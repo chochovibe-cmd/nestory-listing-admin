@@ -1,0 +1,22 @@
+{
+  "draftId": "00000000-0000-4000-8000-000000000001",
+  "ruleVersion": "chochonest-copywriter@2026-06-24-v1",
+  "model": "codex_skill",
+  "output": {
+    "title_zh": "潮巢 Nestory 日系木質收納小托盤",
+    "description_html": "<h3>商品特色</h3><ul><li>適合玄關、桌面與床頭收納。</li><li>木質感外觀，搭配居家軟裝自然耐看。</li></ul><h3>使用情境</h3><ul><li>可放鑰匙、飾品、香氛或小物。</li></ul>",
+    "description_plain": "日系木質收納小托盤，適合桌面、玄關與床頭小物整理。",
+    "seo_title": "日系木質收納小托盤｜潮巢 Nestory",
+    "seo_description": "潮巢 Nestory 精選日系木質收納小托盤，適合桌面、玄關與床頭小物整理，讓生活角落更乾淨有秩序。",
+    "tags": ["潮巢", "Nestory", "收納托盤", "桌面收納", "居家小物"],
+    "collection_suggestion": "居家收納 / 桌面小物",
+    "spec_text": "材質：木質感複合材料\n用途：桌面、玄關、床頭收納\n注意：實際尺寸與色差請以供應商圖片為準",
+    "warnings": ["供應商圖片可能含簡體字，正式上架前需確認是否重製詳情圖。"],
+    "image_alt_texts": [
+      {
+        "image_id": "00000000-0000-4000-8000-000000000101",
+        "alt_text": "潮巢 Nestory 日系木質收納小托盤商品主圖"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "潮巢 Nestory 上架後台",
+  "short_name": "Nestory 上架",
+  "description": "潮巢 Nestory 團隊版 Shopify 商品上架佇列與審核後台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090a0f",
+  "theme_color": "#f4c15d",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

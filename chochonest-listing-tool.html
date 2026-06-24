@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>潮巢 商品上架助手 v3</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+:root{--bg:#0e0e12;--surface:#16161d;--surface2:#1e1e28;--border:#2a2a38;--accent:#c8ff00;--accent2:#ff6b6b;--accent3:#7c5cff;--text:#e8e8f0;--text-muted:#6b6b80;--text-dim:#9898aa;--success:#00e5a0;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
+
+/* Header */
+header{border-bottom:1px solid var(--border);padding:13px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:100;}
+.logo{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;display:flex;align-items:center;gap:10px;}
+.logo-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.logo-sub{font-size:10px;color:var(--text-muted);font-weight:400;letter-spacing:.12em;text-transform:uppercase;}
+.hdr-right{display:flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--text-muted);}
+.rate-val{color:var(--accent);font-weight:600;font-size:13px;}
+.hdr-btn{background:none;border:1px solid var(--border);color:var(--text-muted);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;transition:all .2s;}
+.hdr-btn:hover{border-color:var(--accent);color:var(--accent);}
+.demo-badge{background:var(--accent3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.08em;}
+.cloud-badge{background:rgba(0,229,160,.15);border:1px solid var(--success);color:var(--success);font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;}
+
+/* Layout */
+.container{max-width:1160px;margin:0 auto;padding:20px 24px;display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start;}
+
+/* Panels */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.panel-hdr{padding:11px 16px;border-bottom:1px solid var(--border);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);display:flex;align-items:center;gap:8px;}
+.panel-hdr .ic{color:var(--accent);}
+.panel-body{padding:16px;}
+
+/* Form */
+.field{margin-bottom:13px;}
+label{display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;}
+input[type=text],input[type=number],textarea,select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Noto Sans TC',sans-serif;font-size:13px;padding:8px 11px;transition:border-color .2s;outline:none;}
+input:focus,textarea:focus,select:focus{border-color:var(--accent3);}
+textarea{resize:vertical;min-height:68px;}
+select option{background:var(--surface2);}
+.price-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;}
+.currency-label{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 11px;font-size:12px;color:var(--text-muted);font-family:'Space Grotesk',sans-serif;white-space:nowrap;}
+
+/* Upload zones */
+.upload-section{margin-bottom:14px;}
+.upload-section-label{font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;}
+.upload-type-badge{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;}
+.badge-main{background:rgba(200,255,0,.12);color:var(--accent);border:1px solid rgba(200,255,0,.3);}
+.badge-detail{background:rgba(124,92,255,.12);color:var(--accent3);border:1px solid rgba(124,92,255,.3);}
+.badge-spec{background:rgba(255,107,107,.12);color:var(--accent2);border:1px solid rgba(255,107,107,.3);}
+
+.dropzone{border:1px dashed var(--border);border-radius:8px;padding:14px 12px;cursor:pointer;transition:all .2s;position:relative;display:flex;align-items:center;gap:12px;}
+.dropzone:hover{border-color:var(--accent3);background:rgba(124,92,255,.04);}
+.dropzone.has-files{border-color:var(--success);border-style:solid;background:rgba(0,229,160,.03);}
+.dropzone.dragover{border-color:var(--accent);background:rgba(200,255,0,.04);}
+.dropzone.uploading{border-color:var(--accent3);animation:borderPulse 1s infinite;}
+@keyframes borderPulse{0%,100%{border-color:var(--accent3)}50%{border-color:var(--accent)}}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.dz-icon{font-size:22px;flex-shrink:0;opacity:.5;}
+.dz-text{flex:1;}
+.dz-title{font-size:12px;font-weight:600;color:var(--text-dim);}
+.dz-sub{font-size:10px;color:var(--text-muted);margin-top:2px;}
+.dz-status{font-size:10px;font-weight:700;margin-top:4px;}
+.dz-status.ready{color:var(--success);}
+.dz-status.uploading{color:var(--accent3);}
+.dz-status.done{color:var(--success);}
+.dz-status.error{color:var(--accent2);}
+
+/* Thumb strip */
+.thumb-strip{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
+.thumb{width:44px;height:44px;object-fit:cover;border-radius:4px;border:1px solid var(--border);background:var(--surface2);}
+.thumb.uploaded{border-color:var(--success);}
+.thumb-uploading{width:44px;height:44px;border-radius:4px;border:1px solid var(--accent3);background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent3);}
+
+/* Settings */
+.settings-toggle{width:100%;background:none;border:none;border-top:1px solid var(--border);padding:9px 16px;color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.1em;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;transition:color .2s;}
+.settings-toggle:hover{color:var(--text);}
+.settings-body{padding:13px 16px;border-top:1px solid var(--border);background:var(--surface2);display:none;}
+.settings-body.open{display:block;}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.formula-preview{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:9px 12px;font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--accent);margin-top:10px;}
+.settings-note{font-size:10px;color:var(--text-muted);margin-top:8px;line-height:1.5;border-top:1px solid var(--border);padding-top:8px;}
+
+/* Generate button */
+.btn-gen{width:100%;background:var(--accent);color:#0e0e12;border:none;border-radius:8px;padding:12px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;letter-spacing:.05em;cursor:pointer;transition:all .2s;margin-top:4px;}
+.btn-gen:hover{background:#d4ff20;transform:translateY(-1px);}
+.btn-gen:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+
+/* Output */
+.out-tabs{display:flex;border-bottom:1px solid var(--border);}
+.out-tab{padding:9px 14px;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted);transition:all .2s;background:none;border-top:none;border-left:none;border-right:none;letter-spacing:.05em;}
+.out-tab:hover{color:var(--text);}
+.out-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.out-tab-panel{display:none;}
+.out-tab-panel.active{display:block;}
+
+.result-section{padding:13px 16px;border-bottom:1px solid var(--border);}
+.result-section:last-child{border-bottom:none;}
+.result-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;}
+.copy-btn{background:none;border:1px solid var(--border);color:var(--text-muted);padding:2px 7px;border-radius:4px;cursor:pointer;font-size:10px;transition:all .15s;text-transform:uppercase;}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent);}
+.copy-btn.copied{border-color:var(--success);color:var(--success);}
+.result-text{color:var(--text);font-size:13px;line-height:1.75;white-space:pre-wrap;}
+.result-title{font-size:15px;font-weight:500;}
+
+/* Price card */
+.price-card{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.price-item{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:center;}
+.price-item-label{font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;}
+.price-item-value{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;}
+.cost{color:var(--accent2)}.sell{color:var(--accent)}.profit{color:var(--success)}
+
+/* Tags */
+.tags-wrap{display:flex;flex-wrap:wrap;gap:5px;}
+.tag{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 9px;font-size:11px;color:var(--text-dim);font-family:'Space Grotesk',sans-serif;}
+
+/* Image preview in output */
+.img-preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;padding:14px 16px;}
+.img-preview-card{position:relative;border-radius:6px;overflow:hidden;border:1px solid var(--border);background:var(--surface2);}
+.img-preview-card img{width:100%;height:80px;object-fit:cover;display:block;}
+.img-preview-badge{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.7);color:var(--success);font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;}
+.img-url-row{font-size:9px;color:var(--text-muted);padding:4px 6px;word-break:break-all;line-height:1.4;background:var(--bg);}
+
+/* Upload status panel */
+.upload-status-bar{padding:10px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:8px;}
+.upload-status-bar.success{color:var(--success);}
+.upload-status-bar.error{color:var(--accent2);}
+
+/* Action bar */
+.action-bar{padding:11px 16px;display:flex;gap:7px;border-top:1px solid var(--border);background:var(--surface2);flex-wrap:wrap;}
+.btn-action{flex:1;min-width:90px;background:none;border:1px solid var(--border);color:var(--text-dim);padding:8px 10px;border-radius:6px;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600;letter-spacing:.04em;transition:all .2s;}
+.btn-action:hover{border-color:var(--accent3);color:var(--accent3);}
+.btn-action.primary{background:var(--accent3);border-color:var(--accent3);color:#fff;}
+.btn-action.primary:hover{background:#9171ff;}
+.btn-action.success{background:var(--accent);border-color:var(--accent);color:#0e0e12;font-weight:700;}
+.btn-action.success:hover{background:#d4ff20;}
+.btn-action:disabled{opacity:.4;cursor:not-allowed;}
+
+/* Empty state */
+.empty-state{padding:50px 24px;text-align:center;color:var(--text-muted);}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:.3;}
+
+/* Progress */
+.progress-bar{height:2px;background:var(--border);overflow:hidden;}
+.progress-fill{height:100%;background:var(--accent);transition:width .4s ease;width:0%;}
+
+/* API Overlay */
+.api-overlay{position:fixed;inset:0;background:rgba(14,14,18,.93);display:flex;align-items:center;justify-content:center;z-index:999;backdrop-filter:blur(8px);}
+.api-modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:30px;max-width:430px;width:90%;}
+.api-modal h2{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;margin-bottom:6px;}
+.api-modal p{color:var(--text-muted);font-size:13px;margin-bottom:18px;line-height:1.6;}
+.api-modal a{color:var(--accent3);}
+.api-modal input{margin-bottom:10px;}
+.api-hint{font-size:10px;color:var(--text-muted);margin-top:8px;}
+.btn-secondary{width:100%;background:var(--surface2);color:var(--text-muted);border:1px solid var(--border);border-radius:8px;padding:10px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;transition:all .2s;}
+.btn-secondary:hover{border-color:var(--accent3);color:var(--accent3);}
+
+/* Spinners */
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stream-cursor{display:inline-block;width:2px;height:13px;background:var(--accent);animation:blink .8s step-end infinite;vertical-align:text-bottom;margin-left:2px;}
+@keyframes blink{50%{opacity:0}}
+
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+@media(max-width:800px){.container{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<!-- API Overlay -->
+<div class="api-overlay" id="apiOverlay">
+  <div class="api-modal">
+    <h2>🔑 設定 Claude API Key</h2>
+    <p>輸入 Anthropic API Key 以啟用 AI 文案生成。<br>
+    申請：<a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>（儲值 $5 USD ≈ 1000+ 筆）<br>
+    Key 只存本機，不上傳。</p>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-..." />
+    <button class="btn-gen" onclick="saveApiKey()">開始使用</button>
+    <button class="btn-secondary" onclick="enterDemo()">先看 Demo（不需要 Key）</button>
+    <p class="api-hint">✓ 僅存於本機 localStorage　✓ 不經第三方伺服器</p>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <span class="logo-dot"></span>
+    <div>
+      <div>潮巢 商品上架助手</div>
+      <div class="logo-sub">CHOCHONEST · v3 with Cloudinary</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span>CNY/TWD</span>
+    <span class="rate-val" id="rateDisplay">4.50</span>
+    <button class="hdr-btn" onclick="fetchLiveRate()">↻ 匯率</button>
+    <button class="hdr-btn" onclick="resetApiKey()">⚙ Key</button>
+    <span class="cloud-badge" id="cloudBadge">☁ Cloudinary 已連接</span>
+    <span class="demo-badge" id="demoBadge" style="display:none">◉ DEMO</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ══ LEFT: INPUT ══ -->
+  <div>
+    <div class="panel">
+      <div class="panel-hdr"><span class="ic">✦</span> 商品資料 + 圖片上傳</div>
+      <div class="panel-body">
+
+        <!-- Text fields -->
+        <div class="field">
+          <label>淘寶商品標題</label>
+          <textarea id="inputTitle" placeholder="貼上淘寶原始標題..." rows="3"></textarea>
+        </div>
+        <div class="field">
+          <label>淘寶售價（人民幣）</label>
+          <div class="price-row">
+            <input type="number" id="inputPrice" placeholder="0.00" step="0.01" min="0"/>
+            <div class="currency-label">CNY ¥</div>
+          </div>
+        </div>
+        <div class="field">
+          <label>商品類型</label>
+          <select id="inputCategory">
+            <option value="figure">公仔／手辦 Figure</option>
+            <option value="plush">布娃娃／毛絨玩具 Plush</option>
+            <option value="keychain">吊飾／掛飾 Keychain</option>
+            <option value="tableware">餐具周邊 Tableware</option>
+            <option value="lighting">燈具 Lighting</option>
+            <option value="storage">收納周邊 Storage</option>
+            <option value="stationery">文具 Stationery</option>
+            <option value="apparel">服裝配件 Apparel</option>
+            <option value="accessories">生活配件 Accessories</option>
+            <option value="ip_general">IP 周邊（其他）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>補充備註（選填）</label>
+          <input type="text" id="inputNote" placeholder="例如：含底座、限定版..."/>
+        </div>
+
+        <!-- ── 主圖上傳 ── -->
+        <div class="upload-section">
+          <div class="upload-section-label">
+            <span>🖼 主圖（商品展示，3-5張）</span>
+            <span class="upload-type-badge badge-main">主圖 · 1:1</span>
+          </div>
+          <div class="dropzone" id="dz-main"
+            ondragover="dzOver(event,'main')" ondragleave="dzLeave(event,'main')" ondrop="dzDrop(event,'main')">
+            <input type="file" accept="image/*" multiple onchange="handleFiles(this.files,'main')"/>
+            <div class="dz-icon">🖼</div>
+            <div class="dz-text">
+              <div class="dz-title">點擊或拖曳上傳主圖</div>
+              <div class="dz-sub">自動裁切 1:1 正方形 · 上傳至 Cloudinary</div>
+              <div class="dz-status" id="st-main"></div>
+            </div>
+          </div>
+          <div class="thumb-strip" id="thumbs-main"></div>
+        </div>
+
+        <!-- ── 詳情圖上傳 ── -->
+        <div class="upload-section">
+          <div class="upload-section-label">
+            <span>📋 詳情圖（商品細節說明）</span>
+            <span class="upload-type-badge badge-detail">詳情 · 800px</span>
+          </div>
+          <div class="dropzone" id="dz-detail"
+            ondragover="dzOver(event,'detail')" ondragleave="dzLeave(event,'detail')" ondrop="dzDrop(event,'detail')">
+            <input type="file" accept="image/*" multiple onchange="handleFiles(this.files,'detail')"/>
+            <div class="dz-icon">📋</div>
+            <div class="dz-text">
+              <div class="dz-title">點擊或拖曳上傳詳情圖</div>
+              <div class="dz-sub">自動統一寬度 800px · 上傳至 Cloudinary</div>
+              <div class="dz-status" id="st-detail"></div>
+            </div>
+          </div>
+          <div class="thumb-strip" id="thumbs-detail"></div>
+        </div>
+
+        <!-- ── 規格圖上傳 ── -->
+        <div class="upload-section">
+          <div class="upload-section-label">
+            <span>📐 規格圖（尺寸表等）</span>
+            <span class="upload-type-badge badge-spec">規格 · AI辨識</span>
+          </div>
+          <div class="dropzone" id="dz-spec"
+            ondragover="dzOver(event,'spec')" ondragleave="dzLeave(event,'spec')" ondrop="dzDrop(event,'spec')">
+            <input type="file" accept="image/*" multiple onchange="handleFiles(this.files,'spec')"/>
+            <div class="dz-icon">📐</div>
+            <div class="dz-text">
+              <div class="dz-title">點擊或拖曳上傳規格圖</div>
+              <div class="dz-sub">AI 辨識簡體→繁體 · 自動整理規格</div>
+              <div class="dz-status" id="st-spec"></div>
+            </div>
+          </div>
+          <div class="thumb-strip" id="thumbs-spec"></div>
+        </div>
+
+        <button class="btn-gen" id="generateBtn" onclick="runAll()">
+          ✦ 生成文案 + 上傳圖片 → 產出 CSV
+        </button>
+        <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:8px;">
+          Ctrl+Enter 快速執行
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <button class="settings-toggle" onclick="toggleSettings()">
+        <span>⚙ 定價規則設定</span><span id="settingsArrow">▾</span>
+      </button>
+      <div class="settings-body" id="settingsBody">
+        <div class="settings-grid">
+          <div class="field"><label>CNY 匯率</label><input type="number" id="sRate" value="4.50" step="0.01" oninput="updateFormula()"/></div>
+          <div class="field"><label>成本係數</label><input type="number" id="sCost" value="1.30" step="0.01" oninput="updateFormula()"/></div>
+          <div class="field"><label>利潤加成</label><input type="number" id="sMark" value="1.40" step="0.01" oninput="updateFormula()"/></div>
+          <div class="field"><label>最低售價 TWD</label><input type="number" id="sMin" value="199" step="1"/></div>
+        </div>
+        <div class="formula-preview" id="formulaPreview">售價 ＝ 人民幣 × 4.50 × 1.30 × 1.40</div>
+        <div class="settings-note">成本係數 1.30 含運費手續費緩衝 ／ 利潤加成 1.40 = 40% 利潤空間</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RIGHT: OUTPUT ══ -->
+  <div style="position:sticky;top:60px;">
+    <div class="panel">
+      <div class="panel-hdr">
+        <span class="ic">◈</span> 生成結果
+        <span id="outputStatus" style="margin-left:auto;font-size:10px;color:var(--text-muted);"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+      <div id="emptyState" class="empty-state">
+        <div class="empty-icon">◈</div>
+        <div style="font-size:13px;line-height:1.8">
+          填入商品資料、上傳圖片<br>
+          點擊按鈕一鍵完成文案 + 圖片上傳 + CSV
+        </div>
+      </div>
+
+      <div id="resultContent" style="display:none;">
+
+        <div class="out-tabs">
+          <button class="out-tab active" onclick="switchTab('text')">文案</button>
+          <button class="out-tab" onclick="switchTab('price')">定價</button>
+          <button class="out-tab" onclick="switchTab('seo')">SEO</button>
+          <button class="out-tab" onclick="switchTab('imgs')">圖片</button>
+          <button class="out-tab" onclick="switchTab('tags')">Tags</button>
+        </div>
+
+        <!-- 文案 -->
+        <div class="out-tab-panel active" id="otp-text">
+          <div class="result-section">
+            <div class="result-label">商品標題 <button class="copy-btn" onclick="copyField('outTitle',this)">複製</button></div>
+            <div class="result-text result-title" id="outTitle"></div>
+          </div>
+          <div class="result-section">
+            <div class="result-label">商品描述 <button class="copy-btn" onclick="copyField('outDesc',this)">複製</button></div>
+            <div class="result-text" id="outDesc"></div>
+          </div>
+          <div class="result-section" id="specSection" style="display:none">
+            <div class="result-label">AI 辨識規格 <button class="copy-btn" onclick="copyField('outSpec',this)">複製</button></div>
+            <div class="result-text" id="outSpec" style="font-size:12px;"></div>
+          </div>
+        </div>
+
+        <!-- 定價 -->
+        <div class="out-tab-panel" id="otp-price">
+          <div class="result-section">
+            <div class="result-label">價格試算</div>
+            <div class="price-card">
+              <div class="price-item"><div class="price-item-label">成本價</div><div class="price-item-value cost" id="outCost">—</div></div>
+              <div class="price-item"><div class="price-item-label">建議售價</div><div class="price-item-value sell" id="outPrice">—</div></div>
+              <div class="price-item"><div class="price-item-label">利潤率</div><div class="price-item-value profit" id="outProfit">—</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SEO -->
+        <div class="out-tab-panel" id="otp-seo">
+          <div class="result-section">
+            <div class="result-label">SEO 標題 <button class="copy-btn" onclick="copyField('outSeoTitle',this)">複製</button></div>
+            <div class="result-text" id="outSeoTitle"></div>
+          </div>
+          <div class="result-section">
+            <div class="result-label">SEO 描述 <button class="copy-btn" onclick="copyField('outSeoDesc',this)">複製</button></div>
+            <div class="result-text" id="outSeoDesc"></div>
+          </div>
+        </div>
+
+        <!-- 圖片 -->
+        <div class="out-tab-panel" id="otp-imgs">
+          <div id="imgEmptyMsg" style="padding:20px 16px;font-size:12px;color:var(--text-muted);">尚未上傳圖片，或正在上傳中...</div>
+          <div class="img-preview-grid" id="imgPreviewGrid" style="display:none;"></div>
+          <div id="uploadStatusBar" class="upload-status-bar" style="display:none;"></div>
+        </div>
+
+        <!-- Tags -->
+        <div class="out-tab-panel" id="otp-tags">
+          <div class="result-section">
+            <div class="result-label">Tags <button class="copy-btn" onclick="copyTags(this)">複製全部</button></div>
+            <div class="tags-wrap" id="outTags"></div>
+          </div>
+        </div>
+
+        <div class="action-bar">
+          <button class="btn-action" onclick="copyCSV()">📋 複製 CSV</button>
+          <button class="btn-action success" id="dlCsvBtn" onclick="downloadCSV()">⬇ 下載 CSV（含圖片網址）</button>
+          <button class="btn-action primary" onclick="runAll()">↻ 重新執行</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ══════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════
+const CLOUD_NAME   = 'dlcu13xnn';
+const UPLOAD_PRESET = 'chochonest';
+const CLOUD_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+let apiKey   = localStorage.getItem('cho_api_key') || '';
+let DEMO     = !apiKey;
+let files    = { main:[], detail:[], spec:[] };
+let imgURLs  = { main:[], detail:[], spec:[] };  // Cloudinary URLs after upload
+let currentResult = null;
+
+const DEMO_DATA = {
+  title:'【正版授權】鬼滅之刃 竈門炭治郎 1/7 完成品手辦 GSC 劇場版 無限列車篇 收藏擺件',
+  seo_title:'鬼滅之刃 竈門炭治郎 手辦 1/7 GSC 正版 | 潮巢玩居 動漫公仔收藏',
+  description:`✦ 收藏亮點\nGSC 正版授權，還原劇場版「無限列車篇」炭治郎戰鬥姿勢。精細彩繪髮絲與羽織格紋，含底座全高約 24cm。\n\n✦ 商品規格\n品牌：Good Smile Company（GSC）\n比例：1/7 完成品（免組裝）\n尺寸：全高約 24cm（含底座）\n材質：PVC + ABS\n原產地：日本\n\n✦ 適合你如果\n你是鬼滅系列收藏玩家、喜歡高品質日系手辦，或想為收藏房間找一件視覺焦點擺件。`,
+  seo_description:'潮巢玩居精選 GSC 正版鬼滅之刃 竈門炭治郎 1/7 手辦，劇場版無限列車篇造型，全高約 24cm，台灣現貨。',
+  tags:['鬼滅之刃','竈門炭治郎','GSC','手辦','公仔','1/7','動漫收藏','figure']
+};
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+window.onload = () => {
+  if (apiKey) { document.getElementById('apiOverlay').style.display='none'; DEMO=false; }
+  loadSettings(); updateFormula();
+};
+function enterDemo(){ DEMO=true; document.getElementById('apiOverlay').style.display='none'; document.getElementById('demoBadge').style.display='inline-block'; }
+function saveApiKey(){
+  const v=document.getElementById('apiKeyInput').value.trim();
+  if(!v.startsWith('sk-ant-')){ alert('請輸入有效的 Anthropic API Key（sk-ant- 開頭）'); return; }
+  apiKey=v; DEMO=false; localStorage.setItem('cho_api_key',v);
+  document.getElementById('apiOverlay').style.display='none';
+  document.getElementById('demoBadge').style.display='none';
+}
+function resetApiKey(){
+  if(!confirm('重新設定 API Key？')) return;
+  localStorage.removeItem('cho_api_key'); apiKey=''; DEMO=true;
+  document.getElementById('apiKeyInput').value='';
+  document.getElementById('apiOverlay').style.display='flex';
+}
+
+// ══════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════
+function toggleSettings(){ const b=document.getElementById('settingsBody'); b.classList.toggle('open'); document.getElementById('settingsArrow').textContent=b.classList.contains('open')?'▴':'▾'; }
+function updateFormula(){
+  const r=v('sRate'),c=v('sCost'),m=v('sMark');
+  document.getElementById('formulaPreview').textContent=`售價 ＝ 人民幣 × ${parseFloat(r).toFixed(2)} × ${parseFloat(c).toFixed(2)} × ${parseFloat(m).toFixed(2)}`;
+  document.getElementById('rateDisplay').textContent=parseFloat(r).toFixed(2);
+  localStorage.setItem('cho_settings',JSON.stringify({r,c,m,min:v('sMin')}));
+}
+function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem('cho_settings')||'{}'); if(s.r)sv('sRate',s.r); if(s.c)sv('sCost',s.c); if(s.m)sv('sMark',s.m); if(s.min)sv('sMin',s.min); }catch(e){} }
+function v(id){ return document.getElementById(id).value; }
+function sv(id,val){ document.getElementById(id).value=val; }
+
+// ══════════════════════════════════════════
+// LIVE RATE
+// ══════════════════════════════════════════
+async function fetchLiveRate(){
+  try{
+    const res=await fetch('https://open.er-api.com/v6/latest/CNY');
+    const data=await res.json();
+    if(data.rates?.TWD){ sv('sRate',data.rates.TWD.toFixed(2)); updateFormula(); showToast(`✓ 匯率已更新：1 CNY = ${data.rates.TWD.toFixed(2)} TWD`); }
+  } catch(e){ showToast('匯率更新失敗，請手動輸入'); }
+}
+
+// ══════════════════════════════════════════
+// PRICE CALC
+// ══════════════════════════════════════════
+function calcPrice(cny){
+  const rate=parseFloat(v('sRate'))||4.5, cm=parseFloat(v('sCost'))||1.3, mk=parseFloat(v('sMark'))||1.4, min=parseFloat(v('sMin'))||199;
+  const cost=Math.ceil(cny*rate*cm);
+  let sell=Math.ceil(cost*mk);
+  if(sell<500) sell=Math.ceil(sell/10)*10;
+  else if(sell<2000) sell=Math.ceil(sell/50)*50;
+  else sell=Math.ceil(sell/100)*100;
+  sell=Math.max(sell,min);
+  return { costTWD:cost, sellPrice:sell, profitPct:Math.round(((sell-cost)/sell)*100) };
+}
+
+const catMap={figure:'公仔／手辦',plush:'布娃娃／毛絨玩具',keychain:'吊飾／掛飾',tableware:'餐具周邊',lighting:'燈具',storage:'收納周邊',stationery:'文具',apparel:'服裝配件',accessories:'生活配件',ip_general:'IP 周邊'};
+
+// ══════════════════════════════════════════
+// FILE HANDLING
+// ══════════════════════════════════════════
+function dzOver(e,z){ e.preventDefault(); document.getElementById('dz-'+z).classList.add('dragover'); }
+function dzLeave(e,z){ document.getElementById('dz-'+z).classList.remove('dragover'); }
+function dzDrop(e,z){ e.preventDefault(); document.getElementById('dz-'+z).classList.remove('dragover'); handleFiles(e.dataTransfer.files,z); }
+
+function handleFiles(fileList, zone){
+  const arr=Array.from(fileList).filter(f=>f.type.startsWith('image/'));
+  if(!arr.length) return;
+  files[zone]=arr;
+  const dz=document.getElementById('dz-'+zone);
+  dz.classList.add('has-files');
+  const st=document.getElementById('st-'+zone);
+  st.className='dz-status ready';
+  st.textContent=`✓ 已選 ${arr.length} 張，執行時自動上傳`;
+
+  // Show local thumbnails
+  const strip=document.getElementById('thumbs-'+zone);
+  strip.innerHTML='';
+  arr.forEach(f=>{
+    const img=document.createElement('img');
+    img.className='thumb';
+    img.src=URL.createObjectURL(f);
+    strip.appendChild(img);
+  });
+}
+
+// ══════════════════════════════════════════
+// CLOUDINARY UPLOAD
+// ══════════════════════════════════════════
+async function processAndUpload(file, zone){
+  // Process image on canvas first
+  const processed = await processImage(file, zone);
+  // Upload to Cloudinary
+  const formData = new FormData();
+  const blob = await canvasToBlob(processed.canvas);
+  formData.append('file', blob, processed.filename);
+  formData.append('upload_preset', UPLOAD_PRESET);
+  formData.append('folder', `chochonest/${zone}`);
+
+  const res = await fetch(CLOUD_UPLOAD_URL, { method:'POST', body:formData });
+  if(!res.ok) throw new Error('Cloudinary 上傳失敗');
+  const data = await res.json();
+  return data.secure_url;
+}
+
+function processImage(file, zone){
+  return new Promise(resolve=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const canvas=document.createElement('canvas');
+      const ctx=canvas.getContext('2d');
+      if(zone==='main'){
+        // Square crop 1080x1080
+        canvas.width=1080; canvas.height=1080;
+        ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,1080,1080);
+        const s=Math.min(img.width,img.height);
+        const sx=(img.width-s)/2, sy=(img.height-s)/2;
+        ctx.drawImage(img,sx,sy,s,s,0,0,1080,1080);
+        resolve({ canvas, filename: file.name.replace(/\.[^.]+$/,'')+'_sq1080.jpg' });
+      } else {
+        // 800px wide
+        const w=800, h=Math.round(img.height*(800/img.width));
+        canvas.width=w; canvas.height=h;
+        ctx.drawImage(img,0,0,w,h);
+        resolve({ canvas, filename: file.name.replace(/\.[^.]+$/,'')+'_800w.jpg' });
+      }
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); resolve({canvas:null,filename:file.name}); };
+    img.src=url;
+  });
+}
+
+function canvasToBlob(canvas){
+  return new Promise(res=>canvas.toBlob(res,'image/jpeg',0.88));
+}
+
+// Upload all files for a zone, return URLs array
+async function uploadZone(zone){
+  if(!files[zone].length) return [];
+  const urls=[];
+  const strip=document.getElementById('thumbs-'+zone);
+  const thumbEls=strip.querySelectorAll('.thumb');
+  const st=document.getElementById('st-'+zone);
+  st.className='dz-status uploading'; st.textContent=`⟳ 上傳中...`;
+  document.getElementById('dz-'+zone).classList.add('uploading');
+
+  for(let i=0;i<files[zone].length;i++){
+    // Update thumb to show uploading
+    if(thumbEls[i]){ thumbEls[i].style.opacity='0.4'; }
+    try{
+      const url=await processAndUpload(files[zone][i], zone);
+      urls.push(url);
+      if(thumbEls[i]){ thumbEls[i].style.opacity='1'; thumbEls[i].classList.add('uploaded'); }
+      st.textContent=`⟳ 上傳中 ${i+1}/${files[zone].length}...`;
+    } catch(e){
+      console.error(e);
+      st.className='dz-status error'; st.textContent=`✗ 第 ${i+1} 張上傳失敗`;
+    }
+  }
+  st.className='dz-status done';
+  st.textContent=`✓ ${urls.length}/${files[zone].length} 張已上傳至 Cloudinary`;
+  document.getElementById('dz-'+zone).classList.remove('uploading');
+  return urls;
+}
+
+// ══════════════════════════════════════════
+// MAIN RUNNER
+// ══════════════════════════════════════════
+async function runAll(){
+  if(!DEMO && !apiKey){ document.getElementById('apiOverlay').style.display='flex'; return; }
+  const title=document.getElementById('inputTitle').value.trim();
+  const price=parseFloat(document.getElementById('inputPrice').value);
+  if(!title){ alert('請輸入商品標題'); return; }
+  if(!price||price<=0){ alert('請輸入有效價格'); return; }
+
+  const btn=document.getElementById('generateBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> 執行中...';
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('resultContent').style.display='block';
+  setStatus('⟳ 處理中...'); setProgress(5);
+
+  const pc=calcPrice(price);
+  document.getElementById('outCost').textContent=`NT$${pc.costTWD.toLocaleString()}`;
+  document.getElementById('outPrice').textContent=`NT$${pc.sellPrice.toLocaleString()}`;
+  document.getElementById('outProfit').textContent=`${pc.profitPct}%`;
+  ['outTitle','outSeoTitle','outDesc','outSeoDesc'].forEach(id=>{ document.getElementById(id).innerHTML='<span class="stream-cursor"></span>'; });
+  document.getElementById('outTags').innerHTML='';
+
+  // ── STEP 1: Upload images (parallel by zone) ──
+  setStatus('☁ 上傳圖片至 Cloudinary...'); setProgress(15);
+  try {
+    if(DEMO){
+      // Demo: fake URLs
+      imgURLs.main   = files.main.length   ? ['https://res.cloudinary.com/dlcu13xnn/image/upload/v1/chochonest/demo_main.jpg']   : [];
+      imgURLs.detail = files.detail.length ? ['https://res.cloudinary.com/dlcu13xnn/image/upload/v1/chochonest/demo_detail.jpg'] : [];
+      imgURLs.spec   = files.spec.length   ? ['https://res.cloudinary.com/dlcu13xnn/image/upload/v1/chochonest/demo_spec.jpg']   : [];
+      await sleep(600);
+    } else {
+      const [m,d,s] = await Promise.all([uploadZone('main'), uploadZone('detail'), uploadZone('spec')]);
+      imgURLs.main=m; imgURLs.detail=d; imgURLs.spec=s;
+    }
+  } catch(e){ console.error(e); }
+  setProgress(45);
+
+  // Render image preview tab
+  renderImgPreview();
+
+  // ── STEP 2: Spec recognition ──
+  if(files.spec.length){
+    setStatus('🔍 辨識規格圖...'); setProgress(50);
+    await recognizeSpec(files.spec[0]);
+  }
+  setProgress(55);
+
+  // ── STEP 3: Generate copy ──
+  setStatus('✦ AI 生成文案...'); setProgress(60);
+  const category=document.getElementById('inputCategory').value;
+  const note=document.getElementById('inputNote').value.trim();
+
+  if(DEMO){
+    await sleep(700);
+    currentResult={ ...DEMO_DATA, ...pc, cnyPrice:price, category, imgURLs };
+    await typewrite('outTitle', DEMO_DATA.title);
+    await typewrite('outSeoTitle', DEMO_DATA.seo_title);
+    await typewrite('outDesc', DEMO_DATA.description);
+    await typewrite('outSeoDesc', DEMO_DATA.seo_description);
+    renderTags(DEMO_DATA.tags);
+    setProgress(100); setStatus('✓ Demo 完成（假資料）');
+    setTimeout(()=>setStatus(''),3000);
+    btn.disabled=false; btn.innerHTML='✦ 生成文案 + 上傳圖片 → 產出 CSV';
+    showToast('🟡 Demo 模式 · 設定 API Key 後生成真實文案');
+    return;
+  }
+
+  const specText=document.getElementById('outSpec')?.textContent||'';
+  const sys=`你是潮巢玩居（CHOCHONEST）商品文案專家。品牌：台灣日系動漫IP選物店，高飽和黑膠文藝收藏風格，受眾為動漫收藏玩家。
+回傳純 JSON（無 Markdown、無說明）：
+{"title":"商品標題(繁中為主可含日文角色品牌名,50-60字,SEO優先)","seo_title":"SEO Title(50-60字含主要關鍵字)","description":"商品描述(3段:\\n✦收藏亮點\\n✦商品規格\\n✦適合你如果)","seo_description":"SEO Meta Description(120-160字自然口吻含關鍵字)","tags":["8個以內中英mix含IP名角色品牌類型"]}`;
+
+  const usr=`標題：${title}\n類型：${catMap[category]}\n人民幣：¥${price}\n台灣售價：NT$${pc.sellPrice}${note?'\n備註：'+note:''}${specText?'\n規格資訊：'+specText:''}`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,system:sys,messages:[{role:'user',content:usr}]})
+    });
+    if(!res.ok){ const e=await res.json(); throw new Error(e.error?.message||'HTTP '+res.status); }
+    setProgress(82);
+    const data=await res.json();
+    const parsed=JSON.parse(data.content[0].text.replace(/```json|```/g,'').trim());
+    currentResult={ ...parsed, ...pc, cnyPrice:price, category, imgURLs };
+    await typewrite('outTitle', parsed.title);
+    await typewrite('outSeoTitle', parsed.seo_title);
+    await typewrite('outDesc', parsed.description);
+    await typewrite('outSeoDesc', parsed.seo_description);
+    renderTags(parsed.tags);
+    setProgress(100); setStatus('✓ 全部完成');
+    setTimeout(()=>{ setStatus(''); setProgress(0); },3000);
+    showToast('✓ 文案＋圖片已完成，點「下載 CSV」即可匯入 Matrixify');
+  } catch(e){
+    setStatus('✗ '+e.message); setProgress(0);
+    if(e.message.includes('401')) setTimeout(()=>{ if(confirm('API Key 無效，重設？')) resetApiKey(); },500);
+  } finally {
+    btn.disabled=false; btn.innerHTML='✦ 生成文案 + 上傳圖片 → 產出 CSV';
+  }
+}
+
+// ══════════════════════════════════════════
+// SPEC RECOGNITION
+// ══════════════════════════════════════════
+async function recognizeSpec(file){
+  if(DEMO||!apiKey){ return; }
+  try{
+    const b64=await fileToB64(file);
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:600,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:file.type,data:b64}},
+          {type:'text',text:'請辨識此規格圖中所有文字，簡體中文轉繁體中文（台灣用語），整理成清單格式，直接輸出規格內容，不要說明文字。'}
+        ]}]
+      })
+    });
+    const data=await res.json();
+    const txt=data.content[0].text;
+    document.getElementById('outSpec').textContent=txt;
+    document.getElementById('specSection').style.display='block';
+  } catch(e){ console.error('spec recog failed',e); }
+}
+
+function fileToB64(file){
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(file); });
+}
+
+// ══════════════════════════════════════════
+// IMAGE PREVIEW RENDER
+// ══════════════════════════════════════════
+function renderImgPreview(){
+  const grid=document.getElementById('imgPreviewGrid');
+  const emptyMsg=document.getElementById('imgEmptyMsg');
+  const bar=document.getElementById('uploadStatusBar');
+  const allURLs=[
+    ...imgURLs.main.map(u=>({url:u,type:'主圖'})),
+    ...imgURLs.detail.map(u=>({url:u,type:'詳情'})),
+    ...imgURLs.spec.map(u=>({url:u,type:'規格'}))
+  ];
+  if(!allURLs.length){ emptyMsg.style.display='block'; grid.style.display='none'; return; }
+  emptyMsg.style.display='none'; grid.style.display='grid';
+  grid.innerHTML='';
+  allURLs.forEach(({url,type})=>{
+    const card=document.createElement('div');
+    card.className='img-preview-card';
+    const badge=document.createElement('div');
+    badge.className='img-preview-badge'; badge.textContent=type;
+    const img=document.createElement('img');
+    img.src=url; img.alt=type;
+    const urlRow=document.createElement('div');
+    urlRow.className='img-url-row'; urlRow.textContent=url.split('/').pop();
+    card.appendChild(badge); card.appendChild(img); card.appendChild(urlRow);
+    grid.appendChild(card);
+  });
+
+  const total=allURLs.length;
+  bar.style.display='flex';
+  bar.className='upload-status-bar success';
+  bar.textContent=`☁ ${total} 張圖片已上傳至 Cloudinary，網址已寫入 CSV`;
+}
+
+// ══════════════════════════════════════════
+// CSV BUILDER (Matrixify format)
+// ══════════════════════════════════════════
+function buildCSV(){
+  if(!currentResult) return null;
+  const r=currentResult;
+  const allImgURLs=[...imgURLs.main,...imgURLs.detail];
+
+  // Matrixify: first row has all product fields + first image
+  // Extra images go in separate rows with only Handle + Image Src
+  const handle = (r.title||'product').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g,'-').slice(0,50);
+  const rows=[];
+  const baseRow={
+    'Handle': handle,
+    'Title': r.title||'',
+    'Body (HTML)': (r.description||'').replace(/\n/g,'<br>'),
+    'Vendor': 'CHOCHONEST',
+    'Type': catMap[r.category]||r.category,
+    'Tags': (r.tags||[]).join(', '),
+    'Published': 'FALSE',
+    'SEO Title': r.seo_title||'',
+    'SEO Description': r.seo_description||'',
+    'Variant Price': r.sellPrice||'',
+    'Variant Cost': r.costTWD||'',
+    'Variant Requires Shipping': 'TRUE',
+    'Status': 'draft',
+    'Image Src': allImgURLs[0]||'',
+    'Image Position': allImgURLs.length ? '1' : '',
+    'Image Alt Text': r.title||''
+  };
+  rows.push(baseRow);
+
+  // Additional images
+  for(let i=1;i<allImgURLs.length;i++){
+    rows.push({
+      'Handle': handle,
+      'Title':'','Body (HTML)':'','Vendor':'','Type':'','Tags':'','Published':'',
+      'SEO Title':'','SEO Description':'',
+      'Variant Price':'','Variant Cost':'','Variant Requires Shipping':'','Status':'',
+      'Image Src': allImgURLs[i],
+      'Image Position': String(i+1),
+      'Image Alt Text': r.title||''
+    });
+  }
+
+  const headers=Object.keys(rows[0]);
+  const lines=[headers.join(',')];
+  rows.forEach(row=>{
+    lines.push(headers.map(h=>`"${String(row[h]||'').replace(/"/g,'""')}"`).join(','));
+  });
+  return lines.join('\n');
+}
+
+async function copyCSV(){
+  const csv=buildCSV();
+  if(!csv){ showToast('請先生成文案'); return; }
+  await navigator.clipboard.writeText(csv);
+  showToast('✓ CSV 已複製（含圖片網址）');
+}
+
+function downloadCSV(){
+  const csv=buildCSV();
+  if(!csv){ showToast('請先生成文案'); return; }
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url;
+  a.download=`chochonest_${Date.now()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ CSV 下載完成，可直接丟入 Matrixify 上架');
+}
+
+// ══════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════
+function switchTab(name){
+  document.querySelectorAll('.out-tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.out-tab').forEach((t,i)=>{
+    const names=['text','price','seo','imgs','tags'];
+    t.classList.toggle('active', names[i]===name);
+  });
+  document.getElementById('otp-'+name).classList.add('active');
+}
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+function renderTags(tags){
+  const w=document.getElementById('outTags'); w.innerHTML='';
+  (tags||[]).forEach(t=>{ const s=document.createElement('span'); s.className='tag'; s.textContent=t; w.appendChild(s); });
+}
+
+function typewrite(id, text){
+  return new Promise(resolve=>{
+    const el=document.getElementById(id); el.innerHTML=''; let i=0;
+    const speed=Math.max(6,Math.min(16,Math.floor(900/text.length)));
+    const iv=setInterval(()=>{
+      el.textContent=text.slice(0,i); el.innerHTML+='<span class="stream-cursor"></span>'; i++;
+      if(i>text.length){ clearInterval(iv); el.textContent=text; resolve(); }
+    },speed);
+  });
+}
+
+async function copyField(id,btn){
+  await navigator.clipboard.writeText(document.getElementById(id).textContent);
+  btn.textContent='✓'; btn.classList.add('copied');
+  setTimeout(()=>{ btn.textContent='複製'; btn.classList.remove('copied'); },2000);
+}
+
+async function copyTags(btn){
+  if(!currentResult) return;
+  await navigator.clipboard.writeText(currentResult.tags.join(', '));
+  btn.textContent='✓ 已複製'; btn.classList.add('copied');
+  setTimeout(()=>{ btn.textContent='複製全部'; btn.classList.remove('copied'); },2000);
+}
+
+function setProgress(pct){ document.getElementById('progressFill').style.width=pct+'%'; }
+function setStatus(msg){ document.getElementById('outputStatus').textContent=msg; }
+
+function showToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#c8ff00;color:#0e0e12;padding:9px 18px;border-radius:8px;font-weight:700;font-size:12px;z-index:9999;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4);';
+  t.textContent=msg; document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2800);
+}
+
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.ctrlKey) runAll(); });
+</script>
+</body>
+</html>

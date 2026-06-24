@@ -1,0 +1,44 @@
+{
+  "draftCardStates": [
+    {
+      "label": "Waiting for Codex Skill",
+      "status": "pending_copy",
+      "generation_mode": "codex_skill",
+      "generation_status": "pending",
+      "publish_mode": "active",
+      "publish_status": "pending"
+    },
+    {
+      "label": "Worker Processing",
+      "status": "processing",
+      "generation_mode": "codex_skill",
+      "generation_status": "processing",
+      "publish_mode": "active",
+      "publish_status": "pending"
+    },
+    {
+      "label": "Ready for Review",
+      "status": "ready_for_review",
+      "generation_mode": "codex_skill",
+      "generation_status": "completed",
+      "publish_mode": "active",
+      "publish_status": "pending"
+    },
+    {
+      "label": "Mock Active Published",
+      "status": "active_published",
+      "generation_mode": "codex_skill",
+      "generation_status": "completed",
+      "publish_mode": "active",
+      "publish_status": "active_published"
+    },
+    {
+      "label": "CSV Fallback Ready",
+      "status": "csv_ready",
+      "generation_mode": "codex_skill",
+      "generation_status": "completed",
+      "publish_mode": "active",
+      "publish_status": "csv_ready"
+    }
+  ]
+}

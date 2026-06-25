@@ -28,6 +28,9 @@ Apply `supabase/migrations/001_initial_schema.sql` in Supabase SQL Editor before
 
 See `docs/mock-flow.md` for the first end-to-end mock flow once dependencies and test Supabase credentials are available.
 
+For the latest mock-safe local checkpoint, Next.js startup fix, and next-phase
+handoff checklist, see `docs/v0.1-local-wrap-up.md`.
+
 ## Local Preview
 
 If dependencies are already installed and a production build exists, start the local preview with:

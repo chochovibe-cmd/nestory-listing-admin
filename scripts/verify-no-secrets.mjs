@@ -5,7 +5,6 @@ const root = process.cwd();
 
 const forbiddenRootEntries = [
   ".env",
-  ".env.local",
   ".env.production",
   ".env.development"
 ];
@@ -48,6 +47,10 @@ for (const ignoredEntry of ["node_modules/", ".pnpm-store/"]) {
   if (!gitignore.includes(ignoredEntry)) {
     errors.push(`Generated dependency entry is not ignored: ${ignoredEntry}`);
   }
+}
+
+if (!/\.env\.\*/.test(gitignore)) {
+  errors.push("Local env files are not ignored: .env.*");
 }
 
 const forbiddenPatterns = [

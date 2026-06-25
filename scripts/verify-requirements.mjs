@@ -71,8 +71,8 @@ const checks = [
     ok: exists("src/lib/csv/matrixify.ts") && /matrixify_csv/.test(read("src/app/api/exports/matrixify/route.ts"))
   },
   {
-    name: "No real env file exists",
-    ok: !exists(".env") && !exists(".env.local")
+    name: "Local env file is ignored, not committed",
+    ok: !exists(".env") && /\.env\.\*/.test(read(".gitignore"))
   },
   {
     name: "Generated dependency cache is ignored",

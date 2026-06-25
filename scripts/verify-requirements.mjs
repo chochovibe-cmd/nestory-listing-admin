@@ -176,6 +176,14 @@ const checks = [
     ok: exists("docs/completion-audit.md")
       && /13 requested success criteria/.test(read("docs/completion-audit.md"))
       && /Do not mark v0.1 complete/.test(read("docs/completion-audit.md"))
+  },
+  {
+    name: "Team handoff and PWA smoke evidence exist",
+    ok: exists("docs/v0.1-team-handoff.md")
+      && /Manual QA Still Needed/.test(read("docs/v0.1-team-handoff.md"))
+      && exists("scripts/verify-pwa-smoke.mjs")
+      && /verify:pwa-smoke/.test(read("package.json"))
+      && /Read-Only Route Smoke/.test(read("docs/manual-qa-checklist.md"))
   }
 ];
 

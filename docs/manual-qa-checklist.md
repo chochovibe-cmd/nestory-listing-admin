@@ -3,6 +3,17 @@
 Use this checklist after dependencies install, the app builds, and a test
 Supabase project is configured. Keep `SHOPIFY_PUBLISH_MOCK=true`.
 
+For current handoff context and read-only route smoke evidence, see
+`docs/v0.1-team-handoff.md`.
+
+## Read-Only Route Smoke
+
+- [x] `/` returns 200 on the local dev server.
+- [x] `/login` returns 200 on the local dev server.
+- [x] `/drafts` returns 200 and shows a signed-out prompt.
+- [x] `/drafts/new` returns 200 and shows a signed-out prompt.
+- [x] `/review` returns 200 and shows a signed-out prompt.
+
 ## Login
 
 - [ ] Visiting `/drafts/new` while signed out shows a login prompt.

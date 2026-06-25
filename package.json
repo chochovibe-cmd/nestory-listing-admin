@@ -13,6 +13,7 @@
     "verify:contracts": "node scripts/verify-contracts.mjs",
     "verify:sql": "node scripts/verify-sql-schema.mjs",
     "verify:mock-flow": "node scripts/verify-mock-flow.mjs",
+    "verify:pwa-smoke": "node scripts/verify-pwa-smoke.mjs",
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
     "verify:all": "node scripts/verify-all.mjs"
   },

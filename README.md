@@ -31,6 +31,9 @@ See `docs/mock-flow.md` for the first end-to-end mock flow once dependencies and
 For the latest mock-safe local checkpoint, Next.js startup fix, and next-phase
 handoff checklist, see `docs/v0.1-local-wrap-up.md`.
 
+For team handoff and manual QA readiness, start with
+`docs/v0.1-team-handoff.md`.
+
 ## Local Preview
 
 If dependencies are already installed and a production build exists, start the local preview with:

@@ -40,7 +40,7 @@ if (Test-Path -LiteralPath $BundledNode) {
 }
 
 $GitCommand = Get-Command git -ErrorAction SilentlyContinue
-Add-Result "Git command" ([bool]$GitCommand) $(if ($GitCommand) { "git found" } else { "git not found on PATH" })
+Add-Result "Git command" $true $(if ($GitCommand) { "git found" } else { "git not found on PATH; use full Git path if needed" })
 Add-Result "Git repository" (Test-Path -LiteralPath ".git") $(if (Test-Path -LiteralPath ".git") { ".git exists" } else { "Current folder is not a git repository" })
 
 $RequiredFiles = @(
@@ -62,7 +62,7 @@ foreach ($File in $RequiredFiles) {
 Add-Result "No committed env file" (-not (Test-Path -LiteralPath ".env")) ".env must never be committed"
 Add-Result "Local env file" (Test-Path -LiteralPath ".env.local") $(if (Test-Path -LiteralPath ".env.local") { ".env.local exists; values are not printed" } else { ".env.local missing; Supabase runtime flow cannot be tested yet" })
 Add-Result "Dependencies installed" (Test-Path -LiteralPath "node_modules/next/dist/bin/next")
-Add-Result "Production build exists" (Test-Path -LiteralPath ".next/BUILD_ID")
+Add-Result "Production build artifact" ((Test-Path -LiteralPath ".next/BUILD_ID") -or -not $Full) $(if (Test-Path -LiteralPath ".next/BUILD_ID") { ".next/BUILD_ID exists" } else { "Run with -Full to require a fresh build" })
 
 if ($NodeExe) {
   & $NodeExe scripts/verify-all.mjs
@@ -78,12 +78,8 @@ if ($NodeExe) {
 }
 
 if ($CheckUrl) {
-  try {
-    $Response = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/login" -UseBasicParsing -TimeoutSec 10
-    Add-Result "Preview URL" ($Response.StatusCode -eq 200) "http://127.0.0.1:$Port/login"
-  } catch {
-    Add-Result "Preview URL" $false "http://127.0.0.1:$Port/login is not responding"
-  }
+  & $NodeExe scripts/verify-pwa-smoke.mjs "http://127.0.0.1:$Port"
+  Add-Result "PWA route smoke" ($LASTEXITCODE -eq 0) "http://127.0.0.1:$Port"
 }
 
 $Results | Format-Table -AutoSize

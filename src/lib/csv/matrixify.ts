@@ -10,6 +10,7 @@ function escapeCsv(value: unknown) {
 }
 
 function handleFor(draft: MatrixifyDraft) {
+  if (draft.shopify_handle) return draft.shopify_handle;
   const source = draft.title_zh || draft.taobao_title || draft.original_title || draft.id;
   return source
     .toLowerCase()
@@ -23,6 +24,7 @@ export function buildMatrixifyRows(drafts: MatrixifyDraft[]) {
 
   for (const draft of drafts) {
     const handle = handleFor(draft);
+    const tags = draft.shopify_tags?.length ? draft.shopify_tags : draft.tags;
     const images = (draft.product_images ?? [])
       .filter((image) => image.image_type !== "spec")
       .sort((a, b) => a.sort_order - b.sort_order);
@@ -34,8 +36,8 @@ export function buildMatrixifyRows(drafts: MatrixifyDraft[]) {
       Title: draft.title_zh || draft.taobao_title || "",
       "Body HTML": draft.description_html || draft.description_plain || "",
       Vendor: draft.vendor || "CHOCHONEST",
-      Type: categoryLabel(draft.category),
-      Tags: draft.tags?.join(", ") ?? "",
+      Type: draft.product_type || categoryLabel(draft.category),
+      Tags: tags?.join(", ") ?? "",
       Published: draft.publish_mode === "active" ? "TRUE" : "FALSE",
       Status: draft.publish_mode === "active" ? "active" : "draft",
       "SEO Title": draft.seo_title || "",

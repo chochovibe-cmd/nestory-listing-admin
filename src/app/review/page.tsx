@@ -4,6 +4,8 @@ import { StatusBadge } from "@/components/listing/StatusBadge";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 import type { ProductDraft } from "@/types/domain";
 
+export const dynamic = "force-dynamic";
+
 export default async function ReviewQueuePage() {
   if (!hasSupabaseServerEnv()) {
     return <SetupNotice title="待審核清單需要 Supabase 測試環境" />;

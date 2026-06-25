@@ -33,6 +33,7 @@ export type ImageType = "main" | "detail" | "spec" | "generated_detail" | "varia
 
 export interface ProductDraft {
   id: string;
+  source_url: string | null;
   taobao_url: string | null;
   taobao_title: string | null;
   original_title: string | null;
@@ -43,13 +44,17 @@ export interface ProductDraft {
   category: string | null;
   vendor: string;
   product_type: string | null;
+  shopify_handle: string | null;
   title_zh: string | null;
   description_html: string | null;
   description_plain: string | null;
   seo_title: string | null;
   seo_description: string | null;
   tags: string[];
+  shopify_tags: string[];
   collection_suggestion: string | null;
+  shopify_collections: string[];
+  metafields_json: unknown;
   note: string | null;
   spec_text: string | null;
   warnings: string[];
@@ -61,6 +66,14 @@ export interface ProductDraft {
   generation_model: string | null;
   generation_cost_estimate: number | null;
   generation_error: string | null;
+  generated_payload_json: unknown;
+  shopify_payload_preview: unknown;
+  worker_id: string | null;
+  worker_locked_at: string | null;
+  worker_lock_expires_at: string | null;
+  worker_attempts: number;
+  max_worker_attempts: number;
+  next_retry_at: string | null;
   publish_mode: PublishMode;
   publish_method: PublishMethod;
   publish_status: PublishStatus;

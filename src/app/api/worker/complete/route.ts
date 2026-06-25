@@ -7,6 +7,7 @@ interface CompletePayload {
   draftId?: string;
   ruleVersion?: string;
   model?: string;
+  workerId?: string;
   output?: {
     title_zh?: string;
     description_html?: string;
@@ -14,7 +15,15 @@ interface CompletePayload {
     seo_title?: string;
     seo_description?: string;
     tags?: string[];
+    shopify_tags?: string[];
     collection_suggestion?: string;
+    shopify_collections?: string[];
+    product_type?: string;
+    vendor?: string;
+    shopify_handle?: string;
+    metafields_json?: unknown;
+    generated_payload_json?: unknown;
+    shopify_payload_preview?: unknown;
     spec_text?: string;
     warnings?: string[];
     image_alt_texts?: Array<{ image_id: string; alt_text: string }>;
@@ -30,25 +39,43 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServiceSupabaseClient();
   const output = body.output;
+  const draftUpdate: Record<string, unknown> = {
+    title_zh: output.title_zh ?? null,
+    description_html: output.description_html ?? null,
+    description_plain: output.description_plain ?? null,
+    seo_title: output.seo_title ?? null,
+    seo_description: output.seo_description ?? null,
+    tags: output.tags ?? [],
+    shopify_tags: output.shopify_tags ?? [],
+    collection_suggestion: output.collection_suggestion ?? null,
+    shopify_collections: output.shopify_collections ?? [],
+    spec_text: output.spec_text ?? null,
+    warnings: output.warnings ?? [],
+    status: "ready_for_review",
+    generation_status: "completed",
+    generation_rule_version: body.ruleVersion ?? null,
+    generation_model: body.model ?? "codex_skill",
+    generation_error: null,
+    worker_id: null,
+    worker_locked_at: null,
+    worker_lock_expires_at: null,
+    next_retry_at: null
+  };
+
+  for (const [key, value] of Object.entries({
+    product_type: output.product_type,
+    vendor: output.vendor,
+    shopify_handle: output.shopify_handle,
+    metafields_json: output.metafields_json,
+    generated_payload_json: output.generated_payload_json,
+    shopify_payload_preview: output.shopify_payload_preview
+  })) {
+    if (value !== undefined) draftUpdate[key] = value;
+  }
 
   const { error } = await supabase
     .from("product_drafts")
-    .update({
-      title_zh: output.title_zh ?? null,
-      description_html: output.description_html ?? null,
-      description_plain: output.description_plain ?? null,
-      seo_title: output.seo_title ?? null,
-      seo_description: output.seo_description ?? null,
-      tags: output.tags ?? [],
-      collection_suggestion: output.collection_suggestion ?? null,
-      spec_text: output.spec_text ?? null,
-      warnings: output.warnings ?? [],
-      status: "ready_for_review",
-      generation_status: "completed",
-      generation_rule_version: body.ruleVersion ?? null,
-      generation_model: body.model ?? "codex_skill",
-      generation_error: null
-    })
+    .update(draftUpdate)
     .eq("id", body.draftId);
 
   if (error) return jsonError(error.message, 500);
@@ -63,6 +90,7 @@ export async function POST(request: NextRequest) {
     provider: "codex",
     rule_version: body.ruleVersion ?? null,
     model: body.model ?? "codex_skill",
+    worker_id: body.workerId ?? null,
     status: "completed",
     output_payload: output,
     completed_at: new Date().toISOString()

@@ -32,6 +32,7 @@ export function ProductInputForm({ userId }: { userId: string }) {
       .insert({
         taobao_title: title.trim(),
         original_title: title.trim(),
+        source_url: taobaoUrl.trim() || null,
         taobao_url: taobaoUrl.trim() || null,
         cny_price: parsedPrice,
         twd_cost: pricing?.costTwd,

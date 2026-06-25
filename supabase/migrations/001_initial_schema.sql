@@ -71,6 +71,7 @@ for each row execute function public.handle_new_user();
 create table public.product_drafts (
   id uuid primary key default gen_random_uuid(),
   source_type text not null default 'manual',
+  source_url text,
   taobao_url text,
   taobao_title text,
   original_title text,
@@ -81,13 +82,17 @@ create table public.product_drafts (
   category text,
   vendor text not null default 'CHOCHONEST',
   product_type text,
+  shopify_handle text,
   title_zh text,
   description_html text,
   description_plain text,
   seo_title text,
   seo_description text,
   tags text[] not null default '{}',
+  shopify_tags text[] not null default '{}',
   collection_suggestion text,
+  shopify_collections text[] not null default '{}',
+  metafields_json jsonb not null default '{}'::jsonb,
   note text,
   spec_text text,
   warnings text[] not null default '{}',
@@ -99,6 +104,14 @@ create table public.product_drafts (
   generation_model text,
   generation_cost_estimate numeric(12,4),
   generation_error text,
+  generated_payload_json jsonb not null default '{}'::jsonb,
+  shopify_payload_preview jsonb not null default '{}'::jsonb,
+  worker_id text,
+  worker_locked_at timestamptz,
+  worker_lock_expires_at timestamptz,
+  worker_attempts integer not null default 0 check (worker_attempts >= 0),
+  max_worker_attempts integer not null default 3 check (max_worker_attempts > 0),
+  next_retry_at timestamptz,
   publish_mode public.publish_mode not null default 'active',
   publish_method public.publish_method not null default 'shopify_api',
   publish_status public.publish_status not null default 'pending',
@@ -152,6 +165,7 @@ create table public.generation_runs (
   provider public.generation_provider not null,
   rule_version text,
   model text,
+  worker_id text,
   status public.generation_status not null default 'pending',
   input_payload jsonb not null default '{}'::jsonb,
   output_payload jsonb not null default '{}'::jsonb,
@@ -246,6 +260,18 @@ begin
     or new.generation_model is distinct from old.generation_model
     or new.generation_cost_estimate is distinct from old.generation_cost_estimate
     or new.generation_error is distinct from old.generation_error
+    or new.shopify_handle is distinct from old.shopify_handle
+    or new.shopify_tags is distinct from old.shopify_tags
+    or new.shopify_collections is distinct from old.shopify_collections
+    or new.metafields_json is distinct from old.metafields_json
+    or new.generated_payload_json is distinct from old.generated_payload_json
+    or new.shopify_payload_preview is distinct from old.shopify_payload_preview
+    or new.worker_id is distinct from old.worker_id
+    or new.worker_locked_at is distinct from old.worker_locked_at
+    or new.worker_lock_expires_at is distinct from old.worker_lock_expires_at
+    or new.worker_attempts is distinct from old.worker_attempts
+    or new.max_worker_attempts is distinct from old.max_worker_attempts
+    or new.next_retry_at is distinct from old.next_retry_at
     or new.publish_mode is distinct from old.publish_mode
     or new.publish_status is distinct from old.publish_status
     or new.publish_method is distinct from old.publish_method
@@ -267,7 +293,8 @@ for each row execute function public.guard_sensitive_product_draft_fields();
 
 create or replace function public.claim_pending_generation(
   batch_limit integer default 5,
-  rule_version text default 'chochonest-copywriter@manual-dev'
+  rule_version text default 'chochonest-copywriter@manual-dev',
+  p_worker_id text default 'codex-worker'
 )
 returns setof public.product_drafts
 language plpgsql
@@ -281,6 +308,9 @@ begin
     from public.product_drafts
     where status = 'pending_copy'
       and generation_status = 'pending'
+      and worker_attempts < max_worker_attempts
+      and (next_retry_at is null or next_retry_at <= now())
+      and (worker_lock_expires_at is null or worker_lock_expires_at <= now())
     order by created_at asc
     limit least(greatest(batch_limit, 1), 10)
     for update skip locked
@@ -290,7 +320,12 @@ begin
     set
       status = 'processing',
       generation_status = 'processing',
-      generation_rule_version = rule_version
+      generation_rule_version = rule_version,
+      worker_id = p_worker_id,
+      worker_locked_at = now(),
+      worker_lock_expires_at = now() + interval '15 minutes',
+      worker_attempts = worker_attempts + 1,
+      generation_error = null
     from candidates
     where d.id = candidates.id
     returning d.*
@@ -299,10 +334,10 @@ begin
 end;
 $$;
 
-revoke all on function public.claim_pending_generation(integer, text) from public;
-revoke all on function public.claim_pending_generation(integer, text) from anon;
-revoke all on function public.claim_pending_generation(integer, text) from authenticated;
-grant execute on function public.claim_pending_generation(integer, text) to service_role;
+revoke all on function public.claim_pending_generation(integer, text, text) from public;
+revoke all on function public.claim_pending_generation(integer, text, text) from anon;
+revoke all on function public.claim_pending_generation(integer, text, text) from authenticated;
+grant execute on function public.claim_pending_generation(integer, text, text) to service_role;
 
 create or replace function public.current_user_role()
 returns public.user_role
@@ -333,6 +368,60 @@ stable
 as $$
   select coalesce(public.current_user_role() in ('admin', 'reviewer'), false)
 $$;
+
+create or replace function public.requeue_revision_for_generation(
+  target_draft_id uuid,
+  requeue_comment text default null
+)
+returns public.product_drafts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_draft public.product_drafts;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication is required.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.product_drafts d
+    where d.id = target_draft_id
+      and (public.is_reviewer() or d.created_by = auth.uid())
+  ) then
+    raise exception 'Draft not found or not allowed.';
+  end if;
+
+  update public.product_drafts
+  set
+    status = 'pending_copy',
+    generation_status = 'pending',
+    generation_error = null,
+    error_message = null,
+    worker_id = null,
+    worker_locked_at = null,
+    worker_lock_expires_at = null,
+    next_retry_at = null
+  where id = target_draft_id
+    and status = 'needs_revision'
+  returning * into updated_draft;
+
+  if updated_draft.id is null then
+    raise exception 'Draft must be in needs_revision status before requeue.';
+  end if;
+
+  insert into public.review_logs (draft_id, action, reviewer, comment)
+  values (target_draft_id, 'requeued_pending_copy', auth.uid(), requeue_comment);
+
+  return updated_draft;
+end;
+$$;
+
+revoke all on function public.requeue_revision_for_generation(uuid, text) from public;
+revoke all on function public.requeue_revision_for_generation(uuid, text) from anon;
+grant execute on function public.requeue_revision_for_generation(uuid, text) to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.product_drafts enable row level security;
@@ -491,7 +580,11 @@ values (
   10485760,
   array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 )
-on conflict (id) do nothing;
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 create policy "authenticated users can upload product images"
 on storage.objects for insert
@@ -501,9 +594,9 @@ with check (
   and (storage.foldername(name))[1] = auth.uid()::text
 );
 
-create policy "authenticated users can read product images"
+create policy "public can read product images"
 on storage.objects for select
-to authenticated
+to public
 using (bucket_id = 'product-images');
 
 create policy "owners can update own product image objects"

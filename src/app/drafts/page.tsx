@@ -5,6 +5,8 @@ import { categoryLabel } from "@/lib/categories";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 import type { ProductDraft } from "@/types/domain";
 
+export const dynamic = "force-dynamic";
+
 export default async function DraftQueuePage() {
   if (!hasSupabaseServerEnv()) {
     return <SetupNotice title="商品佇列需要 Supabase 測試環境" />;

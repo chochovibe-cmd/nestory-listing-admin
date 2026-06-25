@@ -49,7 +49,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const payload = buildShopifyProductPayload(draft, publishMode);
   await serviceSupabase
     .from("product_drafts")
-    .update({ status: "publishing", publish_status: "publishing", publish_mode: publishMode })
+    .update({
+      status: "publishing",
+      publish_status: "publishing",
+      publish_mode: publishMode,
+      shopify_payload_preview: payload
+    })
     .eq("id", id);
 
   const publishJobBase = {

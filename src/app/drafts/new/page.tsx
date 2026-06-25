@@ -3,6 +3,8 @@ import { ProductInputForm } from "@/components/listing/ProductInputForm";
 import { SetupNotice } from "@/components/listing/SetupNotice";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewDraftPage() {
   if (!hasSupabaseServerEnv()) {
     return <SetupNotice title="新增商品需要 Supabase 測試環境" />;

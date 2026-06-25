@@ -18,11 +18,13 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const limit = Math.min(Math.max(Number(body.limit ?? 5), 1), 10);
   const ruleVersion = String(body.ruleVersion ?? "chochonest-copywriter@manual-dev");
+  const workerId = String(body.workerId ?? "codex-worker");
   const supabase = createServiceSupabaseClient();
 
   const { data: claimedDraftRows, error } = await supabase.rpc("claim_pending_generation", {
     batch_limit: limit,
-    rule_version: ruleVersion
+    rule_version: ruleVersion,
+    p_worker_id: workerId
   });
 
   if (error) return jsonError(error.message, 500);
@@ -45,6 +47,7 @@ export async function POST(request: NextRequest) {
       mode: "codex_skill",
       provider: "codex",
       rule_version: ruleVersion,
+      worker_id: workerId,
       status: "processing",
       input_payload: draftsWithImages.find((draft) => draft.id === draftId) ?? {},
       started_at: new Date().toISOString()
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
       draft_id: draftId,
       action: "worker.claim",
       status: "processing",
-      message: `Claimed by Codex Skill worker with ${ruleVersion}`
+      message: `Claimed by ${workerId} with ${ruleVersion}`
     }))
   );
 

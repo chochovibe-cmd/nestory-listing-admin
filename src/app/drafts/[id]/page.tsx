@@ -8,6 +8,8 @@ import { categoryLabel } from "@/lib/categories";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
+export const dynamic = "force-dynamic";
+
 export default async function DraftDetailPage({ params }: { params: Promise<{ id: string }> }) {
   if (!hasSupabaseServerEnv()) {
     return <SetupNotice title="商品詳情需要 Supabase 測試環境" />;

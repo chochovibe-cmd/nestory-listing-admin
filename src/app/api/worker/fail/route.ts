@@ -11,13 +11,18 @@ export async function POST(request: NextRequest) {
   if (!body.draftId || !body.error) return jsonError("draftId and error are required");
 
   const supabase = createServiceSupabaseClient();
+  const retryable = body.retryable === true;
 
   const { error } = await supabase
     .from("product_drafts")
     .update({
-      status: "failed",
-      generation_status: "failed",
-      generation_error: String(body.error)
+      status: retryable ? "pending_copy" : "failed",
+      generation_status: retryable ? "pending" : "failed",
+      generation_error: String(body.error),
+      worker_id: null,
+      worker_locked_at: null,
+      worker_lock_expires_at: null,
+      next_retry_at: retryable ? new Date(Date.now() + 5 * 60 * 1000).toISOString() : null
     })
     .eq("id", body.draftId);
 
@@ -28,6 +33,7 @@ export async function POST(request: NextRequest) {
     mode: "codex_skill",
     provider: "codex",
     rule_version: body.ruleVersion ?? null,
+    worker_id: body.workerId ?? null,
     status: "failed",
     error_message: String(body.error),
     output_payload: body,
@@ -37,12 +43,12 @@ export async function POST(request: NextRequest) {
   await supabase.from("automation_logs").insert({
     draft_id: body.draftId,
     action: "worker.fail",
-    status: "failed",
+    status: retryable ? "retry_scheduled" : "failed",
     message: String(body.error),
     raw_payload: body
   });
 
   await notifyMake("generation_failed", { draftId: body.draftId, error: String(body.error) });
 
-  return Response.json({ ok: true, status: "failed" });
+  return Response.json({ ok: true, status: retryable ? "pending_copy" : "failed", retryable });
 }

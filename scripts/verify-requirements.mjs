@@ -49,6 +49,8 @@ const checks = [
     name: "Worker claim uses locked SQL queue",
     ok: /claim_pending_generation/.test(read("supabase/migrations/001_initial_schema.sql"))
       && /for update skip locked/i.test(read("supabase/migrations/001_initial_schema.sql"))
+      && /worker_lock_expires_at/i.test(read("supabase/migrations/001_initial_schema.sql"))
+      && /worker_attempts < max_worker_attempts/i.test(read("supabase/migrations/001_initial_schema.sql"))
       && /grant execute on function public\.claim_pending_generation/i.test(read("supabase/migrations/001_initial_schema.sql"))
   },
   {

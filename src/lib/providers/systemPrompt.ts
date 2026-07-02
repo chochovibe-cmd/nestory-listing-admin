@@ -145,15 +145,17 @@ E｜購買提醒
 }
 
 export function buildCopyUserMessage(input: CopyProviderInput): string {
-  const { rawTitle, saleStatus, price, compareAtPrice, note, imageDescription, specText, webSearchSummary, knownIpNames } = input;
+  const { rawTitle, saleStatus, source, variantSummary, price, compareAtPrice, note, imageDescription, specText, webSearchSummary, knownIpNames } = input;
 
   const lines = [
-    `淘寶原始標題：${rawTitle || "（未提供，請盡量從其他資訊判斷）"}`,
+    `商品來源：${source || "淘寶"}`,
+    `原始標題：${rawTitle || "（未提供，請盡量從其他資訊判斷）"}`,
     `銷售狀態：${saleStatus}`,
   ];
 
   if (price) lines.push(`台幣售價：NT$${price}`);
   if (compareAtPrice) lines.push(`台幣定價：NT$${compareAtPrice}`);
+  if (variantSummary) lines.push(`款式：${variantSummary}`);
   if (note) lines.push(`補充備註：${note}`);
   if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
   if (specText) lines.push(`規格圖辨識文字：${specText}`);

@@ -4,21 +4,30 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ImageType } from "@/types/domain";
 
-const zones: Array<{ type: ImageType; label: string; hint: string }> = [
-  { type: "main", label: "主圖", hint: "Shopify 主圖，後續會裁切 / 補白成 1:1" },
-  { type: "detail", label: "詳情圖", hint: "今天先上傳與預覽，後續處理簡轉繁 / 去字" },
-  { type: "spec", label: "規格圖", hint: "今天先保存，後續給扣哥 Skill 做 OCR 與整理" }
+const zones: Array<{
+  type: ImageType;
+  icon: string;
+  label: string;
+  badgeClass: string;
+  badgeText: string;
+  dropTitle: string;
+}> = [
+  { type: "main", icon: "🖼", label: "主圖（3-5張）", badgeClass: "badge-main", badgeText: "1:1 裁切", dropTitle: "點擊或拖曳主圖" },
+  { type: "detail", icon: "📋", label: "詳情圖", badgeClass: "badge-detail", badgeText: "800px", dropTitle: "點擊或拖曳詳情圖" },
+  { type: "spec", icon: "📐", label: "規格圖", badgeClass: "badge-spec", badgeText: "OCR", dropTitle: "點擊或拖曳規格圖" }
 ];
 
 export function ImageUploader({ draftId, userId }: { draftId: string; userId: string }) {
   const supabase = createClient();
   const [previews, setPreviews] = useState<Record<string, string[]>>({});
+  const [dragging, setDragging] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   async function uploadFiles(type: ImageType, fileList: FileList | null) {
     if (!fileList?.length) return;
     setMessage(`上傳 ${type} 圖片中...`);
     const urls: string[] = [];
+    const startIndex = previews[type]?.length ?? 0;
 
     for (const [index, file] of Array.from(fileList).entries()) {
       const ext = file.name.split(".").pop() || "jpg";
@@ -41,7 +50,7 @@ export function ImageUploader({ draftId, userId }: { draftId: string; userId: st
         image_type: type,
         original_file_url: data.publicUrl,
         processed_file_url: data.publicUrl,
-        sort_order: index,
+        sort_order: startIndex + index,
         processing_status: "uploaded"
       });
     }
@@ -52,23 +61,48 @@ export function ImageUploader({ draftId, userId }: { draftId: string; userId: st
 
   return (
     <div className="drop-grid">
-      {zones.map((zone) => (
-        <label className="drop-zone" key={zone.type}>
-          <strong>{zone.label}</strong>
-          <p className="muted">{zone.hint}</p>
-          <input
-            accept="image/*"
-            multiple
-            onChange={(event) => uploadFiles(zone.type, event.currentTarget.files)}
-            type="file"
-          />
-          <div className="thumbs">
-            {(previews[zone.type] ?? []).map((src) => (
-              <img alt={zone.label} key={src} src={src} />
-            ))}
+      {zones.map((zone) => {
+        const count = previews[zone.type]?.length ?? 0;
+        return (
+          <div className="upload-section" key={zone.type}>
+            <div className="upload-section-label">
+              <span>{zone.icon} {zone.label}</span>
+              <span className={`upload-type-badge ${zone.badgeClass}`}>{zone.badgeText}</span>
+            </div>
+            <label
+              className={`dropzone${count > 0 ? " has-files" : ""}${dragging === zone.type ? " dragover" : ""}`}
+              onDragLeave={() => setDragging(null)}
+              onDragOver={(event) => { event.preventDefault(); setDragging(zone.type); }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragging(null);
+                uploadFiles(zone.type, event.dataTransfer.files);
+              }}
+            >
+              <input
+                accept="image/*"
+                multiple
+                onChange={(event) => uploadFiles(zone.type, event.currentTarget.files)}
+                type="file"
+              />
+              <div className="dz-icon">{zone.icon}</div>
+              <div className="dz-text">
+                <div className="dz-title">{zone.dropTitle}</div>
+                <div className={`dz-status${count > 0 ? " ready" : ""}`}>
+                  {count > 0 ? `✓ 已上傳 ${count} 張` : ""}
+                </div>
+              </div>
+            </label>
+            {count > 0 ? (
+              <div className="thumb-strip">
+                {previews[zone.type].map((src) => (
+                  <img alt={zone.label} className="thumb" key={src} src={src} />
+                ))}
+              </div>
+            ) : null}
           </div>
-        </label>
-      ))}
+        );
+      })}
       {message ? <div className="notice">{message}</div> : null}
     </div>
   );

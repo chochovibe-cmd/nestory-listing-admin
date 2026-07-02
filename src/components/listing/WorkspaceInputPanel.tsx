@@ -18,6 +18,9 @@ const TONE_OPTIONS = [
 ] as const;
 
 const LENGTH_OPTIONS = ["精簡", "標準", "詳細"] as const;
+const SOURCE_OPTIONS = ["淘寶", "閑魚", "蝦皮"] as const;
+
+type VariantRow = { name: string; sku: string; price: string; qty: string };
 
 type Stage = "form" | "created";
 
@@ -28,10 +31,12 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [draftId, setDraftId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
+  const [source, setSource] = useState<(typeof SOURCE_OPTIONS)[number]>(SOURCE_OPTIONS[0]);
   const [price, setPrice] = useState("");
   const [costCurrency, setCostCurrency] = useState<CostCurrency>("CNY");
   const [taobaoUrl, setTaobaoUrl] = useState("");
   const [note, setNote] = useState("");
+  const [variants, setVariants] = useState<VariantRow[]>([]);
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
   const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(TONE_OPTIONS[0].value);
   const [copyLength, setCopyLength] = useState<(typeof LENGTH_OPTIONS)[number]>("標準");
@@ -72,14 +77,20 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       })
     : null;
 
+  function updateVariant(index: number, patch: Partial<VariantRow>) {
+    setVariants((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
   function resetForNextItem() {
     setStage("form");
     setDraftId(null);
     setTitle("");
+    setSource(SOURCE_OPTIONS[0]);
     setPrice("");
     setCostCurrency("CNY");
     setTaobaoUrl("");
     setNote("");
+    setVariants([]);
     setManualPricingEnabled(false);
     setManualCompareAtPrice("");
     setManualSellPrice("");
@@ -130,6 +141,23 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       return;
     }
 
+    const filledVariants = variants.filter((row) => row.name.trim());
+    if (filledVariants.length > 0) {
+      await supabase.from("product_variants").insert(
+        filledVariants.map((row) => ({
+          draft_id: data.id,
+          option1_name: "款式",
+          option1_value: row.name.trim(),
+          sku: row.sku.trim() || null,
+          twd_price: row.price ? Number(row.price) : null,
+          inventory_quantity: row.qty ? Number(row.qty) : 0
+        }))
+      );
+    }
+    const variantSummary = filledVariants
+      .map((row) => `${row.name.trim()}${row.price ? ` 售價${row.price}` : ""}`)
+      .join("、");
+
     setDraftId(data.id);
     setStage("created");
     setMessage("生成文案中...");
@@ -142,6 +170,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         provider: readStoredAiProvider(),
         mode: readStoredRunMode(),
         useWebSearch,
+        source,
+        variantSummary: variantSummary || undefined,
         tone,
         copyLength
       })
@@ -170,8 +200,19 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         {stage === "form" ? (
           <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
             <div className="field">
-              <label>淘寶原標題</label>
-              <textarea onChange={(e) => setTitle(e.target.value)} placeholder="貼上淘寶原始標題..." rows={2} value={title} />
+              <div className="source-inline">
+                <label>原始商品標題</label>
+                <select
+                  className="source-pill"
+                  onChange={(e) => setSource(e.target.value as (typeof SOURCE_OPTIONS)[number])}
+                  value={source}
+                >
+                  {SOURCE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              <textarea onChange={(e) => setTitle(e.target.value)} placeholder="貼上來源商品標題，AI 會整理成 Shopify 商品標題..." rows={2} value={title} />
             </div>
             <div className="row">
               <div className="field">
@@ -272,6 +313,38 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="variant-box">
+              <div className="variant-head">
+                <span>款式 Variants（選填）</span>
+                <button
+                  className="btn-mini"
+                  onClick={() => setVariants((current) => [...current, { name: "", sku: "", price: "", qty: "" }])}
+                  type="button"
+                >
+                  新增款式
+                </button>
+              </div>
+              {variants.length === 0 ? (
+                <div className="variant-empty">單一款式可留空；多款式商品再新增。</div>
+              ) : (
+                variants.map((row, index) => (
+                  <div className="variant-row" key={index}>
+                    <input onChange={(e) => updateVariant(index, { name: e.target.value })} placeholder="款式名" value={row.name} />
+                    <input onChange={(e) => updateVariant(index, { sku: e.target.value })} placeholder="SKU" value={row.sku} />
+                    <input onChange={(e) => updateVariant(index, { price: e.target.value })} placeholder="售價" type="number" value={row.price} />
+                    <input onChange={(e) => updateVariant(index, { qty: e.target.value })} placeholder="庫存" type="number" value={row.qty} />
+                    <button
+                      className="variant-del"
+                      onClick={() => setVariants((current) => current.filter((_, i) => i !== index))}
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
 
             <div className="wsearch-row">

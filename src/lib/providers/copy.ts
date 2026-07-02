@@ -10,6 +10,8 @@ export interface CopyProviderInput {
    * afterwards on the detected values to produce the authoritative tags. */
   rawTitle: string;
   saleStatus: string;
+  source?: string;
+  variantSummary?: string;
   price?: number | null;
   compareAtPrice?: number | null;
   note?: string | null;

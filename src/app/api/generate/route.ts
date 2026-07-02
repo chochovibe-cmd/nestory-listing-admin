@@ -149,6 +149,8 @@ export async function POST(request: NextRequest) {
   const providerKey: "openai" | "claude" = body.provider === "claude" ? "claude" : "openai";
   const runMode: "test" | "llm" = body.mode === "test" ? "test" : "llm";
   const useWebSearch = body.useWebSearch === true;
+  const source = typeof body.source === "string" ? body.source : undefined;
+  const variantSummary = typeof body.variantSummary === "string" ? body.variantSummary : undefined;
   const tone: CopyTone = ["黑膠文藝收藏感", "日系選物店溫柔感", "可愛周邊輕鬆感"].includes(body.tone)
     ? body.tone
     : "黑膠文藝收藏感";
@@ -245,6 +247,8 @@ export async function POST(request: NextRequest) {
       const raw = await COPY_PROVIDERS[providerKey].generate({
         rawTitle: draft.taobao_title ?? draft.original_title ?? "",
         saleStatus: draft.sale_status,
+        source,
+        variantSummary,
         price: draft.twd_price,
         compareAtPrice: draft.compare_at_price,
         note: draft.note,

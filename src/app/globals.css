@@ -163,6 +163,12 @@ select {
   gap: 8px;
 }
 
+.nav-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Pill button groups (Provider / mode switches) */
 .pill-group {
   display: inline-flex;
@@ -803,16 +809,132 @@ textarea {
   background: var(--border);
 }
 
-@media (max-width: 900px) {
+/* ── Mobile floating tab bar (hidden until <=768px; ported from 分支) ── */
+.mobile-tabbar {
+  display: none;
+}
+
+.mtb-ic {
+  font-size: 17px;
+  line-height: 1;
+}
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Leave room for the fixed bottom tab bar. */
+  body { padding-bottom: 84px; }
+
+  .topbar {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    row-gap: 8px;
+  }
+  .brand { flex: 1 1 auto; }
+  .nav {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+    width: 100%;
+  }
+  /* The 3 page links move to the bottom tab bar on mobile. */
+  .nav-links { display: none; }
+
+  .container { padding: 12px; }
   .grid,
-  .row {
+  .row,
+  .settings-grid,
+  .status-grid {
     grid-template-columns: 1fr;
   }
 
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+  .rc-header { align-items: flex-start; flex-wrap: wrap; }
+  .rc-title { flex-basis: 100%; white-space: normal; }
+  .rc-price-stack { flex-direction: row; align-items: center; gap: 8px; }
+  .rc-actions { flex-wrap: wrap; }
+
+  /* 16px keeps iOS Safari from auto-zooming when a field gains focus. */
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px;
+    padding: 11px 12px;
   }
+  .currency-toggle button,
+  .pill-btn { padding: 8px 10px; font-size: 12px; }
+
+  .header-status-wrap {
+    order: 5;
+    flex-basis: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .header-status.status-body { position: static; width: 100%; margin-top: 6px; }
+  .header-status.status-body.open { grid-template-columns: 1fr 1fr; }
+  .header-status .status-pill { justify-content: center; }
+
+  .theme-btn { width: 32px; height: 32px; font-size: 15px; }
+  .hdr-btn { padding: 7px 12px; font-size: 12px; }
+
+  /* 44px minimum touch target for the primary action. */
+  .btn-add { min-height: 44px; }
+
+  .mobile-tabbar {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 900;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 8px;
+    background: var(--surface);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-l);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+  }
+  .mobile-tabbar a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 1.5px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-m);
+    padding: 8px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: 'Noto Sans TC', sans-serif;
+    min-height: 52px;
+    transition: all .2s;
+  }
+  .mobile-tabbar a.active {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+  body[data-theme="dark"] .mobile-tabbar {
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .26);
+  }
+  body[data-theme="dark"] .mobile-tabbar a {
+    border-width: 1px;
+  }
+}
+
+@media (max-width: 420px) {
+  .nav { font-size: 11px; }
 }
 
 /* ── Pricing / settings panel (ported from 分支/index.html) ── */
@@ -874,8 +996,7 @@ textarea {
 /* ── Sticker / Neo-Brutalist polish (ported verbatim from 分支/index.html; `header`
    is a bare element selector so it matches our <header className="topbar">) ── */
 .panel,
-.result-card,
-.mobile-tabbar {
+.result-card {
   border: 2.5px solid var(--line);
   border-radius: var(--radius-l);
   box-shadow: var(--shadow-m);
@@ -1051,8 +1172,7 @@ body[data-theme="kitty"] .rate-val { color: #ffd966 !important; }
 /* ── Reference-balanced polish: cleaner, thinner-bordered dark theme,
    lighter-shadowed light themes (ported from 分支/index.html) ── */
 body:not([data-theme="dark"]) .panel,
-body:not([data-theme="dark"]) .result-card,
-body:not([data-theme="dark"]) .mobile-tabbar {
+body:not([data-theme="dark"]) .result-card {
   border-width: 1.5px;
   box-shadow: 0 3px 0 rgba(26, 26, 26, .045);
 }
@@ -1104,8 +1224,7 @@ body:not([data-theme="dark"]) .hdr-btn:hover {
   box-shadow: 0 3px 0 rgba(26, 26, 26, .07);
 }
 body[data-theme="dark"] .panel,
-body[data-theme="dark"] .result-card,
-body[data-theme="dark"] .mobile-tabbar {
+body[data-theme="dark"] .result-card {
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: none;

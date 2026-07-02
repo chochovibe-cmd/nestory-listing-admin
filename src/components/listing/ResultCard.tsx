@@ -31,11 +31,17 @@ export function ResultCard({
   const [seoTitle, setSeoTitle] = useState(draft.seo_title ?? "");
   const [seoDescription, setSeoDescription] = useState(draft.seo_description ?? "");
   const [tags, setTags] = useState(draft.tags?.join(", ") ?? "");
+  const [faq, setFaq] = useState(draft.generated_faq_html ?? "");
+  const [sellPrice, setSellPrice] = useState(draft.twd_price?.toString() ?? "");
+  const [compareAtPrice, setCompareAtPrice] = useState(draft.compare_at_price?.toString() ?? "");
+  const [detectedCategory, setDetectedCategory] = useState(draft.detected_category ?? "");
+  const [sku, setSku] = useState(draft.sku ?? "");
   const [publishMode, setPublishMode] = useState(draft.publish_mode);
   const [message, setMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
 
   const { icon, className } = statusIcon(draft);
+  const profit = draft.twd_price != null && draft.twd_cost != null ? draft.twd_price - draft.twd_cost : null;
 
   async function save() {
     const { error } = await supabase
@@ -46,6 +52,11 @@ export function ResultCard({
         seo_title: seoTitle || null,
         seo_description: seoDescription || null,
         tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        generated_faq_html: faq || null,
+        twd_price: sellPrice ? Number(sellPrice) : null,
+        compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
+        detected_category: detectedCategory || null,
+        sku: sku || null,
         publish_mode: publishMode
       })
       .eq("id", draft.id);
@@ -134,7 +145,12 @@ export function ResultCard({
       <div className="rc-header" onClick={() => setExpanded((current) => !current)}>
         <span className={`rc-status ${className}`}>{icon}</span>
         <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
-        {draft.twd_price ? <span className="rc-price">NT${draft.twd_price.toLocaleString()}</span> : null}
+        {draft.twd_price ? (
+          <div className="rc-price-stack">
+            <span className="rc-price">NT${draft.twd_price.toLocaleString()}</span>
+            {profit != null ? <span className="rc-profit">利潤 NT${profit.toLocaleString()}</span> : null}
+          </div>
+        ) : null}
         <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
       </div>
       {expanded ? (
@@ -158,6 +174,39 @@ export function ResultCard({
           <div className="field">
             <label>SEO 描述</label>
             <textarea onChange={(event) => setSeoDescription(event.target.value)} value={seoDescription} />
+          </div>
+          <div className="field">
+            <label>FAQ</label>
+            <textarea onChange={(event) => setFaq(event.target.value)} rows={6} value={faq} />
+          </div>
+          <div className="row">
+            <div className="field">
+              <label>AI 偵測類型</label>
+              <input onChange={(event) => setDetectedCategory(event.target.value)} value={detectedCategory} />
+            </div>
+            <div className="field">
+              <label>SKU</label>
+              <input onChange={(event) => setSku(event.target.value)} value={sku} />
+            </div>
+          </div>
+          <div className="rc-field">
+            <div className="rc-label">定價</div>
+            {draft.twd_cost != null ? (
+              <div className="muted">
+                成本 NT${draft.twd_cost.toLocaleString()}
+                {profit != null && draft.twd_price ? ` ／ 毛利 ${Math.round((profit / draft.twd_price) * 100)}%` : null}
+              </div>
+            ) : null}
+            <div className="row">
+              <div className="field">
+                <label>售價 TWD</label>
+                <input min="0" onChange={(event) => setSellPrice(event.target.value)} type="number" value={sellPrice} />
+              </div>
+              <div className="field">
+                <label>定價 TWD</label>
+                <input min="0" onChange={(event) => setCompareAtPrice(event.target.value)} type="number" value={compareAtPrice} />
+              </div>
+            </div>
           </div>
           <div className="field">
             <label>Tags</label>

@@ -99,6 +99,10 @@ export interface ProductDraft {
   character_name: string | null;
   why_we_chose_it: string | null;
   product_highlights: string[];
+  generated_faq_html: string | null;
+  compare_at_price: number | null;
+  detected_category: string | null;
+  sku: string | null;
   video_urls: unknown[];
   created_at: string;
   updated_at: string;

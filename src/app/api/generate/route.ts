@@ -210,6 +210,7 @@ export async function POST(request: NextRequest) {
       seo_description: localizedOutput.meta_description,
       tags: localizedOutput.shopify_tags,
       shopify_tags: localizedOutput.shopify_tags,
+      generated_faq_html: localizedOutput.generated_faq_html,
       why_we_chose_it: providerOutput.whyWeChoseIt,
       product_highlights: providerOutput.productHighlights,
       warnings: localizedOutput.validation_warnings,

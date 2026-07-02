@@ -77,6 +77,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         cny_price: parsedPrice,
         twd_cost: pricing?.costTwd,
         twd_price: pricing?.sellPrice,
+        compare_at_price: pricing?.compareAtPrice,
         pricing_formula: pricing?.pricingFormula,
         category,
         note: note.trim() || null,
@@ -221,7 +222,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
 
             {pricing ? (
               <div className="notice">
-                預估成本 NT${pricing.costTwd.toLocaleString()} / 建議售價 NT${pricing.sellPrice.toLocaleString()} / 利潤率 {pricing.profitPct}%
+                預估成本 NT${pricing.costTwd.toLocaleString()} / 建議售價 NT${pricing.sellPrice.toLocaleString()} / 定價 NT${pricing.compareAtPrice.toLocaleString()} / 利潤率 {pricing.profitPct}%
               </div>
             ) : null}
 

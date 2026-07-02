@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { AuthNav } from "@/components/AuthNav";
 import { ProviderSwitcher } from "@/components/ProviderSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import "./globals.css";
@@ -48,7 +49,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link href="/review">待審核</Link>
               <ProviderSwitcher />
               <ThemeSwitcher />
-              <Link href="/login">登入</Link>
+              <AuthNav />
             </nav>
           </header>
           {children}

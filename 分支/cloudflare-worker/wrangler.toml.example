@@ -1,0 +1,17 @@
+name = "chochonest-v5-worker"
+main = "src/worker.js"
+compatibility_date = "2026-06-25"
+
+[vars]
+# Set this to the Anthropic model you want the Worker to use.
+# Keeping it in vars makes future model changes a deployment config change, not a frontend edit.
+ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+CLOUDINARY_FOLDER = "chochonest/listing-v5"
+ALLOWED_ORIGIN = "*"
+
+# Required secrets:
+# wrangler secret put ACCESS_TOKEN
+# wrangler secret put ANTHROPIC_API_KEY
+# wrangler secret put CLOUDINARY_CLOUD_NAME
+# wrangler secret put CLOUDINARY_API_KEY
+# wrangler secret put CLOUDINARY_API_SECRET

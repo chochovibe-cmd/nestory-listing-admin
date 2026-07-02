@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>潮巢 商品上架助手 v6</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+:root{--bg:#0e0e12;--surface:#16161d;--surface2:#1e1e28;--border:#2a2a38;--accent:#c8ff00;--accent2:#ff6b6b;--accent3:#7c5cff;--text:#e8e8f0;--text-muted:#6b6b80;--text-dim:#9898aa;--success:#00e5a0;--warn:#ffb347;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
+
+/* ── Overlay ── */
+.api-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:flex;align-items:center;justify-content:center;}
+.api-modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;width:380px;text-align:center;}
+.api-modal h2{font-family:'Space Grotesk',sans-serif;font-size:18px;margin-bottom:10px;}
+.api-modal p{font-size:12px;color:var(--text-muted);margin-bottom:18px;line-height:1.6;}
+.api-modal input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;padding:10px 13px;outline:none;margin-bottom:12px;}
+.api-hint{font-size:10px;color:var(--text-muted);margin-top:8px;}
+.btn-secondary{width:100%;background:var(--surface2);color:var(--text-muted);border:1px solid var(--border);border-radius:8px;padding:10px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;transition:all .2s;}
+.btn-secondary:hover{border-color:var(--accent3);color:var(--accent3);}
+
+/* ── Header ── */
+header{border-bottom:1px solid var(--border);padding:13px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:100;}
+.logo{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;display:flex;align-items:center;gap:10px;}
+.logo-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.logo-sub{font-size:10px;color:var(--text-muted);font-weight:400;letter-spacing:.12em;text-transform:uppercase;}
+.hdr-right{display:flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--text-muted);}
+.rate-val{color:var(--accent);font-weight:600;font-size:13px;}
+.hdr-btn{background:none;border:1px solid var(--border);color:var(--text-muted);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;transition:all .2s;}
+.hdr-btn:hover{border-color:var(--accent);color:var(--accent);}
+.demo-badge{background:var(--accent3);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.08em;}
+
+/* ── Layout ── */
+.container{max-width:1340px;margin:0 auto;padding:20px 24px;display:grid;grid-template-columns:390px 1fr;gap:20px;align-items:start;}
+
+/* ── Panels ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.panel-hdr{padding:11px 16px;border-bottom:1px solid var(--border);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);display:flex;align-items:center;gap:8px;}
+.panel-hdr .ic{color:var(--accent);}
+.panel-body{padding:16px;}
+
+/* ── Form ── */
+.field{margin-bottom:13px;}
+label{display:block;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;}
+input[type=text],input[type=number],textarea,select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Noto Sans TC',sans-serif;font-size:13px;padding:8px 11px;transition:border-color .2s;outline:none;}
+input:focus,textarea:focus,select:focus{border-color:var(--accent3);}
+textarea{resize:vertical;min-height:60px;}
+select option{background:var(--surface2);}
+.price-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;}
+.currency-label{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 11px;font-size:12px;color:var(--text-muted);font-family:'Space Grotesk',sans-serif;white-space:nowrap;}
+
+/* ── Web Search toggle ── */
+.wsearch-row{display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:13px;}
+.wsearch-label{font-size:12px;color:var(--text-dim);}
+.wsearch-label span{font-size:10px;color:var(--text-muted);display:block;margin-top:1px;}
+.toggle-wrap{display:flex;align-items:center;gap:8px;}
+.toggle{position:relative;width:36px;height:20px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;position:absolute;}
+.toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:20px;cursor:pointer;transition:background .2s;}
+.toggle-slider:before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:var(--text-muted);border-radius:50%;transition:all .2s;}
+.toggle input:checked+.toggle-slider{background:var(--accent3);}
+.toggle input:checked+.toggle-slider:before{transform:translateX(16px);background:#fff;}
+.toggle-cost{font-size:10px;color:var(--text-muted);}
+
+/* ── Upload zones ── */
+.upload-section{margin-bottom:12px;}
+.upload-section-label{font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;}
+.upload-type-badge{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;}
+.badge-main{background:rgba(200,255,0,.12);color:var(--accent);border:1px solid rgba(200,255,0,.3);}
+.badge-detail{background:rgba(124,92,255,.12);color:var(--accent3);border:1px solid rgba(124,92,255,.3);}
+.badge-spec{background:rgba(255,107,107,.12);color:var(--accent2);border:1px solid rgba(255,107,107,.3);}
+.dropzone{border:1px dashed var(--border);border-radius:8px;padding:11px 12px;cursor:pointer;transition:all .2s;position:relative;display:flex;align-items:center;gap:10px;}
+.dropzone:hover{border-color:var(--accent3);background:rgba(124,92,255,.04);}
+.dropzone.has-files{border-color:var(--success);border-style:solid;background:rgba(0,229,160,.03);}
+.dropzone.dragover{border-color:var(--accent);background:rgba(200,255,0,.04);}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.dz-icon{font-size:18px;flex-shrink:0;opacity:.5;}
+.dz-text{flex:1;}
+.dz-title{font-size:12px;font-weight:600;color:var(--text-dim);}
+.dz-sub{font-size:10px;color:var(--text-muted);margin-top:1px;}
+.dz-status{font-size:10px;font-weight:700;margin-top:3px;}
+.dz-status.ready{color:var(--success);}
+.thumb-strip{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+.thumb{width:38px;height:38px;object-fit:cover;border-radius:4px;border:1px solid var(--border);}
+
+/* ── Add to queue btn ── */
+.btn-add{width:100%;background:var(--surface2);color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:11px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;margin-top:4px;letter-spacing:.04em;}
+.btn-add:hover{background:rgba(200,255,0,.08);}
+
+/* ── Settings ── */
+.settings-toggle{width:100%;background:none;border:none;border-top:1px solid var(--border);padding:9px 16px;color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.1em;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;transition:color .2s;}
+.settings-toggle:hover{color:var(--text);}
+.settings-body{padding:13px 16px;border-top:1px solid var(--border);background:var(--surface2);display:none;}
+.settings-body.open{display:block;}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.formula-preview{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:9px 12px;font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--accent);margin-top:10px;}
+.settings-note{font-size:10px;color:var(--text-muted);margin-top:8px;line-height:1.5;border-top:1px solid var(--border);padding-top:8px;}
+
+/* ── Queue ── */
+.queue-header{padding:11px 16px;border-bottom:1px solid var(--border);font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);display:flex;align-items:center;gap:8px;}
+.queue-count{margin-left:auto;background:var(--accent);color:#0e0e12;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;}
+.queue-empty{padding:24px 16px;text-align:center;font-size:12px;color:var(--text-muted);}
+.queue-list{max-height:220px;overflow-y:auto;}
+.queue-item{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px;}
+.queue-item:last-child{border-bottom:none;}
+.qi-status{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
+.qi-status.waiting{background:var(--surface2);color:var(--text-muted);}
+.qi-status.running{background:rgba(124,92,255,.2);color:var(--accent3);animation:spinS 1s linear infinite;}
+@keyframes spinS{to{transform:rotate(360deg)}}
+.qi-status.done{background:rgba(0,229,160,.15);color:var(--success);}
+.qi-status.error{background:rgba(255,107,107,.15);color:var(--accent2);}
+.qi-title{flex:1;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
+.qi-wsearch{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(124,92,255,.2);color:var(--accent3);border:1px solid rgba(124,92,255,.3);white-space:nowrap;}
+.qi-price{font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--text-muted);white-space:nowrap;}
+.qi-del{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;transition:color .15s;flex-shrink:0;}
+.qi-del:hover{color:var(--accent2);}
+.queue-actions{padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px;}
+.btn-run-all{flex:1;background:var(--accent);color:#0e0e12;border:none;border-radius:7px;padding:10px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.04em;}
+.btn-run-all:hover{background:#d4ff20;}
+.btn-run-all:disabled{opacity:.4;cursor:not-allowed;}
+.btn-clear-q{background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:7px;padding:10px 14px;font-size:12px;cursor:pointer;transition:all .2s;}
+.btn-clear-q:hover{border-color:var(--accent2);color:var(--accent2);}
+
+/* ── Progress ── */
+.progress-bar{height:2px;background:var(--surface2);}
+.progress-fill{height:100%;background:var(--accent);transition:width .4s ease;width:0%;}
+
+/* ── Result cards ── */
+.results-list{padding:12px;}
+.result-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden;}
+.result-card.active{border-color:var(--accent3);}
+.rc-header{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none;}
+.rc-status{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
+.rc-status.done{background:rgba(0,229,160,.15);color:var(--success);}
+.rc-status.need_review{background:rgba(255,179,71,.15);color:var(--warn);}
+.rc-status.blocked{background:rgba(255,107,107,.15);color:var(--accent2);}
+.rc-status.error{background:rgba(255,107,107,.15);color:var(--accent2);}
+.rc-status.running{background:rgba(124,92,255,.2);color:var(--accent3);}
+.rc-title{flex:1;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rc-badge{font-size:9px;padding:2px 7px;border-radius:4px;font-weight:700;white-space:nowrap;}
+.rc-badge.ready{background:rgba(0,229,160,.15);color:var(--success);border:1px solid rgba(0,229,160,.3);}
+.rc-badge.need_review{background:rgba(255,179,71,.15);color:var(--warn);border:1px solid rgba(255,179,71,.3);}
+.rc-badge.blocked{background:rgba(255,107,107,.15);color:var(--accent2);border:1px solid rgba(255,107,107,.3);}
+.rc-price{font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--accent);white-space:nowrap;}
+.rc-toggle{font-size:11px;color:var(--text-muted);}
+.rc-body{padding:0 14px 14px;display:none;}
+.rc-body.open{display:block;}
+.rc-section{margin-bottom:12px;}
+.rc-label{font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;}
+.rc-text{font-size:12px;color:var(--text-dim);line-height:1.7;background:var(--bg);border-radius:5px;padding:8px 10px;white-space:pre-wrap;}
+.rc-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
+.rc-tag{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--text-dim);}
+.rc-tag.ip{border-color:rgba(200,255,0,.3);color:var(--accent);}
+.rc-tag.char{border-color:rgba(124,92,255,.3);color:var(--accent3);}
+.rc-tag.type{border-color:rgba(0,229,160,.3);color:var(--success);}
+.rc-tag.usage{border-color:rgba(255,179,71,.3);color:var(--warn);}
+.rc-imgs{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;}
+.rc-img{width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);}
+.faq-item{background:var(--bg);border-radius:5px;padding:8px 10px;margin-bottom:6px;font-size:12px;}
+.faq-q{font-weight:600;color:var(--text);margin-bottom:3px;}
+.faq-a{color:var(--text-dim);line-height:1.6;}
+.coll-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
+.coll-tag{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--text-dim);}
+.status-reason{background:var(--bg);border-radius:5px;padding:7px 10px;font-size:11px;color:var(--warn);margin-top:4px;line-height:1.5;}
+.rc-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
+.btn-csv{background:var(--accent);color:#0e0e12;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-csv:hover{background:#d4ff20;}
+.copy-btn{background:none;border:none;color:var(--text-muted);font-size:10px;cursor:pointer;padding:2px 6px;border-radius:3px;transition:color .15s;}
+.copy-btn:hover{color:var(--accent);}
+.copy-btn.copied{color:var(--success);}
+
+/* ── DL all ── */
+.dl-all-bar{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;}
+.btn-dl-all{background:var(--success);color:#0e0e12;border:none;border-radius:7px;padding:10px 18px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-dl-all:hover{filter:brightness(1.1);}
+.btn-dl-all:disabled{opacity:.4;cursor:not-allowed;}
+.dl-hint{font-size:11px;color:var(--text-muted);}
+
+/* ── Empty ── */
+.empty-state{padding:48px 24px;text-align:center;color:var(--text-muted);}
+.empty-icon{font-size:32px;margin-bottom:12px;opacity:.3;}
+
+/* ── Misc ── */
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+@media(max-width:860px){.container{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<!-- Overlay -->
+<div class="api-overlay" id="apiOverlay">
+  <div class="api-modal">
+    <h2>🔑 輸入存取密碼</h2>
+    <p>請輸入團隊共用密碼以使用上架工具。</p>
+    <input type="password" id="accessTokenInput" placeholder="輸入密碼..."/>
+    <button class="btn-run-all" style="width:100%;margin-top:4px;" onclick="saveAccessToken()">進入</button>
+    <button class="btn-secondary" onclick="enterDemo()">先看 Demo</button>
+    <p class="api-hint">✓ API Key 由伺服器管理，此裝置不儲存任何金鑰</p>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <span class="logo-dot"></span>
+    <div>
+      <div>潮巢 商品上架助手</div>
+      <div class="logo-sub">CHOCHONEST · v6</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span>CNY/TWD</span>
+    <span class="rate-val" id="rateDisplay">4.50</span>
+    <button class="hdr-btn" onclick="fetchLiveRate()">↻ 匯率</button>
+    <button class="hdr-btn" onclick="resetAccessToken()">⚙ 重設密碼</button>
+    <span class="demo-badge" id="demoBadge" style="display:none">◉ DEMO</span>
+  </div>
+</header>
+
+<div class="container">
+<!-- ══ LEFT ══ -->
+<div>
+  <!-- Input panel -->
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-hdr"><span class="ic">✦</span> 新增商品</div>
+    <div class="panel-body">
+
+      <div class="field">
+        <label>淘寶商品標題</label>
+        <textarea id="inputTitle" placeholder="貼上淘寶原始標題（含簡體中文也沒關係，AI 會轉換）" rows="2"></textarea>
+      </div>
+      <div class="field">
+        <label>淘寶售價（人民幣）</label>
+        <div class="price-row">
+          <input type="number" id="inputPrice" placeholder="0.00" step="0.01" min="0"/>
+          <div class="currency-label">CNY ¥</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>商品類型</label>
+        <select id="inputCategory">
+          <option value="公仔模型">公仔模型</option>
+          <option value="景品">景品</option>
+          <option value="PVC">PVC 手辦</option>
+          <option value="黏土人">黏土人</option>
+          <option value="盲盒">盲盒</option>
+          <option value="扭蛋">扭蛋</option>
+          <option value="一番賞大賞">一番賞大賞</option>
+          <option value="一番賞小賞">一番賞小賞</option>
+          <option value="娃娃抱枕">娃娃抱枕</option>
+          <option value="吊飾徽章">吊飾徽章</option>
+          <option value="壓克力立牌">壓克力立牌</option>
+          <option value="手機電腦小物">手機電腦小物</option>
+          <option value="文具小物">文具小物</option>
+          <option value="服飾配件">服飾配件</option>
+          <option value="生活用品">生活用品</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>補充備註（選填）</label>
+        <input type="text" id="inputNote" placeholder="尺寸、限定版、套組內容物、退回重改備註..."/>
+      </div>
+
+      <!-- Web Search toggle -->
+      <div class="wsearch-row">
+        <div class="wsearch-label">
+          🔍 Web Search 補充資訊
+          <span>開啟時 AI 會先搜尋此商品再產文，適合冷門 IP 或資訊不足的商品</span>
+        </div>
+        <div class="toggle-wrap">
+          <label class="toggle">
+            <input type="checkbox" id="wsearchToggle"/>
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-cost" id="wsearchCost">+約 5 秒</span>
+        </div>
+      </div>
+
+      <!-- 主圖 -->
+      <div class="upload-section">
+        <div class="upload-section-label">
+          <span>🖼 主圖（3–5 張）</span>
+          <span class="upload-type-badge badge-main">1:1 裁切</span>
+        </div>
+        <div class="dropzone" id="dz-main" ondragover="dzOver(event,'main')" ondragleave="dzLeave(event,'main')" ondrop="dzDrop(event,'main')">
+          <input type="file" accept="image/*" multiple onchange="handleFiles(this.files,'main')"/>
+          <div class="dz-icon">🖼</div>
+          <div class="dz-text">
+            <div class="dz-title">點擊或拖曳主圖</div>
+            <div class="dz-status" id="st-main"></div>
+          </div>
+        </div>
+        <div class="thumb-strip" id="thumbs-main"></div>
+      </div>
+
+      <!-- 詳情圖 -->
+      <div class="upload-section">
+        <div class="upload-section-label">
+          <span>📋 詳情圖</span>
+          <span class="upload-type-badge badge-detail">1200px</span>
+        </div>
+        <div class="dropzone" id="dz-detail" ondragover="dzOver(event,'detail')" ondragleave="dzLeave(event,'detail')" ondrop="dzDrop(event,'detail')">
+          <input type="file" accept="image/*" multiple onchange="handleFiles(this.files,'detail')"/>
+          <div class="dz-icon">📋</div>
+          <div class="dz-text">
+            <div class="dz-title">點擊或拖曳詳情圖</div>
+            <div class="dz-status" id="st-detail"></div>
+          </div>
+        </div>
+        <div class="thumb-strip" id="thumbs-detail"></div>
+      </div>
+
+      <!-- 規格圖 -->
+      <div class="upload-section">
+        <div class="upload-section-label">
+          <span>📐 規格圖（AI辨識簡→繁）</span>
+          <span class="upload-type-badge badge-spec">OCR</span>
+        </div>
+        <div class="dropzone" id="dz-spec" ondragover="dzOver(event,'spec')" ondragleave="dzLeave(event,'spec')" ondrop="dzDrop(event,'spec')">
+          <input type="file" accept="image/*" multiple onchange="handleFiles(this.files,'spec')"/>
+          <div class="dz-icon">📐</div>
+          <div class="dz-text">
+            <div class="dz-title">點擊或拖曳規格圖</div>
+            <div class="dz-status" id="st-spec"></div>
+          </div>
+        </div>
+        <div class="thumb-strip" id="thumbs-spec"></div>
+      </div>
+
+      <button class="btn-add" onclick="addToQueue()">＋ 加入佇列</button>
+    </div>
+
+    <!-- Settings -->
+    <button class="settings-toggle" onclick="toggleSettings()">
+      <span>⚙ 定價規則設定</span><span id="settingsArrow">▾</span>
+    </button>
+    <div class="settings-body" id="settingsBody">
+      <div class="settings-grid">
+        <div class="field"><label>CNY 匯率</label><input type="number" id="sRate" value="4.50" step="0.01" oninput="updateFormula()"/></div>
+        <div class="field"><label>成本係數</label><input type="number" id="sCost" value="1.30" step="0.01" oninput="updateFormula()"/></div>
+        <div class="field"><label>利潤加成</label><input type="number" id="sMark" value="1.40" step="0.01" oninput="updateFormula()"/></div>
+        <div class="field"><label>最低售價 TWD</label><input type="number" id="sMin" value="199" step="1"/></div>
+      </div>
+      <div class="formula-preview" id="formulaPreview">售價 ＝ 人民幣 × 4.50 × 1.30 × 1.40</div>
+      <div class="settings-note">成本係數 1.30 含運費手續費緩衝 ／ 利潤加成 1.40 = 40% 利潤空間</div>
+    </div>
+  </div>
+
+  <!-- Queue panel -->
+  <div class="panel">
+    <div class="queue-header">
+      <span class="ic">☰</span> 待處理佇列
+      <span class="queue-count" id="queueCount">0</span>
+    </div>
+    <div id="queueEmpty" class="queue-empty">尚未加入任何商品</div>
+    <div class="queue-list" id="queueList" style="display:none;"></div>
+    <div class="queue-actions">
+      <button class="btn-run-all" id="runAllBtn" onclick="runQueue()" disabled>▶ 全部執行</button>
+      <button class="btn-clear-q" onclick="clearQueue()">清除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ RIGHT ══ -->
+<div style="position:sticky;top:60px;">
+  <div class="panel">
+    <div class="panel-hdr">
+      <span class="ic">◈</span> 生成結果
+      <span id="outputStatus" style="margin-left:auto;font-size:10px;color:var(--text-muted);"></span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">◈</div>
+      <div style="font-size:13px;line-height:1.8;">
+        加入商品到佇列<br>點「全部執行」批次產出<br>完成後統一下載 CSV
+      </div>
+    </div>
+
+    <div id="resultsList" style="display:none;">
+      <div class="results-list" id="resultsContainer"></div>
+      <div class="dl-all-bar">
+        <button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllCSV()" disabled>⬇ 下載全部 CSV（Matrixify）</button>
+        <span class="dl-hint" id="dlHint">完成後合併匯入</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /container -->
+
+<script>
+// ══════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════
+const WORKER_URL = 'https://chochonest-worker.your-subdomain.workers.dev';
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+let accessToken = localStorage.getItem('cho_access_token') || '';
+let DEMO = !accessToken;
+let currentFiles = { main:[], detail:[], spec:[] };
+let queue = [];
+let results = {};
+let isRunning = false;
+
+// ══════════════════════════════════════════
+// SYSTEM PROMPT（潮巢 Nestory 規則 V1.0）
+// ══════════════════════════════════════════
+const SYSTEM_PROMPT = `你是潮巢 Nestory（潮巢玩居）的資深商品文案編輯。以下是完整的品牌規則，每次產出都必須嚴格遵守。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【品牌定位】
+台灣正版授權動漫 IP 選物電商。客群：20–35 歲台灣年輕人，喜愛動漫收藏、桌面佈置、房間美化。
+語氣：親切但有品味的選物店語氣。像懂 IP、懂收藏、也懂生活佈置的選物店編輯，介紹一件值得放進房間或桌面的收藏品。
+不是冷淡潮牌。不是蝦皮叫賣。不是官方客服。不是 AI 摘要。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【語言規則（最重要）】
+輸入標題可能是淘寶簡體中文，全部轉換為台灣繁體中文用語：
+- 手辦 → 手辦（保留，台灣通用）
+- 摆件 → 擺件
+- 周边 → 周邊
+- 娃娃 → 玩偶（若指毛絨類）
+- 钥匙扣 → 鑰匙圈
+- 挂件 → 吊飾
+- 亚克力 → 壓克力
+- 盲盒 → 盲盒（保留）
+- 公仔 → 公仔（保留）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【禁忌詞（絕對不能出現）】
+超值、爆款、必買、剁手、秒殺、全網最低、俗又大碗、台灣發貨、現貨秒出、CP 值爆表、網紅同款、錯過會後悔、最強、神級、頂級收藏、絕對正版、保證升值
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【標題公式】
+IP名稱 角色名稱 商品特色／款式｜用途／情境
+
+範例：
+航海王 魯夫手機背夾｜娃娃造型｜手機支架小物
+蠟筆小新 小白抱枕｜療癒軟萌款｜房間佈置娃娃
+吉伊卡哇 角色吊飾｜迷你收藏款｜包包鑰匙圈小物
+
+規則：
+- 不要硬塞太多關鍵字
+- 不要每個都放「正版授權」，除非特別需要強調
+- 40–60 字為佳
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【描述結構（五段，每段不超過 4 句）】
+A 開頭介紹：2–3 句，說明商品是什麼、哪個 IP／角色、主要特色與適合情境。不能像 AI 摘要，也不能像蝦皮叫賣。
+B 商品亮點：3–5 點條列，可含角色造型亮點、商品功能、收藏價值、陳列情境、送禮或自用適合度
+C 適合誰：依商品屬性，描述具體情境讓買家對號入座，不要說「適合送禮給喜歡動漫的朋友」這種空話
+D 商品資訊：有資料才填，不能亂補。可含尺寸、材質、款式、內容物、使用方式、注意事項
+E 購買提醒：依商品狀態加入，可含「海外預購商品，實際出貨依品牌方與供應狀態為主」「圖片可能因螢幕顯示略有色差」「海外商品外盒可能有運輸痕跡」
+
+段落之間用空行分隔，不加 ✦ 等符號在段首。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【FAQ 規則】
+最低 3 題，最多 5 題，不能完全制式，依商品類型客製化。
+每題格式：{"q":"問題","a":"回答"}
+常用題型：
+- 這款商品適合收藏還是日常使用？（依商品類型回答）
+- 適合送禮嗎？（依 IP 知名度、角色辨識度、商品實用性）
+- 商品多久出貨？（依商品狀態，不可亂承諾固定出貨日）
+- 圖片和實品會有差異嗎？（提醒色差、尺寸誤差、外盒運輸痕跡）
+- 如果商品缺貨怎麼辦？（說明會協助更換、等待或退費）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【SEO Title 格式】
+IP＋角色／商品名｜商品類型｜潮巢 Nestory
+範例：航海王 魯夫手機背夾｜手機支架小物｜潮巢 Nestory
+原則：IP 與角色優先，商品類型要具體，不堆砌無關關鍵字
+
+【Meta Description】
+70–110 字，順序：IP／角色 → 商品特色 → 使用或收藏情境 → 潮巢定位
+範例：航海王魯夫手機背夾，以角色娃娃造型結合手機支架功能，適合日常使用、桌面擺放與粉絲收藏。潮巢 Nestory 精選正版授權 IP 周邊與生活選物。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【Tags 四層格式（帶前綴）】
+每層都要有，格式如下：
+IP 層：IP_作品名（例：IP_咒術迴戰、IP_三麗鷗）
+角色層：角色_角色名（例：角色_五條悟、角色_小八貓）
+型態層：型態_品項（從以下選：型態_公仔模型、型態_景品、型態_PVC、型態_盲盒、型態_扭蛋、型態_黏土人、型態_娃娃抱枕、型態_吊飾徽章、型態_壓克力立牌、型態_手機電腦小物、型態_文具小物）
+用途層（選 1–3 個）：用途_桌面佈置、用途_房間佈置、用途_送禮推薦、用途_可愛療癒、用途_展示收納、用途_順手加購、用途_日常使用、用途_帥氣熱血、用途_唯美夢幻
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【Collection 歸類】
+每個商品必須給出建議 Collection，分三類：
+IP Collection：對應作品名（SEO 主力）
+型態 Collection：對應商品類型
+情境 Collection：對應使用情境（可複選）
+狀態 Collection（選填）：新品上架、人氣熱銷、限量收藏、CP爆擊、順手加購
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【商品狀態判斷】
+ready：標題完整、描述完整、FAQ 產出、SEO 完整、Tags 完整、Collection 建議完整
+need_review：IP 或角色不確定、商品類型不明確、款式資訊不足、FAQ 需人工調整
+blocked：商品疑似非授權、資訊嚴重不足、內容可能侵權或高風險
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【輸出格式】
+回傳純 JSON，不加任何 markdown、說明文字或 code block：
+{
+  "title": "標題（依公式，40–60字）",
+  "seo_title": "SEO Title（IP+角色+類型+潮巢 Nestory）",
+  "description": "五段描述，段落間空行分隔",
+  "seo_description": "Meta 描述（70–110字）",
+  "faq": [{"q":"問題","a":"回答"},{"q":"問題","a":"回答"},{"q":"問題","a":"回答"}],
+  "tags": ["IP_作品名","角色_角色名","型態_品項","用途_情境"],
+  "collections": {"ip":["IP Collection名"],"type":["型態 Collection名"],"theme":["情境 Collection名"],"promo":[]},
+  "status": "ready 或 need_review 或 blocked",
+  "status_reason": "若非 ready，說明原因；若 ready 則填 null"
+}`;
+
+// ══════════════════════════════════════════
+// DEMO DATA
+// ══════════════════════════════════════════
+const DEMO_RESULT = {
+  title:'咒術迴戰 五條悟 景品公仔｜白髮蒙眼造型｜收藏展示擺件',
+  seo_title:'咒術迴戰 五條悟 景品公仔｜正版授權收藏擺件｜潮巢 Nestory',
+  description:`喜歡五條悟的你，一定看過那個蒙著眼睛、白髮隨風飄動的標誌性造型。這款景品公仔完整還原了那個讓人移不開眼的姿態，放在書桌或展示架上，像是把他從畫面裡請進了你的空間。
+
+商品亮點：
+・原作還原度高，白髮與蒙眼布細節精緻
+・景品規格，適合收藏入門
+・附原廠底座，可穩定直立展示
+・PVC 材質，適合長期擺放
+
+如果你的書桌已經有幾隻公仔，但總覺得少了那個「夠帥到可以當主角」的那一隻，這款就是了。也很適合送給剛追完咒術迴戰、準備開始收藏的朋友。
+
+商品資訊：
+高度約 17cm（含底座）
+材質：PVC
+原廠景品規格，非完成品等級，品質與塗裝依景品標準
+
+購買提醒：
+本商品為海外採購，實際到貨依供應商備貨狀況為主。商品外盒可能有輕微運輸痕跡，不影響商品本體。圖片顏色因螢幕設定可能略有色差。`,
+  seo_description:'咒術迴戰五條悟景品公仔，白髮蒙眼經典造型，高約17cm含底座，適合書桌展示與動漫收藏。潮巢 Nestory 精選正版授權 IP 周邊。',
+  faq:[
+    {q:'這款公仔適合收藏還是日常使用？',a:'這款以展示收藏為主，附底座可穩定直立，適合放在書桌、展示架或玻璃櫃內。景品規格塗裝建議避免長時間日曬。'},
+    {q:'適合送禮嗎？',a:'非常適合！咒術迴戰粉絲辨識度高，五條悟又是作品中最具代表性的角色之一，送給粉絲朋友幾乎不會踩雷。'},
+    {q:'圖片和實品顏色會一樣嗎？',a:'圖片顏色僅供參考，實際商品可能因螢幕設定略有色差。景品製程也可能有輕微塗裝差異，屬正常現象。'},
+    {q:'多久可以出貨？',a:'本商品為現貨採購，一般約 7–14 個工作天內處理出貨。若遇備貨延誤，我們會主動通知。'}
+  ],
+  tags:['IP_咒術迴戰','角色_五條悟','型態_景品','型態_公仔模型','用途_展示收納','用途_桌面佈置','用途_送禮推薦'],
+  collections:{ip:['咒術迴戰'],type:['景品','公仔模型'],theme:['展示收納','桌面佈置','送禮推薦'],promo:[]},
+  status:'ready',
+  status_reason:null
+};
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+window.onload = () => {
+  if (accessToken) { document.getElementById('apiOverlay').style.display='none'; DEMO=false; }
+  loadSettings(); updateFormula();
+  document.getElementById('wsearchToggle').addEventListener('change', e => {
+    document.getElementById('wsearchCost').textContent = e.target.checked ? '+約 10–15 秒' : '+約 5 秒';
+  });
+};
+
+function enterDemo(){ DEMO=true; document.getElementById('apiOverlay').style.display='none'; document.getElementById('demoBadge').style.display='inline-block'; }
+
+function saveAccessToken(){
+  const val=document.getElementById('accessTokenInput').value.trim();
+  if(!val){ alert('請輸入密碼'); return; }
+  fetch(`${WORKER_URL}/api/ping`,{headers:{'X-Access-Token':val}})
+    .then(r=>{ if(r.ok){ accessToken=val; DEMO=false; localStorage.setItem('cho_access_token',val); document.getElementById('apiOverlay').style.display='none'; } else { alert('密碼錯誤'); } })
+    .catch(()=>alert('無法連線到伺服器'));
+}
+
+function resetAccessToken(){
+  if(!confirm('重設存取密碼？')) return;
+  localStorage.removeItem('cho_access_token'); accessToken=''; DEMO=true;
+  document.getElementById('accessTokenInput').value='';
+  document.getElementById('apiOverlay').style.display='flex';
+}
+
+// ══════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════
+function toggleSettings(){ const b=document.getElementById('settingsBody'); b.classList.toggle('open'); document.getElementById('settingsArrow').textContent=b.classList.contains('open')?'▴':'▾'; }
+function updateFormula(){
+  const r=v('sRate'),c=v('sCost'),m=v('sMark');
+  document.getElementById('formulaPreview').textContent=`售價 ＝ 人民幣 × ${parseFloat(r).toFixed(2)} × ${parseFloat(c).toFixed(2)} × ${parseFloat(m).toFixed(2)}`;
+  document.getElementById('rateDisplay').textContent=parseFloat(r).toFixed(2);
+  localStorage.setItem('cho_settings',JSON.stringify({r,c,m,min:v('sMin')}));
+}
+function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem('cho_settings')||'{}'); if(s.r)sv('sRate',s.r); if(s.c)sv('sCost',s.c); if(s.m)sv('sMark',s.m); if(s.min)sv('sMin',s.min); updateFormula(); }catch(e){} }
+function v(id){ return document.getElementById(id).value; }
+function sv(id,val){ document.getElementById(id).value=val; }
+
+async function fetchLiveRate(){
+  try{ const res=await fetch('https://open.er-api.com/v6/latest/CNY'); const data=await res.json(); if(data.rates?.TWD){ sv('sRate',data.rates.TWD.toFixed(2)); updateFormula(); showToast(`✓ 匯率已更新：1 CNY = ${data.rates.TWD.toFixed(2)} TWD`); } } catch(e){ showToast('匯率更新失敗，請手動輸入'); }
+}
+
+function calcPrice(cny){
+  const rate=parseFloat(v('sRate'))||4.5, cm=parseFloat(v('sCost'))||1.3, mk=parseFloat(v('sMark'))||1.4, min=parseFloat(v('sMin'))||199;
+  const cost=Math.ceil(cny*rate*cm);
+  let sell=Math.ceil(cost*mk);
+  if(sell<500) sell=Math.ceil(sell/10)*10;
+  else if(sell<2000) sell=Math.ceil(sell/50)*50;
+  else sell=Math.ceil(sell/100)*100;
+  sell=Math.max(sell,min);
+  return { costTWD:cost, sellPrice:sell, profitPct:Math.round(((sell-cost)/sell)*100) };
+}
+
+// ══════════════════════════════════════════
+// FILE HANDLING
+// ══════════════════════════════════════════
+function dzOver(e,z){ e.preventDefault(); document.getElementById('dz-'+z).classList.add('dragover'); }
+function dzLeave(e,z){ document.getElementById('dz-'+z).classList.remove('dragover'); }
+function dzDrop(e,z){ e.preventDefault(); document.getElementById('dz-'+z).classList.remove('dragover'); handleFiles(e.dataTransfer.files,z); }
+function handleFiles(fileList,zone){
+  const arr=Array.from(fileList).filter(f=>f.type.startsWith('image/')); if(!arr.length) return;
+  currentFiles[zone]=arr; document.getElementById('dz-'+zone).classList.add('has-files');
+  const st=document.getElementById('st-'+zone); st.className='dz-status ready'; st.textContent=`✓ ${arr.length} 張`;
+  const strip=document.getElementById('thumbs-'+zone); strip.innerHTML='';
+  arr.forEach(f=>{ const img=document.createElement('img'); img.className='thumb'; img.src=URL.createObjectURL(f); strip.appendChild(img); });
+}
+function resetForm(){
+  sv('inputTitle',''); document.getElementById('inputPrice').value=''; sv('inputNote','');
+  document.getElementById('inputCategory').value='公仔模型';
+  document.getElementById('wsearchToggle').checked=false;
+  document.getElementById('wsearchCost').textContent='+約 5 秒';
+  currentFiles={main:[],detail:[],spec:[]};
+  ['main','detail','spec'].forEach(z=>{ document.getElementById('dz-'+z).classList.remove('has-files'); document.getElementById('st-'+z).textContent=''; document.getElementById('thumbs-'+z).innerHTML=''; });
+}
+
+// ══════════════════════════════════════════
+// QUEUE
+// ══════════════════════════════════════════
+function addToQueue(){
+  const title=document.getElementById('inputTitle').value.trim();
+  const price=parseFloat(document.getElementById('inputPrice').value);
+  if(!title){ alert('請輸入商品標題'); return; }
+  if(!price||price<=0){ alert('請輸入有效價格'); return; }
+  const useWebSearch=document.getElementById('wsearchToggle').checked;
+  const item={ id:Date.now().toString(), title, price, category:v('inputCategory'), note:v('inputNote').trim(), useWebSearch, files:{main:[...currentFiles.main],detail:[...currentFiles.detail],spec:[...currentFiles.spec]}, status:'waiting' };
+  queue.push(item); renderQueue(); resetForm();
+  showToast(`✓ 已加入佇列（共 ${queue.length} 筆）${useWebSearch?' · 已開啟 Web Search':''}`);
+}
+function removeFromQueue(id){ queue=queue.filter(q=>q.id!==id); renderQueue(); }
+function clearQueue(){ if(!confirm(`清除全部 ${queue.length} 筆？`)) return; queue=[]; renderQueue(); }
+
+function renderQueue(){
+  const count=queue.length;
+  document.getElementById('queueCount').textContent=count;
+  document.getElementById('runAllBtn').disabled=count===0||isRunning;
+  const empty=document.getElementById('queueEmpty'), list=document.getElementById('queueList');
+  if(!count){ empty.style.display='block'; list.style.display='none'; return; }
+  empty.style.display='none'; list.style.display='block'; list.innerHTML='';
+  queue.forEach(item=>{
+    const pc=calcPrice(item.price);
+    const icons={waiting:'○',running:'↻',done:'✓',error:'✗'};
+    const div=document.createElement('div'); div.className='queue-item'; div.id=`qi-${item.id}`;
+    div.innerHTML=`<div class="qi-status ${item.status}" id="qis-${item.id}">${icons[item.status]||'○'}</div>
+      <div class="qi-title" title="${esc(item.title)}">${esc(item.title)}</div>
+      ${item.useWebSearch?'<span class="qi-wsearch">🔍</span>':''}
+      <div class="qi-price">NT$${pc.sellPrice.toLocaleString()}</div>
+      ${item.status==='waiting'?`<button class="qi-del" onclick="removeFromQueue('${item.id}')">✕</button>`:'<div style="width:22px"></div>'}`;
+    list.appendChild(div);
+  });
+}
+
+// ══════════════════════════════════════════
+// IMAGE UPLOAD
+// ══════════════════════════════════════════
+async function processAndUpload(file,zone){
+  const proc=await processImage(file,zone);
+  const fd=new FormData(); const blob=await canvasToBlob(proc.canvas);
+  fd.append('file',blob,proc.filename);
+  const res=await fetch(`${WORKER_URL}/api/upload`,{method:'POST',headers:{'X-Access-Token':accessToken},body:fd});
+  if(!res.ok) throw new Error('圖片上傳失敗');
+  const data=await res.json(); return data.secure_url;
+}
+function processImage(file,zone){
+  return new Promise(resolve=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const canvas=document.createElement('canvas'), ctx=canvas.getContext('2d');
+      if(zone==='main'){
+        canvas.width=1200;canvas.height=1200;ctx.fillStyle='#fff';ctx.fillRect(0,0,1200,1200);
+        const s=Math.min(img.width,img.height),sx=(img.width-s)/2,sy=(img.height-s)/2;
+        ctx.drawImage(img,sx,sy,s,s,0,0,1200,1200);
+        resolve({canvas,filename:file.name.replace(/\.[^.]+$/,'')+'_sq1200.jpg'});
+      } else {
+        const w=1200,h=Math.round(img.height*(1200/img.width));
+        canvas.width=w;canvas.height=h;ctx.drawImage(img,0,0,w,h);
+        resolve({canvas,filename:file.name.replace(/\.[^.]+$/,'')+'_1200w.jpg'});
+      }
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);resolve({canvas:document.createElement('canvas'),filename:file.name});};
+    img.src=url;
+  });
+}
+function canvasToBlob(canvas){ return new Promise(res=>canvas.toBlob(res,'image/jpeg',0.90)); }
+async function uploadZoneFiles(fileArr,zone){
+  if(!fileArr||!fileArr.length) return [];
+  const urls=[];
+  for(const f of fileArr){ try{ urls.push(await processAndUpload(f,zone)); }catch(e){ console.error(e); } }
+  return urls;
+}
+
+// ══════════════════════════════════════════
+// QUEUE RUNNER
+// ══════════════════════════════════════════
+async function runQueue(){
+  if(isRunning||!queue.length) return;
+  if(!DEMO&&!accessToken){ document.getElementById('apiOverlay').style.display='flex'; return; }
+  isRunning=true; document.getElementById('runAllBtn').disabled=true;
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('resultsList').style.display='block';
+  const total=queue.length; let done=0;
+  setStatus(`處理中 0/${total}...`); setProgress(0);
+
+  for(let i=0;i<queue.length;i++){
+    const item=queue[i]; item.status='running'; renderQueue();
+
+    createResultCard(item);
+
+    try{
+      // 1. Upload images
+      setStatus(`[${i+1}/${total}] 上傳圖片...`);
+      let imgURLs={main:[],detail:[],spec:[]};
+      if(DEMO){
+        imgURLs={main:item.files.main.length?['https://res.cloudinary.com/dlcu13xnn/image/upload/v1/chochonest/demo.jpg']:[], detail:[], spec:[]};
+        await sleep(400);
+      } else {
+        const [m,d,s]=await Promise.all([uploadZoneFiles(item.files.main,'main'),uploadZoneFiles(item.files.detail,'detail'),uploadZoneFiles(item.files.spec,'spec')]);
+        imgURLs={main:m,detail:d,spec:s};
+      }
+
+      // 2. Spec recognition
+      let specText='';
+      if(item.files.spec.length&&!DEMO){
+        setStatus(`[${i+1}/${total}] 辨識規格圖...`);
+        specText=await recognizeSpecFile(item.files.spec[0]);
+      }
+
+      // 3. Generate copy (with or without web search)
+      const pc=calcPrice(item.price);
+      let parsed;
+
+      if(DEMO){
+        await sleep(700); parsed={...DEMO_RESULT};
+      } else {
+        const userMsg=`商品原始標題（可能含簡體中文）：${item.title}
+商品類型：${item.category}
+人民幣售價：¥${item.price}
+換算台幣售價：NT$${pc.sellPrice}
+${item.note?'補充備註：'+item.note:''}
+${specText?'規格圖辨識內容：'+specText:''}`;
+
+        let messages;
+
+        if(item.useWebSearch){
+          // Web Search：先請 Claude 組搜尋關鍵字並搜尋，再產文
+          setStatus(`[${i+1}/${total}] 🔍 Web Search 搜尋中...`);
+          const searchRes=await fetch(`${WORKER_URL}/api/search`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json','X-Access-Token':accessToken},
+            body:JSON.stringify({query: item.title.slice(0,60)})
+          });
+          let searchContext='';
+          if(searchRes.ok){
+            const sd=await searchRes.json();
+            searchContext=sd.summary||'';
+          }
+          messages=[{role:'user',content:`${userMsg}${searchContext?'\n\n網路搜尋補充資訊：\n'+searchContext:''}`}];
+          setStatus(`[${i+1}/${total}] ✦ AI 產文（含搜尋結果）...`);
+        } else {
+          setStatus(`[${i+1}/${total}] ✦ AI 產文...`);
+          messages=[{role:'user',content:userMsg}];
+        }
+
+        const res=await fetch(`${WORKER_URL}/api/generate`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-Access-Token':accessToken},
+          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2500,system:SYSTEM_PROMPT,messages})
+        });
+        if(!res.ok){ const e=await res.json(); throw new Error(e.error?.message||'HTTP '+res.status); }
+        const data=await res.json();
+        const raw=data.content[0].text.replace(/```json|```/g,'').trim();
+        parsed=JSON.parse(raw);
+      }
+
+      results[item.id]={...parsed,...calcPrice(item.price),cnyPrice:item.price,category:item.category,imgURLs};
+      item.status='done';
+      updateResultCard(item.id,results[item.id]);
+
+    } catch(e){
+      item.status='error';
+      updateResultCard(item.id,null,e.message);
+    }
+
+    renderQueue(); done++;
+    setProgress(Math.round((done/total)*100));
+    setStatus(`處理中 ${done}/${total}`);
+    if(i<queue.length-1) await sleep(800);
+  }
+
+  setStatus(`✓ 全部完成（${done}/${total} 筆）`);
+  setTimeout(()=>setStatus(''),5000);
+  document.getElementById('dlAllBtn').disabled=false;
+  document.getElementById('dlHint').textContent=`${done} 筆完成`;
+  isRunning=false;
+  showToast(`✓ ${done}/${total} 筆完成，點「下載全部 CSV」匯入 Matrixify`);
+}
+
+// ══════════════════════════════════════════
+// SPEC RECOGNITION
+// ══════════════════════════════════════════
+async function recognizeSpecFile(file){
+  try{
+    const b64=await fileToB64(file);
+    const res=await fetch(`${WORKER_URL}/api/recognize`,{method:'POST',headers:{'Content-Type':'application/json','X-Access-Token':accessToken},body:JSON.stringify({image_b64:b64,media_type:file.type})});
+    const data=await res.json(); return data.content[0].text||'';
+  }catch(e){ return ''; }
+}
+function fileToB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
+
+// ══════════════════════════════════════════
+// RESULT CARDS
+// ══════════════════════════════════════════
+function createResultCard(item){
+  const container=document.getElementById('resultsContainer');
+  const pc=calcPrice(item.price);
+  const div=document.createElement('div'); div.className='result-card active'; div.id=`rc-${item.id}`;
+  div.innerHTML=`<div class="rc-header" onclick="toggleCard('${item.id}')">
+    <div class="rc-status running" id="rcs-${item.id}">↻</div>
+    <div class="rc-title" id="rct-${item.id}">${esc(item.title)}</div>
+    <div class="rc-price">NT$${pc.sellPrice.toLocaleString()}</div>
+    <div class="rc-toggle" id="rctog-${item.id}">▾</div>
+  </div>
+  <div class="rc-body open" id="rcb-${item.id}">
+    <div style="padding:20px;text-align:center;font-size:12px;color:var(--text-muted);"><span class="spinner"></span> 處理中...</div>
+  </div>`;
+  container.appendChild(div);
+}
+
+function updateResultCard(id, r, error){
+  const statusEl=document.getElementById(`rcs-${id}`);
+  const bodyEl=document.getElementById(`rcb-${id}`);
+  const cardEl=document.getElementById(`rc-${id}`);
+  cardEl.classList.remove('active');
+
+  if(error){
+    statusEl.className='rc-status error'; statusEl.textContent='✗';
+    bodyEl.innerHTML=`<div style="padding:12px 14px;font-size:12px;color:var(--accent2);">✗ 失敗：${esc(error)}</div>`;
+    return;
+  }
+
+  // Status badge
+  const statusMap={ready:'✓',need_review:'⚠',blocked:'✗'};
+  const statusIcon=statusMap[r.status]||'✓';
+  statusEl.className=`rc-status ${r.status||'done'}`; statusEl.textContent=statusIcon;
+
+  // Update title with AI output
+  const titleEl=document.getElementById(`rct-${id}`);
+  if(titleEl) titleEl.textContent=r.title||'';
+
+  // Tag coloring
+  const tagHtml=(r.tags||[]).map(t=>{
+    let cls='';
+    if(t.startsWith('IP_')) cls='ip';
+    else if(t.startsWith('角色_')) cls='char';
+    else if(t.startsWith('型態_')) cls='type';
+    else if(t.startsWith('用途_')) cls='usage';
+    return `<span class="rc-tag ${cls}">${esc(t)}</span>`;
+  }).join('');
+
+  // Collections
+  const colls=r.collections||{};
+  const collAll=[...(colls.ip||[]),...(colls.type||[]),...(colls.theme||[]),...(colls.promo||[])];
+  const collHtml=collAll.map(c=>`<span class="coll-tag">${esc(c)}</span>`).join('');
+
+  // FAQ
+  const faqHtml=(r.faq||[]).map(f=>`<div class="faq-item"><div class="faq-q">Q：${esc(f.q)}</div><div class="faq-a">A：${esc(f.a)}</div></div>`).join('');
+
+  // Images
+  const allImgs=[...(r.imgURLs?.main||[]),...(r.imgURLs?.detail||[])].slice(0,6);
+  const imgHtml=allImgs.length?`<div class="rc-section"><div class="rc-label">圖片（${allImgs.length} 張）</div><div class="rc-imgs">${allImgs.map(u=>`<img class="rc-img" src="${u}" loading="lazy">`).join('')}</div></div>`:'';
+
+  bodyEl.innerHTML=`
+    <div class="rc-section">
+      <div class="rc-label">狀態 <span class="rc-badge ${r.status||'ready'}">${r.status==='ready'?'✓ Ready':r.status==='need_review'?'⚠ 需審核':'✗ Blocked'}</span></div>
+      ${r.status_reason?`<div class="status-reason">⚠ ${esc(r.status_reason)}</div>`:''}
+    </div>
+    <div class="rc-section">
+      <div class="rc-label">商品標題 <button class="copy-btn" onclick="cp(this,${JSON.stringify(r.title||'')})">複製</button></div>
+      <div class="rc-text">${esc(r.title)}</div>
+    </div>
+    <div class="rc-section">
+      <div class="rc-label">商品描述 <button class="copy-btn" onclick="cp(this,${JSON.stringify(r.description||'')})">複製</button></div>
+      <div class="rc-text">${esc(r.description)}</div>
+    </div>
+    <div class="rc-section">
+      <div class="rc-label">SEO Title</div>
+      <div class="rc-text">${esc(r.seo_title)}</div>
+    </div>
+    <div class="rc-section">
+      <div class="rc-label">Meta Description</div>
+      <div class="rc-text">${esc(r.seo_description)}</div>
+    </div>
+    <div class="rc-section">
+      <div class="rc-label">FAQ（${(r.faq||[]).length} 題）</div>
+      ${faqHtml}
+    </div>
+    <div class="rc-section">
+      <div class="rc-label">Tags</div>
+      <div class="rc-tags">${tagHtml}</div>
+    </div>
+    <div class="rc-section">
+      <div class="rc-label">Collections</div>
+      <div class="coll-list">${collHtml}</div>
+    </div>
+    <div class="rc-section">
+      <div class="rc-label">定價</div>
+      <div class="rc-text">成本 NT$${r.costTWD?.toLocaleString()} ／ 售價 NT$${r.sellPrice?.toLocaleString()} ／ 毛利 ${r.profitPct}%</div>
+    </div>
+    ${imgHtml}
+    <div class="rc-actions">
+      <button class="btn-csv" onclick="downloadSingleCSV('${id}')">⬇ 下載此筆 CSV</button>
+    </div>`;
+}
+
+function toggleCard(id){
+  const body=document.getElementById(`rcb-${id}`), tog=document.getElementById(`rctog-${id}`);
+  body.classList.toggle('open'); tog.textContent=body.classList.contains('open')?'▾':'▸';
+}
+
+// ══════════════════════════════════════════
+// CSV BUILDER（Matrixify 格式，含 FAQ 欄位）
+// ══════════════════════════════════════════
+function buildSingleCSV(id){
+  const r=results[id]; if(!r) return null;
+  const allImgs=[...(r.imgURLs?.main||[]),...(r.imgURLs?.detail||[])];
+  const handle=(r.title||'product').toLowerCase().replace(/[^\w\u4e00-\u9fff]+/g,'-').slice(0,50);
+  const faqText=(r.faq||[]).map((f,i)=>`Q${i+1}：${f.q}\nA${i+1}：${f.a}`).join('\n\n');
+  const allColls=[...(r.collections?.ip||[]),...(r.collections?.type||[]),...(r.collections?.theme||[]),...(r.collections?.promo||[])].join(' | ');
+
+  const baseRow={
+    'Handle':handle, 'Title':r.title||'',
+    'Body (HTML)':(r.description||'').replace(/\n/g,'<br>'),
+    'Vendor':'CHOCHONEST 潮巢 Nestory',
+    'Type':r.category||'',
+    'Tags':(r.tags||[]).join(', '),
+    'Published':'FALSE',
+    'SEO Title':r.seo_title||'',
+    'SEO Description':r.seo_description||'',
+    'Variant Price':r.sellPrice||'',
+    'Variant Cost':r.costTWD||'',
+    'Variant Requires Shipping':'TRUE',
+    'Status':r.status==='blocked'?'draft':'draft',
+    'Metafield: faq [json]': faqText ? JSON.stringify(r.faq||[]) : '',
+    'Metafield: collections_suggestion [string]': allColls,
+    'Metafield: listing_status [string]': r.status||'',
+    'Metafield: status_reason [string]': r.status_reason||'',
+    'Image Src':allImgs[0]||'',
+    'Image Position':allImgs.length?'1':'',
+    'Image Alt Text':r.title||''
+  };
+  const rows=[baseRow];
+  for(let i=1;i<allImgs.length;i++){
+    rows.push({'Handle':handle,'Title':'','Body (HTML)':'','Vendor':'','Type':'','Tags':'','Published':'','SEO Title':'','SEO Description':'','Variant Price':'','Variant Cost':'','Variant Requires Shipping':'','Status':'','Metafield: faq [json]':'','Metafield: collections_suggestion [string]':'','Metafield: listing_status [string]':'','Metafield: status_reason [string]':'','Image Src':allImgs[i],'Image Position':String(i+1),'Image Alt Text':r.title||''});
+  }
+  const headers=Object.keys(rows[0]);
+  const lines=[headers.join(',')];
+  rows.forEach(row=>lines.push(headers.map(h=>`"${String(row[h]||'').replace(/"/g,'""')}"`).join(',')));
+  return lines.join('\n');
+}
+
+function downloadSingleCSV(id){
+  const csv=buildSingleCSV(id); if(!csv){ showToast('找不到此筆資料'); return; }
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=`nestory_${id}.csv`; a.click(); URL.revokeObjectURL(url);
+}
+
+function downloadAllCSV(){
+  const doneIds=queue.filter(q=>q.status==='done').map(q=>q.id);
+  if(!doneIds.length){ showToast('沒有已完成的商品'); return; }
+  let allLines=null;
+  doneIds.forEach(id=>{ const csv=buildSingleCSV(id); if(!csv) return; const lines=csv.split('\n'); if(!allLines){ allLines=lines; } else { allLines=[...allLines,...lines.slice(1)]; } });
+  if(!allLines){ showToast('產生 CSV 失敗'); return; }
+  const blob=new Blob(['\uFEFF'+allLines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=`nestory_batch_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(url);
+  showToast(`✓ 已下載 ${doneIds.length} 筆合併 CSV`);
+}
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+async function cp(btn,text){ await navigator.clipboard.writeText(text); btn.textContent='✓'; btn.classList.add('copied'); setTimeout(()=>{ btn.textContent='複製'; btn.classList.remove('copied'); },2000); }
+function setProgress(pct){ document.getElementById('progressFill').style.width=pct+'%'; }
+function setStatus(msg){ document.getElementById('outputStatus').textContent=msg; }
+function showToast(msg){ const t=document.createElement('div'); t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#c8ff00;color:#0e0e12;padding:9px 18px;border-radius:8px;font-weight:700;font-size:12px;z-index:9999;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4);'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2800); }
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+</script>
+</body>
+</html>

@@ -169,6 +169,14 @@ select {
   gap: 8px;
 }
 
+/* Mobile menu toggle: hidden on desktop, shown <=768px to collapse the header. */
+.nav-toggle {
+  display: none;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 /* Pill button groups (Provider / mode switches) */
 .pill-group {
   display: inline-flex;
@@ -836,12 +844,27 @@ textarea {
     gap: 8px;
     row-gap: 8px;
   }
-  .brand { flex: 1 1 auto; }
+  /* Collapsed by default: only brand + toggle show (~56px tall). Tapping the
+     toggle reveals the control cluster on its own full-width row below. This
+     keeps the sticky header from eating half the screen and from covering
+     (and blocking taps on) the content beneath it. */
+  .brand { order: 1; flex: 1 1 auto; }
+  .nav-toggle {
+    display: inline-flex;
+    order: 2;
+    margin-left: auto;
+  }
   .nav {
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    gap: 6px;
+    order: 3;
     width: 100%;
+    display: none;
+  }
+  .nav.open {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
   }
   /* The 3 page links move to the bottom tab bar on mobile. */
   .nav-links { display: none; }

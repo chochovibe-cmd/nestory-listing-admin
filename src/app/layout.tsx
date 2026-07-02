@@ -1,12 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
-import { AuthNav } from "@/components/AuthNav";
-import { DeploymentStatus } from "@/components/DeploymentStatus";
-import { ExchangeRateWidget } from "@/components/ExchangeRateWidget";
-import { ModeSwitcher } from "@/components/ModeSwitcher";
+import { HeaderControls } from "@/components/HeaderControls";
 import { MobileTabbar } from "@/components/MobileTabbar";
-import { ProviderSwitcher } from "@/components/ProviderSwitcher";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -50,19 +45,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <span>CHOCHONEST · Nestory Admin</span>
               </div>
             </Link>
-            <nav className="nav">
-              <span className="nav-links">
-                <Link href="/drafts/new">新增商品</Link>
-                <Link href="/drafts">商品佇列</Link>
-                <Link href="/review">待審核</Link>
-              </span>
-              <ProviderSwitcher />
-              <ModeSwitcher />
-              <DeploymentStatus />
-              <ThemeSwitcher />
-              <ExchangeRateWidget />
-              <AuthNav />
-            </nav>
+            <HeaderControls />
           </header>
           {children}
           <MobileTabbar />

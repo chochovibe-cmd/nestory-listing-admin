@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { categoryOptions } from "@/lib/categories";
 import { calculatePrice, CostCurrency, defaultPricingSettings, PricingSettings } from "@/lib/pricing";
 import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import { SALE_STATUS_OPTIONS } from "@/lib/saleStatus";
@@ -31,12 +30,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [costCurrency, setCostCurrency] = useState<CostCurrency>("CNY");
-  const [category, setCategory] = useState(categoryOptions[0].value);
   const [taobaoUrl, setTaobaoUrl] = useState("");
   const [note, setNote] = useState("");
-  const [ipName, setIpName] = useState("");
-  const [characterName, setCharacterName] = useState("");
-  const [productType, setProductType] = useState("");
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
   const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(TONE_OPTIONS[0].value);
   const [copyLength, setCopyLength] = useState<(typeof LENGTH_OPTIONS)[number]>("標準");
@@ -85,9 +80,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setCostCurrency("CNY");
     setTaobaoUrl("");
     setNote("");
-    setIpName("");
-    setCharacterName("");
-    setProductType("");
     setManualPricingEnabled(false);
     setManualCompareAtPrice("");
     setManualSellPrice("");
@@ -118,11 +110,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         twd_price: pricing?.sellPrice,
         compare_at_price: pricing?.compareAtPrice,
         pricing_formula: pricing?.pricingFormula,
-        category,
         note: note.trim() || null,
-        ip_name: ipName.trim() || null,
-        character_name: characterName.trim() || null,
-        product_type: productType.trim() || null,
         sale_status: saleStatus,
         status: "pending_copy",
         generation_mode: "api_llm",
@@ -165,7 +153,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     if (!response.ok) {
       setMessage(payload.error ?? "生成失敗，可以到右側卡片按「重新生成」再試一次");
     } else if (payload.draftState === "blocked") {
-      setMessage("規則引擎判斷資料不足：" + payload.validationErrors.join("；"));
+      setMessage("AI 判斷資料不足（多半是 IP 未對到建檔清單）：" + payload.validationErrors.join("；") + "。可在右側卡片修正「AI 偵測類型」等欄位後按「重新生成」。");
     } else {
       setMessage("生成完成，可以在右側卡片繼續上傳圖片或編輯文案");
     }
@@ -209,10 +197,10 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 </div>
               </div>
               <div className="field">
-                <label>商品分類</label>
-                <select onChange={(e) => setCategory(e.target.value)} value={category}>
-                  {categoryOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
+                <label>銷售狀態</label>
+                <select onChange={(e) => setSaleStatus(e.target.value as SaleStatus)} value={saleStatus}>
+                  {SALE_STATUS_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
               </div>
@@ -253,31 +241,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   </div>
                 </div>
               ) : null}
-            </div>
-
-            <div className="row">
-              <div className="field">
-                <label>IP 名稱</label>
-                <input onChange={(e) => setIpName(e.target.value)} value={ipName} />
-              </div>
-              <div className="field">
-                <label>角色名稱</label>
-                <input onChange={(e) => setCharacterName(e.target.value)} value={characterName} />
-              </div>
-            </div>
-            <div className="row">
-              <div className="field">
-                <label>商品類型</label>
-                <input onChange={(e) => setProductType(e.target.value)} placeholder="例：吊飾徽章" value={productType} />
-              </div>
-              <div className="field">
-                <label>銷售狀態</label>
-                <select onChange={(e) => setSaleStatus(e.target.value as SaleStatus)} value={saleStatus}>
-                  {SALE_STATUS_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             <div className="copy-settings-block">

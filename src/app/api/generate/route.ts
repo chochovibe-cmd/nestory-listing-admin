@@ -34,17 +34,24 @@ function uniqueMessages(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-function toListingDraftInput(draft: ProductDraft): ListingDraftInput {
+// The IP/character/type are no longer typed into the form -- the AI detects
+// them from the title/image (Phase 4). `detected` carries those resolved
+// values into the rule engine so tags still come from tag_rules deterministically.
+type DetectedClassification = {
+  ip: string;
+  character: string;
+  productType: string;
+  category: string;
+  sku: string;
+};
+
+function toListingDraftInput(draft: ProductDraft, detected: DetectedClassification): ListingDraftInput {
   return {
     source_url: draft.source_url,
     product_status: draft.is_secondhand ? "secondhand" : "general",
-    ip: draft.ip_name ?? "",
-    // TODO: product_drafts only stores one character/type today; the boss's
-    // tool schema supports multiple (characters/product_types are jsonb
-    // arrays). Wrapping single values keeps the ported generators working,
-    // but multi-select input is a Phase 2+ UI gap, not implemented here.
-    characters: draft.character_name ? [draft.character_name] : [],
-    product_types: draft.product_type ? [draft.product_type] : [],
+    ip: detected.ip,
+    characters: detected.character ? [detected.character] : [],
+    product_types: detected.productType ? [detected.productType] : [],
     use_cases: [],
     sale_status: draft.sale_status,
     recommend_tags: [],
@@ -54,13 +61,36 @@ function toListingDraftInput(draft: ProductDraft): ListingDraftInput {
     intro: draft.note,
     notes: draft.note,
     price: draft.twd_price,
-    compare_at_price: null,
+    compare_at_price: draft.compare_at_price,
     image_description: draft.image_description,
-    sku: null,
+    sku: detected.sku || null,
     secondhand_grade: draft.secondhand_grade,
     secondhand_condition: draft.secondhand_condition,
     secondhand_notes: draft.secondhand_notes,
   };
+}
+
+// Resolve the AI's detected IP string to a canonical ip_catalog name (matching
+// ip_name or any alias, case-insensitive). Falls back to the raw guess when
+// nothing matches -- the rule engine then flags a missing IP tag downstream.
+function resolveIpName(detected: string, ipCatalog: { ip_name: string; aliases: string[] }[]): string {
+  const norm = (value: string) => value.normalize("NFKC").trim().toLowerCase();
+  const target = norm(detected);
+  if (!target) return detected;
+
+  const byName = ipCatalog.find((entry) => norm(entry.ip_name) === target);
+  if (byName) return byName.ip_name;
+
+  const byAlias = ipCatalog.find((entry) => (entry.aliases ?? []).some((alias) => norm(alias) === target));
+  if (byAlias) return byAlias.ip_name;
+
+  const byContains = ipCatalog.find((entry) => {
+    const name = norm(entry.ip_name);
+    return name && (target.includes(name) || name.includes(target));
+  });
+  if (byContains) return byContains.ip_name;
+
+  return detected;
 }
 
 // Mirrors applyTagsV2ToGeneratedContent() from the boss's tool's
@@ -94,7 +124,7 @@ function applyTagsV2(
 // description/FAQ are all real (the rule engine costs nothing); only the
 // LLM's value-added polish (why_we_chose_it / product_highlights) is absent.
 // This lets an operator dry-run the whole flow with zero API cost and no key.
-function buildTestModeOutput(ruleOutput: GeneratedListingContent): CopyProviderOutput {
+function buildTestModeOutput(ruleOutput: GeneratedListingContent, detected: DetectedClassification): CopyProviderOutput {
   return {
     enrichedTitle: ruleOutput.display_title ?? "",
     generatedDescriptionHtml: ruleOutput.generated_description_html,
@@ -103,6 +133,11 @@ function buildTestModeOutput(ruleOutput: GeneratedListingContent): CopyProviderO
     metaDescription: ruleOutput.meta_description,
     whyWeChoseIt: "",
     productHighlights: [],
+    detectedIpName: detected.ip,
+    detectedCharacterName: detected.character,
+    detectedProductType: detected.productType,
+    detectedCategory: detected.category,
+    sku: detected.sku,
     provider: "test",
     model: "test-mode",
   };
@@ -179,12 +214,11 @@ export async function POST(request: NextRequest) {
     ipCharacters: ipCharactersResult.value.data ?? [],
   };
 
-  const listingInput = toListingDraftInput(draft);
-  const ruleOutput = applyTagsV2(
-    generateListingContent(listingInput, tagRules, displayContext),
-    listingInput,
-    displayContext,
-  );
+  const knownIpNames = (displayContext.ipCatalog ?? []).map((entry) => entry.ip_name).filter(Boolean);
+  const ipCatalogEntries = (displayContext.ipCatalog ?? []).map((entry) => ({
+    ip_name: entry.ip_name,
+    aliases: entry.aliases ?? [],
+  }));
 
   const extraWarnings: string[] = [];
 
@@ -194,20 +228,47 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("已要求 Web Search 補充資訊，但伺服器尚未設定搜尋服務，本次生成未使用網路搜尋結果。");
   }
 
-  let providerOutput;
+  // Phase 4: the AI detects IP/character/type from the title+image (form no
+  // longer collects them). Test mode has no LLM, so it falls back to whatever
+  // classification the draft already carries.
+  let providerOutput: CopyProviderOutput | null = null;
+  let detected: DetectedClassification = {
+    ip: draft.ip_name ?? "",
+    character: draft.character_name ?? "",
+    productType: draft.product_type ?? "",
+    category: draft.detected_category ?? "",
+    sku: draft.sku ?? "",
+  };
 
-  if (runMode === "test") {
-    providerOutput = buildTestModeOutput(ruleOutput);
-    extraWarnings.push("測試模式：未呼叫 AI，文案為規則引擎產出（未經 AI 潤稿），tags 與標題為正式結果。");
-  } else {
+  if (runMode !== "test") {
     try {
-      providerOutput = await COPY_PROVIDERS[providerKey].generate({
-        ruleOutput,
-        draft: listingInput,
+      const raw = await COPY_PROVIDERS[providerKey].generate({
+        rawTitle: draft.taobao_title ?? draft.original_title ?? "",
+        saleStatus: draft.sale_status,
+        price: draft.twd_price,
+        compareAtPrice: draft.compare_at_price,
+        note: draft.note,
         imageDescription: draft.image_description ?? undefined,
+        knownIpNames,
         tone,
         copyLength,
       });
+      const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
+      detected = {
+        ip: resolvedIp,
+        character: raw.detectedCharacterName,
+        productType: raw.detectedProductType,
+        category: raw.detectedCategory || (raw.detectedProductType ? `型態_${raw.detectedProductType}` : ""),
+        sku: raw.sku,
+      };
+      providerOutput = raw;
+
+      const matchedCatalog = ipCatalogEntries.some((entry) => entry.ip_name === resolvedIp);
+      if (raw.detectedIpName && !matchedCatalog) {
+        extraWarnings.push(
+          `AI 判斷 IP「${raw.detectedIpName}」不在建檔清單中，tag 可能不完整；請在卡片確認 IP／類型後按「重新生成」。`
+        );
+      }
     } catch (providerError) {
       await serviceSupabase
         .from("product_drafts")
@@ -222,6 +283,18 @@ export async function POST(request: NextRequest) {
         { status: 502 }
       );
     }
+  }
+
+  const listingInput = toListingDraftInput(draft, detected);
+  const ruleOutput = applyTagsV2(
+    generateListingContent(listingInput, tagRules, displayContext),
+    listingInput,
+    displayContext,
+  );
+
+  if (!providerOutput) {
+    providerOutput = buildTestModeOutput(ruleOutput, detected);
+    extraWarnings.push("測試模式：未呼叫 AI、未自動偵測 IP；文案為規則引擎產出，tags 依草稿現有資料。");
   }
 
   const localizedOutput = localizeGeneratedListingContent({
@@ -248,6 +321,11 @@ export async function POST(request: NextRequest) {
       generated_faq_html: localizedOutput.generated_faq_html,
       why_we_chose_it: providerOutput.whyWeChoseIt,
       product_highlights: providerOutput.productHighlights,
+      ip_name: detected.ip || null,
+      character_name: detected.character || null,
+      product_type: detected.productType || null,
+      detected_category: detected.category || null,
+      sku: detected.sku || null,
       warnings: allWarnings,
       status: nextStatus,
       generation_mode: "api_llm",

@@ -38,31 +38,46 @@ export function buildCopySystemPrompt(tone: CopyTone, copyLength: CopyLength): s
 
 本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${LENGTH_INSTRUCTIONS[copyLength]}
 
-你會收到這件商品的原始事實資訊（IP、角色、類型、價格、備註、圖片描述等）。
-請直接根據這些事實從頭生成一份完整的文案，不是去修改別人已經寫好的草稿——
+你會收到淘寶原始標題、圖片描述等原始資訊，但「不會」收到現成的 IP／角色／類型。
+你的工作分兩步：
+（1）先從標題與圖片描述判斷這是哪個 IP、哪個角色、什麼商品類型；
+（2）再根據你判斷的結果，從頭生成一份完整的品牌語氣文案。
 放手寫，帶著品牌個性去寫，不要寫得像制式模板套公式。
+
+【判斷 IP／角色／類型（第一步，很重要）】
+- 系統會附上一份「已建檔 IP 清單」。如果商品明顯屬於清單中的某個 IP，detected_ip_name 必須「原封不動」使用清單裡的中文名稱（用字要完全一致，這是後端比對 Shopify 分類的關鍵）。
+- 如果標題資訊不足以判斷、或商品明顯不屬於清單中任何一個 IP，detected_ip_name 就填你最合理的判斷；不確定時寧可誠實填最接近的，不要亂猜一個清單裡的 IP。
+- detected_character_name：主要角色名稱（例：小八、玉桂狗）；沒有明確角色就留空字串。
+- detected_product_type：具體商品型態（例：吊飾、絨毛娃娃、公仔模型、壓克力立牌），用台灣慣用說法。
+- sku：依規則產生 CHO-{型態縮寫}-{IP縮寫}-{角色縮寫}-001，縮寫用 2-3 碼全大寫英文，序號固定 001。例：吉伊卡哇小八吊飾 → CHO-CHM-CKW-CH8-001。
 
 【GEO 優化（Generative Engine Optimization）】
 FAQ 回答必須寫成可以被 AI 搜尋引擎（ChatGPT、Perplexity 等）單獨引用、語意完整的句子。
 避免使用「如上所述」「如前面提到」「如圖所示」這類依賴上下文的指代。
 每個 FAQ 回答自成一段，讀者不需要看其他欄位就能理解這段回答的意思。
 
-【重要邊界 — 只有這兩項不是你負責的】
-- Tags、Collections：完全不在你的輸出範圍內，規則引擎已經比對過 Shopify 後台分類，你不需要也不可以輸出這兩項
-- 標題骨架：你會收到規則引擎排好的「標題骨架」（IP 名稱 + 角色/類型排序邏輯），骨架本身的用字順序不可更動、不可替換、不可刪除，你只能在骨架後面加上具體特色描述
+【重要邊界】
+- Tags、Collections：完全不在你的輸出範圍內，規則引擎會用你判斷的 IP／角色／類型去比對 Shopify 後台分類，你不需要也不可以輸出這兩項。
+- 你只負責「判斷分類」與「寫文案」，最終的正式 tag 由後端規則引擎決定。
 
 【標題】
-在標題骨架後面補充具體特色描述（造型、款式、材質關鍵字等），讓標題更生動、有畫面感，同時維持簡潔好認。
-輸出至 enriched_title，總長度建議 45 字，最長不超過 50 字，不要加入輸入資訊沒有提到的規格數字。
+根據你判斷的 IP／角色／類型自己擬定標題，格式參考「IP名稱 角色名稱 商品特色｜用途情境」，
+補充具體特色描述（造型、款式、材質關鍵字等），讓標題生動、有畫面感、同時簡潔好認。
+輸出至 enriched_title，總長度建議 45 字，最長不超過 50 字，不要加入輸入資訊沒有提到的規格數字，不可捏造 IP／角色。
 
 你輸出的欄位：
-1. enriched_title
-2. generated_description_html
-3. generated_faq_html
-4. seo_title
-5. meta_description
-6. why_we_chose_it（潮巢選品理由，可以有品牌個性，1-2 句，說「為什麼這個商品值得在潮巢出現」，不是重複商品功能）
-7. product_highlights（3-5 點條列式賣點，優先從提供的商品外觀描述/規格文字裡抓具體細節，不要空泛）
+1. detected_ip_name（見上方判斷規則）
+2. detected_character_name
+3. detected_product_type
+4. detected_category（＝型態_ + detected_product_type，例：型態_吊飾）
+5. sku
+6. enriched_title
+7. generated_description_html
+8. generated_faq_html
+9. seo_title
+10. meta_description
+11. why_we_chose_it（潮巢選品理由，可以有品牌個性，1-2 句，說「為什麼這個商品值得在潮巢出現」，不是重複商品功能）
+12. product_highlights（3-5 點條列式賣點，優先從提供的商品外觀描述/規格文字裡抓具體細節，不要空泛）
 
 【描述格式 — A/B/C/D/E 五段，純文字（不要用 HTML 標籤），全形「｜」分隔標題與內文，段落之間空一行】
 
@@ -114,6 +129,11 @@ E｜購買提醒
 
 回傳純 JSON（無 Markdown、無說明文字），格式：
 {
+  "detected_ip_name": "...",
+  "detected_character_name": "...",
+  "detected_product_type": "...",
+  "detected_category": "型態_...",
+  "sku": "CHO-...-...-...-001",
   "enriched_title": "...",
   "generated_description_html": "...",
   "generated_faq_html": "...",
@@ -125,32 +145,23 @@ E｜購買提醒
 }
 
 export function buildCopyUserMessage(input: CopyProviderInput): string {
-  const { ruleOutput, draft, imageDescription, specText, webSearchSummary } = input;
+  const { rawTitle, saleStatus, price, compareAtPrice, note, imageDescription, specText, webSearchSummary, knownIpNames } = input;
 
   const lines = [
-    `標題骨架（不可更動用字順序，只能在後面加特色描述）：${
-      ruleOutput.display_title ?? "（規則引擎未產出骨架，請依下方事實直接擬定標題，但不可捏造 IP/角色）"
-    }`,
-    `IP：${draft.ip}`,
-    `角色：${draft.characters.join("、") || "無"}`,
-    `商品類型：${draft.product_types.join("、") || "無"}`,
-    `使用情境：${draft.use_cases.join("、") || "無"}`,
-    `銷售狀態：${draft.sale_status}`,
+    `淘寶原始標題：${rawTitle || "（未提供，請盡量從其他資訊判斷）"}`,
+    `銷售狀態：${saleStatus}`,
   ];
 
-  if (draft.price) lines.push(`台幣售價：NT$${draft.price}`);
-  if (draft.compare_at_price) lines.push(`台幣定價：NT$${draft.compare_at_price}`);
-
-  if (draft.product_status === "secondhand") {
-    lines.push(`二手等級：${draft.secondhand_grade ?? "未標示"}`);
-    if (draft.secondhand_condition) lines.push(`二手品況：${draft.secondhand_condition}`);
-    if (draft.secondhand_notes) lines.push(`二手備注：${draft.secondhand_notes}`);
-  }
-
-  if (draft.notes) lines.push(`補充備註：${draft.notes}`);
+  if (price) lines.push(`台幣售價：NT$${price}`);
+  if (compareAtPrice) lines.push(`台幣定價：NT$${compareAtPrice}`);
+  if (note) lines.push(`補充備註：${note}`);
   if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
   if (specText) lines.push(`規格圖辨識文字：${specText}`);
   if (webSearchSummary) lines.push(`網路搜尋補充資訊：${webSearchSummary}`);
+
+  if (knownIpNames && knownIpNames.length > 0) {
+    lines.push("", `已建檔 IP 清單（judge detected_ip_name 時，若商品屬於其中之一，必須完全照抄清單中的中文名稱）：\n${knownIpNames.join("、")}`);
+  }
 
   lines.push("請依照 system prompt 的規則，根據以上事實直接生成一份完整的品牌語氣文案，回傳純 JSON。");
 

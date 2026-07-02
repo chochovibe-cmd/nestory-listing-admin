@@ -53,11 +53,28 @@ if (!/\.env\.\*/.test(gitignore)) {
   errors.push("Local env files are not ignored: .env.*");
 }
 
+// Next.js Route Handlers (src/app/api/**) and the provider modules they call
+// (src/lib/providers/**) are server-only by framework convention -- they never
+// ship to the browser bundle, so calling Anthropic/OpenAI or reading their
+// secret env vars there is expected, not a leak. Everything else under src/
+// is fair game to flag (React components, client-shared libs, etc).
+const clientScope = /^src[\\/](?!app[\\/]api[\\/]|lib[\\/]providers[\\/])/;
+
+// localStorage itself isn't a leak -- the original concern was API keys/tokens
+// stored client-side (the old PWA prototype did that). These files only ever
+// store a UI preference string (theme name, provider pill choice), never a
+// secret, so they're an explicit allowlist rather than a blanket ban.
+const localStorageAllowlist = new Set([
+  path.join("src", "app", "layout.tsx"),
+  path.join("src", "components", "ProviderSwitcher.tsx"),
+  path.join("src", "components", "ThemeSwitcher.tsx")
+]);
+
 const forbiddenPatterns = [
-  { label: "browser localStorage usage", pattern: /localStorage/i, scope: /^src[\\/]/ },
-  { label: "frontend Anthropic API call", pattern: /api\.anthropic/i, scope: /^src[\\/]/ },
-  { label: "OpenAI secret env name in source", pattern: /OPENAI_API_KEY/i, scope: /^src[\\/]/ },
-  { label: "Anthropic secret env name in source", pattern: /ANTHROPIC_API_KEY/i, scope: /^src[\\/]/ },
+  { label: "browser localStorage usage", pattern: /localStorage/i, scope: /^src[\\/]/, except: localStorageAllowlist },
+  { label: "frontend Anthropic API call", pattern: /api\.anthropic/i, scope: clientScope },
+  { label: "OpenAI secret env name in source", pattern: /OPENAI_API_KEY/i, scope: clientScope },
+  { label: "Anthropic secret env name in source", pattern: /ANTHROPIC_API_KEY/i, scope: clientScope },
   { label: "Anthropic-looking key", pattern: /sk-ant-/i },
   { label: "OpenAI-looking key", pattern: /sk-proj-|sk-[A-Za-z0-9]{20,}/i },
   { label: "Shopify token-looking key", pattern: /shpat_/i },
@@ -69,8 +86,9 @@ for (const file of sourceFiles) {
   const relative = path.relative(root, file);
   if (/^scripts[\\/]verify-.*\.mjs$/.test(relative)) continue;
   const source = fs.readFileSync(file, "utf8");
-  for (const { label, pattern, scope } of forbiddenPatterns) {
+  for (const { label, pattern, scope, except } of forbiddenPatterns) {
     if (scope && !scope.test(relative)) continue;
+    if (except && except.has(relative)) continue;
     if (pattern.test(source)) {
       errors.push(`${relative} matched ${label}`);
     }

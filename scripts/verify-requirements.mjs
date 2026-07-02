@@ -33,7 +33,7 @@ const checks = [
   },
   {
     name: "PWA draft creation defaults to pending_copy",
-    ok: /status:\s*"pending_copy"/.test(read("src/components/listing/ProductInputForm.tsx"))
+    ok: /status:\s*"pending_copy"/.test(read("src/components/listing/WorkspaceInputPanel.tsx"))
   },
   {
     name: "Draft queue and review pages exist",
@@ -140,8 +140,8 @@ const checks = [
     name: "Request revision API exists",
     ok: exists("src/app/api/drafts/[id]/request-revision/route.ts")
       && /needs_revision/.test(read("src/app/api/drafts/[id]/request-revision/route.ts"))
-      && /requestRevision/.test(read("src/components/listing/DraftReviewForm.tsx"))
-      && /request-revision/.test(read("src/components/listing/DraftReviewForm.tsx"))
+      && /requestRevision/.test(read("src/components/listing/ResultCard.tsx"))
+      && /request-revision/.test(read("src/components/listing/ResultCard.tsx"))
   },
   {
     name: "Codex Skill rules and mock fixtures exist",

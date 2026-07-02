@@ -31,7 +31,7 @@ const publish = json("fixtures/publish-active-sample.json");
 const matrixify = json("fixtures/matrixify-export-sample.json");
 const uiStates = json("fixtures/ui-states.json");
 const seed = read("supabase/seeds/001_mock_draft.sql");
-const productForm = read("src/components/listing/ProductInputForm.tsx");
+const productForm = read("src/components/listing/WorkspaceInputPanel.tsx");
 const publishRoute = read("src/app/api/drafts/[id]/publish/route.ts");
 const matrixifySource = read("src/lib/csv/matrixify.ts");
 const mockFlowDoc = read("docs/mock-flow.md");
@@ -68,7 +68,10 @@ expect("seed shopify api", seed.includes("'shopify_api'"));
 
 for (const expected of [
   'status: "pending_copy"',
-  'generation_mode: "codex_skill"',
+  // generation_mode moved from "codex_skill" to "api_llm" when copy
+  // generation switched from worker claim/complete to a synchronous
+  // /api/generate call (Phase 1, 2026-07-02).
+  'generation_mode: "api_llm"',
   'generation_provider: "codex"',
   'generation_status: "pending"',
   'publish_mode: "active"',

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { DraftReviewForm } from "@/components/listing/DraftReviewForm";
 import { ImageUploader } from "@/components/listing/ImageUploader";
-import { ResultTabs } from "@/components/listing/ResultTabs";
+import { ResultCard } from "@/components/listing/ResultCard";
 import { SetupNotice } from "@/components/listing/SetupNotice";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import { categoryLabel } from "@/lib/categories";
@@ -70,19 +69,16 @@ export default async function DraftDetailPage({ params }: { params: Promise<{ id
         </div>
       </section>
 
-      <div className="grid">
-        <div style={{ display: "grid", gap: 18 }}>
-          <section className="panel">
-            <div className="panel-header">
-              <h2>圖片上傳</h2>
-            </div>
-            <div className="panel-body">
-              <ImageUploader draftId={typedDraft.id} userId={user.id} />
-            </div>
-          </section>
-          <DraftReviewForm draft={typedDraft} />
-        </div>
-        <ResultTabs draft={typedDraft} images={typedImages} />
+      <div style={{ display: "grid", gap: 18 }}>
+        <section className="panel">
+          <div className="panel-header">
+            <h2>圖片上傳</h2>
+          </div>
+          <div className="panel-body">
+            <ImageUploader draftId={typedDraft.id} userId={user.id} />
+          </div>
+        </section>
+        <ResultCard defaultExpanded draft={typedDraft} images={typedImages} />
       </div>
     </main>
   );

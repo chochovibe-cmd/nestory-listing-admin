@@ -10,7 +10,7 @@ import { localizeGeneratedListingContent } from "@/lib/zhTwLocalizer";
 import { listActiveListingTagRules } from "@/lib/tagRules";
 import { ClaudeCopyProvider } from "@/lib/providers/claude-copy-provider";
 import { OpenAICopyProvider } from "@/lib/providers/openai-copy-provider";
-import { CopyLength, CopyProvider, CopyTone } from "@/lib/providers/copy";
+import { CopyLength, CopyProvider, CopyProviderOutput, CopyTone } from "@/lib/providers/copy";
 import type { GenerationProvider, ProductDraft } from "@/types/domain";
 
 const COPY_PROVIDERS: Record<"openai" | "claude", CopyProvider> = {
@@ -89,10 +89,31 @@ function applyTagsV2(
   };
 }
 
+// Test/DEMO mode: skip the paid LLM copy call entirely and reuse the rule
+// engine's own deterministic output as the "copy". Tags/title skeleton/
+// description/FAQ are all real (the rule engine costs nothing); only the
+// LLM's value-added polish (why_we_chose_it / product_highlights) is absent.
+// This lets an operator dry-run the whole flow with zero API cost and no key.
+function buildTestModeOutput(ruleOutput: GeneratedListingContent): CopyProviderOutput {
+  return {
+    enrichedTitle: ruleOutput.display_title ?? "",
+    generatedDescriptionHtml: ruleOutput.generated_description_html,
+    generatedFaqHtml: ruleOutput.generated_faq_html,
+    seoTitle: ruleOutput.seo_title,
+    metaDescription: ruleOutput.meta_description,
+    whyWeChoseIt: "",
+    productHighlights: [],
+    provider: "test",
+    model: "test-mode",
+  };
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
   const providerKey: "openai" | "claude" = body.provider === "claude" ? "claude" : "openai";
+  const runMode: "test" | "llm" = body.mode === "test" ? "test" : "llm";
+  const useWebSearch = body.useWebSearch === true;
   const tone: CopyTone = ["黑膠文藝收藏感", "日系選物店溫柔感", "可愛周邊輕鬆感"].includes(body.tone)
     ? body.tone
     : "黑膠文藝收藏感";
@@ -165,29 +186,42 @@ export async function POST(request: NextRequest) {
     displayContext,
   );
 
+  const extraWarnings: string[] = [];
+
+  // No search provider is wired up yet. Rather than silently ignore the toggle
+  // or fabricate results, record that the request was made but not fulfilled.
+  if (useWebSearch) {
+    extraWarnings.push("已要求 Web Search 補充資訊，但伺服器尚未設定搜尋服務，本次生成未使用網路搜尋結果。");
+  }
+
   let providerOutput;
 
-  try {
-    providerOutput = await COPY_PROVIDERS[providerKey].generate({
-      ruleOutput,
-      draft: listingInput,
-      imageDescription: draft.image_description ?? undefined,
-      tone,
-      copyLength,
-    });
-  } catch (providerError) {
-    await serviceSupabase
-      .from("product_drafts")
-      .update({
-        generation_status: "failed",
-        generation_error: providerError instanceof Error ? providerError.message : "Copy provider failed",
-      })
-      .eq("id", draftId);
+  if (runMode === "test") {
+    providerOutput = buildTestModeOutput(ruleOutput);
+    extraWarnings.push("測試模式：未呼叫 AI，文案為規則引擎產出（未經 AI 潤稿），tags 與標題為正式結果。");
+  } else {
+    try {
+      providerOutput = await COPY_PROVIDERS[providerKey].generate({
+        ruleOutput,
+        draft: listingInput,
+        imageDescription: draft.image_description ?? undefined,
+        tone,
+        copyLength,
+      });
+    } catch (providerError) {
+      await serviceSupabase
+        .from("product_drafts")
+        .update({
+          generation_status: "failed",
+          generation_error: providerError instanceof Error ? providerError.message : "Copy provider failed",
+        })
+        .eq("id", draftId);
 
-    return Response.json(
-      { error: providerError instanceof Error ? providerError.message : "Copy provider failed" },
-      { status: 502 }
-    );
+      return Response.json(
+        { error: providerError instanceof Error ? providerError.message : "Copy provider failed" },
+        { status: 502 }
+      );
+    }
   }
 
   const localizedOutput = localizeGeneratedListingContent({
@@ -200,6 +234,7 @@ export async function POST(request: NextRequest) {
   });
 
   const nextStatus = localizedOutput.draft_state === "blocked" ? "needs_revision" : "ready_for_review";
+  const allWarnings = uniqueMessages([...localizedOutput.validation_warnings, ...extraWarnings]);
 
   const { error: updateError } = await serviceSupabase
     .from("product_drafts")
@@ -213,7 +248,7 @@ export async function POST(request: NextRequest) {
       generated_faq_html: localizedOutput.generated_faq_html,
       why_we_chose_it: providerOutput.whyWeChoseIt,
       product_highlights: providerOutput.productHighlights,
-      warnings: localizedOutput.validation_warnings,
+      warnings: allWarnings,
       status: nextStatus,
       generation_mode: "api_llm",
       generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
@@ -254,7 +289,7 @@ export async function POST(request: NextRequest) {
     ok: true,
     draftState: localizedOutput.draft_state,
     validationErrors: localizedOutput.validation_errors,
-    validationWarnings: localizedOutput.validation_warnings,
+    validationWarnings: allWarnings,
     result: {
       title: localizedOutput.display_title,
       descriptionHtml: localizedOutput.generated_description_html,

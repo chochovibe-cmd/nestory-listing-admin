@@ -1,5 +1,13 @@
 import { beautifyNestoryPrice } from "./nestoryPrice";
 
+export type CostCurrency = "CNY" | "TWD";
+
+export interface ManualPricingOverride {
+  enabled: boolean;
+  sellPrice?: number | null;
+  compareAtPrice?: number | null;
+}
+
 export interface PricingSettings {
   rate: number;
   costMultiplier: number;
@@ -20,13 +28,35 @@ export const defaultPricingSettings: PricingSettings = {
   minPrice: 199
 };
 
-export function calculatePrice(cnyPrice: number, settings = defaultPricingSettings) {
-  const costTwd = Math.ceil(cnyPrice * settings.rate * settings.costMultiplier);
+export function calculatePrice(
+  price: number,
+  options: {
+    settings?: PricingSettings;
+    currency?: CostCurrency;
+    manualPricing?: ManualPricingOverride;
+  } = {}
+) {
+  const { settings = defaultPricingSettings, currency = "CNY", manualPricing } = options;
+  const base = currency === "TWD" ? price : price * settings.rate;
+  const costTwd = Math.ceil(base * settings.costMultiplier);
+
+  if (manualPricing?.enabled) {
+    const sellPrice = manualPricing.sellPrice && manualPricing.sellPrice > 0
+      ? manualPricing.sellPrice
+      : Math.max(costTwd, settings.minPrice);
+    const compareAtPrice = manualPricing.compareAtPrice && manualPricing.compareAtPrice > 0
+      ? manualPricing.compareAtPrice
+      : sellPrice;
+    const profitPct = sellPrice > 0 ? Math.round(((sellPrice - costTwd) / sellPrice) * 100) : 0;
+
+    return { costTwd, sellPrice, compareAtPrice, profitPct, pricingFormula: "manual_twd" as const };
+  }
+
   const rawSellPrice = Math.max(costTwd * settings.marginMultiplier, settings.minPrice);
   const sellPrice = beautifyNestoryPrice(rawSellPrice);
   const rawCompareAtPrice = Math.max(costTwd * settings.compareAtMultiplier, sellPrice);
   const compareAtPrice = Math.max(beautifyNestoryPrice(rawCompareAtPrice), sellPrice);
-  const profitPct = costTwd > 0 ? Math.round(((sellPrice - costTwd) / sellPrice) * 100) : 0;
+  const profitPct = sellPrice > 0 ? Math.round(((sellPrice - costTwd) / sellPrice) * 100) : 0;
 
   return {
     costTwd,

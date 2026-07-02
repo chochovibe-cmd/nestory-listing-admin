@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { categoryOptions } from "@/lib/categories";
-import { calculatePrice } from "@/lib/pricing";
+import { calculatePrice, CostCurrency, defaultPricingSettings, PricingSettings } from "@/lib/pricing";
+import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import { SALE_STATUS_OPTIONS } from "@/lib/saleStatus";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
+import { readStoredRunMode } from "@/components/ModeSwitcher";
 import { ImageUploader } from "@/components/listing/ImageUploader";
 import { createClient } from "@/lib/supabase/client";
 import type { SaleStatus } from "@/types/domain";
@@ -28,6 +30,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
 
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
+  const [costCurrency, setCostCurrency] = useState<CostCurrency>("CNY");
   const [category, setCategory] = useState(categoryOptions[0].value);
   const [taobaoUrl, setTaobaoUrl] = useState("");
   const [note, setNote] = useState("");
@@ -37,22 +40,58 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
   const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(TONE_OPTIONS[0].value);
   const [copyLength, setCopyLength] = useState<(typeof LENGTH_OPTIONS)[number]>("標準");
+  const [manualPricingEnabled, setManualPricingEnabled] = useState(false);
+  const [manualCompareAtPrice, setManualCompareAtPrice] = useState("");
+  const [manualSellPrice, setManualSellPrice] = useState("");
+  const [useWebSearch, setUseWebSearch] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pricingSettings, setPricingSettings] = useState<PricingSettings>(defaultPricingSettings);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    setPricingSettings(getStoredPricingSettings());
+    function onChange(event: Event) {
+      const detail = (event as CustomEvent<PricingSettings>).detail;
+      if (detail) setPricingSettings(detail);
+    }
+    window.addEventListener("nestory:pricing-settings-changed", onChange);
+    return () => window.removeEventListener("nestory:pricing-settings-changed", onChange);
+  }, []);
+
+  function updatePricingSetting(key: keyof PricingSettings, value: number) {
+    if (Number.isNaN(value)) return;
+    setStoredPricingSettings({ [key]: value });
+  }
+
   const parsedPrice = Number(price || 0);
-  const pricing = parsedPrice > 0 ? calculatePrice(parsedPrice) : null;
+  const pricing = parsedPrice > 0
+    ? calculatePrice(parsedPrice, {
+        settings: pricingSettings,
+        currency: costCurrency,
+        manualPricing: {
+          enabled: manualPricingEnabled,
+          sellPrice: Number(manualSellPrice || 0) || null,
+          compareAtPrice: Number(manualCompareAtPrice || 0) || null
+        }
+      })
+    : null;
 
   function resetForNextItem() {
     setStage("form");
     setDraftId(null);
     setTitle("");
     setPrice("");
+    setCostCurrency("CNY");
     setTaobaoUrl("");
     setNote("");
     setIpName("");
     setCharacterName("");
     setProductType("");
+    setManualPricingEnabled(false);
+    setManualCompareAtPrice("");
+    setManualSellPrice("");
+    setUseWebSearch(false);
     setMessage("");
   }
 
@@ -113,6 +152,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       body: JSON.stringify({
         draftId: data.id,
         provider: readStoredAiProvider(),
+        mode: readStoredRunMode(),
+        useWebSearch,
         tone,
         copyLength
       })
@@ -146,8 +187,26 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             </div>
             <div className="row">
               <div className="field">
-                <label>CNY 價格</label>
-                <input min="0" onChange={(e) => setPrice(e.target.value)} step="0.01" type="number" value={price} />
+                <label>成本價格</label>
+                <div className="price-row">
+                  <input min="0" onChange={(e) => setPrice(e.target.value)} step="0.01" type="number" value={price} />
+                  <div className="currency-toggle">
+                    <button
+                      className={costCurrency === "CNY" ? "active" : ""}
+                      onClick={() => setCostCurrency("CNY")}
+                      type="button"
+                    >
+                      CNY ¥
+                    </button>
+                    <button
+                      className={costCurrency === "TWD" ? "active" : ""}
+                      onClick={() => setCostCurrency("TWD")}
+                      type="button"
+                    >
+                      TWD NT$
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="field">
                 <label>商品分類</label>
@@ -158,6 +217,44 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 </select>
               </div>
             </div>
+
+            <div className="manual-pricing">
+              <label className="check-row">
+                <input
+                  checked={manualPricingEnabled}
+                  onChange={(e) => setManualPricingEnabled(e.target.checked)}
+                  type="checkbox"
+                />
+                <span>自填台幣定價與售價（不套用公式）</span>
+              </label>
+              {manualPricingEnabled ? (
+                <div className="manual-price-fields open">
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <label>定價 TWD</label>
+                    <input
+                      min="0"
+                      onChange={(e) => setManualCompareAtPrice(e.target.value)}
+                      placeholder="例如 980"
+                      step="1"
+                      type="number"
+                      value={manualCompareAtPrice}
+                    />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <label>售價 TWD</label>
+                    <input
+                      min="0"
+                      onChange={(e) => setManualSellPrice(e.target.value)}
+                      placeholder="例如 780"
+                      step="1"
+                      type="number"
+                      value={manualSellPrice}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <div className="row">
               <div className="field">
                 <label>IP 名稱</label>
@@ -183,32 +280,53 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               </div>
             </div>
 
-            <div className="field">
-              <label>AI 文案風格</label>
-              <div className="tone-cards">
-                {TONE_OPTIONS.map((option) => (
-                  <button
-                    className={`tone-card${tone === option.value ? " active" : ""}`}
-                    key={option.value}
-                    onClick={() => setTone(option.value)}
-                    type="button"
-                  >
-                    <span className="tone-emoji">{option.emoji}</span>
-                    <span>
-                      <span className="tone-title">{option.value}</span>
-                      <span className="tone-desc">{option.desc}</span>
-                    </span>
-                  </button>
-                ))}
+            <div className="copy-settings-block">
+              <div className="copy-block-title"><span>✎</span> AI 文案設定</div>
+              <div className="field">
+                <label>AI 文案風格</label>
+                <div className="tone-cards">
+                  {TONE_OPTIONS.map((option) => (
+                    <button
+                      className={`tone-card${tone === option.value ? " active" : ""}`}
+                      key={option.value}
+                      onClick={() => setTone(option.value)}
+                      type="button"
+                    >
+                      <span className="tone-emoji">{option.emoji}</span>
+                      <span>
+                        <span className="tone-title">{option.value}</span>
+                        <span className="tone-desc">{option.desc}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="field">
+                <label>文案長度</label>
+                <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
+                  {LENGTH_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div className="field">
-              <label>文案長度</label>
-              <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
-                {LENGTH_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
+
+            <div className="wsearch-row">
+              <div className="wsearch-label">
+                🔍 Web Search 補充資訊
+                <span>冷門 IP、資訊不足或不確定角色名稱時開啟；會多花一些時間</span>
+              </div>
+              <div className="toggle-wrap">
+                <label className="toggle">
+                  <input
+                    checked={useWebSearch}
+                    onChange={(e) => setUseWebSearch(e.target.checked)}
+                    type="checkbox"
+                  />
+                  <span className="toggle-slider" />
+                </label>
+                <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "+約 5 秒"}</span>
+              </div>
             </div>
 
             <div className="field">
@@ -231,7 +349,74 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             </button>
             {message ? <div className="notice">{message}</div> : null}
           </form>
-        ) : (
+        ) : null}
+        {stage === "form" ? (
+          <>
+            <button className="settings-toggle" onClick={() => setSettingsOpen((current) => !current)} type="button">
+              <span>⚙ 定價規則設定</span><span>{settingsOpen ? "▴" : "▾"}</span>
+            </button>
+            {settingsOpen ? (
+              <div className="settings-body open">
+                <div className="settings-grid">
+                  <div className="field">
+                    <label>CNY 匯率</label>
+                    <input
+                      onChange={(e) => updatePricingSetting("rate", Number(e.target.value))}
+                      step="0.01"
+                      type="number"
+                      value={pricingSettings.rate}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>成本係數</label>
+                    <input
+                      onChange={(e) => updatePricingSetting("costMultiplier", Number(e.target.value))}
+                      step="0.01"
+                      type="number"
+                      value={pricingSettings.costMultiplier}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>利潤加成</label>
+                    <input
+                      onChange={(e) => updatePricingSetting("marginMultiplier", Number(e.target.value))}
+                      step="0.01"
+                      type="number"
+                      value={pricingSettings.marginMultiplier}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>定價加成（原價）</label>
+                    <input
+                      onChange={(e) => updatePricingSetting("compareAtMultiplier", Number(e.target.value))}
+                      step="0.01"
+                      type="number"
+                      value={pricingSettings.compareAtMultiplier}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>最低售價 TWD</label>
+                    <input
+                      onChange={(e) => updatePricingSetting("minPrice", Number(e.target.value))}
+                      step="1"
+                      type="number"
+                      value={pricingSettings.minPrice}
+                    />
+                  </div>
+                </div>
+                <div className="formula-preview">
+                  售價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.marginMultiplier.toFixed(2)}
+                  <br />
+                  定價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.compareAtMultiplier.toFixed(2)}
+                </div>
+                <div className="settings-note">
+                  成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝／售價與定價可在上方手動覆蓋
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        {stage === "created" ? (
           <div style={{ display: "grid", gap: 14 }}>
             {message ? <div className="notice">{message}</div> : null}
             <div className="field">
@@ -242,7 +427,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               ＋ 填寫下一筆商品
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

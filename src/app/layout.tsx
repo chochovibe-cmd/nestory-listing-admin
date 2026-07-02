@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { AuthNav } from "@/components/AuthNav";
+import { DeploymentStatus } from "@/components/DeploymentStatus";
+import { ExchangeRateWidget } from "@/components/ExchangeRateWidget";
+import { ModeSwitcher } from "@/components/ModeSwitcher";
 import { ProviderSwitcher } from "@/components/ProviderSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import "./globals.css";
@@ -32,7 +35,10 @@ const themeInitScript = `
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-Hant">
-      <body data-theme="dark">
+      {/* suppressHydrationWarning: themeInitScript below mutates
+          body[data-theme] from localStorage before React hydrates, so the
+          server's "dark" attribute intentionally differs from the client's. */}
+      <body data-theme="dark" suppressHydrationWarning>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <div className="shell">
           <header className="topbar">
@@ -48,7 +54,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <Link href="/drafts">商品佇列</Link>
               <Link href="/review">待審核</Link>
               <ProviderSwitcher />
+              <ModeSwitcher />
+              <DeploymentStatus />
               <ThemeSwitcher />
+              <ExchangeRateWidget />
               <AuthNav />
             </nav>
           </header>

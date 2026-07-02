@@ -526,6 +526,43 @@ textarea {
   margin-top: 2px;
 }
 
+/* ── Web Search row (ported from 分支/index.html) ── */
+.wsearch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 12px 14px;
+  margin: 14px 0 16px;
+}
+
+.wsearch-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.wsearch-label span {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+.toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-cost {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* ── Toggle switch ── */
 .toggle {
   position: relative;
@@ -776,4 +813,401 @@ textarea {
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+/* ── Pricing / settings panel (ported from 分支/index.html) ── */
+.price-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.source-inline { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.source-inline label { margin-bottom: 0; }
+.source-pill { width: auto; min-width: 86px; border-radius: 999px; padding: 5px 24px 5px 10px; font-size: 11px; background: var(--surface2); }
+
+.currency-toggle { display: flex; border: 1px solid var(--border); border-radius: 7px; background: var(--surface2); padding: 2px; white-space: nowrap; }
+.currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: 'Space Grotesk', sans-serif; cursor: pointer; }
+.currency-toggle button.active { background: var(--accent); color: var(--accent-fg); font-weight: 700; }
+
+.manual-pricing { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 10px 12px; margin-bottom: 13px; }
+.check-row { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 12px; cursor: pointer; }
+.check-row input { width: auto; }
+.manual-price-fields { display: none; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.manual-price-fields.open { display: grid; }
+
+.copy-settings-block { background: color-mix(in srgb, var(--surface2) 72%, var(--surface)); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 12px; margin: 14px 0; }
+.copy-block-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: var(--text); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
+.copy-block-title span { font-size: 18px; }
+
+.settings-toggle { width: 100%; background: none; border: none; border-top: 1px solid var(--border); padding: 9px 16px; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; transition: color .2s; }
+.settings-toggle:hover { color: var(--text); }
+.settings-body { padding: 13px 16px; border-top: 1px solid var(--border); background: var(--surface2); display: none; }
+.settings-body.open { display: block; }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.formula-preview { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; font-family: 'Space Grotesk', sans-serif; font-size: 11px; color: var(--accent); margin-top: 10px; }
+.settings-note { font-size: 10px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; }
+
+/* ── Result card dual price (售價 + 利潤 stacked) ── */
+.rc-price-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.rc-profit { font-family: 'Space Grotesk', sans-serif; font-size: 10px; color: var(--success); white-space: nowrap; }
+
+/* ── Header: live rate + deployment status dropdown ── */
+.rate-val { color: var(--accent); font-weight: 600; font-size: 13px; }
+.hdr-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 11px; transition: all .2s; }
+.hdr-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.btn-mini { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); border-radius: var(--radius-s); padding: 7px 10px; font-size: 11px; cursor: pointer; transition: all .2s; }
+.btn-mini:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+.header-status-wrap { position: relative; display: inline-flex; }
+.header-status-toggle { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); font-size: 11px; font-weight: 700; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.header-status.status-body { position: absolute; right: 0; top: calc(100% + 8px); z-index: 300; display: none; width: min(520px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 10px; box-shadow: var(--shadow-m); }
+.header-status.status-body.open { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.header-status-label { font-size: 10px; color: var(--text-muted); font-weight: 700; padding: 0 4px 0 2px; letter-spacing: .05em; }
+.header-status .status-pill { display: flex; align-items: center; gap: 4px; min-height: 25px; padding: 5px 8px; border-radius: 999px; font-size: 10px; white-space: nowrap; }
+.header-status .status-pill strong { display: inline; margin: 0; font-size: 9px; }
+.header-status .btn-mini { grid-column: 1 / -1; padding: 7px 10px; border-radius: 999px; font-size: 10px; white-space: nowrap; }
+
+.status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 14px; }
+.status-body { display: none; }
+.status-body.open { display: block; }
+.status-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: var(--text-dim); }
+.status-pill strong { display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 2px; }
+.status-ok { border-color: color-mix(in srgb, var(--success) 45%, transparent); color: var(--success); }
+.status-warn { border-color: color-mix(in srgb, var(--accent2) 45%, transparent); color: var(--accent2); }
+
+/* ── Sticker / Neo-Brutalist polish (ported verbatim from 分支/index.html; `header`
+   is a bare element selector so it matches our <header className="topbar">) ── */
+.panel,
+.result-card,
+.mobile-tabbar {
+  border: 2.5px solid var(--line);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-m);
+}
+header {
+  border-bottom: 2.5px solid var(--line);
+  box-shadow: 0 3px 0 rgba(26, 26, 26, .16);
+}
+body[data-theme="dark"] header { box-shadow: 0 3px 0 rgba(232, 232, 240, .18); }
+.panel-header,
+.settings-toggle,
+.settings-body {
+  border-color: var(--line);
+  border-width: 2.5px;
+}
+input[type="text"],
+input[type="number"],
+input[type="password"],
+textarea,
+select,
+.source-pill,
+.currency-toggle,
+.manual-pricing,
+.copy-settings-block,
+.tone-card,
+.dropzone,
+.wsearch-row,
+.status-pill,
+.rc-tag,
+.formula-preview {
+  border: 2.5px solid var(--line);
+  border-radius: var(--radius-s);
+}
+.dropzone,
+.manual-pricing,
+.tone-card,
+.copy-settings-block,
+.wsearch-row,
+.formula-preview,
+.status-pill {
+  background: var(--surface2);
+  box-shadow: var(--shadow-s);
+}
+.dropzone { border-style: dashed; }
+.dropzone.has-files { border-style: solid; }
+.tone-card.active,
+.tone-card:hover,
+.dropzone:hover,
+.source-pill:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--line);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+.hdr-btn,
+.theme-btn,
+.pill-group,
+.btn-add,
+.btn-mini {
+  border: 2.5px solid var(--line);
+  box-shadow: var(--shadow-s);
+}
+.theme-btn {
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+}
+.hdr-btn,
+.btn-mini {
+  background: var(--surface);
+  color: var(--text);
+}
+.btn-add {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.btn-add:hover,
+.btn-mini:hover,
+.theme-btn:hover,
+.hdr-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 rgba(26, 26, 26, .42);
+}
+body[data-theme="dark"] .btn-add:hover,
+body[data-theme="dark"] .btn-mini:hover,
+body[data-theme="dark"] .theme-btn:hover,
+body[data-theme="dark"] .hdr-btn:hover {
+  box-shadow: 5px 5px 0 rgba(232, 232, 240, .30);
+}
+.pill-group { padding: 3px; background: var(--surface); }
+.pill-btn { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
+.pill-btn.active,
+.currency-toggle button.active,
+.mobile-tabbar button.active {
+  border-color: var(--line);
+  background: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
+}
+.currency-toggle { gap: 3px; padding: 3px; background: var(--surface); }
+.currency-toggle button { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
+.rc-status,
+.rc-price,
+.rc-profit,
+.rate-val {
+  border: 2.5px solid var(--line);
+  box-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
+}
+.rate-val {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--warn);
+  color: var(--line);
+}
+.rc-price { background: var(--accent); color: var(--accent-fg); }
+.status-warn,
+.rc-status.error { background: var(--accent2); color: #fff; }
+.rc-status.generating { background: var(--warn); color: var(--line); }
+.rc-status.done,
+.status-ok { background: var(--success); color: #fff; }
+.rc-price { font-size: 13px; padding: 5px 12px; border-radius: 999px; }
+.rc-profit { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; }
+.status-pill { background: var(--surface); color: var(--text); }
+.status-pill strong { color: var(--text); }
+.result-card { background: var(--surface); }
+.result-card.active {
+  border-color: var(--line);
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent3) 72%, var(--line));
+}
+body[data-theme="kitty"] .status-ok,
+body[data-theme="kitty"] .rc-status.done {
+  background: var(--accent3);
+  color: #fff;
+}
+body[data-theme="kitty"] .formula-preview,
+body[data-theme="kitty"] .rc-status.generating,
+body[data-theme="kitty"] .rate-val {
+  background: #ffd966;
+  color: var(--line);
+}
+body[data-theme="kitty"] header {
+  background: #2f56bf;
+  border-bottom-color: #171717;
+}
+body[data-theme="kitty"] .brand,
+body[data-theme="kitty"] .brand span,
+body[data-theme="kitty"] .nav {
+  color: #ffffff;
+}
+body[data-theme="kitty"] .brand-dot {
+  background: #ffd966;
+}
+body[data-theme="kitty"] .theme-btn,
+body[data-theme="kitty"] .hdr-btn,
+body[data-theme="kitty"] .pill-group,
+body[data-theme="kitty"] .header-status-toggle {
+  background: rgba(255, 255, 255, .14);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, .76);
+}
+body[data-theme="kitty"] .pill-btn { color: #ffffff; }
+body[data-theme="kitty"] .pill-btn.active {
+  background: #ff6a00;
+  color: #ffffff;
+  border-color: #171717;
+}
+body[data-theme="kitty"] .rate-val { color: #ffd966 !important; }
+
+/* ── Reference-balanced polish: cleaner, thinner-bordered dark theme,
+   lighter-shadowed light themes (ported from 分支/index.html) ── */
+body:not([data-theme="dark"]) .panel,
+body:not([data-theme="dark"]) .result-card,
+body:not([data-theme="dark"]) .mobile-tabbar {
+  border-width: 1.5px;
+  box-shadow: 0 3px 0 rgba(26, 26, 26, .045);
+}
+body:not([data-theme="dark"]) input[type="text"],
+body:not([data-theme="dark"]) input[type="number"],
+body:not([data-theme="dark"]) input[type="password"],
+body:not([data-theme="dark"]) textarea,
+body:not([data-theme="dark"]) select,
+body:not([data-theme="dark"]) .source-pill,
+body:not([data-theme="dark"]) .currency-toggle,
+body:not([data-theme="dark"]) .manual-pricing,
+body:not([data-theme="dark"]) .copy-settings-block,
+body:not([data-theme="dark"]) .tone-card,
+body:not([data-theme="dark"]) .dropzone,
+body:not([data-theme="dark"]) .wsearch-row,
+body:not([data-theme="dark"]) .status-pill,
+body:not([data-theme="dark"]) .rc-tag,
+body:not([data-theme="dark"]) .formula-preview {
+  border-width: 1.5px;
+  box-shadow: none;
+}
+body:not([data-theme="dark"]) .dropzone,
+body:not([data-theme="dark"]) .manual-pricing,
+body:not([data-theme="dark"]) .copy-settings-block,
+body:not([data-theme="dark"]) .wsearch-row,
+body:not([data-theme="dark"]) .formula-preview {
+  background: color-mix(in srgb, var(--surface2) 58%, var(--surface));
+}
+body:not([data-theme="dark"]) .hdr-btn,
+body:not([data-theme="dark"]) .theme-btn,
+body:not([data-theme="dark"]) .pill-group,
+body:not([data-theme="dark"]) .btn-add,
+body:not([data-theme="dark"]) .btn-mini {
+  border-width: 1.5px;
+  box-shadow: none;
+}
+body:not([data-theme="dark"]) .rc-status,
+body:not([data-theme="dark"]) .rc-price,
+body:not([data-theme="dark"]) .rc-profit,
+body:not([data-theme="dark"]) .rate-val {
+  border-width: 1.5px;
+  box-shadow: none;
+}
+body:not([data-theme="dark"]) .btn-add:hover,
+body:not([data-theme="dark"]) .btn-mini:hover,
+body:not([data-theme="dark"]) .theme-btn:hover,
+body:not([data-theme="dark"]) .hdr-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 rgba(26, 26, 26, .07);
+}
+body[data-theme="dark"] .panel,
+body[data-theme="dark"] .result-card,
+body[data-theme="dark"] .mobile-tabbar {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: none;
+}
+body[data-theme="dark"] header {
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
+}
+body[data-theme="dark"] input[type="text"],
+body[data-theme="dark"] input[type="number"],
+body[data-theme="dark"] input[type="password"],
+body[data-theme="dark"] textarea,
+body[data-theme="dark"] select,
+body[data-theme="dark"] .source-pill,
+body[data-theme="dark"] .currency-toggle,
+body[data-theme="dark"] .manual-pricing,
+body[data-theme="dark"] .copy-settings-block,
+body[data-theme="dark"] .tone-card,
+body[data-theme="dark"] .dropzone,
+body[data-theme="dark"] .wsearch-row,
+body[data-theme="dark"] .status-pill,
+body[data-theme="dark"] .rc-tag,
+body[data-theme="dark"] .formula-preview,
+body[data-theme="dark"] .hdr-btn,
+body[data-theme="dark"] .theme-btn,
+body[data-theme="dark"] .pill-group,
+body[data-theme="dark"] .btn-add,
+body[data-theme="dark"] .btn-mini {
+  border-width: 1px;
+  box-shadow: none;
+}
+body[data-theme="dark"] .btn-add {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+body[data-theme="dark"] .status-pill {
+  background: var(--surface2);
+  color: var(--text-dim);
+}
+body[data-theme="dark"] .status-pill strong { color: var(--text-muted); }
+body[data-theme="dark"] .status-ok {
+  border-color: rgba(62, 207, 176, .34);
+  color: var(--success);
+}
+body[data-theme="dark"] .status-warn {
+  border-color: rgba(255, 107, 157, .34);
+  color: var(--accent2);
+}
+body[data-theme="dark"] .btn-add:hover,
+body[data-theme="dark"] .btn-mini:hover,
+body[data-theme="dark"] .theme-btn:hover,
+body[data-theme="dark"] .hdr-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .22);
+}
+body[data-theme="dark"] .rc-price {
+  background: rgba(200, 255, 0, .10);
+  border: 1px solid rgba(200, 255, 0, .35);
+  color: var(--accent);
+}
+body[data-theme="dark"] .rc-profit {
+  background: transparent;
+  border: 0;
+  color: var(--success);
+}
+
+/* ── Final soft labels: numbers/status/badges become borderless colored text
+   instead of solid blocks (ported from 分支/index.html) ── */
+.rate-val,
+.rc-price,
+.rc-profit {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  color: var(--text-dim) !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+.rate-val,
+.rc-price { color: var(--accent) !important; font-weight: 800; }
+.rc-profit { color: var(--success) !important; }
+.status-pill,
+.rc-status {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent) !important;
+  color: var(--text-dim) !important;
+}
+.status-ok,
+.rc-status.done {
+  background: transparent !important;
+  color: var(--success) !important;
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border)) !important;
+}
+.status-warn,
+.rc-status.error {
+  background: transparent !important;
+  color: var(--accent2) !important;
+  border-color: color-mix(in srgb, var(--accent2) 45%, var(--border)) !important;
+}
+.rc-status.generating {
+  background: transparent !important;
+  color: var(--warn) !important;
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border)) !important;
 }

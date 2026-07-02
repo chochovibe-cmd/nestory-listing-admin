@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
+import { readStoredRunMode } from "@/components/ModeSwitcher";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 function statusIcon(draft: ProductDraft): { icon: string; className: string } {
@@ -43,6 +44,25 @@ export function ResultCard({
   const { icon, className } = statusIcon(draft);
   const profit = draft.twd_price != null && draft.twd_cost != null ? draft.twd_price - draft.twd_cost : null;
 
+  // ResultCard stays mounted (same `key={draft.id}`) across regenerate/save's
+  // router.refresh(), so these editable fields must be re-synced explicitly
+  // when the underlying row changes -- otherwise an already-expanded card
+  // keeps showing pre-regeneration text even though the DB has fresh content.
+  useEffect(() => {
+    setTitle(draft.title_zh ?? "");
+    setDescription(draft.description_html ?? "");
+    setSeoTitle(draft.seo_title ?? "");
+    setSeoDescription(draft.seo_description ?? "");
+    setTags(draft.tags?.join(", ") ?? "");
+    setFaq(draft.generated_faq_html ?? "");
+    setSellPrice(draft.twd_price?.toString() ?? "");
+    setCompareAtPrice(draft.compare_at_price?.toString() ?? "");
+    setDetectedCategory(draft.detected_category ?? "");
+    setSku(draft.sku ?? "");
+    setPublishMode(draft.publish_mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.updated_at]);
+
   async function save() {
     const { error } = await supabase
       .from("product_drafts")
@@ -71,7 +91,7 @@ export function ResultCard({
     const response = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftId: draft.id, provider: readStoredAiProvider() })
+      body: JSON.stringify({ draftId: draft.id, provider: readStoredAiProvider(), mode: readStoredRunMode() })
     });
     const payload = await response.json();
     setRegenerating(false);

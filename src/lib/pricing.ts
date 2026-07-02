@@ -1,3 +1,5 @@
+import { beautifyNestoryPrice } from "./nestoryPrice";
+
 export interface PricingSettings {
   rate: number;
   costMultiplier: number;
@@ -5,6 +7,9 @@ export interface PricingSettings {
   minPrice: number;
 }
 
+// Fallback used until a component loads the adjustable values from
+// team_settings (see supabase/migrations/006_team_settings.sql). The settings
+// page (Phase 6) is where an admin can change these without a code change.
 export const defaultPricingSettings: PricingSettings = {
   rate: 4.5,
   costMultiplier: 1.3,
@@ -12,15 +17,10 @@ export const defaultPricingSettings: PricingSettings = {
   minPrice: 199
 };
 
-export function roundSellPrice(value: number): number {
-  const step = value <= 500 ? 10 : value <= 2000 ? 50 : 100;
-  return Math.ceil(value / step) * step;
-}
-
 export function calculatePrice(cnyPrice: number, settings = defaultPricingSettings) {
   const costTwd = Math.ceil(cnyPrice * settings.rate * settings.costMultiplier);
   const rawSellPrice = Math.max(costTwd * settings.marginMultiplier, settings.minPrice);
-  const sellPrice = roundSellPrice(rawSellPrice);
+  const sellPrice = beautifyNestoryPrice(rawSellPrice);
   const profitPct = costTwd > 0 ? Math.round(((sellPrice - costTwd) / sellPrice) * 100) : 0;
 
   return {

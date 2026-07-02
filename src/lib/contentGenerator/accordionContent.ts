@@ -1,4 +1,5 @@
 import { ProductStatus } from './sourceTypes';
+import { normalizeProductTypeForDisplay } from '../productTypeLabels';
 
 export type AccordionContentDraft = {
   product_status: ProductStatus;
@@ -48,7 +49,7 @@ export function generateProductSpecsText(draft: AccordionContentDraft): string {
     draft.product_name ? '商品名稱：' + draft.product_name : '',
     draft.ip ? 'IP／系列：' + draft.ip : '',
     draft.characters.length > 0 ? '角色／主題：' + joinLabels(draft.characters) : '',
-    draft.product_types.length > 0 ? '商品類型：' + joinLabels(draft.product_types) : '',
+    draft.product_types.length > 0 ? '商品類型：' + joinLabels(draft.product_types.map(normalizeProductTypeForDisplay)) : '',
     compact(draft.variant_feature) ? '款式／特徵：' + compact(draft.variant_feature) : '',
     compact(draft.sku) ? 'SKU：' + compact(draft.sku) : '',
     draft.product_status === 'secondhand' && compact(draft.secondhand_grade)
@@ -75,7 +76,7 @@ export function generateProductSpecsText(draft: AccordionContentDraft): string {
 
 export function generateProductHighlightsText(draft: AccordionContentDraft): string {
   const characterText = joinLabels(draft.characters, '角色粉絲');
-  const typeText = joinLabels(draft.product_types, '周邊商品');
+  const typeText = joinLabels(draft.product_types.map(normalizeProductTypeForDisplay), '周邊商品');
   const useCaseText = joinLabels(draft.use_cases, '收藏展示、日常佈置');
   const highlights = uniqueLines([
     draft.ip ? '・' + draft.ip + ' ' + characterText + ' 主題收藏。' : '',

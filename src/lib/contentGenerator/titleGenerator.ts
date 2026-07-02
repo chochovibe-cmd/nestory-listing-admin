@@ -1,5 +1,12 @@
 import { extractFeatureTerms } from './featureTerms';
+import {
+  DisplayLabelContext,
+  formatCharacterShortNameFromContext,
+  formatListingIpDisplayNameFromContext,
+  isCharacterRedundantWithIpDisplay,
+} from './displayLabels';
 import { ListingDraftInput } from './types';
+import { normalizeProductTypeForDisplay } from '../productTypeLabels';
 
 const TITLE_MAX_LENGTH = 45;
 const NOISE_TERMS = [
@@ -20,10 +27,8 @@ const NOISE_TERMS = [
 ];
 
 const PRODUCT_TYPE_ALIASES: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\u68c9\u82b1\u5a03\u5a03|\u68c9\u5a03/, '\u68c9\u82b1\u5a03\u5a03'],
-  [/絨毛娃娃|毛絨娃娃|絨毛公仔|毛絨公仔|絨毛玩偶|毛絨玩偶|小娃娃|小玩偶|布偶|玩偶/, '絨毛娃娃'],
-  [/包包掛件|包包吊飾|掛件|吊飾/, '吊飾'],
-  [/鑰匙圈|鑰匙扣/, '鑰匙圈'],
+  [/棉花娃娃|棉娃|plush|ぬいぐるみ|絨毛娃娃|毛絨娃娃|絨毛公仔|毛絨公仔|絨毛玩偶|毛絨玩偶|小娃娃|小玩偶|布偶|玩偶|娃娃/, '絨毛娃娃'],
+  [/包包掛件|包包吊飾|包包掛飾|手機掛飾|娃娃吊飾|掛件|吊飾|鑰匙圈|鑰匙扣|徽章|別針|keychain|charm|badge|pin/i, '吊飾掛件'],
   [/盲盒|盲袋/, '盲盒'],
   [/扭蛋/, '扭蛋'],
   [/娃娃抱枕|抱枕/, '娃娃抱枕'],
@@ -73,7 +78,7 @@ function addUnique(values: string[], value: string, limit = Number.POSITIVE_INFI
 }
 
 function canonicalizeProductType(value: string): string | null {
-  const normalized = stripPrefix(normalizeText(value), '類型_');
+  const normalized = normalizeProductTypeForDisplay(stripPrefix(normalizeText(value), '類型_'));
 
   if (!normalized) {
     return null;
@@ -115,8 +120,13 @@ function inferProductTypes(draft: ListingDraftInput): string[] {
   return productTypes;
 }
 
-function buildCoreName(draft: ListingDraftInput): string {
-  const characters = draft.characters.map(normalizeText).filter(Boolean).slice(0, 2);
+function buildCoreName(draft: ListingDraftInput, context: DisplayLabelContext, ipDisplayName: string): string {
+  const characters = draft.characters
+    .map((character) => formatCharacterShortNameFromContext(character, draft.ip, context))
+    .map(normalizeText)
+    .filter(Boolean)
+    .filter((character) => !isCharacterRedundantWithIpDisplay(character, ipDisplayName))
+    .slice(0, 2);
   const productTypes = inferProductTypes(draft);
   const characterText = characters.join('');
   const typeText = productTypes.filter((type) => !characterText.includes(type)).join('');
@@ -203,15 +213,15 @@ function enforceTitleLength(ip: string, coreName: string, featureText: string): 
   return ip + ' | ' + coreName.slice(0, 14) + ' | ' + featureText.slice(0, 10);
 }
 
-export function generateDisplayTitle(draft: ListingDraftInput): string | null {
+export function generateDisplayTitle(draft: ListingDraftInput, context: DisplayLabelContext = {}): string | null {
   const ip = normalizeText(draft.ip);
-  const productName = normalizeText(draft.product_name);
 
-  if (!ip || !productName) {
+  if (!ip) {
     return null;
   }
 
-  const coreName = buildCoreName(draft);
+  const ipDisplayName = formatListingIpDisplayNameFromContext(ip, context);
+  const coreName = buildCoreName(draft, context, ipDisplayName);
 
   if (!coreName) {
     return null;
@@ -222,8 +232,8 @@ export function generateDisplayTitle(draft: ListingDraftInput): string | null {
       return null;
     }
 
-    return enforceTitleLength('【二手】' + ip, coreName, draft.secondhand_grade);
+    return enforceTitleLength('【二手】' + ipDisplayName, coreName, draft.secondhand_grade);
   }
 
-  return enforceTitleLength(ip, coreName, getShortFeatureText(draft));
+  return enforceTitleLength(ipDisplayName, coreName, getShortFeatureText(draft));
 }

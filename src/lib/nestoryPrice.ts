@@ -1,21 +1,45 @@
+// Tiered "尾數美化" price rounding. Replaces the old nearest-10/5/xx9 rounding
+// with a lookup against price points that actually read well in the shop
+// (see nestory_codex_phase2_supplement_1.md §4-10).
+
+const LOW_TIER_PRICES = [99, 129, 149, 169, 199, 229, 249, 299];
+const MID_TIER_PRICES = [329, 349, 399, 449, 499, 549, 599, 699, 799, 899];
+const HIGH_TIER_PRICES = [
+  980, 990, 999, 1080, 1099, 1180, 1199, 1280, 1299, 1580, 1680, 2280, 4480
+];
+
+function nearestAtOrAbove(tier: number[], rawPrice: number, extensionStep: number): number {
+  const candidate = tier.find((price) => price >= rawPrice);
+
+  if (candidate !== undefined) {
+    return candidate;
+  }
+
+  // Beyond the top of this tier's lookup table: extend the ladder upward in
+  // fixed steps instead of hardcoding every value.
+  let extended = tier[tier.length - 1];
+
+  while (extended < rawPrice) {
+    extended += extensionStep;
+  }
+
+  return extended;
+}
+
 export function beautifyNestoryPrice(rawPrice: number): number {
-  if (!Number.isFinite(rawPrice)) {
+  if (!Number.isFinite(rawPrice) || rawPrice <= 0) {
     return 0;
   }
 
-  const basePrice = Math.max(0, Math.ceil(rawPrice));
-  const candidates = [basePrice];
-  const tail = basePrice % 10;
-  const lastTwoDigits = basePrice % 100;
+  const basePrice = Math.ceil(rawPrice);
 
-  candidates.push(tail === 0 ? basePrice : basePrice + (10 - tail));
-  candidates.push(tail <= 5 ? basePrice + (5 - tail) : basePrice + (15 - tail));
-  candidates.push(lastTwoDigits <= 99 ? basePrice + (99 - lastTwoDigits) : basePrice + 99);
+  if (basePrice < 300) {
+    return nearestAtOrAbove(LOW_TIER_PRICES, basePrice, 50);
+  }
 
-  return Math.min(...candidates.filter((price) => {
-    const nextTail = price % 10;
-    const nextLastTwoDigits = price % 100;
+  if (basePrice <= 900) {
+    return nearestAtOrAbove(MID_TIER_PRICES, basePrice, 100);
+  }
 
-    return nextTail === 0 || nextTail === 5 || nextLastTwoDigits === 99;
-  }));
+  return nearestAtOrAbove(HIGH_TIER_PRICES, basePrice, 1000);
 }

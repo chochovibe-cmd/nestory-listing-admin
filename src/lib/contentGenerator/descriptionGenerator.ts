@@ -1,3 +1,9 @@
+import {
+  DisplayLabelContext,
+  formatCharacterShortNameFromContext,
+  formatListingIpDisplayNameFromContext,
+  isCharacterRedundantWithIpDisplay,
+} from './displayLabels';
 import { ListingDraftInput } from './types';
 
 function escapeHtml(value: string): string {
@@ -13,10 +19,14 @@ function joinLabels(values: string[], fallback: string): string {
   return values.length > 0 ? values.join('、') : fallback;
 }
 
-export function generateDescriptionHtml(draft: ListingDraftInput): string {
-  const ip = escapeHtml(draft.ip);
+export function generateDescriptionHtml(draft: ListingDraftInput, context: DisplayLabelContext = {}): string {
+  const ipDisplayName = formatListingIpDisplayNameFromContext(draft.ip, context);
+  const ip = escapeHtml(ipDisplayName);
   const productName = escapeHtml(draft.product_name);
-  const characters = escapeHtml(joinLabels(draft.characters, '喜愛此系列的收藏者'));
+  const characterLabels = draft.characters
+    .map((character) => formatCharacterShortNameFromContext(character, draft.ip, context))
+    .filter((character) => !isCharacterRedundantWithIpDisplay(character, ipDisplayName));
+  const characters = escapeHtml(joinLabels(characterLabels, '\u559c\u611b\u6b64\u7cfb\u5217\u7684\u6536\u85cf\u8005'));
   const useCases = escapeHtml(joinLabels(draft.use_cases, '收藏展示、日常佈置'));
 
   if (draft.product_status === 'secondhand') {

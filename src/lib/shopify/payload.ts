@@ -1,3 +1,4 @@
+import { generateSku } from "@/lib/contentGenerator/sku";
 import type { ProductDraft, ProductImage, PublishMode } from "@/types/domain";
 
 export interface ShopifyPublishDraft extends ProductDraft {
@@ -18,6 +19,11 @@ export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: Pub
       mediaContentType: "IMAGE"
     }))
     .filter((image) => Boolean(image.originalSource));
+  const { sku } = generateSku({
+    productType: draft.product_type ?? "",
+    ipName: draft.ip_name ?? draft.category ?? "",
+    characterName: draft.character_name
+  });
   const generatedPayload = isRecord(draft.generated_payload_json) ? draft.generated_payload_json : {};
   const generatedProduct = isRecord(generatedPayload.product) ? generatedPayload.product : {};
   const generatedVariantSeed = isRecord(generatedPayload.variantSeed) ? generatedPayload.variantSeed : {};
@@ -42,7 +48,7 @@ export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: Pub
     product,
     media: Array.isArray(generatedPayload.media) ? generatedPayload.media : images,
     variantSeed: {
-      sku: `NST-${draft.id.slice(0, 8).toUpperCase()}`,
+      sku,
       price: draft.twd_price ?? 0,
       cost: draft.twd_cost ?? 0,
       inventoryQuantity: 0,

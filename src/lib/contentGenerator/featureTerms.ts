@@ -30,6 +30,9 @@ const FORBIDDEN_FEATURE_PATTERNS = [
 const GENERIC_FEATURE_TERMS = new Set(['\u806f\u540d\u6b3e']);
 
 const FEATURE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/小熊[\s\S]*(莓果|紅色小球|漿果)|(耳朵|尾巴|熊)[\s\S]*(莓果|紅色小球|漿果)|(莓果|紅色小球|漿果)[\s\S]*(小熊|耳朵|尾巴|熊)|bear[\s\S]*berry|berry[\s\S]*bear/i, '小熊莓果款'],
+  [/紅色小球|莓果|漿果|berry/i, '莓果款'],
+  [/小熊|熊耳|耳朵[\s\S]*尾巴|bear/i, '小熊款'],
   [/\bFLASTA\b/i, 'FLASTA'],
   [/\u6f01\u592b\u5e3d[\s\S]*(\u76f8\u6a5f|\u651d\u5f71)|(\u76f8\u6a5f|\u651d\u5f71)[\s\S]*(\u6f01\u592b\u5e3d|\u5713\u6846\u773c\u93e1)|\u9ec3\u8272\u76f8\u6a5f/i, '\u6f01\u592b\u5e3d\u76f8\u6a5f\u6b3e'],
   [/\u651d\u5f71|\u76f8\u6a5f|camera/i, '\u651d\u5f71\u4e3b\u984c\u6b3e'],

@@ -66,6 +66,16 @@ export type TagRule = {
   updated_at: string;
 };
 
+export type IpCatalogEntry = {
+  id: string;
+  ip_name: string;
+  aliases: string[];
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type IpCharacter = {
   id: string;
   ip_name: string;
@@ -76,3 +86,5 @@ export type IpCharacter = {
   created_at: string;
   updated_at: string;
 };
+
+export type TagRuleGroups = Record<RuleGroup, TagRule[]>;

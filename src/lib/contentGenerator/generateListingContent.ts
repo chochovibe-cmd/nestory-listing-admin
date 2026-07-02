@@ -3,6 +3,7 @@ import { generateFaqHtml } from './faqGenerator';
 import { generateSeoContent } from './seoGenerator';
 import { generateShopifyTags } from './tagGenerator';
 import { generateDisplayTitle } from './titleGenerator';
+import { DisplayLabelContext } from './displayLabels';
 import { GeneratedListingContent, ListingDraftInput } from './types';
 import { validateGeneratedContent } from './validation';
 import { TagRule } from './sourceTypes';
@@ -14,13 +15,14 @@ function uniqueMessages(values: string[]): string[] {
 export function generateListingContent(
   draft: ListingDraftInput,
   tagRules: TagRule[],
+  displayContext: DisplayLabelContext = {},
 ): GeneratedListingContent {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const displayTitle = generateDisplayTitle(draft);
-  const generatedDescriptionHtml = generateDescriptionHtml(draft);
-  const generatedFaqHtml = generateFaqHtml(draft);
-  const seoContent = generateSeoContent(draft);
+  const displayTitle = generateDisplayTitle(draft, displayContext);
+  const generatedDescriptionHtml = generateDescriptionHtml(draft, displayContext);
+  const generatedFaqHtml = generateFaqHtml(draft, displayContext);
+  const seoContent = generateSeoContent(draft, displayContext);
   const shopifyTags = generateShopifyTags({
     draft,
     errors,

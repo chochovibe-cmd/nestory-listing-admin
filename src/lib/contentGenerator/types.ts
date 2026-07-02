@@ -1,4 +1,4 @@
-import { DraftState, ProductDraftPayload, TagRule } from "./sourceTypes";
+import { DraftState, ProductDraftPayload, TagRule } from './sourceTypes';
 
 export type ListingDraftInput = ProductDraftPayload;
 

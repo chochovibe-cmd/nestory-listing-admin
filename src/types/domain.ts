@@ -1,4 +1,7 @@
+import type { SaleStatusOption } from "@/lib/saleStatus";
+
 export type UserRole = "admin" | "operator" | "reviewer";
+export type SaleStatus = SaleStatusOption;
 
 export type DraftStatus =
   | "pending_input"
@@ -30,6 +33,8 @@ export type PublishStatus =
   | "failed";
 
 export type ImageType = "main" | "detail" | "spec" | "generated_detail" | "variant";
+
+export type ImageStatus = "pending" | "processing" | "done" | "failed" | "skipped";
 
 export interface ProductDraft {
   id: string;
@@ -82,6 +87,19 @@ export interface ProductDraft {
   error_message: string | null;
   created_by: string | null;
   reviewed_by: string | null;
+  sale_status: SaleStatus;
+  image_description: string | null;
+  image_flags: Record<string, string>;
+  image_status: ImageStatus;
+  is_secondhand: boolean;
+  secondhand_grade: string | null;
+  secondhand_condition: string | null;
+  secondhand_notes: string | null;
+  ip_name: string | null;
+  character_name: string | null;
+  why_we_chose_it: string | null;
+  product_highlights: string[];
+  video_urls: unknown[];
   created_at: string;
   updated_at: string;
 }

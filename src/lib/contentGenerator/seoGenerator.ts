@@ -1,6 +1,15 @@
 import { extractFeatureTerms } from './featureTerms';
+import {
+  DisplayLabelContext,
+  formatCharacterDisplayNameFromContext,
+  formatCharacterShortNameFromContext,
+  formatListingIpDisplayNameFromContext,
+  isCharacterRedundantWithIpDisplay,
+  removeDuplicateDisplayTerms,
+} from './displayLabels';
 import { ListingDraftInput } from './types';
-import type { IpCharacter } from './sourceTypes';
+import type { IpCatalogEntry, IpCharacter } from './sourceTypes';
+import { normalizeProductTypeForDisplay } from '../productTypeLabels';
 
 const SEO_TITLE_MAX_LENGTH = 60;
 const META_DESCRIPTION_MAX_LENGTH = 60;
@@ -19,7 +28,8 @@ const FORBIDDEN_META_TERMS = [
   '供應端',
 ];
 
-type SeoContentOptions = {
+type SeoContentOptions = DisplayLabelContext & {
+  ipCatalog?: Pick<IpCatalogEntry, 'aliases' | 'ip_name'>[];
   ipCharacters?: Pick<IpCharacter, 'aliases' | 'character_name' | 'ip_name'>[];
 };
 
@@ -52,7 +62,7 @@ function getProductTypeText(draft: ListingDraftInput): string {
   const productTypes: string[] = [];
 
   for (const rawType of draft.product_types) {
-    const type = normalizeText(rawType);
+    const type = normalizeProductTypeForDisplay(normalizeText(rawType));
 
     if (!type || productTypes.includes(type)) {
       continue;
@@ -129,14 +139,15 @@ function buildSeoTitle(parts: {
   ip: string;
   productType: string;
 }): string {
-  const build = (featureTerms: string[], alias: string) => compact([
-    parts.ip,
-    parts.character,
-    ...featureTerms,
-    parts.productType,
-    alias,
-    '正版周邊',
-  ]).join(' ') + ' | 潮巢 Nestory';
+  const build = (featureTerms: string[], alias: string) =>
+    removeDuplicateDisplayTerms(compact([
+      parts.ip,
+      parts.character,
+      ...featureTerms,
+      parts.productType,
+      alias,
+      '\u6b63\u7248\u5468\u908a',
+    ])).join(' ') + ' | \u6f6e\u5de2 Nestory';
 
   const featureTerms = parts.featureTerms.slice(0, 2);
   const candidates = [
@@ -193,16 +204,16 @@ function fitMetaDescription(value: string): string {
 }
 
 function buildMetaDescription(ip: string, character: string, productType: string, feature: string): string {
+  const subject = removeDuplicateDisplayTerms(compact([ip, character, productType])).join(' ');
+
   return fitMetaDescription(
-    '潮巢 Nestory 精選' +
-      ip +
-      character +
-      productType +
-      '，' +
+    '\u6f6e\u5de2 Nestory \u7cbe\u9078' +
+      subject +
+      '\uff0c' +
       getMetaHighlight(feature) +
-      '，' +
+      '\uff0c' +
       getMetaContext(ip, character) +
-      '。',
+      '\u3002',
   );
 }
 
@@ -214,20 +225,24 @@ export function generateSeoContent(
   seo_title: string;
 } {
   const ip = normalizeText(draft.ip);
-  const character = getPrimaryCharacter(draft);
+  const ipDisplayName = formatListingIpDisplayNameFromContext(ip, options);
+  const primaryCharacter = getPrimaryCharacter(draft);
+  const characterDisplayName = formatCharacterDisplayNameFromContext(primaryCharacter, ip, options);
+  const characterShortName = formatCharacterShortNameFromContext(primaryCharacter, ip, options);
+  const character = isCharacterRedundantWithIpDisplay(characterShortName, ipDisplayName) ? '' : characterDisplayName;
   const productType = getProductTypeText(draft);
   const feature = getFeatureKeyword(draft);
   const featureTerms = extractFeatureTerms(draft.image_description, getFeatureSourceText(draft));
-  const alias = getHighValueCharacterAlias(character, ip, options.ipCharacters);
+  const alias = getHighValueCharacterAlias(primaryCharacter, ip, options.ipCharacters);
 
   return {
     seo_title: buildSeoTitle({
       alias,
       character,
       featureTerms: featureTerms.length > 0 ? featureTerms : compact([feature]),
-      ip,
+      ip: ipDisplayName,
       productType,
     }),
-    meta_description: buildMetaDescription(ip, character, productType, feature),
+    meta_description: buildMetaDescription(ipDisplayName, character, productType, feature),
   };
 }

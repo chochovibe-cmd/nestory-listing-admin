@@ -1,4 +1,11 @@
+import {
+  DisplayLabelContext,
+  formatCharacterShortNameFromContext,
+  formatListingIpDisplayNameFromContext,
+  isCharacterRedundantWithIpDisplay,
+} from './displayLabels';
 import { ListingDraftInput } from './types';
+import { normalizeProductTypeForDisplay } from '../productTypeLabels';
 
 function escapeHtml(value: string): string {
   return value
@@ -17,9 +24,13 @@ function getCollectionFitText(productTypes: string, useCases: string): string {
   return '重點在於它能不能補上你收藏裡缺的角色、款式或使用情境。若你已經有同角色常規款，這類 ' + productTypes + ' 更適合作為不同造型或不同場景的補充。';
 }
 
-export function generateFaqHtml(draft: ListingDraftInput): string {
-  const characterText = escapeHtml(joinLabels(draft.characters, '角色粉絲'));
-  const productTypeText = escapeHtml(joinLabels(draft.product_types, '周邊商品'));
+export function generateFaqHtml(draft: ListingDraftInput, context: DisplayLabelContext = {}): string {
+  const ipDisplayName = formatListingIpDisplayNameFromContext(draft.ip, context);
+  const characterLabels = draft.characters
+    .map((character) => formatCharacterShortNameFromContext(character, draft.ip, context))
+    .filter((character) => !isCharacterRedundantWithIpDisplay(character, ipDisplayName));
+  const characterText = escapeHtml(joinLabels(characterLabels, '\u89d2\u8272\u6536\u85cf\u8005'));
+  const productTypeText = escapeHtml(joinLabels(draft.product_types.map(normalizeProductTypeForDisplay), '周邊商品'));
   const useCaseText = escapeHtml(joinLabels(draft.use_cases, '收藏展示、日常佈置'));
   if (draft.product_status === 'secondhand') {
     return [

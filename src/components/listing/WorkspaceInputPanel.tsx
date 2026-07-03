@@ -44,6 +44,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [manualCompareAtPrice, setManualCompareAtPrice] = useState("");
   const [manualSellPrice, setManualSellPrice] = useState("");
   const [useWebSearch, setUseWebSearch] = useState(false);
+  const [taobaoUrlOpen, setTaobaoUrlOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pricingSettings, setPricingSettings] = useState<PricingSettings>(defaultPricingSettings);
   const [message, setMessage] = useState("");
@@ -199,51 +200,63 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       <div className="panel-body">
         {stage === "form" ? (
           <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
+            <div>
+              <button className="settings-toggle" onClick={() => setTaobaoUrlOpen((v) => !v)} type="button">
+                <span>🔗 淘寶連結（選填，爬蟲尚未啟用）</span><span>{taobaoUrlOpen ? "▴" : "▾"}</span>
+              </button>
+              {taobaoUrlOpen ? (
+                <div style={{ marginTop: 8 }}>
+                  <input onChange={(e) => setTaobaoUrl(e.target.value)} placeholder="https://..." value={taobaoUrl} />
+                </div>
+              ) : null}
+            </div>
+
             <div className="field">
               <div className="source-inline">
                 <label>原始商品標題</label>
-                <select
-                  className="source-pill"
-                  onChange={(e) => setSource(e.target.value as (typeof SOURCE_OPTIONS)[number])}
-                  value={source}
-                >
-                  {SOURCE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
+                <div className="inline-pills">
+                  <select
+                    className="source-pill"
+                    onChange={(e) => setSource(e.target.value as (typeof SOURCE_OPTIONS)[number])}
+                    value={source}
+                  >
+                    {SOURCE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="source-pill"
+                    onChange={(e) => setSaleStatus(e.target.value as SaleStatus)}
+                    value={saleStatus}
+                  >
+                    {SALE_STATUS_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <textarea onChange={(e) => setTitle(e.target.value)} placeholder="貼上來源商品標題，AI 會整理成 Shopify 商品標題..." rows={2} value={title} />
             </div>
-            <div className="row">
-              <div className="field">
-                <label>成本價格</label>
-                <div className="price-row">
-                  <input min="0" onChange={(e) => setPrice(e.target.value)} step="0.01" type="number" value={price} />
-                  <div className="currency-toggle">
-                    <button
-                      className={costCurrency === "CNY" ? "active" : ""}
-                      onClick={() => setCostCurrency("CNY")}
-                      type="button"
-                    >
-                      CNY ¥
-                    </button>
-                    <button
-                      className={costCurrency === "TWD" ? "active" : ""}
-                      onClick={() => setCostCurrency("TWD")}
-                      type="button"
-                    >
-                      TWD NT$
-                    </button>
-                  </div>
+            <div className="field">
+              <label>成本價格</label>
+              <div className="price-row">
+                <input min="0" onChange={(e) => setPrice(e.target.value)} step="0.01" type="number" value={price} />
+                <div className="currency-toggle">
+                  <button
+                    className={costCurrency === "CNY" ? "active" : ""}
+                    onClick={() => setCostCurrency("CNY")}
+                    type="button"
+                  >
+                    CNY ¥
+                  </button>
+                  <button
+                    className={costCurrency === "TWD" ? "active" : ""}
+                    onClick={() => setCostCurrency("TWD")}
+                    type="button"
+                  >
+                    TWD NT$
+                  </button>
                 </div>
-              </div>
-              <div className="field">
-                <label>銷售狀態</label>
-                <select onChange={(e) => setSaleStatus(e.target.value as SaleStatus)} value={saleStatus}>
-                  {SALE_STATUS_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
               </div>
             </div>
 
@@ -313,6 +326,23 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   ))}
                 </select>
               </div>
+              <div className="wsearch-row">
+                <div className="wsearch-label">
+                  🔍 Web Search 補充資訊
+                  <span>冷門 IP、資訊不足或不確定角色名稱時開啟；會多花一些時間</span>
+                </div>
+                <div className="toggle-wrap">
+                  <label className="toggle">
+                    <input
+                      checked={useWebSearch}
+                      onChange={(e) => setUseWebSearch(e.target.checked)}
+                      type="checkbox"
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                  <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "+約 5 秒"}</span>
+                </div>
+              </div>
             </div>
 
             <div className="variant-box">
@@ -347,28 +377,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               )}
             </div>
 
-            <div className="wsearch-row">
-              <div className="wsearch-label">
-                🔍 Web Search 補充資訊
-                <span>冷門 IP、資訊不足或不確定角色名稱時開啟；會多花一些時間</span>
-              </div>
-              <div className="toggle-wrap">
-                <label className="toggle">
-                  <input
-                    checked={useWebSearch}
-                    onChange={(e) => setUseWebSearch(e.target.checked)}
-                    type="checkbox"
-                  />
-                  <span className="toggle-slider" />
-                </label>
-                <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "+約 5 秒"}</span>
-              </div>
-            </div>
-
-            <div className="field">
-              <label>淘寶連結（可留空）</label>
-              <input onChange={(e) => setTaobaoUrl(e.target.value)} value={taobaoUrl} />
-            </div>
             <div className="field">
               <label>補充備註</label>
               <input onChange={(e) => setNote(e.target.value)} placeholder="例如：含底座、預購款、限定版..." value={note} />
@@ -446,7 +454,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   定價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.compareAtMultiplier.toFixed(2)}
                 </div>
                 <div className="settings-note">
-                  成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝／售價與定價可在上方手動覆蓋
+                  成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝／售價與定價可在上方手動覆蓋。
+                  <br />
+                  ✨ 算出的售價會自動「尾數美化」到順眼的價格帶（如 199／299／399／599／990…），不會出現 437 這種零頭。
                 </div>
               </div>
             ) : null}

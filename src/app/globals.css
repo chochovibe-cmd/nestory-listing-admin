@@ -46,8 +46,8 @@ body[data-theme="nordic"] {
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
-  --shadow-s: 0 2px 0 rgba(28, 28, 28, .055);
-  --shadow-m: 0 3px 0 rgba(28, 28, 28, .065);
+  --shadow-s: 0 1px 3px rgba(28, 28, 28, .09);
+  --shadow-m: 0 6px 18px rgba(28, 28, 28, .11);
 }
 
 body[data-theme="kitty"] {
@@ -70,8 +70,8 @@ body[data-theme="kitty"] {
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
-  --shadow-s: 0 2px 0 rgba(23, 23, 23, .045);
-  --shadow-m: 0 3px 0 rgba(23, 23, 23, .055);
+  --shadow-s: 0 1px 3px rgba(23, 23, 23, .08);
+  --shadow-m: 0 6px 18px rgba(23, 23, 23, .10);
 }
 
 * {
@@ -997,9 +997,10 @@ textarea {
 
 /* ── Pricing / settings panel (ported from 分支/index.html) ── */
 .price-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
-.source-inline { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.source-inline { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
 .source-inline label { margin-bottom: 0; }
-.source-pill { width: auto; min-width: 86px; border-radius: 999px; padding: 5px 24px 5px 10px; font-size: 11px; background: var(--surface2); }
+.inline-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.source-pill { width: auto; min-width: 72px; border-radius: 999px; padding: 5px 24px 5px 10px; font-size: 11px; background: var(--surface2); min-height: 30px; }
 
 .currency-toggle { display: flex; border: 1px solid var(--border); border-radius: 7px; background: var(--surface2); padding: 2px; white-space: nowrap; }
 .currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: 'Space Grotesk', sans-serif; cursor: pointer; }
@@ -1061,9 +1062,9 @@ textarea {
 }
 header {
   border-bottom: 2.5px solid var(--line);
-  box-shadow: 0 3px 0 rgba(26, 26, 26, .16);
+  box-shadow: 0 2px 10px rgba(26, 26, 26, .07);
 }
-body[data-theme="dark"] header { box-shadow: 0 3px 0 rgba(232, 232, 240, .18); }
+body[data-theme="dark"] header { box-shadow: 0 2px 12px rgba(0, 0, 0, .25); }
 .panel-header,
 .settings-toggle,
 .settings-body {
@@ -1107,8 +1108,8 @@ select,
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--line);
-  box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .hdr-btn,
 .theme-btn,
@@ -1136,14 +1137,14 @@ select:focus {
 .btn-mini:hover,
 .theme-btn:hover,
 .hdr-btn:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 5px 5px 0 rgba(26, 26, 26, .42);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 26, 26, .16);
 }
 body[data-theme="dark"] .btn-add:hover,
 body[data-theme="dark"] .btn-mini:hover,
 body[data-theme="dark"] .theme-btn:hover,
 body[data-theme="dark"] .hdr-btn:hover {
-  box-shadow: 5px 5px 0 rgba(232, 232, 240, .30);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .34);
 }
 .pill-group { padding: 3px; background: var(--surface); }
 .pill-btn { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
@@ -1153,7 +1154,7 @@ body[data-theme="dark"] .hdr-btn:hover {
   border-color: var(--line);
   background: var(--accent);
   color: var(--accent-fg);
-  box-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
+  box-shadow: none;
 }
 .currency-toggle { gap: 3px; padding: 3px; background: var(--surface); }
 .currency-toggle button { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
@@ -1185,8 +1186,8 @@ body[data-theme="dark"] .hdr-btn:hover {
 .status-pill strong { color: var(--text); }
 .result-card { background: var(--surface); }
 .result-card.active {
-  border-color: var(--line);
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent3) 72%, var(--line));
+  border-color: var(--accent3);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent3) 28%, transparent);
 }
 body[data-theme="kitty"] .status-ok,
 body[data-theme="kitty"] .rc-status.done {
@@ -1232,7 +1233,7 @@ body[data-theme="kitty"] .rate-val { color: #ffd966 !important; }
 body:not([data-theme="dark"]) .panel,
 body:not([data-theme="dark"]) .result-card {
   border-width: 1.5px;
-  box-shadow: 0 3px 0 rgba(26, 26, 26, .045);
+  box-shadow: 0 2px 10px rgba(26, 26, 26, .05);
 }
 body:not([data-theme="dark"]) input[type="text"],
 body:not([data-theme="dark"]) input[type="number"],
@@ -1279,7 +1280,7 @@ body:not([data-theme="dark"]) .btn-mini:hover,
 body:not([data-theme="dark"]) .theme-btn:hover,
 body:not([data-theme="dark"]) .hdr-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 0 rgba(26, 26, 26, .07);
+  box-shadow: 0 4px 12px rgba(26, 26, 26, .12);
 }
 body[data-theme="dark"] .panel,
 body[data-theme="dark"] .result-card {

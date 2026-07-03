@@ -1110,12 +1110,22 @@ select,
 }
 .dropzone { border-style: dashed; }
 .dropzone.has-files { border-style: solid; }
-.tone-card.active,
-.tone-card:hover,
 .dropzone:hover,
 .source-pill:focus {
   border-color: var(--line);
   box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+/* Fix (2026-07-03): --line equals --border in every theme, and a later
+   "reference-balanced" rule (further down) forces .tone-card's box-shadow
+   back to none -- together that made a "selected" tone card look IDENTICAL
+   to an unselected one (border-color unchanged, shadow removed), so clicking
+   appeared to do nothing. border-color/background aren't touched by that
+   later rule, so setting them here (with --accent, which does differ from
+   the resting border in all 3 themes) survives and is actually visible. */
+.tone-card:hover,
+.tone-card.active {
+  border-color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface2)) !important;
 }
 /* Only the actual text-entry fields get the softer focus ring (2026-07-03,
    user asked to keep everything else's original hard offset shadow). The

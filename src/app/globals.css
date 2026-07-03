@@ -46,8 +46,8 @@ body[data-theme="nordic"] {
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
-  --shadow-s: 0 1px 3px rgba(28, 28, 28, .09);
-  --shadow-m: 0 6px 18px rgba(28, 28, 28, .11);
+  --shadow-s: 0 2px 0 rgba(28, 28, 28, .055);
+  --shadow-m: 0 3px 0 rgba(28, 28, 28, .065);
 }
 
 body[data-theme="kitty"] {
@@ -70,8 +70,8 @@ body[data-theme="kitty"] {
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
-  --shadow-s: 0 1px 3px rgba(23, 23, 23, .08);
-  --shadow-m: 0 6px 18px rgba(23, 23, 23, .10);
+  --shadow-s: 0 2px 0 rgba(23, 23, 23, .045);
+  --shadow-m: 0 3px 0 rgba(23, 23, 23, .055);
 }
 
 * {
@@ -163,6 +163,14 @@ select {
   gap: 8px;
 }
 
+/* Header controls (pills, 匯率, theme dots) are meant to stay compact like
+   分支's header — the generic `button { min-height: 38px }` form-field sizing
+   was stretching Claude/GPT and 測試/LLM into tall capsules next to the small
+   round theme buttons. Let each control's own padding decide its height. */
+.nav button {
+  min-height: 0;
+}
+
 .nav-links {
   display: inline-flex;
   align-items: center;
@@ -210,6 +218,7 @@ select {
 .theme-btn {
   width: 28px;
   height: 28px;
+  min-height: 28px;
   border: 1px solid var(--border);
   background: var(--surface2);
   border-radius: 999px;
@@ -940,7 +949,7 @@ textarea {
   .header-status.status-body.open { grid-template-columns: 1fr 1fr; }
   .header-status .status-pill { justify-content: center; }
 
-  .theme-btn { width: 32px; height: 32px; font-size: 15px; }
+  .theme-btn { width: 32px; height: 32px; min-height: 32px; font-size: 15px; }
   .hdr-btn { padding: 7px 12px; font-size: 12px; }
 
   /* 44px minimum touch target for the primary action. */
@@ -1062,9 +1071,9 @@ textarea {
 }
 header {
   border-bottom: 2.5px solid var(--line);
-  box-shadow: 0 2px 10px rgba(26, 26, 26, .07);
+  box-shadow: 0 3px 0 rgba(26, 26, 26, .16);
 }
-body[data-theme="dark"] header { box-shadow: 0 2px 12px rgba(0, 0, 0, .25); }
+body[data-theme="dark"] header { box-shadow: 0 3px 0 rgba(232, 232, 240, .18); }
 .panel-header,
 .settings-toggle,
 .settings-body {
@@ -1104,12 +1113,20 @@ select,
 .tone-card.active,
 .tone-card:hover,
 .dropzone:hover,
-.source-pill:focus,
+.source-pill:focus {
+  border-color: var(--line);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+/* Only the actual text-entry fields get the softer focus ring (2026-07-03,
+   user asked to keep everything else's original hard offset shadow). The
+   per-theme "reference-balanced polish" block further down has a higher-
+   specificity `box-shadow: none` for these same tags, so !important is
+   needed here or this rule silently loses to it. */
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent) !important;
 }
 .hdr-btn,
 .theme-btn,
@@ -1137,14 +1154,14 @@ select:focus {
 .btn-mini:hover,
 .theme-btn:hover,
 .hdr-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(26, 26, 26, .16);
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 rgba(26, 26, 26, .42);
 }
 body[data-theme="dark"] .btn-add:hover,
 body[data-theme="dark"] .btn-mini:hover,
 body[data-theme="dark"] .theme-btn:hover,
 body[data-theme="dark"] .hdr-btn:hover {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .34);
+  box-shadow: 5px 5px 0 rgba(232, 232, 240, .30);
 }
 .pill-group { padding: 3px; background: var(--surface); }
 .pill-btn { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
@@ -1154,7 +1171,7 @@ body[data-theme="dark"] .hdr-btn:hover {
   border-color: var(--line);
   background: var(--accent);
   color: var(--accent-fg);
-  box-shadow: none;
+  box-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
 }
 .currency-toggle { gap: 3px; padding: 3px; background: var(--surface); }
 .currency-toggle button { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
@@ -1186,8 +1203,8 @@ body[data-theme="dark"] .hdr-btn:hover {
 .status-pill strong { color: var(--text); }
 .result-card { background: var(--surface); }
 .result-card.active {
-  border-color: var(--accent3);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent3) 28%, transparent);
+  border-color: var(--line);
+  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent3) 72%, var(--line));
 }
 body[data-theme="kitty"] .status-ok,
 body[data-theme="kitty"] .rc-status.done {
@@ -1233,7 +1250,7 @@ body[data-theme="kitty"] .rate-val { color: #ffd966 !important; }
 body:not([data-theme="dark"]) .panel,
 body:not([data-theme="dark"]) .result-card {
   border-width: 1.5px;
-  box-shadow: 0 2px 10px rgba(26, 26, 26, .05);
+  box-shadow: 0 3px 0 rgba(26, 26, 26, .045);
 }
 body:not([data-theme="dark"]) input[type="text"],
 body:not([data-theme="dark"]) input[type="number"],
@@ -1280,7 +1297,7 @@ body:not([data-theme="dark"]) .btn-mini:hover,
 body:not([data-theme="dark"]) .theme-btn:hover,
 body:not([data-theme="dark"]) .hdr-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(26, 26, 26, .12);
+  box-shadow: 0 3px 0 rgba(26, 26, 26, .07);
 }
 body[data-theme="dark"] .panel,
 body[data-theme="dark"] .result-card {

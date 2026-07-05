@@ -57,7 +57,10 @@ const serverOnlyDir = /^src[\\/](app[\\/]api[\\/]|lib[\\/]providers[\\/])/;
 const localStorageAllowlist = new Set([
   path.join("src", "app", "layout.tsx"),
   path.join("src", "components", "ProviderSwitcher.tsx"),
-  path.join("src", "components", "ThemeSwitcher.tsx")
+  path.join("src", "components", "ThemeSwitcher.tsx"),
+  path.join("src", "components", "ExchangeRateWidget.tsx"),
+  path.join("src", "components", "ModeSwitcher.tsx"),
+  path.join("src", "lib", "pricingSettingsStore.ts")
 ]);
 
 const forbiddenHits = [];

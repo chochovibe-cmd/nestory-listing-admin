@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { ResultCard } from "@/components/listing/ResultCard";
+import { DraftResultsPanel } from "@/components/listing/DraftResultsPanel";
 import { SetupNotice } from "@/components/listing/SetupNotice";
 import { WorkspaceInputPanel } from "@/components/listing/WorkspaceInputPanel";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
@@ -55,16 +55,11 @@ export default async function NewDraftPage() {
                 <p className="muted">在左側輸入商品資料並送出，生成結果會出現在這裡</p>
               </div>
             ) : (
-              <div className="results-list" id="results-list">
-                {typedDrafts.map((draft, index) => (
-                  <ResultCard
-                    defaultExpanded={index === 0}
-                    draft={draft}
-                    images={imagesByDraft.get(draft.id) ?? []}
-                    key={draft.id}
-                  />
-                ))}
-              </div>
+              <DraftResultsPanel
+                drafts={typedDrafts}
+                images={typedImages}
+                userId={user.id}
+              />
             )}
           </div>
         </section>

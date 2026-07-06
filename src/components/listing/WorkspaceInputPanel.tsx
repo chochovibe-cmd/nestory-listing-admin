@@ -7,7 +7,6 @@ import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricin
 import { SALE_STATUS_OPTIONS } from "@/lib/saleStatus";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
-import { ImageUploader } from "@/components/listing/ImageUploader";
 import { createClient } from "@/lib/supabase/client";
 import type { SaleStatus } from "@/types/domain";
 
@@ -28,7 +27,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const router = useRouter();
   const supabase = createClient();
   const [stage, setStage] = useState<Stage>("form");
-  const [draftId, setDraftId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [source, setSource] = useState<(typeof SOURCE_OPTIONS)[number]>(SOURCE_OPTIONS[0]);
@@ -84,7 +82,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
 
   function resetForNextItem() {
     setStage("form");
-    setDraftId(null);
     setTitle("");
     setSource(SOURCE_OPTIONS[0]);
     setPrice("");
@@ -160,7 +157,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       .map((row) => `${row.name.trim()}${row.price ? ` 售價${row.price}` : ""}`)
       .join("、");
 
-    setDraftId(data.id);
     setStage("created");
     setMessage("生成文案中...");
 
@@ -466,14 +462,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         {stage === "created" ? (
           <div style={{ display: "grid", gap: 14 }}>
             {message ? <div className="notice">{message}</div> : null}
-            <div className="field">
-              <label>上傳圖片</label>
-              {draftId ? <ImageUploader draftId={draftId} userId={userId} /> : null}
-            </div>
-            {/* On mobile the results list sits far below the form, so it's
-                easy to miss that the just-created card auto-expanded. */}
             <a className="button" href="#results-list">
-              ↓ 查看已生成的商品內容
+              ↓ 展開右側卡片上傳圖片
             </a>
             <button className="btn-add" onClick={resetForNextItem} type="button">
               ＋ 填寫下一筆商品

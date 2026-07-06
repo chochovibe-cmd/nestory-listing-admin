@@ -66,7 +66,6 @@ export function HeaderControls() {
             <div className={`nav-links-dropdown${navMenuOpen ? " open" : ""}`}>
               <Link href="/drafts/new">新增商品</Link>
               <Link href="/drafts">商品佇列</Link>
-              <Link href="/review">待審核</Link>
             </div>
           </div>
         ) : null}

@@ -1089,6 +1089,18 @@ textarea {
   margin-top: 10px;
 }
 
+.rc-actions-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rc-actions-group-review {
+  margin-left: auto;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
 .spinner {
   display: inline-block;
   width: 12px;

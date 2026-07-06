@@ -329,16 +329,20 @@ export function ResultCard({
             </select>
           </div>
           <div className="rc-actions">
-            <button onClick={save} type="button">儲存修改</button>
-            <button disabled={regenerating} onClick={regenerate} type="button">
-              {regenerating ? "生成中..." : "↺ 重新生成"}
-            </button>
-            <button onClick={requestRevision} type="button">退回修改</button>
-            <button onClick={markApproved} type="button">核准</button>
-            <button className={publishMode === "active" ? "danger" : ""} onClick={publish} type="button">
-              審核並發布
-            </button>
-            <button onClick={exportCsv} type="button">產生 CSV</button>
+            <span className="rc-actions-group">
+              <button onClick={save} type="button">儲存修改</button>
+              <button disabled={regenerating} onClick={regenerate} type="button">
+                {regenerating ? "生成中..." : "↺ 重新生成"}
+              </button>
+            </span>
+            <span className="rc-actions-group rc-actions-group-review">
+              <button onClick={requestRevision} type="button">退回修改</button>
+              <button onClick={markApproved} type="button">核准</button>
+              <button className={publishMode === "active" ? "danger" : ""} onClick={publish} type="button">
+                審核並發布
+              </button>
+              <button onClick={exportCsv} type="button">產生 CSV</button>
+            </span>
           </div>
           {message ? <div className="notice">{message}</div> : null}
         </div>

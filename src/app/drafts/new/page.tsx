@@ -55,7 +55,7 @@ export default async function NewDraftPage() {
                 <p className="muted">在左側輸入商品資料並送出，生成結果會出現在這裡</p>
               </div>
             ) : (
-              <div className="results-list">
+              <div className="results-list" id="results-list">
                 {typedDrafts.map((draft, index) => (
                   <ResultCard
                     defaultExpanded={index === 0}

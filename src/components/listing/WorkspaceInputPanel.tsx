@@ -470,6 +470,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               <label>上傳圖片</label>
               {draftId ? <ImageUploader draftId={draftId} userId={userId} /> : null}
             </div>
+            {/* On mobile the results list sits far below the form, so it's
+                easy to miss that the just-created card auto-expanded. */}
+            <a className="button" href="#results-list">
+              ↓ 查看已生成的商品內容
+            </a>
             <button className="btn-add" onClick={resetForNextItem} type="button">
               ＋ 填寫下一筆商品
             </button>

@@ -4,12 +4,27 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 
+// Supabase auth errors come back in English -- translate the ones an
+// operator will actually hit so they're not left guessing what a phrase
+// like "Invalid login credentials" means.
+const AUTH_ERROR_LABELS: Record<string, string> = {
+  "Invalid login credentials": "帳號或密碼錯誤，請再確認一次",
+  "Email not confirmed": "此信箱尚未完成驗證，請至信箱收件匣確認",
+  "Email rate limit exceeded": "嘗試次數過多，請稍後再試",
+  "User not found": "找不到此帳號"
+};
+
+function translateAuthError(message: string): string {
+  return AUTH_ERROR_LABELS[message] ?? message;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const supabaseReady = hasSupabaseBrowserEnv();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -19,11 +34,15 @@ export default function LoginPage() {
       return;
     }
 
+    setSubmitting(true);
+    setMessage("");
+
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setMessage(error.message);
+      setSubmitting(false);
+      setMessage(translateAuthError(error.message));
       return;
     }
 
@@ -52,7 +71,9 @@ export default function LoginPage() {
             <label>Password</label>
             <input onChange={(event) => setPassword(event.target.value)} type="password" value={password} />
           </div>
-          <button className="primary" type="submit">登入</button>
+          <button className="primary" disabled={submitting} type="submit">
+            {submitting ? "登入中..." : "登入"}
+          </button>
           {message ? <div className="notice">{message}</div> : null}
         </div>
       </form>

@@ -127,8 +127,6 @@ select {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
   font-size: 15px;
-  order: 1;
-  flex: 1 1 auto;
 }
 
 .brand-dot {
@@ -174,7 +172,8 @@ select {
    分支's header — the generic `button { min-height: 38px }` form-field sizing
    was stretching Claude/GPT and 測試/LLM into tall capsules next to the small
    round theme buttons. Let each control's own padding decide its height. */
-.nav button {
+.nav button,
+.nav a {
   min-height: 0;
 }
 
@@ -303,15 +302,17 @@ select {
 .theme-picker-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--text);
-  font-size: 13px;
-  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
   min-height: 0;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .theme-picker-menu {
@@ -1341,7 +1342,9 @@ select:focus {
 .theme-btn,
 .pill-group,
 .btn-add,
-.btn-mini {
+.btn-mini,
+.nav-links-toggle,
+.theme-picker-toggle {
   border: 2.5px solid var(--line);
   box-shadow: var(--shadow-s);
 }
@@ -1351,7 +1354,9 @@ select:focus {
   color: var(--text);
 }
 .hdr-btn,
-.btn-mini {
+.btn-mini,
+.nav-links-toggle,
+.theme-picker-toggle {
   background: var(--surface);
   color: var(--text);
 }
@@ -1362,7 +1367,9 @@ select:focus {
 .btn-add:hover,
 .btn-mini:hover,
 .theme-btn:hover,
-.hdr-btn:hover {
+.hdr-btn:hover,
+.nav-links-toggle:hover,
+.theme-picker-toggle:hover {
   transform: translate(-1px, -1px);
   box-shadow: 5px 5px 0 rgba(26, 26, 26, .42);
 }
@@ -1490,7 +1497,9 @@ body:not([data-theme="dark"]) .hdr-btn,
 body:not([data-theme="dark"]) .theme-btn,
 body:not([data-theme="dark"]) .pill-group,
 body:not([data-theme="dark"]) .btn-add,
-body:not([data-theme="dark"]) .btn-mini {
+body:not([data-theme="dark"]) .btn-mini,
+body:not([data-theme="dark"]) .nav-links-toggle,
+body:not([data-theme="dark"]) .theme-picker-toggle {
   border-width: 1.5px;
   box-shadow: none;
 }
@@ -1504,7 +1513,9 @@ body:not([data-theme="dark"]) .rate-val {
 body:not([data-theme="dark"]) .btn-add:hover,
 body:not([data-theme="dark"]) .btn-mini:hover,
 body:not([data-theme="dark"]) .theme-btn:hover,
-body:not([data-theme="dark"]) .hdr-btn:hover {
+body:not([data-theme="dark"]) .hdr-btn:hover,
+body:not([data-theme="dark"]) .nav-links-toggle:hover,
+body:not([data-theme="dark"]) .theme-picker-toggle:hover {
   transform: translateY(-1px);
   box-shadow: 0 3px 0 rgba(26, 26, 26, .07);
 }
@@ -1537,7 +1548,9 @@ body[data-theme="dark"] .hdr-btn,
 body[data-theme="dark"] .theme-btn,
 body[data-theme="dark"] .pill-group,
 body[data-theme="dark"] .btn-add,
-body[data-theme="dark"] .btn-mini {
+body[data-theme="dark"] .btn-mini,
+body[data-theme="dark"] .nav-links-toggle,
+body[data-theme="dark"] .theme-picker-toggle {
   border-width: 1px;
   box-shadow: none;
 }
@@ -1561,7 +1574,9 @@ body[data-theme="dark"] .status-warn {
 body[data-theme="dark"] .btn-add:hover,
 body[data-theme="dark"] .btn-mini:hover,
 body[data-theme="dark"] .theme-btn:hover,
-body[data-theme="dark"] .hdr-btn:hover {
+body[data-theme="dark"] .hdr-btn:hover,
+body[data-theme="dark"] .nav-links-toggle:hover,
+body[data-theme="dark"] .theme-picker-toggle:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, .22);
 }

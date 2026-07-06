@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 
 const THEMES = [
-  { value: "dark", icon: "🌑", title: "暗色" },
-  { value: "nordic", icon: "🐰", title: "北歐 Miffy 風" },
-  { value: "kitty", icon: "🎀", title: "Hello Kitty 風" }
+  { value: "dark", icon: "🌑", title: "夜色" },
+  { value: "nordic", icon: "🐰", title: "奶茶" },
+  { value: "kitty", icon: "🎀", title: "海鹽" }
 ] as const;
 
 const STORAGE_KEY = "nestory_theme";

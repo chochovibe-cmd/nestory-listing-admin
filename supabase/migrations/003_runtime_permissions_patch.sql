@@ -13,7 +13,7 @@ grant select on public.profiles to authenticated;
 grant update (name) on public.profiles to authenticated;
 
 grant select, insert, update on public.product_drafts to authenticated;
-grant select, insert, update on public.product_images to authenticated;
+grant select, insert, update, delete on public.product_images to authenticated;
 grant select, insert, update, delete on public.product_variants to authenticated;
 
 grant select on public.generation_runs to authenticated;

@@ -30,6 +30,15 @@ const PROVIDER_LABELS: Record<string, string> = {
   other: "其他"
 };
 
+// product_images only stores the public URL, not the storage path -- derive
+// the path Supabase Storage needs for .remove() from it instead of tracking
+// a separate column just for this.
+function storagePathFromUrl(url: string): string | null {
+  const marker = "/product-images/";
+  const index = url.indexOf(marker);
+  return index === -1 ? null : url.slice(index + marker.length);
+}
+
 function CopyButton({ getValue }: { getValue: () => string }) {
   const [copied, setCopied] = useState(false);
 
@@ -178,6 +187,17 @@ export function ResultCard({
     });
     const payload = await publishResponse.json();
     setMessage(publishResponse.ok ? "已核准並發布" : payload.error ?? "發布失敗");
+    router.refresh();
+  }
+
+  async function removeImage(image: ProductImage) {
+    const url = image.processed_file_url ?? image.original_file_url;
+    const path = url ? storagePathFromUrl(url) : null;
+    if (path) {
+      await supabase.storage.from("product-images").remove([path]);
+    }
+    const { error } = await supabase.from("product_images").delete().eq("id", image.id);
+    setMessage(error ? `刪除圖片失敗：${error.message}` : "已刪除圖片");
     router.refresh();
   }
 
@@ -337,11 +357,20 @@ export function ResultCard({
               <div className="rc-label">圖片</div>
               <div className="thumbs">
                 {images.map((image) => (
-                  <img
-                    alt={image.alt_text ?? image.image_type}
-                    key={image.id}
-                    src={image.processed_file_url ?? image.original_file_url ?? image.generated_file_url ?? ""}
-                  />
+                  <div className="thumb-wrap" key={image.id}>
+                    <img
+                      alt={image.alt_text ?? image.image_type}
+                      src={image.processed_file_url ?? image.original_file_url ?? image.generated_file_url ?? ""}
+                    />
+                    <button
+                      className="thumb-remove"
+                      onClick={() => removeImage(image)}
+                      title="移除這張圖片"
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

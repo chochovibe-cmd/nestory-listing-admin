@@ -782,6 +782,28 @@ textarea {
 .thumb-strip { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
 .thumb-strip .thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); }
 
+.thumb-wrap { position: relative; display: inline-block; }
+.thumb-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  border-radius: 50%;
+  background: var(--accent2);
+  color: #fff;
+  border: 2px solid var(--surface);
+  font-size: 10px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.thumb-remove:hover { filter: brightness(1.1); }
+
 /* Variant (款式) editor (ported from 分支/index.html) */
 .variant-box { border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface2); padding: 10px; margin: 4px 0; }
 .variant-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 10px; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }

@@ -103,7 +103,7 @@ if (runtimePermissionsSql) {
     /grant usage on schema public to anon, authenticated, service_role/i,
     /grant all privileges on all tables in schema public to service_role/i,
     /grant select, insert, update on public\.product_drafts to authenticated/i,
-    /grant select, insert, update on public\.product_images to authenticated/i,
+    /grant select, insert, update, delete on public\.product_images to authenticated/i,
     /grant execute on function public\.claim_pending_generation\(integer, text, text\) to service_role/i
   ]) {
     if (!pattern.test(runtimePermissionsSql)) {

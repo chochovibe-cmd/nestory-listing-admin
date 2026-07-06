@@ -8,11 +8,16 @@ import { readStoredRunMode } from "@/components/ModeSwitcher";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
+// This icon only reports whether AI text-generation itself finished, failed,
+// or is still running -- it must never fall back to a green "done" check for
+// needs_revision, or it visually contradicts the "需修改" status badge right
+// next to it (a scanning eye reads green-checkmark as "all good").
 function statusIcon(draft: ProductDraft): { icon: string; className: string } {
   if (draft.generation_status === "processing") return { icon: "↻", className: "generating" };
   if (draft.generation_status === "failed" || draft.status === "api_failed" || draft.status === "failed") {
     return { icon: "✗", className: "error" };
   }
+  if (draft.status === "needs_revision") return { icon: "!", className: "revision" };
   return { icon: "✓", className: "done" };
 }
 

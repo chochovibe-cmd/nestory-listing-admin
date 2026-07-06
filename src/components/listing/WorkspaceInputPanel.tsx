@@ -369,6 +369,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                     <button
                       className="variant-del"
                       onClick={() => setVariants((current) => current.filter((_, i) => i !== index))}
+                      title="刪除此款式"
                       type="button"
                     >
                       ✕

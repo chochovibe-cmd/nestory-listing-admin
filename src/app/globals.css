@@ -935,7 +935,8 @@ textarea {
   color: var(--success);
 }
 
-.rc-status.error {
+.rc-status.error,
+.rc-status.revision {
   background: color-mix(in srgb, var(--accent2) 16%, transparent);
   color: var(--accent2);
 }
@@ -1509,7 +1510,8 @@ body[data-theme="dark"] .hdr-btn:hover {
 }
 .rc-price { background: var(--accent); color: var(--accent-fg); }
 .status-warn,
-.rc-status.error { background: var(--accent2); color: #fff; }
+.rc-status.error,
+.rc-status.revision { background: var(--accent2); color: #fff; }
 .rc-status.generating { background: var(--warn); color: var(--line); }
 .rc-status.done,
 .status-ok { background: var(--success); color: #fff; }
@@ -1720,7 +1722,8 @@ body[data-theme="dark"] .rc-profit {
   border-color: color-mix(in srgb, var(--success) 45%, var(--border)) !important;
 }
 .status-warn,
-.rc-status.error {
+.rc-status.error,
+.rc-status.revision {
   background: transparent !important;
   color: var(--accent2) !important;
   border-color: color-mix(in srgb, var(--accent2) 45%, var(--border)) !important;

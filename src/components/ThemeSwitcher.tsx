@@ -40,7 +40,7 @@ export function ThemeSwitcher() {
         title="切換主題"
         type="button"
       >
-        {current.icon} <span>{open ? "▴" : "▾"}</span>
+        {current.icon} {current.title} <span>{open ? "▴" : "▾"}</span>
       </button>
       <div className={`theme-picker-menu${open ? " open" : ""}`}>
         {THEMES.map((item) => (

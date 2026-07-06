@@ -20,7 +20,7 @@ export function StatusBadge({ status }: { status: DraftStatus | PublishStatus | 
   const className =
     status.includes("ready") || status.includes("published") || status.includes("created")
       ? "ready"
-      : status.includes("failed")
+      : status.includes("failed") || status === "needs_revision"
         ? "failed"
         : status.includes("pending") || status.includes("processing") || status.includes("publishing")
           ? "processing"

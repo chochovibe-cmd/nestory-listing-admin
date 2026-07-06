@@ -12,6 +12,7 @@ const STORAGE_KEY = "nestory_theme";
 
 export function ThemeSwitcher() {
   const [theme, setTheme] = useState<string>("dark");
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -23,19 +24,37 @@ export function ThemeSwitcher() {
     window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
+  const current = THEMES.find((item) => item.value === theme) ?? THEMES[0];
+
+  function choose(value: string) {
+    setTheme(value);
+    setOpen(false);
+  }
+
   return (
-    <>
-      {THEMES.map((item) => (
-        <button
-          className={`theme-btn${theme === item.value ? " active" : ""}`}
-          key={item.value}
-          onClick={() => setTheme(item.value)}
-          title={item.title}
-          type="button"
-        >
-          {item.icon}
-        </button>
-      ))}
-    </>
+    <div className="theme-picker">
+      <button
+        aria-expanded={open}
+        className="theme-picker-toggle"
+        onClick={() => setOpen((current) => !current)}
+        title="切換主題"
+        type="button"
+      >
+        {current.icon} <span>{open ? "▴" : "▾"}</span>
+      </button>
+      <div className={`theme-picker-menu${open ? " open" : ""}`}>
+        {THEMES.map((item) => (
+          <button
+            className={`theme-btn${theme === item.value ? " active" : ""}`}
+            key={item.value}
+            onClick={() => choose(item.value)}
+            title={item.title}
+            type="button"
+          >
+            {item.icon} {item.title}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

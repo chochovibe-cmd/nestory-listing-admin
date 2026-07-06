@@ -14,11 +14,14 @@ import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 export function HeaderControls() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [navMenuOpen, setNavMenuOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
 
-  // Collapse the mobile menu automatically after navigating to another page.
+  // Collapse the mobile menu and the desktop page-link dropdown automatically
+  // after navigating to another page.
   useEffect(() => {
     setOpen(false);
+    setNavMenuOpen(false);
   }, [pathname]);
 
   // Defaults to signed-out so the operator toolbar (nav links, AI
@@ -51,12 +54,24 @@ export function HeaderControls() {
       </button>
       <nav className={`nav${open ? " open" : ""}`}>
         {signedIn ? (
-          <>
-            <span className="nav-links">
+          <div className="nav-links-menu">
+            <button
+              aria-expanded={navMenuOpen}
+              className="nav-links-toggle"
+              onClick={() => setNavMenuOpen((current) => !current)}
+              type="button"
+            >
+              ☰ 分頁 <span>{navMenuOpen ? "▴" : "▾"}</span>
+            </button>
+            <div className={`nav-links-dropdown${navMenuOpen ? " open" : ""}`}>
               <Link href="/drafts/new">新增商品</Link>
               <Link href="/drafts">商品佇列</Link>
               <Link href="/review">待審核</Link>
-            </span>
+            </div>
+          </div>
+        ) : null}
+        {signedIn ? (
+          <>
             <ProviderSwitcher />
             <ModeSwitcher />
             <DeploymentStatus />

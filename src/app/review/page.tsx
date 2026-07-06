@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { SetupNotice } from "@/components/listing/SetupNotice";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
@@ -15,13 +16,7 @@ export default async function ReviewQueuePage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return (
-      <main className="container">
-        <div className="notice">
-          請先 <Link href="/login">登入</Link> 後查看待審核商品。
-        </div>
-      </main>
-    );
+    redirect("/login");
   }
 
   const { data: drafts, error } = await supabase

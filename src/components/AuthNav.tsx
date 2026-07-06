@@ -33,11 +33,15 @@ export function AuthNav() {
   }
 
   if (!email) {
-    return <Link href="/login">登入</Link>;
+    return (
+      <Link className="hdr-btn" href="/login">
+        登入
+      </Link>
+    );
   }
 
   return (
-    <button onClick={signOut} title={email} type="button">
+    <button className="hdr-btn" onClick={signOut} title={email} type="button">
       登出
     </button>
   );

@@ -158,24 +158,16 @@ select {
   text-transform: uppercase;
 }
 
-/* Collapsed by default at every viewport width: only the brand + toggle show.
-   Tapping the toggle reveals the control cluster on its own full-width row
-   below, same mechanism the mobile layout already used below 768px -- it's
-   now the only mode, desktop included, since the pill row (page links, AI
-   provider/mode switches, deploy status, exchange rate, theme, login) was
-   cluttering the header at every width. */
+/* Visible by default on desktop -- only the 3 page-link tabs get their own
+   collapsible dropdown (.nav-links-menu below); the rest of the control
+   cluster (AI provider/mode, deploy status, exchange rate, theme, login)
+   stays on the header row at all times on desktop. Collapsed entirely
+   behind .nav-toggle only on mobile (see the 768px media query). */
 .nav {
-  display: none;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  order: 3;
-}
-
-.nav.open {
-  display: flex;
-  margin-top: 8px;
 }
 
 /* Header controls (pills, 匯率, theme dots) are meant to stay compact like
@@ -186,16 +178,59 @@ select {
   min-height: 0;
 }
 
-.nav-links {
+/* Desktop-only dropdown for 新增商品/商品佇列/待審核. Hidden on mobile,
+   where the same 3 links live in the fixed bottom MobileTabbar instead. */
+.nav-links-menu {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
-.nav-toggle {
+.nav-links-toggle {
   display: inline-flex;
-  order: 2;
-  margin-left: auto;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  min-height: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nav-links-dropdown {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 300;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 8px;
+  box-shadow: var(--shadow-m);
+}
+
+.nav-links-dropdown.open {
+  display: flex;
+}
+
+.nav-links-dropdown a {
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Mobile-only hamburger for the rest of the control cluster. */
+.nav-toggle {
+  display: none;
   font-family: 'Space Grotesk', sans-serif;
   font-size: 12px;
   font-weight: 700;
@@ -256,6 +291,58 @@ select {
 .theme-btn.active {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Single button + dropdown theme picker, same widget pattern as
+   .nav-links-menu / .header-status-wrap. */
+.theme-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.theme-picker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 5px 9px;
+  min-height: 0;
+  cursor: pointer;
+}
+
+.theme-picker-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 300;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 8px;
+  box-shadow: var(--shadow-m);
+}
+
+.theme-picker-menu.open {
+  display: flex;
+}
+
+.theme-picker-menu .theme-btn {
+  width: auto;
+  height: auto;
+  min-height: 0;
+  justify-content: flex-start;
+  gap: 8px;
+  border-radius: var(--radius-s);
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 .nav a,
@@ -998,9 +1085,32 @@ textarea {
     gap: 8px;
     row-gap: 8px;
   }
-  /* The 3 page links move to the bottom tab bar on mobile -- the collapsed
-     nav toggle itself is no longer mobile-only, see the base .nav rules. */
-  .nav-links { display: none; }
+  /* The 3 page links move to the bottom tab bar on mobile instead of the
+     desktop-only dropdown. */
+  .nav-links-menu { display: none; }
+
+  /* Collapsed by default: only brand + toggle show (~56px tall). Tapping the
+     toggle reveals the control cluster on its own full-width row below. This
+     keeps the sticky header from eating half the screen and from covering
+     (and blocking taps on) the content beneath it. */
+  .brand { order: 1; flex: 1 1 auto; }
+  .nav-toggle {
+    display: inline-flex;
+    order: 2;
+    margin-left: auto;
+  }
+  .nav {
+    order: 3;
+    width: 100%;
+    display: none;
+  }
+  .nav.open {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
 
   .container { padding: 12px; }
   .grid,
@@ -1094,13 +1204,13 @@ textarea {
 }
 
 /* ── Pricing / settings panel (ported from 分支/index.html) ── */
-.price-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.price-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 .source-inline { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
 .source-inline label { margin-bottom: 0; }
 .inline-pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .source-pill { width: auto; min-width: 72px; border-radius: 999px; padding: 5px 24px 5px 10px; font-size: 11px; background: var(--surface2); min-height: 30px; }
 
-.currency-toggle { display: flex; border: 1px solid var(--border); border-radius: 7px; background: var(--surface2); padding: 2px; white-space: nowrap; }
+.currency-toggle { display: flex; align-items: center; min-height: 38px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface2); padding: 2px; white-space: nowrap; box-sizing: border-box; }
 .currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: 'Space Grotesk', sans-serif; cursor: pointer; min-height: 0; line-height: 1; }
 .currency-toggle button.active { background: var(--accent); color: var(--accent-fg); font-weight: 700; }
 

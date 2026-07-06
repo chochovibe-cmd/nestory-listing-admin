@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ImageUploader } from "@/components/listing/ImageUploader";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { SetupNotice } from "@/components/listing/SetupNotice";
@@ -19,13 +19,7 @@ export default async function DraftDetailPage({ params }: { params: Promise<{ id
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return (
-      <main className="container">
-        <div className="notice">
-          請先 <Link href="/login">登入</Link> 後查看商品詳情。
-        </div>
-      </main>
-    );
+    redirect("/login");
   }
 
   const [{ data: draft, error }, { data: images }] = await Promise.all([

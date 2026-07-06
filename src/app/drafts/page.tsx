@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { SetupNotice } from "@/components/listing/SetupNotice";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import { categoryLabel } from "@/lib/categories";
@@ -16,13 +17,7 @@ export default async function DraftQueuePage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return (
-      <main className="container">
-        <div className="notice">
-          請先 <Link href="/login">登入</Link> 後查看商品佇列。
-        </div>
-      </main>
-    );
+    redirect("/login");
   }
 
   const { data: drafts, error } = await supabase

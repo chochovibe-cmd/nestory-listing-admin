@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { SetupNotice } from "@/components/listing/SetupNotice";
 import { WorkspaceInputPanel } from "@/components/listing/WorkspaceInputPanel";
@@ -16,13 +16,7 @@ export default async function NewDraftPage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return (
-      <main className="container">
-        <div className="notice">
-          請先 <Link href="/login">登入</Link> 後再新增商品草稿。
-        </div>
-      </main>
-    );
+    redirect("/login");
   }
 
   const { data: drafts } = await supabase

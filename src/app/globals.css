@@ -575,6 +575,76 @@ textarea {
   gap: 6px;
 }
 
+/* /drafts queue page: filter pills + a standalone batch toolbar bar above
+   the list (this page has no per-row "results" title to fold actions into,
+   unlike the results panel on /drafts/new). */
+.queue-filter-pills {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.queue-batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.queue-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .queue-table-wrap {
+    display: none;
+  }
+
+  .queue-cards {
+    display: grid;
+    gap: 10px;
+  }
+}
+
+.queue-card {
+  position: relative;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.queue-card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.queue-card .rc-header {
+  padding: 0;
+  position: relative;
+  z-index: 2;
+  cursor: default;
+}
+
+.queue-card .rc-checkbox {
+  position: relative;
+  z-index: 2;
+}
+
+.queue-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 2;
+  font-size: 11px;
+}
+
 .rc-meta-stack {
   display: flex;
   align-items: center;

@@ -3,7 +3,9 @@ import type { DraftStatus, PublishStatus } from "@/types/domain";
 const STATUS_LABELS: Record<string, string> = {
   pending_input: "待輸入",
   pending_copy: "待生成",
+  pending: "待處理",
   processing: "生成中",
+  completed: "已完成",
   ready_for_review: "待審核",
   needs_revision: "需修改",
   approved: "已核准",
@@ -18,7 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function StatusBadge({ status }: { status: DraftStatus | PublishStatus | string }) {
   const className =
-    status.includes("ready") || status.includes("published") || status.includes("created")
+    status.includes("ready") || status.includes("published") || status.includes("created") || status === "completed"
       ? "ready"
       : status.includes("failed") || status === "needs_revision"
         ? "failed"

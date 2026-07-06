@@ -1,27 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { DraftQueueList, type DraftQueueRow } from "@/components/drafts/DraftQueueList";
 import { SetupNotice } from "@/components/listing/SetupNotice";
-import { StatusBadge } from "@/components/listing/StatusBadge";
-import { categoryLabel } from "@/lib/categories";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
-import type { ProductDraft } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
-
-type DraftQueueRow = Pick<
-  ProductDraft,
-  | "id"
-  | "title_zh"
-  | "taobao_title"
-  | "original_title"
-  | "category"
-  | "status"
-  | "generation_mode"
-  | "generation_status"
-  | "publish_mode"
-  | "publish_status"
-  | "twd_price"
->;
 
 export default async function DraftQueuePage() {
   if (!hasSupabaseServerEnv()) {
@@ -37,7 +20,7 @@ export default async function DraftQueuePage() {
 
   const { data: drafts, error } = await supabase
     .from("product_drafts")
-    .select("id, title_zh, taobao_title, original_title, category, status, generation_mode, generation_status, publish_mode, publish_status, twd_price")
+    .select("id, title_zh, taobao_title, original_title, category, status, generation_status, publish_mode, publish_status, twd_price")
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -50,39 +33,7 @@ export default async function DraftQueuePage() {
         </div>
         <div className="panel-body">
           {error ? <div className="notice">{error.message}</div> : null}
-          <table className="table">
-            <thead>
-              <tr>
-                <th>商品</th>
-                <th>狀態</th>
-                <th>產文</th>
-                <th>發布</th>
-                <th>售價</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(drafts as DraftQueueRow[] | null)?.map((draft) => (
-                <tr key={draft.id}>
-                  <td>
-                    <Link href={`/drafts/${draft.id}`}>
-                      <strong>{draft.title_zh || draft.taobao_title || draft.original_title || "未命名商品"}</strong>
-                    </Link>
-                    <div className="muted">{categoryLabel(draft.category)}</div>
-                  </td>
-                  <td><StatusBadge status={draft.status} /></td>
-                  <td>
-                    <span>{draft.generation_mode}</span>
-                    <div className="muted">{draft.generation_status}</div>
-                  </td>
-                  <td>
-                    <span>{draft.publish_mode}</span>
-                    <div className="muted">{draft.publish_status}</div>
-                  </td>
-                  <td>NT${draft.twd_price?.toLocaleString() ?? "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DraftQueueList drafts={(drafts as DraftQueueRow[] | null) ?? []} />
         </div>
       </section>
     </main>

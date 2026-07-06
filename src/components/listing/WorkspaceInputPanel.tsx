@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { calculatePrice, CostCurrency, defaultPricingSettings, PricingSettings } from "@/lib/pricing";
 import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricingSettingsStore";
@@ -49,6 +49,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [pricingSettings, setPricingSettings] = useState<PricingSettings>(defaultPricingSettings);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ title?: boolean; price?: boolean }>({});
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  const priceRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setPricingSettings(getStoredPricingSettings());
@@ -97,16 +100,24 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setManualSellPrice("");
     setUseWebSearch(false);
     setMessage("");
+    setFieldErrors({});
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!title.trim() || !parsedPrice || parsedPrice <= 0) {
+    const errors: { title?: boolean; price?: boolean } = {};
+    if (!title.trim()) errors.title = true;
+    if (!parsedPrice || parsedPrice <= 0) errors.price = true;
+
+    if (errors.title || errors.price) {
+      setFieldErrors(errors);
       setMessage("請輸入商品標題與有效 CNY 價格");
+      (errors.title ? titleRef.current : priceRef.current)?.focus();
       return;
     }
 
+    setFieldErrors({});
     setSubmitting(true);
     setMessage("建立商品草稿中...");
 
@@ -212,7 +223,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               ) : null}
             </div>
 
-            <div className="field">
+            <div className={`field${fieldErrors.title ? " error" : ""}`}>
               <div className="source-inline">
                 <label>原始商品標題</label>
                 <div className="inline-pills">
@@ -236,12 +247,26 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   </select>
                 </div>
               </div>
-              <textarea onChange={(e) => setTitle(e.target.value)} placeholder="貼上來源商品標題，AI 會整理成 Shopify 商品標題..." rows={2} value={title} />
+              <textarea
+                onChange={(e) => { setTitle(e.target.value); setFieldErrors((current) => ({ ...current, title: false })); }}
+                placeholder="貼上來源商品標題，AI 會整理成 Shopify 商品標題..."
+                ref={titleRef}
+                rows={2}
+                value={title}
+              />
+              {fieldErrors.title ? <div className="field-msg">請輸入商品標題</div> : null}
             </div>
-            <div className="field">
+            <div className={`field${fieldErrors.price ? " error" : ""}`}>
               <label>成本價格</label>
               <div className="price-row">
-                <input min="0" onChange={(e) => setPrice(e.target.value)} step="0.01" type="number" value={price} />
+                <input
+                  min="0"
+                  onChange={(e) => { setPrice(e.target.value); setFieldErrors((current) => ({ ...current, price: false })); }}
+                  ref={priceRef}
+                  step="0.01"
+                  type="number"
+                  value={price}
+                />
                 <div className="currency-toggle">
                   <button
                     className={costCurrency === "CNY" ? "active" : ""}
@@ -259,6 +284,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   </button>
                 </div>
               </div>
+              {fieldErrors.price ? <div className="field-msg">請輸入有效的成本價格</div> : null}
             </div>
 
             <div className="manual-pricing">

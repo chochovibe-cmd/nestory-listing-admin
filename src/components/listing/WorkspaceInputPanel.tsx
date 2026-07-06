@@ -124,6 +124,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         pricing_formula: pricing?.pricingFormula,
         note: note.trim() || null,
         sale_status: saleStatus,
+        source_platform: source,
         status: "pending_copy",
         generation_mode: "api_llm",
         generation_provider: "codex",

@@ -15,6 +15,15 @@ function statusIcon(draft: ProductDraft): { icon: string; className: string } {
   return { icon: "✓", className: "done" };
 }
 
+const APPROVED_STATUSES = new Set(["approved", "publishing", "draft_created", "active_published"]);
+
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: "Claude",
+  openai: "GPT",
+  codex: "Codex",
+  other: "其他"
+};
+
 export function ResultCard({
   draft,
   images,
@@ -40,6 +49,8 @@ export function ResultCard({
   const [publishMode, setPublishMode] = useState(draft.publish_mode);
   const [message, setMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
+  const [descriptionView, setDescriptionView] = useState<"preview" | "html">("preview");
+  const [faqView, setFaqView] = useState<"preview" | "html">("preview");
 
   const { icon, className } = statusIcon(draft);
   const profit = draft.twd_price != null && draft.twd_cost != null ? draft.twd_price - draft.twd_cost : null;
@@ -176,37 +187,95 @@ export function ResultCard({
       {expanded ? (
         <div className="rc-body">
           <div className="rc-field">
+            <div className="rc-label">快速狀態</div>
+            <div className="rc-text">
+              {APPROVED_STATUSES.has(draft.status) ? (
+                <span className="audit-badge ok">已審核</span>
+              ) : (
+                <span className="audit-badge">待審核</span>
+              )}
+              　來源：{draft.source_platform ?? "-"}
+              　成本：¥{draft.cny_price.toLocaleString()}
+              　定價：{draft.compare_at_price ? `NT$${draft.compare_at_price.toLocaleString()}` : "未填"}
+              　AI：{PROVIDER_LABELS[draft.generation_provider] ?? draft.generation_provider}
+            </div>
+          </div>
+          <div className="rc-field">
             <div className="rc-label">原始標題</div>
             <div className="muted">{draft.taobao_title ?? draft.original_title ?? "-"}</div>
           </div>
           <div className="field">
             <label>商品標題</label>
-            <input onChange={(event) => setTitle(event.target.value)} value={title} />
+            <input className="edit-input" onChange={(event) => setTitle(event.target.value)} value={title} />
           </div>
           <div className="field">
-            <label>商品描述</label>
-            <textarea onChange={(event) => setDescription(event.target.value)} rows={10} value={description} />
+            <div className="rc-view-tabs">
+              <label>商品描述</label>
+              <span className="rc-view-tabs-buttons">
+                <button
+                  className={descriptionView === "preview" ? "active" : ""}
+                  onClick={() => setDescriptionView("preview")}
+                  type="button"
+                >
+                  預覽
+                </button>
+                <button
+                  className={descriptionView === "html" ? "active" : ""}
+                  onClick={() => setDescriptionView("html")}
+                  type="button"
+                >
+                  HTML 原始碼
+                </button>
+              </span>
+            </div>
+            {descriptionView === "preview" ? (
+              <div className="rc-html-preview" dangerouslySetInnerHTML={{ __html: description || "<p>尚無內容</p>" }} />
+            ) : (
+              <textarea className="edit-textarea" onChange={(event) => setDescription(event.target.value)} rows={10} value={description} />
+            )}
           </div>
           <div className="field">
             <label>SEO 標題</label>
-            <input onChange={(event) => setSeoTitle(event.target.value)} value={seoTitle} />
+            <input className="edit-input" onChange={(event) => setSeoTitle(event.target.value)} value={seoTitle} />
           </div>
           <div className="field">
             <label>SEO 描述</label>
-            <textarea onChange={(event) => setSeoDescription(event.target.value)} value={seoDescription} />
+            <textarea className="edit-textarea" onChange={(event) => setSeoDescription(event.target.value)} value={seoDescription} />
           </div>
           <div className="field">
-            <label>FAQ</label>
-            <textarea onChange={(event) => setFaq(event.target.value)} rows={6} value={faq} />
+            <div className="rc-view-tabs">
+              <label>FAQ</label>
+              <span className="rc-view-tabs-buttons">
+                <button
+                  className={faqView === "preview" ? "active" : ""}
+                  onClick={() => setFaqView("preview")}
+                  type="button"
+                >
+                  預覽
+                </button>
+                <button
+                  className={faqView === "html" ? "active" : ""}
+                  onClick={() => setFaqView("html")}
+                  type="button"
+                >
+                  HTML 原始碼
+                </button>
+              </span>
+            </div>
+            {faqView === "preview" ? (
+              <div className="rc-html-preview" dangerouslySetInnerHTML={{ __html: faq || "<p>尚無內容</p>" }} />
+            ) : (
+              <textarea className="edit-textarea" onChange={(event) => setFaq(event.target.value)} rows={6} value={faq} />
+            )}
           </div>
           <div className="row">
             <div className="field">
               <label>AI 偵測類型</label>
-              <input onChange={(event) => setDetectedCategory(event.target.value)} value={detectedCategory} />
+              <input className="edit-input" onChange={(event) => setDetectedCategory(event.target.value)} value={detectedCategory} />
             </div>
             <div className="field">
               <label>SKU</label>
-              <input onChange={(event) => setSku(event.target.value)} value={sku} />
+              <input className="edit-input" onChange={(event) => setSku(event.target.value)} value={sku} />
             </div>
           </div>
           <div className="rc-field">
@@ -220,11 +289,11 @@ export function ResultCard({
             <div className="row">
               <div className="field">
                 <label>售價 TWD</label>
-                <input min="0" onChange={(event) => setSellPrice(event.target.value)} type="number" value={sellPrice} />
+                <input className="edit-input" min="0" onChange={(event) => setSellPrice(event.target.value)} type="number" value={sellPrice} />
               </div>
               <div className="field">
                 <label>定價 TWD</label>
-                <input min="0" onChange={(event) => setCompareAtPrice(event.target.value)} type="number" value={compareAtPrice} />
+                <input className="edit-input" min="0" onChange={(event) => setCompareAtPrice(event.target.value)} type="number" value={compareAtPrice} />
               </div>
             </div>
           </div>
@@ -235,7 +304,7 @@ export function ResultCard({
                 <span className="rc-tag" key={tag}>{tag}</span>
               ))}
             </div>
-            <input onChange={(event) => setTags(event.target.value)} value={tags} />
+            <input className="edit-input" onChange={(event) => setTags(event.target.value)} value={tags} />
           </div>
           {images.length > 0 ? (
             <div className="rc-field">

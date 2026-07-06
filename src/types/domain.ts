@@ -103,6 +103,7 @@ export interface ProductDraft {
   compare_at_price: number | null;
   detected_category: string | null;
   sku: string | null;
+  source_platform: string | null;
   video_urls: unknown[];
   created_at: string;
   updated_at: string;

@@ -127,6 +127,8 @@ select {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
   font-size: 15px;
+  order: 1;
+  flex: 1 1 auto;
 }
 
 .brand-dot {
@@ -156,11 +158,24 @@ select {
   text-transform: uppercase;
 }
 
+/* Collapsed by default at every viewport width: only the brand + toggle show.
+   Tapping the toggle reveals the control cluster on its own full-width row
+   below, same mechanism the mobile layout already used below 768px -- it's
+   now the only mode, desktop included, since the pill row (page links, AI
+   provider/mode switches, deploy status, exchange rate, theme, login) was
+   cluttering the header at every width. */
 .nav {
-  display: flex;
+  display: none;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  order: 3;
+}
+
+.nav.open {
+  display: flex;
+  margin-top: 8px;
 }
 
 /* Header controls (pills, 匯率, theme dots) are meant to stay compact like
@@ -177,9 +192,10 @@ select {
   gap: 8px;
 }
 
-/* Mobile menu toggle: hidden on desktop, shown <=768px to collapse the header. */
 .nav-toggle {
-  display: none;
+  display: inline-flex;
+  order: 2;
+  margin-left: auto;
   font-family: 'Space Grotesk', sans-serif;
   font-size: 12px;
   font-weight: 700;
@@ -365,6 +381,27 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--accent3);
+}
+
+/* Result card edit fields use --surface (white/near-white) instead of the
+   form's --bg, matching 分支's distinction between input-side fields (warm
+   tint) and result-side fields (bright, easy to re-read post-generation). */
+.edit-input,
+.edit-textarea {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 12px;
+  width: 100%;
+  outline: none;
+  transition: border-color .2s;
+}
+.edit-textarea {
+  min-height: 118px;
+  resize: vertical;
+  line-height: 1.6;
 }
 
 textarea {
@@ -813,6 +850,79 @@ textarea {
   color: var(--text-dim);
 }
 
+.rc-text {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+.audit-badge {
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--text-muted);
+}
+.audit-badge.ok {
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  color: var(--success);
+}
+
+.rc-view-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rc-view-tabs-buttons {
+  display: inline-flex;
+  gap: 4px;
+}
+.rc-view-tabs-buttons button {
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 10px;
+  min-height: 0;
+  cursor: pointer;
+}
+.rc-view-tabs-buttons button.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+}
+
+.rc-html-preview {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  min-height: 118px;
+  color: var(--text);
+}
+.rc-html-preview h3 {
+  font-size: 13px;
+  margin: 10px 0 4px;
+}
+.rc-html-preview h3:first-child {
+  margin-top: 0;
+}
+.rc-html-preview p {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+}
+.rc-html-preview ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.rc-html-preview li {
+  margin-bottom: 2px;
+}
+
 .rc-actions {
   display: flex;
   flex-wrap: wrap;
@@ -888,29 +998,8 @@ textarea {
     gap: 8px;
     row-gap: 8px;
   }
-  /* Collapsed by default: only brand + toggle show (~56px tall). Tapping the
-     toggle reveals the control cluster on its own full-width row below. This
-     keeps the sticky header from eating half the screen and from covering
-     (and blocking taps on) the content beneath it. */
-  .brand { order: 1; flex: 1 1 auto; }
-  .nav-toggle {
-    display: inline-flex;
-    order: 2;
-    margin-left: auto;
-  }
-  .nav {
-    order: 3;
-    width: 100%;
-    display: none;
-  }
-  .nav.open {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-  }
-  /* The 3 page links move to the bottom tab bar on mobile. */
+  /* The 3 page links move to the bottom tab bar on mobile -- the collapsed
+     nav toggle itself is no longer mobile-only, see the base .nav rules. */
   .nav-links { display: none; }
 
   .container { padding: 12px; }
@@ -1012,7 +1101,7 @@ textarea {
 .source-pill { width: auto; min-width: 72px; border-radius: 999px; padding: 5px 24px 5px 10px; font-size: 11px; background: var(--surface2); min-height: 30px; }
 
 .currency-toggle { display: flex; border: 1px solid var(--border); border-radius: 7px; background: var(--surface2); padding: 2px; white-space: nowrap; }
-.currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: 'Space Grotesk', sans-serif; cursor: pointer; }
+.currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: 'Space Grotesk', sans-serif; cursor: pointer; min-height: 0; line-height: 1; }
 .currency-toggle button.active { background: var(--accent); color: var(--accent-fg); font-weight: 700; }
 
 .manual-pricing { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 10px 12px; margin-bottom: 13px; }
@@ -1025,7 +1114,7 @@ textarea {
 .copy-block-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: var(--text); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
 .copy-block-title span { font-size: 18px; }
 
-.settings-toggle { width: 100%; background: none; border: none; border-top: 1px solid var(--border); padding: 9px 16px; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; transition: color .2s; }
+.settings-toggle { width: 100%; background: none; border: none; border-top: 1px solid var(--border); border-radius: 0; min-height: 0; padding: 9px 16px; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; transition: color .2s; }
 .settings-toggle:hover { color: var(--text); }
 .settings-body { padding: 13px 16px; border-top: 1px solid var(--border); background: var(--surface2); display: none; }
 .settings-body.open { display: block; }

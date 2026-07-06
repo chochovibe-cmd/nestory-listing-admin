@@ -8,6 +8,21 @@ import type { ProductDraft } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
+type DraftQueueRow = Pick<
+  ProductDraft,
+  | "id"
+  | "title_zh"
+  | "taobao_title"
+  | "original_title"
+  | "category"
+  | "status"
+  | "generation_mode"
+  | "generation_status"
+  | "publish_mode"
+  | "publish_status"
+  | "twd_price"
+>;
+
 export default async function DraftQueuePage() {
   if (!hasSupabaseServerEnv()) {
     return <SetupNotice title="商品佇列需要 Supabase 測試環境" />;
@@ -22,7 +37,7 @@ export default async function DraftQueuePage() {
 
   const { data: drafts, error } = await supabase
     .from("product_drafts")
-    .select("*")
+    .select("id, title_zh, taobao_title, original_title, category, status, generation_mode, generation_status, publish_mode, publish_status, twd_price")
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -46,7 +61,7 @@ export default async function DraftQueuePage() {
               </tr>
             </thead>
             <tbody>
-              {(drafts as ProductDraft[] | null)?.map((draft) => (
+              {(drafts as DraftQueueRow[] | null)?.map((draft) => (
                 <tr key={draft.id}>
                   <td>
                     <Link href={`/drafts/${draft.id}`}>

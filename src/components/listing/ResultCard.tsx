@@ -24,6 +24,24 @@ const PROVIDER_LABELS: Record<string, string> = {
   other: "其他"
 };
 
+function CopyButton({ getValue }: { getValue: () => string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    const value = getValue();
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button className={`copy-btn${copied ? " copied" : ""}`} onClick={handleCopy} type="button">
+      {copied ? "✓" : "複製"}
+    </button>
+  );
+}
+
 export function ResultCard({
   draft,
   images,
@@ -204,24 +222,24 @@ export function ResultCard({
             <div className="muted">{draft.taobao_title ?? draft.original_title ?? "-"}</div>
           </div>
           <div className="field">
-            <label>商品標題</label>
+            <label>商品標題 <CopyButton getValue={() => title} /></label>
             <input className="edit-input" onChange={(event) => setTitle(event.target.value)} value={title} />
           </div>
           <div className="field">
-            <label>商品描述</label>
+            <label>商品描述 <CopyButton getValue={() => description} /></label>
             <textarea className="edit-textarea" onChange={(event) => setDescription(event.target.value)} rows={10} value={description} />
           </div>
           <div className="field">
-            <label>SEO 標題</label>
+            <label>SEO 標題 <CopyButton getValue={() => seoTitle} /></label>
             <input className="edit-input" onChange={(event) => setSeoTitle(event.target.value)} value={seoTitle} />
           </div>
           <div className="field">
-            <label>SEO 描述</label>
+            <label>SEO 描述 <CopyButton getValue={() => seoDescription} /></label>
             <textarea className="edit-textarea" onChange={(event) => setSeoDescription(event.target.value)} value={seoDescription} />
           </div>
           <div className="field">
             <div className="rc-view-tabs">
-              <label>FAQ</label>
+              <label>FAQ <CopyButton getValue={() => faq} /></label>
               <span className="rc-view-tabs-buttons">
                 <button
                   className={faqView === "preview" ? "active" : ""}
@@ -275,7 +293,7 @@ export function ResultCard({
             </div>
           </div>
           <div className="field">
-            <label>Tags</label>
+            <label>Tags <CopyButton getValue={() => tags} /></label>
             <div className="rc-tags">
               {tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tag) => (
                 <span className="rc-tag" key={tag}>{tag}</span>

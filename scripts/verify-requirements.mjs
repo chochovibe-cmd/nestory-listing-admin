@@ -63,8 +63,9 @@ const checks = [
   },
   {
     name: "Shopify publish API is mock-safe and requires active confirmation",
-    ok: /SHOPIFY_PUBLISH_MOCK/.test(read("src/app/api/drafts/[id]/publish/route.ts"))
+    ok: /SHOPIFY_PUBLISH_MOCK/.test(read("src/lib/shopify/publishDraft.ts"))
       && /confirmActive/.test(read("src/app/api/drafts/[id]/publish/route.ts"))
+      && /confirmActive/.test(read("src/app/api/drafts/batch/publish/route.ts"))
   },
   {
     name: "Matrixify fallback mapping exists",

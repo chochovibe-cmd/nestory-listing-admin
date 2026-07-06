@@ -1,9 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SetupNotice } from "@/components/listing/SetupNotice";
-import { StatusBadge } from "@/components/listing/StatusBadge";
+import { ReviewQueueTable, type ReviewQueueRow } from "@/components/review/ReviewQueueTable";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
-import type { ProductDraft } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +19,7 @@ export default async function ReviewQueuePage() {
 
   const { data: drafts, error } = await supabase
     .from("product_drafts")
-    .select("*")
+    .select("id, title_zh, taobao_title, status, warnings, publish_mode")
     .in("status", ["ready_for_review", "needs_revision", "approved", "api_failed", "csv_ready"])
     .order("updated_at", { ascending: false });
 
@@ -34,26 +32,7 @@ export default async function ReviewQueuePage() {
         </div>
         <div className="panel-body">
           {error ? <div className="notice">{error.message}</div> : null}
-          <table className="table">
-            <thead>
-              <tr>
-                <th>商品</th>
-                <th>狀態</th>
-                <th>警告</th>
-                <th>發布模式</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(drafts as ProductDraft[] | null)?.map((draft) => (
-                <tr key={draft.id}>
-                  <td><Link href={`/drafts/${draft.id}`}>{draft.title_zh || draft.taobao_title || "未命名商品"}</Link></td>
-                  <td><StatusBadge status={draft.status} /></td>
-                  <td>{draft.warnings?.length ?? 0}</td>
-                  <td>{draft.publish_mode}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ReviewQueueTable drafts={(drafts as ReviewQueueRow[] | null) ?? []} />
         </div>
       </section>
     </main>

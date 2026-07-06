@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { ImageType } from "@/types/domain";
 
@@ -18,6 +19,7 @@ const zones: Array<{
 ];
 
 export function ImageUploader({ draftId, userId }: { draftId: string; userId: string }) {
+  const router = useRouter();
   const supabase = createClient();
   const [previews, setPreviews] = useState<Record<string, string[]>>({});
   const [dragging, setDragging] = useState<string | null>(null);
@@ -57,6 +59,7 @@ export function ImageUploader({ draftId, userId }: { draftId: string; userId: st
 
     setPreviews((current) => ({ ...current, [type]: [...(current[type] ?? []), ...urls] }));
     setMessage("圖片已寫入資料庫");
+    router.refresh();
   }
 
   return (

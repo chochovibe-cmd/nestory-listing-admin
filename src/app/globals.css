@@ -490,13 +490,26 @@ select:focus {
   border-color: var(--accent3);
 }
 
-/* !important: .edit-input/.edit-textarea (declared later, same 0,1,0
-   specificity) set outline:none, which would otherwise silently win and
-   kill the focus ring on ResultCard's white fields for keyboard nav. */
+/* Scoped to exclude text-entry fields (2026-07-06, user prefers the
+   original border-color + box-shadow ring on inputs -- see the
+   "reference-balanced polish" input:focus rule further down -- over this
+   outline). Buttons/links had no focus indicator at all before this, so
+   the outline still adds real value there.
+   !important: .edit-input/.edit-textarea (declared later, same 0,1,0
+   specificity) set outline:none, which would otherwise silently win. */
 :focus-visible {
   outline: 2px solid var(--accent3) !important;
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* Checkbox/radio/file inputs are excluded from this exclusion -- they don't
+   get the box-shadow ring below (that rule's visual effect only reads as a
+   "ring" on wide text-style fields), so they still need the outline. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none !important;
 }
 
 /* Reuses --accent2, the same tone already used for .rc-status.error /
@@ -1396,7 +1409,7 @@ textarea {
     bottom: calc(10px + env(safe-area-inset-bottom));
     z-index: 900;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
     padding: 8px;
     background: var(--surface);

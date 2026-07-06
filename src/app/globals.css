@@ -374,6 +374,20 @@ button:hover {
   border-color: var(--accent3);
 }
 
+/* Disabled buttons previously looked pixel-identical to enabled ones (no
+   opacity/cursor change), so a disabled batch action looked like a dead
+   click instead of "select rows first" -- this was reported as the button
+   simply "not working." */
+.button:disabled,
+button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.button:disabled:hover,
+button:disabled:hover {
+  border-color: var(--border);
+}
+
 .button.primary,
 button.primary {
   background: var(--accent);

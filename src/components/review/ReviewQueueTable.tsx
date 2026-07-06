@@ -129,25 +129,44 @@ export function ReviewQueueTable({ drafts }: { drafts: ReviewQueueRow[] }) {
           />
           全選
         </label>
-        <span className="batch-selected-count">已選 {selectedIds.size} 筆</span>
+        <span className="batch-selected-count">
+          {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "請先勾選商品才能使用下方批次操作"}
+        </span>
         <span className="batch-status-counts">
           <span className="status-pill">待審核 {counts.pending}</span>
           <span className="status-pill status-ok">已核准 {counts.approved}</span>
           {counts.failed > 0 ? <span className="status-pill status-warn">失敗 {counts.failed}</span> : null}
         </span>
         <div className="batch-actions">
-          <button disabled={busy || !selectedArray.length} onClick={batchApprove} type="button">
+          <button
+            disabled={busy || !selectedArray.length}
+            onClick={batchApprove}
+            title="把已選取的商品狀態改成「已核准」，尚未建立 Shopify 商品"
+            type="button"
+          >
             批次核准
           </button>
-          <button disabled={busy || !selectedArray.length} onClick={() => batchPublish("draft")} type="button">
+          <button
+            disabled={busy || !selectedArray.length}
+            onClick={() => batchPublish("draft")}
+            title="在 Shopify 建立草稿商品，不會公開上架"
+            type="button"
+          >
             批次建立草稿
           </button>
-          <button className="danger" disabled={busy || !selectedArray.length} onClick={() => batchPublish("active")} type="button">
+          <button
+            className="danger"
+            disabled={busy || !selectedArray.length}
+            onClick={() => batchPublish("active")}
+            title="直接在 Shopify 建立正式上架商品，會立刻公開，請先確認內容無誤"
+            type="button"
+          >
             批次上架
           </button>
           <button
             disabled={busy || !selectedArray.length}
             onClick={() => downloadCsv("/api/exports/matrixify", "nestory-matrixify")}
+            title="下載 Matrixify 格式 CSV，供 Shopify 後台批次匯入"
             type="button"
           >
             批次匯出 CSV
@@ -155,6 +174,7 @@ export function ReviewQueueTable({ drafts }: { drafts: ReviewQueueRow[] }) {
           <button
             disabled={busy || !selectedArray.length}
             onClick={() => downloadCsv("/api/exports/showmore", "nestory-showmore", "重量欄位為預設值 0.1kg，上傳前請手動確認。")}
+            title="下載 Showmore 格式 CSV，官網庫存/重量為預設值，上傳前請手動確認"
             type="button"
           >
             批次匯出 Showmore

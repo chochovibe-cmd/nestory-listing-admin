@@ -56,8 +56,13 @@ export default async function NewDraftPage() {
               </div>
             ) : (
               <div className="results-list">
-                {typedDrafts.map((draft) => (
-                  <ResultCard draft={draft} images={imagesByDraft.get(draft.id) ?? []} key={draft.id} />
+                {typedDrafts.map((draft, index) => (
+                  <ResultCard
+                    defaultExpanded={index === 0}
+                    draft={draft}
+                    images={imagesByDraft.get(draft.id) ?? []}
+                    key={draft.id}
+                  />
                 ))}
               </div>
             )}

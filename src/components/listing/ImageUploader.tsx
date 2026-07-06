@@ -34,20 +34,19 @@ export function ImageUploader({ draftId, userId }: { draftId: string; userId: st
     for (const [index, file] of Array.from(fileList).entries()) {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `${userId}/${draftId}/${type}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("product-images").upload(path, file, {
+      const { error: storageError } = await supabase.storage.from("product-images").upload(path, file, {
         contentType: file.type,
         upsert: false
       });
 
-      if (error) {
-        setMessage(error.message);
+      if (storageError) {
+        setMessage(`上傳失敗：${storageError.message}`);
         return;
       }
 
       const { data } = supabase.storage.from("product-images").getPublicUrl(path);
-      urls.push(data.publicUrl);
 
-      await supabase.from("product_images").insert({
+      const { error: insertError } = await supabase.from("product_images").insert({
         draft_id: draftId,
         image_type: type,
         original_file_url: data.publicUrl,
@@ -55,6 +54,13 @@ export function ImageUploader({ draftId, userId }: { draftId: string; userId: st
         sort_order: startIndex + index,
         processing_status: "uploaded"
       });
+
+      if (insertError) {
+        setMessage(`圖片檔案已上傳，但寫入資料庫失敗：${insertError.message}`);
+        return;
+      }
+
+      urls.push(data.publicUrl);
     }
 
     setPreviews((current) => ({ ...current, [type]: [...(current[type] ?? []), ...urls] }));

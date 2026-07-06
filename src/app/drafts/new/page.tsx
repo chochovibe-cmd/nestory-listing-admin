@@ -33,36 +33,12 @@ export default async function NewDraftPage() {
     : { data: [] as ProductImage[] };
 
   const typedImages = (images ?? []) as ProductImage[];
-  const imagesByDraft = new Map<string, ProductImage[]>();
-  for (const image of typedImages) {
-    const list = imagesByDraft.get(image.draft_id) ?? [];
-    list.push(image);
-    imagesByDraft.set(image.draft_id, list);
-  }
 
   return (
     <main className="container">
       <div className="grid">
         <WorkspaceInputPanel userId={user.id} />
-        <section className="panel">
-          <div className="panel-header">
-            <h2>◈ 生成結果</h2>
-          </div>
-          <div className="panel-body">
-            {typedDrafts.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">◈</div>
-                <p className="muted">在左側輸入商品資料並送出，生成結果會出現在這裡</p>
-              </div>
-            ) : (
-              <DraftResultsPanel
-                drafts={typedDrafts}
-                images={typedImages}
-                userId={user.id}
-              />
-            )}
-          </div>
-        </section>
+        <DraftResultsPanel drafts={typedDrafts} images={typedImages} />
       </div>
     </main>
   );

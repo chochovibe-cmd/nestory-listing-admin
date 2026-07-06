@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
-import { ImageUploader } from "@/components/listing/ImageUploader";
+import { StatusBadge } from "@/components/listing/StatusBadge";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 function statusIcon(draft: ProductDraft): { icon: string; className: string } {
@@ -46,14 +46,12 @@ function CopyButton({ getValue }: { getValue: () => string }) {
 export function ResultCard({
   draft,
   images,
-  userId,
   checked,
   onToggle,
   defaultExpanded = false
 }: {
   draft: ProductDraft;
   images: ProductImage[];
-  userId: string;
   checked?: boolean;
   onToggle?: () => void;
   defaultExpanded?: boolean;
@@ -209,6 +207,12 @@ export function ResultCard({
         ) : null}
         <span className={`rc-status ${className}`}>{icon}</span>
         <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+        <div className="rc-meta-stack">
+          <StatusBadge status={draft.status} />
+          {draft.warnings?.length ? (
+            <span className="status-pill status-warn">⚠ {draft.warnings.length}</span>
+          ) : null}
+        </div>
         {draft.twd_price ? (
           <div className="rc-price-stack">
             <span className="rc-price">NT${draft.twd_price.toLocaleString()}</span>
@@ -319,7 +323,7 @@ export function ResultCard({
           </div>
           {images.length > 0 ? (
             <div className="rc-field">
-              <div className="rc-label">已上傳圖片</div>
+              <div className="rc-label">圖片</div>
               <div className="thumbs">
                 {images.map((image) => (
                   <img
@@ -331,10 +335,6 @@ export function ResultCard({
               </div>
             </div>
           ) : null}
-          <div className="rc-field">
-            <div className="rc-label">上傳圖片</div>
-            <ImageUploader draftId={draft.id} userId={userId} />
-          </div>
           {draft.warnings?.length ? (
             <div className="rc-field">
               <div className="rc-label">提醒</div>

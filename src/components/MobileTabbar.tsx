@@ -5,8 +5,7 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/drafts/new", icon: "✦", label: "新增" },
-  { href: "/drafts", icon: "☰", label: "佇列" },
-  { href: "/review", icon: "✓", label: "審核" }
+  { href: "/drafts", icon: "☰", label: "佇列" }
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {

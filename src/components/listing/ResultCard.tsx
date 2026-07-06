@@ -137,17 +137,6 @@ export function ResultCard({
     router.refresh();
   }
 
-  async function markApproved() {
-    const response = await fetch(`/api/drafts/${draft.id}/approve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
-    });
-    const payload = await response.json();
-    setMessage(response.ok ? "已核准，尚未發布" : payload.error ?? "核准失敗");
-    router.refresh();
-  }
-
   async function requestRevision() {
     const comment = window.prompt("請輸入退回原因：") ?? "";
     const response = await fetch(`/api/drafts/${draft.id}/request-revision`, {
@@ -160,18 +149,35 @@ export function ResultCard({
     router.refresh();
   }
 
-  async function publish() {
+  // Approve and publish are merged into one click -- same person does both
+  // steps in practice, so there's no value in a separate confirm-then-publish
+  // round trip. Still two API calls under the hood (approve's audit trail in
+  // review_logs stays intact), just fired back to back.
+  async function approveAndPublish() {
     if (publishMode === "active") {
-      if (!window.confirm("即將建立 Shopify ACTIVE 商品，確定發布？")) return;
+      if (!window.confirm("即將核准並建立 Shopify ACTIVE 商品，確定發布？")) return;
     }
 
-    const response = await fetch(`/api/drafts/${draft.id}/publish`, {
+    setMessage("核准中...");
+    const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    if (!approveResponse.ok) {
+      const payload = await approveResponse.json().catch(() => ({}));
+      setMessage(payload.error ?? "核准失敗");
+      return;
+    }
+
+    setMessage("發布中...");
+    const publishResponse = await fetch(`/api/drafts/${draft.id}/publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ publishMode, confirmActive: publishMode === "active" })
     });
-    const payload = await response.json();
-    setMessage(response.ok ? "發布流程已送出" : payload.error ?? "發布失敗");
+    const payload = await publishResponse.json();
+    setMessage(publishResponse.ok ? "已核准並發布" : payload.error ?? "發布失敗");
     router.refresh();
   }
 
@@ -362,9 +368,8 @@ export function ResultCard({
             </span>
             <span className="rc-actions-group rc-actions-group-review">
               <button onClick={requestRevision} type="button">退回修改</button>
-              <button onClick={markApproved} type="button">核准</button>
-              <button className={publishMode === "active" ? "danger" : ""} onClick={publish} type="button">
-                審核並發布
+              <button className={publishMode === "active" ? "danger" : ""} onClick={approveAndPublish} type="button">
+                ✓ 核准並發布
               </button>
               <button onClick={exportCsv} type="button">產生 CSV</button>
             </span>

@@ -43,31 +43,31 @@ export function DraftResultsPanel({
     );
   }
 
-  async function batchApprove() {
-    if (!selectedArray.length) return;
-    setBusy(true);
-    setMessage("批次核准中...");
-    const response = await fetch("/api/drafts/batch/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: selectedArray })
-    });
-    const payload = await response.json();
-    setBusy(false);
-    setMessage(response.ok ? `已核准 ${payload.approvedCount} 筆` : payload.error ?? "批次核准失敗");
-    setSelectedIds(new Set());
-    router.refresh();
-  }
-
-  async function batchPublish(mode: "draft" | "active") {
+  // Approve and publish are merged into one click, same reasoning as
+  // ResultCard's single-item action: same person does both steps, so a
+  // separate "一鍵審核" pass before publishing is just an extra round trip.
+  async function batchApproveAndPublish(mode: "draft" | "active") {
     if (!selectedArray.length) return;
     if (mode === "active") {
       const confirmed = window.confirm(
-        `即將對已選取的 ${selectedArray.length} 筆商品建立 Shopify ACTIVE 商品（直接上架），確定嗎？`
+        `即將核准並對已選取的 ${selectedArray.length} 筆商品建立 Shopify ACTIVE 商品（直接上架），確定嗎？`
       );
       if (!confirmed) return;
     }
     setBusy(true);
+    setMessage("批次核准中...");
+    const approveResponse = await fetch("/api/drafts/batch/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftIds: selectedArray })
+    });
+    if (!approveResponse.ok) {
+      const payload = await approveResponse.json().catch(() => ({}));
+      setBusy(false);
+      setMessage(payload.error ?? "批次核准失敗");
+      return;
+    }
+
     setMessage(mode === "active" ? "批次上架中..." : "批次建立草稿中...");
     const response = await fetch("/api/drafts/batch/publish", {
       method: "POST",
@@ -134,29 +134,20 @@ export function DraftResultsPanel({
               <button
                 className="btn-mini"
                 disabled={busy || !selectedArray.length}
-                onClick={batchApprove}
-                title="把已選取的商品狀態改成「已核准」，尚未建立 Shopify 商品"
+                onClick={() => batchApproveAndPublish("draft")}
+                title="核准後在 Shopify 建立草稿商品，不會公開上架"
                 type="button"
               >
-                一鍵審核
-              </button>
-              <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={() => batchPublish("draft")}
-                title="在 Shopify 建立草稿商品，不會公開上架"
-                type="button"
-              >
-                建立草稿
+                核准並建草稿
               </button>
               <button
                 className="btn-mini danger"
                 disabled={busy || !selectedArray.length}
-                onClick={() => batchPublish("active")}
-                title="直接在 Shopify 建立正式上架商品，會立刻公開，請先確認內容無誤"
+                onClick={() => batchApproveAndPublish("active")}
+                title="核准後直接在 Shopify 建立正式上架商品，會立刻公開，請先確認內容無誤"
                 type="button"
               >
-                批次上架
+                核准並上架
               </button>
               <button
                 className="btn-mini"

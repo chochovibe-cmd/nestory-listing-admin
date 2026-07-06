@@ -12,5 +12,5 @@ export default async function HomePage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  redirect(user ? "/drafts" : "/login");
+  redirect(user ? "/drafts/new" : "/login");
 }

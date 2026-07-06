@@ -27,7 +27,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/drafts");
+    router.push("/drafts/new");
     router.refresh();
   }
 

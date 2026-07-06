@@ -171,10 +171,14 @@ select {
 /* Header controls (pills, 匯率, theme dots) are meant to stay compact like
    分支's header — the generic `button { min-height: 38px }` form-field sizing
    was stretching Claude/GPT and 測試/LLM into tall capsules next to the small
-   round theme buttons. Let each control's own padding decide its height. */
+   round theme buttons. Let each control's own padding decide its height.
+   !important: the later ".nav a, .button, button { min-height: 38px }"
+   rule has identical ".nav a" specificity and wins on source order alone,
+   so plain min-height:0 here silently loses for <a> tags (the 登入 link)
+   even though it correctly wins for actual <button> elements. */
 .nav button,
 .nav a {
-  min-height: 0;
+  min-height: 0 !important;
 }
 
 /* Desktop-only dropdown for 新增商品/商品佇列/待審核. Hidden on mobile,
@@ -458,8 +462,9 @@ select {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
+  font-size: 13px;
   min-height: 38px;
-  padding: 9px 11px;
+  padding: 8px 11px;
   width: 100%;
   outline: none;
   transition: border-color .2s;
@@ -1239,7 +1244,11 @@ textarea {
 
 /* ── Header: live rate + deployment status dropdown ── */
 .rate-val { color: var(--accent); font-weight: 600; font-size: 13px; }
-.hdr-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 11px; transition: all .2s; }
+/* !important on padding/font-size: as an <a> tag (the 登入 link), .hdr-btn
+   loses to ".nav a" on pure specificity (that selector has an extra element
+   qualifier, 0,1,1 vs .hdr-btn's 0,1,0) regardless of source order, so the
+   generic 8px/12px padding silently wins over this rule's 4px/10px. */
+.hdr-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px !important; border-radius: 999px; cursor: pointer; font-size: 11px !important; transition: all .2s; }
 .hdr-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .btn-mini { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); border-radius: var(--radius-s); padding: 7px 10px; font-size: 11px; cursor: pointer; transition: all .2s; }
 .btn-mini:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
@@ -1379,7 +1388,7 @@ body[data-theme="dark"] .theme-btn:hover,
 body[data-theme="dark"] .hdr-btn:hover {
   box-shadow: 5px 5px 0 rgba(232, 232, 240, .30);
 }
-.pill-group { padding: 3px; background: var(--surface); }
+.pill-group { padding: 1px; background: var(--surface); }
 .pill-btn { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
 .pill-btn.active,
 .currency-toggle button.active,

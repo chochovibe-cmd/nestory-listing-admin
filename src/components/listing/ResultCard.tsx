@@ -49,7 +49,6 @@ export function ResultCard({
   const [publishMode, setPublishMode] = useState(draft.publish_mode);
   const [message, setMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
-  const [descriptionView, setDescriptionView] = useState<"preview" | "html">("preview");
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
 
   const { icon, className } = statusIcon(draft);
@@ -209,30 +208,8 @@ export function ResultCard({
             <input className="edit-input" onChange={(event) => setTitle(event.target.value)} value={title} />
           </div>
           <div className="field">
-            <div className="rc-view-tabs">
-              <label>商品描述</label>
-              <span className="rc-view-tabs-buttons">
-                <button
-                  className={descriptionView === "preview" ? "active" : ""}
-                  onClick={() => setDescriptionView("preview")}
-                  type="button"
-                >
-                  預覽
-                </button>
-                <button
-                  className={descriptionView === "html" ? "active" : ""}
-                  onClick={() => setDescriptionView("html")}
-                  type="button"
-                >
-                  HTML 原始碼
-                </button>
-              </span>
-            </div>
-            {descriptionView === "preview" ? (
-              <div className="rc-html-preview" dangerouslySetInnerHTML={{ __html: description || "<p>尚無內容</p>" }} />
-            ) : (
-              <textarea className="edit-textarea" onChange={(event) => setDescription(event.target.value)} rows={10} value={description} />
-            )}
+            <label>商品描述</label>
+            <textarea className="edit-textarea" onChange={(event) => setDescription(event.target.value)} rows={10} value={description} />
           </div>
           <div className="field">
             <label>SEO 標題</label>

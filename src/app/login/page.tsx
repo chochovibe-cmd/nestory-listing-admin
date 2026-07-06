@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const router = useRouter();
   const supabaseReady = hasSupabaseBrowserEnv();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,7 +21,14 @@ export default function LoginPage() {
 
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setMessage(error ? error.message : "登入成功，請回到商品佇列。");
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    router.push("/drafts");
+    router.refresh();
   }
 
   return (

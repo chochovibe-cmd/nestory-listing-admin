@@ -19,12 +19,17 @@ body[data-theme="dark"] {
   --text-dim: #d8d3e8;
   --success: #3ecfb0;
   --warn: #f5c842;
+  --danger: #ff6b6b;
+  --idle: #8a86a0;
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
   --shadow-s: 0 1px 2px rgba(0, 0, 0, .16);
   --shadow-m: 0 3px 10px rgba(0, 0, 0, .18);
 }
+/* ⚠ 已知地雷：三個主題的 --line 與 --border 目前同值（nordic/kitty 連 --border-soft 也同值），
+   「選取狀態看起來沒反應」的 bug 多半源自於此——B15 整併前，改動任一者要想到另一個。
+   狀態色詞彙表：--idle 灰=未開始 / --warn 黃=進行中 / --success 綠=完成 / --danger 紅=失敗。 */
 
 body[data-theme="nordic"] {
   color-scheme: light;
@@ -43,6 +48,8 @@ body[data-theme="nordic"] {
   --text-dim: #33312b;
   --success: #3b8f83;
   --warn: #f6ce45;
+  --danger: #d9272e;
+  --idle: #9a948a;
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
@@ -67,6 +74,8 @@ body[data-theme="kitty"] {
   --text-dim: #242424;
   --success: #1d4f91;
   --warn: #ffd966;
+  --danger: #e4002b;
+  --idle: #8b93a5;
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;

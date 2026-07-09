@@ -24,7 +24,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .from("product_drafts")
     .update({
       status: "approved",
-      reviewed_by: user.id
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString() // A13: review-stage timestamp
     })
     .eq("id", id);
 

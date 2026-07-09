@@ -80,7 +80,18 @@ export class ClaudeCopyProvider implements CopyProvider {
         throw new Error("Anthropic response did not include message content.");
       }
 
-      return text;
+      // A13: cache_read/cache_creation are billed at different rates; keep them
+      // separate so the cost estimate reflects the caching discount.
+      const u = payload?.usage ?? {};
+      return {
+        text,
+        usage: {
+          inputTokens: Number(u.input_tokens) || 0,
+          outputTokens: Number(u.output_tokens) || 0,
+          cachedInputTokens: Number(u.cache_read_input_tokens) || 0,
+          cacheCreationTokens: Number(u.cache_creation_input_tokens) || 0,
+        },
+      };
     }, "claude", DEFAULT_MODEL, isEmpty);
   }
 }

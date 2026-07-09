@@ -67,6 +67,23 @@ export interface CopyProviderInput {
   currentValues?: CopyCurrentValues;
 }
 
+// A13: token usage a provider reports for one generation, normalised across
+// Anthropic/OpenAI. Full-rate input excludes cached reads (billed cheaper) and
+// cache writes (billed dearer), which are tracked separately for the estimate.
+export interface RawUsage {
+  inputTokens: number;
+  outputTokens: number;
+  /** Cache reads (Anthropic cache_read / OpenAI cached prompt tokens). */
+  cachedInputTokens?: number;
+  /** Cache writes (Anthropic cache_creation); 0 for OpenAI. */
+  cacheCreationTokens?: number;
+}
+
+export interface CopyUsage extends RawUsage {
+  /** Rough USD estimate for this generation -- see estimateCopyCostUsd. */
+  costUsd: number;
+}
+
 export interface CopyProviderOutput {
   enrichedTitle: string;
   generatedDescriptionHtml: string;
@@ -82,11 +99,36 @@ export interface CopyProviderOutput {
   sku: string;
   provider: string;
   model: string;
+  /** A13: present when the model reported token usage (absent in test mode). */
+  usage?: CopyUsage;
 }
 
 export interface CopyProvider {
   name: string;
   generate(input: CopyProviderInput): Promise<CopyProviderOutput>;
+}
+
+// A13: APPROXIMATE USD rates per 1M tokens. These are ballpark public list
+// prices and WILL drift -- they exist so the dashboard has a per-draft cost
+// signal, not an invoice. Update when pricing changes (flagged in 待確認清單).
+// Cache reads are billed ~0.1x input; Anthropic cache writes ~1.25x input.
+const COPY_MODEL_RATES: Array<{ match: string; inPerM: number; outPerM: number }> = [
+  { match: "claude-sonnet", inPerM: 3, outPerM: 15 },
+  { match: "claude-haiku", inPerM: 0.8, outPerM: 4 },
+  { match: "claude-opus", inPerM: 15, outPerM: 75 },
+  { match: "gpt-4o-mini", inPerM: 0.15, outPerM: 0.6 },
+  { match: "gpt-4o", inPerM: 2.5, outPerM: 10 },
+];
+const DEFAULT_COPY_RATE = { inPerM: 3, outPerM: 15 };
+
+export function estimateCopyCostUsd(model: string, usage: RawUsage): number {
+  const rate = COPY_MODEL_RATES.find((entry) => model.includes(entry.match)) ?? DEFAULT_COPY_RATE;
+  const fullInput = usage.inputTokens;
+  const cacheRead = usage.cachedInputTokens ?? 0;
+  const cacheWrite = usage.cacheCreationTokens ?? 0;
+  const inputCost = ((fullInput + cacheWrite * 1.25 + cacheRead * 0.1) / 1_000_000) * rate.inPerM;
+  const outputCost = (usage.outputTokens / 1_000_000) * rate.outPerM;
+  return Math.round((inputCost + outputCost) * 1_000_000) / 1_000_000; // 6dp
 }
 
 type ParsedCopyJson = {
@@ -242,14 +284,31 @@ export const COPY_FORMAT_REMINDER =
  * reminder to append (null on the first attempt) and returns the raw text; HTTP/
  * network errors it throws propagate immediately (they are not parse failures).
  */
+export interface CopyModelResult {
+  text: string;
+  usage?: RawUsage;
+}
+
 export async function generateWithParseRetry(
-  callModel: (formatReminder: string | null) => Promise<string>,
+  callModel: (formatReminder: string | null) => Promise<CopyModelResult>,
   provider: string,
   model: string,
   isEmpty: (output: CopyProviderOutput) => boolean = isCopyOutputEmpty,
 ): Promise<CopyProviderOutput> {
+  // A13: token usage accumulates across attempts so a retried generation
+  // reports the true total spend, not just the successful call's.
+  const total: RawUsage = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationTokens: 0 };
+  let sawUsage = false;
+
   const attempt = async (reminder: string | null): Promise<CopyProviderOutput | null> => {
-    const text = await callModel(reminder);
+    const { text, usage } = await callModel(reminder);
+    if (usage) {
+      sawUsage = true;
+      total.inputTokens += usage.inputTokens;
+      total.outputTokens += usage.outputTokens;
+      total.cachedInputTokens = (total.cachedInputTokens ?? 0) + (usage.cachedInputTokens ?? 0);
+      total.cacheCreationTokens = (total.cacheCreationTokens ?? 0) + (usage.cacheCreationTokens ?? 0);
+    }
     try {
       const parsed = parseCopyProviderOutput(text, provider, model);
       return isEmpty(parsed) ? null : parsed;
@@ -258,11 +317,14 @@ export async function generateWithParseRetry(
     }
   };
 
+  const withUsage = (output: CopyProviderOutput): CopyProviderOutput =>
+    sawUsage ? { ...output, usage: { ...total, costUsd: estimateCopyCostUsd(model, total) } } : output;
+
   const first = await attempt(null);
-  if (first) return first;
+  if (first) return withUsage(first);
 
   const second = await attempt(COPY_FORMAT_REMINDER);
-  if (second) return second;
+  if (second) return withUsage(second);
 
   throw new Error("文案解析失敗：模型連續兩次未回傳可解析的內容，請稍後重試或改用其他模型。");
 }

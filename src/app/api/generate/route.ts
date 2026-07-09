@@ -236,6 +236,13 @@ async function handleFieldRegen(params: {
     historyContent = value;
   }
 
+  // A13: a regen is extra spend -- accumulate onto the draft's running totals.
+  if (raw.usage) {
+    update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd;
+    update.generation_input_tokens = Number(draft.generation_input_tokens ?? 0) + raw.usage.inputTokens;
+    update.generation_output_tokens = Number(draft.generation_output_tokens ?? 0) + raw.usage.outputTokens;
+  }
+
   const { error: updateError } = await serviceSupabase
     .from("product_drafts")
     .update(update)
@@ -503,6 +510,12 @@ export async function POST(request: NextRequest) {
       generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
       generation_status: localizedOutput.draft_state === "blocked" ? "failed" : "completed",
       generation_model: providerOutput.model,
+      // A13: per-draft AI spend + raw tokens (null in test mode) and the copy
+      // stage timestamp for the dashboard funnel/budget.
+      generation_cost_estimate: providerOutput.usage?.costUsd ?? null,
+      generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
+      generation_output_tokens: providerOutput.usage?.outputTokens ?? null,
+      copy_generated_at: new Date().toISOString(),
       generation_error:
         localizedOutput.draft_state === "blocked" ? localizedOutput.validation_errors.join("; ") : null,
     })

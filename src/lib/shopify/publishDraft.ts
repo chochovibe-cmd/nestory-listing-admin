@@ -72,7 +72,8 @@ export async function publishDraft(
         publish_status: publishMode === "active" ? "active_published" : "draft_created",
         shopify_product_id: "mock-product-id",
         shopify_admin_url: null,
-        error_message: null
+        error_message: null,
+        published_at: new Date().toISOString() // A13: publish-stage timestamp
       })
       .eq("id", id);
 
@@ -138,7 +139,8 @@ export async function publishDraft(
       publish_status: publishMode === "active" ? "active_published" : "draft_created",
       shopify_product_id: productId,
       shopify_admin_url: shopifyAdminUrl(productId),
-      error_message: null
+      error_message: null,
+      published_at: new Date().toISOString() // A13: publish-stage timestamp
     })
     .eq("id", id);
 

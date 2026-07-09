@@ -63,7 +63,19 @@ export class OpenAICopyProvider implements CopyProvider {
         throw new Error("OpenAI response did not include message content.");
       }
 
-      return text;
+      // A13: prompt_tokens includes auto-cached tokens; split them out so the
+      // full-rate input isn't double-counted against the cached portion.
+      const u = payload?.usage ?? {};
+      const cached = Number(u?.prompt_tokens_details?.cached_tokens) || 0;
+      return {
+        text,
+        usage: {
+          inputTokens: Math.max((Number(u.prompt_tokens) || 0) - cached, 0),
+          outputTokens: Number(u.completion_tokens) || 0,
+          cachedInputTokens: cached,
+          cacheCreationTokens: 0,
+        },
+      };
     }, "openai", DEFAULT_MODEL, isEmpty);
   }
 }

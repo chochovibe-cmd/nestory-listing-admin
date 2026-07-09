@@ -70,6 +70,8 @@ export interface ProductDraft {
   generation_rule_version: string | null;
   generation_model: string | null;
   generation_cost_estimate: number | null;
+  generation_input_tokens: number | null;
+  generation_output_tokens: number | null;
   generation_error: string | null;
   generated_payload_json: unknown;
   shopify_payload_preview: unknown;
@@ -105,6 +107,9 @@ export interface ProductDraft {
   sku: string | null;
   source_platform: string | null;
   video_urls: unknown[];
+  copy_generated_at: string | null;
+  reviewed_at: string | null;
+  published_at: string | null;
   created_at: string;
   updated_at: string;
 }

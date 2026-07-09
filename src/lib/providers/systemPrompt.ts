@@ -162,7 +162,16 @@ CHO-...-...-...-001
 product_highlights 每點各自一行、用「・」開頭，列 3-5 點。除了各欄位標記與其內容外，不要輸出其他文字。`;
 }
 
-export function buildCopyUserMessage(input: CopyProviderInput): string {
+// The known-IP list is stable across a whole batch, so A5 caches it. Split out
+// as its own block so the Claude provider can mark it cache_control while the
+// OpenAI provider keeps it inline in the user message (OpenAI auto-caches
+// prefixes, no manual control).
+export function buildKnownIpBlock(knownIpNames?: string[]): string | null {
+  if (!knownIpNames || knownIpNames.length === 0) return null;
+  return `已建檔 IP 清單（判斷 detected_ip_name 時，若商品屬於其中之一，必須完全照抄清單中的中文名稱）：\n${knownIpNames.join("、")}`;
+}
+
+export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitKnownIpList?: boolean }): string {
   const { rawTitle, saleStatus, source, variantSummary, price, compareAtPrice, note, imageDescription, specText, webSearchSummary, knownIpNames } = input;
 
   const lines = [
@@ -179,8 +188,9 @@ export function buildCopyUserMessage(input: CopyProviderInput): string {
   if (specText) lines.push(`規格圖辨識文字：${specText}`);
   if (webSearchSummary) lines.push(`網路搜尋補充資訊：${webSearchSummary}`);
 
-  if (knownIpNames && knownIpNames.length > 0) {
-    lines.push("", `已建檔 IP 清單（judge detected_ip_name 時，若商品屬於其中之一，必須完全照抄清單中的中文名稱）：\n${knownIpNames.join("、")}`);
+  if (!options?.omitKnownIpList) {
+    const ipBlock = buildKnownIpBlock(knownIpNames);
+    if (ipBlock) lines.push("", ipBlock);
   }
 
   lines.push("請依照 system prompt 的規則，根據以上事實直接生成一份完整的品牌語氣文案，並用 system prompt 指定的分段標記格式輸出（不要輸出 JSON）。");

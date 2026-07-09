@@ -85,3 +85,86 @@ export function parseCopyProviderJson(text: string, provider: string, model: str
     model,
   };
 }
+
+// A4: the model now emits segmented markers ([[key]] on its own line, content
+// on the following lines until the next marker) instead of a single JSON blob.
+// This is streaming-friendly -- a partial stream shows readable prose per field
+// rather than a half-written `{...}` (文案·一·坑1). The keys mirror the JSON
+// field names so downstream mapping is unchanged.
+export const COPY_SEGMENT_KEYS = [
+  "detected_ip_name",
+  "detected_character_name",
+  "detected_product_type",
+  "detected_category",
+  "sku",
+  "enriched_title",
+  "generated_description_html",
+  "generated_faq_html",
+  "seo_title",
+  "meta_description",
+  "why_we_chose_it",
+  "product_highlights",
+] as const;
+
+type CopySegmentKey = (typeof COPY_SEGMENT_KEYS)[number];
+
+const SEGMENT_MARKER = /^\s*\[\[([a-z_]+)\]\]\s*$/;
+
+/** True when the text contains at least one recognised `[[key]]` marker. */
+export function hasCopySegmentMarkers(text: string): boolean {
+  return COPY_SEGMENT_KEYS.some((key) => text.includes(`[[${key}]]`));
+}
+
+export function parseCopySegments(text: string, provider: string, model: string): CopyProviderOutput {
+  const buffers = new Map<CopySegmentKey, string[]>();
+  let currentKey: CopySegmentKey | null = null;
+
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(SEGMENT_MARKER);
+    if (match && (COPY_SEGMENT_KEYS as readonly string[]).includes(match[1])) {
+      currentKey = match[1] as CopySegmentKey;
+      if (!buffers.has(currentKey)) buffers.set(currentKey, []);
+      continue;
+    }
+    if (currentKey) buffers.get(currentKey)!.push(line);
+  }
+
+  const get = (key: CopySegmentKey): string => (buffers.get(key)?.join("\n") ?? "").trim();
+
+  const productHighlights = get("product_highlights")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*[-*・•‧·]\s*/, "").replace(/^\s*\d+[.)、]\s*/, "").trim())
+    .filter(Boolean);
+
+  return {
+    enrichedTitle: get("enriched_title"),
+    generatedDescriptionHtml: get("generated_description_html"),
+    generatedFaqHtml: get("generated_faq_html"),
+    seoTitle: get("seo_title"),
+    metaDescription: get("meta_description"),
+    whyWeChoseIt: get("why_we_chose_it"),
+    productHighlights,
+    detectedIpName: get("detected_ip_name"),
+    detectedCharacterName: get("detected_character_name"),
+    detectedProductType: get("detected_product_type"),
+    detectedCategory: get("detected_category"),
+    sku: get("sku"),
+    provider,
+    model,
+  };
+}
+
+/**
+ * Primary parser: prefer segmented markers, fall back to JSON. The fallback
+ * keeps older prompts / a model that ignored the marker instruction working,
+ * and covers the A8 retry that re-asks for whichever format.
+ */
+export function parseCopyProviderOutput(text: string, provider: string, model: string): CopyProviderOutput {
+  if (hasCopySegmentMarkers(text)) return parseCopySegments(text, provider, model);
+  return parseCopyProviderJson(text, provider, model);
+}
+
+/** An output is unusable when neither a title nor a description came back. */
+export function isCopyOutputEmpty(output: CopyProviderOutput): boolean {
+  return !output.enrichedTitle.trim() && !output.generatedDescriptionHtml.trim();
+}

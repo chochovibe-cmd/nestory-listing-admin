@@ -127,21 +127,39 @@ E｜購買提醒
 爆款→熱門款／人氣款、网红→話題款／拍照感、拍下→下單、宝贝→商品／小物、
 质量稳定→質感穩定、三丽鸥→三麗鷗、毛绒→毛絨
 
-回傳純 JSON（無 Markdown、無說明文字），格式：
-{
-  "detected_ip_name": "...",
-  "detected_character_name": "...",
-  "detected_product_type": "...",
-  "detected_category": "型態_...",
-  "sku": "CHO-...-...-...-001",
-  "enriched_title": "...",
-  "generated_description_html": "...",
-  "generated_faq_html": "...",
-  "seo_title": "...",
-  "meta_description": "...",
-  "why_we_chose_it": "...",
-  "product_highlights": ["...", "..."]
-}`;
+【輸出格式 — 分段標記（重要：不要輸出 JSON、不要用 Markdown 程式碼區塊、不要加任何說明文字）】
+每個欄位用「獨立一整行」的標記 [[欄位名]] 起頭，內容寫在標記的下一行起，一直到下一個標記為止。
+標記名稱要原封不動照抄（英文小寫、雙中括號），並「依下列順序」輸出全部 12 個欄位；
+沒有內容的欄位（例如沒有明確角色）就讓該標記下方留空一行，不要省略標記本身。
+
+[[detected_ip_name]]
+（IP 中文名，依上方判斷規則）
+[[detected_character_name]]
+（主要角色名，沒有就留空）
+[[detected_product_type]]
+（商品型態，用台灣慣用說法）
+[[detected_category]]
+型態_（同上型態，例：型態_吊飾）
+[[sku]]
+CHO-...-...-...-001
+[[enriched_title]]
+（商品標題）
+[[generated_description_html]]
+（A/B/C/D/E 五段純文字描述，段落之間空一行）
+[[generated_faq_html]]
+（FAQ，每題 <h3><strong>問題</strong></h3><p>回答</p>）
+[[seo_title]]
+（SEO 標題）
+[[meta_description]]
+（meta 描述）
+[[why_we_chose_it]]
+（潮巢選品理由 1-2 句）
+[[product_highlights]]
+・賣點一
+・賣點二
+・賣點三
+
+product_highlights 每點各自一行、用「・」開頭，列 3-5 點。除了各欄位標記與其內容外，不要輸出其他文字。`;
 }
 
 export function buildCopyUserMessage(input: CopyProviderInput): string {
@@ -165,7 +183,7 @@ export function buildCopyUserMessage(input: CopyProviderInput): string {
     lines.push("", `已建檔 IP 清單（judge detected_ip_name 時，若商品屬於其中之一，必須完全照抄清單中的中文名稱）：\n${knownIpNames.join("、")}`);
   }
 
-  lines.push("請依照 system prompt 的規則，根據以上事實直接生成一份完整的品牌語氣文案，回傳純 JSON。");
+  lines.push("請依照 system prompt 的規則，根據以上事實直接生成一份完整的品牌語氣文案，並用 system prompt 指定的分段標記格式輸出（不要輸出 JSON）。");
 
   return lines.join("\n");
 }

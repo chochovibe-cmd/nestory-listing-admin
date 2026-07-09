@@ -1,4 +1,4 @@
-import { CopyProvider, CopyProviderInput, CopyProviderOutput, parseCopyProviderJson } from "./copy";
+import { CopyProvider, CopyProviderInput, CopyProviderOutput, parseCopyProviderOutput } from "./copy";
 import { buildCopySystemPrompt, buildCopyUserMessage } from "./systemPrompt";
 
 const DEFAULT_MODEL = process.env.OPENAI_COPY_MODEL || "gpt-4o";
@@ -26,7 +26,8 @@ export class OpenAICopyProvider implements CopyProvider {
         model: DEFAULT_MODEL,
         // A6: cap generous enough for the full 「詳細」copy without truncation.
         max_tokens: 3000,
-        response_format: { type: "json_object" },
+        // A4: no json_object mode -- the model now returns segmented markers,
+        // not JSON. json_object would force a `{...}` reply and break parsing.
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -46,6 +47,6 @@ export class OpenAICopyProvider implements CopyProvider {
       throw new Error("OpenAI response did not include message content.");
     }
 
-    return parseCopyProviderJson(text, "openai", DEFAULT_MODEL);
+    return parseCopyProviderOutput(text, "openai", DEFAULT_MODEL);
   }
 }

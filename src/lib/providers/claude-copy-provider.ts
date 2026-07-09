@@ -1,4 +1,4 @@
-import { CopyProvider, CopyProviderInput, CopyProviderOutput, parseCopyProviderJson } from "./copy";
+import { CopyProvider, CopyProviderInput, CopyProviderOutput, parseCopyProviderOutput } from "./copy";
 import { buildCopySystemPrompt, buildCopyUserMessage } from "./systemPrompt";
 
 const DEFAULT_MODEL = process.env.ANTHROPIC_COPY_MODEL || "claude-sonnet-5";
@@ -45,6 +45,6 @@ export class ClaudeCopyProvider implements CopyProvider {
       throw new Error("Anthropic response did not include message content.");
     }
 
-    return parseCopyProviderJson(text, "claude", DEFAULT_MODEL);
+    return parseCopyProviderOutput(text, "claude", DEFAULT_MODEL);
   }
 }

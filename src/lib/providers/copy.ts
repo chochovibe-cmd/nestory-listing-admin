@@ -168,3 +168,40 @@ export function parseCopyProviderOutput(text: string, provider: string, model: s
 export function isCopyOutputEmpty(output: CopyProviderOutput): boolean {
   return !output.enrichedTitle.trim() && !output.generatedDescriptionHtml.trim();
 }
+
+// A8: appended to the user message on the single retry, nudging the model back
+// to the marker format when its first reply was unparseable/empty.
+export const COPY_FORMAT_REMINDER =
+  "提醒：請嚴格使用分段標記格式輸出——每個欄位以獨立一行的 [[欄位名]] 起頭、內容寫在下一行，" +
+  "至少要有 [[enriched_title]] 與 [[generated_description_html]] 兩段，不要輸出 JSON、程式碼區塊或任何額外說明文字。";
+
+/**
+ * A8: run the model, parse, and retry EXACTLY ONCE with a format reminder if the
+ * reply is unparseable or empty. No retry loop -- a second failure throws so the
+ * route can mark the draft failed for a human to retry. `callModel` receives the
+ * reminder to append (null on the first attempt) and returns the raw text; HTTP/
+ * network errors it throws propagate immediately (they are not parse failures).
+ */
+export async function generateWithParseRetry(
+  callModel: (formatReminder: string | null) => Promise<string>,
+  provider: string,
+  model: string,
+): Promise<CopyProviderOutput> {
+  const attempt = async (reminder: string | null): Promise<CopyProviderOutput | null> => {
+    const text = await callModel(reminder);
+    try {
+      const parsed = parseCopyProviderOutput(text, provider, model);
+      return isCopyOutputEmpty(parsed) ? null : parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const first = await attempt(null);
+  if (first) return first;
+
+  const second = await attempt(COPY_FORMAT_REMINDER);
+  if (second) return second;
+
+  throw new Error("文案解析失敗：模型連續兩次未回傳可解析的內容，請稍後重試或改用其他模型。");
+}

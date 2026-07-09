@@ -1,4 +1,4 @@
-import { CopyProvider, CopyProviderInput, CopyProviderOutput, parseCopyProviderOutput } from "./copy";
+import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry } from "./copy";
 import { buildCopySystemPrompt, buildCopyUserMessage, buildKnownIpBlock } from "./systemPrompt";
 
 const DEFAULT_MODEL = process.env.ANTHROPIC_COPY_MODEL || "claude-sonnet-5";
@@ -31,35 +31,41 @@ export class ClaudeCopyProvider implements CopyProvider {
       systemBlocks.push({ type: "text", text: ipBlock, cache_control: { type: "ephemeral" } });
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: DEFAULT_MODEL,
-        // A6: 1500 truncated the 「詳細」length copy (文案風險 #6). 3000 leaves
-        // headroom for the full 12-field segmented output without cutting off.
-        max_tokens: 3000,
-        system: systemBlocks,
-        messages: [{ role: "user", content: user }],
-      }),
-    });
+    // A8: parse-failure retry runs the request at most twice; the second pass
+    // appends a format reminder to the user message.
+    return generateWithParseRetry(async (formatReminder) => {
+      const userContent = formatReminder ? `${user}\n\n${formatReminder}` : user;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Anthropic copy generation failed (${response.status}): ${errorText}`);
-    }
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: DEFAULT_MODEL,
+          // A6: 1500 truncated the 「詳細」length copy (文案風險 #6). 3000 leaves
+          // headroom for the full 12-field segmented output without cutting off.
+          max_tokens: 3000,
+          system: systemBlocks,
+          messages: [{ role: "user", content: userContent }],
+        }),
+      });
 
-    const payload = await response.json();
-    const text = payload?.content?.[0]?.text;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Anthropic copy generation failed (${response.status}): ${errorText}`);
+      }
 
-    if (typeof text !== "string") {
-      throw new Error("Anthropic response did not include message content.");
-    }
+      const payload = await response.json();
+      const text = payload?.content?.[0]?.text;
 
-    return parseCopyProviderOutput(text, "claude", DEFAULT_MODEL);
+      if (typeof text !== "string") {
+        throw new Error("Anthropic response did not include message content.");
+      }
+
+      return text;
+    }, "claude", DEFAULT_MODEL);
   }
 }

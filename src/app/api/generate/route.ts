@@ -253,6 +253,11 @@ export async function POST(request: NextRequest) {
         compareAtPrice: draft.compare_at_price,
         note: draft.note,
         imageDescription: draft.image_description ?? undefined,
+        // A3: spec_text (規格圖 OCR from analyze-images) was never passed to the
+        // copy provider even though CopyProviderInput/buildCopyUserMessage
+        // already support it. Sizes/materials in the copy's D 段 must come from
+        // here (or the spec field), never from Vision's visual guess (風險 #2).
+        specText: draft.spec_text ?? undefined,
         knownIpNames,
         tone,
         copyLength,

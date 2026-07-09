@@ -19,6 +19,12 @@
 不要去讀使用者轉貼的舊對話紀錄（CHOCHONEST v7、Cloudflare Worker 佇列版等是已放棄的舊方向）；
 一切以上面三份文件＋這個 repo 的現有程式碼為準。
 
+**repo 根目錄的舊計畫檔**（`nestory_codex_context_plan.md`、`nestory_new_chat_bootstrap.md`、
+`chochonest-listing-tool-團隊版轉向整理.md` 等）為歷史文件，與 docs/ 新文件衝突時**一律以新文件為準**。
+已知差異舉例：舊版四角色（Admin/Operator/Reviewer/Service Worker）已演化為三角色
+（admin/operator/viewer，Reviewer 因「誰上架誰審到底」的單人一條龍決策併入 operator；
+Service Worker＝WORKER_API_TOKEN 後端機制不變，見【文案·四】）。
+
 ## 二、施工順序（不要跳步、不要重排）
 
 ```text

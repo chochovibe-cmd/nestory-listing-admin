@@ -10,6 +10,7 @@ import { localizeGeneratedListingContent } from "@/lib/zhTwLocalizer";
 import { listActiveListingTagRules } from "@/lib/tagRules";
 import { ClaudeCopyProvider } from "@/lib/providers/claude-copy-provider";
 import { OpenAICopyProvider } from "@/lib/providers/openai-copy-provider";
+import { buildForbiddenTermWarning } from "@/lib/providers/forbiddenTerms";
 import { CopyLength, CopyProvider, CopyProviderOutput, CopyTone } from "@/lib/providers/copy";
 import type { GenerationProvider, ProductDraft } from "@/types/domain";
 
@@ -314,6 +315,20 @@ export async function POST(request: NextRequest) {
     seo_title: providerOutput.seoTitle || ruleOutput.seo_title,
     meta_description: providerOutput.metaDescription || ruleOutput.meta_description,
   });
+
+  // A11: warn (never block) when generated copy leaks a 叫賣/禁忌詞. The rule
+  // engine's own validation stays authoritative for blocking; this only adds a
+  // yellow flag for the reviewer.
+  const forbiddenWarning = buildForbiddenTermWarning([
+    localizedOutput.display_title,
+    localizedOutput.generated_description_html,
+    localizedOutput.generated_faq_html,
+    localizedOutput.seo_title,
+    localizedOutput.meta_description,
+    providerOutput.whyWeChoseIt,
+    ...providerOutput.productHighlights,
+  ]);
+  if (forbiddenWarning) extraWarnings.push(forbiddenWarning);
 
   const nextStatus = localizedOutput.draft_state === "blocked" ? "needs_revision" : "ready_for_review";
   const allWarnings = uniqueMessages([...localizedOutput.validation_warnings, ...extraWarnings]);

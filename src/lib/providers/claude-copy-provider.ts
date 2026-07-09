@@ -1,5 +1,11 @@
-import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry } from "./copy";
-import { buildCopySystemPrompt, buildCopyUserMessage, buildKnownIpBlock } from "./systemPrompt";
+import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry, makeFieldEmptyCheck } from "./copy";
+import {
+  buildCopySystemPrompt,
+  buildCopyUserMessage,
+  buildFieldRegenSystemPrompt,
+  buildFieldRegenUserMessage,
+  buildKnownIpBlock,
+} from "./systemPrompt";
 
 const DEFAULT_MODEL = process.env.ANTHROPIC_COPY_MODEL || "claude-sonnet-5";
 
@@ -13,11 +19,18 @@ export class ClaudeCopyProvider implements CopyProvider {
       throw new Error("ANTHROPIC_API_KEY is not configured on the server.");
     }
 
-    const system = buildCopySystemPrompt(input.tone, input.copyLength);
-    const ipBlock = buildKnownIpBlock(input.knownIpNames);
+    // A7: single-field regen swaps in a focused prompt that rewrites one field
+    // only; the IP list / detection are irrelevant then.
+    const regenField = input.regenerateField;
+    const system = regenField
+      ? buildFieldRegenSystemPrompt(regenField, input.tone, input.copyLength)
+      : buildCopySystemPrompt(input.tone, input.copyLength);
+    const ipBlock = regenField ? null : buildKnownIpBlock(input.knownIpNames);
     // A5: the IP list lives in a cached system block, not the user message, so
     // the per-product user message stays fully variable.
-    const user = buildCopyUserMessage(input, { omitKnownIpList: true });
+    const user = regenField
+      ? buildFieldRegenUserMessage(input)
+      : buildCopyUserMessage(input, { omitKnownIpList: true });
 
     // A5: mark the stable prefix (system prompt + IP list) cache_control so a
     // batch of listings only pays full input price on the first call -- repeat
@@ -32,7 +45,9 @@ export class ClaudeCopyProvider implements CopyProvider {
     }
 
     // A8: parse-failure retry runs the request at most twice; the second pass
-    // appends a format reminder to the user message.
+    // appends a format reminder to the user message. On regen the emptiness
+    // check is scoped to the single field being rewritten.
+    const isEmpty = regenField ? makeFieldEmptyCheck(regenField) : undefined;
     return generateWithParseRetry(async (formatReminder) => {
       const userContent = formatReminder ? `${user}\n\n${formatReminder}` : user;
 
@@ -66,6 +81,6 @@ export class ClaudeCopyProvider implements CopyProvider {
       }
 
       return text;
-    }, "claude", DEFAULT_MODEL);
+    }, "claude", DEFAULT_MODEL, isEmpty);
   }
 }

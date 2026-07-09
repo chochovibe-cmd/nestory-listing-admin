@@ -6,12 +6,20 @@ import { generateSeoContent } from "@/lib/contentGenerator/seoGenerator";
 import { ListingDraftInput, GeneratedListingContent } from "@/lib/contentGenerator/types";
 import { DisplayLabelContext } from "@/lib/contentGenerator/displayLabels";
 import { buildNestoryTagsV2Result } from "@/lib/nestoryTagsV2";
-import { localizeGeneratedListingContent } from "@/lib/zhTwLocalizer";
+import { localizeGeneratedListingContent, localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
 import { listActiveListingTagRules } from "@/lib/tagRules";
 import { ClaudeCopyProvider } from "@/lib/providers/claude-copy-provider";
 import { OpenAICopyProvider } from "@/lib/providers/openai-copy-provider";
 import { buildForbiddenTermWarning } from "@/lib/providers/forbiddenTerms";
-import { CopyLength, CopyProvider, CopyProviderOutput, CopyTone } from "@/lib/providers/copy";
+import {
+  COPY_REGEN_FIELDS,
+  CopyLength,
+  CopyProvider,
+  CopyProviderOutput,
+  CopyRegenField,
+  CopyTone,
+  getCopyFieldValue,
+} from "@/lib/providers/copy";
 import type { GenerationProvider, ProductDraft } from "@/types/domain";
 
 const COPY_PROVIDERS: Record<"openai" | "claude", CopyProvider> = {
@@ -144,6 +152,122 @@ function buildTestModeOutput(ruleOutput: GeneratedListingContent, detected: Dete
   };
 }
 
+// A7: maps each regenerable field to the product_drafts column it writes back to.
+const REGEN_FIELD_TO_COLUMN: Record<CopyRegenField, string> = {
+  enriched_title: "title_zh",
+  generated_description_html: "description_html",
+  generated_faq_html: "generated_faq_html",
+  seo_title: "seo_title",
+  meta_description: "seo_description",
+  why_we_chose_it: "why_we_chose_it",
+  product_highlights: "product_highlights",
+};
+
+// A7: regenerate a single copy field. Keeps detection/tags untouched, writes
+// only the one column, and appends a generation_history row so the version UI
+// (B10) still sees every rewrite.
+async function handleFieldRegen(params: {
+  regenField: CopyRegenField;
+  providerKey: "openai" | "claude";
+  draft: ProductDraft;
+  draftId: string;
+  userId: string;
+  serviceSupabase: ReturnType<typeof createServiceSupabaseClient>;
+  source?: string;
+  variantSummary?: string;
+  tone: CopyTone;
+  copyLength: CopyLength;
+}): Promise<Response> {
+  const { regenField, providerKey, draft, draftId, userId, serviceSupabase, source, variantSummary, tone, copyLength } = params;
+
+  let raw: CopyProviderOutput;
+  try {
+    raw = await COPY_PROVIDERS[providerKey].generate({
+      rawTitle: draft.taobao_title ?? draft.original_title ?? "",
+      saleStatus: draft.sale_status,
+      source,
+      variantSummary,
+      price: draft.twd_price,
+      compareAtPrice: draft.compare_at_price,
+      note: draft.note,
+      imageDescription: draft.image_description ?? undefined,
+      specText: draft.spec_text ?? undefined,
+      tone,
+      copyLength,
+      regenerateField: regenField,
+      currentValues: {
+        enrichedTitle: draft.title_zh ?? undefined,
+        generatedDescriptionHtml: draft.description_html ?? undefined,
+        generatedFaqHtml: draft.generated_faq_html ?? undefined,
+        seoTitle: draft.seo_title ?? undefined,
+        metaDescription: draft.seo_description ?? undefined,
+        whyWeChoseIt: draft.why_we_chose_it ?? undefined,
+        productHighlights: draft.product_highlights ?? undefined,
+        detectedIpName: draft.ip_name ?? undefined,
+        detectedCharacterName: draft.character_name ?? undefined,
+        detectedProductType: draft.product_type ?? undefined,
+      },
+    });
+  } catch (providerError) {
+    await serviceSupabase
+      .from("product_drafts")
+      .update({ generation_error: providerError instanceof Error ? providerError.message : "Copy regen failed" })
+      .eq("id", draftId);
+    return Response.json(
+      { error: providerError instanceof Error ? providerError.message : "Copy regen failed" },
+      { status: 502 },
+    );
+  }
+
+  const update: Record<string, unknown> = {};
+  let responseHighlights: string[] | undefined;
+  let historyContent: string;
+
+  if (regenField === "product_highlights") {
+    const localized = raw.productHighlights.map(localizeToTaiwanTraditionalText).filter((value) => value.trim());
+    update.product_highlights = localized;
+    responseHighlights = localized;
+    historyContent = localized.join("\n");
+  } else {
+    let value = localizeToTaiwanTraditionalText(getCopyFieldValue(raw, regenField));
+    // Mirror the main flow's display-title term swap.
+    if (regenField === "enriched_title") value = value.split("包包吊飾").join("包包掛件");
+    update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
+    historyContent = value;
+  }
+
+  const { error: updateError } = await serviceSupabase
+    .from("product_drafts")
+    .update(update)
+    .eq("id", draftId);
+
+  if (updateError) {
+    return Response.json({ error: updateError.message }, { status: 500 });
+  }
+
+  if (historyContent.trim()) {
+    await serviceSupabase.from("generation_history").insert({
+      draft_id: draftId,
+      field_name: regenField,
+      content: historyContent,
+      provider: raw.provider,
+      model: raw.model,
+      created_by: userId,
+    });
+  }
+
+  return Response.json({
+    ok: true,
+    regeneratedField: regenField,
+    result: {
+      field: regenField,
+      value: regenField === "product_highlights" ? responseHighlights : historyContent,
+      provider: raw.provider,
+      model: raw.model,
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
@@ -156,6 +280,11 @@ export async function POST(request: NextRequest) {
     ? body.tone
     : "黑膠文藝收藏感";
   const copyLength: CopyLength = ["精簡", "標準", "詳細"].includes(body.copyLength) ? body.copyLength : "標準";
+  // A7: optional single-field regen. When present, only this field is rewritten.
+  const regenField: CopyRegenField | null =
+    typeof body.field === "string" && (COPY_REGEN_FIELDS as readonly string[]).includes(body.field)
+      ? (body.field as CopyRegenField)
+      : null;
 
   if (!draftId) {
     return Response.json({ error: "draftId is required" }, { status: 400 });
@@ -187,6 +316,24 @@ export async function POST(request: NextRequest) {
 
   const draft = draftRow as ProductDraft;
   const serviceSupabase = createServiceSupabaseClient();
+
+  // A7: single-field regen path. Rewrites just one copy field using the rest of
+  // the current draft as context; it does NOT re-detect IP/type or recompute
+  // tags (those stay fixed), so it returns early before the full pipeline.
+  if (regenField) {
+    return handleFieldRegen({
+      regenField,
+      providerKey,
+      draft,
+      draftId,
+      userId: user.id,
+      serviceSupabase,
+      source,
+      variantSummary,
+      tone,
+      copyLength,
+    });
+  }
 
   const [tagRulesResult, ipCatalogResult, ipCharactersResult] = await Promise.allSettled([
     listActiveListingTagRules(serviceSupabase),

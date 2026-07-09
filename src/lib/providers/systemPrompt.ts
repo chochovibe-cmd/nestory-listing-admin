@@ -1,4 +1,4 @@
-import { CopyLength, CopyProviderInput, CopyTone } from "./copy";
+import { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
 
 const TONE_DESCRIPTIONS: Record<CopyTone, string> = {
   黑膠文藝收藏感: "像懂收藏的選物店，沉穩、有故事感",
@@ -195,5 +195,98 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
 
   lines.push("請依照 system prompt 的規則，根據以上事實直接生成一份完整的品牌語氣文案，並用 system prompt 指定的分段標記格式輸出（不要輸出 JSON）。");
 
+  return lines.join("\n");
+}
+
+// ----- A7: single-field regeneration -----
+
+const REGEN_FIELD_LABELS: Record<CopyRegenField, string> = {
+  enriched_title: "商品標題（enriched_title）",
+  generated_description_html: "商品描述（generated_description_html）",
+  generated_faq_html: "常見問答（generated_faq_html）",
+  seo_title: "SEO 標題（seo_title）",
+  meta_description: "Meta 描述（meta_description）",
+  why_we_chose_it: "潮巢選品理由（why_we_chose_it）",
+  product_highlights: "商品賣點（product_highlights）",
+};
+
+const REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
+  enriched_title: "格式參考「IP名稱 角色名稱 商品特色｜用途情境」，建議 45 字、最長 50 字，不可捏造 IP／角色／規格數字。",
+  generated_description_html: "沿用 A/B/C/D/E 五段純文字格式（全形｜分隔標題與內文、段落間空一行），尺寸材質只能引用已知規格，不要寫入價格。",
+  generated_faq_html: "3-5 題，每題 <h3><strong>問題</strong></h3><p>回答</p>，答案自成一段可被單獨引用，導購感優先。",
+  seo_title: "20-35 字（最長 60），核心關鍵字（IP＋角色＋類型）壓在前 25 字，別堆砌別名。",
+  meta_description: "70-110 字（最長 120），結尾帶收藏／送禮鉤子，避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端。",
+  why_we_chose_it: "1-2 句，說明為什麼這個商品值得在潮巢出現，帶品牌個性，不要只重複商品功能。",
+  product_highlights: "3-5 點條列，每點各自一行、用「・」開頭，優先抓具體視覺／規格細節，不要空泛形容。",
+};
+
+function currentFieldText(field: CopyRegenField, input: CopyProviderInput): string {
+  const cv = input.currentValues ?? {};
+  switch (field) {
+    case "enriched_title": return cv.enrichedTitle ?? "";
+    case "generated_description_html": return cv.generatedDescriptionHtml ?? "";
+    case "generated_faq_html": return cv.generatedFaqHtml ?? "";
+    case "seo_title": return cv.seoTitle ?? "";
+    case "meta_description": return cv.metaDescription ?? "";
+    case "why_we_chose_it": return cv.whyWeChoseIt ?? "";
+    case "product_highlights": return (cv.productHighlights ?? []).join("\n");
+  }
+}
+
+export function buildFieldRegenSystemPrompt(field: CopyRegenField, tone: CopyTone, copyLength: CopyLength): string {
+  return `你是潮巢玩居（CHOCHONEST）商品文案專家，台灣日系動漫 IP 選物店品牌「潮巢 Nestory」。
+語氣：親切有品味、SEO 友善、文青可愛、一點點幽默、不浮誇、不淘寶叫賣感。本次風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${LENGTH_INSTRUCTIONS[copyLength]}
+
+【本次任務：只重新生成一個欄位】
+你要重寫的欄位是「${REGEN_FIELD_LABELS[field]}」。其他欄位「已經定稿」，只提供給你當上下文以保持整體一致——請「不要」重寫或輸出其他欄位。
+重寫規則：${REGEN_FIELD_RULES[field]}
+換一個角度、換一種說法，讓這個版本與上一版有真實差異，不要只是換幾個字。
+
+【輸出格式】
+只輸出這一段分段標記，內容寫在標記的下一行，不要輸出 JSON、不要輸出其他欄位、不要加任何說明文字：
+
+[[${field}]]
+（你重寫後的內容）`;
+}
+
+export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
+  const field = input.regenerateField;
+  if (!field) return buildCopyUserMessage(input);
+
+  const cv = input.currentValues ?? {};
+  const lines: string[] = [
+    `商品來源：${input.source || "淘寶"}`,
+    `原始標題：${input.rawTitle || "（未提供）"}`,
+    `銷售狀態：${input.saleStatus}`,
+  ];
+  if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
+  if (input.specText) lines.push(`規格圖辨識文字：${input.specText}`);
+  if (cv.detectedIpName) lines.push(`IP：${cv.detectedIpName}`);
+  if (cv.detectedCharacterName) lines.push(`角色：${cv.detectedCharacterName}`);
+  if (cv.detectedProductType) lines.push(`類型：${cv.detectedProductType}`);
+
+  const previous = currentFieldText(field, input).trim();
+  if (previous) {
+    lines.push("", `【這個欄位的上一版（請避免雷同、換角度重寫）】\n${previous}`);
+  }
+
+  // The remaining finalised fields, for consistency (excluding the one being rewritten).
+  const others: Array<[CopyRegenField, string]> = [
+    ["enriched_title", cv.enrichedTitle ?? ""],
+    ["generated_description_html", cv.generatedDescriptionHtml ?? ""],
+    ["generated_faq_html", cv.generatedFaqHtml ?? ""],
+    ["seo_title", cv.seoTitle ?? ""],
+    ["meta_description", cv.metaDescription ?? ""],
+    ["why_we_chose_it", cv.whyWeChoseIt ?? ""],
+    ["product_highlights", (cv.productHighlights ?? []).join("；")],
+  ];
+  const otherLines = others
+    .filter(([key, value]) => key !== field && value.trim())
+    .map(([key, value]) => `${REGEN_FIELD_LABELS[key]}：${value}`);
+  if (otherLines.length > 0) {
+    lines.push("", "【其他已定稿欄位（保持一致，不要重寫）】", ...otherLines);
+  }
+
+  lines.push("", `請只重新生成「${REGEN_FIELD_LABELS[field]}」，並用指定的分段標記格式輸出。`);
   return lines.join("\n");
 }

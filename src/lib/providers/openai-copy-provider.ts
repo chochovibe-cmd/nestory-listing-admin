@@ -1,5 +1,10 @@
-import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry } from "./copy";
-import { buildCopySystemPrompt, buildCopyUserMessage } from "./systemPrompt";
+import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry, makeFieldEmptyCheck } from "./copy";
+import {
+  buildCopySystemPrompt,
+  buildCopyUserMessage,
+  buildFieldRegenSystemPrompt,
+  buildFieldRegenUserMessage,
+} from "./systemPrompt";
 
 const DEFAULT_MODEL = process.env.OPENAI_COPY_MODEL || "gpt-4o";
 
@@ -13,11 +18,17 @@ export class OpenAICopyProvider implements CopyProvider {
       throw new Error("OPENAI_API_KEY is not configured on the server.");
     }
 
-    const system = buildCopySystemPrompt(input.tone, input.copyLength);
-    const user = buildCopyUserMessage(input);
+    // A7: single-field regen swaps in a focused prompt that rewrites one field only.
+    const regenField = input.regenerateField;
+    const system = regenField
+      ? buildFieldRegenSystemPrompt(regenField, input.tone, input.copyLength)
+      : buildCopySystemPrompt(input.tone, input.copyLength);
+    const user = regenField ? buildFieldRegenUserMessage(input) : buildCopyUserMessage(input);
 
     // A8: parse-failure retry runs the request at most twice; the second pass
-    // appends a format reminder to the user message.
+    // appends a format reminder to the user message. On regen the emptiness
+    // check is scoped to the single field being rewritten.
+    const isEmpty = regenField ? makeFieldEmptyCheck(regenField) : undefined;
     return generateWithParseRetry(async (formatReminder) => {
       const userContent = formatReminder ? `${user}\n\n${formatReminder}` : user;
 
@@ -53,6 +64,6 @@ export class OpenAICopyProvider implements CopyProvider {
       }
 
       return text;
-    }, "openai", DEFAULT_MODEL);
+    }, "openai", DEFAULT_MODEL, isEmpty);
   }
 }

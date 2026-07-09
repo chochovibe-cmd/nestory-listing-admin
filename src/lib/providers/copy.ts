@@ -3,6 +3,43 @@ import { GeneratedListingContent, ListingDraftInput } from "@/lib/contentGenerat
 export type CopyTone = "黑膠文藝收藏感" | "日系選物店溫柔感" | "可愛周邊輕鬆感";
 export type CopyLength = "精簡" | "標準" | "詳細";
 
+// A7: the copy fields that can be regenerated one at a time. Detection fields
+// (IP/character/type) are NOT regenerable here -- they stay fixed and feed the
+// tag engine; single-field regen only rewrites human-readable copy.
+export type CopyRegenField =
+  | "enriched_title"
+  | "generated_description_html"
+  | "generated_faq_html"
+  | "seo_title"
+  | "meta_description"
+  | "why_we_chose_it"
+  | "product_highlights";
+
+export const COPY_REGEN_FIELDS: readonly CopyRegenField[] = [
+  "enriched_title",
+  "generated_description_html",
+  "generated_faq_html",
+  "seo_title",
+  "meta_description",
+  "why_we_chose_it",
+  "product_highlights",
+];
+
+// The already-finalised values of the other fields, sent as context on a
+// single-field regen so the rewrite stays consistent with the rest of the copy.
+export interface CopyCurrentValues {
+  enrichedTitle?: string;
+  generatedDescriptionHtml?: string;
+  generatedFaqHtml?: string;
+  seoTitle?: string;
+  metaDescription?: string;
+  whyWeChoseIt?: string;
+  productHighlights?: string[];
+  detectedIpName?: string;
+  detectedCharacterName?: string;
+  detectedProductType?: string;
+}
+
 export interface CopyProviderInput {
   /** Raw product facts the model works from. The model both DETECTS the IP/
    * character/type from the title + image and writes the copy in one pass
@@ -24,6 +61,10 @@ export interface CopyProviderInput {
   knownIpNames?: string[];
   tone: CopyTone;
   copyLength: CopyLength;
+  /** A7: when set, only this one field is regenerated; currentValues carries
+   * the rest of the copy as context. */
+  regenerateField?: CopyRegenField;
+  currentValues?: CopyCurrentValues;
 }
 
 export interface CopyProviderOutput {
@@ -169,6 +210,25 @@ export function isCopyOutputEmpty(output: CopyProviderOutput): boolean {
   return !output.enrichedTitle.trim() && !output.generatedDescriptionHtml.trim();
 }
 
+/** Reads a single regen field's text off a parsed output (highlights joined). */
+export function getCopyFieldValue(output: CopyProviderOutput, field: CopyRegenField): string {
+  switch (field) {
+    case "enriched_title": return output.enrichedTitle;
+    case "generated_description_html": return output.generatedDescriptionHtml;
+    case "generated_faq_html": return output.generatedFaqHtml;
+    case "seo_title": return output.seoTitle;
+    case "meta_description": return output.metaDescription;
+    case "why_we_chose_it": return output.whyWeChoseIt;
+    case "product_highlights": return output.productHighlights.join("\n");
+  }
+}
+
+/** A7: emptiness check scoped to the single field being regenerated, so the A8
+ * retry fires on that field rather than the default title/description pair. */
+export function makeFieldEmptyCheck(field: CopyRegenField): (output: CopyProviderOutput) => boolean {
+  return (output) => !getCopyFieldValue(output, field).trim();
+}
+
 // A8: appended to the user message on the single retry, nudging the model back
 // to the marker format when its first reply was unparseable/empty.
 export const COPY_FORMAT_REMINDER =
@@ -186,12 +246,13 @@ export async function generateWithParseRetry(
   callModel: (formatReminder: string | null) => Promise<string>,
   provider: string,
   model: string,
+  isEmpty: (output: CopyProviderOutput) => boolean = isCopyOutputEmpty,
 ): Promise<CopyProviderOutput> {
   const attempt = async (reminder: string | null): Promise<CopyProviderOutput | null> => {
     const text = await callModel(reminder);
     try {
       const parsed = parseCopyProviderOutput(text, provider, model);
-      return isCopyOutputEmpty(parsed) ? null : parsed;
+      return isEmpty(parsed) ? null : parsed;
     } catch {
       return null;
     }

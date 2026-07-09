@@ -24,6 +24,8 @@ export class OpenAICopyProvider implements CopyProvider {
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
+        // A6: cap generous enough for the full 「詳細」copy without truncation.
+        max_tokens: 3000,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: system },

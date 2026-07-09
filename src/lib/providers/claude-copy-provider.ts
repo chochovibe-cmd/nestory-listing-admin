@@ -1,7 +1,7 @@
 import { CopyProvider, CopyProviderInput, CopyProviderOutput, parseCopyProviderJson } from "./copy";
 import { buildCopySystemPrompt, buildCopyUserMessage } from "./systemPrompt";
 
-const DEFAULT_MODEL = process.env.ANTHROPIC_COPY_MODEL || "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = process.env.ANTHROPIC_COPY_MODEL || "claude-sonnet-5";
 
 export class ClaudeCopyProvider implements CopyProvider {
   name = "claude";
@@ -25,7 +25,9 @@ export class ClaudeCopyProvider implements CopyProvider {
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
-        max_tokens: 1500,
+        // A6: 1500 truncated the 「詳細」length copy (文案風險 #6). 3000 leaves
+        // headroom for the full 12-field segmented output without cutting off.
+        max_tokens: 3000,
         system,
         messages: [{ role: "user", content: user }],
       }),

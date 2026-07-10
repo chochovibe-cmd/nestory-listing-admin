@@ -16,6 +16,7 @@ import {
   mergeScenarioKeywordMap,
   pickScenarioKeywords,
 } from "@/lib/contentGenerator/scenarioKeywords";
+import { generateShopifyHandleSlug } from "@/lib/contentGenerator/handleGenerator";
 import { normalizeProductTypeForDisplay } from "@/lib/productTypeLabels";
 import { buildNestoryTagsV2Result } from "@/lib/nestoryTagsV2";
 import { localizeGeneratedListingContent, localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
@@ -580,6 +581,19 @@ export async function POST(request: NextRequest) {
     scenarioKeywordMap,
   );
 
+  // A21-1: romanized handle slug off the just-finalised classification, e.g.
+  // "chiikawa-hachiware-keychain" -- written to shopify_handle below so
+  // publish (payload.ts) and the Matrixify CSV export (matrixify.ts) both
+  // pick it up instead of falling back to a raw-Chinese-derived handle.
+  const handleSlug = generateShopifyHandleSlug(
+    {
+      ip: detected.ip,
+      character: detected.character,
+      productType: normalizeProductTypeForDisplay(detected.productType),
+    },
+    displayContext,
+  );
+
   const listingInput = toListingDraftInput(draft, detected);
   const ruleOutput = applyTagsV2(
     generateListingContent(listingInput, tagRules, displayContext),
@@ -643,6 +657,7 @@ export async function POST(request: NextRequest) {
       description_html: localizedOutput.generated_description_html,
       seo_title: localizedOutput.seo_title,
       seo_description: localizedOutput.meta_description,
+      shopify_handle: handleSlug,
       tags: localizedOutput.shopify_tags,
       shopify_tags: localizedOutput.shopify_tags,
       generated_faq_html: localizedOutput.generated_faq_html,

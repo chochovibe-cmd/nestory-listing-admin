@@ -2,10 +2,17 @@ import { NextRequest } from "next/server";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
 import { generateListingContent } from "@/lib/contentGenerator/generateListingContent";
-import { appendNestoryBrandSuffix, generateSeoContent } from "@/lib/contentGenerator/seoGenerator";
+import {
+  appendNestoryBrandSuffix,
+  generateSeoContent,
+  injectScenarioKeywordsIntoMetaDescription,
+  injectScenarioKeywordsIntoSeoTitle,
+} from "@/lib/contentGenerator/seoGenerator";
 import { ListingDraftInput, GeneratedListingContent } from "@/lib/contentGenerator/types";
 import { DisplayLabelContext } from "@/lib/contentGenerator/displayLabels";
 import { buildImageAltText } from "@/lib/contentGenerator/altTextGenerator";
+import { mergeScenarioKeywordMap, pickScenarioKeywords } from "@/lib/contentGenerator/scenarioKeywords";
+import { normalizeProductTypeForDisplay } from "@/lib/productTypeLabels";
 import { buildNestoryTagsV2Result } from "@/lib/nestoryTagsV2";
 import { localizeGeneratedListingContent, localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
 import { listActiveListingTagRules } from "@/lib/tagRules";
@@ -111,9 +118,10 @@ function applyTagsV2(
   generatedContent: GeneratedListingContent,
   payload: ListingDraftInput,
   displayContext: DisplayLabelContext,
+  scenarioTerms: string[] = [],
 ): GeneratedListingContent {
   const tagResult = buildNestoryTagsV2Result(payload, displayContext);
-  const seoContent = generateSeoContent(payload, displayContext);
+  const seoContent = generateSeoContent(payload, { ...displayContext, scenarioTerms });
   const validationErrors = uniqueMessages([
     ...generatedContent.validation_errors.filter((message) => !isLegacyTagRuleMappingError(message)),
     ...tagResult.missing,
@@ -179,8 +187,16 @@ async function handleFieldRegen(params: {
   variantSummary?: string;
   tone: CopyTone;
   copyLength: CopyLength;
+  scenarioKeywordMap: Record<string, string[]>;
 }): Promise<Response> {
-  const { regenField, providerKey, draft, draftId, userId, serviceSupabase, source, variantSummary, tone, copyLength } = params;
+  const { regenField, providerKey, draft, draftId, userId, serviceSupabase, source, variantSummary, tone, copyLength, scenarioKeywordMap } = params;
+  // A16/A17: same scenario terms the initial generation would have picked for
+  // this draft's already-detected product type, so a single-field regen of
+  // description/seo_title/meta_description stays consistent with the rest.
+  const scenarioTerms = pickScenarioKeywords(
+    [normalizeProductTypeForDisplay(draft.product_type ?? "")],
+    scenarioKeywordMap,
+  );
 
   let raw: CopyProviderOutput;
   try {
@@ -243,7 +259,12 @@ async function handleFieldRegen(params: {
     // Mirror the main flow's display-title term swap.
     if (regenField === "enriched_title") value = value.split("包包吊飾").join("包包掛件");
     // A9 item 6: the model no longer writes the brand suffix itself.
-    if (regenField === "seo_title") value = appendNestoryBrandSuffix(value);
+    if (regenField === "seo_title") {
+      value = appendNestoryBrandSuffix(injectScenarioKeywordsIntoSeoTitle(value, scenarioTerms));
+    }
+    if (regenField === "meta_description") {
+      value = injectScenarioKeywordsIntoMetaDescription(value, scenarioTerms);
+    }
     update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
     historyContent = value;
   }
@@ -385,6 +406,19 @@ export async function POST(request: NextRequest) {
   const draft = draftRow as ProductDraft;
   const serviceSupabase = createServiceSupabaseClient();
 
+  // A16: team_settings-editable override of the default scenario keyword
+  // dictionary (scenarioKeywords.ts). Missing row/key just falls back to the
+  // built-in defaults -- no admin UI writes this yet, so it's normal for the
+  // row not to exist until someone edits it directly in Supabase.
+  const { data: scenarioSettingsRow } = await serviceSupabase
+    .from("team_settings")
+    .select("value")
+    .eq("key", "scenario_keywords_by_type")
+    .maybeSingle();
+  const scenarioKeywordMap = mergeScenarioKeywordMap(
+    (scenarioSettingsRow?.value as Record<string, string[]> | null) ?? null,
+  );
+
   // A7: single-field regen path. Rewrites just one copy field using the rest of
   // the current draft as context; it does NOT re-detect IP/type or recompute
   // tags (those stay fixed), so it returns early before the full pipeline.
@@ -400,6 +434,7 @@ export async function POST(request: NextRequest) {
       variantSummary,
       tone,
       copyLength,
+      scenarioKeywordMap,
     });
   }
 
@@ -530,11 +565,20 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("圖片 ALT 文字寫入失敗，不影響文案結果，可稍後重新生成。");
   }
 
+  // A16: scenario terms picked once off the just-finalised detected product
+  // type, reused for seo_title/meta (both the rule-engine path via
+  // applyTagsV2 and the LLM's own output below) and A17's D段 bullet.
+  const scenarioTerms = pickScenarioKeywords(
+    [normalizeProductTypeForDisplay(detected.productType)],
+    scenarioKeywordMap,
+  );
+
   const listingInput = toListingDraftInput(draft, detected);
   const ruleOutput = applyTagsV2(
     generateListingContent(listingInput, tagRules, displayContext),
     listingInput,
     displayContext,
+    scenarioTerms,
   );
 
   if (!providerOutput) {
@@ -549,9 +593,16 @@ export async function POST(request: NextRequest) {
     generated_faq_html: providerOutput.generatedFaqHtml || ruleOutput.generated_faq_html,
     // A9 item 6: the model no longer writes "｜潮巢 Nestory" itself -- appended
     // here uniformly. ruleOutput.seo_title (the test-mode/fallback path)
-    // already carries the suffix via seoGenerator's buildSeoTitle.
-    seo_title: providerOutput.seoTitle ? appendNestoryBrandSuffix(providerOutput.seoTitle) : ruleOutput.seo_title,
-    meta_description: providerOutput.metaDescription || ruleOutput.meta_description,
+    // already carries the suffix (and scenario terms) via seoGenerator's
+    // buildSeoTitle. A16: scenario terms are injected into the LLM's own
+    // seo_title/meta_description the same way, since that's what actually
+    // ships in real (non-test-mode) generation.
+    seo_title: providerOutput.seoTitle
+      ? appendNestoryBrandSuffix(injectScenarioKeywordsIntoSeoTitle(providerOutput.seoTitle, scenarioTerms))
+      : ruleOutput.seo_title,
+    meta_description: providerOutput.metaDescription
+      ? injectScenarioKeywordsIntoMetaDescription(providerOutput.metaDescription, scenarioTerms)
+      : ruleOutput.meta_description,
   });
 
   // A11: warn (never block) when generated copy leaks a 叫賣/禁忌詞. The rule

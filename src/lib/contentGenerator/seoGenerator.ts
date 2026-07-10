@@ -31,6 +31,9 @@ const FORBIDDEN_META_TERMS = [
 type SeoContentOptions = DisplayLabelContext & {
   ipCatalog?: Pick<IpCatalogEntry, 'aliases' | 'ip_name'>[];
   ipCharacters?: Pick<IpCharacter, 'aliases' | 'character_name' | 'ip_name'>[];
+  /** A16: 1-2 scenario terms picked by the caller from the team_settings-backed
+   * dictionary (scenarioKeywords.ts), keyed off the draft's product type. */
+  scenarioTerms?: string[];
 };
 
 function normalizeText(value: string | null | undefined): string {
@@ -138,23 +141,28 @@ function buildSeoTitle(parts: {
   featureTerms: string[];
   ip: string;
   productType: string;
+  scenarioTerms: string[];
 }): string {
-  const build = (featureTerms: string[], alias: string) =>
+  const build = (featureTerms: string[], alias: string, scenarioTerms: string[]) =>
     removeDuplicateDisplayTerms(compact([
       parts.ip,
       parts.character,
       ...featureTerms,
       parts.productType,
+      ...scenarioTerms,
       alias,
       '\u6b63\u7248\u5468\u908a',
     ])).join(' ') + ' | \u6f6e\u5de2 Nestory';
 
   const featureTerms = parts.featureTerms.slice(0, 2);
+  const scenarioTerms = parts.scenarioTerms.slice(0, 2);
   const candidates = [
-    build(featureTerms, parts.alias),
-    build(featureTerms.slice(0, 1), parts.alias),
-    build(featureTerms.slice(0, 1), ''),
-    build([], ''),
+    build(featureTerms, parts.alias, scenarioTerms),
+    build(featureTerms, parts.alias, scenarioTerms.slice(0, 1)),
+    build(featureTerms, parts.alias, []),
+    build(featureTerms.slice(0, 1), parts.alias, []),
+    build(featureTerms.slice(0, 1), '', []),
+    build([], '', []),
   ];
 
   return candidates.find((candidate) => textLength(candidate) <= SEO_TITLE_MAX_LENGTH) ?? candidates[candidates.length - 1];
@@ -203,14 +211,22 @@ function fitMetaDescription(value: string): string {
   return chars.slice(0, META_DESCRIPTION_MAX_LENGTH - 1).join('').replace(/[，、；]$/g, '') + '。';
 }
 
-function buildMetaDescription(ip: string, character: string, productType: string, feature: string): string {
+function buildMetaDescription(
+  ip: string,
+  character: string,
+  productType: string,
+  feature: string,
+  scenarioTerms: string[] = [],
+): string {
   const subject = removeDuplicateDisplayTerms(compact([ip, character, productType])).join(' ');
+  const scenarioClause = scenarioTerms.length > 0 ? '\uff0c' + scenarioTerms.join('\u3001') + '\u9996\u9078' : '';
 
   return fitMetaDescription(
     '\u6f6e\u5de2 Nestory \u7cbe\u9078' +
       subject +
       '\uff0c' +
       getMetaHighlight(feature) +
+      scenarioClause +
       '\uff0c' +
       getMetaContext(ip, character) +
       '\u3002',
@@ -258,6 +274,7 @@ export function generateSeoContent(
   const feature = getFeatureKeyword(draft);
   const featureTerms = extractFeatureTerms(draft.image_description, getFeatureSourceText(draft));
   const alias = getHighValueCharacterAlias(primaryCharacter, ip, options.ipCharacters);
+  const scenarioTerms = options.scenarioTerms ?? [];
 
   return {
     seo_title: buildSeoTitle({
@@ -266,7 +283,51 @@ export function generateSeoContent(
       featureTerms: featureTerms.length > 0 ? featureTerms : compact([feature]),
       ip: ipDisplayName,
       productType,
+      scenarioTerms,
     }),
-    meta_description: buildMetaDescription(ipDisplayName, character, productType, feature),
+    meta_description: buildMetaDescription(ipDisplayName, character, productType, feature, scenarioTerms),
   };
+}
+
+function injectTermsWithinBudget(text: string, terms: string[], maxLength: number): string {
+  const picked = terms.filter((term) => term && !text.includes(term));
+  if (picked.length === 0) return text;
+
+  for (let take = Math.min(2, picked.length); take > 0; take -= 1) {
+    const candidate = text + ' ' + picked.slice(0, take).join(' ');
+    if (textLength(candidate) <= maxLength) return candidate;
+  }
+
+  return text;
+}
+
+// A16: the LLM writes its own seo_title/meta_description (system prompt fields
+// #9/#10), and that text -- not this file's rule-engine buildSeoTitle/
+// buildMetaDescription -- is what actually ships in real (non-test-mode)
+// generation (see route.ts). So scenario terms must also be injected as a
+// deterministic post-process on the model's own output, the same way
+// appendNestoryBrandSuffix already handles the brand suffix. Runs BEFORE
+// appendNestoryBrandSuffix, so the budget reserves room for that suffix.
+export function injectScenarioKeywordsIntoSeoTitle(seoTitle: string, scenarioTerms: string[]): string {
+  const trimmed = seoTitle.trim();
+  if (!trimmed || scenarioTerms.length === 0) return trimmed;
+
+  const budget = SEO_TITLE_MAX_LENGTH - textLength(BRAND_SUFFIX);
+  return injectTermsWithinBudget(trimmed, scenarioTerms, budget);
+}
+
+export function injectScenarioKeywordsIntoMetaDescription(metaDescription: string, scenarioTerms: string[]): string {
+  const trimmed = metaDescription.trim();
+  if (!trimmed || scenarioTerms.length === 0) return trimmed;
+
+  const picked = scenarioTerms.filter((term) => term && !trimmed.includes(term)).slice(0, 2);
+  if (picked.length === 0) return trimmed;
+
+  const base = trimmed.endsWith('。') ? trimmed.slice(0, -1) : trimmed;
+  for (let take = picked.length; take > 0; take -= 1) {
+    const candidate = base + '，' + picked.slice(0, take).join('、') + '首選。';
+    if (textLength(candidate) <= META_DESCRIPTION_MAX_LENGTH) return candidate;
+  }
+
+  return trimmed;
 }

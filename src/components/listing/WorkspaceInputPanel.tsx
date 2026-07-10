@@ -60,6 +60,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [costCurrency, setCostCurrency] = useState<CostCurrency>("CNY");
   const [taobaoUrl, setTaobaoUrl] = useState("");
   const [note, setNote] = useState("");
+  // B1 (Mockup差異備忘 差異2): 規格改手填，不做規格圖 OCR。寫進 product_drafts.spec_text，
+  // 生成時進到文案 D 段；analyze-images 已改為不覆蓋此欄，手填值會被尊重。
+  const [specText, setSpecText] = useState("");
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
   const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(TONE_OPTIONS[0].value);
@@ -171,6 +174,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       compare_at_price: pricing?.compareAtPrice,
       pricing_formula: pricing?.pricingFormula,
       note: note.trim() || null,
+      spec_text: specText.trim() || null,
       sale_status: saleStatus,
       source_platform: source,
       status: "pending_copy",
@@ -261,6 +265,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setPrice("");
     setTaobaoUrl("");
     setNote("");
+    setSpecText("");
     setVariants([]);
     setManualPricingEnabled(false);
     setManualCompareAtPrice("");
@@ -591,6 +596,16 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 </div>
               ))
             )}
+          </div>
+
+          <div className="field">
+            <label>商品規格（手填）</label>
+            <textarea
+              onChange={(e) => setSpecText(e.target.value)}
+              placeholder="材質、尺寸、產地等規格文字，一行一項或照抄商品頁。生成文案時會放進商品資訊段。"
+              rows={3}
+              value={specText}
+            />
           </div>
 
           <div className="field">

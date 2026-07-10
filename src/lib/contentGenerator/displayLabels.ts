@@ -9,6 +9,12 @@ export type DisplayLabelContext = {
 };
 
 const IP_DISPLAY_OVERRIDES: Record<string, string> = {
+  // A15: explicit safety net for the doc's literal example (\u4e09\u9e97\u9dd7 Sanrio) --
+  // the generic alias-based fallback already produces this from ip_catalog's
+  // seeded aliases (['Sanrio','\u30b5\u30f3\u30ea\u30aa']), but an override guarantees the
+  // pairing even if that seed data is ever missing/edited.
+  '\u4e09\u9e97\u9dd7': '\u4e09\u9e97\u9dd7 Sanrio',
+  Sanrio: '\u4e09\u9e97\u9dd7 Sanrio',
   Miffy: '\u7c73\u83f2 Miffy',
   '\u7c73\u83f2': '\u7c73\u83f2 Miffy',
   Peanuts: '\u53f2\u52aa\u6bd4 Peanuts',

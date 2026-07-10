@@ -120,6 +120,20 @@ function inferProductTypes(draft: ListingDraftInput): string[] {
   return productTypes;
 }
 
+// A15: `characterText` can carry a type word under a different surface form
+// than its canonical (e.g. a character/product name literally containing "吊飾"
+// while the canonicalized type is "吊飾掛件") -- a plain substring check on the
+// canonical string misses that and produces doubled words like "吊飾吊飾" in the
+// final title. Re-testing each type's own alias pattern against characterText
+// catches the raw-word overlap that the canonical-string check alone cannot.
+function typeAlreadyPresentIn(type: string, text: string): boolean {
+  if (!text) return false;
+  if (text.includes(type)) return true;
+
+  const pattern = PRODUCT_TYPE_ALIASES.find(([, canonical]) => canonical === type)?.[0];
+  return pattern ? pattern.test(text) : false;
+}
+
 function buildCoreName(draft: ListingDraftInput, context: DisplayLabelContext, ipDisplayName: string): string {
   const characters = draft.characters
     .map((character) => formatCharacterShortNameFromContext(character, draft.ip, context))
@@ -129,7 +143,7 @@ function buildCoreName(draft: ListingDraftInput, context: DisplayLabelContext, i
     .slice(0, 2);
   const productTypes = inferProductTypes(draft);
   const characterText = characters.join('');
-  const typeText = productTypes.filter((type) => !characterText.includes(type)).join('');
+  const typeText = productTypes.filter((type) => !typeAlreadyPresentIn(type, characterText)).join('');
 
   if (characterText || typeText) {
     return characterText + typeText;

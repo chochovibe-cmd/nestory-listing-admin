@@ -18,54 +18,114 @@ const zones: Array<{
   { type: "spec", icon: "📐", label: "規格圖", badgeClass: "badge-spec", badgeText: "OCR", dropTitle: "點擊或拖曳規格圖" }
 ];
 
-export function ImageUploader({ draftId, userId }: { draftId: string; userId: string }) {
+// B1: images are now selected in the form BEFORE the draft is generated and
+// uploaded in the background while the operator keeps filling in the rest.
+// The draft row may not exist yet on first drop, so the new-draft flow passes
+// `ensureDraftId()` (idempotent -- first call creates the minimal draft, later
+// calls return the same id) instead of a fixed `draftId`. The existing-draft
+// detail page still passes a plain `draftId` (a Server Component can't hand a
+// function to a Client Component). Each upload promise is handed back through
+// `trackUpload` so the parent can await outstanding uploads before it calls
+// analyze-images/generate, and `onUploadingChange` drives the parent's
+// "圖片還在上傳" gate on the generate button.
+export function ImageUploader({
+  draftId,
+  ensureDraftId,
+  userId,
+  trackUpload,
+  onUploadingChange
+}: {
+  draftId?: string;
+  ensureDraftId?: () => Promise<string | null>;
+  userId: string;
+  trackUpload?: (promise: Promise<unknown>) => void;
+  onUploadingChange?: (uploading: boolean) => void;
+}) {
   const router = useRouter();
   const supabase = createClient();
   const [previews, setPreviews] = useState<Record<string, string[]>>({});
   const [dragging, setDragging] = useState<string | null>(null);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [message, setMessage] = useState("");
+
+  function beginUpload() {
+    setUploadingCount((current) => {
+      const next = current + 1;
+      if (current === 0) onUploadingChange?.(true);
+      return next;
+    });
+  }
+
+  function endUpload() {
+    setUploadingCount((current) => {
+      const next = Math.max(0, current - 1);
+      if (next === 0) onUploadingChange?.(false);
+      return next;
+    });
+  }
 
   async function uploadFiles(type: ImageType, fileList: FileList | null) {
     if (!fileList?.length) return;
+    const files = Array.from(fileList);
     setMessage(`上傳 ${type} 圖片中...`);
-    const urls: string[] = [];
-    const startIndex = previews[type]?.length ?? 0;
+    beginUpload();
 
-    for (const [index, file] of Array.from(fileList).entries()) {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${userId}/${draftId}/${type}/${crypto.randomUUID()}.${ext}`;
-      const { error: storageError } = await supabase.storage.from("product-images").upload(path, file, {
-        contentType: file.type,
-        upsert: false
-      });
-
-      if (storageError) {
-        setMessage(`上傳失敗：${storageError.message}`);
+    const task = (async () => {
+      // Existing-draft page passes draftId directly; the new-draft flow creates
+      // it lazily on the first upload (concurrent drops resolve to the same id
+      // because ensureDraftId is idempotent).
+      const resolvedDraftId = draftId ?? (ensureDraftId ? await ensureDraftId() : null);
+      if (!resolvedDraftId) {
+        setMessage("無法建立商品草稿，圖片尚未上傳，請稍後再試。");
         return;
       }
 
-      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+      const urls: string[] = [];
+      const startIndex = previews[type]?.length ?? 0;
 
-      const { error: insertError } = await supabase.from("product_images").insert({
-        draft_id: draftId,
-        image_type: type,
-        original_file_url: data.publicUrl,
-        processed_file_url: data.publicUrl,
-        sort_order: startIndex + index,
-        processing_status: "uploaded"
-      });
+      for (const [index, file] of files.entries()) {
+        const ext = file.name.split(".").pop() || "jpg";
+        const path = `${userId}/${resolvedDraftId}/${type}/${crypto.randomUUID()}.${ext}`;
+        const { error: storageError } = await supabase.storage.from("product-images").upload(path, file, {
+          contentType: file.type,
+          upsert: false
+        });
 
-      if (insertError) {
-        setMessage(`圖片檔案已上傳，但寫入資料庫失敗：${insertError.message}`);
-        return;
+        if (storageError) {
+          setMessage(`上傳失敗：${storageError.message}`);
+          return;
+        }
+
+        const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+
+        const { error: insertError } = await supabase.from("product_images").insert({
+          draft_id: resolvedDraftId,
+          image_type: type,
+          original_file_url: data.publicUrl,
+          processed_file_url: data.publicUrl,
+          sort_order: startIndex + index,
+          processing_status: "uploaded"
+        });
+
+        if (insertError) {
+          setMessage(`圖片檔案已上傳，但寫入資料庫失敗：${insertError.message}`);
+          return;
+        }
+
+        urls.push(data.publicUrl);
       }
 
-      urls.push(data.publicUrl);
+      setPreviews((current) => ({ ...current, [type]: [...(current[type] ?? []), ...urls] }));
+      setMessage("圖片已寫入資料庫");
+      router.refresh();
+    })();
+
+    trackUpload?.(task);
+    try {
+      await task;
+    } finally {
+      endUpload();
     }
-
-    setPreviews((current) => ({ ...current, [type]: [...(current[type] ?? []), ...urls] }));
-    setMessage("圖片已寫入資料庫");
-    router.refresh();
   }
 
   return (
@@ -112,6 +172,7 @@ export function ImageUploader({ draftId, userId }: { draftId: string; userId: st
           </div>
         );
       })}
+      {uploadingCount > 0 ? <div className="notice">⟳ 圖片背景上傳中…（可繼續填寫，生成前會自動等它傳完）</div> : null}
       {message ? <div className="notice">{message}</div> : null}
     </div>
   );

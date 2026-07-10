@@ -1033,6 +1033,89 @@ textarea {
 }
 
 /* ── Result cards ── */
+/* B1: 生成四步驟進度卡 (driven by nestory:generation-progress, rendered atop the
+   results list). Built only from existing tokens -- no new colour/radius/shadow
+   values. Status colours follow the vocabulary: idle 灰／warn 黃／success 綠／
+   danger 紅; the pulse animation is the shared one defined above. */
+.gen-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+  padding: 12px 15px 14px;
+  margin-bottom: 12px;
+}
+
+.gen-card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+}
+
+.gen-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.gen-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--idle);
+}
+
+.gen-dot.running { background: var(--warn); animation: pulse 1.2s infinite; }
+.gen-dot.done { background: var(--success); }
+.gen-dot.error { background: var(--danger); }
+
+.gen-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gen-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.gen-step .gs-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.gen-step.active { color: var(--accent); }
+.gen-step.active .gs-dot { border-color: var(--accent); animation: pulse 1.2s infinite; }
+.gen-step.done { color: var(--text-dim); }
+.gen-step.done .gs-dot { background: var(--success); border-color: var(--success); color: var(--accent-fg); }
+.gen-step.warn { color: var(--warn); }
+.gen-step.warn .gs-dot { border-color: var(--warn); color: var(--warn); }
+.gen-step.error { color: var(--danger); }
+.gen-step.error .gs-dot { background: var(--danger); border-color: var(--danger); color: var(--accent-fg); }
+
+.gen-error {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-radius: var(--radius-s);
+  padding: 8px 10px;
+  line-height: 1.6;
+}
+
 .results-list {
   display: grid;
   gap: 12px;

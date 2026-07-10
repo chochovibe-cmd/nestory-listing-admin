@@ -379,6 +379,13 @@ export async function POST(request: NextRequest) {
     ? body.tone
     : "黑膠文藝收藏感";
   const copyLength: CopyLength = ["精簡", "標準", "詳細"].includes(body.copyLength) ? body.copyLength : "標準";
+  // B1: analyze-images runs client-side before generate and must never block it
+  // (requirement: skip image info, still generate). Any image-analysis failures
+  // arrive here as strings so they end up in the draft's warnings (黃字), rather
+  // than being lost when the operator moves on.
+  const imageWarnings: string[] = Array.isArray(body.imageWarnings)
+    ? body.imageWarnings.filter((value: unknown): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
   // A7: optional single-field regen. When present, only this field is rewritten.
   const regenField: CopyRegenField | null =
     typeof body.field === "string" && (COPY_REGEN_FIELDS as readonly string[]).includes(body.field)
@@ -484,6 +491,10 @@ export async function POST(request: NextRequest) {
   }));
 
   const extraWarnings: string[] = [];
+
+  // B1: carry forward any image-analysis warnings collected client-side so they
+  // land in validation_warnings (黃字) instead of silently vanishing.
+  if (imageWarnings.length > 0) extraWarnings.push(...imageWarnings);
 
   // No search provider is wired up yet. Rather than silently ignore the toggle
   // or fabricate results, record that the request was made but not fulfilled.

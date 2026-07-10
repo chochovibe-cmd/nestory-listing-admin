@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
+import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 export function DraftResultsPanel({
@@ -16,6 +17,37 @@ export function DraftResultsPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
+  // B1: the input panel (left) drives the 生成 progress card via a window event;
+  // this panel (right) renders it at the top of the results list, matching the
+  // Mockup's information architecture. On success the card auto-clears once the
+  // real ResultCard lands via router.refresh; on error it stays put so the
+  // operator can read which step went red and why.
+  const [progress, setProgress] = useState<GenerationProgress | null>(null);
+  useEffect(() => {
+    function onProgress(event: Event) {
+      const model = (event as CustomEvent<GenerationProgress>).detail;
+      if (!model || !model.visible) {
+        setProgress(null);
+        return;
+      }
+      setProgress(model);
+      const allDone = model.steps.length > 0 && model.steps.every((step) => step.status === "done");
+      if (allDone) {
+        setTimeout(() => setProgress(null), 1500);
+      }
+    }
+    window.addEventListener(GENERATION_PROGRESS_EVENT, onProgress);
+    return () => window.removeEventListener(GENERATION_PROGRESS_EVENT, onProgress);
+  }, []);
+
+  const progressHeadStatus = progress
+    ? progress.steps.some((step) => step.status === "error")
+      ? "error"
+      : progress.steps.every((step) => step.status === "done")
+        ? "done"
+        : "running"
+    : null;
 
   const imagesByDraft = new Map<string, ProductImage[]>();
   for (const image of images) {
@@ -172,26 +204,55 @@ export function DraftResultsPanel({
         ) : null}
       </div>
       <div className="panel-body">
-        {drafts.length === 0 ? (
+        {progress ? (
+          <div className="gen-card">
+            <div className="gen-card-head">
+              <span className={`gen-dot ${progressHeadStatus}`} />
+              <span className="gen-card-title">
+                {progressHeadStatus === "done"
+                  ? `✓ 生成完成：${progress.title}`
+                  : progressHeadStatus === "error"
+                    ? `✗ 生成失敗：${progress.title}`
+                    : `生成中：${progress.title}…`}
+              </span>
+            </div>
+            <div className="gen-steps">
+              {progress.steps.map((step, index) => (
+                <div className={`gen-step ${step.status}`} key={step.label}>
+                  <span className="gs-dot">
+                    {step.status === "done"
+                      ? "✓"
+                      : step.status === "error"
+                        ? "✕"
+                        : step.status === "warn"
+                          ? "!"
+                          : index + 1}
+                  </span>
+                  {step.label}
+                </div>
+              ))}
+            </div>
+            {progress.error ? <div className="gen-error">⚠ {progress.error}</div> : null}
+          </div>
+        ) : null}
+        {message ? <div className="notice">{message}</div> : null}
+        {drafts.length === 0 && !progress ? (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
             <p className="muted">在左側輸入商品資料並送出，生成結果會出現在這裡</p>
           </div>
         ) : (
-          <>
-            {message ? <div className="notice">{message}</div> : null}
-            <div className="results-list" id="results-list">
-              {drafts.map((draft) => (
-                <ResultCard
-                  checked={selectedIds.has(draft.id)}
-                  draft={draft}
-                  images={imagesByDraft.get(draft.id) ?? []}
-                  key={draft.id}
-                  onToggle={() => toggleOne(draft.id)}
-                />
-              ))}
-            </div>
-          </>
+          <div className="results-list" id="results-list">
+            {drafts.map((draft) => (
+              <ResultCard
+                checked={selectedIds.has(draft.id)}
+                draft={draft}
+                images={imagesByDraft.get(draft.id) ?? []}
+                key={draft.id}
+                onToggle={() => toggleOne(draft.id)}
+              />
+            ))}
+          </div>
         )}
       </div>
     </section>

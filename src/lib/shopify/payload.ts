@@ -1,4 +1,5 @@
 import { generateSku } from "@/lib/contentGenerator/sku";
+import { formatPlainTextAsHtml } from "@/lib/contentGenerator/htmlFormat";
 import type { ProductDraft, ProductImage, PublishMode } from "@/types/domain";
 
 export interface ShopifyPublishDraft extends ProductDraft {
@@ -30,7 +31,13 @@ export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: Pub
   const tags = draft.shopify_tags?.length ? draft.shopify_tags : draft.tags || [];
   const product = {
     title: draft.title_zh || draft.taobao_title || "Nestory product",
-    descriptionHtml: draft.description_html || draft.description_plain || "",
+    // A23 (2026-07-10 A14 finding): description_html is stored as PLAIN TEXT
+    // on purpose (ResultCard.tsx edits it in a plain <textarea> so reviewers
+    // see readable Chinese, not markup) -- the conversion to real HTML only
+    // happens here, at the Shopify boundary, not at save time. Converting at
+    // save time would make the DB column (and the edit textarea) show raw
+    // <p>/<ul> tags instead of readable text.
+    descriptionHtml: formatPlainTextAsHtml(draft.description_html || draft.description_plain || ""),
     // A24 (2026-07-10 A14 finding): fallback only, real fix is the DB column
     // default (migration 015) -- "CHOCHONEST" isn't a real vendor value in
     // this store, "潮巢 Nestory" already exists in Shopify's vendor list.

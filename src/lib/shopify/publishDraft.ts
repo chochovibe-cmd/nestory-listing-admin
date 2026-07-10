@@ -1,5 +1,7 @@
 import { notifyMake } from "@/lib/notifications/make";
 import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/payload";
+import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
+import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { PublishMode } from "@/types/domain";
 
@@ -51,11 +53,8 @@ export async function publishDraft(
   };
 
   const mockMode = process.env.SHOPIFY_PUBLISH_MOCK !== "false";
-  const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
-  const domain = process.env.SHOPIFY_STORE_DOMAIN;
-  const apiVersion = process.env.SHOPIFY_API_VERSION || "2026-04";
 
-  if (mockMode || !token || !domain) {
+  if (mockMode || !hasShopifyAdminCredentials()) {
     await serviceSupabase.from("publish_jobs").insert({
       ...publishJobBase,
       publish_status: publishMode === "active" ? "active_published" : "draft_created",
@@ -90,26 +89,41 @@ export async function publishDraft(
     }
   `;
 
-  const response = await fetch(`https://${domain}/admin/api/${apiVersion}/graphql.json`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": token
-    },
-    body: JSON.stringify({
-      query: mutation,
-      variables: {
-        product: payload.product,
-        media: payload.media
-      }
-    })
-  });
+  // A1: token acquisition (the client_credentials exchange) can itself fail
+  // (bad/expired credentials, network error) -- that needs the same
+  // api_failed bookkeeping as a GraphQL-level error, not an unhandled throw.
+  let response: Response;
+  let result: {
+    data?: { productCreate?: { product?: { id: string } | null; userErrors?: { field: string; message: string }[] } };
+    errors?: unknown[];
+  };
+  try {
+    ({ response, result } = await callShopifyAdminGraphQL(mutation, {
+      product: payload.product,
+      media: payload.media,
+    }));
+  } catch (tokenOrNetworkError) {
+    const message = tokenOrNetworkError instanceof Error ? tokenOrNetworkError.message : String(tokenOrNetworkError);
+    await serviceSupabase.from("publish_jobs").insert({
+      ...publishJobBase,
+      publish_status: "api_failed",
+      response_payload: { error: message },
+      error_message: message,
+      completed_at: new Date().toISOString()
+    });
+    await serviceSupabase
+      .from("product_drafts")
+      .update({ status: "api_failed", publish_status: "api_failed", error_message: message })
+      .eq("id", id);
+    await notifyMake("api_failed", { draftId: id, error: message });
+    return { ok: false, status: 502, error: message };
+  }
 
-  const result = await response.json();
   const errors = result?.data?.productCreate?.userErrors ?? result.errors;
+  const productId = result?.data?.productCreate?.product?.id;
 
-  if (!response.ok || errors?.length) {
-    const message = JSON.stringify(errors ?? result);
+  if (!response.ok || errors?.length || !productId) {
+    const message = JSON.stringify(errors?.length ? errors : result);
     await serviceSupabase.from("publish_jobs").insert({
       ...publishJobBase,
       publish_status: "api_failed",
@@ -125,7 +139,6 @@ export async function publishDraft(
     return { ok: false, status: 502, error: message };
   }
 
-  const productId = result.data.productCreate.product.id;
   await serviceSupabase.from("publish_jobs").insert({
     ...publishJobBase,
     publish_status: publishMode === "active" ? "active_published" : "draft_created",

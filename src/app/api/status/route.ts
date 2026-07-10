@@ -19,7 +19,9 @@ export async function GET() {
       openai: Boolean(process.env.OPENAI_API_KEY),
       claude: Boolean(process.env.ANTHROPIC_API_KEY)
     },
-    shopify: Boolean(process.env.SHOPIFY_ADMIN_ACCESS_TOKEN && process.env.SHOPIFY_STORE_DOMAIN),
+    // A1 (2026-07-10): Shopify's static Admin API token was replaced by a
+    // client_credentials OAuth exchange -- see src/lib/shopify/adminToken.ts.
+    shopify: Boolean(process.env.SHOPIFY_CLIENT_ID && process.env.SHOPIFY_CLIENT_SECRET && process.env.SHOPIFY_STORE_DOMAIN),
     shopifyMock: process.env.SHOPIFY_PUBLISH_MOCK !== "false"
   });
 }

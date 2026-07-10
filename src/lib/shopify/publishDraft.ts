@@ -152,6 +152,12 @@ export async function publishDraft(
     return { ok: false, status: 502, error: message };
   }
 
+  // A14 follow-up (2026-07-10): missing defaultVariantId used to fall through
+  // this whole block silently -- product created, price left at $0, publish
+  // still reported success with no trace of why. Now recorded as a visible
+  // warning instead of disappearing.
+  let priceSyncWarning: string | null = null;
+
   // A14 fix: productCreate's ProductInput has no price/cost/sku fields in
   // current Shopify API versions -- the auto-created default variant starts
   // at $0 until a separate mutation sets it. This was previously never
@@ -234,12 +240,14 @@ export async function publishDraft(
       await notifyMake("api_failed", { draftId: id, error: message, shopifyProductId: productId });
       return { ok: false, status: 502, error: message };
     }
+  } else {
+    priceSyncWarning = "Shopify 未回傳預設款式 ID，價格／成本未同步，請至 Shopify 後台手動確認並設定價格。";
   }
 
   await serviceSupabase.from("publish_jobs").insert({
     ...publishJobBase,
     publish_status: publishMode === "active" ? "active_published" : "draft_created",
-    response_payload: result,
+    response_payload: priceSyncWarning ? { ...result, warning: priceSyncWarning } : result,
     completed_at: new Date().toISOString()
   });
   await serviceSupabase
@@ -250,7 +258,8 @@ export async function publishDraft(
       shopify_product_id: productId,
       shopify_admin_url: shopifyAdminUrl(productId),
       error_message: null,
-      published_at: new Date().toISOString() // A13: publish-stage timestamp
+      published_at: new Date().toISOString(), // A13: publish-stage timestamp
+      ...(priceSyncWarning ? { warnings: [...(draft.warnings ?? []), priceSyncWarning] } : {})
     })
     .eq("id", id);
 

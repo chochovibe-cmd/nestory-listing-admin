@@ -1,16 +1,87 @@
 import { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
 
+// A9 item 2: 中二熱血宣言／小編聊天口吻 are real voices the model writes in;
+// 依IP自動匹配 is a meta-tone that never reaches the model as-is (see
+// resolveCopyTone below) -- its description/example exist only for type
+// completeness (Record<CopyTone,...> must be exhaustive).
 const TONE_DESCRIPTIONS: Record<CopyTone, string> = {
   黑膠文藝收藏感: "像懂收藏的選物店，沉穩、有故事感",
   日系選物店溫柔感: "溫柔清楚，適合同事快速審稿",
   可愛周邊輕鬆感: "可愛但不浮誇，適合小物與周邊",
+  中二熱血宣言: "熱血中二、宣言式語氣，適合戰鬥/熱血番周邊，語句有氣勢但不失品牌質感",
+  小編聊天口吻: "像小編在限動聊天，輕鬆口語、有梗，適合日常小物快速導購",
+  依IP自動匹配: "（系統內部用途，模型不會實際收到這個值——見 resolveCopyTone）",
 };
+
+// A9 item 2a: one concrete demo sentence per tone so the model has a real
+// register to match, not just an abstract description (反模板化設計·4 的簡化版；
+// 真正的「使用者自己得意之作」黃金範例是之後才能做的事，需要老闆挑稿)。
+const TONE_EXAMPLES: Partial<Record<CopyTone, string>> = {
+  黑膠文藝收藏感: "這款吉伊卡哇小八吊飾，絨毛觸感沉靜溫潤，像從唱片行架上取下的珍藏。",
+  日系選物店溫柔感: "軟軟的觸感、剛剛好的重量，放在包包上就是每天的小確幸。",
+  可愛周邊輕鬆感: "圓滾滾的身形配上呆萌表情，掛在包包上瞬間療癒指數爆表！",
+  中二熱血宣言: "覺醒吧，收藏家的靈魂！這尊公仔承載著角色燃燒到底的意志，此刻降臨你的展示櫃。",
+  小編聊天口吻: "欸這個真的太可愛了吧！摸起來軟軟的，放桌上根本捨不得移開視線。",
+};
+
+// A9 item 2: 依IP自動匹配 isn't picked by the model -- it's resolved here,
+// server-side, to one of the other 5 concrete tones before the prompt is
+// built (文案·三 note: "不是讓 LLM 自己挑"). IP_TONE_MAP starts EMPTY on
+// purpose: which tone suits which IP is the owner's editorial call, not
+// something to guess. Until it's populated (or moved to a team_settings
+// table, matching A16's pattern), every 依IP自動匹配 request just falls back
+// to the default tone below -- functionally a no-op, honestly labelled.
+const IP_TONE_MAP: Partial<Record<string, CopyTone>> = {};
+const AUTO_MATCH_FALLBACK_TONE: CopyTone = "黑膠文藝收藏感";
+
+/**
+ * Resolves 依IP自動匹配 to a concrete tone using the draft's already-detected
+ * IP. On a draft's first-ever generation the IP isn't known yet (chicken/egg:
+ * detection and copy-writing happen in the same LLM pass), so this only does
+ * something useful on regenerations of an already-classified draft; the
+ * initial pass always falls back to the default. Any other tone passes through
+ * unchanged.
+ */
+export function resolveCopyTone(tone: CopyTone, detectedIpName?: string | null): CopyTone {
+  if (tone !== "依IP自動匹配") return tone;
+  const mapped = detectedIpName ? IP_TONE_MAP[detectedIpName] : undefined;
+  return mapped ?? AUTO_MATCH_FALLBACK_TONE;
+}
 
 const LENGTH_INSTRUCTIONS: Record<CopyLength, string> = {
   精簡: "描述與 FAQ 都盡量精簡，每段 1-2 句話。",
   標準: "描述與 FAQ 維持一般篇幅，每段 2-3 句話。",
   詳細: "描述與 FAQ 可以更完整，每段 3-4 句話，但不要灌水湊字數。",
 };
+
+// A9 item 4: secondhand facts the model needs to know to write honest 二手
+// copy. Previously CopyProviderInput carried none of this -- the model had
+// zero signal a listing was secondhand, so it always wrote new-item copy
+// regardless of the draft's actual is_secondhand flag (a real functional gap,
+// not just missing wording).
+export interface SecondhandInfo {
+  grade?: string | null;
+  condition?: string | null;
+  notes?: string | null;
+}
+
+function buildSecondhandSection(info: SecondhandInfo | null | undefined): string {
+  if (!info) return "";
+  const gradeText = info.grade ? `二手等級：${info.grade}` : "二手等級：未提供";
+  const conditionText = info.condition ? `品況描述：${info.condition}` : "";
+  const notesText = info.notes ? `保存／瑕疵備註：${info.notes}` : "";
+
+  return `
+
+【二手商品語氣（風險 #5，這件是二手商品，務必遵守）】
+這件商品是二手／中古品，不是全新品，語氣要轉成「二手撿寶」的誠實調性，不能寫得像全新品廣告。
+${[gradeText, conditionText, notesText].filter(Boolean).join("\n")}
+規則：
+- A 段與 B 段要誠實帶到「這是一件經過挑選的二手好物」的事實，不要迴避或模糊二手身份
+- 如果有品況描述或瑕疵備註，用平實語氣具體帶到（例如輕微使用痕跡、盒況等），不要誇大也不要隱瞞
+- 不要使用「全新未拆」「嶄新」等只適合全新品的字眼，除非備註明確這麼寫
+- 賣點可以強調「值得的挑選眼光」「難得流通的二手好物」這類二手收藏視角，而不是單純複製新品賣點語言`;
+}
 
 // This system prompt keeps the branch prototype's (分支/index.html) approach:
 // the model writes the full title/description/FAQ/SEO directly from raw
@@ -24,7 +95,12 @@ const LENGTH_INSTRUCTIONS: Record<CopyLength, string> = {
 // existing taxonomy, never delegated to the model; (2) the title's
 // IP/character/type ordering skeleton -- the model may only append
 // descriptive detail after it, per nestory_codex_phase2_supplement_1.md §三.
-export function buildCopySystemPrompt(tone: CopyTone, copyLength: CopyLength): string {
+export function buildCopySystemPrompt(
+  tone: CopyTone,
+  copyLength: CopyLength,
+  secondhandInfo?: SecondhandInfo | null,
+): string {
+  const toneExample = TONE_EXAMPLES[tone];
   return `你是潮巢玩居（CHOCHONEST）商品文案專家。品牌：潮巢 Nestory，台灣日系動漫 IP 選物店。
 
 語氣核心（必須同時達到，缺一不可）：
@@ -36,7 +112,9 @@ export function buildCopySystemPrompt(tone: CopyTone, copyLength: CopyLength): s
 - 不淘寶感（語言是台灣人說話的方式）
 不要蝦皮叫賣、不要冷淡潮牌、不要官方客服語氣。可以有一點點表情符號，但整篇最多 2-3 個。
 
-本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${LENGTH_INSTRUCTIONS[copyLength]}
+本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${LENGTH_INSTRUCTIONS[copyLength]}${toneExample ? `
+語感示範句（不要照抄，只是抓這個風格實際讀起來的樣子）：「${toneExample}」` : ""}
+${buildSecondhandSection(secondhandInfo)}
 
 你會收到淘寶原始標題、圖片描述等原始資訊，但「不會」收到現成的 IP／角色／類型。
 你的工作分兩步：
@@ -65,6 +143,12 @@ FAQ 回答必須寫成可以被 AI 搜尋引擎（ChatGPT、Perplexity 等）單
 補充具體特色描述（造型、款式、材質關鍵字等），讓標題生動、有畫面感、同時簡潔好認。
 輸出至 enriched_title，總長度建議 45 字，最長不超過 50 字，不要加入輸入資訊沒有提到的規格數字，不可捏造 IP／角色。
 
+標題清洗（原始標題常帶平台活動詞，不要照抄進 enriched_title）：
+- 剔除：618、雙11、雙12、限時、限定活動、母親節限定、情人節禮物、聖誕節禮物、開學季、
+  免運、包郵、特賣、清倉、618大促 等短期節慶／平台促銷用語
+- 用途情境改寫成長銷的日常使用情境（例如「包包吊飾」「桌面擺件」「送禮首選」），
+  不要寫成綁定特定節日檔期的情境（例如不要寫「母親節送禮」，可以寫「送禮自用兩相宜」）
+
 你輸出的欄位：
 1. detected_ip_name（見上方判斷規則）
 2. detected_character_name
@@ -83,6 +167,9 @@ FAQ 回答必須寫成可以被 AI 搜尋引擎（ChatGPT、Perplexity 等）單
 
 A｜開頭一句話破題，文青語氣、有畫面感，帶出這個商品的情感價值或使用情境。1-2 句，40 字以內。
 範例語感（不要照抄字句，只是抓語氣）：「把日常的空氣換得更柔軟一點。這款米菲毛絨鑰匙圈掛件，以輕巧的體積留住絨毛玩偶的療癒感……」
+禁止重複開場句式：不要每次都用同一套切入角度（例如每篇都寫「把日常的○○換得更△△」）。
+每次自己換一個不同角度破題，例如：情境帶入／角色性格梗／材質觸感／收藏視角／生活小幽默／畫面感描寫，
+挑一個跟這件商品最搭的角度，不要收斂成固定公式。
 
 B｜商品亮點
 ・列 3 條左右，每條用「重點詞：具體說明」的節奏，講觸感／功能／設計上的具體亮點，不要空泛形容詞堆疊
@@ -92,6 +179,9 @@ C｜適合誰
 
 D｜商品資訊（只寫你實際掌握到的資訊，來源是輸入資料裡的原標題關鍵字、圖片辨識描述、規格文字等）
 ・依實際可得資訊列，例如：品名、類型、材質、尺寸——只列有依據的項目
+・尺寸來源限制（重要）：尺寸數字只能來自「規格圖辨識文字」或原始標題裡明確寫出的數字，
+  「商品外觀描述」（來自主圖/詳情圖 Vision 辨識）是用照片目測的，不可以拿來推測或杜撰尺寸——
+  沒有規格文字或原始標題依據時，這一項就不要寫，寧可少寫也不要用目測數字充數
 ・如果除了商品名稱以外完全沒有其他可寫的具體資訊，就整段刪除、不要輸出「D｜商品資訊」這個標題，不要為了湊格式硬寫或編造
 ・絕對不要在這裡寫入售價、定價或任何價格數字——價格由 Shopify 商品頁自己的價格欄位顯示，文案裡重複價格是多餘的
 
@@ -110,7 +200,13 @@ E｜購買提醒
 
 【SEO 規則】
 - seo_title：在 enriched_title 基礎上，補充易搜尋的熱門角色別名 / 商品材質 / 使用情境關鍵字，20-35 字為佳，最長 60 字
+  ・核心關鍵字（IP＋角色＋類型）壓在「前 25 字」內——Google 中文搜尋結果標題約 30 字就會截斷，
+    核心字放後面等於沒被看到
+  ・角色的英日文別名「擇一」最熱門的放進去就好，不要多個別名堆在一起硬塞關鍵字
+  ・不要自己加上「｜潮巢 Nestory」這類品牌尾綴——這段由後端統一附加，不要佔用你的字數配額
 - meta_description：70-110 字為佳，最長 120 字，避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端
+  ・結尾收一句收藏或送禮相關的鉤子（例如：適合收藏／送禮自用兩相宜／值得收進展示櫃），
+    依商品調性挑一句合適的，不要每篇都套用同一句固定句子
 
 【禁忌詞（全域）】
 超值、爆款、必買、剁手、秒殺、全網低價、全網最低、清倉、狂銷、熱賣、CP值、買到賺到、
@@ -172,7 +268,7 @@ export function buildKnownIpBlock(knownIpNames?: string[]): string | null {
 }
 
 export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitKnownIpList?: boolean }): string {
-  const { rawTitle, saleStatus, source, variantSummary, price, compareAtPrice, note, imageDescription, specText, webSearchSummary, knownIpNames } = input;
+  const { rawTitle, saleStatus, source, variantSummary, price, compareAtPrice, note, imageDescription, specText, webSearchSummary, knownIpNames, isSecondhand, secondhandGrade, secondhandCondition, secondhandNotes } = input;
 
   const lines = [
     `商品來源：${source || "淘寶"}`,
@@ -187,6 +283,19 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
   if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
   if (specText) lines.push(`規格圖辨識文字：${specText}`);
   if (webSearchSummary) lines.push(`網路搜尋補充資訊：${webSearchSummary}`);
+  // A9 item 4: without this the model has no signal the listing is secondhand.
+  if (isSecondhand) {
+    lines.push(
+      `這是二手／中古商品（見 system prompt 的二手語氣規則）：` +
+        [
+          secondhandGrade ? `等級 ${secondhandGrade}` : null,
+          secondhandCondition ? `品況 ${secondhandCondition}` : null,
+          secondhandNotes ? `備註 ${secondhandNotes}` : null,
+        ]
+          .filter(Boolean)
+          .join("／"),
+    );
+  }
 
   if (!options?.omitKnownIpList) {
     const ipBlock = buildKnownIpBlock(knownIpNames);
@@ -214,7 +323,7 @@ const REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
   enriched_title: "格式參考「IP名稱 角色名稱 商品特色｜用途情境」，建議 45 字、最長 50 字，不可捏造 IP／角色／規格數字。",
   generated_description_html: "沿用 A/B/C/D/E 五段純文字格式（全形｜分隔標題與內文、段落間空一行），尺寸材質只能引用已知規格，不要寫入價格。",
   generated_faq_html: "3-5 題，每題 <h3><strong>問題</strong></h3><p>回答</p>，答案自成一段可被單獨引用，導購感優先。",
-  seo_title: "20-35 字（最長 60），核心關鍵字（IP＋角色＋類型）壓在前 25 字，別堆砌別名。",
+  seo_title: "20-35 字（最長 60），核心關鍵字（IP＋角色＋類型）壓在前 25 字，別名擇一最熱門、別堆砌，不要自己加「｜潮巢 Nestory」尾綴（後端統一附加）。",
   meta_description: "70-110 字（最長 120），結尾帶收藏／送禮鉤子，避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端。",
   why_we_chose_it: "1-2 句，說明為什麼這個商品值得在潮巢出現，帶品牌個性，不要只重複商品功能。",
   product_highlights: "3-5 點條列，每點各自一行、用「・」開頭，優先抓具體視覺／規格細節，不要空泛形容。",
@@ -233,9 +342,15 @@ function currentFieldText(field: CopyRegenField, input: CopyProviderInput): stri
   }
 }
 
-export function buildFieldRegenSystemPrompt(field: CopyRegenField, tone: CopyTone, copyLength: CopyLength): string {
+export function buildFieldRegenSystemPrompt(
+  field: CopyRegenField,
+  tone: CopyTone,
+  copyLength: CopyLength,
+  secondhandInfo?: SecondhandInfo | null,
+): string {
   return `你是潮巢玩居（CHOCHONEST）商品文案專家，台灣日系動漫 IP 選物店品牌「潮巢 Nestory」。
 語氣：親切有品味、SEO 友善、文青可愛、一點點幽默、不浮誇、不淘寶叫賣感。本次風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${LENGTH_INSTRUCTIONS[copyLength]}
+${buildSecondhandSection(secondhandInfo)}
 
 【本次任務：只重新生成一個欄位】
 你要重寫的欄位是「${REGEN_FIELD_LABELS[field]}」。其他欄位「已經定稿」，只提供給你當上下文以保持整體一致——請「不要」重寫或輸出其他欄位。
@@ -261,6 +376,18 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
   ];
   if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
   if (input.specText) lines.push(`規格圖辨識文字：${input.specText}`);
+  if (input.isSecondhand) {
+    lines.push(
+      `這是二手／中古商品：` +
+        [
+          input.secondhandGrade ? `等級 ${input.secondhandGrade}` : null,
+          input.secondhandCondition ? `品況 ${input.secondhandCondition}` : null,
+          input.secondhandNotes ? `備註 ${input.secondhandNotes}` : null,
+        ]
+          .filter(Boolean)
+          .join("／"),
+    );
+  }
   if (cv.detectedIpName) lines.push(`IP：${cv.detectedIpName}`);
   if (cv.detectedCharacterName) lines.push(`角色：${cv.detectedCharacterName}`);
   if (cv.detectedProductType) lines.push(`類型：${cv.detectedProductType}`);

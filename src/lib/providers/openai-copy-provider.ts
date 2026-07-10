@@ -4,6 +4,8 @@ import {
   buildCopyUserMessage,
   buildFieldRegenSystemPrompt,
   buildFieldRegenUserMessage,
+  resolveCopyTone,
+  SecondhandInfo,
 } from "./systemPrompt";
 
 const DEFAULT_MODEL = process.env.OPENAI_COPY_MODEL || "gpt-4o";
@@ -20,9 +22,15 @@ export class OpenAICopyProvider implements CopyProvider {
 
     // A7: single-field regen swaps in a focused prompt that rewrites one field only.
     const regenField = input.regenerateField;
+    // A9 item 2: 依IP自動匹配 is resolved to a concrete tone here, before it
+    // ever reaches a prompt string.
+    const resolvedTone = resolveCopyTone(input.tone, input.detectedIpName);
+    const secondhandInfo: SecondhandInfo | null = input.isSecondhand
+      ? { grade: input.secondhandGrade, condition: input.secondhandCondition, notes: input.secondhandNotes }
+      : null;
     const system = regenField
-      ? buildFieldRegenSystemPrompt(regenField, input.tone, input.copyLength)
-      : buildCopySystemPrompt(input.tone, input.copyLength);
+      ? buildFieldRegenSystemPrompt(regenField, resolvedTone, input.copyLength, secondhandInfo)
+      : buildCopySystemPrompt(resolvedTone, input.copyLength, secondhandInfo);
     const user = regenField ? buildFieldRegenUserMessage(input) : buildCopyUserMessage(input);
 
     // A8: parse-failure retry runs the request at most twice; the second pass

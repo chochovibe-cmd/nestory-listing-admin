@@ -217,6 +217,30 @@ function buildMetaDescription(ip: string, character: string, productType: string
   );
 }
 
+const BRAND_SUFFIX = ' | 潮巢 Nestory'; // " | 潮巢 Nestory"
+
+// A9 item 6: the model is instructed not to spend its own token budget on the
+// brand suffix -- this appends it uniformly in code instead. Defensive against
+// the model adding it anyway (older prompt behaviour, or a model that ignores
+// the instruction): strips any existing "｜潮巢 Nestory" / "| 潮巢 Nestory"
+// tail first so it's never doubled, then truncates the core title if needed
+// so the suffixed result still fits SEO_TITLE_MAX_LENGTH.
+export function appendNestoryBrandSuffix(seoTitle: string): string {
+  const trimmed = seoTitle.trim();
+  if (!trimmed) return trimmed;
+
+  const core = trimmed.replace(/[|｜]\s*潮巢\s*Nestory\s*$/u, '').trim();
+  const suffixed = core + BRAND_SUFFIX;
+
+  if (textLength(suffixed) <= SEO_TITLE_MAX_LENGTH) {
+    return suffixed;
+  }
+
+  const budget = SEO_TITLE_MAX_LENGTH - textLength(BRAND_SUFFIX);
+  const truncatedCore = Array.from(core).slice(0, Math.max(budget, 0)).join('');
+  return truncatedCore + BRAND_SUFFIX;
+}
+
 export function generateSeoContent(
   draft: ListingDraftInput,
   options: SeoContentOptions = {},

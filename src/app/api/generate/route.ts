@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
 import { generateListingContent } from "@/lib/contentGenerator/generateListingContent";
-import { generateSeoContent } from "@/lib/contentGenerator/seoGenerator";
+import { appendNestoryBrandSuffix, generateSeoContent } from "@/lib/contentGenerator/seoGenerator";
 import { ListingDraftInput, GeneratedListingContent } from "@/lib/contentGenerator/types";
 import { DisplayLabelContext } from "@/lib/contentGenerator/displayLabels";
 import { buildNestoryTagsV2Result } from "@/lib/nestoryTagsV2";
@@ -13,6 +13,7 @@ import { OpenAICopyProvider } from "@/lib/providers/openai-copy-provider";
 import { buildForbiddenTermWarning } from "@/lib/providers/forbiddenTerms";
 import {
   COPY_REGEN_FIELDS,
+  COPY_TONES,
   CopyLength,
   CopyProvider,
   CopyProviderOutput,
@@ -194,6 +195,14 @@ async function handleFieldRegen(params: {
       specText: draft.spec_text ?? undefined,
       tone,
       copyLength,
+      // A9 items 2/4: 依IP自動匹配 resolution and honest 二手 copy both need
+      // these; on a regen the draft's classification/secondhand facts are
+      // already known (unlike the very first generation).
+      isSecondhand: draft.is_secondhand,
+      secondhandGrade: draft.secondhand_grade,
+      secondhandCondition: draft.secondhand_condition,
+      secondhandNotes: draft.secondhand_notes,
+      detectedIpName: draft.ip_name,
       regenerateField: regenField,
       currentValues: {
         enrichedTitle: draft.title_zh ?? undefined,
@@ -232,6 +241,8 @@ async function handleFieldRegen(params: {
     let value = localizeToTaiwanTraditionalText(getCopyFieldValue(raw, regenField));
     // Mirror the main flow's display-title term swap.
     if (regenField === "enriched_title") value = value.split("包包吊飾").join("包包掛件");
+    // A9 item 6: the model no longer writes the brand suffix itself.
+    if (regenField === "seo_title") value = appendNestoryBrandSuffix(value);
     update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
     historyContent = value;
   }
@@ -283,7 +294,7 @@ export async function POST(request: NextRequest) {
   const useWebSearch = body.useWebSearch === true;
   const source = typeof body.source === "string" ? body.source : undefined;
   const variantSummary = typeof body.variantSummary === "string" ? body.variantSummary : undefined;
-  const tone: CopyTone = ["黑膠文藝收藏感", "日系選物店溫柔感", "可愛周邊輕鬆感"].includes(body.tone)
+  const tone: CopyTone = (COPY_TONES as readonly string[]).includes(body.tone)
     ? body.tone
     : "黑膠文藝收藏感";
   const copyLength: CopyLength = ["精簡", "標準", "詳細"].includes(body.copyLength) ? body.copyLength : "標準";
@@ -416,6 +427,17 @@ export async function POST(request: NextRequest) {
         knownIpNames,
         tone,
         copyLength,
+        // A9 item 4: honest 二手 copy needs these facts, which the model
+        // previously never received at all.
+        isSecondhand: draft.is_secondhand,
+        secondhandGrade: draft.secondhand_grade,
+        secondhandCondition: draft.secondhand_condition,
+        secondhandNotes: draft.secondhand_notes,
+        // A9 item 2: 依IP自動匹配 resolution. On this very first pass the IP
+        // isn't known yet (detection happens in this same call), so this is
+        // only non-null on a later full regeneration of an already-classified
+        // draft; the initial pass falls back to the default tone.
+        detectedIpName: draft.ip_name,
       });
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
       detected = {
@@ -466,7 +488,10 @@ export async function POST(request: NextRequest) {
     display_title: providerOutput.enrichedTitle || ruleOutput.display_title,
     generated_description_html: providerOutput.generatedDescriptionHtml || ruleOutput.generated_description_html,
     generated_faq_html: providerOutput.generatedFaqHtml || ruleOutput.generated_faq_html,
-    seo_title: providerOutput.seoTitle || ruleOutput.seo_title,
+    // A9 item 6: the model no longer writes "｜潮巢 Nestory" itself -- appended
+    // here uniformly. ruleOutput.seo_title (the test-mode/fallback path)
+    // already carries the suffix via seoGenerator's buildSeoTitle.
+    seo_title: providerOutput.seoTitle ? appendNestoryBrandSuffix(providerOutput.seoTitle) : ruleOutput.seo_title,
     meta_description: providerOutput.metaDescription || ruleOutput.meta_description,
   });
 

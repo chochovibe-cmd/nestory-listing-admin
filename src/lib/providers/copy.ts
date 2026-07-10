@@ -1,6 +1,24 @@
 import { GeneratedListingContent, ListingDraftInput } from "@/lib/contentGenerator/types";
 
-export type CopyTone = "黑膠文藝收藏感" | "日系選物店溫柔感" | "可愛周邊輕鬆感";
+// A9 item 2: three new tones added (中二熱血宣言／小編聊天口吻／依IP自動匹配), for a
+// 6-tone total matching Phase B's B8 ("語氣 6 款"). 依IP自動匹配 is NOT a voice the
+// model picks itself -- it's resolved server-side to one of the other 5 tones via
+// resolveCopyTone() in systemPrompt.ts before the prompt is built.
+export type CopyTone =
+  | "黑膠文藝收藏感"
+  | "日系選物店溫柔感"
+  | "可愛周邊輕鬆感"
+  | "中二熱血宣言"
+  | "小編聊天口吻"
+  | "依IP自動匹配";
+export const COPY_TONES: readonly CopyTone[] = [
+  "黑膠文藝收藏感",
+  "日系選物店溫柔感",
+  "可愛周邊輕鬆感",
+  "中二熱血宣言",
+  "小編聊天口吻",
+  "依IP自動匹配",
+];
 export type CopyLength = "精簡" | "標準" | "詳細";
 
 // A7: the copy fields that can be regenerated one at a time. Detection fields
@@ -65,6 +83,17 @@ export interface CopyProviderInput {
    * the rest of the copy as context. */
   regenerateField?: CopyRegenField;
   currentValues?: CopyCurrentValues;
+  /** A9 item 4: without these the model has no way to know a listing is
+   * secondhand, so it always wrote new-item copy regardless of the draft's
+   * actual is_secondhand flag -- this was a real gap, not just wording. */
+  isSecondhand?: boolean;
+  secondhandGrade?: string | null;
+  secondhandCondition?: string | null;
+  secondhandNotes?: string | null;
+  /** A9 item 2: the draft's already-detected IP, used to resolve
+   * 依IP自動匹配 to a concrete tone. Unknown on a draft's first-ever
+   * generation (falls back to a default); known on regenerations. */
+  detectedIpName?: string | null;
 }
 
 // A13: token usage a provider reports for one generation, normalised across

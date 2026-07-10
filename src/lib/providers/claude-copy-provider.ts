@@ -5,6 +5,8 @@ import {
   buildFieldRegenSystemPrompt,
   buildFieldRegenUserMessage,
   buildKnownIpBlock,
+  resolveCopyTone,
+  SecondhandInfo,
 } from "./systemPrompt";
 
 const DEFAULT_MODEL = process.env.ANTHROPIC_COPY_MODEL || "claude-sonnet-5";
@@ -22,9 +24,15 @@ export class ClaudeCopyProvider implements CopyProvider {
     // A7: single-field regen swaps in a focused prompt that rewrites one field
     // only; the IP list / detection are irrelevant then.
     const regenField = input.regenerateField;
+    // A9 item 2: 依IP自動匹配 is resolved to a concrete tone here, before it
+    // ever reaches a prompt string.
+    const resolvedTone = resolveCopyTone(input.tone, input.detectedIpName);
+    const secondhandInfo: SecondhandInfo | null = input.isSecondhand
+      ? { grade: input.secondhandGrade, condition: input.secondhandCondition, notes: input.secondhandNotes }
+      : null;
     const system = regenField
-      ? buildFieldRegenSystemPrompt(regenField, input.tone, input.copyLength)
-      : buildCopySystemPrompt(input.tone, input.copyLength);
+      ? buildFieldRegenSystemPrompt(regenField, resolvedTone, input.copyLength, secondhandInfo)
+      : buildCopySystemPrompt(resolvedTone, input.copyLength, secondhandInfo);
     const ipBlock = regenField ? null : buildKnownIpBlock(input.knownIpNames);
     // A5: the IP list lives in a cached system block, not the user message, so
     // the per-product user message stays fully variable.

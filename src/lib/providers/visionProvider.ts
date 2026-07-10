@@ -13,17 +13,27 @@ const DEFAULT_VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 const MAX_DESCRIBE_IMAGES = 6;
 const MAX_OCR_IMAGES = 4;
 
-const DESCRIBE_SYSTEM_PROMPT = `你是商品外觀描述助手，服務台灣日系動漫周邊選物店「潮巢 Nestory」。
-你會收到一件商品的主圖與詳情圖（可能多張）。請用繁體中文寫一段客觀的商品外觀描述，重點寫：
+// B1 (Mockup差異備忘 差異2): 規格圖 OCR 廢棄後，詳情圖是圖上文字的主要來源。除了外觀
+// 描述，這支 prompt 現在還要「轉錄詳情圖上實際印出來、看得到的文字」（廣告文案／賣點／
+// 規格文字），給文案撰寫者當素材。仍禁止「憑外觀猜測數字」——數字只在圖上有印時才照抄。
+const DESCRIBE_SYSTEM_PROMPT = `你是商品外觀描述＋圖上文字擷取助手，服務台灣日系動漫周邊選物店「潮巢 Nestory」。
+你會收到一件商品的主圖與詳情圖（可能多張）。請用繁體中文輸出兩個部分：
+
+【外觀描述】客觀描述你在照片中實際看到的：
 - 顏色、材質觸感（絨毛／壓克力／塑膠／金屬等視覺可辨識的材質）
 - 造型特徵、細節工藝（縫線、印花、配色分布等）
 - 包裝或配件（如果照片中看得到）
 
+【圖上文字】把詳情圖上「實際印出來、看得到的文字」逐字轉錄出來，包含：
+- 廣告文案、賣點標語、商品特色說明
+- 圖上印的規格文字（材質／尺寸／產地等）
+簡體字可轉成繁體；不要翻譯成別的語言、不要摘要、不要補寫看不清楚的字。若圖上沒有可見文字就寫「（無）」。
+
 規則：
-- 只寫你在照片中「實際看到」的事實，不要形容詞堆疊、不要行銷語氣
-- 絕對不要猜測或寫出任何尺寸、重量等數字規格——這些只能來自規格圖文字，不是你的工作
-- 100-200 字，純文字，不要條列、不要 Markdown
-- 這段描述是寫給文案撰寫者參考用的素材，不是最終文案`;
+- 外觀描述只寫實際看到的事實，不要形容詞堆疊、不要行銷語氣
+- 尺寸、重量等數字規格：只有在圖上「有印出來」時才照抄進【圖上文字】；絕對不要憑外觀猜測或自己編造數字
+- 純文字，兩段各用上面的【標題】分隔，總長約 150-300 字，不要 Markdown
+- 這是寫給文案撰寫者參考用的素材，不是最終文案`;
 
 const OCR_SYSTEM_PROMPT = `你是商品規格圖文字辨識助手。你會收到一張或多張商品規格圖（通常包含商品名稱、材質、尺寸、產地等文字資訊，原文可能是簡體中文）。
 
@@ -85,6 +95,8 @@ export async function describeProductImages(imageUrls: string[]): Promise<string
   );
 }
 
+// Reserved for B3 (截圖／網址自動辨識). Not called by /api/analyze-images anymore
+// -- 規格圖 OCR 路徑已廢棄 (Mockup差異備忘 差異2)，但辨識引擎保留給 B3 沿用。
 export async function ocrSpecImages(imageUrls: string[]): Promise<string> {
   return callVision(
     OCR_SYSTEM_PROMPT,

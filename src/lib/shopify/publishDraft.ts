@@ -83,7 +83,14 @@ export async function publishDraft(
   const mutation = `
     mutation ProductCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
       productCreate(product: $product, media: $media) {
-        product { id title status }
+        product {
+          id
+          title
+          status
+          variants(first: 1) {
+            nodes { id }
+          }
+        }
         userErrors { field message }
       }
     }
@@ -94,7 +101,12 @@ export async function publishDraft(
   // api_failed bookkeeping as a GraphQL-level error, not an unhandled throw.
   let response: Response;
   let result: {
-    data?: { productCreate?: { product?: { id: string } | null; userErrors?: { field: string; message: string }[] } };
+    data?: {
+      productCreate?: {
+        product?: { id: string; variants?: { nodes?: { id: string }[] } } | null;
+        userErrors?: { field: string; message: string }[];
+      };
+    };
     errors?: unknown[];
   };
   try {
@@ -121,6 +133,7 @@ export async function publishDraft(
 
   const errors = result?.data?.productCreate?.userErrors ?? result.errors;
   const productId = result?.data?.productCreate?.product?.id;
+  const defaultVariantId = result?.data?.productCreate?.product?.variants?.nodes?.[0]?.id;
 
   if (!response.ok || errors?.length || !productId) {
     const message = JSON.stringify(errors?.length ? errors : result);
@@ -137,6 +150,90 @@ export async function publishDraft(
       .eq("id", id);
     await notifyMake("api_failed", { draftId: id, error: message });
     return { ok: false, status: 502, error: message };
+  }
+
+  // A14 fix: productCreate's ProductInput has no price/cost/sku fields in
+  // current Shopify API versions -- the auto-created default variant starts
+  // at $0 until a separate mutation sets it. This was previously never
+  // called at all, so every published draft silently kept its $0 price.
+  if (defaultVariantId) {
+    const variantMutation = `
+      mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+          productVariants { id price compareAtPrice }
+          userErrors { field message }
+        }
+      }
+    `;
+    const seed = payload.variantSeed as {
+      sku: string;
+      price: number;
+      cost: number;
+      compareAtPrice?: number | null;
+      inventoryPolicy: "DENY" | "CONTINUE";
+    };
+
+    type VariantUpdateResult = {
+      data?: { productVariantsBulkUpdate?: { userErrors?: { field: string; message: string }[] } };
+      errors?: unknown[];
+    };
+
+    let variantResult: VariantUpdateResult | null = null;
+    let variantError: string | null = null;
+
+    try {
+      const { response: variantResponse, result: vr } = await callShopifyAdminGraphQL<VariantUpdateResult>(
+        variantMutation,
+        {
+          productId,
+          variants: [
+            {
+              id: defaultVariantId,
+              price: String(seed.price),
+              ...(seed.compareAtPrice ? { compareAtPrice: String(seed.compareAtPrice) } : {}),
+              inventoryPolicy: seed.inventoryPolicy,
+              inventoryItem: { sku: seed.sku, cost: String(seed.cost) },
+            },
+          ],
+        },
+      );
+      variantResult = vr;
+      const variantErrors = variantResult?.data?.productVariantsBulkUpdate?.userErrors ?? variantResult?.errors;
+      if (!variantResponse.ok || variantErrors?.length) {
+        variantError = JSON.stringify(variantErrors?.length ? variantErrors : variantResult);
+      }
+    } catch (variantNetworkError) {
+      variantError = variantNetworkError instanceof Error ? variantNetworkError.message : String(variantNetworkError);
+    }
+
+    if (variantError) {
+      // The product genuinely exists in Shopify at this point (with a $0
+      // variant) -- backfill the GID/admin link so a human can fix the price
+      // by hand instead of losing track of the product entirely. Retrying
+      // this publish would create a SECOND duplicate product (no
+      // resume-only-the-variant path yet), so this is deliberately still
+      // surfaced as api_failed rather than silently downgraded to a warning.
+      const message = `商品已建立但價格同步失敗，請至 Shopify 後台手動確認價格：${variantError}`;
+      await serviceSupabase.from("publish_jobs").insert({
+        ...publishJobBase,
+        publish_status: "api_failed",
+        response_payload: variantResult ?? { error: variantError },
+        error_message: message,
+        completed_at: new Date().toISOString()
+      });
+      await serviceSupabase
+        .from("product_drafts")
+        .update({
+          status: "api_failed",
+          publish_status: "api_failed",
+          shopify_product_id: productId,
+          shopify_admin_url: shopifyAdminUrl(productId),
+          error_message: message
+        })
+        .eq("id", id);
+      await notifyMake("api_failed", { draftId: id, error: message, shopifyProductId: productId });
+      return { ok: false, status: 502, error: message };
+    }
   }
 
   await serviceSupabase.from("publish_jobs").insert({

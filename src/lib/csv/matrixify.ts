@@ -35,7 +35,8 @@ export function buildMatrixifyRows(drafts: MatrixifyDraft[]) {
       Handle: handle,
       Title: draft.title_zh || draft.taobao_title || "",
       "Body HTML": draft.description_html || draft.description_plain || "",
-      Vendor: draft.vendor || "CHOCHONEST",
+      // A24 (2026-07-10 A14 finding): same fallback fix as payload.ts.
+      Vendor: draft.vendor || "潮巢 Nestory",
       Type: draft.product_type || categoryLabel(draft.category),
       Tags: tags?.join(", ") ?? "",
       Published: draft.publish_mode === "active" ? "TRUE" : "FALSE",

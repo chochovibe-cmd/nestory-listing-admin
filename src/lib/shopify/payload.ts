@@ -31,7 +31,10 @@ export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: Pub
   const product = {
     title: draft.title_zh || draft.taobao_title || "Nestory product",
     descriptionHtml: draft.description_html || draft.description_plain || "",
-    vendor: draft.vendor || "CHOCHONEST",
+    // A24 (2026-07-10 A14 finding): fallback only, real fix is the DB column
+    // default (migration 015) -- "CHOCHONEST" isn't a real vendor value in
+    // this store, "潮巢 Nestory" already exists in Shopify's vendor list.
+    vendor: draft.vendor || "潮巢 Nestory",
     productType: draft.product_type || draft.category || "IP 周邊",
     tags,
     status: mode === "active" ? "ACTIVE" : "DRAFT",
@@ -51,6 +54,11 @@ export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: Pub
       sku,
       price: draft.twd_price ?? 0,
       cost: draft.twd_cost ?? 0,
+      // A14 fix: this was computed but never sent anywhere -- productCreate's
+      // ProductInput has no variant/price fields in current API versions, and
+      // nothing called the follow-up mutation that actually sets it. See
+      // publishDraft.ts's productVariantsBulkUpdate call.
+      compareAtPrice: draft.compare_at_price ?? null,
       inventoryQuantity: 0,
       inventoryPolicy: "DENY",
       ...generatedVariantSeed

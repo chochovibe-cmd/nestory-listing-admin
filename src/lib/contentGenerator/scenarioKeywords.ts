@@ -5,20 +5,23 @@
 // `normalizeProductTypeForDisplay` / titleGenerator's PRODUCT_TYPE_ALIASES
 // already produce, so no new type-taxonomy is introduced.
 //
-// Initial content drafted by AI (待老闆審 -- see docs/施工清單.md 待確認清單):
-// this is a business/marketing judgment call about which search terms and
-// gifting occasions actually match Nestory's customers, not something to
-// guess confidently. team_settings row 'scenario_keywords_by_type' (migration
-// 016) can override/extend this per-key without a code change once reviewed.
+// Content is a business/marketing judgment call about which search terms and
+// gifting occasions actually match Nestory's customers. team_settings row
+// 'scenario_keywords_by_type' (migration 016) can override/extend this
+// per-key without a code change.
+// Reviewed 2026-07-10 (marketing pass, commander session): dropped 送禮首選
+// (seller puffery, zero search volume), added 生日禮物 (highest-volume TW gift
+// long-tail), and reordered — pickScenarioKeywords() always takes the FIRST
+// `count` terms, so position 1-2 of each list is what actually ships.
 export const DEFAULT_SCENARIO_KEYWORDS: Record<string, string[]> = {
-  吊飾掛件: ['包包掛飾', '交換禮物', '書包裝飾', '送禮首選'],
-  絨毛娃娃: ['療癒小物', '送禮首選', '桌面擺飾', '交換禮物'],
-  盲盒: ['開箱驚喜', '收藏系列', '交換禮物'],
-  扭蛋: ['收藏系列', '桌面小物'],
-  娃娃抱枕: ['療癒小物', '沙發擺飾', '送禮首選'],
-  壓克力立牌: ['桌面擺飾', '收藏展示'],
-  手機支架: ['桌面小物', '辦公室擺飾'],
-  公仔模型: ['收藏展示', '送禮首選'],
+  吊飾掛件: ['包包掛飾', '交換禮物', '生日禮物', '書包裝飾'],
+  絨毛娃娃: ['療癒小物', '生日禮物', '交換禮物', '房間佈置'],
+  盲盒: ['交換禮物', '開箱驚喜', '收藏系列'],
+  扭蛋: ['桌面小物', '交換禮物', '收藏系列'],
+  娃娃抱枕: ['療癒小物', '午睡神器', '生日禮物'],
+  壓克力立牌: ['桌面擺飾', '追星應援', '收藏展示'],
+  手機支架: ['追劇神器', '辦公桌小物', '實用禮物'],
+  公仔模型: ['收藏展示', '桌面擺飾', '生日禮物'],
 };
 
 function normalizeType(value: string | null | undefined): string {

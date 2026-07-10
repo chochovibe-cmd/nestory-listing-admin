@@ -5,6 +5,7 @@ import { generateListingContent } from "@/lib/contentGenerator/generateListingCo
 import { appendNestoryBrandSuffix, generateSeoContent } from "@/lib/contentGenerator/seoGenerator";
 import { ListingDraftInput, GeneratedListingContent } from "@/lib/contentGenerator/types";
 import { DisplayLabelContext } from "@/lib/contentGenerator/displayLabels";
+import { buildImageAltText } from "@/lib/contentGenerator/altTextGenerator";
 import { buildNestoryTagsV2Result } from "@/lib/nestoryTagsV2";
 import { localizeGeneratedListingContent, localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
 import { listActiveListingTagRules } from "@/lib/tagRules";
@@ -21,7 +22,7 @@ import {
   CopyTone,
   getCopyFieldValue,
 } from "@/lib/providers/copy";
-import type { GenerationProvider, ProductDraft } from "@/types/domain";
+import type { GenerationProvider, ImageType, ProductDraft } from "@/types/domain";
 
 const COPY_PROVIDERS: Record<"openai" | "claude", CopyProvider> = {
   openai: new OpenAICopyProvider(),
@@ -286,6 +287,55 @@ async function handleFieldRegen(params: {
   });
 }
 
+// A10: template-assembled ALT text (rule engine, never the LLM -- 文案·三·9),
+// written once per generate call using the just-finalised classification.
+// Always overwrites; there's no manual-edit UI for alt_text yet, so nothing to
+// preserve. Best-effort: a failure here shouldn't fail the whole generate call,
+// so callers should not await-and-throw this without a try/catch.
+async function writeImageAltTexts(
+  serviceSupabase: ReturnType<typeof createServiceSupabaseClient>,
+  draftId: string,
+  detected: DetectedClassification,
+  displayContext: DisplayLabelContext,
+  imageDescription: string | null,
+): Promise<void> {
+  const { data: imageRows, error } = await serviceSupabase
+    .from("product_images")
+    .select("id,image_type,sort_order")
+    .eq("draft_id", draftId)
+    .order("sort_order", { ascending: true });
+
+  if (error || !imageRows || imageRows.length === 0) return;
+
+  const rows = imageRows as { id: string; image_type: ImageType; sort_order: number }[];
+  const countByType = new Map<ImageType, number>();
+  for (const row of rows) {
+    countByType.set(row.image_type, (countByType.get(row.image_type) ?? 0) + 1);
+  }
+
+  const indexByType = new Map<ImageType, number>();
+  const updates = rows
+    .map((row) => {
+      const indexInType = indexByType.get(row.image_type) ?? 0;
+      indexByType.set(row.image_type, indexInType + 1);
+      const altText = buildImageAltText(
+        { ip: detected.ip, character: detected.character, productType: detected.productType, imageDescription },
+        displayContext,
+        row.image_type,
+        indexInType,
+        countByType.get(row.image_type) ?? 1,
+      );
+      return altText ? { id: row.id, altText } : null;
+    })
+    .filter((entry): entry is { id: string; altText: string } => entry !== null);
+
+  await Promise.all(
+    updates.map(({ id, altText }) =>
+      serviceSupabase.from("product_images").update({ alt_text: altText }).eq("id", id),
+    ),
+  );
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
@@ -469,6 +519,15 @@ export async function POST(request: NextRequest) {
         { status: 502 }
       );
     }
+  }
+
+  // A10: template ALT text, keyed off the classification just finalised above.
+  // Best-effort -- alt_text is supplementary, so a failure here must not fail
+  // the whole generate call.
+  try {
+    await writeImageAltTexts(serviceSupabase, draftId, detected, displayContext, draft.image_description);
+  } catch {
+    extraWarnings.push("圖片 ALT 文字寫入失敗，不影響文案結果，可稍後重新生成。");
   }
 
   const listingInput = toListingDraftInput(draft, detected);

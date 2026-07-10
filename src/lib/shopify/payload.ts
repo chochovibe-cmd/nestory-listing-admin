@@ -2,6 +2,7 @@ import { generateSku } from "@/lib/contentGenerator/sku";
 import { formatPlainTextAsHtml, htmlFaqToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
 import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
+import { buildImageFileNameSlug } from "@/lib/contentGenerator/imageFileNameGenerator";
 import type { ProductDraft, ProductImage, PublishMode } from "@/types/domain";
 
 export interface ShopifyPublishDraft extends ProductDraft {
@@ -10,6 +11,33 @@ export interface ShopifyPublishDraft extends ProductDraft {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// A21-4: the filename Shopify ends up storing the image under is derived
+// from the source URL it downloads -- Supabase Storage's public URLs honor a
+// `download` query param that sets Content-Disposition to this filename.
+// Falls back to the untouched URL when there's nothing to slug (no
+// shopify_handle yet, or the URL isn't a normal absolute URL).
+function withDownloadFilename(url: string, filename: string | null): string {
+  if (!filename) return url;
+
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("download", filename);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function extractUrlExtension(url: string): string {
+  try {
+    const lastSegment = new URL(url).pathname.split("/").pop() ?? "";
+    const match = lastSegment.match(/\.([a-zA-Z0-9]+)$/);
+    return match ? match[1] : "webp";
+  } catch {
+    return "webp";
+  }
 }
 
 // A22b (2026-07-10 A14 finding): why_we_chose_it / product_highlights /
@@ -61,15 +89,42 @@ export function buildShopifyProductPayload(
   mode: PublishMode,
   internalLinkMap: InternalLinkMap = {}
 ) {
-  const images = (draft.product_images ?? [])
+  const sortedImages = (draft.product_images ?? [])
     .filter((image) => image.image_type !== "spec")
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((image) => ({
-      originalSource: image.processed_file_url || image.original_file_url || image.generated_file_url,
-      alt: image.alt_text || draft.title_zh || draft.taobao_title || "Nestory product image",
-      mediaContentType: "IMAGE"
-    }))
-    .filter((image) => Boolean(image.originalSource));
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const imageTypeCounts = new Map<string, number>();
+  for (const image of sortedImages) {
+    imageTypeCounts.set(image.image_type, (imageTypeCounts.get(image.image_type) ?? 0) + 1);
+  }
+  const imageTypeSeen = new Map<string, number>();
+  const images = sortedImages
+    .map((image) => {
+      const sourceUrl = image.processed_file_url || image.original_file_url || image.generated_file_url;
+      if (!sourceUrl) return null;
+
+      const indexInType = imageTypeSeen.get(image.image_type) ?? 0;
+      imageTypeSeen.set(image.image_type, indexInType + 1);
+
+      // A21-4: keyword filename off the same slug as the Shopify handle
+      // (A21-1), so the random-UUID Supabase path (ImageUploader.tsx) never
+      // leaks through as the Shopify Files name / image src.
+      const fileNameSlug = draft.shopify_handle
+        ? buildImageFileNameSlug(
+            draft.shopify_handle,
+            image.image_type,
+            indexInType,
+            imageTypeCounts.get(image.image_type) ?? 1,
+            extractUrlExtension(sourceUrl)
+          )
+        : null;
+
+      return {
+        originalSource: withDownloadFilename(sourceUrl, fileNameSlug),
+        alt: image.alt_text || draft.title_zh || draft.taobao_title || "Nestory product image",
+        mediaContentType: "IMAGE"
+      };
+    })
+    .filter((image): image is { originalSource: string; alt: string; mediaContentType: string } => image !== null);
   const { sku } = generateSku({
     productType: draft.product_type ?? "",
     ipName: draft.ip_name ?? draft.category ?? "",

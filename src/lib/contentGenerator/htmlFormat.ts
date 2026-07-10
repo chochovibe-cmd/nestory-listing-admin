@@ -15,7 +15,10 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-const BULLET_PREFIX = /^[・･•]\s*/;
+// A17: "➼" marks the rule-engine-appended "適用情境" line (scenarioKeywords.ts)
+// alongside the model's own "・" bullets in the D段 block -- both render as
+// <li> in the same list.
+const BULLET_PREFIX = /^[・･•➼]\s*/;
 
 export function formatPlainTextAsHtml(text: string | null | undefined): string {
   if (!text) return "";

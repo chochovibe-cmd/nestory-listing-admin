@@ -11,7 +11,11 @@ import {
 import { ListingDraftInput, GeneratedListingContent } from "@/lib/contentGenerator/types";
 import { DisplayLabelContext } from "@/lib/contentGenerator/displayLabels";
 import { buildImageAltText } from "@/lib/contentGenerator/altTextGenerator";
-import { mergeScenarioKeywordMap, pickScenarioKeywords } from "@/lib/contentGenerator/scenarioKeywords";
+import {
+  appendScenarioBulletToDescription,
+  mergeScenarioKeywordMap,
+  pickScenarioKeywords,
+} from "@/lib/contentGenerator/scenarioKeywords";
 import { normalizeProductTypeForDisplay } from "@/lib/productTypeLabels";
 import { buildNestoryTagsV2Result } from "@/lib/nestoryTagsV2";
 import { localizeGeneratedListingContent, localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
@@ -264,6 +268,9 @@ async function handleFieldRegen(params: {
     }
     if (regenField === "meta_description") {
       value = injectScenarioKeywordsIntoMetaDescription(value, scenarioTerms);
+    }
+    if (regenField === "generated_description_html") {
+      value = appendScenarioBulletToDescription(value, scenarioTerms);
     }
     update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
     historyContent = value;
@@ -589,7 +596,14 @@ export async function POST(request: NextRequest) {
   const localizedOutput = localizeGeneratedListingContent({
     ...ruleOutput,
     display_title: providerOutput.enrichedTitle || ruleOutput.display_title,
-    generated_description_html: providerOutput.generatedDescriptionHtml || ruleOutput.generated_description_html,
+    // A17: rule-engine-picked scenario terms appended as a deterministic
+    // "➼ 適用情境" bullet inside the model's own D段, never left to the LLM
+    // to invent. No-op when the model omitted D段 (nothing to attach to) or
+    // when falling back to ruleOutput's own (structurally different) HTML.
+    generated_description_html: appendScenarioBulletToDescription(
+      providerOutput.generatedDescriptionHtml || ruleOutput.generated_description_html,
+      scenarioTerms,
+    ),
     generated_faq_html: providerOutput.generatedFaqHtml || ruleOutput.generated_faq_html,
     // A9 item 6: the model no longer writes "｜潮巢 Nestory" itself -- appended
     // here uniformly. ruleOutput.seo_title (the test-mode/fallback path)

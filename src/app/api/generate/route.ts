@@ -17,6 +17,8 @@ import {
   pickScenarioKeywords,
 } from "@/lib/contentGenerator/scenarioKeywords";
 import { generateShopifyHandleSlug } from "@/lib/contentGenerator/handleGenerator";
+import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
+import { buildMetaContentGapWarning, buildMetaDuplicateWarning } from "@/lib/contentGenerator/metaUniqueness";
 import { normalizeProductTypeForDisplay } from "@/lib/productTypeLabels";
 import { buildNestoryTagsV2Result } from "@/lib/nestoryTagsV2";
 import { localizeGeneratedListingContent, localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
@@ -646,6 +648,42 @@ export async function POST(request: NextRequest) {
     ...providerOutput.productHighlights,
   ]);
   if (forbiddenWarning) extraWarnings.push(forbiddenWarning);
+
+  // A21-5: Meta Description uniqueness guard, warn-only (same posture as
+  // A11's forbiddenWarning above). Content-gap check is local; the
+  // cross-product duplicate check needs a DB read of sibling drafts under
+  // the same IP, so it only runs when the IP was actually resolved.
+  const metaFeatureTerms = extractFeatureTerms(
+    draft.image_description,
+    [listingInput.intro, listingInput.product_name].filter(Boolean).join(" "),
+  );
+  const metaContentGapWarning = buildMetaContentGapWarning(
+    localizedOutput.meta_description,
+    detected.character,
+    detected.ip,
+    metaFeatureTerms,
+    displayContext,
+  );
+  if (metaContentGapWarning) extraWarnings.push(metaContentGapWarning);
+
+  if (detected.ip) {
+    const { data: siblingRows } = await serviceSupabase
+      .from("product_drafts")
+      .select("id,title_zh,seo_description")
+      .eq("ip_name", detected.ip)
+      .neq("id", draftId)
+      .not("seo_description", "is", null)
+      .limit(30);
+    const metaDuplicateWarning = buildMetaDuplicateWarning(
+      localizedOutput.meta_description,
+      (siblingRows ?? []).map((row) => ({
+        id: row.id,
+        title: row.title_zh,
+        metaDescription: row.seo_description,
+      })),
+    );
+    if (metaDuplicateWarning) extraWarnings.push(metaDuplicateWarning);
+  }
 
   const nextStatus = localizedOutput.draft_state === "blocked" ? "needs_revision" : "ready_for_review";
   const allWarnings = uniqueMessages([...localizedOutput.validation_warnings, ...extraWarnings]);

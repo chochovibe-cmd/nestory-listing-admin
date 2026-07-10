@@ -44,3 +44,30 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
     })
     .join("");
 }
+
+function stripHtmlTags(value: string): string {
+  return value.replace(/<[^>]+>/g, "").trim();
+}
+
+// A22b: the reverse direction -- generated_faq_html is real HTML
+// (<h3><strong>Q</strong></h3><p>A</p> pairs, per systemPrompt.ts's FAQ
+// rules), but Shopify's custom.product_faq metafield is a plain
+// multi_line_text_field, not a rich-text field. Used only when building that
+// metafield's value; the FAQ tab in the app keeps rendering the real HTML.
+export function htmlFaqToPlainText(html: string | null | undefined): string {
+  if (!html) return "";
+
+  const pairs: string[] = [];
+  const pattern = /<h3>\s*<strong>(.*?)<\/strong>\s*<\/h3>\s*<p>(.*?)<\/p>/gis;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(html)) !== null) {
+    const question = stripHtmlTags(match[1]);
+    const answer = stripHtmlTags(match[2]);
+    if (question || answer) {
+      pairs.push(`Q：${question}\nA：${answer}`);
+    }
+  }
+
+  return pairs.join("\n\n");
+}

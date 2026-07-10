@@ -1,5 +1,5 @@
 import { generateSku } from "@/lib/contentGenerator/sku";
-import { formatPlainTextAsHtml } from "@/lib/contentGenerator/htmlFormat";
+import { formatPlainTextAsHtml, htmlFaqToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import type { ProductDraft, ProductImage, PublishMode } from "@/types/domain";
 
 export interface ShopifyPublishDraft extends ProductDraft {
@@ -8,6 +8,50 @@ export interface ShopifyPublishDraft extends ProductDraft {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// A22b (2026-07-10 A14 finding): why_we_chose_it / product_highlights /
+// generated_faq_html / spec_text were all generated and stored, but nothing
+// ever mapped them into Shopify product metafields -- the store's four
+// existing custom.* definitions sat empty on every published product.
+// namespace/key values below were confirmed against the live store's
+// metafieldDefinitions query (not guessed): all four are multi_line_text_field.
+function buildProductMetafields(draft: ShopifyPublishDraft): { namespace: string; key: string; type: string; value: string }[] {
+  const metafields: { namespace: string; key: string; type: string; value: string }[] = [];
+
+  if (draft.why_we_chose_it?.trim()) {
+    metafields.push({
+      namespace: "custom",
+      key: "why_nestory_pick",
+      type: "multi_line_text_field",
+      value: draft.why_we_chose_it.trim()
+    });
+  }
+
+  if (draft.product_highlights?.length) {
+    metafields.push({
+      namespace: "custom",
+      key: "product_highlights",
+      type: "multi_line_text_field",
+      value: draft.product_highlights.map((line) => `・${line}`).join("\n")
+    });
+  }
+
+  const faqPlainText = htmlFaqToPlainText(draft.generated_faq_html);
+  if (faqPlainText) {
+    metafields.push({ namespace: "custom", key: "product_faq", type: "multi_line_text_field", value: faqPlainText });
+  }
+
+  if (draft.spec_text?.trim()) {
+    metafields.push({
+      namespace: "custom",
+      key: "product_specs",
+      type: "multi_line_text_field",
+      value: draft.spec_text.trim()
+    });
+  }
+
+  return metafields;
 }
 
 export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: PublishMode) {
@@ -50,6 +94,10 @@ export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: Pub
       description: draft.seo_description || ""
     },
     ...(draft.shopify_handle ? { handle: draft.shopify_handle } : {}),
+    // A22b: computed default, overridable by the legacy metafields_json
+    // column (worker/complete path) or generatedProduct, same precedence the
+    // handle/other overrides already followed here.
+    metafields: buildProductMetafields(draft),
     ...(Array.isArray(draft.metafields_json) ? { metafields: draft.metafields_json } : {}),
     ...generatedProduct
   };

@@ -39,6 +39,10 @@ UI 驗收標準是 `docs/mockups/nestory-v7-mockup.html`（v7.4，用瀏覽器�
 
 ## Mockup 的參考權限分級（重要：Mockup 不是照抄對象）
 
+**動任何前台前，先讀 Mockup 對應區塊，再讀 `docs/Mockup差異備忘.md`（第二真相來源）**——
+那份記錄「跟 Mockup 不同、但已定案」的差異；兩者衝突以差異備忘為準。每個 session 產生新的
+定案差異都必須當場補進那份文件（Mockup 不會自己更新，舊 docs 可能殘留被推翻的方向）。
+
 `docs/mockups/nestory-v7-mockup.html` 的權威範圍分三級：
 
 | 層面 | 權威 | 規則 |

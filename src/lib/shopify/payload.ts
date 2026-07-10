@@ -1,6 +1,7 @@
 import { generateSku } from "@/lib/contentGenerator/sku";
 import { formatPlainTextAsHtml, htmlFaqToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
+import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import type { ProductDraft, ProductImage, PublishMode } from "@/types/domain";
 
 export interface ShopifyPublishDraft extends ProductDraft {
@@ -55,7 +56,11 @@ function buildProductMetafields(draft: ShopifyPublishDraft): { namespace: string
   return metafields;
 }
 
-export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: PublishMode) {
+export function buildShopifyProductPayload(
+  draft: ShopifyPublishDraft,
+  mode: PublishMode,
+  internalLinkMap: InternalLinkMap = {}
+) {
   const images = (draft.product_images ?? [])
     .filter((image) => image.image_type !== "spec")
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -82,11 +87,12 @@ export function buildShopifyProductPayload(draft: ShopifyPublishDraft, mode: Pub
     // happens here, at the Shopify boundary, not at save time. Converting at
     // save time would make the DB column (and the edit textarea) show raw
     // <p>/<ul> tags instead of readable text.
-    // A21-2: FAQPage JSON-LD appended the same way -- generated at the
-    // Shopify boundary only, never written back to the DB column or the
-    // app's own FAQ tab UI.
+    // A21-2/A21-3: internal link + FAQPage JSON-LD appended the same way --
+    // generated at the Shopify boundary only, never written back to the DB
+    // column or the app's own FAQ/description UI.
     descriptionHtml:
       formatPlainTextAsHtml(draft.description_html || draft.description_plain || "") +
+      buildInternalLinkHtml(draft.ip_name, internalLinkMap) +
       buildFaqJsonLdScriptTag(draft.generated_faq_html),
     // A24 (2026-07-10 A14 finding): fallback only, real fix is the DB column
     // default (migration 015) -- "CHOCHONEST" isn't a real vendor value in

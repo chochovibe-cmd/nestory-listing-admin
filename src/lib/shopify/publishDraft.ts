@@ -2,6 +2,7 @@ import { notifyMake } from "@/lib/notifications/make";
 import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/payload";
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
+import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { PublishMode } from "@/types/domain";
 
@@ -33,7 +34,19 @@ export async function publishDraft(
     return { ok: false, status: 409, error: `Draft status ${draft.status} cannot be published` };
   }
 
-  const payload = buildShopifyProductPayload(draft, publishMode);
+  // A21-3: team_settings-editable IP -> collection URL map (migration 017).
+  // Fetched fresh at publish time (not generate time) so filling in the map
+  // later still takes effect on drafts generated before it existed.
+  const { data: linkSettingsRow } = await serviceSupabase
+    .from("team_settings")
+    .select("value")
+    .eq("key", "internal_link_urls_by_ip")
+    .maybeSingle();
+  const internalLinkMap = mergeInternalLinkMap(
+    (linkSettingsRow?.value as Record<string, string> | null) ?? null
+  );
+
+  const payload = buildShopifyProductPayload(draft, publishMode, internalLinkMap);
   await serviceSupabase
     .from("product_drafts")
     .update({

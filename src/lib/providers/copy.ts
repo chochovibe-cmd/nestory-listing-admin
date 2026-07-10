@@ -108,14 +108,17 @@ export interface CopyProvider {
   generate(input: CopyProviderInput): Promise<CopyProviderOutput>;
 }
 
-// A13: APPROXIMATE USD rates per 1M tokens. These are ballpark public list
-// prices and WILL drift -- they exist so the dashboard has a per-draft cost
-// signal, not an invoice. Update when pricing changes (flagged in 待確認清單).
+// A13: USD rates per 1M tokens -- a dashboard cost signal, not an invoice.
+// Claude rates verified against official pricing 2026-07-10 (Fable):
+// sonnet-5 $3/$15 (intro $2/$10 through 2026-08-31 -- booked at standard rate,
+// so estimates run slightly conservative until then), haiku-4.5 $1/$5,
+// opus-4.x $5/$25. OpenAI rates are public list prices. Order matters:
+// "gpt-4o-mini" must precede "gpt-4o" (substring match).
 // Cache reads are billed ~0.1x input; Anthropic cache writes ~1.25x input.
 const COPY_MODEL_RATES: Array<{ match: string; inPerM: number; outPerM: number }> = [
   { match: "claude-sonnet", inPerM: 3, outPerM: 15 },
-  { match: "claude-haiku", inPerM: 0.8, outPerM: 4 },
-  { match: "claude-opus", inPerM: 15, outPerM: 75 },
+  { match: "claude-haiku", inPerM: 1, outPerM: 5 },
+  { match: "claude-opus", inPerM: 5, outPerM: 25 },
   { match: "gpt-4o-mini", inPerM: 0.15, outPerM: 0.6 },
   { match: "gpt-4o", inPerM: 2.5, outPerM: 10 },
 ];

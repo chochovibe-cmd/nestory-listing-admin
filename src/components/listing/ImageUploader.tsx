@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { ImageType } from "@/types/domain";
 
+// B1 (Mockup差異備忘 差異2): 只有主圖／詳情圖兩框。規格改表單手填欄位，不再上傳規格圖
+// 做 OCR。詳情圖給 AI 讀資訊用（Vision 會轉錄圖上可見文字），不上架。
 const zones: Array<{
   type: ImageType;
   icon: string;
@@ -14,8 +16,7 @@ const zones: Array<{
   dropTitle: string;
 }> = [
   { type: "main", icon: "🖼", label: "主圖（3-5張）", badgeClass: "badge-main", badgeText: "1:1 裁切", dropTitle: "點擊或拖曳主圖" },
-  { type: "detail", icon: "📋", label: "詳情圖", badgeClass: "badge-detail", badgeText: "800px", dropTitle: "點擊或拖曳詳情圖" },
-  { type: "spec", icon: "📐", label: "規格圖", badgeClass: "badge-spec", badgeText: "OCR", dropTitle: "點擊或拖曳規格圖" }
+  { type: "detail", icon: "📋", label: "詳情圖（供 AI 讀資訊，不上架）", badgeClass: "badge-detail", badgeText: "Vision 參考", dropTitle: "點擊或拖曳詳情圖" }
 ];
 
 // B1: images are now selected in the form BEFORE the draft is generated and

@@ -126,6 +126,12 @@ export interface CopyProviderOutput {
   detectedProductType: string;
   detectedCategory: string;
   sku: string;
+  /** 規格自動化 (Mockup差異備忘 差異2, 老闆 2026-07-11)：the model synthesises a
+   * spec block from the evidence pool (variant options > raw title > detail-image
+   * text > Vision attributes > conservative generic). Written back to spec_text
+   * only when the operator left it empty. Optional so non-LLM constructors
+   * (test mode) needn't set it. */
+  spec?: string;
   provider: string;
   model: string;
   /** A13: present when the model reported token usage (absent in test mode). */
@@ -176,6 +182,7 @@ type ParsedCopyJson = {
   detected_product_type?: string;
   detected_category?: string;
   sku?: string;
+  spec?: string;
 };
 
 /** Both providers ask the model for the same JSON schema; some models wrap it in a ```json fence. */
@@ -196,6 +203,7 @@ export function parseCopyProviderJson(text: string, provider: string, model: str
     detectedProductType: parsed.detected_product_type ?? "",
     detectedCategory: parsed.detected_category ?? "",
     sku: parsed.sku ?? "",
+    spec: parsed.spec ?? "",
     provider,
     model,
   };
@@ -219,6 +227,7 @@ export const COPY_SEGMENT_KEYS = [
   "meta_description",
   "why_we_chose_it",
   "product_highlights",
+  "spec",
 ] as const;
 
 type CopySegmentKey = (typeof COPY_SEGMENT_KEYS)[number];
@@ -264,6 +273,7 @@ export function parseCopySegments(text: string, provider: string, model: string)
     detectedProductType: get("detected_product_type"),
     detectedCategory: get("detected_category"),
     sku: get("sku"),
+    spec: get("spec"),
     provider,
     model,
   };

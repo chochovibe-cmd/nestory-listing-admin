@@ -26,13 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1 -Por
 
 Apply `supabase/migrations/001_initial_schema.sql` in Supabase SQL Editor before using the PWA.
 
-See `docs/mock-flow.md` for the first end-to-end mock flow once dependencies and test Supabase credentials are available.
-
-For the latest mock-safe local checkpoint, Next.js startup fix, and next-phase
-handoff checklist, see `docs/v0.1-local-wrap-up.md`.
-
-For team handoff and manual QA readiness, start with
-`docs/v0.1-team-handoff.md`.
+Start with `AGENTS.md` (standing rules for all AI models, including the active-document map) and `docs/施工清單.md` (the single source of progress truth). Historical v0.1-era docs (mock flow, team handoff, QA checklists) are quarantined in `docs/archive/` — see its README before citing anything from there.
 
 ## Local Preview
 

@@ -60,8 +60,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [costCurrency, setCostCurrency] = useState<CostCurrency>("CNY");
   const [taobaoUrl, setTaobaoUrl] = useState("");
   const [note, setNote] = useState("");
-  // B1 (Mockup差異備忘 差異2): 規格改手填，不做規格圖 OCR。寫進 product_drafts.spec_text，
-  // 生成時進到文案 D 段；analyze-images 已改為不覆蓋此欄，手填值會被尊重。
+  // B1 (Mockup差異備忘 差異2): 規格以「系統自動整理」為主，此欄是常駐可編輯的補充/修正入口，
+  // 預設留空。留空時生成會用 LLM 從證據池整理的規格回寫 spec_text；有填則以此為準不被覆蓋。
   const [specText, setSpecText] = useState("");
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
@@ -599,10 +599,10 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
           </div>
 
           <div className="field">
-            <label>商品規格（手填）</label>
+            <label>商品規格（選填，留空由系統自動整理）</label>
             <textarea
               onChange={(e) => setSpecText(e.target.value)}
-              placeholder="材質、尺寸、產地等規格文字，一行一項或照抄商品頁。生成文案時會放進商品資訊段。"
+              placeholder="留空即可——系統會自動從款式／標題／圖片整理規格。只在需要補充或修正時才填（一行一項）。"
               rows={3}
               value={specText}
             />

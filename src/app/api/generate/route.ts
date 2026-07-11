@@ -696,6 +696,21 @@ export async function POST(request: NextRequest) {
     if (metaDuplicateWarning) extraWarnings.push(metaDuplicateWarning);
   }
 
+  // 規格自動化 (Mockup差異備忘 差異2, 老闆 2026-07-11): when the operator left
+  // spec_text empty, adopt the model's [[spec]] synthesis and flag it for a
+  // review glance. A non-empty spec_text (operator 補充/修正) is authoritative and
+  // never overwritten. Empty spec never blocks generation -- it just stays null.
+  const existingSpec = (draft.spec_text ?? "").trim();
+  const autoSpec = localizeToTaiwanTraditionalText(providerOutput.spec ?? "").trim();
+  const autoSpecIsBlank = !autoSpec || autoSpec === "（無）" || autoSpec === "(無)";
+  let finalSpecText: string | null = draft.spec_text ?? null;
+  if (!existingSpec && !autoSpecIsBlank) {
+    finalSpecText = autoSpec;
+    extraWarnings.push(
+      "商品規格為系統自動整理（來自款式／標題／圖片文字），發布前請審核瞄一眼確認無誤、必要時修正。"
+    );
+  }
+
   const nextStatus = localizedOutput.draft_state === "blocked" ? "needs_revision" : "ready_for_review";
   const allWarnings = uniqueMessages([...localizedOutput.validation_warnings, ...extraWarnings]);
 
@@ -710,6 +725,7 @@ export async function POST(request: NextRequest) {
       tags: localizedOutput.shopify_tags,
       shopify_tags: localizedOutput.shopify_tags,
       generated_faq_html: localizedOutput.generated_faq_html,
+      spec_text: finalSpecText,
       why_we_chose_it: providerOutput.whyWeChoseIt,
       product_highlights: providerOutput.productHighlights,
       ip_name: detected.ip || null,

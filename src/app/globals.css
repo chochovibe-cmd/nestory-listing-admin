@@ -184,7 +184,8 @@ select {
 /* ── Header ── */
 .topbar {
   align-items: center;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--header-border-w) solid var(--border);
+  box-shadow: var(--header-shadow);
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -194,6 +195,9 @@ select {
   top: 0;
   background: var(--bg);
   z-index: 100;
+}
+body[data-theme="kitty"] .topbar {
+  background: var(--header-bg);
 }
 
 .brand {
@@ -343,6 +347,8 @@ select {
   background: var(--accent);
   color: var(--accent-fg);
   font-weight: 700;
+  border-color: var(--border);
+  box-shadow: var(--pill-active-shadow);
 }
 
 .theme-btn {
@@ -500,10 +506,10 @@ button.danger {
 /* ── Panels ── */
 .panel {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
+  border: var(--frame-w-panel) solid var(--border);
+  border-radius: var(--frame-radius-panel);
   overflow: hidden;
-  box-shadow: var(--shadow-s);
+  box-shadow: var(--frame-shadow);
 }
 
 .panel-header {
@@ -563,7 +569,9 @@ select {
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--accent3);
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  outline: none;
 }
 
 /* Scoped to exclude text-entry fields (2026-07-06, user prefers the
@@ -1676,17 +1684,19 @@ textarea {
 }
 
 .result-card {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
+  background: var(--surface);
+  border: var(--frame-w-panel) solid var(--border);
+  border-radius: var(--frame-radius-panel);
   overflow: hidden;
-  box-shadow: var(--shadow-s);
+  box-shadow: var(--frame-shadow);
   transition: box-shadow .2s, border-color .2s;
 }
 
 .result-card.active {
-  border-color: var(--accent3);
-  box-shadow: var(--shadow-m);
+  /* Active card cue is offset shadow (accent3 mix), not accent border —
+     matches pre-B15 final computed look after L2→L4 cascade. */
+  border-color: var(--border);
+  box-shadow: var(--card-active-shadow);
 }
 
 .rc-header {
@@ -1834,6 +1844,7 @@ textarea {
   }
 }
 
+/* Soft status chips (final site look — transparent/light + tinted border/text) */
 .rc-status {
   width: 20px;
   height: 20px;
@@ -1843,11 +1854,16 @@ textarea {
   justify-content: center;
   font-size: 10px;
   flex-shrink: 0;
+  background: var(--chip-bg);
+  box-shadow: none;
+  border: 1px solid var(--chip-border);
+  color: var(--text-dim);
 }
 
 .rc-status.generating {
-  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  background: var(--chip-bg);
   color: var(--warn);
+  border-color: var(--chip-run-border);
   animation: spinStatus 1s linear infinite;
 }
 
@@ -1856,14 +1872,16 @@ textarea {
 }
 
 .rc-status.done {
-  background: color-mix(in srgb, var(--success) 16%, transparent);
+  background: var(--chip-bg);
   color: var(--success);
+  border-color: var(--chip-ok-border);
 }
 
 .rc-status.error,
 .rc-status.revision {
-  background: color-mix(in srgb, var(--accent2) 16%, transparent);
+  background: var(--chip-bg);
   color: var(--accent2);
+  border-color: var(--chip-warn-border);
 }
 
 /* B4: title + detect chips stack (Mockup rc-headmain) */
@@ -2623,13 +2641,38 @@ textarea {
 .formula-preview { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; font-family: 'Space Grotesk', sans-serif; font-size: 11px; color: var(--accent); margin-top: 10px; }
 .settings-note { font-size: 10px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; }
 
-/* ── Result card dual price (售價 + 利潤 stacked) ── */
+/* ── Result card dual price (售價 + 利潤 stacked) — soft text labels ── */
 .rc-price-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
-.rc-profit { font-family: 'Space Grotesk', sans-serif; font-size: 10px; color: var(--success); white-space: nowrap; }
+.rc-price,
+.rc-profit,
+.rate-val {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+  padding-left: 0;
+  padding-right: 0;
+  font-weight: 800;
+}
+.rc-price,
+.rate-val {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  font-size: 13px;
+}
+.rc-profit {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  color: var(--success);
+  white-space: nowrap;
+  padding: 4px 0;
+  border-radius: 999px;
+}
 .rc-compare { font-size: 10px; color: var(--text-muted); text-decoration: line-through; white-space: nowrap; }
 
 /* ── Header: live rate + deployment status dropdown ── */
-.rate-val { color: var(--accent); font-weight: 600; font-size: 13px; }
+.rate-val { font-weight: 800; }
 /* !important on padding/font-size: as an <a> tag (the 登入 link), .hdr-btn
    loses to ".nav a" on pure specificity (that selector has an extra element
    qualifier, 0,1,1 vs .hdr-btn's 0,1,0) regardless of source order, so the
@@ -2652,33 +2695,41 @@ textarea {
 .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 14px; }
 .status-body { display: none; }
 .status-body.open { display: block; }
-.status-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: var(--text-dim); }
-.status-pill strong { display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 2px; }
-.status-ok { border-color: color-mix(in srgb, var(--success) 45%, transparent); color: var(--success); }
-.status-warn { border-color: color-mix(in srgb, var(--accent2) 45%, transparent); color: var(--accent2); }
+.status-pill {
+  background: var(--chip-bg);
+  box-shadow: none;
+  border: 1px solid var(--chip-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.status-pill strong {
+  display: block;
+  color: var(--text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 2px;
+}
+.status-ok {
+  background: var(--chip-bg);
+  color: var(--success);
+  border-color: var(--chip-ok-border);
+}
+.status-warn {
+  background: var(--chip-bg);
+  color: var(--accent2);
+  border-color: var(--chip-warn-border);
+}
 
-/* ── B15⁵a Theme polish (single layer) ─────────────────────────────────────
-   Replaces the old L2 sticker → L3 reference-balanced → L4 soft-labels cascade.
-   Values come from structure tokens so each theme only differs in :root tokens.
-   Visual target = previous final computed look (not a redesign). ── */
-.panel,
-.result-card {
+/* ── B15⁵b residual theme chrome (shared controls + kitty header widgets) ──
+   Frame/chip/header tokens already live on base components above. This block
+   only covers multi-selector control lists and kitty-on-blue chrome. ── */
+.panel {
   border: var(--frame-w-panel) solid var(--border);
   border-radius: var(--frame-radius-panel);
   box-shadow: var(--frame-shadow);
-  background: var(--surface);
-}
-/* Prefer .topbar (class) over bare header — .topbar base rule sets border/bg
-   with higher specificity than element `header`, same as production markup. */
-.topbar,
-header.topbar {
-  border-bottom: var(--header-border-w) solid var(--border);
-  box-shadow: var(--header-shadow);
-  background: var(--bg);
-}
-body[data-theme="kitty"] .topbar,
-body[data-theme="kitty"] header.topbar {
-  background: var(--header-bg);
 }
 .panel-header,
 .settings-toggle,
@@ -2698,7 +2749,6 @@ select,
 .tone-card,
 .dropzone,
 .wsearch-row,
-.status-pill,
 .rc-tag,
 .formula-preview {
   border: var(--frame-w) solid var(--border);
@@ -2722,22 +2772,18 @@ select,
   border-color: var(--border);
   box-shadow: var(--drop-hover-shadow);
 }
-/* Selection must use --accent (never --line/--border alone). No !important:
-   resting rules no longer wipe focus/selected shadows later in the file. */
+/* Selection = accent frame (never --line/--border alone) */
 .tone-card:hover,
 .tone-card.active {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface2));
   box-shadow: var(--control-shadow);
 }
-input:focus,
 input[type="text"]:focus,
 input[type="number"]:focus,
 input[type="password"]:focus,
 textarea:focus,
 select:focus {
-  /* border-color must beat earlier `input[type].{border shorthand}` at equal cascade
-     depth; ring is the visible focus cue even if a UA snaps border paint. */
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
   outline: none;
@@ -2783,7 +2829,6 @@ select:focus {
   border-radius: 999px;
   font-weight: 700;
 }
-.pill-btn.active,
 .currency-toggle button.active,
 .mobile-tabbar button.active {
   border-color: var(--border);
@@ -2797,75 +2842,7 @@ select:focus {
   border-radius: 999px;
   font-weight: 700;
 }
-/* Soft price labels (old L4): borderless accent/success text */
-.rate-val,
-.rc-price,
-.rc-profit {
-  background: transparent;
-  box-shadow: none;
-  border: 0;
-  padding-left: 0;
-  padding-right: 0;
-  font-weight: 800;
-}
-.rate-val,
-.rc-price {
-  color: var(--accent);
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  font-size: 13px;
-}
-.rc-profit {
-  color: var(--success);
-  font-size: 11px;
-  padding: 4px 0;
-  border-radius: 999px;
-}
-/* Soft status chips (old L4 final look) */
-.status-pill,
-.rc-status {
-  background: var(--chip-bg);
-  box-shadow: none;
-  border: 1px solid var(--chip-border);
-  color: var(--text-dim);
-}
-.status-pill {
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 11px;
-}
-.status-pill strong {
-  display: block;
-  color: var(--text-muted);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  margin-bottom: 2px;
-}
-.status-ok,
-.rc-status.done {
-  background: var(--chip-bg);
-  color: var(--success);
-  border-color: var(--chip-ok-border);
-}
-.status-warn,
-.rc-status.error,
-.rc-status.revision {
-  background: var(--chip-bg);
-  color: var(--accent2);
-  border-color: var(--chip-warn-border);
-}
-.rc-status.generating {
-  background: var(--chip-bg);
-  color: var(--warn);
-  border-color: var(--chip-run-border);
-}
-.result-card.active {
-  border-color: var(--border);
-  box-shadow: var(--card-active-shadow);
-}
-/* Kitty chrome on colored header (structure tokens supply --header-bg) */
+/* Kitty chrome on colored header */
 body[data-theme="kitty"] .brand,
 body[data-theme="kitty"] .brand span,
 body[data-theme="kitty"] .nav {

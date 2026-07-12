@@ -36,6 +36,9 @@ export type ImageType = "main" | "detail" | "spec" | "generated_detail" | "varia
 
 export type ImageStatus = "pending" | "processing" | "done" | "failed" | "skipped";
 
+/** B5: how the Phase D pipeline should process this product image. null = unmarked. */
+export type ImageProcessIntent = "keep" | "de_text" | "regenerate";
+
 export interface ProductDraft {
   id: string;
   source_url: string | null;
@@ -129,5 +132,12 @@ export interface ProductImage {
   translated_text: string | null;
   processing_status: string;
   processing_error: string | null;
+  /** B5: null until operator picks keep / de_text / regenerate. */
+  process_intent: ImageProcessIntent | null;
+  /**
+   * B5「規格圖」mark: image-pipeline only (去簡體字). Not OCR source —
+   * see docs/Mockup差異備忘.md 差異2. May still be a main product photo.
+   */
+  is_spec_process: boolean;
   created_at: string;
 }

@@ -1015,6 +1015,147 @@ textarea {
   flex-shrink: 0;
 }
 
+/* B11: approve summary modal (desktop center / mobile bottom sheet) — tokens only */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--bg) 35%, rgba(0, 0, 0, 0.5));
+}
+.modal-overlay.open {
+  display: flex;
+}
+.modal-box {
+  width: min(420px, 94vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-m);
+}
+.modal-hdr {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-muted);
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: var(--radius-s);
+  padding: 0;
+}
+.modal-close:hover {
+  color: var(--text);
+  border-color: transparent;
+}
+.modal-body {
+  padding: 14px 16px 16px;
+}
+.approve-sum-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sum-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 6px 0;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.sum-row-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+.sum-row-warn .sum-row-text,
+.sum-row-ng .sum-row-text {
+  color: var(--warn);
+}
+.sum-row-ng .sum-row-text {
+  color: var(--danger);
+}
+.st-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.st-dot.st-ok { background: var(--success); }
+.st-dot.st-busy { background: var(--warn); }
+.st-dot.st-ng { background: var(--danger); }
+.st-dot.st-idle { background: var(--idle); }
+.approve-sum-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.approve-sum-btn {
+  flex: 1;
+  min-height: 44px;
+  font-weight: 700;
+}
+.approve-sum-btn.primary.danger {
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+@media (max-width: 959px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-box {
+    width: 100%;
+    max-height: 88vh;
+    border-radius: var(--radius-l) var(--radius-l) 0 0;
+    border-bottom: none;
+  }
+  .modal-hdr {
+    padding-top: 18px;
+  }
+  .modal-hdr::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-soft);
+  }
+}
+
 /* Variant (款式) editor — B7 multi-dimension (tokens only; layout from mockup IA) */
 .variant-box { border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface2); padding: 10px; margin: 4px 0; position: relative; }
 .variant-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; font-size: 10px; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }

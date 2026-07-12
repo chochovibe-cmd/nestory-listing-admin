@@ -181,8 +181,8 @@ export function buildShopifyProductPayload(
       // nothing called the follow-up mutation that actually sets it. See
       // publishDraft.ts's productVariantsBulkUpdate call.
       compareAtPrice: draft.compare_at_price ?? null,
-      inventoryQuantity: 0,
-      inventoryPolicy: "DENY",
+      inventoryQuantity: draft.inventory_quantity ?? 0,
+      inventoryPolicy: draft.inventory_policy === "deny" ? "DENY" : "CONTINUE",
       ...generatedVariantSeed
     },
     shopifyCollections: draft.shopify_collections ?? [],

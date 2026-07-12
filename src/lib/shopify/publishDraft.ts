@@ -11,6 +11,32 @@ export type PublishDraftResult =
   | { ok: true; mock?: false; productId: string; adminUrl: string | null }
   | { ok: false; status: number; error: string };
 
+async function getShopifyInventoryLocationId(): Promise<string | null> {
+  const configuredLocationId = process.env.SHOPIFY_LOCATION_ID?.trim();
+  if (configuredLocationId) return configuredLocationId;
+
+  const locationQuery = `
+    query PrimaryInventoryLocation {
+      locations(first: 1) {
+        nodes { id name }
+      }
+    }
+  `;
+
+  try {
+    const { response, result } = await callShopifyAdminGraphQL<{
+      data?: { locations?: { nodes?: { id: string; name?: string }[] } };
+      errors?: unknown[];
+    }>(locationQuery, {});
+
+    if (!response.ok || result.errors?.length) return null;
+
+    return result.data?.locations?.nodes?.[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Shared by the single-draft publish route and the batch publish route so the
 // Shopify GraphQL call / mock-safe fallback / publish_jobs bookkeeping only
 // lives in one place. Callers are expected to have already done auth + role
@@ -189,8 +215,11 @@ export async function publishDraft(
       price: number;
       cost: number;
       compareAtPrice?: number | null;
+      inventoryQuantity: number;
       inventoryPolicy: "DENY" | "CONTINUE";
     };
+    const hasFiniteInventory = seed.inventoryPolicy === "DENY" && Number.isInteger(seed.inventoryQuantity);
+    const inventoryLocationId = hasFiniteInventory ? await getShopifyInventoryLocationId() : null;
 
     type VariantUpdateResult = {
       data?: { productVariantsBulkUpdate?: { userErrors?: { field: string; message: string }[] } };
@@ -201,6 +230,12 @@ export async function publishDraft(
     let variantError: string | null = null;
 
     try {
+      if (hasFiniteInventory && !inventoryLocationId) {
+        throw new Error(
+          "有限庫存發布需要 Shopify location ID；請設定 SHOPIFY_LOCATION_ID，或確認 Shopify Admin API 可讀取 locations。"
+        );
+      }
+
       const { response: variantResponse, result: vr } = await callShopifyAdminGraphQL<VariantUpdateResult>(
         variantMutation,
         {
@@ -211,7 +246,10 @@ export async function publishDraft(
               price: String(seed.price),
               ...(seed.compareAtPrice ? { compareAtPrice: String(seed.compareAtPrice) } : {}),
               inventoryPolicy: seed.inventoryPolicy,
-              inventoryItem: { sku: seed.sku, cost: String(seed.cost) },
+              inventoryItem: { sku: seed.sku, cost: String(seed.cost), tracked: hasFiniteInventory },
+              ...(hasFiniteInventory && inventoryLocationId
+                ? { quantityAdjustments: [{ locationId: inventoryLocationId, adjustment: seed.inventoryQuantity, changeFromQuantity: 0 }] }
+                : {}),
             },
           ],
         },

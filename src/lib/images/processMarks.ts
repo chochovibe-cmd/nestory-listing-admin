@@ -11,8 +11,12 @@ export function isImageMarked(image: Pick<ProductImage, "process_intent">): bool
 
 export function sortPipelineImages<T extends Pick<ProductImage, "sort_order" | "created_at">>(images: T[]): T[] {
   return [...images].sort((a, b) => {
-    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
-    return a.created_at.localeCompare(b.created_at);
+    // B12 hotfix: queue-page rows may lack sort_order/created_at (narrower
+    // select) — sort defensively instead of crashing stage counts.
+    const orderA = a.sort_order ?? 0;
+    const orderB = b.sort_order ?? 0;
+    if (orderA !== orderB) return orderA - orderB;
+    return (a.created_at ?? "").localeCompare(b.created_at ?? "");
   });
 }
 

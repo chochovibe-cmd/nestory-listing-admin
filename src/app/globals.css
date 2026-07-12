@@ -1108,6 +1108,14 @@ textarea {
     max-height: 55vh; border-radius: var(--radius-m) var(--radius-m) 0 0;
     z-index: 80;
   }
+
+  /* fix(B9): mobile sticky batch toolbar was a tall wrap wall that permanently
+     covered card quick-actions / checkboxes (z-index 5). Drop sticky under
+     960px so the bar scrolls away with the page; desktop keeps sticky above. */
+  .results-batch-toolbar {
+    position: static;
+    z-index: auto;
+  }
 }
 
 .drop-zone {
@@ -1588,6 +1596,25 @@ textarea {
 .rc-tabpanel {
   display: block;
   padding-bottom: 4px;
+}
+
+/* fix(B9): desktop balanced two-column field layout inside card tabs.
+   Reuses the same two-col idea as .row (AI偵測類型/SKU); no new color tokens.
+   Long fields use .rc-span-2; <960px stacks to single column (see media query). */
+.rc-tabpanel-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (min-width: 960px) {
+  .rc-tabpanel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rc-tabpanel-grid > .rc-span-2 {
+    grid-column: 1 / -1;
+  }
 }
 
 .rc-status {

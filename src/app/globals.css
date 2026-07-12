@@ -32,6 +32,26 @@ body[data-theme="dark"] {
   --radius-l: 20px;
   --shadow-s: 0 1px 2px rgba(0, 0, 0, .16);
   --shadow-m: 0 3px 10px rgba(0, 0, 0, .18);
+  /* B15⁵a structure tokens = final computed look after old L2→L3→L4 cascade */
+  --frame-w: 1px;
+  --frame-w-panel: 1px;
+  --frame-radius-panel: 10px;
+  --frame-shadow: none;
+  --control-shadow: none;
+  --header-border-w: 1px;
+  --header-shadow: none;
+  --hover-transform: translateY(-1px);
+  --hover-shadow: 0 4px 12px rgba(0, 0, 0, .22);
+  --inset-surface: var(--surface2);
+  --pill-active-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
+  --card-active-shadow: 6px 6px 0 color-mix(in srgb, var(--accent3) 72%, var(--border));
+  --drop-hover-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 55%, var(--border));
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  --chip-bg: transparent;
+  --chip-border: color-mix(in srgb, var(--border) 72%, transparent);
+  --chip-ok-border: color-mix(in srgb, var(--success) 45%, var(--border));
+  --chip-warn-border: color-mix(in srgb, var(--accent2) 45%, var(--border));
+  --chip-run-border: color-mix(in srgb, var(--warn) 45%, var(--border));
 }
 /* 狀態色詞彙表：--idle 灰=未開始 / --warn 黃=進行中 / --success 綠=完成 / --danger 紅=失敗。
    nordic/kitty：--border-soft 刻意與 --border 同值（B15 ③-2 維持現狀）；dark 的 soft 已較淡。 */
@@ -62,6 +82,25 @@ body[data-theme="nordic"] {
   --radius-l: 20px;
   --shadow-s: 0 2px 0 rgba(28, 28, 28, .055);
   --shadow-m: 0 3px 0 rgba(28, 28, 28, .065);
+  --frame-w: 1.5px;
+  --frame-w-panel: 1.5px;
+  --frame-radius-panel: var(--radius-l);
+  --frame-shadow: 0 3px 0 rgba(26, 26, 26, .045);
+  --control-shadow: none;
+  --header-border-w: 2.5px;
+  --header-shadow: 0 3px 0 rgba(26, 26, 26, .16);
+  --hover-transform: translateY(-1px);
+  --hover-shadow: 0 3px 0 rgba(26, 26, 26, .07);
+  --inset-surface: color-mix(in srgb, var(--surface2) 58%, var(--surface));
+  --pill-active-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
+  --card-active-shadow: 6px 6px 0 color-mix(in srgb, var(--accent3) 72%, var(--border));
+  --drop-hover-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 55%, var(--border));
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  --chip-bg: transparent;
+  --chip-border: color-mix(in srgb, var(--border) 72%, transparent);
+  --chip-ok-border: color-mix(in srgb, var(--success) 45%, var(--border));
+  --chip-warn-border: color-mix(in srgb, var(--accent2) 45%, var(--border));
+  --chip-run-border: color-mix(in srgb, var(--warn) 45%, var(--border));
 }
 
 body[data-theme="kitty"] {
@@ -90,6 +129,25 @@ body[data-theme="kitty"] {
   --radius-l: 20px;
   --shadow-s: 0 2px 0 rgba(23, 23, 23, .045);
   --shadow-m: 0 3px 0 rgba(23, 23, 23, .055);
+  --frame-w: 1.5px;
+  --frame-w-panel: 1.5px;
+  --frame-radius-panel: var(--radius-l);
+  --frame-shadow: 0 3px 0 rgba(26, 26, 26, .045);
+  --control-shadow: none;
+  --header-border-w: 2.5px;
+  --header-shadow: 0 3px 0 rgba(26, 26, 26, .16);
+  --hover-transform: translateY(-1px);
+  --hover-shadow: 0 3px 0 rgba(26, 26, 26, .07);
+  --inset-surface: color-mix(in srgb, var(--surface2) 58%, var(--surface));
+  --pill-active-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
+  --card-active-shadow: 6px 6px 0 color-mix(in srgb, var(--accent3) 72%, var(--border));
+  --drop-hover-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 55%, var(--border));
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  --chip-bg: transparent;
+  --chip-border: color-mix(in srgb, var(--border) 72%, transparent);
+  --chip-ok-border: color-mix(in srgb, var(--success) 45%, var(--border));
+  --chip-warn-border: color-mix(in srgb, var(--accent2) 45%, var(--border));
+  --chip-run-border: color-mix(in srgb, var(--warn) 45%, var(--border));
 }
 
 * {
@@ -509,10 +567,9 @@ select:focus {
 }
 
 /* Scoped to exclude text-entry fields (2026-07-06, user prefers the
-   original border-color + box-shadow ring on inputs -- see the
-   "reference-balanced polish" input:focus rule further down -- over this
-   outline). Buttons/links had no focus indicator at all before this, so
-   the outline still adds real value there.
+   original border-color + box-shadow focus ring on inputs -- see theme polish
+   input:focus further down -- over this outline). Buttons/links had no focus
+   indicator at all before this, so the outline still adds real value there.
    !important: .edit-input/.edit-textarea (declared later, same 0,1,0
    specificity) set outline:none, which would otherwise silently win. */
 :focus-visible {
@@ -2600,24 +2657,34 @@ textarea {
 .status-ok { border-color: color-mix(in srgb, var(--success) 45%, transparent); color: var(--success); }
 .status-warn { border-color: color-mix(in srgb, var(--accent2) 45%, transparent); color: var(--accent2); }
 
-/* ── Sticker / Neo-Brutalist polish (ported verbatim from 分支/index.html; `header`
-   is a bare element selector so it matches our <header className="topbar">) ── */
+/* ── B15⁵a Theme polish (single layer) ─────────────────────────────────────
+   Replaces the old L2 sticker → L3 reference-balanced → L4 soft-labels cascade.
+   Values come from structure tokens so each theme only differs in :root tokens.
+   Visual target = previous final computed look (not a redesign). ── */
 .panel,
 .result-card {
-  border: 2.5px solid var(--line);
-  border-radius: var(--radius-l);
-  box-shadow: var(--shadow-m);
+  border: var(--frame-w-panel) solid var(--border);
+  border-radius: var(--frame-radius-panel);
+  box-shadow: var(--frame-shadow);
+  background: var(--surface);
 }
-header {
-  border-bottom: 2.5px solid var(--line);
-  box-shadow: 0 3px 0 rgba(26, 26, 26, .16);
+/* Prefer .topbar (class) over bare header — .topbar base rule sets border/bg
+   with higher specificity than element `header`, same as production markup. */
+.topbar,
+header.topbar {
+  border-bottom: var(--header-border-w) solid var(--border);
+  box-shadow: var(--header-shadow);
+  background: var(--bg);
 }
-body[data-theme="dark"] header { box-shadow: 0 3px 0 rgba(232, 232, 240, .18); }
+body[data-theme="kitty"] .topbar,
+body[data-theme="kitty"] header.topbar {
+  background: var(--header-bg);
+}
 .panel-header,
 .settings-toggle,
 .settings-body {
-  border-color: var(--line);
-  border-width: 2.5px;
+  border-color: var(--border);
+  border-width: var(--frame-w);
 }
 input[type="text"],
 input[type="number"],
@@ -2634,48 +2701,46 @@ select,
 .status-pill,
 .rc-tag,
 .formula-preview {
-  border: 2.5px solid var(--line);
+  border: var(--frame-w) solid var(--border);
   border-radius: var(--radius-s);
+  box-shadow: var(--control-shadow);
 }
 .dropzone,
 .manual-pricing,
-.tone-card,
 .copy-settings-block,
 .wsearch-row,
-.formula-preview,
-.status-pill {
+.formula-preview {
+  background: var(--inset-surface);
+}
+.tone-card {
   background: var(--surface2);
-  box-shadow: var(--shadow-s);
 }
 .dropzone { border-style: dashed; }
 .dropzone.has-files { border-style: solid; }
 .dropzone:hover,
 .source-pill:focus {
-  border-color: var(--line);
-  box-shadow: 4px 4px 0 color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-color: var(--border);
+  box-shadow: var(--drop-hover-shadow);
 }
-/* Fix (2026-07-03): --line equals --border in every theme, and a later
-   "reference-balanced" rule (further down) forces .tone-card's box-shadow
-   back to none -- together that made a "selected" tone card look IDENTICAL
-   to an unselected one (border-color unchanged, shadow removed), so clicking
-   appeared to do nothing. border-color/background aren't touched by that
-   later rule, so setting them here (with --accent, which does differ from
-   the resting border in all 3 themes) survives and is actually visible. */
+/* Selection must use --accent (never --line/--border alone). No !important:
+   resting rules no longer wipe focus/selected shadows later in the file. */
 .tone-card:hover,
 .tone-card.active {
-  border-color: var(--accent) !important;
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface2)) !important;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface2));
+  box-shadow: var(--control-shadow);
 }
-/* Only the actual text-entry fields get the softer focus ring (2026-07-03,
-   user asked to keep everything else's original hard offset shadow). The
-   per-theme "reference-balanced polish" block further down has a higher-
-   specificity `box-shadow: none` for these same tags, so !important is
-   needed here or this rule silently loses to it. */
 input:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent) !important;
+  /* border-color must beat earlier `input[type].{border shorthand}` at equal cascade
+     depth; ring is the visible focus cue even if a UA snaps border paint. */
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  outline: none;
 }
 .hdr-btn,
 .theme-btn,
@@ -2684,8 +2749,8 @@ select:focus {
 .btn-mini,
 .nav-links-toggle,
 .theme-picker-toggle {
-  border: 2.5px solid var(--line);
-  box-shadow: var(--shadow-s);
+  border: var(--frame-w) solid var(--border);
+  box-shadow: var(--control-shadow);
 }
 .theme-btn {
   border-radius: 999px;
@@ -2709,74 +2774,98 @@ select:focus {
 .hdr-btn:hover,
 .nav-links-toggle:hover,
 .theme-picker-toggle:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 5px 5px 0 rgba(26, 26, 26, .42);
-}
-body[data-theme="dark"] .btn-add:hover,
-body[data-theme="dark"] .btn-mini:hover,
-body[data-theme="dark"] .theme-btn:hover,
-body[data-theme="dark"] .hdr-btn:hover {
-  box-shadow: 5px 5px 0 rgba(232, 232, 240, .30);
+  transform: var(--hover-transform);
+  box-shadow: var(--hover-shadow);
 }
 .pill-group { padding: 1px; background: var(--surface); }
-.pill-btn { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
+.pill-btn {
+  border: var(--frame-w) solid transparent;
+  border-radius: 999px;
+  font-weight: 700;
+}
 .pill-btn.active,
 .currency-toggle button.active,
 .mobile-tabbar button.active {
-  border-color: var(--line);
+  border-color: var(--border);
   background: var(--accent);
   color: var(--accent-fg);
-  box-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
+  box-shadow: var(--pill-active-shadow);
 }
 .currency-toggle { gap: 3px; padding: 3px; background: var(--surface); }
-.currency-toggle button { border: 2.5px solid transparent; border-radius: 999px; font-weight: 700; }
-.rc-status,
-.rc-price,
-.rc-profit,
-.rate-val {
-  border: 2.5px solid var(--line);
-  box-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
+.currency-toggle button {
+  border: var(--frame-w) solid transparent;
+  border-radius: 999px;
+  font-weight: 700;
 }
-.rate-val {
+/* Soft price labels (old L4): borderless accent/success text */
+.rate-val,
+.rc-price,
+.rc-profit {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+  padding-left: 0;
+  padding-right: 0;
+  font-weight: 800;
+}
+.rate-val,
+.rc-price {
+  color: var(--accent);
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--warn);
-  color: var(--line);
+  font-size: 13px;
 }
-.rc-price { background: var(--accent); color: var(--accent-fg); }
+.rc-profit {
+  color: var(--success);
+  font-size: 11px;
+  padding: 4px 0;
+  border-radius: 999px;
+}
+/* Soft status chips (old L4 final look) */
+.status-pill,
+.rc-status {
+  background: var(--chip-bg);
+  box-shadow: none;
+  border: 1px solid var(--chip-border);
+  color: var(--text-dim);
+}
+.status-pill {
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+}
+.status-pill strong {
+  display: block;
+  color: var(--text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 2px;
+}
+.status-ok,
+.rc-status.done {
+  background: var(--chip-bg);
+  color: var(--success);
+  border-color: var(--chip-ok-border);
+}
 .status-warn,
 .rc-status.error,
-.rc-status.revision { background: var(--accent2); color: var(--on-solid); }
-.rc-status.generating { background: var(--warn); color: var(--line); }
-.rc-status.done,
-.status-ok { background: var(--success); color: var(--on-solid); }
-.rc-price { font-size: 13px; padding: 5px 12px; border-radius: 999px; }
-.rc-profit { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; }
-.status-pill { background: var(--surface); color: var(--text); }
-.status-pill strong { color: var(--text); }
-.result-card { background: var(--surface); }
+.rc-status.revision {
+  background: var(--chip-bg);
+  color: var(--accent2);
+  border-color: var(--chip-warn-border);
+}
+.rc-status.generating {
+  background: var(--chip-bg);
+  color: var(--warn);
+  border-color: var(--chip-run-border);
+}
 .result-card.active {
-  border-color: var(--line);
-  box-shadow: 6px 6px 0 color-mix(in srgb, var(--accent3) 72%, var(--line));
+  border-color: var(--border);
+  box-shadow: var(--card-active-shadow);
 }
-body[data-theme="kitty"] .status-ok,
-body[data-theme="kitty"] .rc-status.done {
-  background: var(--accent3);
-  color: var(--on-solid);
-}
-body[data-theme="kitty"] .formula-preview,
-body[data-theme="kitty"] .rc-status.generating,
-body[data-theme="kitty"] .rate-val {
-  background: var(--warn);
-  color: var(--line);
-}
-body[data-theme="kitty"] header {
-  background: var(--header-bg);
-  border-bottom-color: var(--border);
-}
+/* Kitty chrome on colored header (structure tokens supply --header-bg) */
 body[data-theme="kitty"] .brand,
 body[data-theme="kitty"] .brand span,
 body[data-theme="kitty"] .nav {
@@ -2799,175 +2888,10 @@ body[data-theme="kitty"] .pill-btn.active {
   color: var(--on-solid);
   border-color: var(--border);
 }
-body[data-theme="kitty"] .rate-val { color: var(--warn) !important; }
-
-/* ── Reference-balanced polish: cleaner, thinner-bordered dark theme,
-   lighter-shadowed light themes (ported from 分支/index.html) ── */
-body:not([data-theme="dark"]) .panel,
-body:not([data-theme="dark"]) .result-card {
-  border-width: 1.5px;
-  box-shadow: 0 3px 0 rgba(26, 26, 26, .045);
+body[data-theme="kitty"] .formula-preview {
+  background: var(--warn);
+  color: var(--border);
 }
-body:not([data-theme="dark"]) input[type="text"],
-body:not([data-theme="dark"]) input[type="number"],
-body:not([data-theme="dark"]) input[type="password"],
-body:not([data-theme="dark"]) textarea,
-body:not([data-theme="dark"]) select,
-body:not([data-theme="dark"]) .source-pill,
-body:not([data-theme="dark"]) .currency-toggle,
-body:not([data-theme="dark"]) .manual-pricing,
-body:not([data-theme="dark"]) .copy-settings-block,
-body:not([data-theme="dark"]) .tone-card,
-body:not([data-theme="dark"]) .dropzone,
-body:not([data-theme="dark"]) .wsearch-row,
-body:not([data-theme="dark"]) .status-pill,
-body:not([data-theme="dark"]) .rc-tag,
-body:not([data-theme="dark"]) .formula-preview {
-  border-width: 1.5px;
-  box-shadow: none;
-}
-body:not([data-theme="dark"]) .dropzone,
-body:not([data-theme="dark"]) .manual-pricing,
-body:not([data-theme="dark"]) .copy-settings-block,
-body:not([data-theme="dark"]) .wsearch-row,
-body:not([data-theme="dark"]) .formula-preview {
-  background: color-mix(in srgb, var(--surface2) 58%, var(--surface));
-}
-body:not([data-theme="dark"]) .hdr-btn,
-body:not([data-theme="dark"]) .theme-btn,
-body:not([data-theme="dark"]) .pill-group,
-body:not([data-theme="dark"]) .btn-add,
-body:not([data-theme="dark"]) .btn-mini,
-body:not([data-theme="dark"]) .nav-links-toggle,
-body:not([data-theme="dark"]) .theme-picker-toggle {
-  border-width: 1.5px;
-  box-shadow: none;
-}
-body:not([data-theme="dark"]) .rc-status,
-body:not([data-theme="dark"]) .rc-price,
-body:not([data-theme="dark"]) .rc-profit,
-body:not([data-theme="dark"]) .rate-val {
-  border-width: 1.5px;
-  box-shadow: none;
-}
-body:not([data-theme="dark"]) .btn-add:hover,
-body:not([data-theme="dark"]) .btn-mini:hover,
-body:not([data-theme="dark"]) .theme-btn:hover,
-body:not([data-theme="dark"]) .hdr-btn:hover,
-body:not([data-theme="dark"]) .nav-links-toggle:hover,
-body:not([data-theme="dark"]) .theme-picker-toggle:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 0 rgba(26, 26, 26, .07);
-}
-body[data-theme="dark"] .panel,
-body[data-theme="dark"] .result-card {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: none;
-}
-body[data-theme="dark"] header {
-  border-bottom: 1px solid var(--border);
-  box-shadow: none;
-}
-body[data-theme="dark"] input[type="text"],
-body[data-theme="dark"] input[type="number"],
-body[data-theme="dark"] input[type="password"],
-body[data-theme="dark"] textarea,
-body[data-theme="dark"] select,
-body[data-theme="dark"] .source-pill,
-body[data-theme="dark"] .currency-toggle,
-body[data-theme="dark"] .manual-pricing,
-body[data-theme="dark"] .copy-settings-block,
-body[data-theme="dark"] .tone-card,
-body[data-theme="dark"] .dropzone,
-body[data-theme="dark"] .wsearch-row,
-body[data-theme="dark"] .status-pill,
-body[data-theme="dark"] .rc-tag,
-body[data-theme="dark"] .formula-preview,
-body[data-theme="dark"] .hdr-btn,
-body[data-theme="dark"] .theme-btn,
-body[data-theme="dark"] .pill-group,
-body[data-theme="dark"] .btn-add,
-body[data-theme="dark"] .btn-mini,
-body[data-theme="dark"] .nav-links-toggle,
-body[data-theme="dark"] .theme-picker-toggle {
-  border-width: 1px;
-  box-shadow: none;
-}
-body[data-theme="dark"] .btn-add {
-  background: var(--accent);
-  color: var(--accent-fg);
-}
-body[data-theme="dark"] .status-pill {
-  background: var(--surface2);
-  color: var(--text-dim);
-}
-body[data-theme="dark"] .status-pill strong { color: var(--text-muted); }
-body[data-theme="dark"] .status-ok {
-  border-color: color-mix(in srgb, var(--success) 34%, transparent);
-  color: var(--success);
-}
-body[data-theme="dark"] .status-warn {
-  border-color: color-mix(in srgb, var(--accent2) 34%, transparent);
-  color: var(--accent2);
-}
-body[data-theme="dark"] .btn-add:hover,
-body[data-theme="dark"] .btn-mini:hover,
-body[data-theme="dark"] .theme-btn:hover,
-body[data-theme="dark"] .hdr-btn:hover,
-body[data-theme="dark"] .nav-links-toggle:hover,
-body[data-theme="dark"] .theme-picker-toggle:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .22);
-}
-body[data-theme="dark"] .rc-price {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  color: var(--accent);
-}
-body[data-theme="dark"] .rc-profit {
-  background: transparent;
-  border: 0;
-  color: var(--success);
-}
-
-/* ── Final soft labels: numbers/status/badges become borderless colored text
-   instead of solid blocks (ported from 分支/index.html) ── */
-.rate-val,
-.rc-price,
-.rc-profit {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: 0 !important;
-  color: var(--text-dim) !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}
-.rate-val,
-.rc-price { color: var(--accent) !important; font-weight: 800; }
-.rc-profit { color: var(--success) !important; }
-.status-pill,
-.rc-status {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent) !important;
-  color: var(--text-dim) !important;
-}
-.status-ok,
-.rc-status.done {
-  background: transparent !important;
-  color: var(--success) !important;
-  border-color: color-mix(in srgb, var(--success) 45%, var(--border)) !important;
-}
-.status-warn,
-.rc-status.error,
-.rc-status.revision {
-  background: transparent !important;
-  color: var(--accent2) !important;
-  border-color: color-mix(in srgb, var(--accent2) 45%, var(--border)) !important;
-}
-.rc-status.generating {
-  background: transparent !important;
-  color: var(--warn) !important;
-  border-color: color-mix(in srgb, var(--warn) 45%, var(--border)) !important;
+body[data-theme="kitty"] .rate-val {
+  color: var(--warn);
 }

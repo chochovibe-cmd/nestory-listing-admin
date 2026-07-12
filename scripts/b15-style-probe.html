@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>B15 style probe</title>
+  <link rel="stylesheet" href="../src/app/globals.css" />
+  <style>
+    /* harness-only layout; does not affect probe classes */
+    #mount { padding: 24px; display: grid; gap: 12px; }
+  </style>
+</head>
+<body data-theme="dark">
+  <div id="mount">
+    <div class="pill-group">
+      <button type="button" class="pill-btn active" id="p1">active pill</button>
+    </div>
+    <button type="button" class="tone-card active" id="p2">
+      <span class="tone-title">tone active</span>
+    </button>
+    <span class="rc-status done" id="p3a">✓</span>
+    <span class="rc-status generating" id="p3b">…</span>
+    <span class="rc-status error" id="p3c">!</span>
+    <div class="result-card" id="p4">card</div>
+    <div class="result-card active" id="p5">card active</div>
+    <input id="p6" type="text" value="focus me" />
+    <header class="topbar" id="p7"><div class="brand">Nestory</div></header>
+    <div class="status-pill status-ok" id="p8"><strong>ok</strong>ready</div>
+  </div>
+  <pre id="out"></pre>
+  <script>
+    const PROBES = [
+      ["P1", "#p1"],
+      ["P2", "#p2"],
+      ["P3a", "#p3a"],
+      ["P3b", "#p3b"],
+      ["P3c", "#p3c"],
+      ["P4", "#p4"],
+      ["P5", "#p5"],
+      ["P6", "#p6"],
+      ["P7", "#p7"],
+      ["P8", "#p8"],
+    ];
+    const KEYS = [
+      "borderTopWidth",
+      "borderTopColor",
+      "borderTopStyle",
+      "boxShadow",
+      "backgroundColor",
+      "color",
+      "borderRadius",
+    ];
+    function snap(el) {
+      const cs = getComputedStyle(el);
+      const o = {};
+      for (const k of KEYS) o[k] = cs[k];
+      return o;
+    }
+    function nextFrame() {
+      return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+    async function runTheme(theme) {
+      document.body.setAttribute("data-theme", theme);
+      await nextFrame();
+      const focusEl = document.querySelector("#p6");
+      focusEl.blur();
+      const rest = {};
+      for (const [id, sel] of PROBES) {
+        const el = document.querySelector(sel);
+        const s = snap(el);
+        // header uses border-bottom
+        if (id === "P7") {
+          s.borderBottomWidth = getComputedStyle(el).borderBottomWidth;
+          s.borderBottomColor = getComputedStyle(el).borderBottomColor;
+        }
+        rest[id] = s;
+      }
+      focusEl.focus();
+      await nextFrame();
+      rest.P6_focus = snap(focusEl);
+      focusEl.blur();
+      return rest;
+    }
+    (async () => {
+      const report = {
+        dark: await runTheme("dark"),
+        nordic: await runTheme("nordic"),
+        kitty: await runTheme("kitty"),
+      };
+      const text = JSON.stringify(report, null, 2);
+      document.getElementById("out").textContent = text;
+      document.title = "B15_PROBE_READY";
+      // also expose for CDP
+      window.__B15_REPORT__ = report;
+    })();
+  </script>
+</body>
+</html>

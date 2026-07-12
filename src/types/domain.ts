@@ -90,6 +90,8 @@ export interface ProductDraft {
   created_by: string | null;
   reviewed_by: string | null;
   sale_status: SaleStatus;
+  inventory_quantity: number | null;
+  inventory_policy: "deny" | "continue";
   image_description: string | null;
   image_flags: Record<string, string>;
   image_status: ImageStatus;

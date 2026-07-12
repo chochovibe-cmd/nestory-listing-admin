@@ -1,16 +1,18 @@
 /**
  * B9: internal underline tabs on ResultCard.
- * D3-A: 4 tabs — SEO folds into 文案 (density over Mockup's 5).
+ * Mockup: 5 tabs — 文案／定價／圖片／Tags／SEO.
+ * (Was temporarily 4 with SEO folded into 文案; boss reconfirmed 5 after use.)
  * Stage pills filters are deferred to B12 (not here).
  */
 
-export type ResultCardTabId = "copy" | "pricing" | "images" | "tags";
+export type ResultCardTabId = "copy" | "pricing" | "images" | "tags" | "seo";
 
 export const RESULT_CARD_TABS: { id: ResultCardTabId; label: string }[] = [
   { id: "copy", label: "文案" },
   { id: "pricing", label: "定價" },
   { id: "images", label: "圖片" },
-  { id: "tags", label: "Tags" }
+  { id: "tags", label: "Tags" },
+  { id: "seo", label: "SEO" }
 ];
 
 /**
@@ -24,13 +26,12 @@ export const RESULT_CARD_TAB_FIELDS: Record<ResultCardTabId, readonly string[]> 
     "title_zh",
     "description",
     "faq",
-    "ai_detect",
-    "seo_title",
-    "seo_description"
+    "ai_detect"
   ],
   pricing: ["cost_profit", "sell_price", "compare_at_price"],
   images: ["process_marks", "detail_thumbs", "unmarked_warn"],
-  tags: ["tags_chips", "tags_input", "warnings_list", "quick_add_character"]
+  tags: ["tags_chips", "tags_input", "warnings_list", "quick_add_character"],
+  seo: ["seo_title", "seo_description"]
 };
 
 /** Always visible under any tab (must not disappear when refactoring layout). */
@@ -50,5 +51,11 @@ export function tabLabelWithWarn(id: ResultCardTabId, warnCount: number): string
 }
 
 export function isResultCardTabId(value: unknown): value is ResultCardTabId {
-  return value === "copy" || value === "pricing" || value === "images" || value === "tags";
+  return (
+    value === "copy" ||
+    value === "pricing" ||
+    value === "images" ||
+    value === "tags" ||
+    value === "seo"
+  );
 }

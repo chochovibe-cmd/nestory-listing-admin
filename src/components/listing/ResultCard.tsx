@@ -43,6 +43,10 @@ import {
   extractMissingCharacterNames,
   isCharacterMissingInWarnings,
 } from "@/lib/characters/missingCharacterWarnings";
+import {
+  descriptionPreviewHtml,
+  normalizeDescriptionToPlainText,
+} from "@/lib/contentGenerator/htmlFormat";
 
 // This icon only reports whether AI text-generation itself finished, failed,
 // or is still running -- it must never fall back to a green "done" check for
@@ -183,7 +187,10 @@ export function ResultCard({
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [activeTab, setActiveTab] = useState<ResultCardTabId>("copy");
   const [title, setTitle] = useState(draft.title_zh ?? "");
-  const [description, setDescription] = useState(draft.description_html ?? "");
+  // fix(B10): tolerate legacy HTML rows — display/edit as plain text contract.
+  const [description, setDescription] = useState(
+    normalizeDescriptionToPlainText(draft.description_html ?? ""),
+  );
   const [seoTitle, setSeoTitle] = useState(draft.seo_title ?? "");
   const [seoDescription, setSeoDescription] = useState(draft.seo_description ?? "");
   const [whyWeChoseIt, setWhyWeChoseIt] = useState(draft.why_we_chose_it ?? "");
@@ -203,6 +210,7 @@ export function ResultCard({
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickAddingCharacter, setQuickAddingCharacter] = useState<string | null>(null);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
+  const [descriptionView, setDescriptionView] = useState<"preview" | "source">("preview");
   // Local mirror of pipeline marks so toggles feel instant; re-synced on refresh.
   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
   // B10: generation_history (read-only for ←→; inserts on regen/manual commit)
@@ -276,7 +284,8 @@ export function ResultCard({
         setProductHighlights(value);
         break;
       case "generated_description_html":
-        setDescription(value);
+        // fix(B10): normalize only when loading history/regen, not on every keystroke.
+        setDescription(markDirty ? value : normalizeDescriptionToPlainText(value));
         break;
       case "generated_faq_html":
         setFaq(value);
@@ -330,7 +339,7 @@ export function ResultCard({
   // keeps showing pre-regeneration text even though the DB has fresh content.
   useEffect(() => {
     setTitle(draft.title_zh ?? "");
-    setDescription(draft.description_html ?? "");
+    setDescription(normalizeDescriptionToPlainText(draft.description_html ?? ""));
     setSeoTitle(draft.seo_title ?? "");
     setSeoDescription(draft.seo_description ?? "");
     setWhyWeChoseIt(draft.why_we_chose_it ?? "");
@@ -471,7 +480,7 @@ export function ResultCard({
       .update({
         // Copy columns may already be written by commitCopyCombination; re-write is idempotent.
         title_zh: title || null,
-        description_html: description || null,
+        description_html: normalizeDescriptionToPlainText(description) || null,
         seo_title: seoTitle || null,
         seo_description: seoDescription || null,
         why_we_chose_it: whyWeChoseIt || null,
@@ -910,7 +919,7 @@ export function ResultCard({
 
       {expanded ? (
         <div className="rc-body">
-          {/* B9 D3-A: 4 underline tabs; SEO inside 文案 */}
+          {/* B9: 5 underline tabs — SEO is its own page (Mockup; boss reconfirmed). */}
           <div className="rc-tabs" role="tablist" aria-label="卡片分頁">
             {RESULT_CARD_TABS.map((tab) => (
               <button
@@ -928,234 +937,249 @@ export function ResultCard({
 
           {activeTab === "copy" ? (
             <div className="rc-tabpanel" role="tabpanel">
-              <div className="rc-field">
-                <div className="rc-label">快速狀態</div>
-                <div className="rc-text">
-                  {APPROVED_STATUSES.has(draft.status) ? (
-                    <span className="audit-badge ok">已審核</span>
-                  ) : (
-                    <span className="audit-badge">待審核</span>
-                  )}
-                  　來源：{draft.source_platform ?? "-"}
-                  　成本：{draft.cny_price.toLocaleString()}
-                  　模式：{priceMode === "single" ? "單一售價" : "特價"}
-                  　定價：
-                  {priceMode === "single"
-                    ? "不適用"
-                    : draft.compare_at_price
-                      ? `NT$${draft.compare_at_price.toLocaleString()}`
-                      : "未填"}
-                  　AI：{PROVIDER_LABELS[draft.generation_provider] ?? draft.generation_provider}
-                </div>
-              </div>
-              <div className="rc-field">
-                <div className="rc-label">原始標題</div>
-                <div className="muted">{draft.taobao_title ?? draft.original_title ?? "-"}</div>
-              </div>
-
-              <div className="rc-field">
-                <div className="rc-label">AI 偵測</div>
-                <div className="rc-text">
-                  IP：{draft.ip_name || "—"}
-                  ｜角色：{draft.character_name || "—"}
-                  {characterChipWarned ? " ⚠" : ""}
-                  ｜型態：{detectTypeLabel || "—"}
-                  ｜SKU：{sku || "—"}
-                </div>
-                {missingCharacters.length > 0 ? (
-                  <div className="rc-quick-add-list">
-                    {missingCharacters.map((name) => (
-                      <div className="rc-quick-add-row" key={name}>
-                        <span className="price-soft-warn">
-                          ⚠ 角色「{name}」尚未建檔
-                          {!draft.ip_name ? "（請先確認 IP 已建檔）" : ""}
-                        </span>
-                        <button
-                          className="mini-btn"
-                          disabled={
-                            !draft.ip_name ||
-                            quickAddingCharacter === name ||
-                            regenerating ||
-                            regeneratingField != null
-                          }
-                          onClick={() => void quickAddCharacter(name)}
-                          type="button"
-                        >
-                          {quickAddingCharacter === name ? "新增中…" : "一鍵新增角色"}
-                        </button>
-                      </div>
-                    ))}
+              {/* Desktop two-col balanced grid (same idea as .row AI類型/SKU); mobile stacks. */}
+              <div className="rc-tabpanel-grid">
+                <div className="rc-field rc-span-2">
+                  <div className="rc-label">快速狀態</div>
+                  <div className="rc-text">
+                    {APPROVED_STATUSES.has(draft.status) ? (
+                      <span className="audit-badge ok">已審核</span>
+                    ) : (
+                      <span className="audit-badge">待審核</span>
+                    )}
+                    　來源：{draft.source_platform ?? "-"}
+                    　成本：{draft.cny_price.toLocaleString()}
+                    　模式：{priceMode === "single" ? "單一售價" : "特價"}
+                    　定價：
+                    {priceMode === "single"
+                      ? "不適用"
+                      : draft.compare_at_price
+                        ? `NT$${draft.compare_at_price.toLocaleString()}`
+                        : "未填"}
+                    　AI：{PROVIDER_LABELS[draft.generation_provider] ?? draft.generation_provider}
                   </div>
+                </div>
+                <div className="rc-field">
+                  <div className="rc-label">原始標題</div>
+                  <div className="muted">{draft.taobao_title ?? draft.original_title ?? "-"}</div>
+                </div>
+
+                <div className="rc-field">
+                  <div className="rc-label">AI 偵測</div>
+                  <div className="rc-text">
+                    IP：{draft.ip_name || "—"}
+                    ｜角色：{draft.character_name || "—"}
+                    {characterChipWarned ? " ⚠" : ""}
+                    ｜型態：{detectTypeLabel || "—"}
+                    ｜SKU：{sku || "—"}
+                  </div>
+                  {missingCharacters.length > 0 ? (
+                    <div className="rc-quick-add-list">
+                      {missingCharacters.map((name) => (
+                        <div className="rc-quick-add-row" key={name}>
+                          <span className="price-soft-warn">
+                            ⚠ 角色「{name}」尚未建檔
+                            {!draft.ip_name ? "（請先確認 IP 已建檔）" : ""}
+                          </span>
+                          <button
+                            className="mini-btn"
+                            disabled={
+                              !draft.ip_name ||
+                              quickAddingCharacter === name ||
+                              regenerating ||
+                              regeneratingField != null
+                            }
+                            onClick={() => void quickAddCharacter(name)}
+                            type="button"
+                          >
+                            {quickAddingCharacter === name ? "新增中…" : "一鍵新增角色"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="row rc-span-2">
+                  <div className="field">
+                    <label>AI 偵測類型</label>
+                    <input className="edit-input" onChange={(event) => setDetectedCategory(event.target.value)} value={detectedCategory} />
+                  </div>
+                  <div className="field">
+                    <label>SKU</label>
+                    <input className="edit-input" onChange={(event) => setSku(event.target.value)} value={sku} />
+                  </div>
+                </div>
+
+                {/* B10: versioned copy fields (A7); SEO lives on its own tab */}
+                {!historyLoaded ? (
+                  <div className="muted rc-span-2">載入版本歷史…</div>
                 ) : null}
-              </div>
-              <div className="row">
-                <div className="field">
-                  <label>AI 偵測類型</label>
-                  <input className="edit-input" onChange={(event) => setDetectedCategory(event.target.value)} value={detectedCategory} />
-                </div>
-                <div className="field">
-                  <label>SKU</label>
-                  <input className="edit-input" onChange={(event) => setSku(event.target.value)} value={sku} />
-                </div>
-              </div>
 
-              {/* B10: 7 versioned copy fields (A7 field names) */}
-              {!historyLoaded ? (
-                <div className="muted">載入版本歷史…</div>
-              ) : null}
-
-              {(() => {
-                const fieldBusy = regeneratingField != null || regenerating || comboSaving;
-                const renderVersionHdr = (field: CopyVersionField) => {
-                  const versions = versionsByField[field];
-                  const idx = Math.min(versionIndex[field] ?? 0, Math.max(versions.length - 1, 0));
-                  return (
-                    <div className="rc-field-hdr">
-                      <span className="rc-field-hdr-label">
-                        {COPY_VERSION_FIELD_LABELS[field]}
-                        <CopyButton getValue={() => displayByField[field]} />
-                        {copyDirty[field] ? <span className="version-dirty-dot" title="未定案修改">·</span> : null}
-                      </span>
-                      <VersionNav
-                        canNext={idx < versions.length - 1}
-                        canPrev={idx > 0}
-                        label={versionLabel(idx, versions)}
-                        onNext={() => switchVersion(field, idx + 1)}
-                        onPrev={() => switchVersion(field, idx - 1)}
-                        onRegen={() => void regenerateField(field)}
-                        regenBusy={regeneratingField === field}
-                        regenDisabled={fieldBusy && regeneratingField !== field}
-                      />
-                    </div>
-                  );
-                };
-
-                return (
-                  <>
-                    <div className="field">
-                      {renderVersionHdr("enriched_title")}
-                      <input
-                        className="edit-input"
-                        onChange={(event) => setFieldDisplay("enriched_title", event.target.value, true)}
-                        value={title}
-                      />
-                    </div>
-                    <div className="field">
-                      {renderVersionHdr("why_we_chose_it")}
-                      <textarea
-                        className="edit-textarea"
-                        onChange={(event) => setFieldDisplay("why_we_chose_it", event.target.value, true)}
-                        rows={3}
-                        value={whyWeChoseIt}
-                      />
-                    </div>
-                    <div className="field">
-                      {renderVersionHdr("product_highlights")}
-                      <textarea
-                        className="edit-textarea"
-                        onChange={(event) => setFieldDisplay("product_highlights", event.target.value, true)}
-                        placeholder="每點一行（可加・）"
-                        rows={4}
-                        value={productHighlights}
-                      />
-                    </div>
-                    <div className="field">
-                      {renderVersionHdr("generated_description_html")}
-                      <textarea
-                        className="edit-textarea"
-                        onChange={(event) => setFieldDisplay("generated_description_html", event.target.value, true)}
-                        rows={10}
-                        value={description}
-                      />
-                    </div>
-                    <div className="field">
-                      <div className="rc-view-tabs">
-                        {renderVersionHdr("generated_faq_html")}
-                      </div>
-                      <div className="rc-view-tabs" style={{ marginBottom: 6 }}>
-                        <span className="rc-view-tabs-buttons">
-                          <button
-                            className={faqView === "preview" ? "active" : ""}
-                            onClick={() => setFaqView("preview")}
-                            type="button"
-                          >
-                            預覽
-                          </button>
-                          <button
-                            className={faqView === "html" ? "active" : ""}
-                            onClick={() => setFaqView("html")}
-                            type="button"
-                          >
-                            HTML 原始碼
-                          </button>
+                {(() => {
+                  const fieldBusy = regeneratingField != null || regenerating || comboSaving;
+                  const renderVersionHdr = (field: CopyVersionField) => {
+                    const versions = versionsByField[field];
+                    const idx = Math.min(versionIndex[field] ?? 0, Math.max(versions.length - 1, 0));
+                    return (
+                      <div className="rc-field-hdr">
+                        <span className="rc-field-hdr-label">
+                          {COPY_VERSION_FIELD_LABELS[field]}
+                          <CopyButton getValue={() => displayByField[field]} />
+                          {copyDirty[field] ? <span className="version-dirty-dot" title="未定案修改">·</span> : null}
                         </span>
+                        <VersionNav
+                          canNext={idx < versions.length - 1}
+                          canPrev={idx > 0}
+                          label={versionLabel(idx, versions)}
+                          onNext={() => switchVersion(field, idx + 1)}
+                          onPrev={() => switchVersion(field, idx - 1)}
+                          onRegen={() => void regenerateField(field)}
+                          regenBusy={regeneratingField === field}
+                          regenDisabled={fieldBusy && regeneratingField !== field}
+                        />
                       </div>
-                      {faqView === "preview" ? (
-                        <div className="rc-html-preview" dangerouslySetInnerHTML={{ __html: faq || "<p>尚無內容</p>" }} />
-                      ) : (
+                    );
+                  };
+
+                  return (
+                    <>
+                      <div className="field">
+                        {renderVersionHdr("enriched_title")}
+                        <input
+                          className="edit-input"
+                          onChange={(event) => setFieldDisplay("enriched_title", event.target.value, true)}
+                          value={title}
+                        />
+                      </div>
+                      <div className="field">
+                        {renderVersionHdr("why_we_chose_it")}
                         <textarea
                           className="edit-textarea"
-                          onChange={(event) => setFieldDisplay("generated_faq_html", event.target.value, true)}
-                          rows={6}
-                          value={faq}
+                          onChange={(event) => setFieldDisplay("why_we_chose_it", event.target.value, true)}
+                          rows={3}
+                          value={whyWeChoseIt}
                         />
-                      )}
-                    </div>
-                    <div className="field">
-                      {renderVersionHdr("seo_title")}
-                      <input
-                        className="edit-input"
-                        onChange={(event) => setFieldDisplay("seo_title", event.target.value, true)}
-                        value={seoTitle}
-                      />
-                    </div>
-                    <div className="field">
-                      {renderVersionHdr("meta_description")}
-                      <textarea
-                        className="edit-textarea"
-                        onChange={(event) => setFieldDisplay("meta_description", event.target.value, true)}
-                        rows={3}
-                        value={seoDescription}
-                      />
-                    </div>
+                      </div>
+                      <div className="field rc-span-2">
+                        {renderVersionHdr("product_highlights")}
+                        <textarea
+                          className="edit-textarea"
+                          onChange={(event) => setFieldDisplay("product_highlights", event.target.value, true)}
+                          placeholder="每點一行（可加・）"
+                          rows={4}
+                          value={productHighlights}
+                        />
+                      </div>
+                      <div className="field rc-span-2">
+                        <div className="rc-view-tabs">
+                          {renderVersionHdr("generated_description_html")}
+                        </div>
+                        <div className="rc-view-tabs" style={{ marginBottom: 6 }}>
+                          <span className="rc-view-tabs-buttons">
+                            <button
+                              className={descriptionView === "preview" ? "active" : ""}
+                              onClick={() => setDescriptionView("preview")}
+                              type="button"
+                            >
+                              預覽
+                            </button>
+                            <button
+                              className={descriptionView === "source" ? "active" : ""}
+                              onClick={() => setDescriptionView("source")}
+                              type="button"
+                            >
+                              原始碼
+                            </button>
+                          </span>
+                        </div>
+                        {descriptionView === "preview" ? (
+                          <div
+                            className="rc-html-preview"
+                            dangerouslySetInnerHTML={{ __html: descriptionPreviewHtml(description) }}
+                          />
+                        ) : (
+                          <textarea
+                            className="edit-textarea"
+                            onChange={(event) => setFieldDisplay("generated_description_html", event.target.value, true)}
+                            rows={10}
+                            value={description}
+                          />
+                        )}
+                      </div>
+                      <div className="field rc-span-2">
+                        <div className="rc-view-tabs">
+                          {renderVersionHdr("generated_faq_html")}
+                        </div>
+                        <div className="rc-view-tabs" style={{ marginBottom: 6 }}>
+                          <span className="rc-view-tabs-buttons">
+                            <button
+                              className={faqView === "preview" ? "active" : ""}
+                              onClick={() => setFaqView("preview")}
+                              type="button"
+                            >
+                              預覽
+                            </button>
+                            <button
+                              className={faqView === "html" ? "active" : ""}
+                              onClick={() => setFaqView("html")}
+                              type="button"
+                            >
+                              HTML 原始碼
+                            </button>
+                          </span>
+                        </div>
+                        {faqView === "preview" ? (
+                          <div className="rc-html-preview" dangerouslySetInnerHTML={{ __html: faq || "<p>尚無內容</p>" }} />
+                        ) : (
+                          <textarea
+                            className="edit-textarea"
+                            onChange={(event) => setFieldDisplay("generated_faq_html", event.target.value, true)}
+                            rows={6}
+                            value={faq}
+                          />
+                        )}
+                      </div>
 
-                    <button
-                      className="btn-save-version"
-                      disabled={comboSaving || regenerating || regeneratingField != null}
-                      onClick={() => void saveComboOnly()}
-                      type="button"
-                    >
-                      {comboSaving ? "儲存中…" : "✅ 確認儲存此版本組合"}
-                    </button>
-                  </>
-                );
-              })()}
+                      <button
+                        className="btn-save-version rc-span-2"
+                        disabled={comboSaving || regenerating || regeneratingField != null}
+                        onClick={() => void saveComboOnly()}
+                        type="button"
+                      >
+                        {comboSaving ? "儲存中…" : "✅ 確認儲存此版本組合"}
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           ) : null}
 
           {activeTab === "pricing" ? (
             <div className="rc-tabpanel" role="tabpanel">
-              <div className="rc-field">
-                <div className="rc-label">定價</div>
-                {draft.twd_cost != null ? (
-                  <div className="muted">
-                    成本 NT${draft.twd_cost.toLocaleString()}
-                    {profit != null ? ` ／ 利潤 NT$${profit.toLocaleString()}` : null}
-                    {profitPct != null ? `（約 ${profitPct}%）` : null}
-                    {priceMode === "single" ? " ／ 單一售價（無劃線定價）" : " ／ 特價模式"}
-                  </div>
-                ) : null}
-                <div className="row">
-                  <div className="field">
-                    <label>售價 TWD</label>
-                    <input className="edit-input" min="0" onChange={(event) => setSellPrice(event.target.value)} type="number" value={sellPrice} />
-                  </div>
-                  {priceMode === "sale" ? (
-                    <div className="field">
-                      <label>定價 TWD</label>
-                      <input className="edit-input" min="0" onChange={(event) => setCompareAtPrice(event.target.value)} type="number" value={compareAtPrice} />
+              <div className="rc-tabpanel-grid">
+                <div className="rc-field rc-span-2">
+                  <div className="rc-label">定價</div>
+                  {draft.twd_cost != null ? (
+                    <div className="muted">
+                      成本 NT${draft.twd_cost.toLocaleString()}
+                      {profit != null ? ` ／ 利潤 NT$${profit.toLocaleString()}` : null}
+                      {profitPct != null ? `（約 ${profitPct}%）` : null}
+                      {priceMode === "single" ? " ／ 單一售價（無劃線定價）" : " ／ 特價模式"}
                     </div>
                   ) : null}
+                  <div className="row">
+                    <div className="field">
+                      <label>售價 TWD</label>
+                      <input className="edit-input" min="0" onChange={(event) => setSellPrice(event.target.value)} type="number" value={sellPrice} />
+                    </div>
+                    {priceMode === "sale" ? (
+                      <div className="field">
+                        <label>定價 TWD</label>
+                        <input className="edit-input" min="0" onChange={(event) => setCompareAtPrice(event.target.value)} type="number" value={compareAtPrice} />
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1262,41 +1286,108 @@ export function ResultCard({
 
           {activeTab === "tags" ? (
             <div className="rc-tabpanel" role="tabpanel">
-              <div className="field">
-                <label>Tags <CopyButton getValue={() => tags} /></label>
-                <div className="rc-tags">
-                  {tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tag) => (
-                    <span className="rc-tag" key={tag}>{tag}</span>
-                  ))}
+              <div className="rc-tabpanel-grid">
+                <div className="field">
+                  <label>Tags <CopyButton getValue={() => tags} /></label>
+                  <div className="rc-tags">
+                    {tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tag) => (
+                      <span className="rc-tag" key={tag}>{tag}</span>
+                    ))}
+                  </div>
+                  <input className="edit-input" onChange={(event) => setTags(event.target.value)} value={tags} />
                 </div>
-                <input className="edit-input" onChange={(event) => setTags(event.target.value)} value={tags} />
+                {draft.warnings?.length ? (
+                  <div className="rc-field">
+                    <div className="rc-label">提醒</div>
+                    {draft.warnings.map((warning) => {
+                      const missingFromLine = extractMissingCharacterNames([warning]);
+                      return (
+                        <div className="rc-warning-line" key={warning}>
+                          <div className="price-soft-warn">{warning}</div>
+                          {missingFromLine.map((name) => (
+                            <button
+                              className="mini-btn"
+                              disabled={!draft.ip_name || quickAddingCharacter === name || regenerating}
+                              key={`${warning}-${name}`}
+                              onClick={() => void quickAddCharacter(name)}
+                              type="button"
+                            >
+                              {quickAddingCharacter === name ? "新增中…" : `一鍵新增「${name}」`}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="muted">目前沒有待確認提醒。</div>
+                )}
               </div>
-              {draft.warnings?.length ? (
-                <div className="rc-field">
-                  <div className="rc-label">提醒</div>
-                  {draft.warnings.map((warning) => {
-                    const missingFromLine = extractMissingCharacterNames([warning]);
+            </div>
+          ) : null}
+
+          {activeTab === "seo" ? (
+            <div className="rc-tabpanel" role="tabpanel">
+              <div className="rc-tabpanel-grid">
+                {!historyLoaded ? (
+                  <div className="muted rc-span-2">載入版本歷史…</div>
+                ) : null}
+                {(() => {
+                  const fieldBusy = regeneratingField != null || regenerating || comboSaving;
+                  const renderVersionHdr = (field: CopyVersionField) => {
+                    const versions = versionsByField[field];
+                    const idx = Math.min(versionIndex[field] ?? 0, Math.max(versions.length - 1, 0));
                     return (
-                      <div className="rc-warning-line" key={warning}>
-                        <div className="price-soft-warn">{warning}</div>
-                        {missingFromLine.map((name) => (
-                          <button
-                            className="mini-btn"
-                            disabled={!draft.ip_name || quickAddingCharacter === name || regenerating}
-                            key={`${warning}-${name}`}
-                            onClick={() => void quickAddCharacter(name)}
-                            type="button"
-                          >
-                            {quickAddingCharacter === name ? "新增中…" : `一鍵新增「${name}」`}
-                          </button>
-                        ))}
+                      <div className="rc-field-hdr">
+                        <span className="rc-field-hdr-label">
+                          {COPY_VERSION_FIELD_LABELS[field]}
+                          <CopyButton getValue={() => displayByField[field]} />
+                          {copyDirty[field] ? <span className="version-dirty-dot" title="未定案修改">·</span> : null}
+                        </span>
+                        <VersionNav
+                          canNext={idx < versions.length - 1}
+                          canPrev={idx > 0}
+                          label={versionLabel(idx, versions)}
+                          onNext={() => switchVersion(field, idx + 1)}
+                          onPrev={() => switchVersion(field, idx - 1)}
+                          onRegen={() => void regenerateField(field)}
+                          regenBusy={regeneratingField === field}
+                          regenDisabled={fieldBusy && regeneratingField !== field}
+                        />
                       </div>
                     );
-                  })}
-                </div>
-              ) : (
-                <div className="muted">目前沒有待確認提醒。</div>
-              )}
+                  };
+                  return (
+                    <>
+                      <div className="field">
+                        {renderVersionHdr("seo_title")}
+                        <input
+                          className="edit-input"
+                          onChange={(event) => setFieldDisplay("seo_title", event.target.value, true)}
+                          value={seoTitle}
+                        />
+                      </div>
+                      <div className="field">
+                        {renderVersionHdr("meta_description")}
+                        <textarea
+                          className="edit-textarea"
+                          onChange={(event) => setFieldDisplay("meta_description", event.target.value, true)}
+                          rows={4}
+                          value={seoDescription}
+                        />
+                      </div>
+                      <button
+                        className="btn-save-version rc-span-2"
+                        disabled={comboSaving || regenerating || regeneratingField != null}
+                        onClick={() => void saveComboOnly()}
+                        type="button"
+                      >
+                        {comboSaving ? "儲存中…" : "✅ 確認儲存此版本組合"}
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           ) : null}
 

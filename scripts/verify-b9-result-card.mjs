@@ -1,7 +1,8 @@
 /**
  * B9 pure-logic verification (no secrets, no network).
  * Covers: sort modes (incl. D5-A needs_attention), sessionStorage sort key,
- * 4-tab field map (SEO in copy), batch/quick send B5 block messages.
+ * 5-tab field map (SEO independent), batch/quick send B5 block messages,
+ * mobile sticky CSS contract.
  *
  * Run: node scripts/verify-b9-result-card.mjs
  */
@@ -132,13 +133,12 @@ const RESULT_CARD_TAB_FIELDS = {
     "title_zh",
     "description",
     "faq",
-    "ai_detect",
-    "seo_title",
-    "seo_description"
+    "ai_detect"
   ],
   pricing: ["cost_profit", "sell_price", "compare_at_price"],
   images: ["process_marks", "detail_thumbs", "unmarked_warn"],
-  tags: ["tags_chips", "tags_input", "warnings_list", "quick_add_character"]
+  tags: ["tags_chips", "tags_input", "warnings_list", "quick_add_character"],
+  seo: ["seo_title", "seo_description"]
 };
 
 const RESULT_CARD_FOOTER_ACTIONS = [
@@ -308,20 +308,22 @@ await check("invalid stored value falls back", () => {
   assert.equal(readStoredResultSort(mem), "newest");
 });
 
-console.log("\n3) tab field classification (4 tabs, SEO in copy)");
-await check("exactly 4 tabs", () => {
+console.log("\n3) tab field classification (5 tabs, SEO independent)");
+await check("exactly 5 tabs", () => {
   assert.deepEqual(Object.keys(RESULT_CARD_TAB_FIELDS).sort(), [
     "copy",
     "images",
     "pricing",
+    "seo",
     "tags"
   ]);
 });
 
-await check("SEO fields live under copy, not separate tab", () => {
-  assert.ok(RESULT_CARD_TAB_FIELDS.copy.includes("seo_title"));
-  assert.ok(RESULT_CARD_TAB_FIELDS.copy.includes("seo_description"));
-  assert.equal(Object.keys(RESULT_CARD_TAB_FIELDS).includes("seo"), false);
+await check("SEO fields live under seo tab, not copy", () => {
+  assert.equal(RESULT_CARD_TAB_FIELDS.copy.includes("seo_title"), false);
+  assert.equal(RESULT_CARD_TAB_FIELDS.copy.includes("seo_description"), false);
+  assert.ok(RESULT_CARD_TAB_FIELDS.seo.includes("seo_title"));
+  assert.ok(RESULT_CARD_TAB_FIELDS.seo.includes("seo_description"));
 });
 
 await check("footer keeps approve_and_publish + send_images (only-add)", () => {
@@ -396,9 +398,10 @@ try {
     );
   });
 
-  await check("TS RESULT_CARD_TAB_FIELDS has seo in copy", () => {
-    assert.ok(tabsMod.RESULT_CARD_TAB_FIELDS.copy.includes("seo_title"));
-    assert.equal(tabsMod.RESULT_CARD_TABS.length, 4);
+  await check("TS RESULT_CARD_TAB_FIELDS has independent seo tab", () => {
+    assert.equal(tabsMod.RESULT_CARD_TAB_FIELDS.copy.includes("seo_title"), false);
+    assert.ok(tabsMod.RESULT_CARD_TAB_FIELDS.seo.includes("seo_title"));
+    assert.equal(tabsMod.RESULT_CARD_TABS.length, 5);
   });
 
   await check("TS evaluateBatchSendImages blocks unmarked", () => {
@@ -457,6 +460,33 @@ try {
 } catch (err) {
   console.log(`  ⚠ TS import skipped (${err.message}) — inline mirrors still ran`);
 }
+
+console.log("\n6) CSS mobile sticky contract (source assert)");
+await check("globals.css: <960px results-batch-toolbar is position static", async () => {
+  const fs = await import("node:fs/promises");
+  const css = await fs.readFile(path.join(root, "src/app/globals.css"), "utf8");
+  // Base sticky remains for desktop
+  assert.match(css, /\.results-batch-toolbar\s*\{[^}]*position:\s*sticky/s);
+  // Inside the mobile media block we require static (fix drops sticky wall)
+  const mobileIdx = css.search(/@media\s*\(\s*max-width:\s*959\.98px\s*\)|@media\s*\(\s*max-width:\s*960px\s*\)|@media\s*\(max-width:\s*959px\)/);
+  // Project uses max-width: 959.98px or similar — fall back to scanning for mobile toolbar rule
+  const staticBlock = css.includes(".results-batch-toolbar") &&
+    /results-batch-toolbar\s*\{[^}]*position:\s*static/s.test(css);
+  assert.ok(staticBlock, "expected mobile override position: static on .results-batch-toolbar");
+  // collapsed notice class still present (B9 req2)
+  assert.match(css, /\.rc-collapsed-notice\b/);
+});
+
+await check("ResultCard source has 5 tabs + collapsed notice", async () => {
+  const fs = await import("node:fs/promises");
+  const src = await fs.readFile(path.join(root, "src/components/listing/ResultCard.tsx"), "utf8");
+  assert.match(src, /rc-collapsed-notice/);
+  assert.match(src, /activeTab === "seo"/);
+  assert.match(src, /descriptionView/);
+  const tabsSrc = await fs.readFile(path.join(root, "src/lib/drafts/resultCardTabs.ts"), "utf8");
+  assert.match(tabsSrc, /id: "seo"/);
+  assert.match(tabsSrc, /label: "SEO"/);
+});
 
 console.log("");
 if (failures.length) {

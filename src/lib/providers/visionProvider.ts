@@ -104,3 +104,99 @@ export async function ocrSpecImages(imageUrls: string[]): Promise<string> {
     imageUrls.slice(0, MAX_OCR_IMAGES),
   );
 }
+
+// B3: 商品頁／規格表截圖 → 結構化欄位（標題／¥成本／特色／規格／款式列）。
+// 底層仍走 vision chat completions；輸出要求 JSON 方便回填表單。
+const RECOGNIZE_PRODUCT_SYSTEM = `你是電商商品頁截圖辨識助手，服務台灣選物店「潮巢 Nestory」。
+你會收到 1–4 張商品頁或詳情截圖（可能含簡體中文）。請從圖上「實際看得到的文字」抽出欄位，輸出**純 JSON**（不要 Markdown、不要前言）：
+
+{
+  "title": "商品標題字串或 null",
+  "costCny": 人民幣成本數字或 null,
+  "features": "特色／賣點小標，用・或、連接，或 null",
+  "specText": "規格文字，一行一項，用換行分隔，或 null",
+  "variants": [{"name":"款式名","costCny":數字或null}]
+}
+
+規則：
+- 只抽圖上真實文字，不要編造；看不清就填 null 或省略該款式
+- 標題：商品名主標，去掉「包郵／618／滿減」等活動詞若明顯是廣告貼片
+- costCny：人民幣售價／成本，只要數字（不要 ¥ 符號）；多價取主商品價或最低可見價
+- features：圖上的特色小標、賣點短句（不是長文描述）
+- specText：材質／尺寸／重量／產地等規格；簡體可轉繁體用字
+- variants：規格選擇列（顏色／角色／尺寸＋價格）；沒有就 []
+- 只輸出一個 JSON 物件`;
+
+const RECOGNIZE_SPEC_SYSTEM = `你是商品規格表／SKU 截圖辨識助手。你會收到 1–4 張規格彈窗或 SKU 表截圖。
+請從圖上實際文字抽出 JSON（不要 Markdown、不要前言）：
+
+{
+  "title": null,
+  "costCny": 若有單一總價則填數字否則 null,
+  "features": null,
+  "specText": "規格名與選項整理，一行一項",
+  "variants": [{"name":"選項值（如角色名或尺寸）","costCny":數字或null}]
+}
+
+規則：只抄圖上文字，不要編造；簡體可轉繁體；沒有的欄位用 null 或 []；只輸出一個 JSON 物件`;
+
+export type ScreenshotRecognizeMode = "product" | "spec";
+
+/**
+ * B3 主引擎：截圖 → 結構化 JSON 字串（呼叫端再 parse + 簡轉繁）。
+ * 沿用 ocr 的多圖上限；max_tokens 略高以容納多款式。
+ */
+export async function recognizeProductScreenshots(
+  imageUrls: string[],
+  mode: ScreenshotRecognizeMode = "product"
+): Promise<string> {
+  const urls = imageUrls.slice(0, MAX_OCR_IMAGES);
+  if (urls.length === 0) {
+    throw new Error("至少需要一張截圖網址");
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured on the server.");
+  }
+
+  const systemPrompt = mode === "spec" ? RECOGNIZE_SPEC_SYSTEM : RECOGNIZE_PRODUCT_SYSTEM;
+  const userText =
+    mode === "spec"
+      ? "請辨識以下規格截圖，輸出 JSON："
+      : "請辨識以下商品頁截圖，輸出 JSON：";
+
+  const content: VisionContentBlock[] = [
+    { type: "text", text: userText },
+    ...urls.map((url): VisionContentBlock => ({ type: "image_url", image_url: { url } })),
+  ];
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: DEFAULT_VISION_MODEL,
+      max_tokens: 1200,
+      temperature: 0.1,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI vision call failed (${response.status}): ${errorText}`);
+  }
+
+  const payload = await response.json();
+  const text = payload?.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("OpenAI vision response did not include message content.");
+  }
+  return text.trim();
+}

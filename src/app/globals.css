@@ -499,6 +499,43 @@ button.danger {
   align-items: start;
 }
 
+/* B16: workbench = desktop two-col; mobile sub-tabs hide inactive pane */
+.workbench {
+  display: block;
+}
+.workbench-panes {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 420px 1fr;
+  align-items: start;
+}
+.sub-tabs {
+  display: none;
+}
+.sub-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 11px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.sub-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+  flex-shrink: 0;
+}
+
 .row {
   display: grid;
   gap: 12px;
@@ -2305,6 +2342,36 @@ textarea {
 @media (max-width: 860px) {
   .grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* B16: mobile workbench — 輸入／結果 sub-tabs; breakpoint 960 (tabbar stays 768) */
+@media (max-width: 959px) {
+  .workbench-panes {
+    grid-template-columns: 1fr;
+  }
+  .sub-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-bottom: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    background: var(--bg);
+    padding: 6px 0;
+  }
+  .workbench-pane {
+    display: none;
+  }
+  .workbench-pane.mob-active {
+    display: block;
+  }
+}
+
+@media (min-width: 960px) {
+  .workbench-pane {
+    display: block !important;
   }
 }
 

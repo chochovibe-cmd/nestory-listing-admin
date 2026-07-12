@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { DraftResultsPanel } from "@/components/listing/DraftResultsPanel";
 import { SetupNotice } from "@/components/listing/SetupNotice";
+import { WorkbenchMobileShell } from "@/components/listing/WorkbenchMobileShell";
 import { WorkspaceInputPanel } from "@/components/listing/WorkspaceInputPanel";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 import type { ProductDraft, ProductImage } from "@/types/domain";
@@ -49,10 +50,10 @@ export default async function NewDraftPage() {
 
   return (
     <main className="container">
-      <div className="grid">
-        <WorkspaceInputPanel userId={user.id} />
-        <DraftResultsPanel drafts={typedDrafts} images={typedImages} />
-      </div>
+      <WorkbenchMobileShell
+        input={<WorkspaceInputPanel userId={user.id} />}
+        results={<DraftResultsPanel drafts={typedDrafts} images={typedImages} />}
+      />
     </main>
   );
 }

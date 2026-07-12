@@ -343,7 +343,9 @@ body[data-theme="kitty"] .topbar {
   transition: all .2s;
 }
 
-.pill-btn.active {
+.pill-btn.active,
+.sel--fill.pill-btn,
+.pill-btn.sel--fill {
   background: var(--accent);
   color: var(--accent-fg);
   font-weight: 700;
@@ -1408,9 +1410,12 @@ textarea {
 }
 
 .tone-card:hover,
-.tone-card.active {
+.tone-card.active,
+.tone-card.sel,
+.tone-card.sel--ring {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface2));
+  box-shadow: var(--control-shadow);
 }
 
 .tone-emoji {
@@ -1844,8 +1849,10 @@ textarea {
   }
 }
 
-/* Soft status chips (final site look — transparent/light + tinted border/text) */
-.rc-status {
+/* Soft status chips (final site look — transparent/light + tinted border/text).
+   Prefer .schip / .schip--* for new markup; .rc-status* stay as aliases. */
+.rc-status,
+.rc-status.schip {
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -1858,9 +1865,11 @@ textarea {
   box-shadow: none;
   border: 1px solid var(--chip-border);
   color: var(--text-dim);
+  padding: 0;
 }
 
-.rc-status.generating {
+.rc-status.generating,
+.rc-status.schip--run {
   background: var(--chip-bg);
   color: var(--warn);
   border-color: var(--chip-run-border);
@@ -1871,14 +1880,17 @@ textarea {
   to { transform: rotate(360deg); }
 }
 
-.rc-status.done {
+.rc-status.done,
+.rc-status.schip--ok {
   background: var(--chip-bg);
   color: var(--success);
   border-color: var(--chip-ok-border);
 }
 
 .rc-status.error,
-.rc-status.revision {
+.rc-status.revision,
+.rc-status.schip--error,
+.rc-status.schip--revision {
   background: var(--chip-bg);
   color: var(--accent2);
   border-color: var(--chip-warn-border);
@@ -2695,7 +2707,8 @@ textarea {
 .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 14px; }
 .status-body { display: none; }
 .status-body.open { display: block; }
-.status-pill {
+.status-pill,
+.status-pill.schip {
   background: var(--chip-bg);
   box-shadow: none;
   border: 1px solid var(--chip-border);
@@ -2712,15 +2725,90 @@ textarea {
   letter-spacing: .08em;
   margin-bottom: 2px;
 }
-.status-ok {
+.status-ok,
+.status-ok.schip--ok {
   background: var(--chip-bg);
   color: var(--success);
   border-color: var(--chip-ok-border);
 }
-.status-warn {
+.status-warn,
+.status-warn.schip--error {
   background: var(--chip-bg);
   color: var(--accent2);
   border-color: var(--chip-warn-border);
+}
+
+/* ── B15⁶ Shared primitives (.sel / .schip) ────────────────────────────────
+   New UI MUST use these instead of inventing per-component selected/status
+   styles. Legacy selectors stay grouped so existing markup keeps working.
+   Selection ≠ status: never use .schip for user clicks, never use .sel for
+   system state. ── */
+
+/* Selection — ring (cards / tone / theme) */
+.sel,
+.sel--ring,
+.theme-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Selection — filled accent (pills / segmented controls) */
+.sel--fill {
+  border-color: var(--border);
+  background: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: var(--pill-active-shadow);
+  font-weight: 700;
+}
+
+/* Selection — tinted surface + accent frame (marks / price mode) */
+.sel--tint,
+.img-mark-btn.active,
+.price-mode-btn.active {
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  font-weight: 700;
+}
+
+/* Status chip base — soft outline (final site look, not solid fills) */
+.schip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--chip-bg);
+  box-shadow: none;
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 4px 10px;
+}
+.schip--idle {
+  color: var(--idle);
+  border-color: color-mix(in srgb, var(--idle) 45%, var(--border));
+}
+.schip--ok,
+.schip--success {
+  color: var(--success);
+  border-color: var(--chip-ok-border);
+  background: var(--chip-bg);
+}
+.schip--warn,
+.schip--run {
+  color: var(--warn);
+  border-color: var(--chip-run-border);
+  background: var(--chip-bg);
+}
+/* error/revision stay on accent2 (B15 ⑥-D1) — not --danger */
+.schip--danger,
+.schip--error,
+.schip--revision {
+  color: var(--accent2);
+  border-color: var(--chip-warn-border);
+  background: var(--chip-bg);
 }
 
 /* ── B15⁵b residual theme chrome (shared controls + kitty header widgets) ──
@@ -2774,7 +2862,9 @@ select,
 }
 /* Selection = accent frame (never --line/--border alone) */
 .tone-card:hover,
-.tone-card.active {
+.tone-card.active,
+.tone-card.sel,
+.tone-card.sel--ring {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface2));
   box-shadow: var(--control-shadow);
@@ -2830,7 +2920,8 @@ select:focus {
   font-weight: 700;
 }
 .currency-toggle button.active,
-.mobile-tabbar button.active {
+.mobile-tabbar button.active,
+.sel--fill {
   border-color: var(--border);
   background: var(--accent);
   color: var(--accent-fg);

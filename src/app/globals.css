@@ -2367,6 +2367,117 @@ textarea {
   .workbench-pane.mob-active {
     display: block;
   }
+
+  /* B16 touch ≥44px audit (workbench / cards; MobileTabbar remains 768) */
+  .source-pill {
+    min-height: 44px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .stock-line button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 12px;
+  }
+  .currency-toggle {
+    min-height: 44px;
+  }
+  .currency-toggle button {
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+  .pill-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .mini-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .version-nav-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .btn-save-version {
+    min-height: 44px;
+  }
+  .rc-quick {
+    width: 100%;
+  }
+  .rc-quick-btn {
+    min-height: 44px;
+    flex: 1;
+  }
+  .rc-tab {
+    min-height: 44px;
+  }
+  .sort-sel {
+    min-height: 44px;
+  }
+  .settings-toggle {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+  .spec-shot-toggle {
+    min-height: 44px;
+  }
+  .model-quick .mq-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .v-dim-x {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .v-inline-edit {
+    min-height: 44px;
+    padding: 8px 6px;
+  }
+  .vthumb {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .vgrid-row input {
+    min-height: 44px;
+  }
+  .btn-add {
+    min-height: 44px;
+  }
+  .rc-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .rc-headmain {
+    flex-basis: 100%;
+  }
+  .rc-title {
+    white-space: normal;
+  }
+  .rc-detect-chips {
+    max-width: 100%;
+  }
+  .rc-header-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+  .results-sort-label {
+    margin-left: 0;
+    width: 100%;
+  }
+  .sort-sel {
+    width: 100%;
+  }
+  /* 16px stops iOS Safari auto-zoom on focus (also for tablet-width phones) */
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  input[type="url"],
+  textarea,
+  select {
+    font-size: 16px;
+    padding: 11px 12px;
+  }
 }
 
 @media (min-width: 960px) {

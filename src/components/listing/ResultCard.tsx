@@ -6,7 +6,16 @@ import { createClient } from "@/lib/supabase/client";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
 import { StatusBadge } from "@/components/listing/StatusBadge";
-import type { ProductDraft, ProductImage } from "@/types/domain";
+import {
+  formatReadyButPipelinePendingMessage,
+  formatUnmarkedBlockMessage,
+  imageSlotLabel,
+  listPipelineImages,
+  listUnmarkedPipelineImages,
+  patchForProcessIntentPick,
+  PROCESS_INTENT_LABELS
+} from "@/lib/images/processMarks";
+import type { ImageProcessIntent, ProductDraft, ProductImage } from "@/types/domain";
 
 // This icon only reports whether AI text-generation itself finished, failed,
 // or is still running -- it must never fall back to a green "done" check for
@@ -85,11 +94,17 @@ export function ResultCard({
   const [sku, setSku] = useState(draft.sku ?? "");
   const [publishMode, setPublishMode] = useState(draft.publish_mode);
   const [message, setMessage] = useState("");
+  const [markMessage, setMarkMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
+  // Local mirror of pipeline marks so toggles feel instant; re-synced on refresh.
+  const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
 
   const { icon, className } = statusIcon(draft);
   const profit = draft.twd_price != null && draft.twd_cost != null ? draft.twd_price - draft.twd_cost : null;
+  const pipelineImages = listPipelineImages(imageMarks);
+  const unmarkedImages = listUnmarkedPipelineImages(imageMarks);
+  const unmarkedBlockMessage = formatUnmarkedBlockMessage(imageMarks);
 
   // ResultCard stays mounted (same `key={draft.id}`) across regenerate/save's
   // router.refresh(), so these editable fields must be re-synced explicitly
@@ -109,6 +124,17 @@ export function ResultCard({
     setPublishMode(draft.publish_mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.updated_at]);
+
+  useEffect(() => {
+    // Normalize before migration 019 is applied (fields may be missing at runtime).
+    setImageMarks(
+      images.map((image) => ({
+        ...image,
+        process_intent: image.process_intent ?? null,
+        is_spec_process: Boolean(image.is_spec_process)
+      }))
+    );
+  }, [images]);
 
   async function save() {
     const { error } = await supabase
@@ -198,7 +224,75 @@ export function ResultCard({
     }
     const { error } = await supabase.from("product_images").delete().eq("id", image.id);
     setMessage(error ? `刪除圖片失敗：${error.message}` : "已刪除圖片");
+    if (!error) {
+      setImageMarks((current) => current.filter((row) => row.id !== image.id));
+    }
     router.refresh();
+  }
+
+  // B5: client-side update under existing product_images RLS (owner of
+  // unpublished draft / reviewer). Does not loosen policies.
+  async function setProcessIntent(image: ProductImage, intent: ImageProcessIntent) {
+    const patch = patchForProcessIntentPick(intent, image.is_spec_process);
+    setMarkMessage("");
+    const { error } = await supabase
+      .from("product_images")
+      .update({
+        process_intent: patch.process_intent,
+        is_spec_process: patch.is_spec_process
+      })
+      .eq("id", image.id);
+
+    if (error) {
+      setMarkMessage(`標記失敗：${error.message}`);
+      return;
+    }
+
+    setImageMarks((current) =>
+      current.map((row) =>
+        row.id === image.id
+          ? { ...row, process_intent: patch.process_intent, is_spec_process: patch.is_spec_process }
+          : row
+      )
+    );
+    router.refresh();
+  }
+
+  async function toggleSpecOnCard(image: ProductImage) {
+    const nextOn = !image.is_spec_process;
+    const patch = nextOn
+      ? { is_spec_process: true, process_intent: "de_text" as const }
+      : { is_spec_process: false, process_intent: null };
+    setMarkMessage("");
+    const { error } = await supabase
+      .from("product_images")
+      .update(patch)
+      .eq("id", image.id);
+
+    if (error) {
+      setMarkMessage(`規格圖標記失敗：${error.message}`);
+      return;
+    }
+
+    setImageMarks((current) =>
+      current.map((row) =>
+        row.id === image.id
+          ? { ...row, is_spec_process: patch.is_spec_process, process_intent: patch.process_intent }
+          : row
+      )
+    );
+    router.refresh();
+  }
+
+  // B5 裁決 3A: block when unmarked (specific which/how many); when all marked,
+  // explain Phase D pipeline is not wired yet — no Make webhook here.
+  function sendImages() {
+    const block = formatUnmarkedBlockMessage(imageMarks);
+    if (block) {
+      setMarkMessage(block);
+      return;
+    }
+    setMarkMessage(formatReadyButPipelinePendingMessage(imageMarks));
   }
 
   async function exportCsv() {
@@ -240,6 +334,12 @@ export function ResultCard({
         <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
         <div className="rc-meta-stack">
           <StatusBadge status={draft.status} />
+          {pipelineImages.length > 0 && unmarkedImages.length > 0 ? (
+            <span className="img-mark-status" title={unmarkedBlockMessage ?? undefined}>
+              <span className="st-dot" />
+              圖片未標記（{unmarkedImages.length}）
+            </span>
+          ) : null}
           {draft.warnings?.length ? (
             <span className="status-pill status-warn">⚠ {draft.warnings.length}</span>
           ) : null}
@@ -352,27 +452,105 @@ export function ResultCard({
             </div>
             <input className="edit-input" onChange={(event) => setTags(event.target.value)} value={tags} />
           </div>
-          {images.length > 0 ? (
+          {imageMarks.length > 0 ? (
             <div className="rc-field">
-              <div className="rc-label">圖片</div>
-              <div className="thumbs">
-                {images.map((image) => (
-                  <div className="thumb-wrap" key={image.id}>
-                    <img
-                      alt={image.alt_text ?? image.image_type}
-                      src={image.processed_file_url ?? image.original_file_url ?? image.generated_file_url ?? ""}
-                    />
-                    <button
-                      className="thumb-remove"
-                      onClick={() => removeImage(image)}
-                      title="移除這張圖片"
-                      type="button"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <div className="rc-label">圖片處理標記（預設不選，未標記不能送圖）</div>
+              {pipelineImages.length > 0 ? (
+                <div className="imgmark-list">
+                  {pipelineImages.map((image, index) => {
+                    const src =
+                      image.processed_file_url ?? image.original_file_url ?? image.generated_file_url ?? "";
+                    const slot = imageSlotLabel(image, index + 1);
+                    const intents = (image.is_spec_process
+                      ? (["de_text"] as ImageProcessIntent[])
+                      : (["keep", "de_text", "regenerate"] as ImageProcessIntent[]));
+                    return (
+                      <div className="imgmark-row" key={image.id}>
+                        <div className="thumb-wrap">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
+                          <button
+                            className="thumb-remove"
+                            onClick={() => removeImage(image)}
+                            title="移除這張圖片"
+                            type="button"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <span className="imgmark-slot-label">{slot}</span>
+                        <span className="imgmark-btns">
+                          {intents.map((intent) => (
+                            <button
+                              aria-pressed={image.process_intent === intent}
+                              className={`img-mark-btn${image.process_intent === intent ? " active" : ""}`}
+                              key={intent}
+                              onClick={() => void setProcessIntent(image, intent)}
+                              type="button"
+                            >
+                              {image.process_intent === intent ? `✓ ${PROCESS_INTENT_LABELS[intent]}` : PROCESS_INTENT_LABELS[intent]}
+                            </button>
+                          ))}
+                          {!image.is_spec_process ? (
+                            <button
+                              aria-pressed={false}
+                              className="img-mark-btn"
+                              onClick={() => void toggleSpecOnCard(image)}
+                              type="button"
+                            >
+                              規格圖
+                            </button>
+                          ) : (
+                            <button
+                              aria-pressed
+                              className="img-mark-btn active"
+                              onClick={() => void toggleSpecOnCard(image)}
+                              type="button"
+                            >
+                              ✓ 規格圖
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {/* Detail / Vision-only thumbs still removable, no process marks */}
+              {imageMarks.some((image) => image.image_type === "detail") ? (
+                <div className="thumbs" style={{ marginTop: 10 }}>
+                  {imageMarks
+                    .filter((image) => image.image_type === "detail")
+                    .map((image) => (
+                      <div className="thumb-wrap" key={image.id}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          alt={image.alt_text ?? "詳情圖"}
+                          src={image.processed_file_url ?? image.original_file_url ?? image.generated_file_url ?? ""}
+                        />
+                        <button
+                          className="thumb-remove"
+                          onClick={() => removeImage(image)}
+                          title="移除這張圖片"
+                          type="button"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              ) : null}
+              {unmarkedImages.length > 0 && unmarkedBlockMessage ? (
+                <div className="img-mark-warn" role="status">{unmarkedBlockMessage}</div>
+              ) : null}
+              {markMessage ? (
+                <div
+                  className={markMessage.includes("尚未接通") ? "notice" : "img-mark-warn"}
+                  role="status"
+                >
+                  {markMessage}
+                </div>
+              ) : null}
             </div>
           ) : null}
           {draft.warnings?.length ? (
@@ -397,6 +575,9 @@ export function ResultCard({
             </span>
             <span className="rc-actions-group rc-actions-group-review">
               <button onClick={requestRevision} type="button">退回修改</button>
+              <button onClick={sendImages} type="button">
+                ▶ 送圖
+              </button>
               <button className={publishMode === "active" ? "danger" : ""} onClick={approveAndPublish} type="button">
                 ✓ 核准並發布
               </button>

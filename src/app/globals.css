@@ -826,6 +826,133 @@ textarea {
 }
 .thumb-remove:hover { filter: brightness(1.1); }
 
+/* B5: per-thumbnail 規格圖 mark + result-card process intent (tokens only) */
+.pthumb-strip {
+  display: flex;
+  gap: 11px;
+  flex-wrap: wrap;
+  margin-top: 11px;
+  align-items: flex-end;
+}
+.pthumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.pthumb-img-wrap {
+  position: relative;
+  display: inline-block;
+}
+.pthumb-img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border-soft);
+  display: block;
+}
+.pthumb.is-main .pthumb-img {
+  width: 84px;
+  height: 84px;
+  border: 2px solid var(--accent);
+}
+.pthumb-badge {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+/* 使用者選取＝外框強調（與 source-pill / 選取語意一致） */
+.img-mark-btn {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  min-height: 44px;
+  line-height: 1.2;
+}
+.img-mark-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.img-mark-btn.active {
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  font-weight: 700;
+}
+.imgmark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.imgmark-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+  flex-wrap: wrap;
+}
+.imgmark-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border-soft);
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+.imgmark-btns {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+.imgmark-slot-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 4.5em;
+}
+/* 黃字警告層級：未標記（狀態詞彙 --warn） */
+.img-mark-warn {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  border-radius: var(--radius-s);
+  padding: 8px 10px;
+}
+.img-mark-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--warn);
+}
+.img-mark-status .st-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+  flex-shrink: 0;
+}
+
 /* Variant (款式) editor (ported from 分支/index.html) */
 .variant-box { border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface2); padding: 10px; margin: 4px 0; }
 .variant-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 10px; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }

@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { ImageType } from "@/types/domain";
+import { imageSlotLabel, intentForSpecToggle } from "@/lib/images/processMarks";
+import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
 // B1 (Mockup差異備忘 差異2): 只有主圖／詳情圖兩框。規格改表單手填欄位，不再上傳規格圖
 // 做 OCR。詳情圖給 AI 讀資訊用（Vision 會轉錄圖上可見文字），不上架。
+// B5: 主圖區每張縮圖可切「規格圖」＝去簡體字影像處理標記（不是 OCR）。
 const zones: Array<{
   type: ImageType;
   icon: string;
@@ -18,6 +20,14 @@ const zones: Array<{
   { type: "main", icon: "🖼", label: "主圖（3-5張）", badgeClass: "badge-main", badgeText: "1:1 裁切", dropTitle: "點擊或拖曳主圖" },
   { type: "detail", icon: "📋", label: "詳情圖（供 AI 讀資訊，不上架）", badgeClass: "badge-detail", badgeText: "Vision 參考", dropTitle: "點擊或拖曳詳情圖" }
 ];
+
+type PreviewItem = {
+  id: string;
+  url: string;
+  sort_order: number;
+  is_spec_process: boolean;
+  process_intent: ImageProcessIntent | null;
+};
 
 // B1: images are now selected in the form BEFORE the draft is generated and
 // uploaded in the background while the operator keeps filling in the rest.
@@ -44,10 +54,11 @@ export function ImageUploader({
 }) {
   const router = useRouter();
   const supabase = createClient();
-  const [previews, setPreviews] = useState<Record<string, string[]>>({});
+  const [previews, setPreviews] = useState<Record<string, PreviewItem[]>>({});
   const [dragging, setDragging] = useState<string | null>(null);
   const [uploadingCount, setUploadingCount] = useState(0);
   const [message, setMessage] = useState("");
+  const [markError, setMarkError] = useState("");
 
   function beginUpload() {
     setUploadingCount((current) => {
@@ -69,6 +80,7 @@ export function ImageUploader({
     if (!fileList?.length) return;
     const files = Array.from(fileList);
     setMessage(`上傳 ${type} 圖片中...`);
+    setMarkError("");
     beginUpload();
 
     const task = (async () => {
@@ -81,7 +93,7 @@ export function ImageUploader({
         return;
       }
 
-      const urls: string[] = [];
+      const added: PreviewItem[] = [];
       const startIndex = previews[type]?.length ?? 0;
 
       for (const [index, file] of files.entries()) {
@@ -99,24 +111,40 @@ export function ImageUploader({
 
         const { data } = supabase.storage.from("product-images").getPublicUrl(path);
 
-        const { error: insertError } = await supabase.from("product_images").insert({
-          draft_id: resolvedDraftId,
-          image_type: type,
-          original_file_url: data.publicUrl,
-          processed_file_url: data.publicUrl,
-          sort_order: startIndex + index,
-          processing_status: "uploaded"
-        });
+        // Default blank marks (process_intent null, is_spec_process false) —
+        // DB defaults cover this; we select the row back so the 規格圖 toggle
+        // can update by id without a full page reload.
+        const { data: row, error: insertError } = await supabase
+          .from("product_images")
+          .insert({
+            draft_id: resolvedDraftId,
+            image_type: type,
+            original_file_url: data.publicUrl,
+            processed_file_url: data.publicUrl,
+            sort_order: startIndex + index,
+            processing_status: "uploaded"
+          })
+          .select("id, original_file_url, processed_file_url, sort_order, process_intent, is_spec_process")
+          .single();
 
-        if (insertError) {
-          setMessage(`圖片檔案已上傳，但寫入資料庫失敗：${insertError.message}`);
+        if (insertError || !row) {
+          setMessage(`圖片檔案已上傳，但寫入資料庫失敗：${insertError?.message ?? "未知錯誤"}`);
           return;
         }
 
-        urls.push(data.publicUrl);
+        added.push({
+          id: row.id as string,
+          url: (row.processed_file_url ?? row.original_file_url ?? data.publicUrl) as string,
+          sort_order: (row.sort_order as number) ?? startIndex + index,
+          is_spec_process: Boolean(row.is_spec_process),
+          process_intent: (row.process_intent as ImageProcessIntent | null) ?? null
+        });
       }
 
-      setPreviews((current) => ({ ...current, [type]: [...(current[type] ?? []), ...urls] }));
+      setPreviews((current) => ({
+        ...current,
+        [type]: [...(current[type] ?? []), ...added]
+      }));
       setMessage("圖片已寫入資料庫");
       router.refresh();
     })();
@@ -129,10 +157,51 @@ export function ImageUploader({
     }
   }
 
+  // B5: 規格圖 toggle on main-zone thumbs. Writes via existing product_images
+  // update RLS (owner of unpublished draft / reviewer) — same path as delete.
+  async function toggleSpecMark(item: PreviewItem) {
+    const next = intentForSpecToggle(!item.is_spec_process);
+    setMarkError("");
+    const { error } = await supabase
+      .from("product_images")
+      .update({
+        is_spec_process: next.is_spec_process,
+        process_intent: next.process_intent
+      })
+      .eq("id", item.id);
+
+    if (error) {
+      setMarkError(`標記失敗：${error.message}`);
+      return;
+    }
+
+    setPreviews((current) => {
+      const main = (current.main ?? []).map((row) =>
+        row.id === item.id
+          ? { ...row, is_spec_process: next.is_spec_process, process_intent: next.process_intent }
+          : row
+      );
+      return { ...current, main };
+    });
+    router.refresh();
+  }
+
+  const mainItems = previews.main ?? [];
+  // Local-session unmarked count for main images only (form-side hint).
+  const unmarkedMain = mainItems.filter((item) => item.process_intent == null);
+  const formUnmarkedLabels = unmarkedMain.map((item) => {
+    const position = mainItems.findIndex((row) => row.id === item.id) + 1;
+    return imageSlotLabel(
+      { image_type: "main", is_spec_process: item.is_spec_process },
+      position
+    );
+  });
+
   return (
     <div className="drop-grid">
       {zones.map((zone) => {
-        const count = previews[zone.type]?.length ?? 0;
+        const items = previews[zone.type] ?? [];
+        const count = items.length;
         return (
           <div className="upload-section" key={zone.type}>
             <div className="upload-section-label">
@@ -164,15 +233,46 @@ export function ImageUploader({
               </div>
             </label>
             {count > 0 ? (
-              <div className="thumb-strip">
-                {previews[zone.type].map((src) => (
-                  <img alt={zone.label} className="thumb" key={src} src={src} />
-                ))}
+              <div className="pthumb-strip">
+                {items.map((item, index) => {
+                  const isMainZone = zone.type === "main";
+                  const isFirstMain = isMainZone && index === 0;
+                  return (
+                    <div className={`pthumb${isFirstMain ? " is-main" : ""}`} key={item.id}>
+                      <span className="pthumb-img-wrap">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img alt={zone.label} className="thumb pthumb-img" src={item.url} />
+                        {isFirstMain ? <span className="pthumb-badge">主圖</span> : null}
+                      </span>
+                      {isMainZone ? (
+                        <button
+                          aria-pressed={item.is_spec_process}
+                          className={`img-mark-btn${item.is_spec_process ? " active" : ""}`}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void toggleSpecMark(item);
+                          }}
+                          type="button"
+                        >
+                          {item.is_spec_process ? "✓ 規格圖" : "規格圖"}
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>
         );
       })}
+      {mainItems.length > 0 && unmarkedMain.length > 0 ? (
+        <div className="img-mark-warn" role="status">
+          ⚠ 還有 {unmarkedMain.length} 張商品圖未標記：{formUnmarkedLabels.join("、")}
+          （送圖前請在右側卡片選處理方式；規格圖＝去簡體字）
+        </div>
+      ) : null}
+      {markError ? <div className="img-mark-warn" role="alert">{markError}</div> : null}
       {uploadingCount > 0 ? <div className="notice">⟳ 圖片背景上傳中…（可繼續填寫，生成前會自動等它傳完）</div> : null}
       {message ? <div className="notice">{message}</div> : null}
     </div>

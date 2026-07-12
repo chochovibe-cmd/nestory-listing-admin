@@ -513,9 +513,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             {fieldErrors.inventory ? <div className="field-msg">請填 0 或正整數；若可持續接單，請勾選無上限。</div> : null}
           </div>
 
-          {/* B1: 圖片先選＋背景上傳 -- images now live in the form (before 生成), not
-              after it. Marking UI stays the current three zones; the Mockup's
-              per-thumbnail 規格圖 toggle is B5's scope. */}
+          {/* B1: 圖片先選＋背景上傳；B5: 主圖縮圖可切「規格圖」處理標記（非 OCR）。 */}
           <div className="field">
             <label>商品圖片（拖入即背景上傳）</label>
             <ImageUploader

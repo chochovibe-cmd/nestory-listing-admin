@@ -1549,6 +1549,11 @@ textarea {
 .source-inline label { margin-bottom: 0; }
 .inline-pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .source-pill { width: auto; min-width: 72px; border-radius: 999px; padding: 5px 24px 5px 10px; font-size: 11px; background: var(--surface2); min-height: 30px; }
+.stock-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; color: var(--text-muted); font-size: 11px; }
+.stock-line button { background: transparent; border: 0; color: var(--accent); cursor: pointer; font-size: 11px; font-weight: 700; min-height: 0; padding: 0; }
+.stock-edit { display: none; align-items: center; gap: 10px; margin-top: 8px; }
+.stock-edit.open { display: flex; }
+.stock-edit input[type="number"] { max-width: 120px; }
 
 .currency-toggle { display: flex; align-items: center; min-height: 38px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface2); padding: 2px; white-space: nowrap; box-sizing: border-box; }
 .currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: 'Space Grotesk', sans-serif; cursor: pointer; min-height: 0; line-height: 1; }

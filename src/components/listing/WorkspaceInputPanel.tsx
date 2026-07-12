@@ -27,6 +27,7 @@ const LENGTH_OPTIONS = ["精簡", "標準", "詳細"] as const;
 const SOURCE_OPTIONS = ["淘寶", "閑魚", "蝦皮"] as const;
 
 type VariantRow = { name: string; sku: string; price: string; qty: string };
+type InventoryPolicy = "deny" | "continue";
 
 // B1: 生成四步驟進度卡. The panel (left) drives the card, DraftResultsPanel
 // (right) renders it, bridged by a window event (see generationProgress.ts) --
@@ -65,6 +66,10 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [specText, setSpecText] = useState("");
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
+  const [inventoryUnlimited, setInventoryUnlimited] = useState(true);
+  const [inventoryQuantity, setInventoryQuantity] = useState("");
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [inventoryNotice, setInventoryNotice] = useState("");
   const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(TONE_OPTIONS[0].value);
   const [copyLength, setCopyLength] = useState<(typeof LENGTH_OPTIONS)[number]>("標準");
   const [manualPricingEnabled, setManualPricingEnabled] = useState(false);
@@ -76,9 +81,10 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [pricingSettings, setPricingSettings] = useState<PricingSettings>(defaultPricingSettings);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<{ title?: boolean; price?: boolean }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ title?: boolean; price?: boolean; inventory?: boolean }>({});
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const priceRef = useRef<HTMLInputElement>(null);
+  const inventoryRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setPricingSettings(getStoredPricingSettings());
@@ -114,6 +120,27 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setVariants((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
 
+  function handleSaleStatusChange(nextStatus: SaleStatus) {
+    setSaleStatus(nextStatus);
+    if (nextStatus === "台灣現貨" || nextStatus === "二手現貨") {
+      setInventoryOpen(true);
+      setInventoryNotice("已切換為現貨類型，請確認庫存；預設仍是無上限。");
+    }
+  }
+
+  function getInventoryFields(): { inventory_quantity: number | null; inventory_policy: InventoryPolicy } | null {
+    if (inventoryUnlimited) {
+      return { inventory_quantity: null, inventory_policy: "continue" };
+    }
+
+    if (!inventoryQuantity.trim()) return null;
+
+    const quantity = Number(inventoryQuantity);
+    if (!Number.isInteger(quantity) || quantity < 0) return null;
+
+    return { inventory_quantity: quantity, inventory_policy: "deny" };
+  }
+
   // B1: lazily create the draft so image uploads have a draft_id before the
   // form is submitted. Idempotent + concurrency-guarded (two fast drops share
   // one insert). cny_price is NOT NULL/> 0 in the schema, so we seed it with the
@@ -135,6 +162,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
           cny_price: seedCny,
           sale_status: saleStatus,
           source_platform: source,
+          inventory_quantity: null,
+          inventory_policy: "continue",
           status: "pending_input",
           created_by: userId
         })
@@ -162,6 +191,14 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   // INSERT a fresh one when no image was ever added. Returns the draft id.
   async function persistDraft(): Promise<string | null> {
     const filledVariants = variants.filter((row) => row.name.trim());
+    const inventoryFields = getInventoryFields();
+
+    if (!inventoryFields) {
+      setFieldErrors((current) => ({ ...current, inventory: true }));
+      setMessage("庫存數量請填 0 或正整數，或勾選無上限");
+      inventoryRef.current?.focus();
+      return null;
+    }
 
     const fields = {
       taobao_title: title.trim(),
@@ -177,6 +214,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       spec_text: specText.trim() || null,
       sale_status: saleStatus,
       source_platform: source,
+      inventory_quantity: inventoryFields.inventory_quantity,
+      inventory_policy: inventoryFields.inventory_policy,
       status: "pending_copy",
       generation_mode: "api_llm" as const,
       generation_provider: "codex" as const,
@@ -217,7 +256,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
           option1_value: row.name.trim(),
           sku: row.sku.trim() || null,
           twd_price: row.price ? Number(row.price) : null,
-          inventory_quantity: row.qty ? Number(row.qty) : 0
+          inventory_quantity: row.qty ? Number(row.qty) : 0,
+          inventory_policy: row.qty ? "deny" : "continue"
         }))
       );
     }
@@ -267,6 +307,10 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setNote("");
     setSpecText("");
     setVariants([]);
+    setInventoryUnlimited(true);
+    setInventoryQuantity("");
+    setInventoryOpen(false);
+    setInventoryNotice("");
     setManualPricingEnabled(false);
     setManualCompareAtPrice("");
     setManualSellPrice("");
@@ -416,7 +460,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 </select>
                 <select
                   className="source-pill"
-                  onChange={(e) => setSaleStatus(e.target.value as SaleStatus)}
+                  onChange={(e) => handleSaleStatusChange(e.target.value as SaleStatus)}
                   value={saleStatus}
                 >
                   {SALE_STATUS_OPTIONS.map((option) => (
@@ -433,6 +477,40 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               value={title}
             />
             {fieldErrors.title ? <div className="field-msg">請輸入商品標題</div> : null}
+            <div className="stock-line">
+              <span>庫存：{inventoryUnlimited ? "無上限" : `${inventoryQuantity || 0} 件（賣完即止）`}</span>
+              <button onClick={() => setInventoryOpen((current) => !current)} type="button">
+                {inventoryOpen ? "收合" : "修改"}
+              </button>
+            </div>
+            <div className={`stock-edit${inventoryOpen ? " open" : ""}`}>
+              <label className="check-row">
+                <input
+                  checked={inventoryUnlimited}
+                  onChange={(e) => {
+                    setInventoryUnlimited(e.target.checked);
+                    setFieldErrors((current) => ({ ...current, inventory: false }));
+                  }}
+                  type="checkbox"
+                />
+                <span>無上限</span>
+              </label>
+              <input
+                disabled={inventoryUnlimited}
+                min="0"
+                onChange={(e) => {
+                  setInventoryQuantity(e.target.value);
+                  setFieldErrors((current) => ({ ...current, inventory: false }));
+                }}
+                placeholder="實際數量"
+                ref={inventoryRef}
+                step="1"
+                type="number"
+                value={inventoryQuantity}
+              />
+            </div>
+            {inventoryNotice ? <div className="field-msg">{inventoryNotice}</div> : null}
+            {fieldErrors.inventory ? <div className="field-msg">請填 0 或正整數；若可持續接單，請勾選無上限。</div> : null}
           </div>
 
           {/* B1: 圖片先選＋背景上傳 -- images now live in the form (before 生成), not
@@ -584,7 +662,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   <input onChange={(e) => updateVariant(index, { name: e.target.value })} placeholder="款式名" value={row.name} />
                   <input onChange={(e) => updateVariant(index, { sku: e.target.value })} placeholder="SKU" value={row.sku} />
                   <input onChange={(e) => updateVariant(index, { price: e.target.value })} placeholder="售價" type="number" value={row.price} />
-                  <input onChange={(e) => updateVariant(index, { qty: e.target.value })} placeholder="庫存" type="number" value={row.qty} />
+                  <input onChange={(e) => updateVariant(index, { qty: e.target.value })} placeholder="庫存（空白=無上限）" type="number" value={row.qty} />
                   <button
                     className="variant-del"
                     onClick={() => setVariants((current) => current.filter((_, i) => i !== index))}

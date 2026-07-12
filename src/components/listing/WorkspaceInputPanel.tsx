@@ -2,7 +2,13 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { calculatePrice, CostCurrency, defaultPricingSettings, PricingSettings } from "@/lib/pricing";
+import {
+  calculatePrice,
+  CostCurrency,
+  defaultPricingSettings,
+  type PriceMode,
+  type PricingSettings
+} from "@/lib/pricing";
 import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import { SALE_STATUS_OPTIONS } from "@/lib/saleStatus";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
@@ -75,6 +81,12 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [manualPricingEnabled, setManualPricingEnabled] = useState(false);
   const [manualCompareAtPrice, setManualCompareAtPrice] = useState("");
   const [manualSellPrice, setManualSellPrice] = useState("");
+  // B6: 特價/單一售價；預設特價。切到單一暫留定價，送出才寫 null。
+  const [priceMode, setPriceMode] = useState<PriceMode>("sale");
+  const [retainedCompareAt, setRetainedCompareAt] = useState<number | null>(null);
+  // B6 A 案：利潤手改驅動售價；成本／幣別／匯率變動時必須清掉，避免殘留舊值。
+  const [profitDriven, setProfitDriven] = useState(false);
+  const [targetProfitInput, setTargetProfitInput] = useState("");
   const [useWebSearch, setUseWebSearch] = useState(false);
   const [taobaoUrlOpen, setTaobaoUrlOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -90,7 +102,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setPricingSettings(getStoredPricingSettings());
     function onChange(event: Event) {
       const detail = (event as CustomEvent<PricingSettings>).detail;
-      if (detail) setPricingSettings(detail);
+      if (detail) {
+        // 匯率／係數從其他元件或本機設定變更時，立刻重算並退出利潤驅動。
+        setProfitDriven(false);
+        setPricingSettings(detail);
+      }
     }
     window.addEventListener("nestory:pricing-settings-changed", onChange);
     return () => window.removeEventListener("nestory:pricing-settings-changed", onChange);
@@ -98,23 +114,106 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
 
   function updatePricingSetting(key: keyof PricingSettings, value: number) {
     if (Number.isNaN(value)) return;
+    setProfitDriven(false);
     setStoredPricingSettings({ [key]: value });
+  }
+
+  function handleCostCurrencyChange(next: CostCurrency) {
+    if (next === costCurrency) return;
+    setProfitDriven(false);
+    setCostCurrency(next);
+  }
+
+  function handleCostPriceChange(value: string) {
+    setProfitDriven(false);
+    setPrice(value);
+    setFieldErrors((current) => ({ ...current, price: false }));
+  }
+
+  function handleProfitInputChange(value: string) {
+    // 直填模式：利潤只讀，不應進到這裡；保險擋一次。
+    if (manualPricingEnabled) return;
+    setProfitDriven(true);
+    setTargetProfitInput(value);
   }
 
   const parsedPrice = Number(price || 0);
   const parsedPriceRef = useRef(0);
   parsedPriceRef.current = parsedPrice;
-  const pricing = parsedPrice > 0
-    ? calculatePrice(parsedPrice, {
-        settings: pricingSettings,
-        currency: costCurrency,
-        manualPricing: {
-          enabled: manualPricingEnabled,
-          sellPrice: Number(manualSellPrice || 0) || null,
-          compareAtPrice: Number(manualCompareAtPrice || 0) || null
-        }
-      })
-    : null;
+
+  // 有填成本或直填售價時都要算，方便 price-live 即時更新與軟警告。
+  const pricing =
+    parsedPrice > 0 || (manualPricingEnabled && Number(manualSellPrice || 0) > 0)
+      ? calculatePrice(parsedPrice, {
+          settings: pricingSettings,
+          currency: costCurrency,
+          priceMode,
+          profitDriven: profitDriven && !manualPricingEnabled,
+          targetProfitTwd:
+            profitDriven && !manualPricingEnabled
+              ? Number(targetProfitInput || 0)
+              : null,
+          manualPricing: {
+            enabled: manualPricingEnabled,
+            sellPrice: Number(manualSellPrice || 0) || null,
+            compareAtPrice:
+              priceMode === "sale"
+                ? Number(manualCompareAtPrice || 0) || retainedCompareAt || null
+                : null
+          }
+        })
+      : null;
+
+  function handlePriceModeChange(next: PriceMode) {
+    if (next === priceMode) return;
+    if (next === "single") {
+      // 暫留目前定價（公式算出或直填），切回特價可還原直填欄。
+      const currentCompare =
+        pricing?.compareAtPrice ??
+        (manualCompareAtPrice ? Number(manualCompareAtPrice) : null) ??
+        retainedCompareAt;
+      if (currentCompare && currentCompare > 0) {
+        setRetainedCompareAt(currentCompare);
+      }
+    } else if (next === "sale" && retainedCompareAt && manualPricingEnabled) {
+      setManualCompareAtPrice(String(retainedCompareAt));
+    }
+    setPriceMode(next);
+  }
+
+  // 非利潤驅動時，把利潤輸入同步成「售價−成本」，避免幣別／匯率切換後殘留舊利潤。
+  useEffect(() => {
+    if (manualPricingEnabled) {
+      if (pricing) {
+        setTargetProfitInput(String(pricing.profitTwd));
+      } else {
+        setTargetProfitInput("");
+      }
+      return;
+    }
+    if (!profitDriven) {
+      if (pricing) {
+        setTargetProfitInput(String(pricing.profitTwd));
+      } else {
+        setTargetProfitInput("");
+      }
+    }
+  }, [
+    manualPricingEnabled,
+    profitDriven,
+    pricing?.profitTwd,
+    pricing?.costTwd,
+    pricing?.sellPrice,
+    costCurrency,
+    pricingSettings.rate,
+    pricingSettings.costMultiplier,
+    pricingSettings.marginMultiplier,
+    pricingSettings.compareAtMultiplier,
+    pricingSettings.minPrice,
+    price,
+    manualSellPrice,
+    priceMode
+  ]);
 
   function updateVariant(index: number, patch: Partial<VariantRow>) {
     setVariants((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -200,16 +299,21 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       return null;
     }
 
+    // B6: 單一售價送出時 compare_at_price 必為 null（暫留只在記憶體）。
+    const compareAtForSave =
+      priceMode === "single" ? null : (pricing?.compareAtPrice ?? null);
+
     const fields = {
       taobao_title: title.trim(),
       original_title: title.trim(),
       source_url: taobaoUrl.trim() || null,
       taobao_url: taobaoUrl.trim() || null,
       cny_price: parsedPrice,
-      twd_cost: pricing?.costTwd,
-      twd_price: pricing?.sellPrice,
-      compare_at_price: pricing?.compareAtPrice,
-      pricing_formula: pricing?.pricingFormula,
+      twd_cost: pricing?.costTwd ?? null,
+      twd_price: pricing?.sellPrice ?? null,
+      compare_at_price: compareAtForSave,
+      price_mode: priceMode,
+      pricing_formula: pricing?.pricingFormula ?? {},
       note: note.trim() || null,
       spec_text: specText.trim() || null,
       sale_status: saleStatus,
@@ -314,6 +418,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setManualPricingEnabled(false);
     setManualCompareAtPrice("");
     setManualSellPrice("");
+    setProfitDriven(false);
+    setTargetProfitInput("");
+    // priceMode 連續上架保留（跟來源／銷售狀態一樣是操作偏好）
     setFieldErrors({});
   }
 
@@ -326,7 +433,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
 
     if (errors.title || errors.price) {
       setFieldErrors(errors);
-      setMessage("請輸入商品標題與有效 CNY 價格");
+      setMessage("請輸入商品標題與有效成本價格");
       (errors.title ? titleRef.current : priceRef.current)?.focus();
       return;
     }
@@ -525,12 +632,14 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             />
           </div>
 
-          <div className={`field${fieldErrors.price ? " error" : ""}`}>
-            <label>成本價格</label>
+          <div className={`field${fieldErrors.price ? " error" : ""}`} id="f-price">
+            <label>
+              成本價格 <span className="field-req">必填</span>
+            </label>
             <div className="price-row">
               <input
                 min="0"
-                onChange={(e) => { setPrice(e.target.value); setFieldErrors((current) => ({ ...current, price: false })); }}
+                onChange={(e) => handleCostPriceChange(e.target.value)}
                 ref={priceRef}
                 step="0.01"
                 type="number"
@@ -539,45 +648,101 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               <div className="currency-toggle">
                 <button
                   className={costCurrency === "CNY" ? "active" : ""}
-                  onClick={() => setCostCurrency("CNY")}
+                  onClick={() => handleCostCurrencyChange("CNY")}
                   type="button"
                 >
-                  CNY ¥
+                  ¥ CNY
                 </button>
                 <button
                   className={costCurrency === "TWD" ? "active" : ""}
-                  onClick={() => setCostCurrency("TWD")}
+                  onClick={() => handleCostCurrencyChange("TWD")}
                   type="button"
                 >
-                  TWD NT$
+                  NT$ TWD
                 </button>
               </div>
             </div>
             {fieldErrors.price ? <div className="field-msg">請輸入有效的成本價格</div> : null}
-          </div>
 
-          <div className="manual-pricing">
-            <label className="check-row">
-              <input
-                checked={manualPricingEnabled}
-                onChange={(e) => setManualPricingEnabled(e.target.checked)}
-                type="checkbox"
-              />
-              <span>自填台幣定價與售價（不套用公式）</span>
-            </label>
-            {manualPricingEnabled ? (
-              <div className="manual-price-fields open">
-                <div className="field" style={{ marginBottom: 0 }}>
-                  <label>定價 TWD</label>
+            {/* B6: 特價 / 單一售價二選一（預設特價） */}
+            <div className="price-mode" role="group" aria-label="定價模式">
+              <button
+                className={`price-mode-btn${priceMode === "sale" ? " active" : ""}`}
+                onClick={() => handlePriceModeChange("sale")}
+                type="button"
+              >
+                🏷 特價模式（售價＋定價劃線）
+              </button>
+              <button
+                className={`price-mode-btn${priceMode === "single" ? " active" : ""}`}
+                onClick={() => handlePriceModeChange("single")}
+                type="button"
+              >
+                單一售價（不填定價）
+              </button>
+            </div>
+
+            {pricing ? (
+              <div className="price-live">
+                <span>
+                  成本 <b>NT${pricing.costTwd.toLocaleString()}</b>
+                </span>
+                <span>
+                  → 售價 <b>NT${pricing.sellPrice.toLocaleString()}</b>
+                </span>
+                {priceMode === "sale" && pricing.compareAtPrice != null ? (
+                  <span>
+                    定價 <s>NT${pricing.compareAtPrice.toLocaleString()}</s>
+                  </span>
+                ) : null}
+                <span className="price-live-profit">
+                  利潤{" "}
                   <input
-                    min="0"
-                    onChange={(e) => setManualCompareAtPrice(e.target.value)}
-                    placeholder="例如 980"
+                    aria-label="利潤台幣"
+                    className="profit-input"
+                    disabled={manualPricingEnabled}
+                    onChange={(e) => handleProfitInputChange(e.target.value)}
+                    readOnly={manualPricingEnabled}
                     step="1"
+                    title={
+                      manualPricingEnabled
+                        ? "直填模式下利潤只顯示、不反推售價"
+                        : "手填利潤後售價跳到最近美化價（可低於成本，僅黃字提醒）"
+                    }
                     type="number"
-                    value={manualCompareAtPrice}
+                    value={targetProfitInput}
                   />
-                </div>
+                  <span className="profit-pct">約 {pricing.profitPct}%</span>
+                  {pricing.profitNote ? (
+                    <span className="profit-note">{pricing.profitNote}</span>
+                  ) : null}
+                </span>
+              </div>
+            ) : null}
+
+            {pricing?.warnings?.length
+              ? pricing.warnings.map((warning) => (
+                  <div className="price-soft-warn" key={warning}>
+                    ⚠ {warning}
+                  </div>
+                ))
+              : null}
+
+            <div className="price-opts">
+              <label className="check-row">
+                <input
+                  checked={manualPricingEnabled}
+                  onChange={(e) => {
+                    setProfitDriven(false);
+                    setManualPricingEnabled(e.target.checked);
+                  }}
+                  type="checkbox"
+                />
+                <span>直填台幣售價/定價</span>
+              </label>
+            </div>
+            {manualPricingEnabled ? (
+              <div className={`manual-price-fields open${priceMode === "single" ? " single" : ""}`}>
                 <div className="field" style={{ marginBottom: 0 }}>
                   <label>售價 TWD</label>
                   <input
@@ -589,6 +754,19 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                     value={manualSellPrice}
                   />
                 </div>
+                {priceMode === "sale" ? (
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <label>定價 TWD</label>
+                    <input
+                      min="0"
+                      onChange={(e) => setManualCompareAtPrice(e.target.value)}
+                      placeholder="例如 980"
+                      step="1"
+                      type="number"
+                      value={manualCompareAtPrice}
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -689,12 +867,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             <input onChange={(e) => setNote(e.target.value)} placeholder="例如：含底座、預購款、限定版..." value={note} />
           </div>
 
-          {pricing ? (
-            <div className="notice">
-              預估成本 NT${pricing.costTwd.toLocaleString()} / 建議售價 NT${pricing.sellPrice.toLocaleString()} / 定價 NT${pricing.compareAtPrice.toLocaleString()} / 利潤率 {pricing.profitPct}%
-            </div>
-          ) : null}
-
           <button className="btn-add" disabled={submitting || imagesUploading} type="submit">
             {submitting ? "處理中..." : imagesUploading ? "圖片上傳中，請稍候…" : "建立商品並生成文案"}
           </button>
@@ -759,9 +931,13 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               定價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.compareAtMultiplier.toFixed(2)}
             </div>
             <div className="settings-note">
-              成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝／售價與定價可在上方手動覆蓋。
+              成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝。
               <br />
-              ✨ 算出的售價會自動「尾數美化」到順眼的價格帶（如 199／299／399／599／990…），不會出現 437 這種零頭。
+              ✨ 算出的售價會自動「尾數美化」到順眼的價格帶（如 199／299／399／599／990…）。
+              <br />
+              手填利潤時，售價會跳到「不低於 成本＋利潤」的最近美化價；直填台幣時不套公式。
+              <br />
+              特價模式會帶定價劃線；單一售價不寫定價（compare_at 留空）。
             </div>
           </div>
         ) : null}

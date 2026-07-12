@@ -1686,11 +1686,87 @@ textarea {
 .currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: 'Space Grotesk', sans-serif; cursor: pointer; min-height: 0; line-height: 1; }
 .currency-toggle button.active { background: var(--accent); color: var(--accent-fg); font-weight: 700; }
 
-.manual-pricing { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 10px 12px; margin-bottom: 13px; }
+/* B6: 定價模式二選一＋即時價格列＋可改利潤（只用現有 tokens） */
+.field-req { color: var(--danger); font-size: 11px; font-weight: 700; margin-left: 4px; }
+.price-mode { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
+.price-mode-btn {
+  flex: 1 1 140px;
+  min-height: 44px;
+  font-size: 11.5px;
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.price-mode-btn:hover { border-color: var(--accent); color: var(--accent); }
+/* 使用者選取＝外框強調（與 source-pill / currency-toggle 語意一致） */
+.price-mode-btn.active {
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  font-weight: 700;
+}
+.price-live {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 10px 13px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.price-live b {
+  color: var(--accent);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+}
+.price-live s { color: var(--text-muted); }
+.price-live-profit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.profit-input {
+  width: 78px;
+  min-height: 44px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-family: 'Space Grotesk', sans-serif;
+  display: inline-block;
+}
+.profit-input:disabled,
+.profit-input[readonly] {
+  opacity: 0.75;
+  cursor: not-allowed;
+  background: var(--surface);
+}
+.profit-pct,
+.profit-note {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.price-soft-warn {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--warn);
+  line-height: 1.45;
+}
+.price-opts { display: flex; gap: 14px; margin-top: 9px; flex-wrap: wrap; }
+
 .check-row { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 12px; cursor: pointer; }
 .check-row input { width: auto; }
 .manual-price-fields { display: none; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .manual-price-fields.open { display: grid; }
+.manual-price-fields.open.single { grid-template-columns: 1fr; }
 
 .copy-settings-block { background: color-mix(in srgb, var(--surface2) 72%, var(--surface)); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 12px; margin: 14px 0; }
 .copy-block-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: var(--text); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
@@ -1707,6 +1783,7 @@ textarea {
 /* ── Result card dual price (售價 + 利潤 stacked) ── */
 .rc-price-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
 .rc-profit { font-family: 'Space Grotesk', sans-serif; font-size: 10px; color: var(--success); white-space: nowrap; }
+.rc-compare { font-size: 10px; color: var(--text-muted); text-decoration: line-through; white-space: nowrap; }
 
 /* ── Header: live rate + deployment status dropdown ── */
 .rate-val { color: var(--accent); font-weight: 600; font-size: 13px; }

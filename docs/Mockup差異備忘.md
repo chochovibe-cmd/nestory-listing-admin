@@ -140,10 +140,25 @@
   重複判斷先 NFKC＋trim；收合列 detect chips＋⚠；三維度查重寫入 `draft.warnings`。
   migration 021 只產檔待老闆 SQL Editor 執行。
 
+### 差異 9：結果卡內部分頁 4 頁（SEO 併文案）；Mockup 階段 pills 本包不做
+
+- **差在哪**：
+  1. Mockup 卡片展開是 **5 個底線分頁**（文案／定價／圖片／Tags／**SEO**）。正式版定案
+     **4 頁**：文案（**含 SEO 標題／Meta**）／定價／圖片／Tags。
+  2. Mockup 結果區有 **階段 pills 篩選**（文案待審／圖片生成中／圖片待審…）。正式版
+     **B9 不做**；歸 **B12 佇列篩選**（含已封存）一起規劃，避免本包膨脹。
+- **為什麼**：AGENTS 資訊密度規範優先於 Mockup 分頁數——SEO 欄位少、與文案同屬審稿內容，
+  獨立一頁徒增點擊。階段篩選與佇列狀態模型綁在一起，不宜只做半套。
+- **誰拍板**：老闆，2026-07-12（B9 設計 D3-A＋開工補要求 1）。
+- **現況**：✅ **B9 已對齊（2026-07-12）**。`ResultCard` 四頁底線分頁；收合列快速核准／送圖；
+  批次工具列 sticky＋排序器（sessionStorage）；腳本 `scripts/verify-b9-result-card.mjs`。
+
 ---
 
 ## 修訂紀錄
 
+- 2026-07-12（Grok）：差異 9 **B9 已對齊**——卡片 4 分頁（SEO 併文案）、階段 pills 歸 B12；
+  快速鈕擋送圖收合可見 notice；排序 sessionStorage。
 - 2026-07-12（Grok）：差異 8 **B8/B19 已對齊**——Web Search 預設開＋Tavily＋draft 快取＋規格證據池 v2＋
   語氣 6 款／模型單次切換；IP 語氣 DEFAULT＋team_settings 覆蓋；migration 023 只產檔。
 - 2026-07-12（Grok）：差異 7 **B7 已對齊**——多維度／選圖／✎／角色多選／發布 BulkCreate；

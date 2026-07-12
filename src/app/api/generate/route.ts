@@ -47,6 +47,7 @@ import {
   buildClassificationDuplicateWarning,
   queryDuplicateMatches,
 } from "@/lib/drafts/checkDuplicate";
+import { mergeRegenCurrentValues } from "@/lib/drafts/copyVersionHistory";
 
 const COPY_PROVIDERS: Record<"openai" | "claude", CopyProvider> = {
   openai: new OpenAICopyProvider(),
@@ -223,8 +224,11 @@ async function handleFieldRegen(params: {
   copyLength: CopyLength;
   scenarioKeywordMap: Record<string, string[]>;
   ipToneMap: ReturnType<typeof mergeIpToneMap>;
+  /** B10 D4: optional on-screen combination as LLM context (falls back to draft). */
+  clientCurrentValues?: unknown;
 }): Promise<Response> {
-  const { regenField, providerKey, draft, draftId, userId, serviceSupabase, source, variantSummary, tone, copyLength, scenarioKeywordMap, ipToneMap } = params;
+  const { regenField, providerKey, draft, draftId, userId, serviceSupabase, source, variantSummary, tone, copyLength, scenarioKeywordMap, ipToneMap, clientCurrentValues } = params;
+  const currentValues = mergeRegenCurrentValues(draft, clientCurrentValues);
   // A16/A17: same scenario terms the initial generation would have picked for
   // this draft's already-detected product type, so a single-field regen of
   // description/seo_title/meta_description stays consistent with the rest.
@@ -259,18 +263,7 @@ async function handleFieldRegen(params: {
       detectedIpName: draft.ip_name,
       ipToneMap,
       regenerateField: regenField,
-      currentValues: {
-        enrichedTitle: draft.title_zh ?? undefined,
-        generatedDescriptionHtml: draft.description_html ?? undefined,
-        generatedFaqHtml: draft.generated_faq_html ?? undefined,
-        seoTitle: draft.seo_title ?? undefined,
-        metaDescription: draft.seo_description ?? undefined,
-        whyWeChoseIt: draft.why_we_chose_it ?? undefined,
-        productHighlights: draft.product_highlights ?? undefined,
-        detectedIpName: draft.ip_name ?? undefined,
-        detectedCharacterName: draft.character_name ?? undefined,
-        detectedProductType: draft.product_type ?? undefined,
-      },
+      currentValues,
     });
   } catch (providerError) {
     await serviceSupabase
@@ -497,6 +490,8 @@ export async function POST(request: NextRequest) {
       copyLength,
       scenarioKeywordMap,
       ipToneMap,
+      // B10 D4: UI may send the on-screen multi-version combination as context.
+      clientCurrentValues: body.currentValues,
     });
   }
 
@@ -867,6 +862,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // B10: all 7 regenerable fields get a history row (was missing product_highlights).
+  const highlightsContent = (providerOutput.productHighlights ?? [])
+    .map((line) => localizeToTaiwanTraditionalText(line).trim())
+    .filter(Boolean)
+    .join("\n");
   const historyRows = [
     { field_name: "enriched_title", content: localizedOutput.display_title },
     { field_name: "generated_description_html", content: localizedOutput.generated_description_html },
@@ -874,6 +874,7 @@ export async function POST(request: NextRequest) {
     { field_name: "seo_title", content: localizedOutput.seo_title },
     { field_name: "meta_description", content: localizedOutput.meta_description },
     { field_name: "why_we_chose_it", content: providerOutput.whyWeChoseIt },
+    { field_name: "product_highlights", content: highlightsContent },
   ]
     .filter((row) => row.content)
     .map((row) => ({

@@ -76,6 +76,8 @@ export type IpCatalogEntry = {
   updated_at: string;
 };
 
+export type IpCharacterReviewStatus = 'pending' | 'approved';
+
 export type IpCharacter = {
   id: string;
   ip_name: string;
@@ -83,6 +85,9 @@ export type IpCharacter = {
   aliases: string[];
   sort_order: number;
   is_active: boolean;
+  /** B4: pending = one-click add awaiting Phase C review; still usable for tags. */
+  review_status?: IpCharacterReviewStatus;
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 };

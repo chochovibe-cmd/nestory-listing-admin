@@ -1,0 +1,35 @@
+// B8／B19: pluggable web-search backend. Tavily first; Serper when volume grows.
+// Providers never invent results — missing key / failed call = honest empty + warning.
+
+export type WebSearchProviderName = "tavily" | "serper";
+
+export interface WebSearchSource {
+  title: string;
+  url: string;
+}
+
+export interface WebSearchResult {
+  /** Plain-text summary for the copy LLM (繁中重點 + 來源標註). */
+  summary: string;
+  sources: WebSearchSource[];
+  provider: WebSearchProviderName;
+  query: string;
+  /** True when this result came from draft cache, not a live API call. */
+  fromCache: boolean;
+}
+
+/** Persisted on product_drafts.web_search_cache (migration 023). */
+export interface WebSearchCache {
+  query: string;
+  queryFingerprint: string;
+  summary: string;
+  sources: WebSearchSource[];
+  provider: WebSearchProviderName | string;
+  fetchedAt: string;
+}
+
+export interface WebSearchProvider {
+  name: WebSearchProviderName;
+  isConfigured(): boolean;
+  search(query: string): Promise<Omit<WebSearchResult, "fromCache">>;
+}

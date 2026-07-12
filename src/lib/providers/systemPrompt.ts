@@ -1,4 +1,5 @@
 import { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
+import { DEFAULT_IP_TONE_MAP, lookupIpTone } from "./ipToneMap";
 
 // A9 item 2: 中二熱血宣言／小編聊天口吻 are real voices the model writes in;
 // 依IP自動匹配 is a meta-tone that never reaches the model as-is (see
@@ -24,28 +25,28 @@ const TONE_EXAMPLES: Partial<Record<CopyTone, string>> = {
   小編聊天口吻: "欸這個真的太可愛了吧！摸起來軟軟的，放桌上根本捨不得移開視線。",
 };
 
-// A9 item 2: 依IP自動匹配 isn't picked by the model -- it's resolved here,
-// server-side, to one of the other 5 concrete tones before the prompt is
-// built (文案·三 note: "不是讓 LLM 自己挑"). IP_TONE_MAP starts EMPTY on
-// purpose: which tone suits which IP is the owner's editorial call, not
-// something to guess. Until it's populated (or moved to a team_settings
-// table, matching A16's pattern), every 依IP自動匹配 request just falls back
-// to the default tone below -- functionally a no-op, honestly labelled.
-const IP_TONE_MAP: Partial<Record<string, CopyTone>> = {};
+// B8: DEFAULT_IP_TONE_MAP lives in ipToneMap.ts (+ team_settings overrides).
+// Manual tones always pass through unchanged — only 依IP自動匹配 consults the map.
 const AUTO_MATCH_FALLBACK_TONE: CopyTone = "黑膠文藝收藏感";
 
 /**
  * Resolves 依IP自動匹配 to a concrete tone using the draft's already-detected
- * IP. On a draft's first-ever generation the IP isn't known yet (chicken/egg:
- * detection and copy-writing happen in the same LLM pass), so this only does
- * something useful on regenerations of an already-classified draft; the
- * initial pass always falls back to the default. Any other tone passes through
- * unchanged.
+ * IP + optional tone map (DEFAULT merged with team_settings).
+ *
+ * Semantic guarantee (老闆 2026-07-12): the map ONLY applies when the operator
+ * selected「依IP自動匹配」. Any other tone is returned as-is and never remapped.
+ *
+ * On a draft's first-ever generation the IP isn't known yet (chicken/egg:
+ * detection and copy-writing happen in the same LLM pass), so auto-match falls
+ * back to the default tone until a later regeneration has draft.ip_name.
  */
-export function resolveCopyTone(tone: CopyTone, detectedIpName?: string | null): CopyTone {
+export function resolveCopyTone(
+  tone: CopyTone,
+  detectedIpName?: string | null,
+  toneMap: Partial<Record<string, CopyTone>> = DEFAULT_IP_TONE_MAP,
+): CopyTone {
   if (tone !== "依IP自動匹配") return tone;
-  const mapped = detectedIpName ? IP_TONE_MAP[detectedIpName] : undefined;
-  return mapped ?? AUTO_MATCH_FALLBACK_TONE;
+  return lookupIpTone(detectedIpName, toneMap) ?? AUTO_MATCH_FALLBACK_TONE;
 }
 
 const LENGTH_INSTRUCTIONS: Record<CopyLength, string> = {
@@ -200,14 +201,22 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 1. 款式／Variant 選項文字（賣家自己標的，最可靠，例如「20cm款」「大號」）
 2. 原始標題（常含尺寸／材質／正版授權資訊）
 3. 商品外觀描述裡的【圖上文字】轉錄（詳情圖上賣家自己印出來的規格文字）
-4. 商品外觀描述裡的客觀屬性（材質、配件、包裝——照片看得出來的，但這不能拿來當「數字」依據）
-5. 以上都沒有時，寫「保守通用規格」：只寫幾乎一定成立的通則（材質類別、用途類型），不要寫具體數字
+4. 網路搜尋補充資訊（B19：放在賣家自標資訊之後、保守通用之前；寫入時在該行標「來源：網路」或附 URL 關鍵字；不確定就不寫）
+5. 商品外觀描述裡的客觀屬性（材質、配件、包裝——照片看得出來的，但這不能拿來當「數字」依據）
+6. 以上都沒有時，寫「保守通用規格」：只寫幾乎一定成立的通則（材質類別、用途類型），不要寫具體數字
 數字紅線（與 D 段一致，絕對遵守）：
 - 可以寫：款式選項／原標題／詳情圖轉錄裡「賣家自己標出來」的尺寸／重量等數字
+- 可以寫：網路搜尋結果裡有明確來源、且與本商品合理相符的規格數字——必須標來源，不確定就不寫
 - 禁止寫：證據池裡不存在、只靠你看圖目測估計的精確數字——沒有可靠尺寸來源就「不要寫尺寸」
 - 不要寫價格
 若輸入資料已提供「商品規格（操作者補充）」，以那份為準，只做簡繁與格式整理，不要另外編造或推翻。
 留空是允許的：真的完全沒有可寫的規格時，spec 就只寫「（無）」，不要硬湊。
+
+【網路搜尋補充（若有提供）】
+輸入若含「網路搜尋補充資訊」，可作冷門 IP／角色背景與同款規格的參考。規則：
+- 當參考用，不是官方背書；描述與 FAQ 語氣要像「公開資料參考」，不要寫成絕對事實
+- 規格數字只有搜尋結果清楚標出且你合理判斷為同款時才寫入，並標來源
+- 與賣家自標資訊衝突時，以賣家自標（款式／標題／圖上文字／操作者補充）為準
 
 【FAQ 規則】
 - 3-5 題，每題 <h3><strong>問題</strong></h3> + <p>回答</p>（2-3 句）
@@ -303,7 +312,11 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
   if (note) lines.push(`補充備註：${note}`);
   if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
   if (specText) lines.push(`商品規格（操作者補充，以此為準只做整理）：${specText}`);
-  if (webSearchSummary) lines.push(`網路搜尋補充資訊：${webSearchSummary}`);
+  if (webSearchSummary) {
+    lines.push(
+      `網路搜尋補充資訊（參考用、須核實；規格寫入請標來源，不確定勿寫）：\n${webSearchSummary}`,
+    );
+  }
   // A9 item 4: without this the model has no signal the listing is secondhand.
   if (isSecondhand) {
     lines.push(

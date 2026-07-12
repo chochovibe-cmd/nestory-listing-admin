@@ -36,6 +36,12 @@ import {
   CopyTone,
   getCopyFieldValue,
 } from "@/lib/providers/copy";
+import { mergeIpToneMap } from "@/lib/providers/ipToneMap";
+import {
+  resolveWebSearchForGenerate,
+  WEB_SEARCH_USED_WARNING,
+  type WebSearchCache,
+} from "@/lib/providers/webSearch";
 import type { GenerationProvider, ImageType, ProductDraft } from "@/types/domain";
 import {
   buildClassificationDuplicateWarning,
@@ -66,6 +72,13 @@ function isLegacyTagRuleMappingError(message: string): boolean {
 
 function uniqueMessages(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+/** A7: reuse draft-cached search text without spending another Tavily call. */
+function parseCachedWebSearchSummary(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const summary = (raw as { summary?: unknown }).summary;
+  return typeof summary === "string" && summary.trim() ? summary : undefined;
 }
 
 // The IP/character/type are no longer typed into the form -- the AI detects
@@ -209,8 +222,9 @@ async function handleFieldRegen(params: {
   tone: CopyTone;
   copyLength: CopyLength;
   scenarioKeywordMap: Record<string, string[]>;
+  ipToneMap: ReturnType<typeof mergeIpToneMap>;
 }): Promise<Response> {
-  const { regenField, providerKey, draft, draftId, userId, serviceSupabase, source, variantSummary, tone, copyLength, scenarioKeywordMap } = params;
+  const { regenField, providerKey, draft, draftId, userId, serviceSupabase, source, variantSummary, tone, copyLength, scenarioKeywordMap, ipToneMap } = params;
   // A16/A17: same scenario terms the initial generation would have picked for
   // this draft's already-detected product type, so a single-field regen of
   // description/seo_title/meta_description stays consistent with the rest.
@@ -231,6 +245,8 @@ async function handleFieldRegen(params: {
       note: draft.note,
       imageDescription: draft.image_description ?? undefined,
       specText: draft.spec_text ?? undefined,
+      // A7: single-field regen does not re-search (cost). Reuse cached summary if present.
+      webSearchSummary: parseCachedWebSearchSummary(draft.web_search_cache),
       tone,
       copyLength,
       // A9 items 2/4: 依IP自動匹配 resolution and honest 二手 copy both need
@@ -241,6 +257,7 @@ async function handleFieldRegen(params: {
       secondhandCondition: draft.secondhand_condition,
       secondhandNotes: draft.secondhand_notes,
       detectedIpName: draft.ip_name,
+      ipToneMap,
       regenerateField: regenField,
       currentValues: {
         enrichedTitle: draft.title_zh ?? undefined,
@@ -386,7 +403,9 @@ export async function POST(request: NextRequest) {
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
   const providerKey: "openai" | "claude" = body.provider === "claude" ? "claude" : "openai";
   const runMode: "test" | "llm" = body.mode === "test" ? "test" : "llm";
-  const useWebSearch = body.useWebSearch === true;
+  // B8: default ON when omitted (form default + ResultCard 重新生成 without toggle).
+  // Explicit false still turns it off.
+  const useWebSearch = body.useWebSearch !== false;
   const source = typeof body.source === "string" ? body.source : undefined;
   const variantSummary = typeof body.variantSummary === "string" ? body.variantSummary : undefined;
   const tone: CopyTone = (COPY_TONES as readonly string[]).includes(body.tone)
@@ -441,13 +460,24 @@ export async function POST(request: NextRequest) {
   // dictionary (scenarioKeywords.ts). Missing row/key just falls back to the
   // built-in defaults -- no admin UI writes this yet, so it's normal for the
   // row not to exist until someone edits it directly in Supabase.
-  const { data: scenarioSettingsRow } = await serviceSupabase
-    .from("team_settings")
-    .select("value")
-    .eq("key", "scenario_keywords_by_type")
-    .maybeSingle();
+  // B8: same pattern for IP→tone overrides (ip_tone_map_overrides).
+  const [scenarioSettingsResult, ipToneSettingsResult] = await Promise.all([
+    serviceSupabase
+      .from("team_settings")
+      .select("value")
+      .eq("key", "scenario_keywords_by_type")
+      .maybeSingle(),
+    serviceSupabase
+      .from("team_settings")
+      .select("value")
+      .eq("key", "ip_tone_map_overrides")
+      .maybeSingle(),
+  ]);
   const scenarioKeywordMap = mergeScenarioKeywordMap(
-    (scenarioSettingsRow?.value as Record<string, string[]> | null) ?? null,
+    (scenarioSettingsResult.data?.value as Record<string, string[]> | null) ?? null,
+  );
+  const ipToneMap = mergeIpToneMap(
+    (ipToneSettingsResult.data?.value as Record<string, string> | null) ?? null,
   );
 
   // A7: single-field regen path. Rewrites just one copy field using the rest of
@@ -466,6 +496,7 @@ export async function POST(request: NextRequest) {
       tone,
       copyLength,
       scenarioKeywordMap,
+      ipToneMap,
     });
   }
 
@@ -510,10 +541,30 @@ export async function POST(request: NextRequest) {
   // land in validation_warnings (黃字) instead of silently vanishing.
   if (imageWarnings.length > 0) extraWarnings.push(...imageWarnings);
 
-  // No search provider is wired up yet. Rather than silently ignore the toggle
-  // or fabricate results, record that the request was made but not fulfilled.
-  if (useWebSearch) {
-    extraWarnings.push("已要求 Web Search 補充資訊，但伺服器尚未設定搜尋服務，本次生成未使用網路搜尋結果。");
+  // B8/B19: real web search (Tavily) with draft-level cache. Missing key = honest
+  // warning, never fake results. Single-field regen does not re-search.
+  const rawTitleForSearch = draft.taobao_title ?? draft.original_title ?? "";
+  let webSearchSummary: string | undefined;
+  let webSearchCacheToPersist: WebSearchCache | null = null;
+  if (runMode !== "test") {
+    const searchOutcome = await resolveWebSearchForGenerate({
+      useWebSearch,
+      rawTitle: rawTitleForSearch,
+      ipName: draft.ip_name,
+      characterName: draft.character_name,
+      productType: draft.product_type,
+      existingCache: draft.web_search_cache,
+    });
+    if (searchOutcome.warnings.length > 0) extraWarnings.push(...searchOutcome.warnings);
+    if (searchOutcome.result?.summary) {
+      webSearchSummary = searchOutcome.result.summary;
+      extraWarnings.push(WEB_SEARCH_USED_WARNING);
+    }
+    if (searchOutcome.cacheToPersist) {
+      webSearchCacheToPersist = searchOutcome.cacheToPersist;
+    }
+  } else if (useWebSearch) {
+    extraWarnings.push("測試模式未呼叫 Web Search。");
   }
 
   // Phase 4: the AI detects IP/character/type from the title+image (form no
@@ -531,7 +582,7 @@ export async function POST(request: NextRequest) {
   if (runMode !== "test") {
     try {
       const raw = await COPY_PROVIDERS[providerKey].generate({
-        rawTitle: draft.taobao_title ?? draft.original_title ?? "",
+        rawTitle: rawTitleForSearch,
         saleStatus: draft.sale_status,
         source,
         variantSummary,
@@ -544,6 +595,7 @@ export async function POST(request: NextRequest) {
         // already support it. Sizes/materials in the copy's D 段 must come from
         // here (or the spec field), never from Vision's visual guess (風險 #2).
         specText: draft.spec_text ?? undefined,
+        webSearchSummary,
         knownIpNames,
         tone,
         copyLength,
@@ -557,7 +609,9 @@ export async function POST(request: NextRequest) {
         // isn't known yet (detection happens in this same call), so this is
         // only non-null on a later full regeneration of an already-classified
         // draft; the initial pass falls back to the default tone.
+        // Manual tones never consult ipToneMap (resolveCopyTone gate).
         detectedIpName: draft.ip_name,
+        ipToneMap,
       });
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
       detected = {
@@ -721,7 +775,9 @@ export async function POST(request: NextRequest) {
   if (!existingSpec && !autoSpecIsBlank) {
     finalSpecText = autoSpec;
     extraWarnings.push(
-      "商品規格為系統自動整理（來自款式／標題／圖片文字），發布前請審核瞄一眼確認無誤、必要時修正。"
+      webSearchSummary
+        ? "商品規格為系統自動整理（來自款式／標題／圖片文字／網路搜尋），發布前請審核瞄一眼確認無誤、必要時修正。"
+        : "商品規格為系統自動整理（來自款式／標題／圖片文字），發布前請審核瞄一眼確認無誤、必要時修正。",
     );
   }
 
@@ -787,6 +843,28 @@ export async function POST(request: NextRequest) {
 
   if (updateError) {
     return Response.json({ error: updateError.message }, { status: 500 });
+  }
+
+  // B8/B19: persist search cache separately so missing migration 023 never
+  // fails the whole generation (column absent → soft warn only).
+  if (webSearchCacheToPersist) {
+    const { error: cacheError } = await serviceSupabase
+      .from("product_drafts")
+      .update({ web_search_cache: webSearchCacheToPersist })
+      .eq("id", draftId);
+    if (cacheError) {
+      // Re-read warnings already written; append via a second soft update is optional.
+      // Surface in response path by best-effort merge into warnings column.
+      await serviceSupabase
+        .from("product_drafts")
+        .update({
+          warnings: uniqueMessages([
+            ...allWarnings,
+            "Web Search 結果未能快取（可能尚未執行 migration 023），下次同標題可能重複搜尋。",
+          ]),
+        })
+        .eq("id", draftId);
+    }
   }
 
   const historyRows = [

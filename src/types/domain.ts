@@ -127,6 +127,11 @@ export interface ProductDraft {
    * Max 3. Empty = single-SKU / no multi-variant form state. migration 022.
    */
   variant_dimensions?: VariantDimensionDef[] | null;
+  /**
+   * B8/B19: cached web search payload for this draft (migration 023).
+   * Reused on regenerate when queryFingerprint still matches.
+   */
+  web_search_cache?: unknown;
 }
 
 /** B7: one product option axis (Shopify productOptions name). */

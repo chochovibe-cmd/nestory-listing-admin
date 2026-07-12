@@ -935,7 +935,9 @@ textarea {
 .dropzone {
   border: 1.5px dashed var(--border-soft);
   border-radius: var(--radius-m);
-  padding: 11px 12px;
+  /* B17: taller drop target (breathing room) */
+  padding: 20px 14px;
+  min-height: 72px;
   cursor: pointer;
   transition: all .2s;
   position: relative;
@@ -980,9 +982,9 @@ textarea {
 .badge-main { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
 .badge-detail { background: color-mix(in srgb, var(--accent3) 16%, transparent); color: var(--accent3); border: 1px solid color-mix(in srgb, var(--accent3) 40%, transparent); }
 .badge-spec { background: color-mix(in srgb, var(--accent2) 14%, transparent); color: var(--accent2); border: 1px solid color-mix(in srgb, var(--accent2) 35%, transparent); }
-.dz-icon { font-size: 18px; flex-shrink: 0; opacity: .5; }
+.dz-icon { font-size: 22px; flex-shrink: 0; opacity: .5; }
 .dz-text { flex: 1; }
-.dz-title { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.dz-title { font-size: 13px; font-weight: 600; color: var(--text-dim); }
 .dz-sub { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
 .dz-status { font-size: 10px; font-weight: 700; margin-top: 3px; }
 .dz-status.ready { color: var(--success); }
@@ -1030,16 +1032,17 @@ textarea {
   display: inline-block;
 }
 .pthumb-img {
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   object-fit: cover;
   border-radius: var(--radius-s);
   border: 1px solid var(--border-soft);
   display: block;
 }
+/* B17: main thumb ~96px (AGENTS 呼吸感) */
 .pthumb.is-main .pthumb-img {
-  width: 84px;
-  height: 84px;
+  width: 96px;
+  height: 96px;
   border: 2px solid var(--accent);
 }
 .pthumb-badge {

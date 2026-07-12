@@ -68,9 +68,19 @@ export function formatUnmarkedBlockMessage(images: ProductImage[]): string | nul
   return `還有 ${unmarked.length} 張沒標記：${labels.join("、")}。請先為每張選「保留原圖／去簡體字／重生主圖」後再送圖。`;
 }
 
+/**
+ * @deprecated B14: prefer formatImageBatchCreatedMessage after API succeeds.
+ * Kept for offline/client-only fallback when create-batch is unavailable.
+ */
 export function formatReadyButPipelinePendingMessage(images: ProductImage[]): string {
   const count = listPipelineImages(images).length;
   return `已標記完成（${count} 張）。圖片處理管線尚未接通（Phase D），目前無法真正送出處理。`;
+}
+
+/** B14 client fallback when batch create API is not used yet. */
+export function formatReadyBatchQueuedHint(images: ProductImage[]): string {
+  const count = listPipelineImages(images).length;
+  return `已標記完成（${count} 張）。將建立送圖批次；處理管線 Phase D 接通後自動執行。`;
 }
 
 export const PROCESS_INTENT_LABELS: Record<ImageProcessIntent, string> = {

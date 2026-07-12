@@ -6,7 +6,6 @@ import { ResultCard } from "@/components/listing/ResultCard";
 import { ApproveSummaryModal } from "@/components/listing/ApproveSummaryModal";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
-import { evaluateBatchSendImages } from "@/lib/drafts/batchSendImages";
 import {
   buildBatchApproveSummary,
   modalHeading,
@@ -285,23 +284,37 @@ export function DraftResultsPanel({
     };
   }, [batchPublishSummary, drafts, imagesByDraft]);
 
-  // B9: batch send images — B5 gate per draft; no silent fail.
-  function batchSendImages() {
+  // B9 + B14: batch send images — B5 gate server-side; create image_batches when ready.
+  async function batchSendImages() {
     if (!selectedArray.length) {
       setMessage("請先勾選商品再批次送圖。");
       return;
     }
-    const items = selectedArray.map((id) => {
-      const draft = drafts.find((row) => row.id === id);
-      return {
-        draftId: id,
-        title: draft?.title_zh || draft?.taobao_title || "未命名草稿",
-        images: imagesByDraft.get(id) ?? []
-      };
-    });
-    const result = evaluateBatchSendImages(items);
+    setBusy(true);
     setLastArchiveIds(null);
-    setMessage(result.message);
+    setMessage("建立送圖批次中…");
+    try {
+      const response = await fetch("/api/drafts/batch/send-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: selectedArray })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const hint = typeof payload.hint === "string" ? `\n${payload.hint}` : "";
+        setMessage((payload.error ?? "建立送圖批次失敗") + hint);
+        return;
+      }
+      setMessage(typeof payload.message === "string" ? payload.message : "送圖批次處理完成");
+      // Soft refresh so current_image_batch_id is available if UI later shows it
+      if (payload.ok && payload.batchId) {
+        scheduleRouterRefresh(() => router.refresh());
+      }
+    } catch {
+      setMessage("建立送圖批次失敗（網路錯誤）");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // B12: batch archive / unarchive — busy statuses skipped per-item (like 送圖).
@@ -514,8 +527,8 @@ export function DraftResultsPanel({
                     <button
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
-                      onClick={batchSendImages}
-                      title="批次送圖；未標記的商品會擋下並列出原因"
+                      onClick={() => void batchSendImages()}
+                      title="批次送圖；標記齊全會建立送圖批次（Phase D 接通後自動處理）"
                       type="button"
                     >
                       ▶ 批次送圖

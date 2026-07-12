@@ -7,7 +7,6 @@ import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import {
-  formatReadyButPipelinePendingMessage,
   formatUnmarkedBlockMessage,
   imageSlotLabel,
   listPipelineImages,
@@ -895,17 +894,37 @@ export function ResultCard({
     router.refresh();
   }
 
-  // B5 裁決 3A: block when unmarked (specific which/how many); when all marked,
-  // explain Phase D pipeline is not wired yet — no Make webhook here.
+  // B5 裁決 3A: block when unmarked (specific which/how many).
+  // B14 1A: single 送圖 also creates a 1-item image batch (no Make webhook yet).
   // B9: always surface markMessage while collapsed (never silent).
-  function sendImages() {
+  async function sendImages() {
     setMessage("");
     const block = formatUnmarkedBlockMessage(imageMarks);
     if (block) {
       setMarkMessage(block);
       return;
     }
-    setMarkMessage(formatReadyButPipelinePendingMessage(imageMarks));
+    setMarkMessage("建立送圖批次中…");
+    try {
+      const response = await fetch("/api/drafts/batch/send-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: [draft.id] })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const hint = typeof payload.hint === "string" ? `\n${payload.hint}` : "";
+        setMarkMessage((payload.error ?? "建立送圖批次失敗") + hint);
+        return;
+      }
+      setMarkMessage(
+        typeof payload.message === "string"
+          ? payload.message
+          : "已建立送圖批次（1 件），處理管線 Phase D 接通後自動執行"
+      );
+    } catch {
+      setMarkMessage("建立送圖批次失敗（網路錯誤）");
+    }
   }
 
   async function exportCsv() {
@@ -1017,8 +1036,8 @@ export function ResultCard({
               <button
                 className="mini-btn rc-quick-btn"
                 disabled={quickBusy || regenerating || regeneratingField != null}
-                onClick={sendImages}
-                title="送圖；未標記會擋下並列出哪幾張"
+                onClick={() => void sendImages()}
+                title="送圖；未標記會擋下並列出哪幾張；標記齊全會建立送圖批次"
                 type="button"
               >
                 ▶ 送圖
@@ -1592,7 +1611,7 @@ export function ResultCard({
               ) : (
                 <>
                   <button onClick={() => void requestRevision()} type="button">退回修改</button>
-                  <button onClick={sendImages} type="button">
+                  <button onClick={() => void sendImages()} type="button">
                     ▶ 送圖
                   </button>
                   <button

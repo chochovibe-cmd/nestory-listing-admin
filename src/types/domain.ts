@@ -39,6 +39,23 @@ export type ImageStatus = "pending" | "processing" | "done" | "failed" | "skippe
 /** B5: how the Phase D pipeline should process this product image. null = unmarked. */
 export type ImageProcessIntent = "keep" | "de_text" | "regenerate";
 
+/** B14: image_batches.status — queued until Phase D pipeline runs. */
+export type ImageBatchStatus =
+  | "queued"
+  | "processing"
+  | "completed"
+  | "partial_failed"
+  | "failed"
+  | "stuck";
+
+/** B14: image_batch_items.item_status */
+export type ImageBatchItemStatus =
+  | "queued"
+  | "processing"
+  | "done"
+  | "failed"
+  | "skipped";
+
 /** B6: sale = 售價＋定價劃線；single = 單一售價（不填 compare_at）。 */
 export type PriceMode = "sale" | "single";
 
@@ -139,6 +156,43 @@ export interface ProductDraft {
   status_before_archive?: DraftStatus | null;
   /** B12: when soft-archived (migration 024). */
   archived_at?: string | null;
+  /**
+   * B14: latest image send batch (migration 025).
+   * Re-send updates pointer only; history stays in image_batch_items (3A simplified).
+   */
+  current_image_batch_id?: string | null;
+}
+
+/** B14: one 送圖 batch header (image_batches). */
+export interface ImageBatch {
+  id: string;
+  kind: "image_process";
+  status: ImageBatchStatus;
+  total_count: number;
+  done_count: number;
+  failed_count: number;
+  regenerate_item_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  notify_sent_at: string | null;
+  stuck_notified_at: string | null;
+  error_summary: string | null;
+  /** Create-time process_intent summary; Phase D webhook must prefer this over live marks. */
+  snapshot_json: unknown;
+}
+
+/** B14: draft membership in an image batch. */
+export interface ImageBatchItem {
+  id: string;
+  batch_id: string;
+  draft_id: string;
+  item_status: ImageBatchItemStatus;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
 }
 
 /** B7: one product option axis (Shopify productOptions name). */

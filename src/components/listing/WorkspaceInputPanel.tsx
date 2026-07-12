@@ -194,6 +194,12 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const prevVariantContentRef = useRef(false);
   const prevSpecContentRef = useRef(false);
   const prevNoteContentRef = useRef(false);
+  // B17 mobile accordion: 1基本 2圖片 3價格規格 4風格；never hard-block manual jumps
+  type AccordionStep = 1 | 2 | 3 | 4;
+  const [isNarrow, setIsNarrow] = useState(false);
+  const [mobileStep, setMobileStep] = useState<AccordionStep>(1);
+  const autoAdv12Ref = useRef(false);
+  const autoAdv34Ref = useRef(false);
   const [manualPricingEnabled, setManualPricingEnabled] = useState(false);
   const [manualCompareAtPrice, setManualCompareAtPrice] = useState("");
   const [manualSellPrice, setManualSellPrice] = useState("");
@@ -275,6 +281,32 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     if (noteHasContent && !prevNoteContentRef.current) setNoteSectionOpen(true);
     prevNoteContentRef.current = noteHasContent;
   }, [noteHasContent]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 959px)");
+    const apply = () => setIsNarrow(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Soft auto-advance only (never blocks manual jump / going back)
+  useEffect(() => {
+    if (!isNarrow) return;
+    if (title.trim() && !autoAdv12Ref.current && mobileStep === 1) {
+      autoAdv12Ref.current = true;
+      setMobileStep(2);
+    }
+  }, [title, isNarrow, mobileStep]);
+  useEffect(() => {
+    if (!isNarrow) return;
+    const costOk = Number(price) > 0;
+    if (costOk && !autoAdv34Ref.current && mobileStep === 3) {
+      autoAdv34Ref.current = true;
+      setMobileStep(4);
+    }
+  }, [price, isNarrow, mobileStep]);
 
   useEffect(() => {
     setPricingSettings(getStoredPricingSettings());
@@ -940,6 +972,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     prevVariantContentRef.current = false;
     prevSpecContentRef.current = false;
     prevNoteContentRef.current = false;
+    setMobileStep(1);
+    autoAdv12Ref.current = false;
+    autoAdv34Ref.current = false;
     // priceMode 連續上架保留（跟來源／銷售狀態一樣是操作偏好）
     setFieldErrors({});
   }
@@ -1347,6 +1382,17 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             </div>
           ) : null}
 
+          {/* B17: mobile accordion steps (headers always clickable; desktop shows all bodies) */}
+          <div className={`form-acc-step${mobileStep === 1 || !isNarrow ? " open" : ""}`} data-step="1">
+            <button
+              className="form-acc-hdr"
+              onClick={() => setMobileStep(1)}
+              type="button"
+            >
+              <span>1 · 基本資料</span>
+              <span className="form-acc-chev">{mobileStep === 1 ? "▾" : "▸"}</span>
+            </button>
+            <div className="form-acc-body">
           <div className={`field${fieldErrors.title ? " error" : ""}`}>
             <div className="source-inline">
               <label>原始商品標題</label>
@@ -1480,7 +1526,19 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             {inventoryNotice ? <div className="field-msg">{inventoryNotice}</div> : null}
             {fieldErrors.inventory ? <div className="field-msg">請填 0 或正整數；若可持續接單，請勾選無上限。</div> : null}
           </div>
+            </div>
+          </div>
 
+          <div className={`form-acc-step${mobileStep === 2 || !isNarrow ? " open" : ""}`} data-step="2">
+            <button
+              className="form-acc-hdr"
+              onClick={() => setMobileStep(2)}
+              type="button"
+            >
+              <span>2 · 圖片</span>
+              <span className="form-acc-chev">{mobileStep === 2 ? "▾" : "▸"}</span>
+            </button>
+            <div className="form-acc-body">
           {/* B1: 圖片先選＋背景上傳；B5: 主圖縮圖可切「規格圖」處理標記（非 OCR）。 */}
           <div className="field">
             <label>商品圖片（拖入即背景上傳）</label>
@@ -1492,7 +1550,19 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               userId={userId}
             />
           </div>
+            </div>
+          </div>
 
+          <div className={`form-acc-step${mobileStep === 3 || !isNarrow ? " open" : ""}`} data-step="3">
+            <button
+              className="form-acc-hdr"
+              onClick={() => setMobileStep(3)}
+              type="button"
+            >
+              <span>3 · 價格規格</span>
+              <span className="form-acc-chev">{mobileStep === 3 ? "▾" : "▸"}</span>
+            </button>
+            <div className="form-acc-body">
           <div className={`field${fieldErrors.price ? " error" : ""}`} id="f-price">
             <label>
               成本價格 <span className="field-req">必填</span>
@@ -1633,75 +1703,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
           </div>
 
           <CollapsibleSection
-            className="adv-ai"
-            onToggle={() => setAiSectionOpen((v) => !v)}
-            open={aiSectionOpen}
-            summary={aiHasContent ? tone : undefined}
-            title="✎ AI 文案設定"
-          >
-            <div className="copy-settings-block adv-nested">
-              <div className="field">
-                <label className="copy-style-label">
-                  <span>AI 文案風格</span>
-                  <span className="model-quick">
-                    <button className="mq-btn" onClick={cycleSessionModel} type="button">
-                      🤖 本次：{MODEL_LABEL[sessionProvider ?? readStoredAiProvider()]}
-                    </button>
-                    <FieldHelp label="本次模型說明">
-                      預設用頂部全域模型（目前 {defaultProviderLabel}）。這裡只改「這一次」；生成後會自動回到預設。
-                    </FieldHelp>
-                  </span>
-                </label>
-                <div className="tone-cards">
-                  {TONE_OPTIONS.map((option) => (
-                    <button
-                      className={`tone-card${tone === option.value ? " active" : ""}`}
-                      key={option.value}
-                      onClick={() => setTone(option.value)}
-                      type="button"
-                    >
-                      <span className="tone-emoji">{option.emoji}</span>
-                      <span>
-                        <span className="tone-title">{option.value}</span>
-                        <span className="tone-desc">{option.desc}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="copy-len-row field">
-                <label style={{ margin: 0 }}>文案長度</label>
-                <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
-                  {LENGTH_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="wsearch-row">
-                <div className="wsearch-label">
-                  <span className="wsearch-label-row">
-                    🔍 Web Search 補充資訊
-                    <FieldHelp label="Web Search 說明">
-                      預設開啟（冷門 IP／規格更準）；趕時間可關。查來的內容會標來源提醒核實。
-                    </FieldHelp>
-                  </span>
-                </div>
-                <div className="toggle-wrap">
-                  <label className="toggle">
-                    <input
-                      checked={useWebSearch}
-                      onChange={(e) => setUseWebSearch(e.target.checked)}
-                      type="checkbox"
-                    />
-                    <span className="toggle-slider" />
-                  </label>
-                  <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "已關閉"}</span>
-                </div>
-              </div>
-            </div>
-          </CollapsibleSection>
-
-          <CollapsibleSection
             className="adv-variant"
             onToggle={() => setVariantSectionOpen((v) => !v)}
             open={variantSectionOpen}
@@ -1719,7 +1720,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               dimensions={variantDimensions}
               footer={
                 <>
-                  {/* B3: 規格截圖入口（空表時可填簡單 1 維款式列） */}
                   <button
                     className="spec-shot-toggle"
                     disabled={recognizing}
@@ -1794,6 +1794,87 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               />
             </div>
           </CollapsibleSection>
+            </div>
+          </div>
+
+          <div className={`form-acc-step${mobileStep === 4 || !isNarrow ? " open" : ""}`} data-step="4">
+            <button
+              className="form-acc-hdr"
+              onClick={() => setMobileStep(4)}
+              type="button"
+            >
+              <span>4 · 風格與備註</span>
+              <span className="form-acc-chev">{mobileStep === 4 ? "▾" : "▸"}</span>
+            </button>
+            <div className="form-acc-body">
+          <CollapsibleSection
+            className="adv-ai"
+            onToggle={() => setAiSectionOpen((v) => !v)}
+            open={aiSectionOpen}
+            summary={aiHasContent ? tone : undefined}
+            title="✎ AI 文案設定"
+          >
+            <div className="copy-settings-block adv-nested">
+              <div className="field">
+                <label className="copy-style-label">
+                  <span>AI 文案風格</span>
+                  <span className="model-quick">
+                    <button className="mq-btn" onClick={cycleSessionModel} type="button">
+                      🤖 本次：{MODEL_LABEL[sessionProvider ?? readStoredAiProvider()]}
+                    </button>
+                    <FieldHelp label="本次模型說明">
+                      預設用頂部全域模型（目前 {defaultProviderLabel}）。這裡只改「這一次」；生成後會自動回到預設。
+                    </FieldHelp>
+                  </span>
+                </label>
+                <div className="tone-cards">
+                  {TONE_OPTIONS.map((option) => (
+                    <button
+                      className={`tone-card${tone === option.value ? " active" : ""}`}
+                      key={option.value}
+                      onClick={() => setTone(option.value)}
+                      type="button"
+                    >
+                      <span className="tone-emoji">{option.emoji}</span>
+                      <span>
+                        <span className="tone-title">{option.value}</span>
+                        <span className="tone-desc">{option.desc}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="copy-len-row field">
+                <label style={{ margin: 0 }}>文案長度</label>
+                <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
+                  {LENGTH_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="wsearch-row">
+                <div className="wsearch-label">
+                  <span className="wsearch-label-row">
+                    🔍 Web Search 補充資訊
+                    <FieldHelp label="Web Search 說明">
+                      預設開啟（冷門 IP／規格更準）；趕時間可關。查來的內容會標來源提醒核實。
+                    </FieldHelp>
+                  </span>
+                </div>
+                <div className="toggle-wrap">
+                  <label className="toggle">
+                    <input
+                      checked={useWebSearch}
+                      onChange={(e) => setUseWebSearch(e.target.checked)}
+                      type="checkbox"
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                  <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "已關閉"}</span>
+                </div>
+              </div>
+            </div>
+          </CollapsibleSection>
 
           <CollapsibleSection
             className="adv-note"
@@ -1817,6 +1898,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             {submitting ? "處理中..." : imagesUploading ? "圖片上傳中，請稍候…" : "建立商品並生成文案"}
           </button>
           {message ? <div className="notice">{message}</div> : null}
+            </div>
+          </div>
         </form>
 
         <button className="settings-toggle" onClick={() => setSettingsOpen((current) => !current)} type="button">

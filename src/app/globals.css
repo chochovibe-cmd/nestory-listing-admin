@@ -1561,6 +1561,62 @@ textarea {
   flex-wrap: wrap;
 }
 
+/* B17: mobile form accordion (headers hidden on desktop) */
+.form-acc-step {
+  display: contents;
+}
+.form-acc-hdr {
+  display: none;
+}
+.form-acc-body {
+  display: contents;
+}
+
+@media (max-width: 959px) {
+  .form-acc-step {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .form-acc-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: none;
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 800;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+  .form-acc-hdr:hover {
+    color: var(--accent);
+  }
+  .form-acc-chev {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .form-acc-body {
+    display: none;
+    padding: 12px 12px 14px;
+  }
+  .form-acc-step.open .form-acc-body {
+    display: grid;
+    gap: 14px;
+  }
+  .form-acc-step.open .form-acc-hdr {
+    border-bottom: 1px solid var(--border);
+  }
+}
+
 /* B17: collapsible advanced sections + field ? help */
 .adv-section {
   border: 1px solid var(--border);

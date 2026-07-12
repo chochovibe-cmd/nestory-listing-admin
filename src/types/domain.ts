@@ -132,6 +132,13 @@ export interface ProductDraft {
    * Reused on regenerate when queryFingerprint still matches.
    */
   web_search_cache?: unknown;
+  /**
+   * B12: snapshot of status before soft-archive (migration 024).
+   * Restored on 解除封存; null when not archived / after restore.
+   */
+  status_before_archive?: DraftStatus | null;
+  /** B12: when soft-archived (migration 024). */
+  archived_at?: string | null;
 }
 
 /** B7: one product option axis (Shopify productOptions name). */

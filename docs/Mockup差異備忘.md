@@ -117,6 +117,15 @@
 - **現況**：✅ **B7 已對齊（2026-07-12）**。migration 022 只產檔；`VariantEditor`＋發布 `productVariantsBulkCreate`；
   腳本 `scripts/verify-b7-variants.mjs`。
 
+### 差異 8：B8 Web Search 預設常駐開啟（Mockup 示意為關）
+
+- **差在哪**：Mockup 的 Web Search 開關示意為關閉；正式版**預設開啟**，趕時間才手動關。
+- **為什麼**：舊分支預設關是因為當年用 LLM 內建搜尋太貴；已定案改 Tavily 外接（幾乎免費），
+  開著文案與規格證據才豐富。後端未接上前不可翻預設（會每筆多一條黃字警告）——B8/B19 接線後才翻。
+- **誰拍板**：老闆，2026-07-12（施工清單 B8 註記）。
+- **現況**：✅ **B8/B19 已對齊（2026-07-12）**。Tavily provider＋draft 快取（migration 023）、
+  證據池 v2、語氣 6 款＋模型單次切換；無 key 誠實降級。Vercel 環境變數待部署時補。
+
 ### 差異 6：B4 一鍵新增角色只寫 ip_characters（pending），不寫 tag_rules
 
 - **差在哪**：Mockup Tags 分頁文案寫「一鍵新增進規則庫（tag_rules＋ip_characters）」。
@@ -135,6 +144,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-12（Grok）：差異 8 **B8/B19 已對齊**——Web Search 預設開＋Tavily＋draft 快取＋規格證據池 v2＋
+  語氣 6 款／模型單次切換；IP 語氣 DEFAULT＋team_settings 覆蓋；migration 023 只產檔。
 - 2026-07-12（Grok）：差異 7 **B7 已對齊**——多維度／選圖／✎／角色多選／發布 BulkCreate；
   migration 022 只產檔。
 - 2026-07-12（Grok）：差異 6 **B4 已對齊**——一鍵只寫 ip_characters（pending），不寫 tag_rules；

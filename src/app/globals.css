@@ -1311,14 +1311,110 @@ textarea {
   color: var(--accent2);
 }
 
-.rc-title {
+/* B4: title + detect chips stack (Mockup rc-headmain) */
+.rc-headmain {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rc-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* B4: system-status chips under collapsed title (tokens only) */
+.rc-detect-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.rc-detect-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-detect-chip.is-warn {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, var(--surface));
+  font-weight: 700;
+}
+
+.rc-detect-warn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, var(--surface));
+  white-space: nowrap;
+}
+
+.rc-quick-add-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rc-quick-add-row,
+.rc-warning-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rc-warning-line {
+  margin-bottom: 6px;
+}
+
+/* B4: auxiliary action (align helper-link / copy-btn density; touch ≥44px on mobile) */
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mini-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.mini-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .rc-price {
@@ -1587,7 +1683,10 @@ textarea {
   }
 
   .rc-header { align-items: flex-start; flex-wrap: wrap; }
-  .rc-title { flex-basis: 100%; white-space: normal; }
+  .rc-headmain { flex-basis: 100%; }
+  .rc-title { white-space: normal; }
+  .rc-detect-chips { max-width: 100%; }
+  .mini-btn { min-height: 44px; padding: 8px 12px; }
   .rc-price-stack { flex-direction: row; align-items: center; gap: 8px; }
   .rc-actions { flex-wrap: wrap; }
   .rc-header-actions { margin-left: 0; width: 100%; }

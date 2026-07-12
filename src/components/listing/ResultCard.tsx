@@ -16,6 +16,10 @@ import {
   PROCESS_INTENT_LABELS
 } from "@/lib/images/processMarks";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
+import {
+  extractMissingCharacterNames,
+  isCharacterMissingInWarnings,
+} from "@/lib/characters/missingCharacterWarnings";
 
 // This icon only reports whether AI text-generation itself finished, failed,
 // or is still running -- it must never fall back to a green "done" check for
@@ -96,6 +100,7 @@ export function ResultCard({
   const [message, setMessage] = useState("");
   const [markMessage, setMarkMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
+  const [quickAddingCharacter, setQuickAddingCharacter] = useState<string | null>(null);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
   // Local mirror of pipeline marks so toggles feel instant; re-synced on refresh.
   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
@@ -111,6 +116,10 @@ export function ResultCard({
   const pipelineImages = listPipelineImages(imageMarks);
   const unmarkedImages = listUnmarkedPipelineImages(imageMarks);
   const unmarkedBlockMessage = formatUnmarkedBlockMessage(imageMarks);
+  const missingCharacters = extractMissingCharacterNames(draft.warnings);
+  const characterChipWarned = isCharacterMissingInWarnings(draft.character_name, draft.warnings);
+  const warnCount = draft.warnings?.length ?? 0;
+  const detectTypeLabel = draft.product_type || draft.detected_category || "";
 
   // ResultCard stays mounted (same `key={draft.id}`) across regenerate/save's
   // router.refresh(), so these editable fields must be re-synced explicitly
@@ -178,6 +187,38 @@ export function ResultCard({
     setRegenerating(false);
     setMessage(response.ok ? "重新生成完成" : payload.error ?? "重新生成失敗");
     router.refresh();
+  }
+
+  // B4: one-click write ip_characters (pending). Does not auto-regenerate (5A).
+  async function quickAddCharacter(characterName: string) {
+    if (!characterName.trim()) return;
+    setQuickAddingCharacter(characterName);
+    setMessage("");
+    try {
+      const response = await fetch("/api/characters/quick-add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftId: draft.id,
+          characterName,
+          ipName: draft.ip_name ?? "",
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(payload.error ?? "一鍵新增角色失敗");
+        return;
+      }
+      setMessage(
+        typeof payload.message === "string"
+          ? payload.message
+          : `已處理角色「${characterName}」，請按重新生成以產出角色 tag`,
+      );
+    } catch {
+      setMessage("一鍵新增角色連線失敗");
+    } finally {
+      setQuickAddingCharacter(null);
+    }
   }
 
   async function requestRevision() {
@@ -339,7 +380,25 @@ export function ResultCard({
           />
         ) : null}
         <span className={`rc-status ${className}`}>{icon}</span>
-        <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+        <span className="rc-headmain">
+          <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+          {/* B4: 收合列即可見 IP／角色／類型 chips＋⚠（不用展開才發現未建檔） */}
+          {draft.ip_name || draft.character_name || detectTypeLabel || warnCount > 0 ? (
+            <span className="rc-detect-chips">
+              {draft.ip_name ? <span className="rc-detect-chip">{draft.ip_name}</span> : null}
+              {draft.character_name ? (
+                <span className={`rc-detect-chip${characterChipWarned ? " is-warn" : ""}`}>
+                  {characterChipWarned ? "⚠ " : ""}
+                  {draft.character_name}
+                </span>
+              ) : null}
+              {detectTypeLabel ? <span className="rc-detect-chip">{detectTypeLabel}</span> : null}
+              {warnCount > 0 ? (
+                <span className="rc-detect-warn">⚠ {warnCount} 項待確認</span>
+              ) : null}
+            </span>
+          ) : null}
+        </span>
         <div className="rc-meta-stack">
           <StatusBadge status={draft.status} />
           {pipelineImages.length > 0 && unmarkedImages.length > 0 ? (
@@ -347,9 +406,6 @@ export function ResultCard({
               <span className="st-dot" />
               圖片未標記（{unmarkedImages.length}）
             </span>
-          ) : null}
-          {draft.warnings?.length ? (
-            <span className="status-pill status-warn">⚠ {draft.warnings.length}</span>
           ) : null}
         </div>
         {draft.twd_price ? (
@@ -435,6 +491,38 @@ export function ResultCard({
             ) : (
               <textarea className="edit-textarea" onChange={(event) => setFaq(event.target.value)} rows={6} value={faq} />
             )}
+          </div>
+          <div className="rc-field">
+            <div className="rc-label">AI 偵測</div>
+            <div className="rc-text">
+              IP：{draft.ip_name || "—"}
+              ｜角色：{draft.character_name || "—"}
+              {characterChipWarned ? " ⚠" : ""}
+              ｜型態：{detectTypeLabel || "—"}
+              ｜SKU：{sku || "—"}
+            </div>
+            {missingCharacters.length > 0 ? (
+              <div className="rc-quick-add-list">
+                {missingCharacters.map((name) => (
+                  <div className="rc-quick-add-row" key={name}>
+                    <span className="price-soft-warn">
+                      ⚠ 角色「{name}」尚未建檔
+                      {!draft.ip_name ? "（請先確認 IP 已建檔）" : ""}
+                    </span>
+                    <button
+                      className="mini-btn"
+                      disabled={
+                        !draft.ip_name || quickAddingCharacter === name || regenerating
+                      }
+                      onClick={() => void quickAddCharacter(name)}
+                      type="button"
+                    >
+                      {quickAddingCharacter === name ? "新增中…" : "一鍵新增角色"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="row">
             <div className="field">
@@ -582,7 +670,25 @@ export function ResultCard({
           {draft.warnings?.length ? (
             <div className="rc-field">
               <div className="rc-label">提醒</div>
-              {draft.warnings.map((warning) => <div className="muted" key={warning}>{warning}</div>)}
+              {draft.warnings.map((warning) => {
+                const missingFromLine = extractMissingCharacterNames([warning]);
+                return (
+                  <div className="rc-warning-line" key={warning}>
+                    <div className="price-soft-warn">{warning}</div>
+                    {missingFromLine.map((name) => (
+                      <button
+                        className="mini-btn"
+                        disabled={!draft.ip_name || quickAddingCharacter === name || regenerating}
+                        key={`${warning}-${name}`}
+                        onClick={() => void quickAddCharacter(name)}
+                        type="button"
+                      >
+                        {quickAddingCharacter === name ? "新增中…" : `一鍵新增「${name}」`}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           ) : null}
           <div className="field">

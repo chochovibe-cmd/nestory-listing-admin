@@ -11,6 +11,13 @@ import {
   formatUnarchiveResultMessage
 } from "@/lib/drafts/archiveDrafts";
 import {
+  applyOptimisticHide,
+  filterByOptimisticHide,
+  reconcileOptimisticHide,
+  type OptimisticHideMap
+} from "@/lib/drafts/optimisticArchiveHide";
+import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
+import {
   countByStage,
   filterDraftsByStage,
   readStoredStage,
@@ -46,6 +53,8 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [lastArchiveIds, setLastArchiveIds] = useState<string[] | null>(null);
+  // B12 fix: hide rows immediately; refresh only corrects server props.
+  const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
 
   useEffect(() => {
     setStage(
@@ -56,10 +65,17 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
     );
   }, []);
 
+  useEffect(() => {
+    setOptimisticHide((prev) => reconcileOptimisticHide(prev, drafts));
+  }, [drafts]);
+
   // Queue has no images → 圖片未標記 always 0 (still show pill for consistency).
   const stageCounts = useMemo(() => countByStage(drafts), [drafts]);
 
-  const filtered = useMemo(() => filterDraftsByStage(drafts, stage), [drafts, stage]);
+  const filtered = useMemo(() => {
+    const stageRows = filterDraftsByStage(drafts, stage);
+    return filterByOptimisticHide(stageRows, optimisticHide);
+  }, [drafts, stage, optimisticHide]);
 
   const allSelected = filtered.length > 0 && filtered.every((draft) => selectedIds.has(draft.id));
   const someSelected = filtered.some((draft) => selectedIds.has(draft.id)) && !allSelected;
@@ -141,6 +157,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
     router.refresh();
   }
 
+  // fix(B12): paint notice + optimistic hide first; defer refresh as background reconcile.
   async function batchArchiveOrUnarchive(action: "archive" | "unarchive") {
     if (!selectedArray.length) {
       setMessage(
@@ -157,63 +174,85 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
     }
     setBusy(true);
     setMessage(action === "archive" ? "批次封存中…" : "批次解除封存中…");
-    const response = await fetch("/api/drafts/batch/archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: selectedArray, action })
-    });
-    const payload = await response.json().catch(() => ({}));
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(payload.error ?? (action === "archive" ? "批次封存失敗" : "批次解除封存失敗"));
-      return;
+    try {
+      const response = await fetch("/api/drafts/batch/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: selectedArray, action })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(payload.error ?? (action === "archive" ? "批次封存失敗" : "批次解除封存失敗"));
+        return;
+      }
+      if (action === "archive") {
+        const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
+        setLastArchiveIds(archivedIds.length ? archivedIds : null);
+        setMessage(
+          typeof payload.message === "string"
+            ? payload.message
+            : formatArchiveResultMessage({
+                archivedCount: payload.archivedCount ?? 0,
+                skippedBusyCount: payload.skippedBusyCount ?? 0,
+                includesPublished: Boolean(payload.includesPublished)
+              })
+        );
+        if (archivedIds.length) {
+          setOptimisticHide((prev) => applyOptimisticHide(prev, archivedIds, "archived"));
+        }
+      } else {
+        const restoredIds =
+          (payload.restoredIds as string[] | undefined) ??
+          selectedArray.filter((id) => drafts.find((d) => d.id === id)?.status === "archived");
+        setLastArchiveIds(null);
+        setMessage(
+          typeof payload.message === "string"
+            ? payload.message
+            : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? 0 })
+        );
+        if (restoredIds.length) {
+          setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
+        }
+      }
+      setSelectedIds(new Set());
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      setMessage(action === "archive" ? "批次封存連線失敗" : "批次解除封存連線失敗");
+    } finally {
+      setBusy(false);
     }
-    if (action === "archive") {
-      const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
-      setLastArchiveIds(archivedIds.length ? archivedIds : null);
-      setMessage(
-        typeof payload.message === "string"
-          ? payload.message
-          : formatArchiveResultMessage({
-              archivedCount: payload.archivedCount ?? 0,
-              skippedBusyCount: payload.skippedBusyCount ?? 0,
-              includesPublished: Boolean(payload.includesPublished)
-            })
-      );
-    } else {
-      setLastArchiveIds(null);
-      setMessage(
-        typeof payload.message === "string"
-          ? payload.message
-          : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? 0 })
-      );
-    }
-    setSelectedIds(new Set());
-    router.refresh();
   }
 
   async function undoLastArchive() {
     if (!lastArchiveIds?.length) return;
     setBusy(true);
     setMessage("解除封存中…");
-    const response = await fetch("/api/drafts/batch/archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: lastArchiveIds, action: "unarchive" })
-    });
-    const payload = await response.json().catch(() => ({}));
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(payload.error ?? "解除封存失敗");
-      return;
+    try {
+      const response = await fetch("/api/drafts/batch/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: lastArchiveIds, action: "unarchive" })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(payload.error ?? "解除封存失敗");
+        return;
+      }
+      const restoredIds =
+        (payload.restoredIds as string[] | undefined) ?? lastArchiveIds;
+      setLastArchiveIds(null);
+      setMessage(
+        typeof payload.message === "string"
+          ? payload.message
+          : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length })
+      );
+      setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      setMessage("解除封存連線失敗");
+    } finally {
+      setBusy(false);
     }
-    setLastArchiveIds(null);
-    setMessage(
-      typeof payload.message === "string"
-        ? payload.message
-        : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length })
-    );
-    router.refresh();
   }
 
   async function downloadCsv(endpoint: string, filenamePrefix: string, note?: string) {
@@ -412,23 +451,31 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                           className="btn-mini"
                           disabled={busy}
                           onClick={() => {
-                            setSelectedIds(new Set([draft.id]));
                             void (async () => {
                               setBusy(true);
-                              const response = await fetch("/api/drafts/batch/archive", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ draftIds: [draft.id], action: "unarchive" })
-                              });
-                              const payload = await response.json().catch(() => ({}));
-                              setBusy(false);
-                              setMessage(
-                                response.ok
-                                  ? payload.message ?? "已解除封存"
-                                  : payload.error ?? "解除封存失敗"
-                              );
-                              setLastArchiveIds(null);
-                              router.refresh();
+                              setMessage("解除封存中…");
+                              try {
+                                const response = await fetch("/api/drafts/batch/archive", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ draftIds: [draft.id], action: "unarchive" })
+                                });
+                                const payload = await response.json().catch(() => ({}));
+                                if (!response.ok) {
+                                  setMessage(payload.error ?? "解除封存失敗");
+                                  return;
+                                }
+                                setLastArchiveIds(null);
+                                setMessage(payload.message ?? "已解除封存");
+                                setOptimisticHide((prev) =>
+                                  applyOptimisticHide(prev, [draft.id], "unarchived")
+                                );
+                                scheduleRouterRefresh(() => router.refresh());
+                              } catch {
+                                setMessage("解除封存連線失敗");
+                              } finally {
+                                setBusy(false);
+                              }
                             })();
                           }}
                           type="button"
@@ -442,21 +489,30 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                           onClick={() => {
                             void (async () => {
                               setBusy(true);
-                              const response = await fetch("/api/drafts/batch/archive", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ draftIds: [draft.id], action: "archive" })
-                              });
-                              const payload = await response.json().catch(() => ({}));
-                              setBusy(false);
-                              if (response.ok) {
-                                const ids = (payload.archivedIds as string[] | undefined) ?? [];
+                              setMessage("封存中…");
+                              try {
+                                const response = await fetch("/api/drafts/batch/archive", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ draftIds: [draft.id], action: "archive" })
+                                });
+                                const payload = await response.json().catch(() => ({}));
+                                if (!response.ok) {
+                                  setMessage(payload.error ?? "封存失敗");
+                                  return;
+                                }
+                                const ids = (payload.archivedIds as string[] | undefined) ?? [draft.id];
                                 setLastArchiveIds(ids.length ? ids : null);
                                 setMessage(payload.message ?? "已封存");
-                              } else {
-                                setMessage(payload.error ?? "封存失敗");
+                                setOptimisticHide((prev) =>
+                                  applyOptimisticHide(prev, ids, "archived")
+                                );
+                                scheduleRouterRefresh(() => router.refresh());
+                              } catch {
+                                setMessage("封存連線失敗");
+                              } finally {
+                                setBusy(false);
                               }
-                              router.refresh();
                             })();
                           }}
                           type="button"

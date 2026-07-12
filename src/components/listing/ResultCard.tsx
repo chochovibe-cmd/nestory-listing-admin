@@ -44,6 +44,7 @@ import {
   primaryConfirmLabel,
   type FieldVersionInput,
 } from "@/lib/drafts/approveSummary";
+import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import {
   formatArchiveResultMessage,
   formatUnarchiveResultMessage,
@@ -264,6 +265,7 @@ export function ResultCard({
   // B9: collapsed-visible notice — never silent-fail on quick actions.
   const collapsedNotice = markMessage || message;
 
+  // fix(B12): commit notice first; defer refresh so UI isn't racing RSC.
   async function archiveOne() {
     if (isArchived || archiveBusy) return;
     if (isArchiveBusyStatus(draft.status)) {
@@ -272,53 +274,63 @@ export function ResultCard({
     }
     setArchiveBusy(true);
     setMarkMessage("封存中…");
-    const response = await fetch("/api/drafts/batch/archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: [draft.id], action: "archive" })
-    });
-    const payload = await response.json().catch(() => ({}));
-    setArchiveBusy(false);
-    if (!response.ok) {
-      setMarkMessage(payload.error ?? "封存失敗");
-      return;
+    try {
+      const response = await fetch("/api/drafts/batch/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: [draft.id], action: "archive" })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMarkMessage(payload.error ?? "封存失敗");
+        return;
+      }
+      const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
+      setLastArchiveIds(archivedIds.length ? archivedIds : null);
+      const msg =
+        typeof payload.message === "string"
+          ? payload.message
+          : formatArchiveResultMessage({
+              archivedCount: payload.archivedCount ?? 0,
+              skippedBusyCount: payload.skippedBusyCount ?? 0,
+              includesPublished: isPublishedArchiveStatus(draft.status)
+            });
+      setMarkMessage(msg);
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      setMarkMessage("封存連線失敗");
+    } finally {
+      setArchiveBusy(false);
     }
-    const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
-    setLastArchiveIds(archivedIds.length ? archivedIds : null);
-    const msg =
-      typeof payload.message === "string"
-        ? payload.message
-        : formatArchiveResultMessage({
-            archivedCount: payload.archivedCount ?? 0,
-            skippedBusyCount: payload.skippedBusyCount ?? 0,
-            includesPublished: isPublishedArchiveStatus(draft.status)
-          });
-    setMarkMessage(msg);
-    router.refresh();
   }
 
   async function unarchiveOne(ids?: string[]) {
     const targetIds = ids?.length ? ids : [draft.id];
     setArchiveBusy(true);
     setMarkMessage("解除封存中…");
-    const response = await fetch("/api/drafts/batch/archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: targetIds, action: "unarchive" })
-    });
-    const payload = await response.json().catch(() => ({}));
-    setArchiveBusy(false);
-    if (!response.ok) {
-      setMarkMessage(payload.error ?? "解除封存失敗");
-      return;
+    try {
+      const response = await fetch("/api/drafts/batch/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: targetIds, action: "unarchive" })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMarkMessage(payload.error ?? "解除封存失敗");
+        return;
+      }
+      setLastArchiveIds(null);
+      setMarkMessage(
+        typeof payload.message === "string"
+          ? payload.message
+          : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? targetIds.length })
+      );
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      setMarkMessage("解除封存連線失敗");
+    } finally {
+      setArchiveBusy(false);
     }
-    setLastArchiveIds(null);
-    setMarkMessage(
-      typeof payload.message === "string"
-        ? payload.message
-        : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? targetIds.length })
-    );
-    router.refresh();
   }
 
   const displayByField = useMemo((): Record<CopyVersionField, string> => ({

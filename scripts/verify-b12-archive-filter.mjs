@@ -311,6 +311,84 @@ await check("DraftResultsPanel wires stage pills + batch archive", () => {
   assert.ok(panel.includes("/api/drafts/batch/archive"));
 });
 
+// --- fix(B12): optimistic hide + deferred refresh (inline mirrors) ---
+
+function applyOptimisticHide(prev, ids, reason) {
+  const next = new Map(prev);
+  for (const id of ids) next.set(id, reason);
+  return next;
+}
+
+function reconcileOptimisticHide(prev, drafts) {
+  if (prev.size === 0) return prev;
+  const byId = new Map(drafts.map((d) => [d.id, d.status]));
+  const next = new Map(prev);
+  for (const [id, reason] of prev) {
+    const status = byId.get(id);
+    const done =
+      reason === "archived"
+        ? status === undefined || status === "archived"
+        : status !== undefined && status !== "archived";
+    if (done) next.delete(id);
+  }
+  return next;
+}
+
+function filterByOptimisticHide(items, hide) {
+  if (hide.size === 0) return items;
+  return items.filter((item) => !hide.has(item.id));
+}
+
+await check("fix(B12) optimistic hide removes rows immediately", () => {
+  const rows = [
+    { id: "a", status: "pending_input" },
+    { id: "b", status: "ready_for_review" },
+  ];
+  let hide = new Map();
+  hide = applyOptimisticHide(hide, ["a"], "archived");
+  const visible = filterByOptimisticHide(rows, hide);
+  assert.deepEqual(
+    visible.map((r) => r.id),
+    ["b"]
+  );
+});
+
+await check("fix(B12) reconcile drops hide after server status matches", () => {
+  let hide = applyOptimisticHide(new Map(), ["a"], "archived");
+  hide = reconcileOptimisticHide(hide, [
+    { id: "a", status: "archived" },
+    { id: "b", status: "ready_for_review" },
+  ]);
+  assert.equal(hide.size, 0);
+  hide = applyOptimisticHide(new Map(), ["a"], "unarchived");
+  hide = reconcileOptimisticHide(hide, [{ id: "a", status: "pending_input" }]);
+  assert.equal(hide.size, 0);
+  hide = applyOptimisticHide(new Map(), ["a"], "archived");
+  hide = reconcileOptimisticHide(hide, [{ id: "a", status: "pending_input" }]);
+  assert.equal(hide.has("a"), true);
+});
+
+await check("fix(B12) panels defer refresh + optimistic hide", () => {
+  const panel = fs.readFileSync(
+    path.join(root, "src/components/listing/DraftResultsPanel.tsx"),
+    "utf8"
+  );
+  const queue = fs.readFileSync(
+    path.join(root, "src/components/drafts/DraftQueueList.tsx"),
+    "utf8"
+  );
+  const card = fs.readFileSync(
+    path.join(root, "src/components/listing/ResultCard.tsx"),
+    "utf8"
+  );
+  assert.ok(panel.includes("scheduleRouterRefresh"));
+  assert.ok(panel.includes("applyOptimisticHide"));
+  assert.ok(panel.includes("optimisticHide"));
+  assert.ok(queue.includes("scheduleRouterRefresh"));
+  assert.ok(queue.includes("applyOptimisticHide"));
+  assert.ok(card.includes("scheduleRouterRefresh"));
+});
+
 await check("migration 024 has status_before_archive + archived_at", () => {
   const sql = fs.readFileSync(
     path.join(root, "supabase/migrations/024_draft_archive_restore.sql"),

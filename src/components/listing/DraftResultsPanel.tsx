@@ -31,6 +31,13 @@ import {
   formatArchiveResultMessage,
   formatUnarchiveResultMessage
 } from "@/lib/drafts/archiveDrafts";
+import {
+  applyOptimisticHide,
+  filterByOptimisticHide,
+  reconcileOptimisticHide,
+  type OptimisticHideMap
+} from "@/lib/drafts/optimisticArchiveHide";
+import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 export function DraftResultsPanel({
@@ -45,6 +52,8 @@ export function DraftResultsPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [lastArchiveIds, setLastArchiveIds] = useState<string[] | null>(null);
+  // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
+  const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
   const [sortMode, setSortMode] = useState<ResultSortMode>("newest");
   const [stage, setStage] = useState<StageKey>("all");
   // B11 D1-B: summary only for batch Shopify paths (建草稿／上架), not pure 批次核准
@@ -84,6 +93,11 @@ export function DraftResultsPanel({
     setSortMode(readStoredResultSort(storage));
     setStage(readStoredStage(storage, STAGE_FILTER_STORAGE_KEY_RESULTS));
   }, []);
+
+  // Drop optimistic hides once server props already reflect archive/unarchive.
+  useEffect(() => {
+    setOptimisticHide((prev) => reconcileOptimisticHide(prev, drafts));
+  }, [drafts]);
 
   const progressHeadStatus = progress
     ? progress.steps.some((step) => step.status === "error")
@@ -130,10 +144,15 @@ export function DraftResultsPanel({
     [stageFiltered, stageImages, sortMode]
   );
 
+  const visibleDrafts = useMemo(
+    () => filterByOptimisticHide(sortedDrafts, optimisticHide),
+    [sortedDrafts, optimisticHide]
+  );
+
   const allSelected =
-    sortedDrafts.length > 0 && sortedDrafts.every((draft) => selectedIds.has(draft.id));
+    visibleDrafts.length > 0 && visibleDrafts.every((draft) => selectedIds.has(draft.id));
   const someSelected =
-    sortedDrafts.some((draft) => selectedIds.has(draft.id)) && !allSelected;
+    visibleDrafts.some((draft) => selectedIds.has(draft.id)) && !allSelected;
   const selectedArray = Array.from(selectedIds);
 
   function toggleOne(id: string) {
@@ -147,13 +166,13 @@ export function DraftResultsPanel({
 
   function toggleAll() {
     setSelectedIds((current) => {
-      if (sortedDrafts.every((draft) => current.has(draft.id))) {
+      if (visibleDrafts.every((draft) => current.has(draft.id))) {
         const next = new Set(current);
-        for (const draft of sortedDrafts) next.delete(draft.id);
+        for (const draft of visibleDrafts) next.delete(draft.id);
         return next;
       }
       const next = new Set(current);
-      for (const draft of sortedDrafts) next.add(draft.id);
+      for (const draft of visibleDrafts) next.add(draft.id);
       return next;
     });
   }
@@ -286,6 +305,7 @@ export function DraftResultsPanel({
   }
 
   // B12: batch archive / unarchive — busy statuses skipped per-item (like 送圖).
+  // fix(B12): paint notice + optimistic hide first; defer refresh as background reconcile.
   async function batchArchiveOrUnarchive(action: "archive" | "unarchive") {
     if (!selectedArray.length) {
       setMessage(
@@ -302,63 +322,85 @@ export function DraftResultsPanel({
     }
     setBusy(true);
     setMessage(action === "archive" ? "批次封存中…" : "批次解除封存中…");
-    const response = await fetch("/api/drafts/batch/archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: selectedArray, action })
-    });
-    const payload = await response.json().catch(() => ({}));
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(payload.error ?? (action === "archive" ? "批次封存失敗" : "批次解除封存失敗"));
-      return;
+    try {
+      const response = await fetch("/api/drafts/batch/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: selectedArray, action })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(payload.error ?? (action === "archive" ? "批次封存失敗" : "批次解除封存失敗"));
+        return;
+      }
+      if (action === "archive") {
+        const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
+        setLastArchiveIds(archivedIds.length ? archivedIds : null);
+        setMessage(
+          typeof payload.message === "string"
+            ? payload.message
+            : formatArchiveResultMessage({
+                archivedCount: payload.archivedCount ?? 0,
+                skippedBusyCount: payload.skippedBusyCount ?? 0,
+                includesPublished: Boolean(payload.includesPublished)
+              })
+        );
+        if (archivedIds.length) {
+          setOptimisticHide((prev) => applyOptimisticHide(prev, archivedIds, "archived"));
+        }
+      } else {
+        const restoredIds =
+          (payload.restoredIds as string[] | undefined) ??
+          selectedArray.filter((id) => drafts.find((d) => d.id === id)?.status === "archived");
+        setLastArchiveIds(null);
+        setMessage(
+          typeof payload.message === "string"
+            ? payload.message
+            : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? 0 })
+        );
+        if (restoredIds.length) {
+          setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
+        }
+      }
+      setSelectedIds(new Set());
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      setMessage(action === "archive" ? "批次封存連線失敗" : "批次解除封存連線失敗");
+    } finally {
+      setBusy(false);
     }
-    if (action === "archive") {
-      const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
-      setLastArchiveIds(archivedIds.length ? archivedIds : null);
-      setMessage(
-        typeof payload.message === "string"
-          ? payload.message
-          : formatArchiveResultMessage({
-              archivedCount: payload.archivedCount ?? 0,
-              skippedBusyCount: payload.skippedBusyCount ?? 0,
-              includesPublished: Boolean(payload.includesPublished)
-            })
-      );
-    } else {
-      setLastArchiveIds(null);
-      setMessage(
-        typeof payload.message === "string"
-          ? payload.message
-          : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? 0 })
-      );
-    }
-    setSelectedIds(new Set());
-    router.refresh();
   }
 
   async function undoLastArchive() {
     if (!lastArchiveIds?.length) return;
     setBusy(true);
     setMessage("解除封存中…");
-    const response = await fetch("/api/drafts/batch/archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: lastArchiveIds, action: "unarchive" })
-    });
-    const payload = await response.json().catch(() => ({}));
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(payload.error ?? "解除封存失敗");
-      return;
+    try {
+      const response = await fetch("/api/drafts/batch/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: lastArchiveIds, action: "unarchive" })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(payload.error ?? "解除封存失敗");
+        return;
+      }
+      const restoredIds =
+        (payload.restoredIds as string[] | undefined) ?? lastArchiveIds;
+      setLastArchiveIds(null);
+      setMessage(
+        typeof payload.message === "string"
+          ? payload.message
+          : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length })
+      );
+      setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      setMessage("解除封存連線失敗");
+    } finally {
+      setBusy(false);
     }
-    setLastArchiveIds(null);
-    setMessage(
-      typeof payload.message === "string"
-        ? payload.message
-        : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length })
-    );
-    router.refresh();
   }
 
   async function downloadCsv(endpoint: string, filenamePrefix: string, note?: string) {
@@ -576,14 +618,14 @@ export function DraftResultsPanel({
             <div className="empty-icon">◈</div>
             <p className="muted">在左側輸入商品資料並送出，生成結果會出現在這裡</p>
           </div>
-        ) : sortedDrafts.length === 0 && !progress ? (
+        ) : visibleDrafts.length === 0 && !progress ? (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
             <p className="muted">這個篩選條件下沒有商品</p>
           </div>
         ) : (
           <div className="results-list" id="results-list">
-            {sortedDrafts.map((draft) => (
+            {visibleDrafts.map((draft) => (
               <ResultCard
                 checked={selectedIds.has(draft.id)}
                 draft={draft}

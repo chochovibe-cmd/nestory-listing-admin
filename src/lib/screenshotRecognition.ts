@@ -19,11 +19,20 @@ export type RecognitionFields = {
   variants: RecognizedVariant[];
 };
 
+/**
+ * B7: aligned with VariantFormRow (minimal fields for 2A fill).
+ * Spec screenshots still only produce optionValues[0] + cost (1 dimension).
+ */
 export type VariantRowLike = {
-  name: string;
-  sku: string;
-  price: string;
+  optionValues: [string, string, string];
+  cost: string;
+  sellPrice: string;
+  compareAt: string;
+  priceLocked: boolean;
   qty: string;
+  sku: string;
+  imageId: string | null;
+  sortOrder: number;
 };
 
 export type FillPlan = {
@@ -130,23 +139,34 @@ export function planScreenshotFill(
     missingLines.push("未辨識到規格（可手填或留空由系統整理）");
   }
 
-  // --- 款式（1A：僅當表單尚無任何有名稱的款式列時才填） ---
-  const hasExistingVariants = current.variants.some((row) => row.name.trim());
+  // --- 款式（B3 1A + B7：僅當表單尚無任何有選項值的款式列時才填；只建 1 維） ---
+  const hasExistingVariants = current.variants.some((row) =>
+    (row.optionValues ?? []).some((v) => String(v ?? "").trim())
+  );
   const recognizedVariants = (recognized.variants ?? []).filter((v) => v.name?.trim());
   if (hasExistingVariants) {
     if (recognizedVariants.length > 0) {
       missingLines.push("款式已有內容，未覆蓋");
     }
   } else if (recognizedVariants.length > 0) {
-    variants = recognizedVariants.map((v) => ({
-      name: v.name.trim(),
+    // Cap soft-aligned with B7 MAX_VARIANT_ROWS (50).
+    const capped = recognizedVariants.slice(0, 50);
+    variants = capped.map((v, index) => ({
+      optionValues: [v.name.trim(), "", ""] as [string, string, string],
+      // B7: cost lives in cost; sellPrice filled by formula in UI after apply.
+      cost: v.costCny != null && v.costCny > 0 ? formatCost(v.costCny) : "",
+      sellPrice: "",
+      compareAt: "",
+      priceLocked: false,
+      qty: "",
       sku: "",
-      // 成本存進 price 欄（現有簡表用 price 當售價／成本混合；B7 會重做）
-      // 這裡放 ¥ 成本字串，方便操作者對照；定價仍以上方主成本為準。
-      price: v.costCny != null && v.costCny > 0 ? formatCost(v.costCny) : "",
-      qty: ""
+      imageId: null,
+      sortOrder: index
     }));
     filledLines.push(`款式 ${variants.length} 列✓`);
+    if (recognizedVariants.length > 50) {
+      missingLines.push(`辨識超過 50 列，只填入前 50 列`);
+    }
   } else if (mode === "spec") {
     missingLines.push("未辨識到款式列（可手動新增）");
   }

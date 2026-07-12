@@ -15,7 +15,7 @@ import {
   patchForProcessIntentPick,
   PROCESS_INTENT_LABELS
 } from "@/lib/images/processMarks";
-import type { ImageProcessIntent, ProductDraft, ProductImage } from "@/types/domain";
+import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 
 // This icon only reports whether AI text-generation itself finished, failed,
 // or is still running -- it must never fall back to a green "done" check for
@@ -101,7 +101,13 @@ export function ResultCard({
   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
 
   const { icon, className } = statusIcon(draft);
+  // B6: 卡片只跟讀 price_mode（不做完整切換 UI）；migration 020 前 fallback 特價。
+  const priceMode: PriceMode = draft.price_mode === "single" ? "single" : "sale";
   const profit = draft.twd_price != null && draft.twd_cost != null ? draft.twd_price - draft.twd_cost : null;
+  const profitPct =
+    profit != null && draft.twd_price && draft.twd_price > 0
+      ? Math.round((profit / draft.twd_price) * 100)
+      : null;
   const pipelineImages = listPipelineImages(imageMarks);
   const unmarkedImages = listUnmarkedPipelineImages(imageMarks);
   const unmarkedBlockMessage = formatUnmarkedBlockMessage(imageMarks);
@@ -147,7 +153,9 @@ export function ResultCard({
         tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         generated_faq_html: faq || null,
         twd_price: sellPrice ? Number(sellPrice) : null,
-        compare_at_price: compareAtPrice ? Number(compareAtPrice) : null,
+        // B6: 單一售價存檔時強制清掉定價，避免殘留劃線價。
+        compare_at_price:
+          priceMode === "single" ? null : compareAtPrice ? Number(compareAtPrice) : null,
         detected_category: detectedCategory || null,
         sku: sku || null,
         publish_mode: publishMode
@@ -347,7 +355,15 @@ export function ResultCard({
         {draft.twd_price ? (
           <div className="rc-price-stack">
             <span className="rc-price">NT${draft.twd_price.toLocaleString()}</span>
-            {profit != null ? <span className="rc-profit">利潤 NT${profit.toLocaleString()}</span> : null}
+            {priceMode === "sale" && draft.compare_at_price ? (
+              <span className="rc-compare muted">定價 NT${draft.compare_at_price.toLocaleString()}</span>
+            ) : null}
+            {profit != null ? (
+              <span className="rc-profit">
+                利潤 NT${profit.toLocaleString()}
+                {profitPct != null ? `（約 ${profitPct}%）` : ""}
+              </span>
+            ) : null}
           </div>
         ) : null}
         <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
@@ -363,8 +379,14 @@ export function ResultCard({
                 <span className="audit-badge">待審核</span>
               )}
               　來源：{draft.source_platform ?? "-"}
-              　成本：¥{draft.cny_price.toLocaleString()}
-              　定價：{draft.compare_at_price ? `NT$${draft.compare_at_price.toLocaleString()}` : "未填"}
+              　成本：{draft.cny_price.toLocaleString()}
+              　模式：{priceMode === "single" ? "單一售價" : "特價"}
+              　定價：
+              {priceMode === "single"
+                ? "不適用"
+                : draft.compare_at_price
+                  ? `NT$${draft.compare_at_price.toLocaleString()}`
+                  : "未填"}
               　AI：{PROVIDER_LABELS[draft.generation_provider] ?? draft.generation_provider}
             </div>
           </div>
@@ -429,7 +451,9 @@ export function ResultCard({
             {draft.twd_cost != null ? (
               <div className="muted">
                 成本 NT${draft.twd_cost.toLocaleString()}
-                {profit != null && draft.twd_price ? ` ／ 毛利 ${Math.round((profit / draft.twd_price) * 100)}%` : null}
+                {profit != null ? ` ／ 利潤 NT$${profit.toLocaleString()}` : null}
+                {profitPct != null ? `（約 ${profitPct}%）` : null}
+                {priceMode === "single" ? " ／ 單一售價（無劃線定價）" : " ／ 特價模式"}
               </div>
             ) : null}
             <div className="row">
@@ -437,10 +461,12 @@ export function ResultCard({
                 <label>售價 TWD</label>
                 <input className="edit-input" min="0" onChange={(event) => setSellPrice(event.target.value)} type="number" value={sellPrice} />
               </div>
-              <div className="field">
-                <label>定價 TWD</label>
-                <input className="edit-input" min="0" onChange={(event) => setCompareAtPrice(event.target.value)} type="number" value={compareAtPrice} />
-              </div>
+              {priceMode === "sale" ? (
+                <div className="field">
+                  <label>定價 TWD</label>
+                  <input className="edit-input" min="0" onChange={(event) => setCompareAtPrice(event.target.value)} type="number" value={compareAtPrice} />
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="field">

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
 import { generateListingContent } from "@/lib/contentGenerator/generateListingContent";
+import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import {
   appendNestoryBrandSuffix,
   generateSeoContent,
@@ -297,7 +298,9 @@ async function handleFieldRegen(params: {
       value = injectScenarioKeywordsIntoMetaDescription(value, scenarioTerms);
     }
     if (regenField === "generated_description_html") {
-      value = appendScenarioBulletToDescription(value, scenarioTerms);
+      value = normalizeDescriptionToPlainText(
+        appendScenarioBulletToDescription(value, scenarioTerms),
+      );
     }
     update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
     historyContent = value;
@@ -804,7 +807,9 @@ export async function POST(request: NextRequest) {
     .from("product_drafts")
     .update({
       title_zh: localizedOutput.display_title,
-      description_html: localizedOutput.generated_description_html,
+      // fix(B10): description_html storage contract = plain text (A23);
+      // rule/test path used to write HTML — normalize at write boundary.
+      description_html: normalizeDescriptionToPlainText(localizedOutput.generated_description_html),
       seo_title: localizedOutput.seo_title,
       seo_description: localizedOutput.meta_description,
       shopify_handle: handleSlug,

@@ -142,12 +142,10 @@ export function buildShopifyProductPayload(
   const tags = draft.shopify_tags?.length ? draft.shopify_tags : draft.tags || [];
   const product = {
     title: draft.title_zh || draft.taobao_title || "Nestory product",
-    // A23 (2026-07-10 A14 finding): description_html is stored as PLAIN TEXT
-    // on purpose (ResultCard.tsx edits it in a plain <textarea> so reviewers
-    // see readable Chinese, not markup) -- the conversion to real HTML only
-    // happens here, at the Shopify boundary, not at save time. Converting at
-    // save time would make the DB column (and the edit textarea) show raw
-    // <p>/<ul> tags instead of readable text.
+    // A23 / fix(B10): description_html storage contract is PLAIN TEXT.
+    // formatPlainTextAsHtml also guards isLikelyHtml so legacy HTML rows are
+    // not double-wrapped. Conversion to rich HTML only happens here at the
+    // Shopify boundary (not at save time).
     // A21-2/A21-3: internal link + FAQPage JSON-LD appended the same way --
     // generated at the Shopify boundary only, never written back to the DB
     // column or the app's own FAQ/description UI.

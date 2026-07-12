@@ -7,9 +7,9 @@
 // field doesn't render raw "\n" as a line break, so the five A/B/C/D/E
 // sections collapsed into one run-on paragraph on the product page.
 //
-// Fix is scoped to that boundary only: payload.ts calls this right before
-// building the Shopify product input. The DB column and the app's own
-// textarea are untouched.
+// fix(B10): rule-engine / test-mode previously wrote real HTML into the same
+// column. Storage contract is now plain text everywhere; isLikelyHtml guards
+// payload conversion so legacy HTML rows are not double-wrapped.
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -20,8 +20,61 @@ function escapeHtml(text: string): string {
 // <li> in the same list.
 const BULLET_PREFIX = /^[・･•➼]\s*/;
 
+/** True when the string looks like markup (legacy rows / accidental HTML store). */
+export function isLikelyHtml(text: string | null | undefined): boolean {
+  if (!text) return false;
+  return /<\/?(?:p|div|br|ul|ol|li|h[1-6]|strong|em|span|a|table|tr|td|th|section|article|header|footer)\b/i.test(
+    text,
+  );
+}
+
+/**
+ * Convert legacy HTML description blobs back to plain paragraphs so the
+ * textarea / storage contract stays readable Chinese, not markup soup.
+ * Block tags become blank-line separators; <br> / list items become newlines.
+ */
+export function htmlDescriptionToPlainText(html: string | null | undefined): string {
+  if (!html) return "";
+  let text = html
+    .replace(/\r\n?/g, "\n")
+    .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/\s*(?:p|div|h[1-6]|section|article|li|tr)\s*>/gi, "\n\n")
+    .replace(/<\s*li\b[^>]*>/gi, "・")
+    .replace(/<\/\s*ul\s*>/gi, "\n\n")
+    .replace(/<\/\s*ol\s*>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+
+  text = text
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return text;
+}
+
+/** Normalize any description (plain or legacy HTML) to the plain-text store form. */
+export function normalizeDescriptionToPlainText(text: string | null | undefined): string {
+  if (!text) return "";
+  return isLikelyHtml(text) ? htmlDescriptionToPlainText(text) : text;
+}
+
+/**
+ * Shopify-boundary converter: plain text → HTML paragraphs / lists.
+ * If input is already HTML (legacy DB row), return as-is — never double-wrap.
+ */
 export function formatPlainTextAsHtml(text: string | null | undefined): string {
   if (!text) return "";
+
+  // fix(B10): already-HTML content must not be escaped into another <p> layer.
+  if (isLikelyHtml(text)) return text;
 
   const blocks = text
     .split(/\n{2,}/)
@@ -46,6 +99,16 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
       return `<p>${lines.map(escapeHtml).join("<br>")}</p>`;
     })
     .join("");
+}
+
+/**
+ * Preview renderer for the ResultCard description toggle:
+ * plain → convert; legacy HTML → use as stored (same boundary helper).
+ */
+export function descriptionPreviewHtml(text: string | null | undefined): string {
+  if (!text) return "<p>尚無內容</p>";
+  const html = formatPlainTextAsHtml(text);
+  return html || "<p>尚無內容</p>";
 }
 
 function stripHtmlTags(value: string): string {

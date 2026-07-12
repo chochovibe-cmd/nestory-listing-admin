@@ -6,6 +6,7 @@
 
 import type { CopyCurrentValues, CopyRegenField } from "@/lib/providers/copy";
 import { COPY_REGEN_FIELDS } from "@/lib/providers/copy";
+import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import type { ProductDraft } from "@/types/domain";
 
 export const COPY_VERSION_FIELDS = COPY_REGEN_FIELDS;
@@ -32,7 +33,7 @@ export const COPY_VERSION_FIELD_LABELS: Record<CopyVersionField, string> = {
   meta_description: "Meta 描述",
 };
 
-/** Display order in the copy tab (Mockup-aligned + SEO kept in-tab per B9). */
+/** Display order for versioned fields (SEO has its own tab; still versioned). */
 export const COPY_VERSION_FIELD_ORDER: readonly CopyVersionField[] = [
   "enriched_title",
   "why_we_chose_it",
@@ -264,6 +265,10 @@ export function buildDraftCopyPatch(
     const raw = values[field] ?? "";
     if (field === "product_highlights") {
       patch.product_highlights = contentToHighlights(raw);
+    } else if (field === "generated_description_html") {
+      // fix(B10): always persist plain text (legacy HTML rows get stripped).
+      const plain = normalizeDescriptionToPlainText(raw);
+      patch.description_html = normalizeCopyContent(plain) ? plain : null;
     } else {
       const col = REGEN_FIELD_TO_COLUMN[field] as string;
       patch[col] = normalizeCopyContent(raw) ? raw : null;

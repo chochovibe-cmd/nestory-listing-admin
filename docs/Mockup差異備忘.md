@@ -209,10 +209,29 @@
 - **現況**：✅ **B13＋BX4 已對齊（2026-07-12）**。`workspaceAutosave.ts`＋`WorkspaceInputPanel`；
   腳本 `scripts/verify-b13-workspace-autosave.mjs`。fix(B12) 樂觀隱藏＋defer refresh 同 session。
 
+### 差異 13：B14 送圖建批次（Mockup 未畫 batch 表，行為定案）
+
+- **差在哪**：
+  1. Mockup／B5 標記齊全時只提示「Phase D 未接通」；正式版 **B14** 在標記齊全時會
+     **建立 `image_batches` 紀錄**（batch_id＋items＋發起人＋時間＋queued），提示改為
+     「已建立送圖批次（N 件），處理管線 Phase D 接通後自動執行」。
+  2. **單件 ▶ 送圖也建 1 件批次（1A）**，與批次送圖同一 API，避免 Phase D 通知特判。
+  3. **不改** `image_status`／`draft.status`（2A）——誠實排隊，不假「處理中」。
+  4. 可重複送圖建新批；`current_image_batch_id` 指最新；舊 item 不自動 skipped（3A 簡化）。
+  5. `snapshot_json` **必做**：建立當下每 draft 的 process_intent 輕量摘要，Phase D webhook
+     吃快照不吃事後被改過的標記。
+  6. `regenerate_item_count`＝含 ≥1 張重生主圖的**商品數**（4A），對齊【自動·二】通知文案。
+- **為什麼**：【自動·二】批次通知與 Make 收單的資料前提；真管線仍 Phase D。
+- **誰拍板**：老闆，2026-07-12（B14 設計 1A／2A／3A 簡化／4A＋必做 snapshot）。
+- **現況**：✅ **B14 已對齊（2026-07-12）**。migration **025 只產檔待執行**；
+  `POST /api/drafts/batch/send-images`；腳本 `verify-b14-image-batch.mjs`。
+
 ---
 
 ## 修訂紀錄
 
+- 2026-07-12（Grok）：差異 13 **B14 定案並對齊**——送圖建 image_batches／items／snapshot；
+  1A 單件也建批；2A 不改 image_status；025 只產檔。
 - 2026-07-12（Grok）：差異 12 **B13／BX4 定案並對齊**——autosave debounce、7 天過期、
   恢復條 savedAt、丟棄軟封存、不常駐 gen-hint、連續上架清 storage。
 - 2026-07-12（Grok）：差異 9 **B12 階段 pills＋封存已對齊**——現有狀態詞彙 pills、軟刪除 archived、

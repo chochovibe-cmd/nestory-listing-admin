@@ -9,7 +9,10 @@ body[data-theme="dark"] {
   --surface2: #1c1c22;
   --border: #2a2a38;
   --border-soft: #38384a;
-  --line: #2a2a38;
+  /* B15³: --line is a historical alias of --border (same value in all themes).
+     New code should use --border. Selection state must use --accent / .sel — never
+     treat --line as a "selected" border color (that was the invisible-selection bug). */
+  --line: var(--border);
   --accent: #c8ff00;
   --accent-fg: #0e0e12;
   --accent2: #ff6b9d;
@@ -27,9 +30,8 @@ body[data-theme="dark"] {
   --shadow-s: 0 1px 2px rgba(0, 0, 0, .16);
   --shadow-m: 0 3px 10px rgba(0, 0, 0, .18);
 }
-/* ⚠ 已知地雷：三個主題的 --line 與 --border 目前同值（nordic/kitty 連 --border-soft 也同值），
-   「選取狀態看起來沒反應」的 bug 多半源自於此——B15 整併前，改動任一者要想到另一個。
-   狀態色詞彙表：--idle 灰=未開始 / --warn 黃=進行中 / --success 綠=完成 / --danger 紅=失敗。 */
+/* 狀態色詞彙表：--idle 灰=未開始 / --warn 黃=進行中 / --success 綠=完成 / --danger 紅=失敗。
+   nordic/kitty：--border-soft 刻意與 --border 同值（B15 ③-2 維持現狀）；dark 的 soft 已較淡。 */
 
 body[data-theme="nordic"] {
   color-scheme: light;
@@ -38,7 +40,7 @@ body[data-theme="nordic"] {
   --surface2: #eee7d8;
   --border: #1c1c1c;
   --border-soft: #1c1c1c;
-  --line: #1c1c1c;
+  --line: var(--border);
   --accent: #58a9dc;
   --accent-fg: #ffffff;
   --accent2: #d9272e;
@@ -64,7 +66,7 @@ body[data-theme="kitty"] {
   --surface2: #f6f9ff;
   --border: #171717;
   --border-soft: #171717;
-  --line: #171717;
+  --line: var(--border);
   --accent: #ff6a00;
   --accent-fg: #ffffff;
   --accent2: #e4002b;
@@ -1373,7 +1375,7 @@ textarea {
 }
 
 .model-quick .mq-btn {
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--border-soft);
   border-radius: 999px;
   background: var(--surface);
   padding: 4px 13px;

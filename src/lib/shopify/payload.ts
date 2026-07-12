@@ -3,10 +3,16 @@ import { formatPlainTextAsHtml, htmlFaqToPlainText } from "@/lib/contentGenerato
 import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
 import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildImageFileNameSlug } from "@/lib/contentGenerator/imageFileNameGenerator";
-import type { ProductDraft, ProductImage, PublishMode } from "@/types/domain";
+import type { ProductDraft, ProductImage, ProductVariantRow, PublishMode } from "@/types/domain";
+import {
+  buildVariantPublishPlan,
+  type VariantPublishPlan
+} from "@/lib/variants/shopifyVariants";
 
 export interface ShopifyPublishDraft extends ProductDraft {
   product_images?: ProductImage[];
+  /** B7: loaded at publish time; never used pre-B7. */
+  product_variants?: ProductVariantRow[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -169,8 +175,28 @@ export function buildShopifyProductPayload(
     ...generatedProduct
   };
 
+  // B7: multi-variant plan from product_variants (empty → single default path).
+  const variantPlan: VariantPublishPlan = buildVariantPublishPlan(
+    draft.product_variants,
+    {
+      cny_price: draft.cny_price,
+      twd_cost: draft.twd_cost,
+      price_mode: draft.price_mode
+    }
+  );
+
+  const productWithOptions =
+    variantPlan.mode === "multi"
+      ? {
+          ...product,
+          // Official productCreate ProductCreateInput.productOptions — creates
+          // options + one initial variant (first value of each option).
+          productOptions: variantPlan.productOptions
+        }
+      : product;
+
   return {
-    product,
+    product: productWithOptions,
     media: Array.isArray(generatedPayload.media) ? generatedPayload.media : images,
     variantSeed: {
       sku,
@@ -185,6 +211,8 @@ export function buildShopifyProductPayload(
       inventoryPolicy: draft.inventory_policy === "deny" ? "DENY" : "CONTINUE",
       ...generatedVariantSeed
     },
+    // B7: multi-variant seeds for publishDraft (null when single-SKU).
+    variantPlan,
     shopifyCollections: draft.shopify_collections ?? [],
     collectionSuggestion: draft.collection_suggestion,
     generationRuleVersion: draft.generation_rule_version

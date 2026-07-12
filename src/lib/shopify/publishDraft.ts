@@ -3,8 +3,9 @@ import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/paylo
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
+import { toBulkVariantInput, type MultiVariantPublishPlan } from "@/lib/variants/shopifyVariants";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
-import type { PublishMode } from "@/types/domain";
+import type { ProductVariantRow, PublishMode } from "@/types/domain";
 
 export type PublishDraftResult =
   | { ok: true; mock: true; payload: unknown }
@@ -60,6 +61,13 @@ export async function publishDraft(
     return { ok: false, status: 409, error: `Draft status ${draft.status} cannot be published` };
   }
 
+  // B7: load product_variants (publish previously ignored this table).
+  const { data: variantRows } = await serviceSupabase
+    .from("product_variants")
+    .select("*")
+    .eq("draft_id", id)
+    .order("sort_order", { ascending: true });
+
   // A21-3: team_settings-editable IP -> collection URL map (migration 017).
   // Fetched fresh at publish time (not generate time) so filling in the map
   // later still takes effect on drafts generated before it existed.
@@ -72,7 +80,14 @@ export async function publishDraft(
     (linkSettingsRow?.value as Record<string, string> | null) ?? null
   );
 
-  const payload = buildShopifyProductPayload(draft, publishMode, internalLinkMap);
+  const payload = buildShopifyProductPayload(
+    {
+      ...draft,
+      product_variants: (variantRows ?? []) as ProductVariantRow[]
+    },
+    publishMode,
+    internalLinkMap
+  );
   await serviceSupabase
     .from("product_drafts")
     .update({
@@ -126,8 +141,11 @@ export async function publishDraft(
           id
           title
           status
-          variants(first: 1) {
-            nodes { id }
+          variants(first: 10) {
+            nodes {
+              id
+              selectedOptions { name value }
+            }
           }
         }
         userErrors { field message }
@@ -142,7 +160,15 @@ export async function publishDraft(
   let result: {
     data?: {
       productCreate?: {
-        product?: { id: string; variants?: { nodes?: { id: string }[] } } | null;
+        product?: {
+          id: string;
+          variants?: {
+            nodes?: {
+              id: string;
+              selectedOptions?: { name: string; value: string }[];
+            }[];
+          } | null;
+        } | null;
         userErrors?: { field: string; message: string }[];
       };
     };
@@ -171,7 +197,7 @@ export async function publishDraft(
   }
 
   const errors = result?.data?.productCreate?.userErrors ?? result.errors;
-  const productId = result?.data?.productCreate?.product?.id;
+  const productId = result?.data?.productCreate?.product?.id ?? "";
   const defaultVariantId = result?.data?.productCreate?.product?.variants?.nodes?.[0]?.id;
 
   if (!response.ok || errors?.length || !productId) {
@@ -197,11 +223,151 @@ export async function publishDraft(
   // warning instead of disappearing.
   let priceSyncWarning: string | null = null;
 
-  // A14 fix: productCreate's ProductInput has no price/cost/sku fields in
-  // current Shopify API versions -- the auto-created default variant starts
-  // at $0 until a separate mutation sets it. This was previously never
-  // called at all, so every published draft silently kept its $0 price.
-  if (defaultVariantId) {
+  const variantPlan = (
+    payload as { variantPlan?: { mode: string } & Partial<MultiVariantPublishPlan> }
+  ).variantPlan;
+  const isMulti = variantPlan?.mode === "multi" && variantPlan.initial && variantPlan.all;
+
+  type VariantMutationResult = {
+    data?: {
+      productVariantsBulkUpdate?: { userErrors?: { field: string; message: string }[] };
+      productVariantsBulkCreate?: {
+        userErrors?: { field: string; message: string }[];
+        productVariants?: { id: string }[];
+      };
+    };
+    errors?: unknown[];
+  };
+
+  async function failVariantSync(
+    message: string,
+    variantResult: unknown
+  ): Promise<PublishDraftResult> {
+    await serviceSupabase.from("publish_jobs").insert({
+      ...publishJobBase,
+      publish_status: "api_failed",
+      response_payload: variantResult ?? { error: message },
+      error_message: message,
+      completed_at: new Date().toISOString()
+    });
+    await serviceSupabase
+      .from("product_drafts")
+      .update({
+        status: "api_failed",
+        publish_status: "api_failed",
+        shopify_product_id: productId,
+        shopify_admin_url: shopifyAdminUrl(productId),
+        error_message: message
+      })
+      .eq("id", id);
+    await notifyMake("api_failed", { draftId: id, error: message, shopifyProductId: productId });
+    return { ok: false, status: 502, error: message };
+  }
+
+  if (isMulti) {
+    // B7 multi-variant path (official 2026-07):
+    // 1) productCreate already ran with productOptions → one initial variant
+    //    (first value of each option = our sort_order 0 row).
+    // 2) productVariantsBulkUpdate that initial variant with price/inventory.
+    // 3) productVariantsBulkCreate remaining rows with optionValues.optionName.
+    const multi = variantPlan as MultiVariantPublishPlan;
+    const needsLocation = multi.all.some(
+      (s) => s.inventoryPolicy === "DENY" && Number.isInteger(s.inventoryQuantity)
+    );
+    const inventoryLocationId = needsLocation ? await getShopifyInventoryLocationId() : null;
+
+    if (needsLocation && !inventoryLocationId) {
+      return failVariantSync(
+        "有限庫存發布需要 Shopify location ID；請設定 SHOPIFY_LOCATION_ID，或確認 Shopify Admin API 可讀取 locations。",
+        null
+      );
+    }
+
+    if (!defaultVariantId) {
+      return failVariantSync(
+        "商品已建立但 Shopify 未回傳初始款式 ID，多款式價格無法同步。",
+        result
+      );
+    }
+
+    const updateMutation = `
+      mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+          productVariants { id price compareAtPrice }
+          userErrors { field message }
+        }
+      }
+    `;
+    const createMutation = `
+      mutation ProductVariantsBulkCreate(
+        $productId: ID!,
+        $variants: [ProductVariantsBulkInput!]!,
+        $strategy: ProductVariantsBulkCreateStrategy
+      ) {
+        productVariantsBulkCreate(productId: $productId, variants: $variants, strategy: $strategy) {
+          productVariants { id title }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    try {
+      const { response: updateRes, result: updateResult } =
+        await callShopifyAdminGraphQL<VariantMutationResult>(updateMutation, {
+          productId,
+          variants: [
+            toBulkVariantInput(multi.initial, {
+              includeOptionValues: false,
+              locationId: inventoryLocationId,
+              inventoryMode: "update",
+              variantId: defaultVariantId
+            })
+          ]
+        });
+      const updateErrors =
+        updateResult?.data?.productVariantsBulkUpdate?.userErrors ?? updateResult?.errors;
+      if (!updateRes.ok || updateErrors?.length) {
+        return failVariantSync(
+          `商品已建立但初始款式價格同步失敗：${JSON.stringify(updateErrors?.length ? updateErrors : updateResult)}`,
+          updateResult
+        );
+      }
+
+      if (multi.additional.length > 0) {
+        const { response: createRes, result: createResult } =
+          await callShopifyAdminGraphQL<VariantMutationResult>(createMutation, {
+            productId,
+            // strategy default is fine; we already have a real option combo, not Default Title.
+            // Documented enum kept explicit for auditability.
+            strategy: "DEFAULT",
+            variants: multi.additional.map((seed) =>
+              toBulkVariantInput(seed, {
+                includeOptionValues: true,
+                locationId: inventoryLocationId,
+                inventoryMode: "create"
+              })
+            )
+          });
+        const createErrors =
+          createResult?.data?.productVariantsBulkCreate?.userErrors ?? createResult?.errors;
+        if (!createRes.ok || createErrors?.length) {
+          return failVariantSync(
+            `商品已建立且第一個款式已更新，但其餘款式 productVariantsBulkCreate 失敗：${JSON.stringify(
+              createErrors?.length ? createErrors : createResult
+            )}`,
+            createResult
+          );
+        }
+      }
+    } catch (variantNetworkError) {
+      const msg =
+        variantNetworkError instanceof Error
+          ? variantNetworkError.message
+          : String(variantNetworkError);
+      return failVariantSync(`商品已建立但多款式同步失敗：${msg}`, null);
+    }
+  } else if (defaultVariantId) {
+    // Single-SKU path (unchanged from A14 / B2).
     const variantMutation = `
       mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
         productVariantsBulkUpdate(productId: $productId, variants: $variants) {
@@ -218,15 +384,13 @@ export async function publishDraft(
       inventoryQuantity: number;
       inventoryPolicy: "DENY" | "CONTINUE";
     };
-    const hasFiniteInventory = seed.inventoryPolicy === "DENY" && Number.isInteger(seed.inventoryQuantity);
-    const inventoryLocationId = hasFiniteInventory ? await getShopifyInventoryLocationId() : null;
+    const hasFiniteInventory =
+      seed.inventoryPolicy === "DENY" && Number.isInteger(seed.inventoryQuantity);
+    const inventoryLocationId = hasFiniteInventory
+      ? await getShopifyInventoryLocationId()
+      : null;
 
-    type VariantUpdateResult = {
-      data?: { productVariantsBulkUpdate?: { userErrors?: { field: string; message: string }[] } };
-      errors?: unknown[];
-    };
-
-    let variantResult: VariantUpdateResult | null = null;
+    let variantResult: VariantMutationResult | null = null;
     let variantError: string | null = null;
 
     try {
@@ -236,9 +400,8 @@ export async function publishDraft(
         );
       }
 
-      const { response: variantResponse, result: vr } = await callShopifyAdminGraphQL<VariantUpdateResult>(
-        variantMutation,
-        {
+      const { response: variantResponse, result: vr } =
+        await callShopifyAdminGraphQL<VariantMutationResult>(variantMutation, {
           productId,
           variants: [
             {
@@ -246,53 +409,47 @@ export async function publishDraft(
               price: String(seed.price),
               ...(seed.compareAtPrice ? { compareAtPrice: String(seed.compareAtPrice) } : {}),
               inventoryPolicy: seed.inventoryPolicy,
-              inventoryItem: { sku: seed.sku, cost: String(seed.cost), tracked: hasFiniteInventory },
+              inventoryItem: {
+                sku: seed.sku,
+                cost: String(seed.cost),
+                tracked: hasFiniteInventory
+              },
               ...(hasFiniteInventory && inventoryLocationId
-                ? { quantityAdjustments: [{ locationId: inventoryLocationId, adjustment: seed.inventoryQuantity, changeFromQuantity: 0 }] }
-                : {}),
-            },
-          ],
-        },
-      );
+                ? {
+                    quantityAdjustments: [
+                      {
+                        locationId: inventoryLocationId,
+                        adjustment: seed.inventoryQuantity,
+                        changeFromQuantity: 0
+                      }
+                    ]
+                  }
+                : {})
+            }
+          ]
+        });
       variantResult = vr;
-      const variantErrors = variantResult?.data?.productVariantsBulkUpdate?.userErrors ?? variantResult?.errors;
+      const variantErrors =
+        variantResult?.data?.productVariantsBulkUpdate?.userErrors ?? variantResult?.errors;
       if (!variantResponse.ok || variantErrors?.length) {
         variantError = JSON.stringify(variantErrors?.length ? variantErrors : variantResult);
       }
     } catch (variantNetworkError) {
-      variantError = variantNetworkError instanceof Error ? variantNetworkError.message : String(variantNetworkError);
+      variantError =
+        variantNetworkError instanceof Error
+          ? variantNetworkError.message
+          : String(variantNetworkError);
     }
 
     if (variantError) {
-      // The product genuinely exists in Shopify at this point (with a $0
-      // variant) -- backfill the GID/admin link so a human can fix the price
-      // by hand instead of losing track of the product entirely. Retrying
-      // this publish would create a SECOND duplicate product (no
-      // resume-only-the-variant path yet), so this is deliberately still
-      // surfaced as api_failed rather than silently downgraded to a warning.
-      const message = `商品已建立但價格同步失敗，請至 Shopify 後台手動確認價格：${variantError}`;
-      await serviceSupabase.from("publish_jobs").insert({
-        ...publishJobBase,
-        publish_status: "api_failed",
-        response_payload: variantResult ?? { error: variantError },
-        error_message: message,
-        completed_at: new Date().toISOString()
-      });
-      await serviceSupabase
-        .from("product_drafts")
-        .update({
-          status: "api_failed",
-          publish_status: "api_failed",
-          shopify_product_id: productId,
-          shopify_admin_url: shopifyAdminUrl(productId),
-          error_message: message
-        })
-        .eq("id", id);
-      await notifyMake("api_failed", { draftId: id, error: message, shopifyProductId: productId });
-      return { ok: false, status: 502, error: message };
+      return failVariantSync(
+        `商品已建立但價格同步失敗，請至 Shopify 後台手動確認價格：${variantError}`,
+        variantResult
+      );
     }
   } else {
-    priceSyncWarning = "Shopify 未回傳預設款式 ID，價格／成本未同步，請至 Shopify 後台手動確認並設定價格。";
+    priceSyncWarning =
+      "Shopify 未回傳預設款式 ID，價格／成本未同步，請至 Shopify 後台手動確認並設定價格。";
   }
 
   await serviceSupabase.from("publish_jobs").insert({

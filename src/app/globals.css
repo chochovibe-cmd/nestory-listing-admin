@@ -616,8 +616,11 @@ textarea {
   color: var(--accent3);
 }
 
-/* Batch action cluster lives inside the results panel's header, next to the
-   "◈ 生成結果" title, instead of as its own block above the card list. */
+/* B9: results panel allows sticky toolbar (overflow:hidden on .panel breaks sticky). */
+.panel.results-panel {
+  overflow: visible;
+}
+
 .rc-panel-header {
   flex-wrap: wrap;
   row-gap: 8px;
@@ -641,6 +644,65 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* B9: sticky batch toolbar + sorter above result cards (tokens only). */
+.results-batch-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin: 0 0 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+}
+
+.results-batch-check {
+  white-space: nowrap;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.results-sort-label {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sort-sel {
+  width: auto;
+  min-height: 32px;
+  padding: 4px 28px 4px 10px;
+  font-size: 11px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.results-batch-notice {
+  white-space: pre-wrap;
+  scroll-margin-top: 64px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* /drafts queue page: filter pills + a standalone batch toolbar bar above
@@ -1409,6 +1471,7 @@ textarea {
   padding: 10px 14px;
   cursor: pointer;
   user-select: none;
+  flex-wrap: wrap;
 }
 
 .rc-checkbox {
@@ -1417,6 +1480,114 @@ textarea {
   width: 16px;
   height: 16px;
   margin: 0;
+}
+
+/* B9 D4-A: collapsed main thumb */
+.rc-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.rc-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.rc-thumb-placeholder {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* B9: quick approve / send on collapsed row */
+.rc-quick {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.rc-quick-btn {
+  min-height: 36px;
+}
+
+.rc-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 0 14px 10px;
+}
+
+/* B9 req2: notice visible while collapsed (never silent fail) */
+.rc-collapsed-notice {
+  margin: 0 14px 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-s);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface2));
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.rc-collapsed-notice.is-warn {
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
+  font-weight: 600;
+}
+
+/* B9 underline tabs */
+.rc-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  gap: 0;
+  margin: 0 -14px 12px;
+  padding: 0 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.rc-tab {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-height: 40px;
+  border-radius: 0;
+  flex-shrink: 0;
+}
+
+.rc-tab:hover {
+  color: var(--text);
+}
+
+.rc-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 700;
+}
+
+.rc-tabpanel {
+  display: block;
+  padding-bottom: 4px;
 }
 
 .rc-status {
@@ -1827,9 +1998,15 @@ textarea {
   .rc-title { white-space: normal; }
   .rc-detect-chips { max-width: 100%; }
   .mini-btn { min-height: 44px; padding: 8px 12px; }
+  .rc-quick { width: 100%; }
+  .rc-quick-btn { min-height: 44px; flex: 1; }
+  .rc-tab { min-height: 44px; }
   .rc-price-stack { flex-direction: row; align-items: center; gap: 8px; }
   .rc-actions { flex-wrap: wrap; }
   .rc-header-actions { margin-left: 0; width: 100%; }
+  .results-batch-toolbar { gap: 8px; }
+  .results-sort-label { margin-left: 0; width: 100%; }
+  .sort-sel { width: 100%; min-height: 44px; }
 
   /* 16px keeps iOS Safari from auto-zooming when a field gains focus. */
   input[type="text"],

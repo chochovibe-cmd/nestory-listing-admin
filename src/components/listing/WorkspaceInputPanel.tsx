@@ -28,6 +28,61 @@ import {
   type ScreenshotMode
 } from "@/lib/screenshotRecognition";
 import type { SaleStatus } from "@/types/domain";
+import {
+  formRowsToDbInserts,
+  recalculateUnlockedVariantPrices,
+  type VariantDimension,
+  type VariantFormRow
+} from "@/lib/variants";
+import { VariantEditor, repriceVariants } from "@/components/listing/VariantEditor";
+
+/** B7: insert-first overwrite so a failed insert never leaves variants empty. */
+async function persistProductVariants(
+  client: ReturnType<typeof createClient>,
+  draftId: string,
+  rows: Record<string, unknown>[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: oldRows, error: loadError } = await client
+    .from("product_variants")
+    .select("id")
+    .eq("draft_id", draftId);
+
+  if (loadError) {
+    return { ok: false, error: `讀取舊款式失敗（未改動任何列）：${loadError.message}` };
+  }
+  const oldIds = (oldRows ?? []).map((r) => r.id as string);
+
+  if (rows.length === 0) {
+    if (oldIds.length === 0) return { ok: true };
+    const { error: delError } = await client
+      .from("product_variants")
+      .delete()
+      .eq("draft_id", draftId);
+    if (delError) {
+      return { ok: false, error: `清空款式失敗（舊列仍在，可重試）：${delError.message}` };
+    }
+    return { ok: true };
+  }
+
+  const { error: insertError } = await client.from("product_variants").insert(rows);
+  if (insertError) {
+    return {
+      ok: false,
+      error: `寫入新款式失敗（舊款式仍保留，可重試）：${insertError.message}`
+    };
+  }
+
+  if (oldIds.length > 0) {
+    const { error: delError } = await client.from("product_variants").delete().in("id", oldIds);
+    if (delError) {
+      return {
+        ok: false,
+        error: `新款式已寫入，但清除舊列失敗（可能暫時重複，請再按一次生成/儲存以清理）：${delError.message}`
+      };
+    }
+  }
+  return { ok: true };
+}
 
 const TONE_OPTIONS = [
   { value: "黑膠文藝收藏感", emoji: "🎙️", desc: "像懂收藏的選物店，沉穩、有故事感" },
@@ -38,10 +93,10 @@ const TONE_OPTIONS = [
 const LENGTH_OPTIONS = ["精簡", "標準", "詳細"] as const;
 const SOURCE_OPTIONS = ["淘寶", "閑魚", "蝦皮"] as const;
 
-type VariantRow = { name: string; sku: string; price: string; qty: string };
 type InventoryPolicy = "deny" | "continue";
 type B3Status = { kind: "info" | "ok" | "error"; text: string } | null;
 type DedupeHit = { id: string; title: string | null; status: string; createdAt: string };
+type VariantImageOption = { id: string; url: string; label: string };
 
 // B1: 生成四步驟進度卡. The panel (left) drives the card, DraftResultsPanel
 // (right) renders it, bridged by a window event (see generationProgress.ts) --
@@ -78,7 +133,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   // B1 (Mockup差異備忘 差異2): 規格以「系統自動整理」為主，此欄是常駐可編輯的補充/修正入口，
   // 預設留空。留空時生成會用 LLM 從證據池整理的規格回寫 spec_text；有填則以此為準不被覆蓋。
   const [specText, setSpecText] = useState("");
-  const [variants, setVariants] = useState<VariantRow[]>([]);
+  // B7 multi-dimension variants
+  const [variantDimensions, setVariantDimensions] = useState<VariantDimension[]>([]);
+  const [variants, setVariants] = useState<VariantFormRow[]>([]);
+  const [variantWarning, setVariantWarning] = useState<string | null>(null);
+  const [variantImages, setVariantImages] = useState<VariantImageOption[]>([]);
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
   const [inventoryUnlimited, setInventoryUnlimited] = useState(true);
   const [inventoryQuantity, setInventoryQuantity] = useState("");
@@ -115,7 +174,13 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const productShotInputRef = useRef<HTMLInputElement>(null);
   const specShotInputRef = useRef<HTMLInputElement>(null);
   // 2A 填空時用最新表單值（避免閉包過期）
-  const formSnapshotRef = useRef({ title: "", price: "", note: "", specText: "", variants: [] as VariantRow[] });
+  const formSnapshotRef = useRef({
+    title: "",
+    price: "",
+    note: "",
+    specText: "",
+    variants: [] as VariantFormRow[]
+  });
   formSnapshotRef.current = { title, price, note, specText, variants };
 
   useEffect(() => {
@@ -235,9 +300,56 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     priceMode
   ]);
 
-  function updateVariant(index: number, patch: Partial<VariantRow>) {
-    setVariants((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  }
+  // B7: reprice unlocked variant rows when currency / rate / price mode changes
+  useEffect(() => {
+    setVariants((current) => {
+      if (current.length === 0) return current;
+      return repriceVariants(current, {
+        currency: costCurrency,
+        priceMode,
+        settings: pricingSettings
+      });
+    });
+  }, [
+    costCurrency,
+    priceMode,
+    pricingSettings.rate,
+    pricingSettings.costMultiplier,
+    pricingSettings.marginMultiplier,
+    pricingSettings.compareAtMultiplier,
+    pricingSettings.minPrice
+  ]);
+
+  // B7: load product images for per-variant picker
+  useEffect(() => {
+    if (!draftId) {
+      setVariantImages([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("product_images")
+        .select("id,original_file_url,processed_file_url,image_type,sort_order")
+        .eq("draft_id", draftId)
+        .order("sort_order", { ascending: true });
+      if (cancelled || !data) return;
+      setVariantImages(
+        data
+          .filter((img) => img.image_type === "main" || img.image_type === "variant")
+          .map((img, i) => ({
+            id: img.id as string,
+            url: String(img.processed_file_url || img.original_file_url || ""),
+            label: `主圖 ${i + 1}`
+          }))
+          .filter((img) => img.url)
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- supabase client is stable enough per render cycle; re-fetch on draft/upload
+  }, [draftId, formKey, imagesUploading]);
 
   function handleSaleStatusChange(nextStatus: SaleStatus) {
     setSaleStatus(nextStatus);
@@ -348,7 +460,16 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     }
     if (plan.note) setNote(plan.note);
     if (plan.specText) setSpecText(plan.specText);
-    if (plan.variants) setVariants(plan.variants);
+    if (plan.variants) {
+      // B7: screenshot fill is 1-dimension 「款式」; reprice unlocked rows.
+      setVariantDimensions([{ name: "款式" }]);
+      const priced = recalculateUnlockedVariantPrices(plan.variants, {
+        currency: costCurrency,
+        priceMode,
+        settings: pricingSettings
+      });
+      setVariants(priced);
+    }
 
     const tone = plan.filledLines.length > 0 ? "ok" : "info";
     setStatus({ kind: tone, text: plan.summary });
@@ -487,7 +608,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   // Write the full form fields onto the draft: UPDATE the lazily-created row, or
   // INSERT a fresh one when no image was ever added. Returns the draft id.
   async function persistDraft(): Promise<string | null> {
-    const filledVariants = variants.filter((row) => row.name.trim());
+    const filledVariants = variants.filter(
+      (row) => row.optionValues.some((v) => v.trim().length > 0)
+    );
     const inventoryFields = getInventoryFields();
 
     if (!inventoryFields) {
@@ -518,6 +641,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       source_platform: source,
       inventory_quantity: inventoryFields.inventory_quantity,
       inventory_policy: inventoryFields.inventory_policy,
+      // B7: dimension defs (empty when single SKU)
+      variant_dimensions: variantDimensions,
       status: "pending_copy",
       generation_mode: "api_llm" as const,
       generation_provider: "codex" as const,
@@ -550,18 +675,17 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       setDraftId(id);
     }
 
-    if (filledVariants.length > 0) {
-      await supabase.from("product_variants").insert(
-        filledVariants.map((row) => ({
-          draft_id: id,
-          option1_name: "款式",
-          option1_value: row.name.trim(),
-          sku: row.sku.trim() || null,
-          twd_price: row.price ? Number(row.price) : null,
-          inventory_quantity: row.qty ? Number(row.qty) : 0,
-          inventory_policy: row.qty ? "deny" : "continue"
-        }))
-      );
+    // B7: safe insert-first overwrite (never leave variants wiped if insert fails).
+    // Also runs when clearing all rows so old multi-variant drafts become single SKU.
+    const inserts = formRowsToDbInserts(variantDimensions, filledVariants);
+    const persistResult = await persistProductVariants(
+      supabase,
+      id,
+      inserts.map((row) => ({ ...row, draft_id: id }))
+    );
+    if (!persistResult.ok) {
+      setMessage(persistResult.error);
+      return null;
     }
 
     return id;
@@ -693,8 +817,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
           source,
           variantSummary:
             variants
-              .filter((row) => row.name.trim())
-              .map((row) => `${row.name.trim()}${row.price ? ` 售價${row.price}` : ""}`)
+              .filter((row) => row.optionValues.some((v) => v.trim()))
+              .map((row) => {
+                const label = row.optionValues.filter((v) => v.trim()).join(" / ");
+                return `${label}${row.sellPrice ? ` 售價${row.sellPrice}` : row.cost ? ` 成本${row.cost}` : ""}`;
+              })
               .join("、") || undefined,
           tone,
           copyLength,
@@ -1078,79 +1205,63 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             </div>
           </div>
 
-          <div className="variant-box">
-            <div className="variant-head">
-              <span>款式 Variants（選填）</span>
-              <button
-                className="btn-mini"
-                onClick={() => setVariants((current) => [...current, { name: "", sku: "", price: "", qty: "" }])}
-                type="button"
-              >
-                新增款式
-              </button>
-            </div>
-            {variants.length === 0 ? (
-              <div className="variant-empty">單一款式可留空；多款式商品再新增。</div>
-            ) : (
-              variants.map((row, index) => (
-                <div className="variant-row" key={index}>
-                  <input onChange={(e) => updateVariant(index, { name: e.target.value })} placeholder="款式名" value={row.name} />
-                  <input onChange={(e) => updateVariant(index, { sku: e.target.value })} placeholder="SKU" value={row.sku} />
-                  <input onChange={(e) => updateVariant(index, { price: e.target.value })} placeholder="售價" type="number" value={row.price} />
-                  <input onChange={(e) => updateVariant(index, { qty: e.target.value })} placeholder="庫存（空白=無上限）" type="number" value={row.qty} />
-                  <button
-                    className="variant-del"
-                    onClick={() => setVariants((current) => current.filter((_, i) => i !== index))}
-                    title="刪除此款式"
-                    type="button"
+          <VariantEditor
+            currency={costCurrency}
+            dimensions={variantDimensions}
+            footer={
+              <>
+                {/* B3: 規格截圖入口（空表時可填簡單 1 維款式列） */}
+                <button
+                  className="spec-shot-toggle"
+                  disabled={recognizing}
+                  onClick={() => setSpecShotOpen((open) => !open)}
+                  type="button"
+                >
+                  📸 {specShotOpen ? "▾" : "▸"} 上傳規格截圖自動填入
+                </button>
+                <div className={`spec-shot-body${specShotOpen ? " open" : ""}`}>
+                  <div
+                    className="spec-shot-drop"
+                    onClick={() => !recognizing && specShotInputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        if (!recognizing) specShotInputRef.current?.click();
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                   >
-                    ✕
-                  </button>
+                    <div>拖拉或點擊上傳規格截圖（最多 {MAX_SCREENSHOT_IMAGES} 張）</div>
+                    <div style={{ marginTop: 4, fontSize: 11 }}>與標題區截圖辨識同一引擎；只補空白欄</div>
+                  </div>
+                  <input
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "spec");
+                    }}
+                    ref={specShotInputRef}
+                    style={{ display: "none" }}
+                    type="file"
+                  />
+                  {specShotStatus ? (
+                    <div className={`b3-status ${specShotStatus.kind}`} style={{ marginTop: 8 }}>
+                      {specShotStatus.text}
+                    </div>
+                  ) : null}
                 </div>
-              ))
-            )}
-            {/* B3: 規格截圖入口（1A：規格欄＋空表時可填簡單款式列） */}
-            <button
-              className="spec-shot-toggle"
-              disabled={recognizing}
-              onClick={() => setSpecShotOpen((open) => !open)}
-              type="button"
-            >
-              📸 {specShotOpen ? "▾" : "▸"} 上傳規格截圖自動填入
-            </button>
-            <div className={`spec-shot-body${specShotOpen ? " open" : ""}`}>
-              <div
-                className="spec-shot-drop"
-                onClick={() => !recognizing && specShotInputRef.current?.click()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    if (!recognizing) specShotInputRef.current?.click();
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <div>拖拉或點擊上傳規格截圖（最多 {MAX_SCREENSHOT_IMAGES} 張）</div>
-                <div style={{ marginTop: 4, fontSize: 11 }}>與標題區截圖辨識同一引擎；只補空白欄</div>
-              </div>
-              <input
-                accept="image/*"
-                multiple
-                onChange={(e) => {
-                  if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "spec");
-                }}
-                ref={specShotInputRef}
-                style={{ display: "none" }}
-                type="file"
-              />
-              {specShotStatus ? (
-                <div className={`b3-status ${specShotStatus.kind}`} style={{ marginTop: 8 }}>
-                  {specShotStatus.text}
-                </div>
-              ) : null}
-            </div>
-          </div>
+              </>
+            }
+            images={variantImages}
+            onDimensionsChange={setVariantDimensions}
+            onRowsChange={setVariants}
+            onWarning={setVariantWarning}
+            priceMode={priceMode}
+            pricingSettings={pricingSettings}
+            rows={variants}
+            warning={variantWarning}
+          />
 
           <div className="field">
             <label>商品規格（選填，留空由系統自動整理）</label>

@@ -122,6 +122,44 @@ export interface ProductDraft {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * B7: option axis defs on the draft, e.g. [{ name: "角色" }, { name: "尺寸" }].
+   * Max 3. Empty = single-SKU / no multi-variant form state. migration 022.
+   */
+  variant_dimensions?: VariantDimensionDef[] | null;
+}
+
+/** B7: one product option axis (Shopify productOptions name). */
+export interface VariantDimensionDef {
+  name: string;
+}
+
+/**
+ * B7: product_variants row (DB shape).
+ * cny_price = cost in source currency (redefined B7; pre-B7 form never wrote it).
+ * twd_price = NT$ sell price.
+ */
+export interface ProductVariantRow {
+  id: string;
+  draft_id: string;
+  option1_name: string | null;
+  option1_value: string | null;
+  option2_name: string | null;
+  option2_value: string | null;
+  option3_name: string | null;
+  option3_value: string | null;
+  sku: string | null;
+  /** Cost in source currency (B7). */
+  cny_price: number | null;
+  /** NT$ sell price. */
+  twd_price: number | null;
+  compare_at_price: number | null;
+  price_locked: boolean;
+  sort_order: number;
+  inventory_quantity: number;
+  inventory_policy: "deny" | "continue";
+  image_id: string | null;
+  created_at: string;
 }
 
 export interface ProductImage {

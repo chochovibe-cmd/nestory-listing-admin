@@ -10,6 +10,7 @@ Path convention:
 {user_id}/{draft_id}/spec/{filename}
 {user_id}/{draft_id}/generated_detail/{filename}
 {user_id}/{draft_id}/variant/{filename}
+{user_id}/temp-screenshots/{filename}   # B3 截圖辨識暫存；辨識結束應刪除，不寫 product_images
 ```
 
 The bucket is public-read in v0.1 so Shopify and Matrixify can consume image URLs.

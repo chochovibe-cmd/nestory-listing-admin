@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { ApproveSummaryModal } from "@/components/listing/ApproveSummaryModal";
+import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
 import { evaluateBatchSendImages } from "@/lib/drafts/batchSendImages";
 import {
@@ -18,6 +19,18 @@ import {
   sortResultDrafts,
   writeStoredResultSort
 } from "@/lib/drafts/resultSort";
+import {
+  countByStage,
+  filterDraftsByStage,
+  readStoredStage,
+  STAGE_FILTER_STORAGE_KEY_RESULTS,
+  type StageKey,
+  writeStoredStage
+} from "@/lib/drafts/stageFilter";
+import {
+  formatArchiveResultMessage,
+  formatUnarchiveResultMessage
+} from "@/lib/drafts/archiveDrafts";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 export function DraftResultsPanel({
@@ -31,7 +44,9 @@ export function DraftResultsPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [lastArchiveIds, setLastArchiveIds] = useState<string[] | null>(null);
   const [sortMode, setSortMode] = useState<ResultSortMode>("newest");
+  const [stage, setStage] = useState<StageKey>("all");
   // B11 D1-B: summary only for batch Shopify paths (建草稿／上架), not pure 批次核准
   const [batchPublishSummary, setBatchPublishSummary] = useState<null | {
     mode: "draft" | "active";
@@ -63,8 +78,11 @@ export function DraftResultsPanel({
   }, []);
 
   // B9: remember sort preference for this browser tab session.
+  // B12: remember stage filter for this tab session.
   useEffect(() => {
-    setSortMode(readStoredResultSort(typeof window !== "undefined" ? window.sessionStorage : null));
+    const storage = typeof window !== "undefined" ? window.sessionStorage : null;
+    setSortMode(readStoredResultSort(storage));
+    setStage(readStoredStage(storage, STAGE_FILTER_STORAGE_KEY_RESULTS));
   }, []);
 
   const progressHeadStatus = progress
@@ -85,22 +103,37 @@ export function DraftResultsPanel({
     return map;
   }, [images]);
 
+  const stageImages = useMemo(
+    () =>
+      images.map((image) => ({
+        draft_id: image.draft_id,
+        image_type: image.image_type,
+        process_intent: image.process_intent ?? null
+      })),
+    [images]
+  );
+
+  const stageCounts = useMemo(() => countByStage(drafts, stageImages), [drafts, stageImages]);
+
+  const stageFiltered = useMemo(
+    () => filterDraftsByStage(drafts, stage, stageImages),
+    [drafts, stage, stageImages]
+  );
+
   const sortedDrafts = useMemo(
     () =>
       sortResultDrafts(
-        drafts,
+        stageFiltered,
         sortMode,
-        images.map((image) => ({
-          draft_id: image.draft_id,
-          image_type: image.image_type,
-          process_intent: image.process_intent ?? null
-        }))
+        stageImages
       ),
-    [drafts, images, sortMode]
+    [stageFiltered, stageImages, sortMode]
   );
 
-  const allSelected = drafts.length > 0 && selectedIds.size === drafts.length;
-  const someSelected = selectedIds.size > 0 && !allSelected;
+  const allSelected =
+    sortedDrafts.length > 0 && sortedDrafts.every((draft) => selectedIds.has(draft.id));
+  const someSelected =
+    sortedDrafts.some((draft) => selectedIds.has(draft.id)) && !allSelected;
   const selectedArray = Array.from(selectedIds);
 
   function toggleOne(id: string) {
@@ -113,14 +146,31 @@ export function DraftResultsPanel({
   }
 
   function toggleAll() {
-    setSelectedIds((current) =>
-      current.size === drafts.length ? new Set() : new Set(drafts.map((d) => d.id))
-    );
+    setSelectedIds((current) => {
+      if (sortedDrafts.every((draft) => current.has(draft.id))) {
+        const next = new Set(current);
+        for (const draft of sortedDrafts) next.delete(draft.id);
+        return next;
+      }
+      const next = new Set(current);
+      for (const draft of sortedDrafts) next.add(draft.id);
+      return next;
+    });
   }
 
   function onSortChange(next: ResultSortMode) {
     setSortMode(next);
     writeStoredResultSort(next, typeof window !== "undefined" ? window.sessionStorage : null);
+  }
+
+  function onStageChange(next: StageKey) {
+    setStage(next);
+    setSelectedIds(new Set());
+    writeStoredStage(
+      next,
+      typeof window !== "undefined" ? window.sessionStorage : null,
+      STAGE_FILTER_STORAGE_KEY_RESULTS
+    );
   }
 
   // B9 D1-C: pure approve (status only), no publish.
@@ -129,6 +179,7 @@ export function DraftResultsPanel({
     if (!selectedArray.length) return;
     setBusy(true);
     setMessage("批次核准中...");
+    setLastArchiveIds(null);
     const approveResponse = await fetch("/api/drafts/batch/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -158,6 +209,7 @@ export function DraftResultsPanel({
     setBusy(true);
     try {
       setMessage("批次核准中...");
+      setLastArchiveIds(null);
       const approveResponse = await fetch("/api/drafts/batch/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -229,12 +281,90 @@ export function DraftResultsPanel({
       };
     });
     const result = evaluateBatchSendImages(items);
+    setLastArchiveIds(null);
     setMessage(result.message);
+  }
+
+  // B12: batch archive / unarchive — busy statuses skipped per-item (like 送圖).
+  async function batchArchiveOrUnarchive(action: "archive" | "unarchive") {
+    if (!selectedArray.length) {
+      setMessage(
+        action === "archive"
+          ? formatArchiveResultMessage({
+              archivedCount: 0,
+              skippedBusyCount: 0,
+              includesPublished: false,
+              emptySelection: true
+            })
+          : "請先勾選商品再批次解除封存。"
+      );
+      return;
+    }
+    setBusy(true);
+    setMessage(action === "archive" ? "批次封存中…" : "批次解除封存中…");
+    const response = await fetch("/api/drafts/batch/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftIds: selectedArray, action })
+    });
+    const payload = await response.json().catch(() => ({}));
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(payload.error ?? (action === "archive" ? "批次封存失敗" : "批次解除封存失敗"));
+      return;
+    }
+    if (action === "archive") {
+      const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
+      setLastArchiveIds(archivedIds.length ? archivedIds : null);
+      setMessage(
+        typeof payload.message === "string"
+          ? payload.message
+          : formatArchiveResultMessage({
+              archivedCount: payload.archivedCount ?? 0,
+              skippedBusyCount: payload.skippedBusyCount ?? 0,
+              includesPublished: Boolean(payload.includesPublished)
+            })
+      );
+    } else {
+      setLastArchiveIds(null);
+      setMessage(
+        typeof payload.message === "string"
+          ? payload.message
+          : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? 0 })
+      );
+    }
+    setSelectedIds(new Set());
+    router.refresh();
+  }
+
+  async function undoLastArchive() {
+    if (!lastArchiveIds?.length) return;
+    setBusy(true);
+    setMessage("解除封存中…");
+    const response = await fetch("/api/drafts/batch/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftIds: lastArchiveIds, action: "unarchive" })
+    });
+    const payload = await response.json().catch(() => ({}));
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(payload.error ?? "解除封存失敗");
+      return;
+    }
+    setLastArchiveIds(null);
+    setMessage(
+      typeof payload.message === "string"
+        ? payload.message
+        : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length })
+    );
+    router.refresh();
   }
 
   async function downloadCsv(endpoint: string, filenamePrefix: string, note?: string) {
     if (!selectedArray.length) return;
     setBusy(true);
+    setLastArchiveIds(null);
     setMessage("產生 CSV 中...");
     const response = await fetch(endpoint, {
       method: "POST",
@@ -258,6 +388,9 @@ export function DraftResultsPanel({
     URL.revokeObjectURL(url);
     setMessage(note ? `CSV 已下載。${note}` : "CSV 已下載");
   }
+
+  const showToolbar = drafts.length > 0;
+  const isArchivedStage = stage === "archived";
 
   return (
     <section className="panel results-panel">
@@ -297,105 +430,144 @@ export function DraftResultsPanel({
           </div>
         ) : null}
 
-        {drafts.length > 0 ? (
-          <div className="results-batch-toolbar" role="toolbar" aria-label="批次操作與排序">
-            <label className="check-row results-batch-check">
-              <input
-                checked={allSelected}
-                onChange={toggleAll}
-                ref={(el) => {
-                  if (el) el.indeterminate = someSelected;
-                }}
-                type="checkbox"
-              />
-              全選
-            </label>
-            <span className="batch-selected-count">
-              {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
-            </span>
-            <div className="batch-actions">
-              <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={() => void batchApproveOnly()}
-                title="只核准文案狀態，不會發布到 Shopify"
-                type="button"
-              >
-                ✓ 批次核准
-              </button>
-              <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={batchSendImages}
-                title="批次送圖；未標記的商品會擋下並列出原因"
-                type="button"
-              >
-                ▶ 批次送圖
-              </button>
-              <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={() => openBatchApproveAndPublishSummary("draft")}
-                title="核准後在 Shopify 建立草稿商品，不會公開上架（先摘要確認）"
-                type="button"
-              >
-                核准並建草稿
-              </button>
-              <button
-                className="btn-mini danger"
-                disabled={busy || !selectedArray.length}
-                onClick={() => openBatchApproveAndPublishSummary("active")}
-                title="核准後直接在 Shopify 建立正式上架商品，會立刻公開，請先確認內容無誤"
-                type="button"
-              >
-                核准並上架
-              </button>
-              <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={() => void downloadCsv("/api/exports/matrixify", "nestory-matrixify")}
-                title="下載 Matrixify 格式 CSV，供 Shopify 後台批次匯入"
-                type="button"
-              >
-                ⬇ Matrixify
-              </button>
-              <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={() =>
-                  void downloadCsv(
-                    "/api/exports/showmore",
-                    "nestory-showmore",
-                    "重量欄位為預設值 0.1kg，上傳前請手動確認。"
-                  )
-                }
-                title="下載 Showmore 格式 CSV，官網庫存/重量為預設值，上傳前請手動確認"
-                type="button"
-              >
-                ⬇ Showmore
-              </button>
+        {showToolbar ? (
+          <>
+            <div className="results-batch-toolbar" role="toolbar" aria-label="批次操作與排序">
+              <label className="check-row results-batch-check">
+                <input
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  type="checkbox"
+                />
+                全選
+              </label>
+              <span className="batch-selected-count">
+                {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
+              </span>
+              <div className="batch-actions">
+                {isArchivedStage ? (
+                  <button
+                    className="btn-mini"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchArchiveOrUnarchive("unarchive")}
+                    title="批次解除封存，回到預設列表"
+                    type="button"
+                  >
+                    解除封存
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => void batchApproveOnly()}
+                      title="只核准文案狀態，不會發布到 Shopify"
+                      type="button"
+                    >
+                      ✓ 批次核准
+                    </button>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={batchSendImages}
+                      title="批次送圖；未標記的商品會擋下並列出原因"
+                      type="button"
+                    >
+                      ▶ 批次送圖
+                    </button>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => openBatchApproveAndPublishSummary("draft")}
+                      title="核准後在 Shopify 建立草稿商品，不會公開上架（先摘要確認）"
+                      type="button"
+                    >
+                      核准並建草稿
+                    </button>
+                    <button
+                      className="btn-mini danger"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => openBatchApproveAndPublishSummary("active")}
+                      title="核准後直接在 Shopify 建立正式上架商品，會立刻公開，請先確認內容無誤"
+                      type="button"
+                    >
+                      核准並上架
+                    </button>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => void batchArchiveOrUnarchive("archive")}
+                      title="批次軟刪除；生成中／上架中會跳過並彙總回報"
+                      type="button"
+                    >
+                      🗄 批次封存
+                    </button>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => void downloadCsv("/api/exports/matrixify", "nestory-matrixify")}
+                      title="下載 Matrixify 格式 CSV，供 Shopify 後台批次匯入"
+                      type="button"
+                    >
+                      ⬇ Matrixify
+                    </button>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() =>
+                        void downloadCsv(
+                          "/api/exports/showmore",
+                          "nestory-showmore",
+                          "重量欄位為預設值 0.1kg，上傳前請手動確認。"
+                        )
+                      }
+                      title="下載 Showmore 格式 CSV，官網庫存/重量為預設值，上傳前請手動確認"
+                      type="button"
+                    >
+                      ⬇ Showmore
+                    </button>
+                  </>
+                )}
+              </div>
+              <label className="results-sort-label">
+                <span className="sr-only">排序</span>
+                <select
+                  aria-label="排序"
+                  className="sort-sel"
+                  onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
+                  value={sortMode}
+                >
+                  {RESULT_SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-            <label className="results-sort-label">
-              <span className="sr-only">排序</span>
-              <select
-                aria-label="排序"
-                className="sort-sel"
-                onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
-                value={sortMode}
-              >
-                {RESULT_SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+
+            {/* B12 / 差異 9: stage pills under batch toolbar */}
+            <StageFilterPills counts={stageCounts} onChange={onStageChange} stage={stage} />
+          </>
         ) : null}
 
         {message ? (
           <div className="notice results-batch-notice" role="status">
-            {message}
+            <span style={{ whiteSpace: "pre-wrap" }}>{message}</span>
+            {lastArchiveIds && lastArchiveIds.length > 0 ? (
+              <button
+                className="btn-mini"
+                disabled={busy}
+                onClick={() => void undoLastArchive()}
+                style={{ marginLeft: 10 }}
+                type="button"
+              >
+                解除封存
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -403,6 +575,11 @@ export function DraftResultsPanel({
           <div className="empty-state">
             <div className="empty-icon">◈</div>
             <p className="muted">在左側輸入商品資料並送出，生成結果會出現在這裡</p>
+          </div>
+        ) : sortedDrafts.length === 0 && !progress ? (
+          <div className="empty-state">
+            <div className="empty-icon">◈</div>
+            <p className="muted">這個篩選條件下沒有商品</p>
           </div>
         ) : (
           <div className="results-list" id="results-list">

@@ -19,13 +19,26 @@ export default async function NewDraftPage() {
     redirect("/login");
   }
 
-  const { data: drafts } = await supabase
-    .from("product_drafts")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(30);
+  // B12 D7-A: load active workbench + recent archived so stage pills can switch without empty 已封存.
+  const [{ data: activeDrafts }, { data: archivedDrafts }] = await Promise.all([
+    supabase
+      .from("product_drafts")
+      .select("*")
+      .neq("status", "archived")
+      .order("created_at", { ascending: false })
+      .limit(40),
+    supabase
+      .from("product_drafts")
+      .select("*")
+      .eq("status", "archived")
+      .order("updated_at", { ascending: false })
+      .limit(50)
+  ]);
 
-  const typedDrafts = (drafts ?? []) as ProductDraft[];
+  const typedDrafts = [
+    ...((activeDrafts ?? []) as ProductDraft[]),
+    ...((archivedDrafts ?? []) as ProductDraft[])
+  ];
   const draftIds = typedDrafts.map((draft) => draft.id);
 
   const { data: images } = draftIds.length

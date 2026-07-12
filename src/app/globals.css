@@ -1761,6 +1761,93 @@ textarea {
   margin-bottom: 4px;
 }
 
+/* B10: per-field version row (Mockup version-nav; tokens only) */
+.rc-field-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.rc-field-hdr-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.version-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.version-nav-label {
+  min-width: 5.5em;
+  text-align: center;
+  white-space: nowrap;
+}
+.version-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 8px;
+  min-height: 32px;
+  min-width: 32px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.version-nav-btn:hover:not(:disabled) {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.version-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.version-nav-regen {
+  font-size: 14px;
+}
+.version-dirty-dot {
+  color: var(--warn);
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 700;
+}
+.btn-save-version {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  margin: 12px 0 4px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, var(--surface2));
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-save-version:hover:not(:disabled) {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 18%, var(--surface2));
+}
+.btn-save-version:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .rc-tags {
   display: flex;
   flex-wrap: wrap;
@@ -1998,6 +2085,8 @@ textarea {
   .rc-title { white-space: normal; }
   .rc-detect-chips { max-width: 100%; }
   .mini-btn { min-height: 44px; padding: 8px 12px; }
+  .version-nav-btn { min-height: 44px; min-width: 44px; }
+  .btn-save-version { min-height: 44px; }
   .rc-quick { width: 100%; }
   .rc-quick-btn { min-height: 44px; flex: 1; }
   .rc-tab { min-height: 44px; }

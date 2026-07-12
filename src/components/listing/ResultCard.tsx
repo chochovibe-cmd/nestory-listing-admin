@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
@@ -21,6 +21,23 @@ import {
   tabLabelWithWarn,
   type ResultCardTabId
 } from "@/lib/drafts/resultCardTabs";
+import {
+  anyCopyDirty,
+  buildDraftCopyPatch,
+  buildFieldVersions,
+  COPY_VERSION_FIELD_LABELS,
+  COPY_VERSION_FIELDS,
+  copyDisplayDiffersFromDb,
+  displayMapToCurrentValues,
+  draftFieldContent,
+  GenerationHistoryRow,
+  groupHistoryByField,
+  highlightsToContent,
+  initialVersionIndex,
+  planComboSaveHistoryInserts,
+  type CopyVersionField,
+  versionLabel,
+} from "@/lib/drafts/copyVersionHistory";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -76,6 +93,69 @@ function CopyButton({ getValue }: { getValue: () => string }) {
   );
 }
 
+/** B10: ← 版本 N/M → ↺ — version switch is local-only; ↺ spends LLM. */
+function VersionNav({
+  label,
+  canPrev,
+  canNext,
+  onPrev,
+  onNext,
+  onRegen,
+  regenBusy,
+  regenDisabled,
+}: {
+  label: string;
+  canPrev: boolean;
+  canNext: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+  onRegen: () => void;
+  regenBusy: boolean;
+  regenDisabled: boolean;
+}) {
+  return (
+    <span className="version-nav" onClick={(event) => event.stopPropagation()}>
+      <button
+        aria-label="上一版"
+        className="version-nav-btn"
+        disabled={!canPrev || regenBusy}
+        onClick={onPrev}
+        type="button"
+      >
+        ←
+      </button>
+      <span className="version-nav-label">{label}</span>
+      <button
+        aria-label="下一版"
+        className="version-nav-btn"
+        disabled={!canNext || regenBusy}
+        onClick={onNext}
+        type="button"
+      >
+        →
+      </button>
+      <button
+        aria-label="只重生此欄"
+        className="version-nav-btn version-nav-regen"
+        disabled={regenDisabled || regenBusy}
+        onClick={onRegen}
+        title="只重生此欄（會呼叫 AI，需花費）"
+        type="button"
+      >
+        {regenBusy ? "…" : "↺"}
+      </button>
+    </span>
+  );
+}
+
+function emptyVersionIndexMap(): Record<CopyVersionField, number> {
+  return Object.fromEntries(COPY_VERSION_FIELDS.map((f) => [f, 0])) as Record<CopyVersionField, number>;
+}
+
+function emptyDirtyMap(): Partial<Record<CopyVersionField, boolean>> {
+  return {};
+}
+
 function mainThumbUrl(images: ProductImage[]): string | null {
   const mains = images
     .filter((image) => image.image_type === "main")
@@ -106,6 +186,8 @@ export function ResultCard({
   const [description, setDescription] = useState(draft.description_html ?? "");
   const [seoTitle, setSeoTitle] = useState(draft.seo_title ?? "");
   const [seoDescription, setSeoDescription] = useState(draft.seo_description ?? "");
+  const [whyWeChoseIt, setWhyWeChoseIt] = useState(draft.why_we_chose_it ?? "");
+  const [productHighlights, setProductHighlights] = useState(highlightsToContent(draft.product_highlights));
   const [tags, setTags] = useState(draft.tags?.join(", ") ?? "");
   const [faq, setFaq] = useState(draft.generated_faq_html ?? "");
   const [sellPrice, setSellPrice] = useState(draft.twd_price?.toString() ?? "");
@@ -116,11 +198,18 @@ export function ResultCard({
   const [message, setMessage] = useState("");
   const [markMessage, setMarkMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
+  const [regeneratingField, setRegeneratingField] = useState<CopyVersionField | null>(null);
+  const [comboSaving, setComboSaving] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickAddingCharacter, setQuickAddingCharacter] = useState<string | null>(null);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
   // Local mirror of pipeline marks so toggles feel instant; re-synced on refresh.
   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
+  // B10: generation_history (read-only for ←→; inserts on regen/manual commit)
+  const [historyRows, setHistoryRows] = useState<GenerationHistoryRow[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [versionIndex, setVersionIndex] = useState<Record<CopyVersionField, number>>(emptyVersionIndexMap);
+  const [copyDirty, setCopyDirty] = useState<Partial<Record<CopyVersionField, boolean>>>(emptyDirtyMap);
 
   const { icon, className } = statusIcon(draft);
   // B6: 卡片只跟讀 price_mode（不做完整切換 UI）；migration 020 前 fallback 特價。
@@ -147,6 +236,94 @@ export function ResultCard({
   // B9: collapsed-visible notice — never silent-fail on quick actions.
   const collapsedNotice = markMessage || message;
 
+  const displayByField = useMemo((): Record<CopyVersionField, string> => ({
+    enriched_title: title,
+    why_we_chose_it: whyWeChoseIt,
+    product_highlights: productHighlights,
+    generated_description_html: description,
+    generated_faq_html: faq,
+    seo_title: seoTitle,
+    meta_description: seoDescription,
+  }), [title, whyWeChoseIt, productHighlights, description, faq, seoTitle, seoDescription]);
+
+  const dbSnapshot = useMemo((): Record<CopyVersionField, string> => {
+    const snap = {} as Record<CopyVersionField, string>;
+    for (const field of COPY_VERSION_FIELDS) {
+      snap[field] = draftFieldContent(draft, field);
+    }
+    return snap;
+  }, [draft]);
+
+  const historyByField = useMemo(() => groupHistoryByField(historyRows), [historyRows]);
+
+  const versionsByField = useMemo(() => {
+    const map = {} as Record<CopyVersionField, ReturnType<typeof buildFieldVersions>>;
+    for (const field of COPY_VERSION_FIELDS) {
+      map[field] = buildFieldVersions(historyByField[field], dbSnapshot[field]);
+    }
+    return map;
+  }, [historyByField, dbSnapshot]);
+
+  const setFieldDisplay = useCallback((field: CopyVersionField, value: string, markDirty: boolean) => {
+    switch (field) {
+      case "enriched_title":
+        setTitle(value);
+        break;
+      case "why_we_chose_it":
+        setWhyWeChoseIt(value);
+        break;
+      case "product_highlights":
+        setProductHighlights(value);
+        break;
+      case "generated_description_html":
+        setDescription(value);
+        break;
+      case "generated_faq_html":
+        setFaq(value);
+        break;
+      case "seo_title":
+        setSeoTitle(value);
+        break;
+      case "meta_description":
+        setSeoDescription(value);
+        break;
+    }
+    if (markDirty) {
+      setCopyDirty((prev) => ({ ...prev, [field]: true }));
+    }
+  }, []);
+
+  const loadHistory = useCallback(async (
+    /** Prefer matching these display values when placing the version cursor (e.g. after regen). */
+    matchDisplay?: Partial<Record<CopyVersionField, string>>,
+  ) => {
+    const { data, error } = await supabase
+      .from("generation_history")
+      .select("id,draft_id,field_name,content,provider,model,created_by,created_at")
+      .eq("draft_id", draft.id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      setMessage(`讀取版本歷史失敗：${error.message}`);
+      setHistoryLoaded(true);
+      return;
+    }
+
+    const rows = (data ?? []) as GenerationHistoryRow[];
+    setHistoryRows(rows);
+    setHistoryLoaded(true);
+
+    const grouped = groupHistoryByField(rows);
+    const nextIndex = emptyVersionIndexMap();
+    for (const field of COPY_VERSION_FIELDS) {
+      const dbContent = draftFieldContent(draft, field);
+      const versions = buildFieldVersions(grouped[field], dbContent);
+      const prefer = matchDisplay?.[field] ?? dbContent;
+      nextIndex[field] = initialVersionIndex(versions, prefer);
+    }
+    setVersionIndex(nextIndex);
+  }, [draft, supabase]);
+
   // ResultCard stays mounted (same `key={draft.id}`) across regenerate/save's
   // router.refresh(), so these editable fields must be re-synced explicitly
   // when the underlying row changes -- otherwise an already-expanded card
@@ -156,6 +333,8 @@ export function ResultCard({
     setDescription(draft.description_html ?? "");
     setSeoTitle(draft.seo_title ?? "");
     setSeoDescription(draft.seo_description ?? "");
+    setWhyWeChoseIt(draft.why_we_chose_it ?? "");
+    setProductHighlights(highlightsToContent(draft.product_highlights));
     setTags(draft.tags?.join(", ") ?? "");
     setFaq(draft.generated_faq_html ?? "");
     setSellPrice(draft.twd_price?.toString() ?? "");
@@ -163,6 +342,7 @@ export function ResultCard({
     setDetectedCategory(draft.detected_category ?? "");
     setSku(draft.sku ?? "");
     setPublishMode(draft.publish_mode);
+    setCopyDirty(emptyDirtyMap());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.updated_at]);
 
@@ -177,14 +357,130 @@ export function ResultCard({
     );
   }, [images]);
 
+  // B10: load history when card expands (not on list mount — avoid N queries).
+  useEffect(() => {
+    if (!expanded) return;
+    void loadHistory();
+  }, [expanded, draft.id, draft.updated_at, loadHistory]);
+
+  function switchVersion(field: CopyVersionField, nextIndex: number) {
+    const versions = versionsByField[field];
+    if (nextIndex < 0 || nextIndex >= versions.length) return;
+    if (copyDirty[field]) {
+      const ok = window.confirm("切換將捨棄此欄未儲存修改，確定？");
+      if (!ok) return;
+    }
+    const content = versions[nextIndex].content;
+    setFieldDisplay(field, content, false);
+    setCopyDirty((prev) => {
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+    setVersionIndex((prev) => ({ ...prev, [field]: nextIndex }));
+  }
+
+  async function insertHistoryRows(
+    rows: Array<{
+      draft_id: string;
+      field_name: string;
+      content: string;
+      provider: string | null;
+      model: string | null;
+      created_by: string | null;
+    }>,
+  ) {
+    if (rows.length === 0) return { error: null as string | null };
+    const { error } = await supabase.from("generation_history").insert(rows);
+    return { error: error?.message ?? null };
+  }
+
+  /**
+   * B10: write on-screen copy combination to product_drafts + history
+   * (manual dirty → history; version browse only → draft columns).
+   */
+  async function commitCopyCombination(): Promise<{ ok: boolean; error?: string; didCommitCopy: boolean }> {
+    const display = displayByField;
+    const needsDraftWrite =
+      copyDisplayDiffersFromDb(display, dbSnapshot) || anyCopyDirty(copyDirty);
+    const inserts = planComboSaveHistoryInserts({
+      draftId: draft.id,
+      userId: draft.created_by,
+      display,
+      dbSnapshot,
+      historyByField,
+      dirty: copyDirty,
+    });
+
+    // Prefer auth user for created_by when available.
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData.user?.id ?? draft.created_by;
+    const insertsWithUser = inserts.map((row) => ({ ...row, created_by: userId }));
+
+    if (insertsWithUser.length > 0) {
+      const { error: histErr } = await insertHistoryRows(insertsWithUser);
+      if (histErr) return { ok: false, error: histErr, didCommitCopy: false };
+    }
+
+    if (needsDraftWrite || insertsWithUser.length > 0) {
+      const patch = buildDraftCopyPatch(display);
+      const { error } = await supabase.from("product_drafts").update(patch).eq("id", draft.id);
+      if (error) return { ok: false, error: error.message, didCommitCopy: false };
+    }
+
+    setCopyDirty(emptyDirtyMap());
+    await loadHistory();
+    return {
+      ok: true,
+      didCommitCopy: needsDraftWrite || insertsWithUser.length > 0 || anyCopyDirty(copyDirty),
+    };
+  }
+
+  async function saveComboOnly() {
+    setComboSaving(true);
+    setMessage("儲存文案組合中…");
+    try {
+      const result = await commitCopyCombination();
+      if (!result.ok) {
+        setMessage(result.error ?? "儲存失敗");
+        return;
+      }
+      setMessage(result.didCommitCopy ? "已定案此文案組合" : "文案組合無變更");
+      router.refresh();
+    } finally {
+      setComboSaving(false);
+    }
+  }
+
   async function save() {
+    // D2: any save button should persist on-screen copy too (informative, not blocking).
+    const copyWasDirty =
+      anyCopyDirty(copyDirty) || copyDisplayDiffersFromDb(displayByField, dbSnapshot);
+    let comboNote = "";
+    if (copyWasDirty) {
+      const combo = await commitCopyCombination();
+      if (!combo.ok) {
+        setMessage(combo.error ?? "文案組合儲存失敗");
+        return;
+      }
+      if (combo.didCommitCopy) comboNote = "已一併定案文案組合";
+    }
+
     const { error } = await supabase
       .from("product_drafts")
       .update({
+        // Copy columns may already be written by commitCopyCombination; re-write is idempotent.
         title_zh: title || null,
         description_html: description || null,
         seo_title: seoTitle || null,
         seo_description: seoDescription || null,
+        why_we_chose_it: whyWeChoseIt || null,
+        product_highlights: productHighlights
+          ? productHighlights
+              .split("\n")
+              .map((line) => line.replace(/^[・•\-\*]\s*/, "").trim())
+              .filter(Boolean)
+          : [],
         tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         generated_faq_html: faq || null,
         twd_price: sellPrice ? Number(sellPrice) : null,
@@ -197,8 +493,87 @@ export function ResultCard({
       })
       .eq("id", draft.id);
 
-    setMessage(error ? error.message : "已儲存修改");
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage(comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改");
     router.refresh();
+  }
+
+  async function regenerateField(field: CopyVersionField) {
+    if (regenerating || regeneratingField) return;
+    if (copyDirty[field]) {
+      const ok = window.confirm("此欄有未儲存修改，重生將以目前畫面文字為基礎並捨棄未定案狀態，確定？");
+      if (!ok) return;
+    }
+    setRegeneratingField(field);
+    setMessage(`正在重生「${COPY_VERSION_FIELD_LABELS[field]}」…`);
+
+    try {
+      // D6: materialise virtual baseline before the new regen row lands.
+      const historyCount = historyByField[field]?.length ?? 0;
+      const originalContent = displayByField[field] ?? "";
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id ?? draft.created_by;
+
+      if (historyCount === 0 && originalContent.trim()) {
+        const { error: baseErr } = await insertHistoryRows([
+          {
+            draft_id: draft.id,
+            field_name: field,
+            content: originalContent,
+            provider: null,
+            model: null,
+            created_by: userId,
+          },
+        ]);
+        if (baseErr) {
+          setMessage(`寫入原版歷史失敗：${baseErr}`);
+          return;
+        }
+      }
+
+      const currentValues = displayMapToCurrentValues(displayByField, draft);
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftId: draft.id,
+          field,
+          provider: readStoredAiProvider(),
+          mode: readStoredRunMode(),
+          currentValues,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(payload.error ?? "單欄重生失敗");
+        return;
+      }
+
+      const value = payload?.result?.value;
+      let nextText = "";
+      if (typeof value === "string") {
+        nextText = value;
+        setFieldDisplay(field, value, false);
+      } else if (Array.isArray(value)) {
+        nextText = (value as string[]).join("\n");
+        setFieldDisplay(field, nextText, false);
+      }
+      setCopyDirty((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+      setMessage(`「${COPY_VERSION_FIELD_LABELS[field]}」已重生`);
+      await loadHistory({ [field]: nextText });
+      router.refresh();
+    } catch {
+      setMessage("單欄重生連線失敗");
+    } finally {
+      setRegeneratingField(null);
+    }
   }
 
   async function regenerate() {
@@ -212,6 +587,8 @@ export function ResultCard({
     const payload = await response.json();
     setRegenerating(false);
     setMessage(response.ok ? "重新生成完成" : payload.error ?? "重新生成失敗");
+    setCopyDirty(emptyDirtyMap());
+    if (expanded) await loadHistory();
     router.refresh();
   }
 
@@ -484,7 +861,7 @@ export function ResultCard({
         <span className="rc-quick" onClick={(event) => event.stopPropagation()}>
           <button
             className="mini-btn rc-quick-btn"
-            disabled={quickBusy || regenerating || !canQuickApprove}
+            disabled={quickBusy || regenerating || regeneratingField != null || !canQuickApprove}
             onClick={() => void approveOnly()}
             title="只核准文案，不會發布到 Shopify"
             type="button"
@@ -493,7 +870,7 @@ export function ResultCard({
           </button>
           <button
             className="mini-btn rc-quick-btn"
-            disabled={quickBusy || regenerating}
+            disabled={quickBusy || regenerating || regeneratingField != null}
             onClick={sendImages}
             title="送圖；未標記會擋下並列出哪幾張"
             type="button"
@@ -575,48 +952,7 @@ export function ResultCard({
                 <div className="rc-label">原始標題</div>
                 <div className="muted">{draft.taobao_title ?? draft.original_title ?? "-"}</div>
               </div>
-              <div className="field">
-                <label>商品標題 <CopyButton getValue={() => title} /></label>
-                <input className="edit-input" onChange={(event) => setTitle(event.target.value)} value={title} />
-              </div>
-              <div className="field">
-                <label>商品描述 <CopyButton getValue={() => description} /></label>
-                <textarea className="edit-textarea" onChange={(event) => setDescription(event.target.value)} rows={10} value={description} />
-              </div>
-              <div className="field">
-                <label>SEO 標題 <CopyButton getValue={() => seoTitle} /></label>
-                <input className="edit-input" onChange={(event) => setSeoTitle(event.target.value)} value={seoTitle} />
-              </div>
-              <div className="field">
-                <label>SEO 描述 <CopyButton getValue={() => seoDescription} /></label>
-                <textarea className="edit-textarea" onChange={(event) => setSeoDescription(event.target.value)} value={seoDescription} />
-              </div>
-              <div className="field">
-                <div className="rc-view-tabs">
-                  <label>FAQ <CopyButton getValue={() => faq} /></label>
-                  <span className="rc-view-tabs-buttons">
-                    <button
-                      className={faqView === "preview" ? "active" : ""}
-                      onClick={() => setFaqView("preview")}
-                      type="button"
-                    >
-                      預覽
-                    </button>
-                    <button
-                      className={faqView === "html" ? "active" : ""}
-                      onClick={() => setFaqView("html")}
-                      type="button"
-                    >
-                      HTML 原始碼
-                    </button>
-                  </span>
-                </div>
-                {faqView === "preview" ? (
-                  <div className="rc-html-preview" dangerouslySetInnerHTML={{ __html: faq || "<p>尚無內容</p>" }} />
-                ) : (
-                  <textarea className="edit-textarea" onChange={(event) => setFaq(event.target.value)} rows={6} value={faq} />
-                )}
-              </div>
+
               <div className="rc-field">
                 <div className="rc-label">AI 偵測</div>
                 <div className="rc-text">
@@ -637,7 +973,10 @@ export function ResultCard({
                         <button
                           className="mini-btn"
                           disabled={
-                            !draft.ip_name || quickAddingCharacter === name || regenerating
+                            !draft.ip_name ||
+                            quickAddingCharacter === name ||
+                            regenerating ||
+                            regeneratingField != null
                           }
                           onClick={() => void quickAddCharacter(name)}
                           type="button"
@@ -659,6 +998,138 @@ export function ResultCard({
                   <input className="edit-input" onChange={(event) => setSku(event.target.value)} value={sku} />
                 </div>
               </div>
+
+              {/* B10: 7 versioned copy fields (A7 field names) */}
+              {!historyLoaded ? (
+                <div className="muted">載入版本歷史…</div>
+              ) : null}
+
+              {(() => {
+                const fieldBusy = regeneratingField != null || regenerating || comboSaving;
+                const renderVersionHdr = (field: CopyVersionField) => {
+                  const versions = versionsByField[field];
+                  const idx = Math.min(versionIndex[field] ?? 0, Math.max(versions.length - 1, 0));
+                  return (
+                    <div className="rc-field-hdr">
+                      <span className="rc-field-hdr-label">
+                        {COPY_VERSION_FIELD_LABELS[field]}
+                        <CopyButton getValue={() => displayByField[field]} />
+                        {copyDirty[field] ? <span className="version-dirty-dot" title="未定案修改">·</span> : null}
+                      </span>
+                      <VersionNav
+                        canNext={idx < versions.length - 1}
+                        canPrev={idx > 0}
+                        label={versionLabel(idx, versions)}
+                        onNext={() => switchVersion(field, idx + 1)}
+                        onPrev={() => switchVersion(field, idx - 1)}
+                        onRegen={() => void regenerateField(field)}
+                        regenBusy={regeneratingField === field}
+                        regenDisabled={fieldBusy && regeneratingField !== field}
+                      />
+                    </div>
+                  );
+                };
+
+                return (
+                  <>
+                    <div className="field">
+                      {renderVersionHdr("enriched_title")}
+                      <input
+                        className="edit-input"
+                        onChange={(event) => setFieldDisplay("enriched_title", event.target.value, true)}
+                        value={title}
+                      />
+                    </div>
+                    <div className="field">
+                      {renderVersionHdr("why_we_chose_it")}
+                      <textarea
+                        className="edit-textarea"
+                        onChange={(event) => setFieldDisplay("why_we_chose_it", event.target.value, true)}
+                        rows={3}
+                        value={whyWeChoseIt}
+                      />
+                    </div>
+                    <div className="field">
+                      {renderVersionHdr("product_highlights")}
+                      <textarea
+                        className="edit-textarea"
+                        onChange={(event) => setFieldDisplay("product_highlights", event.target.value, true)}
+                        placeholder="每點一行（可加・）"
+                        rows={4}
+                        value={productHighlights}
+                      />
+                    </div>
+                    <div className="field">
+                      {renderVersionHdr("generated_description_html")}
+                      <textarea
+                        className="edit-textarea"
+                        onChange={(event) => setFieldDisplay("generated_description_html", event.target.value, true)}
+                        rows={10}
+                        value={description}
+                      />
+                    </div>
+                    <div className="field">
+                      <div className="rc-view-tabs">
+                        {renderVersionHdr("generated_faq_html")}
+                      </div>
+                      <div className="rc-view-tabs" style={{ marginBottom: 6 }}>
+                        <span className="rc-view-tabs-buttons">
+                          <button
+                            className={faqView === "preview" ? "active" : ""}
+                            onClick={() => setFaqView("preview")}
+                            type="button"
+                          >
+                            預覽
+                          </button>
+                          <button
+                            className={faqView === "html" ? "active" : ""}
+                            onClick={() => setFaqView("html")}
+                            type="button"
+                          >
+                            HTML 原始碼
+                          </button>
+                        </span>
+                      </div>
+                      {faqView === "preview" ? (
+                        <div className="rc-html-preview" dangerouslySetInnerHTML={{ __html: faq || "<p>尚無內容</p>" }} />
+                      ) : (
+                        <textarea
+                          className="edit-textarea"
+                          onChange={(event) => setFieldDisplay("generated_faq_html", event.target.value, true)}
+                          rows={6}
+                          value={faq}
+                        />
+                      )}
+                    </div>
+                    <div className="field">
+                      {renderVersionHdr("seo_title")}
+                      <input
+                        className="edit-input"
+                        onChange={(event) => setFieldDisplay("seo_title", event.target.value, true)}
+                        value={seoTitle}
+                      />
+                    </div>
+                    <div className="field">
+                      {renderVersionHdr("meta_description")}
+                      <textarea
+                        className="edit-textarea"
+                        onChange={(event) => setFieldDisplay("meta_description", event.target.value, true)}
+                        rows={3}
+                        value={seoDescription}
+                      />
+                    </div>
+
+                    <button
+                      className="btn-save-version"
+                      disabled={comboSaving || regenerating || regeneratingField != null}
+                      onClick={() => void saveComboOnly()}
+                      type="button"
+                    >
+                      {comboSaving ? "儲存中…" : "✅ 確認儲存此版本組合"}
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           ) : null}
 
@@ -837,10 +1308,29 @@ export function ResultCard({
               <option value="draft">draft：只建立 Shopify 草稿</option>
             </select>
           </div>
+          {message ? (
+            <div
+              className={
+                message.includes("一併定案") || message.includes("已定案")
+                  ? "price-soft-warn"
+                  : "muted"
+              }
+              role="status"
+              style={{ marginTop: 8 }}
+            >
+              {message}
+            </div>
+          ) : null}
           <div className="rc-actions">
             <span className="rc-actions-group">
-              <button onClick={() => void save()} type="button">儲存修改</button>
-              <button disabled={regenerating} onClick={() => void regenerate()} type="button">
+              <button disabled={comboSaving || regeneratingField != null} onClick={() => void save()} type="button">
+                儲存修改
+              </button>
+              <button
+                disabled={regenerating || regeneratingField != null || comboSaving}
+                onClick={() => void regenerate()}
+                type="button"
+              >
                 {regenerating ? "生成中..." : "↺ 重新生成"}
               </button>
             </span>

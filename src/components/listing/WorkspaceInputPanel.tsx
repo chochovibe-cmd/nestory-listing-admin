@@ -36,6 +36,8 @@ import {
   type VariantFormRow
 } from "@/lib/variants";
 import { VariantEditor, repriceVariants } from "@/components/listing/VariantEditor";
+import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
+import { FieldHelp } from "@/components/listing/FieldHelp";
 import {
   buildWorkspaceAutosaveSnapshot,
   clearWorkspaceAutosave,
@@ -106,6 +108,9 @@ const TONE_OPTIONS = [
 ] as const;
 
 const LENGTH_OPTIONS = ["精簡", "標準", "詳細"] as const;
+const DEFAULT_TONE = TONE_OPTIONS[0].value;
+const DEFAULT_COPY_LENGTH: (typeof LENGTH_OPTIONS)[number] = "標準";
+const DEFAULT_WEB_SEARCH = true;
 const MODEL_CYCLE: Array<"claude" | "openai"> = ["claude", "openai"];
 const MODEL_LABEL = {
   claude: "Claude",
@@ -178,8 +183,17 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [inventoryQuantity, setInventoryQuantity] = useState("");
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [inventoryNotice, setInventoryNotice] = useState("");
-  const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(TONE_OPTIONS[0].value);
-  const [copyLength, setCopyLength] = useState<(typeof LENGTH_OPTIONS)[number]>("標準");
+  const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(DEFAULT_TONE);
+  const [copyLength, setCopyLength] = useState<(typeof LENGTH_OPTIONS)[number]>(DEFAULT_COPY_LENGTH);
+  // B17: advanced sections collapsed by default; auto-open when content / non-default (incl. B13 restore)
+  const [aiSectionOpen, setAiSectionOpen] = useState(false);
+  const [variantSectionOpen, setVariantSectionOpen] = useState(false);
+  const [specSectionOpen, setSpecSectionOpen] = useState(false);
+  const [noteSectionOpen, setNoteSectionOpen] = useState(false);
+  const prevAiContentRef = useRef(false);
+  const prevVariantContentRef = useRef(false);
+  const prevSpecContentRef = useRef(false);
+  const prevNoteContentRef = useRef(false);
   const [manualPricingEnabled, setManualPricingEnabled] = useState(false);
   const [manualCompareAtPrice, setManualCompareAtPrice] = useState("");
   const [manualSellPrice, setManualSellPrice] = useState("");
@@ -190,7 +204,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [profitDriven, setProfitDriven] = useState(false);
   const [targetProfitInput, setTargetProfitInput] = useState("");
   // B8: default ON once Tavily backend is wired (老闆 2026-07-12); turn off when rushed.
-  const [useWebSearch, setUseWebSearch] = useState(true);
+  const [useWebSearch, setUseWebSearch] = useState(DEFAULT_WEB_SEARCH);
   // B8 D3-A: form model override is single-shot; after generate, fall back to header default.
   const [sessionProvider, setSessionProvider] = useState<"openai" | "claude" | null>(null);
   const [defaultProviderLabel, setDefaultProviderLabel] = useState<ModelLabel>("GPT");
@@ -233,6 +247,34 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     variants: [] as VariantFormRow[]
   });
   formSnapshotRef.current = { title, price, note, specText, variants };
+
+  // B17: auto-expand advanced sections when content appears (typing, screenshot fill, B13 restore).
+  // Only open on false→true so the operator can still collapse manually.
+  const aiHasContent =
+    tone !== DEFAULT_TONE ||
+    copyLength !== DEFAULT_COPY_LENGTH ||
+    useWebSearch !== DEFAULT_WEB_SEARCH ||
+    sessionProvider !== null;
+  const variantHasContent = variants.length > 0 || variantDimensions.length > 0;
+  const specHasContent = specText.trim().length > 0;
+  const noteHasContent = note.trim().length > 0;
+
+  useEffect(() => {
+    if (aiHasContent && !prevAiContentRef.current) setAiSectionOpen(true);
+    prevAiContentRef.current = aiHasContent;
+  }, [aiHasContent]);
+  useEffect(() => {
+    if (variantHasContent && !prevVariantContentRef.current) setVariantSectionOpen(true);
+    prevVariantContentRef.current = variantHasContent;
+  }, [variantHasContent]);
+  useEffect(() => {
+    if (specHasContent && !prevSpecContentRef.current) setSpecSectionOpen(true);
+    prevSpecContentRef.current = specHasContent;
+  }, [specHasContent]);
+  useEffect(() => {
+    if (noteHasContent && !prevNoteContentRef.current) setNoteSectionOpen(true);
+    prevNoteContentRef.current = noteHasContent;
+  }, [noteHasContent]);
 
   useEffect(() => {
     setPricingSettings(getStoredPricingSettings());
@@ -891,6 +933,13 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setDedupeDismissed(false);
     setFetchBoxOpen(false);
     setSpecShotOpen(false);
+    // B17: collapse advanced after light reset (tone/length/web kept → AI may stay open if non-default)
+    setVariantSectionOpen(false);
+    setSpecSectionOpen(false);
+    setNoteSectionOpen(false);
+    prevVariantContentRef.current = false;
+    prevSpecContentRef.current = false;
+    prevNoteContentRef.current = false;
     // priceMode 連續上架保留（跟來源／銷售狀態一樣是操作偏好）
     setFieldErrors({});
   }
@@ -930,6 +979,25 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setTargetProfitInput(fields.targetProfitInput);
     setVariantDimensions(fields.variantDimensions);
     setVariants(fields.variants as VariantFormRow[]);
+
+    // B17 req1: B13 restore must open sections that already have content (don't look like data lost).
+    const restoredAi =
+      (TONE_OPTIONS.some((t) => t.value === fields.tone) && fields.tone !== DEFAULT_TONE) ||
+      fields.copyLength !== DEFAULT_COPY_LENGTH ||
+      fields.useWebSearch !== DEFAULT_WEB_SEARCH;
+    const restoredVariants =
+      (fields.variants?.length ?? 0) > 0 || (fields.variantDimensions?.length ?? 0) > 0;
+    const restoredSpec = Boolean(fields.specText?.trim());
+    const restoredNote = Boolean(fields.note?.trim());
+    if (restoredAi) setAiSectionOpen(true);
+    if (restoredVariants) setVariantSectionOpen(true);
+    if (restoredSpec) setSpecSectionOpen(true);
+    if (restoredNote) setNoteSectionOpen(true);
+    // Align prev refs so effects don't fight manual collapse right after restore
+    prevAiContentRef.current = restoredAi;
+    prevVariantContentRef.current = restoredVariants;
+    prevSpecContentRef.current = restoredSpec;
+    prevNoteContentRef.current = restoredNote;
 
     if (fields.draftId) {
       draftIdRef.current = fields.draftId;
@@ -1564,134 +1632,186 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             ) : null}
           </div>
 
-          <div className="copy-settings-block">
-            <div className="copy-block-title"><span>✎</span> AI 文案設定</div>
-            <div className="field">
-              <label className="copy-style-label">
-                <span>AI 文案風格</span>
-                <span className="model-quick">
-                  <button className="mq-btn" onClick={cycleSessionModel} type="button">
-                    🤖 本次：{MODEL_LABEL[sessionProvider ?? readStoredAiProvider()]}
-                  </button>
-                  <span className="mq-note">預設 {defaultProviderLabel} · 生成後回預設</span>
-                </span>
-              </label>
-              <div className="tone-cards">
-                {TONE_OPTIONS.map((option) => (
+          <CollapsibleSection
+            className="adv-ai"
+            onToggle={() => setAiSectionOpen((v) => !v)}
+            open={aiSectionOpen}
+            summary={aiHasContent ? tone : undefined}
+            title="✎ AI 文案設定"
+          >
+            <div className="copy-settings-block adv-nested">
+              <div className="field">
+                <label className="copy-style-label">
+                  <span>AI 文案風格</span>
+                  <span className="model-quick">
+                    <button className="mq-btn" onClick={cycleSessionModel} type="button">
+                      🤖 本次：{MODEL_LABEL[sessionProvider ?? readStoredAiProvider()]}
+                    </button>
+                    <FieldHelp label="本次模型說明">
+                      預設用頂部全域模型（目前 {defaultProviderLabel}）。這裡只改「這一次」；生成後會自動回到預設。
+                    </FieldHelp>
+                  </span>
+                </label>
+                <div className="tone-cards">
+                  {TONE_OPTIONS.map((option) => (
+                    <button
+                      className={`tone-card${tone === option.value ? " active" : ""}`}
+                      key={option.value}
+                      onClick={() => setTone(option.value)}
+                      type="button"
+                    >
+                      <span className="tone-emoji">{option.emoji}</span>
+                      <span>
+                        <span className="tone-title">{option.value}</span>
+                        <span className="tone-desc">{option.desc}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="copy-len-row field">
+                <label style={{ margin: 0 }}>文案長度</label>
+                <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
+                  {LENGTH_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="wsearch-row">
+                <div className="wsearch-label">
+                  <span className="wsearch-label-row">
+                    🔍 Web Search 補充資訊
+                    <FieldHelp label="Web Search 說明">
+                      預設開啟（冷門 IP／規格更準）；趕時間可關。查來的內容會標來源提醒核實。
+                    </FieldHelp>
+                  </span>
+                </div>
+                <div className="toggle-wrap">
+                  <label className="toggle">
+                    <input
+                      checked={useWebSearch}
+                      onChange={(e) => setUseWebSearch(e.target.checked)}
+                      type="checkbox"
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                  <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "已關閉"}</span>
+                </div>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            className="adv-variant"
+            onToggle={() => setVariantSectionOpen((v) => !v)}
+            open={variantSectionOpen}
+            summary={
+              variants.length > 0
+                ? `已填 ${variants.length} 列`
+                : variantDimensions.length > 0
+                  ? `${variantDimensions.length} 個維度`
+                  : undefined
+            }
+            title="款式規格"
+          >
+            <VariantEditor
+              currency={costCurrency}
+              dimensions={variantDimensions}
+              footer={
+                <>
+                  {/* B3: 規格截圖入口（空表時可填簡單 1 維款式列） */}
                   <button
-                    className={`tone-card${tone === option.value ? " active" : ""}`}
-                    key={option.value}
-                    onClick={() => setTone(option.value)}
+                    className="spec-shot-toggle"
+                    disabled={recognizing}
+                    onClick={() => setSpecShotOpen((open) => !open)}
                     type="button"
                   >
-                    <span className="tone-emoji">{option.emoji}</span>
-                    <span>
-                      <span className="tone-title">{option.value}</span>
-                      <span className="tone-desc">{option.desc}</span>
-                    </span>
+                    📸 {specShotOpen ? "▾" : "▸"} 上傳規格截圖自動填入
                   </button>
-                ))}
-              </div>
-            </div>
-            <div className="copy-len-row field">
-              <label style={{ margin: 0 }}>文案長度</label>
-              <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
-                {LENGTH_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </div>
-            <div className="wsearch-row">
-              <div className="wsearch-label">
-                🔍 Web Search 補充資訊
-                <span>預設開啟（冷門 IP／規格更準）；趕時間可關。查來的內容會提醒核實</span>
-              </div>
-              <div className="toggle-wrap">
-                <label className="toggle">
-                  <input
-                    checked={useWebSearch}
-                    onChange={(e) => setUseWebSearch(e.target.checked)}
-                    type="checkbox"
-                  />
-                  <span className="toggle-slider" />
-                </label>
-                <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "已關閉"}</span>
-              </div>
-            </div>
-          </div>
-
-          <VariantEditor
-            currency={costCurrency}
-            dimensions={variantDimensions}
-            footer={
-              <>
-                {/* B3: 規格截圖入口（空表時可填簡單 1 維款式列） */}
-                <button
-                  className="spec-shot-toggle"
-                  disabled={recognizing}
-                  onClick={() => setSpecShotOpen((open) => !open)}
-                  type="button"
-                >
-                  📸 {specShotOpen ? "▾" : "▸"} 上傳規格截圖自動填入
-                </button>
-                <div className={`spec-shot-body${specShotOpen ? " open" : ""}`}>
-                  <div
-                    className="spec-shot-drop"
-                    onClick={() => !recognizing && specShotInputRef.current?.click()}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        if (!recognizing) specShotInputRef.current?.click();
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div>拖拉或點擊上傳規格截圖（最多 {MAX_SCREENSHOT_IMAGES} 張）</div>
-                    <div style={{ marginTop: 4, fontSize: 11 }}>與標題區截圖辨識同一引擎；只補空白欄</div>
-                  </div>
-                  <input
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => {
-                      if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "spec");
-                    }}
-                    ref={specShotInputRef}
-                    style={{ display: "none" }}
-                    type="file"
-                  />
-                  {specShotStatus ? (
-                    <div className={`b3-status ${specShotStatus.kind}`} style={{ marginTop: 8 }}>
-                      {specShotStatus.text}
+                  <div className={`spec-shot-body${specShotOpen ? " open" : ""}`}>
+                    <div
+                      className="spec-shot-drop"
+                      onClick={() => !recognizing && specShotInputRef.current?.click()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (!recognizing) specShotInputRef.current?.click();
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div>拖拉或點擊上傳規格截圖（最多 {MAX_SCREENSHOT_IMAGES} 張）</div>
                     </div>
-                  ) : null}
-                </div>
-              </>
-            }
-            images={variantImages}
-            onDimensionsChange={setVariantDimensions}
-            onRowsChange={setVariants}
-            onWarning={setVariantWarning}
-            priceMode={priceMode}
-            pricingSettings={pricingSettings}
-            rows={variants}
-            warning={variantWarning}
-          />
-
-          <div className="field">
-            <label>商品規格（選填，留空由系統自動整理）</label>
-            <textarea
-              onChange={(e) => setSpecText(e.target.value)}
-              placeholder="留空即可——系統會自動從款式／標題／圖片整理規格。也可用上方規格截圖自動填。"
-              rows={3}
-              value={specText}
+                    <input
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "spec");
+                      }}
+                      ref={specShotInputRef}
+                      style={{ display: "none" }}
+                      type="file"
+                    />
+                    {specShotStatus ? (
+                      <div className={`b3-status ${specShotStatus.kind}`} style={{ marginTop: 8 }}>
+                        {specShotStatus.text}
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              }
+              images={variantImages}
+              onDimensionsChange={setVariantDimensions}
+              onRowsChange={setVariants}
+              onWarning={setVariantWarning}
+              priceMode={priceMode}
+              pricingSettings={pricingSettings}
+              rows={variants}
+              warning={variantWarning}
             />
-          </div>
+          </CollapsibleSection>
 
-          <div className="field">
-            <label>補充備註（截圖辨識的特色會自動填入）</label>
-            <input onChange={(e) => setNote(e.target.value)} placeholder="例如：含底座、預購款、限定版..." value={note} />
-          </div>
+          <CollapsibleSection
+            className="adv-spec"
+            onToggle={() => setSpecSectionOpen((v) => !v)}
+            open={specSectionOpen}
+            summary={specHasContent ? "已填" : undefined}
+            title="商品規格"
+          >
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label-with-help">
+                <span>商品規格</span>
+                <FieldHelp label="商品規格說明">
+                  選填。留空時系統會從款式／標題／圖片自動整理；也可先用規格截圖填入。有手填內容時生成不會覆蓋。
+                </FieldHelp>
+              </label>
+              <textarea
+                onChange={(e) => setSpecText(e.target.value)}
+                placeholder="留空即可——系統會自動整理。例：材質／尺寸／包裝內容"
+                rows={3}
+                value={specText}
+              />
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            className="adv-note"
+            onToggle={() => setNoteSectionOpen((v) => !v)}
+            open={noteSectionOpen}
+            summary={noteHasContent ? "已填" : undefined}
+            title="補充備註"
+          >
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label-with-help">
+                <span>補充備註</span>
+                <FieldHelp label="備註說明">
+                  截圖辨識的特色會自動填入空白欄。可手寫含底座、預購、限定等補充給文案用。
+                </FieldHelp>
+              </label>
+              <input onChange={(e) => setNote(e.target.value)} placeholder="例如：含底座、預購款、限定版..." value={note} />
+            </div>
+          </CollapsibleSection>
 
           <button className="btn-add" disabled={submitting || imagesUploading} type="submit">
             {submitting ? "處理中..." : imagesUploading ? "圖片上傳中，請稍候…" : "建立商品並生成文案"}

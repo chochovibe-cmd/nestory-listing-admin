@@ -1551,6 +1551,139 @@ textarea {
   line-height: 1.45;
 }
 
+.wsearch-label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* B17: collapsible advanced sections + field ? help */
+.adv-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  margin: 4px 0;
+  overflow: visible;
+}
+.adv-section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.adv-section-toggle:hover {
+  color: var(--accent);
+}
+.adv-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.adv-section-summary {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.adv-section-body {
+  padding: 0 12px 12px;
+}
+.adv-section .copy-settings-block.adv-nested {
+  margin: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+.adv-section .variant-box {
+  margin: 0;
+}
+
+.label-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.field-help {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.field-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+.field-help-btn:hover,
+.field-help.open .field-help-btn {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.field-help-pop {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 90;
+  min-width: 200px;
+  max-width: min(320px, 80vw);
+  padding: 10px 12px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-m);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+@media (max-width: 959px) {
+  .field-help-btn {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .field-help-pop {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    max-width: none;
+    min-width: 0;
+  }
+}
+
 .toggle-wrap {
   display: flex;
   align-items: center;

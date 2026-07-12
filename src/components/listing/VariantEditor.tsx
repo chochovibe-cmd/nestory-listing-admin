@@ -547,9 +547,7 @@ export function VariantEditor({
       ) : null}
       {warning ? <div className="v-sync-warn">{warning}</div> : null}
 
-      <div className="v-foot-note">
-        成本跟上方同幣別；每列庫存預設無上限；SKU 有來源再填（進階略）
-      </div>
+      {/* B17: foot note moved off permanent chrome — see FieldHelp on parent if needed */}
 
       {footer}
     </div>

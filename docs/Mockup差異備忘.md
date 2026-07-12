@@ -193,10 +193,28 @@
 - **現況**：✅ **B11 已對齊（2026-07-12）**。`approveSummary.ts`＋`ApproveSummaryModal`；
   單件核准並發布／批次建草稿·上架掛摘要；純核准直跑；腳本 `verify-b11-approve-summary.mjs`。
 
+### 差異 12：B13 自動保存／連續上架／BX4 恢復條（相對 Mockup）
+
+- **差在哪**：
+  1. Mockup 生成鈕下常駐 `.gen-hint`「送出後保留來源…」；正式版 **D2-A** 不常駐 hint，
+     只靠生成成功 message「表單已清空，可直接填下一筆」（資訊密度）。
+  2. 恢復條是 **BX4**（Mockup 未畫完整），開頁偵測 localStorage；**約 X 分鐘前** 用真實
+     `savedAt`；**超過 7 天直接清掉**不跳條。
+  3. 丟棄 **D1-A** 軟封存（B12 API）＋盡力清圖，不硬刪 draft（authenticated 無 DELETE）。
+  4. 恢復時圖片預覽 **不** 自動載回（D3-A），有 draftId 則黃字提示伺服器已有圖。
+  5. 連續上架 light reset（保留來源／狀態／語氣／長度／WebSearch／priceMode）與 autosave
+     同規則清 localStorage，避免打架。
+- **為什麼**：單人作業、少字、對齊 B1 draftId 與 B12 封存能力。
+- **誰拍板**：老闆，2026-07-12（B13 設計 D1–D4 全 A＋三補要求）。
+- **現況**：✅ **B13＋BX4 已對齊（2026-07-12）**。`workspaceAutosave.ts`＋`WorkspaceInputPanel`；
+  腳本 `scripts/verify-b13-workspace-autosave.mjs`。fix(B12) 樂觀隱藏＋defer refresh 同 session。
+
 ---
 
 ## 修訂紀錄
 
+- 2026-07-12（Grok）：差異 12 **B13／BX4 定案並對齊**——autosave debounce、7 天過期、
+  恢復條 savedAt、丟棄軟封存、不常駐 gen-hint、連續上架清 storage。
 - 2026-07-12（Grok）：差異 9 **B12 階段 pills＋封存已對齊**——現有狀態詞彙 pills、軟刪除 archived、
   024 還原欄位、批次跳過進行中、已封存 quick 只留解除、已發布提示 Shopify 仍在。
 - 2026-07-12（Grok）：差異 11 **B11 定案**——摘要只掛 Shopify 不可逆入口（D1-B）；

@@ -685,6 +685,17 @@ textarea {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+/* B12: stage filter pills under batch toolbar (reuse .pill-group/.pill-btn tokens). */
+.stage-filter-pills {
+  margin: 8px 0 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.stage-filter-pills .pill-btn {
+  min-height: 36px;
+}
   cursor: pointer;
 }
 

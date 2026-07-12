@@ -1,4 +1,4 @@
-import { beautifyNestoryPrice } from "./nestoryPrice";
+import { beautifyNestoryPrice, nextBeautifiedPriceAbove } from "./nestoryPrice";
 
 export type CostCurrency = "CNY" | "TWD";
 
@@ -123,8 +123,14 @@ function formulaCompareAt(
   priceMode: PriceMode
 ): number | null {
   if (priceMode === "single") return null;
+  // 定價至少不低於「成本×定價加成」與售價；再美化。
+  // B6 補修：利潤驅動時售價可能追上定價 → 必須嚴格高於售價，跳下一階美化價。
   const rawCompareAtPrice = Math.max(costTwd * settings.compareAtMultiplier, sellPrice);
-  return Math.max(beautifyNestoryPrice(rawCompareAtPrice), sellPrice);
+  let compareAt = beautifyNestoryPrice(rawCompareAtPrice);
+  if (sellPrice > 0 && compareAt <= sellPrice) {
+    compareAt = nextBeautifiedPriceAbove(sellPrice);
+  }
+  return compareAt;
 }
 
 export function calculatePrice(

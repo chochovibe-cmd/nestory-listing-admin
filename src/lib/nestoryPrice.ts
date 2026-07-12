@@ -43,3 +43,18 @@ export function beautifyNestoryPrice(rawPrice: number): number {
 
   return nearestAtOrAbove(HIGH_TIER_PRICES, basePrice, 1000);
 }
+
+/**
+ * B6 補修：回傳「嚴格大於 price」的下一階美化價。
+ * 用於特價模式定價不能等於／低於售價（利潤驅動把售價拉高追上定價時）。
+ */
+export function nextBeautifiedPriceAbove(price: number): number {
+  if (!Number.isFinite(price) || price < 0) {
+    return beautifyNestoryPrice(1);
+  }
+  // beautify 是「≥ raw 的最近階」；對 floor(price)+1 取美化即可跳過目前這階。
+  const candidate = beautifyNestoryPrice(Math.floor(price) + 1);
+  if (candidate > price) return candidate;
+  // 理論上不該發生；再保險往上推一階。
+  return beautifyNestoryPrice(candidate + 1);
+}

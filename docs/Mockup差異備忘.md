@@ -100,12 +100,28 @@
   5. 款式多維度／規格彈窗完整表仍屬 **B7**；本包規格截圖只餵現有簡表＋`spec_text`。
 - **為什麼**：爬蟲屬後期基礎建設；暫存不建草稿減少 BX4 空草稿；2A 避免誤蓋手填。
 - **誰拍板**：老闆，2026-07-12（B3 設計 1A/2A/3A/4A＋三補要求）。
-- **現況**：✅ **B3 已對齊（2026-07-12）**。見施工清單 B3 與驗收步驟。
+- **現況**：✅ **B3 已對齊（2026-07-12）**。腳本補驗通過（見施工清單 B3 註記）。
+
+### 差異 6：B4 一鍵新增角色只寫 ip_characters（pending），不寫 tag_rules
+
+- **差在哪**：Mockup Tags 分頁文案寫「一鍵新增進規則庫（tag_rules＋ip_characters）」。
+  正式版**只寫 `ip_characters`**，並標 `review_status=pending`（migration 021）；
+  **不**插入 `tag_rules` 列。
+- **為什麼**：現行 shopify tags 權威是 Tags V2（`nestoryTagsV2`＋`ip_characters` 字典）；
+  `tag_rules` 角色 mapping 已被 V2 覆寫，再寫一列是死資料。重生時另過濾含 `tag_rules` 的
+  幽靈警告（與既有 error 過濾同精神），避免「V2 已修好但仍見 tag_rules 黃字」。
+  pending 審核 UI 屬 Phase C。
+- **誰拍板**：老闆，2026-07-12（B4 設計裁決 1A）。
+- **現況**：✅ **B4 已對齊（2026-07-12）**。API `POST /api/characters/quick-add`；
+  重複判斷先 NFKC＋trim；收合列 detect chips＋⚠；三維度查重寫入 `draft.warnings`。
+  migration 021 只產檔待老闆 SQL Editor 執行。
 
 ---
 
 ## 修訂紀錄
 
+- 2026-07-12（Grok）：差異 6 **B4 已對齊**——一鍵只寫 ip_characters（pending），不寫 tag_rules；
+  021 只產檔。
 - 2026-07-12（Grok）：差異 5 **B3 已對齊**；差異 4 補定價嚴格高於售價。
 - 2026-07-12（Grok）：差異 4 **B6 已對齊**——特價/單一、利潤 A 案、直填、卡片跟讀；
   migration 020 只產檔。

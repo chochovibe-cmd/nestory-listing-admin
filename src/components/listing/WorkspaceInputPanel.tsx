@@ -21,6 +21,12 @@ import {
   type StepStatus
 } from "@/components/listing/generationProgress";
 import { createClient } from "@/lib/supabase/client";
+import {
+  MAX_SCREENSHOT_IMAGES,
+  planScreenshotFill,
+  type RecognitionFields,
+  type ScreenshotMode
+} from "@/lib/screenshotRecognition";
 import type { SaleStatus } from "@/types/domain";
 
 const TONE_OPTIONS = [
@@ -34,6 +40,8 @@ const SOURCE_OPTIONS = ["淘寶", "閑魚", "蝦皮"] as const;
 
 type VariantRow = { name: string; sku: string; price: string; qty: string };
 type InventoryPolicy = "deny" | "continue";
+type B3Status = { kind: "info" | "ok" | "error"; text: string } | null;
+type DedupeHit = { id: string; title: string | null; status: string; createdAt: string };
 
 // B1: 生成四步驟進度卡. The panel (left) drives the card, DraftResultsPanel
 // (right) renders it, bridged by a window event (see generationProgress.ts) --
@@ -88,7 +96,14 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [profitDriven, setProfitDriven] = useState(false);
   const [targetProfitInput, setTargetProfitInput] = useState("");
   const [useWebSearch, setUseWebSearch] = useState(false);
-  const [taobaoUrlOpen, setTaobaoUrlOpen] = useState(false);
+  // B3: 網址抓取入口（誠實停用）＋截圖辨識＋網址查重
+  const [fetchBoxOpen, setFetchBoxOpen] = useState(false);
+  const [specShotOpen, setSpecShotOpen] = useState(false);
+  const [b3Status, setB3Status] = useState<B3Status>(null);
+  const [specShotStatus, setSpecShotStatus] = useState<B3Status>(null);
+  const [recognizing, setRecognizing] = useState(false);
+  const [dedupeHits, setDedupeHits] = useState<DedupeHit[]>([]);
+  const [dedupeDismissed, setDedupeDismissed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pricingSettings, setPricingSettings] = useState<PricingSettings>(defaultPricingSettings);
   const [message, setMessage] = useState("");
@@ -97,6 +112,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const priceRef = useRef<HTMLInputElement>(null);
   const inventoryRef = useRef<HTMLInputElement>(null);
+  const productShotInputRef = useRef<HTMLInputElement>(null);
+  const specShotInputRef = useRef<HTMLInputElement>(null);
+  // 2A 填空時用最新表單值（避免閉包過期）
+  const formSnapshotRef = useRef({ title: "", price: "", note: "", specText: "", variants: [] as VariantRow[] });
+  formSnapshotRef.current = { title, price, note, specText, variants };
 
   useEffect(() => {
     setPricingSettings(getStoredPricingSettings());
@@ -224,6 +244,184 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     if (nextStatus === "台灣現貨" || nextStatus === "二手現貨") {
       setInventoryOpen(true);
       setInventoryNotice("已切換為現貨類型，請確認庫存；預設仍是無上限。");
+    }
+  }
+
+  // B3: 網址查重（A12）；只比 URL，不擋送出。
+  async function runUrlDedupe(url: string) {
+    const trimmed = url.trim();
+    if (!trimmed || !/^https?:\/\//i.test(trimmed)) {
+      setDedupeHits([]);
+      return;
+    }
+    try {
+      const response = await fetch("/api/drafts/check-duplicate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceUrl: trimmed,
+          excludeDraftId: draftIdRef.current
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setDedupeHits([]);
+        return;
+      }
+      const matches = Array.isArray(payload.urlMatches) ? payload.urlMatches : [];
+      setDedupeHits(
+        matches.slice(0, 5).map((row: { id: string; title?: string | null; status?: string; createdAt?: string }) => ({
+          id: row.id,
+          title: row.title ?? null,
+          status: row.status ?? "",
+          createdAt: row.createdAt ?? ""
+        }))
+      );
+      setDedupeDismissed(false);
+    } catch {
+      setDedupeHits([]);
+    }
+  }
+
+  function handleSourceUrlChange(value: string) {
+    setTaobaoUrl(value);
+    setDedupeDismissed(false);
+  }
+
+  function handleFetchClick() {
+    // 誠實停用：爬蟲屬後期 Phase；仍保留網址並跑查重。
+    const url = taobaoUrl.trim();
+    if (!url) {
+      setB3Status({ kind: "error", text: "請先貼上商品網址。" });
+      return;
+    }
+    setB3Status({
+      kind: "info",
+      text: "網址抓取尚未啟用（爬蟲後期才接）。網址已保留供查重／日後使用；請改用「上傳截圖自動辨識」或手動貼標題。"
+    });
+    void runUrlDedupe(url);
+  }
+
+  /** 暫存截圖 → 公開 URL；路徑 {userId}/temp-screenshots/{uuid}.ext（4A 不建草稿） */
+  async function uploadTempScreenshots(files: File[]): Promise<{ urls: string[]; paths: string[] }> {
+    const urls: string[] = [];
+    const paths: string[] = [];
+    for (const file of files.slice(0, MAX_SCREENSHOT_IMAGES)) {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${userId}/temp-screenshots/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("product-images").upload(path, file, {
+        contentType: file.type || "image/jpeg",
+        upsert: false
+      });
+      if (error) {
+        throw new Error(`截圖上傳失敗：${error.message}`);
+      }
+      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+      urls.push(data.publicUrl);
+      paths.push(path);
+    }
+    return { urls, paths };
+  }
+
+  async function removeTempScreenshots(paths: string[]) {
+    if (paths.length === 0) return;
+    try {
+      await supabase.storage.from("product-images").remove(paths);
+    } catch {
+      // 刪失敗不擋流程、不報錯
+    }
+  }
+
+  function applyFillPlan(
+    plan: ReturnType<typeof planScreenshotFill>,
+    setStatus: (s: B3Status) => void
+  ) {
+    if (plan.title) {
+      setTitle(plan.title);
+      setFieldErrors((current) => ({ ...current, title: false }));
+    }
+    if (plan.costCny != null && plan.costCny > 0) {
+      setProfitDriven(false);
+      setCostCurrency("CNY");
+      setPrice(String(plan.costCny));
+      setFieldErrors((current) => ({ ...current, price: false }));
+    }
+    if (plan.note) setNote(plan.note);
+    if (plan.specText) setSpecText(plan.specText);
+    if (plan.variants) setVariants(plan.variants);
+
+    const tone = plan.filledLines.length > 0 ? "ok" : "info";
+    setStatus({ kind: tone, text: plan.summary });
+  }
+
+  async function runScreenshotRecognition(files: FileList | File[], mode: ScreenshotMode) {
+    const setStatus = mode === "spec" ? setSpecShotStatus : setB3Status;
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (list.length === 0) {
+      setStatus({ kind: "error", text: "請選擇圖片檔（截圖）。手動填寫路徑仍可用。" });
+      return;
+    }
+    if (list.length > MAX_SCREENSHOT_IMAGES) {
+      setStatus({
+        kind: "info",
+        text: `一次最多 ${MAX_SCREENSHOT_IMAGES} 張，已取前 ${MAX_SCREENSHOT_IMAGES} 張。`
+      });
+    }
+
+    setRecognizing(true);
+    setStatus({ kind: "info", text: "辨識中…請稍候（可同時繼續手填其他欄位）" });
+
+    let paths: string[] = [];
+    try {
+      const uploaded = await uploadTempScreenshots(list);
+      paths = uploaded.paths;
+
+      const response = await fetch("/api/recognize-screenshots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrls: uploaded.urls, mode })
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setStatus({
+          kind: "error",
+          text: `${payload.error ?? "截圖辨識失敗"}。表單仍可手動填寫。`
+        });
+        return;
+      }
+
+      const fields = (payload.fields ?? {}) as RecognitionFields;
+      const snap = formSnapshotRef.current;
+      const plan = planScreenshotFill(
+        {
+          title: snap.title,
+          price: snap.price,
+          note: snap.note,
+          specText: snap.specText,
+          variants: snap.variants
+        },
+        {
+          title: fields.title ?? null,
+          costCny: fields.costCny ?? null,
+          features: fields.features ?? null,
+          specText: fields.specText ?? null,
+          variants: Array.isArray(fields.variants) ? fields.variants : []
+        },
+        mode
+      );
+      applyFillPlan(plan, setStatus);
+    } catch (error) {
+      setStatus({
+        kind: "error",
+        text: `${error instanceof Error ? error.message : "截圖辨識連線失敗"}。表單仍可手動填寫。`
+      });
+    } finally {
+      // 成功或失敗都嘗試清暫存（失敗靜默）
+      await removeTempScreenshots(paths);
+      setRecognizing(false);
+      if (mode === "product" && productShotInputRef.current) productShotInputRef.current.value = "";
+      if (mode === "spec" && specShotInputRef.current) specShotInputRef.current.value = "";
     }
   }
 
@@ -420,6 +618,12 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setManualSellPrice("");
     setProfitDriven(false);
     setTargetProfitInput("");
+    setB3Status(null);
+    setSpecShotStatus(null);
+    setDedupeHits([]);
+    setDedupeDismissed(false);
+    setFetchBoxOpen(false);
+    setSpecShotOpen(false);
     // priceMode 連續上架保留（跟來源／銷售狀態一樣是操作偏好）
     setFieldErrors({});
   }
@@ -541,17 +745,6 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       </div>
       <div className="panel-body">
         <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
-          <div>
-            <button className="settings-toggle" onClick={() => setTaobaoUrlOpen((v) => !v)} type="button">
-              <span>🔗 淘寶連結（選填，爬蟲尚未啟用）</span><span>{taobaoUrlOpen ? "▴" : "▾"}</span>
-            </button>
-            {taobaoUrlOpen ? (
-              <div style={{ marginTop: 8 }}>
-                <input onChange={(e) => setTaobaoUrl(e.target.value)} placeholder="https://..." value={taobaoUrl} />
-              </div>
-            ) : null}
-          </div>
-
           <div className={`field${fieldErrors.title ? " error" : ""}`}>
             <div className="source-inline">
               <label>原始商品標題</label>
@@ -578,12 +771,78 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             </div>
             <textarea
               onChange={(e) => { setTitle(e.target.value); setFieldErrors((current) => ({ ...current, title: false })); }}
-              placeholder="貼上來源商品標題，AI 會整理成 Shopify 商品標題..."
+              placeholder="貼上來源商品標題（也可用下方網址／截圖自動填入）..."
               ref={titleRef}
               rows={2}
               value={title}
             />
             {fieldErrors.title ? <div className="field-msg">請輸入商品標題</div> : null}
+
+            {/* B3: Mockup 標題區 helper — 網址抓取（誠實停用）＋截圖辨識 */}
+            <div className="helper-links">
+              <button
+                className="helper-link"
+                disabled={recognizing}
+                onClick={() => setFetchBoxOpen((open) => !open)}
+                type="button"
+              >
+                🔗 貼商品網址自動抓取（淘寶／蝦皮／官網）{fetchBoxOpen ? " ▴" : ""}
+              </button>
+              <button
+                className="helper-link"
+                disabled={recognizing}
+                onClick={() => productShotInputRef.current?.click()}
+                type="button"
+              >
+                📷 上傳截圖自動辨識（可多張，最多 {MAX_SCREENSHOT_IMAGES} 張）
+              </button>
+              <input
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "product");
+                }}
+                ref={productShotInputRef}
+                style={{ display: "none" }}
+                type="file"
+              />
+            </div>
+            <div className={`fetch-box${fetchBoxOpen ? " open" : ""}`}>
+              <input
+                onBlur={() => void runUrlDedupe(taobaoUrl)}
+                onChange={(e) => handleSourceUrlChange(e.target.value)}
+                placeholder="貼上商品網址..."
+                type="url"
+                value={taobaoUrl}
+              />
+              <button className="btn-mini" disabled={recognizing} onClick={handleFetchClick} type="button">
+                自動抓取
+              </button>
+            </div>
+            {b3Status ? <div className={`b3-status ${b3Status.kind}`}>{b3Status.text}</div> : null}
+            {dedupeHits.length > 0 && !dedupeDismissed ? (
+              <div className="dedupe-alert" role="status">
+                <div className="dd-body">
+                  <div className="dedupe-title">⚠ 這個網址可能已上架過</div>
+                  <div className="dedupe-meta">
+                    {dedupeHits.map((hit) => (
+                      <div key={hit.id}>
+                        「{hit.title || "（無標題）"}」· {hit.status || "—"}
+                        {hit.createdAt
+                          ? ` · ${new Date(hit.createdAt).toLocaleDateString("zh-TW")}`
+                          : ""}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="dedupe-actions">
+                    <button className="btn-mini" onClick={() => setDedupeDismissed(true)} type="button">
+                      知道了，繼續
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="stock-line">
               <span>庫存：{inventoryUnlimited ? "無上限" : `${inventoryQuantity || 0} 件（賣完即止）`}</span>
               <button onClick={() => setInventoryOpen((current) => !current)} type="button">
@@ -850,20 +1109,61 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 </div>
               ))
             )}
+            {/* B3: 規格截圖入口（1A：規格欄＋空表時可填簡單款式列） */}
+            <button
+              className="spec-shot-toggle"
+              disabled={recognizing}
+              onClick={() => setSpecShotOpen((open) => !open)}
+              type="button"
+            >
+              📸 {specShotOpen ? "▾" : "▸"} 上傳規格截圖自動填入
+            </button>
+            <div className={`spec-shot-body${specShotOpen ? " open" : ""}`}>
+              <div
+                className="spec-shot-drop"
+                onClick={() => !recognizing && specShotInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (!recognizing) specShotInputRef.current?.click();
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <div>拖拉或點擊上傳規格截圖（最多 {MAX_SCREENSHOT_IMAGES} 張）</div>
+                <div style={{ marginTop: 4, fontSize: 11 }}>與標題區截圖辨識同一引擎；只補空白欄</div>
+              </div>
+              <input
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "spec");
+                }}
+                ref={specShotInputRef}
+                style={{ display: "none" }}
+                type="file"
+              />
+              {specShotStatus ? (
+                <div className={`b3-status ${specShotStatus.kind}`} style={{ marginTop: 8 }}>
+                  {specShotStatus.text}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="field">
             <label>商品規格（選填，留空由系統自動整理）</label>
             <textarea
               onChange={(e) => setSpecText(e.target.value)}
-              placeholder="留空即可——系統會自動從款式／標題／圖片整理規格。只在需要補充或修正時才填（一行一項）。"
+              placeholder="留空即可——系統會自動從款式／標題／圖片整理規格。也可用上方規格截圖自動填。"
               rows={3}
               value={specText}
             />
           </div>
 
           <div className="field">
-            <label>補充備註</label>
+            <label>補充備註（截圖辨識的特色會自動填入）</label>
             <input onChange={(e) => setNote(e.target.value)} placeholder="例如：含底座、預購款、限定版..." value={note} />
           </div>
 

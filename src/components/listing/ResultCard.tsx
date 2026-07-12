@@ -44,6 +44,12 @@ import {
   primaryConfirmLabel,
   type FieldVersionInput,
 } from "@/lib/drafts/approveSummary";
+import {
+  formatArchiveResultMessage,
+  formatUnarchiveResultMessage,
+  isArchiveBusyStatus,
+  isPublishedArchiveStatus
+} from "@/lib/drafts/archiveDrafts";
 import { ApproveSummaryModal } from "@/components/listing/ApproveSummaryModal";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
@@ -218,6 +224,8 @@ export function ResultCard({
   const [approveSummaryOpen, setApproveSummaryOpen] = useState(false);
   const [approveSummaryBusy, setApproveSummaryBusy] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [lastArchiveIds, setLastArchiveIds] = useState<string[] | null>(null);
   const [quickAddingCharacter, setQuickAddingCharacter] = useState<string | null>(null);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
   const [descriptionView, setDescriptionView] = useState<"preview" | "source">("preview");
@@ -245,7 +253,9 @@ export function ResultCard({
   const warnCount = draft.warnings?.length ?? 0;
   const detectTypeLabel = draft.product_type || draft.detected_category || "";
   const thumbUrl = mainThumbUrl(imageMarks);
+  const isArchived = draft.status === "archived";
   const canQuickApprove =
+    !isArchived &&
     draft.generation_status !== "processing" &&
     draft.generation_status !== "failed" &&
     draft.status !== "failed" &&
@@ -253,6 +263,63 @@ export function ResultCard({
 
   // B9: collapsed-visible notice — never silent-fail on quick actions.
   const collapsedNotice = markMessage || message;
+
+  async function archiveOne() {
+    if (isArchived || archiveBusy) return;
+    if (isArchiveBusyStatus(draft.status)) {
+      setMarkMessage("生成中／上架中，請稍後再封存");
+      return;
+    }
+    setArchiveBusy(true);
+    setMarkMessage("封存中…");
+    const response = await fetch("/api/drafts/batch/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftIds: [draft.id], action: "archive" })
+    });
+    const payload = await response.json().catch(() => ({}));
+    setArchiveBusy(false);
+    if (!response.ok) {
+      setMarkMessage(payload.error ?? "封存失敗");
+      return;
+    }
+    const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
+    setLastArchiveIds(archivedIds.length ? archivedIds : null);
+    const msg =
+      typeof payload.message === "string"
+        ? payload.message
+        : formatArchiveResultMessage({
+            archivedCount: payload.archivedCount ?? 0,
+            skippedBusyCount: payload.skippedBusyCount ?? 0,
+            includesPublished: isPublishedArchiveStatus(draft.status)
+          });
+    setMarkMessage(msg);
+    router.refresh();
+  }
+
+  async function unarchiveOne(ids?: string[]) {
+    const targetIds = ids?.length ? ids : [draft.id];
+    setArchiveBusy(true);
+    setMarkMessage("解除封存中…");
+    const response = await fetch("/api/drafts/batch/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftIds: targetIds, action: "unarchive" })
+    });
+    const payload = await response.json().catch(() => ({}));
+    setArchiveBusy(false);
+    if (!response.ok) {
+      setMarkMessage(payload.error ?? "解除封存失敗");
+      return;
+    }
+    setLastArchiveIds(null);
+    setMarkMessage(
+      typeof payload.message === "string"
+        ? payload.message
+        : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? targetIds.length })
+    );
+    router.refresh();
+  }
 
   const displayByField = useMemo((): Record<CopyVersionField, string> => ({
     enriched_title: title,
@@ -912,26 +979,49 @@ export function ResultCard({
             ) : null}
           </div>
         ) : null}
-        {/* B9: quick actions — stopPropagation so row does not toggle */}
+        {/* B9 quick actions; B12: archived view hides ✓/▶ — only 解除封存 */}
         <span className="rc-quick" onClick={(event) => event.stopPropagation()}>
-          <button
-            className="mini-btn rc-quick-btn"
-            disabled={quickBusy || regenerating || regeneratingField != null || !canQuickApprove}
-            onClick={() => void approveOnly()}
-            title="只核准文案，不會發布到 Shopify"
-            type="button"
-          >
-            {quickBusy ? "…" : "✓ 核准"}
-          </button>
-          <button
-            className="mini-btn rc-quick-btn"
-            disabled={quickBusy || regenerating || regeneratingField != null}
-            onClick={sendImages}
-            title="送圖；未標記會擋下並列出哪幾張"
-            type="button"
-          >
-            ▶ 送圖
-          </button>
+          {isArchived ? (
+            <button
+              className="mini-btn rc-quick-btn"
+              disabled={archiveBusy}
+              onClick={() => void unarchiveOne()}
+              title="解除封存，回到列表預設篩選可見"
+              type="button"
+            >
+              {archiveBusy ? "…" : "解除封存"}
+            </button>
+          ) : (
+            <>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={quickBusy || regenerating || regeneratingField != null || !canQuickApprove}
+                onClick={() => void approveOnly()}
+                title="只核准文案，不會發布到 Shopify"
+                type="button"
+              >
+                {quickBusy ? "…" : "✓ 核准"}
+              </button>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={quickBusy || regenerating || regeneratingField != null}
+                onClick={sendImages}
+                title="送圖；未標記會擋下並列出哪幾張"
+                type="button"
+              >
+                ▶ 送圖
+              </button>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={archiveBusy || quickBusy || regenerating || regeneratingField != null}
+                onClick={() => void archiveOne()}
+                title="軟刪除：從預設列表隱藏，可從「已封存」找回"
+                type="button"
+              >
+                {archiveBusy ? "…" : "🗄 封存"}
+              </button>
+            </>
+          )}
         </span>
         <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
       </div>
@@ -947,7 +1037,7 @@ export function ResultCard({
         ) : null}
       </div>
 
-      {/* B9 req2: collapsed-visible notice for quick-action block/fail */}
+      {/* B9 req2: collapsed-visible notice for quick-action block/fail; B12 low-cost undo */}
       {collapsedNotice ? (
         <div
           className={
@@ -959,7 +1049,18 @@ export function ResultCard({
           }
           role="status"
         >
-          {collapsedNotice}
+          <span>{collapsedNotice}</span>
+          {lastArchiveIds && lastArchiveIds.length > 0 ? (
+            <button
+              className="mini-btn"
+              disabled={archiveBusy}
+              onClick={() => void unarchiveOne(lastArchiveIds)}
+              style={{ marginLeft: 8 }}
+              type="button"
+            >
+              解除封存
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -1472,19 +1573,30 @@ export function ResultCard({
               </button>
             </span>
             <span className="rc-actions-group rc-actions-group-review">
-              <button onClick={() => void requestRevision()} type="button">退回修改</button>
-              <button onClick={sendImages} type="button">
-                ▶ 送圖
-              </button>
-              <button
-                className={publishMode === "active" ? "danger" : ""}
-                disabled={approveSummaryBusy || comboSaving}
-                onClick={openApproveAndPublishSummary}
-                type="button"
-              >
-                ✓ 核准並發布
-              </button>
-              <button onClick={() => void exportCsv()} type="button">產生 CSV</button>
+              {isArchived ? (
+                <button disabled={archiveBusy} onClick={() => void unarchiveOne()} type="button">
+                  {archiveBusy ? "處理中…" : "解除封存"}
+                </button>
+              ) : (
+                <>
+                  <button onClick={() => void requestRevision()} type="button">退回修改</button>
+                  <button onClick={sendImages} type="button">
+                    ▶ 送圖
+                  </button>
+                  <button
+                    className={publishMode === "active" ? "danger" : ""}
+                    disabled={approveSummaryBusy || comboSaving}
+                    onClick={openApproveAndPublishSummary}
+                    type="button"
+                  >
+                    ✓ 核准並發布
+                  </button>
+                  <button disabled={archiveBusy} onClick={() => void archiveOne()} type="button">
+                    🗄 封存
+                  </button>
+                  <button onClick={() => void exportCsv()} type="button">產生 CSV</button>
+                </>
+              )}
             </span>
           </div>
         </div>

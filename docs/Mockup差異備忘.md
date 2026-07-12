@@ -153,10 +153,26 @@
 - **現況**：✅ **B9 已對齊（2026-07-12）**。`ResultCard` 四頁底線分頁；收合列快速核准／送圖；
   批次工具列 sticky＋排序器（sessionStorage）；腳本 `scripts/verify-b9-result-card.mjs`。
 
+### 差異 10：B10 版本列／儲存語意相對 Mockup
+
+- **差在哪**：
+  1. Mockup 有獨立「✅ 確認儲存此版本組合」；正式版**兩者都保留**，且底部「儲存修改」
+     若文案有變更會**一併定案組合**（黃字「已一併定案文案組合」告知，不擋操作）——
+     單人作業下任一儲存鈕都應把畫面現狀存好。
+  2. 歷史為空時**不**在展開卡片時寫 seed 列進 `generation_history`；UI 以虛擬
+     「版本 1/1（目前值）」顯示 DB 現值，第一次 ↺ 或手改定案才把原值補寫為 baseline。
+  3. SEO 標題／Meta 與其他 5 欄一視同仁都有 version-nav＋↺（併在文案分頁，見差異 9）。
+- **為什麼**：避免「只按儲存修改、組合沒入庫」；避免看一眼就寫庫；與 A7 七欄契約對齊。
+- **誰拍板**：老闆，2026-07-12（B10 設計 D1–D7 ＋ D2／D6 微調）。
+- **現況**：✅ **B10 已對齊（2026-07-12）**。`copyVersionHistory.ts`＋ResultCard version-nav；
+  無 migration 024；腳本 `scripts/verify-b10-version-history.mjs`。
+
 ---
 
 ## 修訂紀錄
 
+- 2026-07-12（Grok）：差異 10 **B10 已對齊**——版本列 7 欄、虛擬 v1、儲存修改一併定案、
+  單欄 ↺／組合儲存；無 migration。
 - 2026-07-12（Grok）：差異 9 **B9 已對齊**——卡片 4 分頁（SEO 併文案）、階段 pills 歸 B12；
   快速鈕擋送圖收合可見 notice；排序 sessionStorage。
 - 2026-07-12（Grok）：差異 8 **B8/B19 已對齊**——Web Search 預設開＋Tavily＋draft 快取＋規格證據池 v2＋

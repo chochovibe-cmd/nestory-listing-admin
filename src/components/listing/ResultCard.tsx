@@ -38,6 +38,13 @@ import {
   type CopyVersionField,
   versionLabel,
 } from "@/lib/drafts/copyVersionHistory";
+import {
+  buildSingleApproveSummary,
+  modalHeading,
+  primaryConfirmLabel,
+  type FieldVersionInput,
+} from "@/lib/drafts/approveSummary";
+import { ApproveSummaryModal } from "@/components/listing/ApproveSummaryModal";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -207,6 +214,9 @@ export function ResultCard({
   const [regenerating, setRegenerating] = useState(false);
   const [regeneratingField, setRegeneratingField] = useState<CopyVersionField | null>(null);
   const [comboSaving, setComboSaving] = useState(false);
+  // B11 D1-B: summary only for Shopify-affecting「核准並發布」(not pure ✓)
+  const [approveSummaryOpen, setApproveSummaryOpen] = useState(false);
+  const [approveSummaryBusy, setApproveSummaryBusy] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickAddingCharacter, setQuickAddingCharacter] = useState<string | null>(null);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
@@ -670,36 +680,72 @@ export function ResultCard({
     }
   }
 
-  // Approve and publish are merged into one click -- same person does both
-  // steps in practice, so there's no value in a separate confirm-then-publish
-  // round trip. Still two API calls under the hood (approve's audit trail in
-  // review_logs stays intact), just fired back to back.
-  async function approveAndPublish() {
-    if (publishMode === "active") {
-      if (!window.confirm("即將核准並建立 Shopify ACTIVE 商品，確定發布？")) return;
-    }
+  /** B11: on-screen dirty (D3-B) — same signals as B10 save path. */
+  function hasUncommittedCopy(): boolean {
+    return anyCopyDirty(copyDirty) || copyDisplayDiffersFromDb(displayByField, dbSnapshot);
+  }
 
-    setMessage("核准中...");
-    const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
+  function buildFieldVersionInputs(): FieldVersionInput[] {
+    return COPY_VERSION_FIELDS.map((field) => {
+      const versions = versionsByField[field];
+      const total = versions.length;
+      const idx = total === 0 ? 0 : Math.min(versionIndex[field] ?? 0, total - 1);
+      return {
+        field,
+        versionNumber: total === 0 ? 1 : idx + 1,
+        total: total === 0 && (displayByField[field] ?? "").trim() ? 1 : total,
+      };
     });
-    if (!approveResponse.ok) {
-      const payload = await approveResponse.json().catch(() => ({}));
-      setMessage(payload.error ?? "核准失敗");
-      return;
-    }
+  }
 
-    setMessage("發布中...");
-    const publishResponse = await fetch(`/api/drafts/${draft.id}/publish`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publishMode, confirmActive: publishMode === "active" })
-    });
-    const payload = await publishResponse.json();
-    setMessage(publishResponse.ok ? "已核准並發布" : payload.error ?? "發布失敗");
-    router.refresh();
+  // B11 D1-B: open summary for Shopify path only (replaces window.confirm — D2-A).
+  function openApproveAndPublishSummary() {
+    setApproveSummaryOpen(true);
+  }
+
+  /**
+   * Approve and publish after summary confirm.
+   * D3-B: if dirty, commit via B10 commitCopyCombination first (所見即所核).
+   */
+  async function confirmApproveAndPublishFromSummary() {
+    setApproveSummaryBusy(true);
+    try {
+      if (hasUncommittedCopy()) {
+        setMessage("定案文案組合中…");
+        const combo = await commitCopyCombination();
+        if (!combo.ok) {
+          setMessage(combo.error ?? "文案組合定案失敗，已取消發布");
+          return;
+        }
+      }
+
+      setApproveSummaryOpen(false);
+      setMessage("核准中...");
+      const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!approveResponse.ok) {
+        const payload = await approveResponse.json().catch(() => ({}));
+        setMessage(payload.error ?? "核准失敗");
+        return;
+      }
+
+      setMessage("發布中...");
+      const publishResponse = await fetch(`/api/drafts/${draft.id}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publishMode, confirmActive: publishMode === "active" }),
+      });
+      const payload = await publishResponse.json();
+      setMessage(publishResponse.ok ? "已核准並發布" : payload.error ?? "發布失敗");
+      router.refresh();
+    } catch {
+      setMessage("核准／發布連線失敗");
+    } finally {
+      setApproveSummaryBusy(false);
+    }
   }
 
   async function removeImage(image: ProductImage) {
@@ -1430,7 +1476,12 @@ export function ResultCard({
               <button onClick={sendImages} type="button">
                 ▶ 送圖
               </button>
-              <button className={publishMode === "active" ? "danger" : ""} onClick={() => void approveAndPublish()} type="button">
+              <button
+                className={publishMode === "active" ? "danger" : ""}
+                disabled={approveSummaryBusy || comboSaving}
+                onClick={openApproveAndPublishSummary}
+                type="button"
+              >
                 ✓ 核准並發布
               </button>
               <button onClick={() => void exportCsv()} type="button">產生 CSV</button>
@@ -1438,6 +1489,32 @@ export function ResultCard({
           </div>
         </div>
       ) : null}
+
+      {/* B11 D1-B: Shopify 不可逆入口才開摘要；純 ✓ 核准不掛 */}
+      {(() => {
+        const dirty = hasUncommittedCopy();
+        const summary = buildSingleApproveSummary({
+          fieldVersions: buildFieldVersionInputs(),
+          images: imageMarks,
+          warnings: draft.warnings,
+          hasDirtyCopy: dirty,
+        });
+        const mode = publishMode === "active" ? "active" : "draft";
+        return (
+          <ApproveSummaryModal
+            busy={approveSummaryBusy}
+            heading={modalHeading({})}
+            onCancel={() => {
+              if (!approveSummaryBusy) setApproveSummaryOpen(false);
+            }}
+            onConfirm={() => void confirmApproveAndPublishFromSummary()}
+            open={approveSummaryOpen}
+            primaryDanger={mode === "active"}
+            primaryLabel={primaryConfirmLabel({ publishMode: mode, hasDirtyCopy: dirty })}
+            rows={summary.rows}
+          />
+        );
+      })()}
     </div>
   );
 }

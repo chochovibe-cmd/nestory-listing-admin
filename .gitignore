@@ -11,3 +11,6 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+
+# boss local test screenshots (B3/B4 acceptance) - never commit
+淘寶截圖測試照片/

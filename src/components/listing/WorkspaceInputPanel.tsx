@@ -35,6 +35,15 @@ import {
   type VariantFormRow
 } from "@/lib/variants";
 import { VariantEditor, repriceVariants } from "@/components/listing/VariantEditor";
+import {
+  buildWorkspaceAutosaveSnapshot,
+  clearWorkspaceAutosave,
+  formatAutosaveAgeLabel,
+  loadWorkspaceAutosave,
+  writeWorkspaceAutosave,
+  type WorkspaceAutosaveSnapshot
+} from "@/lib/drafts/workspaceAutosave";
+import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 
 /** B7: insert-first overwrite so a failed insert never leaves variants empty. */
 async function persistProductVariants(
@@ -118,6 +127,20 @@ function emitProgress(model: GenerationProgress) {
   window.dispatchEvent(new CustomEvent<GenerationProgress>(GENERATION_PROGRESS_EVENT, { detail: model }));
 }
 
+/** Extract Storage object path from a Supabase public URL (bucket product-images). */
+function storagePathFromPublicUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = "/product-images/";
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  const rest = url.slice(idx + marker.length).split("?")[0];
+  try {
+    return decodeURIComponent(rest);
+  } catch {
+    return rest || null;
+  }
+}
+
 export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const router = useRouter();
   const supabase = createClient();
@@ -182,6 +205,12 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<{ title?: boolean; price?: boolean; inventory?: boolean }>({});
+  // B13 / BX4: restore bar when localStorage has an unsent form snapshot.
+  const [restorePrompt, setRestorePrompt] = useState<WorkspaceAutosaveSnapshot | null>(null);
+  const [serverImageHint, setServerImageHint] = useState<string | null>(null);
+  const [discardBusy, setDiscardBusy] = useState(false);
+  /** Skip debounce write until restore bar is resolved (avoid clobbering snapshot with empty form). */
+  const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const priceRef = useRef<HTMLInputElement>(null);
   const inventoryRef = useRef<HTMLInputElement>(null);
@@ -215,6 +244,83 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   useEffect(() => {
     setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
   }, []);
+
+  // B13 / BX4: detect unsent local snapshot on mount (7d+ expired → cleared, no bar).
+  useEffect(() => {
+    const storage = typeof window !== "undefined" ? window.localStorage : null;
+    const result = loadWorkspaceAutosave(storage);
+    if (result.kind === "ready") {
+      setRestorePrompt(result.snapshot);
+      setAutosaveEnabled(false);
+    } else {
+      setAutosaveEnabled(true);
+    }
+  }, []);
+
+  // B13: debounce form → localStorage (~500ms).
+  // Known limit documented in workspaceAutosave.ts: multi-tab last-write-wins.
+  useEffect(() => {
+    if (!autosaveEnabled || restorePrompt || submitting) return;
+    const storage = typeof window !== "undefined" ? window.localStorage : null;
+    const timer = window.setTimeout(() => {
+      writeWorkspaceAutosave(
+        storage,
+        buildWorkspaceAutosaveSnapshot({
+          draftId: draftIdRef.current,
+          title,
+          source,
+          price,
+          costCurrency,
+          taobaoUrl,
+          note,
+          specText,
+          saleStatus,
+          inventoryUnlimited,
+          inventoryQuantity,
+          inventoryOpen,
+          tone,
+          copyLength,
+          useWebSearch,
+          priceMode,
+          manualPricingEnabled,
+          manualCompareAtPrice,
+          manualSellPrice,
+          profitDriven,
+          targetProfitInput,
+          variantDimensions,
+          variants
+        })
+      );
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [
+    autosaveEnabled,
+    restorePrompt,
+    submitting,
+    title,
+    source,
+    price,
+    costCurrency,
+    taobaoUrl,
+    note,
+    specText,
+    saleStatus,
+    inventoryUnlimited,
+    inventoryQuantity,
+    inventoryOpen,
+    tone,
+    copyLength,
+    useWebSearch,
+    priceMode,
+    manualPricingEnabled,
+    manualCompareAtPrice,
+    manualSellPrice,
+    profitDriven,
+    targetProfitInput,
+    variantDimensions,
+    variants,
+    draftId
+  ]);
 
   function updatePricingSetting(key: keyof PricingSettings, value: number) {
     if (Number.isNaN(value)) return;
@@ -739,7 +845,13 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   }
 
   function resetForNextItem() {
-    // 連續上架 (light): keep 來源/銷售狀態/語氣/長度/Web Search, clear the rest.
+    // 連續上架 (light): keep 來源/銷售狀態/語氣/長度/Web Search/priceMode, clear the rest.
+    // B13: clear localStorage with the same light-reset rules so refresh won't re-prompt.
+    clearWorkspaceAutosave(typeof window !== "undefined" ? window.localStorage : null);
+    setRestorePrompt(null);
+    setServerImageHint(null);
+    setAutosaveEnabled(true);
+
     draftIdRef.current = null;
     ensureDraftPromiseRef.current = null;
     uploadPromisesRef.current = [];
@@ -752,6 +864,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setNote("");
     setSpecText("");
     setVariants([]);
+    setVariantDimensions([]);
+    setVariantWarning(null);
     setInventoryUnlimited(true);
     setInventoryQuantity("");
     setInventoryOpen(false);
@@ -769,6 +883,151 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setSpecShotOpen(false);
     // priceMode 連續上架保留（跟來源／銷售狀態一樣是操作偏好）
     setFieldErrors({});
+  }
+
+  function applyWorkspaceSnapshot(snap: WorkspaceAutosaveSnapshot) {
+    setTitle(snap.title ?? "");
+    if (SOURCE_OPTIONS.includes(snap.source as (typeof SOURCE_OPTIONS)[number])) {
+      setSource(snap.source as (typeof SOURCE_OPTIONS)[number]);
+    }
+    setPrice(snap.price ?? "");
+    if (snap.costCurrency === "TWD" || snap.costCurrency === "CNY") {
+      setCostCurrency(snap.costCurrency);
+    }
+    setTaobaoUrl(snap.taobaoUrl ?? "");
+    setNote(snap.note ?? "");
+    setSpecText(snap.specText ?? "");
+    if (SALE_STATUS_OPTIONS.includes(snap.saleStatus as SaleStatus)) {
+      setSaleStatus(snap.saleStatus as SaleStatus);
+    }
+    setInventoryUnlimited(Boolean(snap.inventoryUnlimited));
+    setInventoryQuantity(snap.inventoryQuantity ?? "");
+    setInventoryOpen(Boolean(snap.inventoryOpen));
+    if (TONE_OPTIONS.some((t) => t.value === snap.tone)) {
+      setTone(snap.tone as (typeof TONE_OPTIONS)[number]["value"]);
+    }
+    if (LENGTH_OPTIONS.includes(snap.copyLength as (typeof LENGTH_OPTIONS)[number])) {
+      setCopyLength(snap.copyLength as (typeof LENGTH_OPTIONS)[number]);
+    }
+    setUseWebSearch(snap.useWebSearch !== false);
+    if (snap.priceMode === "sale" || snap.priceMode === "single") {
+      setPriceMode(snap.priceMode);
+    }
+    setManualPricingEnabled(Boolean(snap.manualPricingEnabled));
+    setManualCompareAtPrice(snap.manualCompareAtPrice ?? "");
+    setManualSellPrice(snap.manualSellPrice ?? "");
+    setProfitDriven(Boolean(snap.profitDriven));
+    setTargetProfitInput(snap.targetProfitInput ?? "");
+    setVariantDimensions(Array.isArray(snap.variantDimensions) ? snap.variantDimensions : []);
+    setVariants(Array.isArray(snap.variants) ? (snap.variants as VariantFormRow[]) : []);
+
+    if (snap.draftId) {
+      draftIdRef.current = snap.draftId;
+      setDraftId(snap.draftId);
+    } else {
+      draftIdRef.current = null;
+      setDraftId(null);
+    }
+    setFormKey((k) => k + 1);
+    setServerImageHint(
+      snap.draftId
+        ? "此草稿在伺服器上可能已有圖片，可再補圖或直接生成（預覽不會自動載回）。"
+        : null
+    );
+  }
+
+  async function continueRestore() {
+    if (!restorePrompt) return;
+    const snap = restorePrompt;
+    applyWorkspaceSnapshot(snap);
+    setRestorePrompt(null);
+    setAutosaveEnabled(true);
+
+    // If draftId was saved, verify the row still exists (not archived / deleted).
+    if (snap.draftId) {
+      const { data, error } = await supabase
+        .from("product_drafts")
+        .select("id, status")
+        .eq("id", snap.draftId)
+        .maybeSingle();
+      if (error || !data || data.status === "archived") {
+        draftIdRef.current = null;
+        setDraftId(null);
+        setServerImageHint(null);
+        setMessage("原草稿已不在（可能已封存），欄位已回填；再生成會建立新草稿。");
+      } else {
+        const { count } = await supabase
+          .from("product_images")
+          .select("id", { count: "exact", head: true })
+          .eq("draft_id", snap.draftId);
+        if ((count ?? 0) > 0) {
+          setServerImageHint(
+            `此草稿伺服器上已有 ${count} 張圖，可再補圖或直接生成（預覽不會自動載回）。`
+          );
+        } else {
+          setServerImageHint(null);
+        }
+      }
+    }
+  }
+
+  /** BX4 D1-A: clear localStorage + soft-archive pending draft; best-effort wipe images. */
+  async function discardRestore() {
+    if (discardBusy) return;
+    setDiscardBusy(true);
+    const snap = restorePrompt;
+    const draftToDrop = snap?.draftId ?? null;
+    clearWorkspaceAutosave(typeof window !== "undefined" ? window.localStorage : null);
+    setRestorePrompt(null);
+    setServerImageHint(null);
+    setAutosaveEnabled(true);
+
+    if (!draftToDrop) {
+      setDiscardBusy(false);
+      setMessage("已丟棄本機暫存。");
+      return;
+    }
+
+    try {
+      // Soft-archive (authenticated has no DELETE on product_drafts).
+      await fetch("/api/drafts/batch/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: [draftToDrop], action: "archive" })
+      });
+
+      // Best-effort: remove image rows + storage objects (product_images allows delete).
+      // Paths are not stored as a column — extract from public URL (upload layout: userId/draftId/...).
+      const { data: imgs } = await supabase
+        .from("product_images")
+        .select("id, original_file_url")
+        .eq("draft_id", draftToDrop);
+      if (imgs?.length) {
+        const paths = imgs
+          .map((row) => storagePathFromPublicUrl(row.original_file_url as string | null))
+          .filter((p): p is string => Boolean(p));
+        if (paths.length) {
+          try {
+            await supabase.storage.from("product-images").remove(paths);
+          } catch {
+            /* ignore storage cleanup failures */
+          }
+        }
+        await supabase.from("product_images").delete().eq("draft_id", draftToDrop);
+      }
+
+      if (draftIdRef.current === draftToDrop) {
+        draftIdRef.current = null;
+        setDraftId(null);
+        setFormKey((k) => k + 1);
+      }
+      setMessage("已丟棄本機暫存，並將伺服器上的空草稿封存。");
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      setMessage("已清本機暫存；伺服器草稿清理失敗，可稍後在「已封存」或待輸入列表處理。");
+    } finally {
+      setDiscardBusy(false);
+    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -907,6 +1166,43 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       </div>
       <div className="panel-body">
         <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
+          {/* BX4: unsent draft restore bar — only when localStorage has a fresh snapshot */}
+          {restorePrompt ? (
+            <div className="notice workspace-restore-notice" role="status">
+              <span>
+                偵測到未送出的草稿（{formatAutosaveAgeLabel(restorePrompt.savedAt)}
+                {restorePrompt.title?.trim()
+                  ? `：${restorePrompt.title.trim().slice(0, 24)}${restorePrompt.title.trim().length > 24 ? "…" : ""}`
+                  : ""}
+                ）。要繼續編輯還是丟掉？
+              </span>
+              <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                <button
+                  className="btn-mini"
+                  disabled={discardBusy}
+                  onClick={() => void continueRestore()}
+                  type="button"
+                >
+                  繼續編輯
+                </button>
+                <button
+                  className="btn-mini"
+                  disabled={discardBusy}
+                  onClick={() => void discardRestore()}
+                  type="button"
+                >
+                  {discardBusy ? "處理中…" : "丟棄"}
+                </button>
+              </span>
+            </div>
+          ) : null}
+
+          {serverImageHint ? (
+            <div className="notice" role="status">
+              {serverImageHint}
+            </div>
+          ) : null}
+
           <div className={`field${fieldErrors.title ? " error" : ""}`}>
             <div className="source-inline">
               <label>原始商品標題</label>

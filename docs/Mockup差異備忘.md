@@ -140,18 +140,23 @@
   重複判斷先 NFKC＋trim；收合列 detect chips＋⚠；三維度查重寫入 `draft.warnings`。
   migration 021 只產檔待老闆 SQL Editor 執行。
 
-### 差異 9：結果卡內部分頁 — SEO 獨立第五頁；Mockup 階段 pills 本包不做
+### 差異 9：結果卡內部分頁 — SEO 獨立第五頁；階段 pills 歸 B12（已對齊）
 
 - **差在哪**：
   1. Mockup 卡片展開是 **5 個底線分頁**（文案／定價／圖片／Tags／**SEO**）。
      曾短暫定案 4 頁（SEO 併文案）；**老闆實際使用後改回五分頁**（SEO 標題＋Meta 描述獨立）。
   2. Mockup 結果區有 **階段 pills 篩選**（文案待審／圖片生成中／圖片待審…）。正式版
-     **B9 不做**；歸 **B12 佇列篩選**（含已封存）一起規劃，避免本包膨脹。
-- **為什麼**：五分頁回到 Mockup 原設計，SEO 審稿與文案編輯分頁較清楚；階段篩選仍與佇列狀態模型綁在一起，不宜只做半套。
-- **誰拍板**：老闆，2026-07-12（B9 初版 D3-A 四頁）→ **2026-07-12 驗收回饋改回五頁**。
-- **現況**：✅ **B9 已對齊（2026-07-12 修正）**。`ResultCard` 五頁底線分頁（SEO 獨立）；
-  收合列快速核准／送圖；批次工具列桌機 sticky、手機 `<960px` 改 static；
-  腳本 `scripts/verify-b9-result-card.mjs`＋`scripts/verify-b9-mobile-sticky.mjs`。
+     **B9 不做**；歸 **B12**。B12 用**現有狀態詞彙**（不發明新 status），也不抄尚未上線的
+     Phase D「圖片生成中／圖片待審」當主 pill（會永遠 0）。
+- **為什麼**：五分頁回到 Mockup 原設計；階段篩選與佇列／封存狀態模型綁在一起。
+- **誰拍板**：老闆，2026-07-12（B9）→ 驗收回饋五頁 → **B12 2026-07-12 D1–D7 全 A**。
+- **現況**：
+  - ✅ **B9 分頁**：`ResultCard` 五頁；批次列桌機 sticky、手機 static。
+  - ✅ **B12 階段 pills＋封存（2026-07-12）**：共用 `stageFilter.ts`／`StageFilterPills`；
+    工作檯＋佇列：全部｜待輸入｜文案待審｜需修改｜已核准｜圖片未標記｜失敗｜已發布｜已封存；
+    預設「全部」藏 archived；`status=archived`＋migration 024 還原欄位；
+    批次封存跳過 processing/publishing 並彙總；已封存視圖 quick 只留「解除封存」；
+    已發布封存提示 Shopify 仍在店。腳本 `scripts/verify-b12-archive-filter.mjs`。
 
 ### 差異 10：B10 版本列／儲存語意相對 Mockup
 
@@ -192,6 +197,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-12（Grok）：差異 9 **B12 階段 pills＋封存已對齊**——現有狀態詞彙 pills、軟刪除 archived、
+  024 還原欄位、批次跳過進行中、已封存 quick 只留解除、已發布提示 Shopify 仍在。
 - 2026-07-12（Grok）：差異 11 **B11 定案**——摘要只掛 Shopify 不可逆入口（D1-B）；
   dirty 主鈕先定案並送出沿用 B10 組合路徑（D3-B）；ACTIVE 由彈窗取代 confirm（D2-A）。
 - 2026-07-12（Grok）：差異 9 **改回五分頁**——老闆實際使用後 SEO 獨立；手機批次列取消 sticky；

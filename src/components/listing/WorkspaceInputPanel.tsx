@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   calculatePrice,
@@ -38,6 +39,7 @@ import { VariantEditor, repriceVariants } from "@/components/listing/VariantEdit
 import {
   buildWorkspaceAutosaveSnapshot,
   clearWorkspaceAutosave,
+  formFieldsFromAutosaveSnapshot,
   formatAutosaveAgeLabel,
   loadWorkspaceAutosave,
   writeWorkspaceAutosave,
@@ -211,6 +213,12 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [discardBusy, setDiscardBusy] = useState(false);
   /** Skip debounce write until restore bar is resolved (avoid clobbering snapshot with empty form). */
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
+  /**
+   * fix(B13): block autosave while restore is applying / for a short window after.
+   * Otherwise enabling autosave in the same turn as restore can schedule a write
+   * from a still-empty render and race the restored state.
+   */
+  const suppressAutosaveRef = useRef(false);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const priceRef = useRef<HTMLInputElement>(null);
   const inventoryRef = useRef<HTMLInputElement>(null);
@@ -260,9 +268,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   // B13: debounce form → localStorage (~500ms).
   // Known limit documented in workspaceAutosave.ts: multi-tab last-write-wins.
   useEffect(() => {
-    if (!autosaveEnabled || restorePrompt || submitting) return;
+    if (!autosaveEnabled || restorePrompt || submitting || suppressAutosaveRef.current) return;
     const storage = typeof window !== "undefined" ? window.localStorage : null;
     const timer = window.setTimeout(() => {
+      // Re-check suppress at fire time (restore may have just finished).
+      if (suppressAutosaveRef.current) return;
       writeWorkspaceAutosave(
         storage,
         buildWorkspaceAutosaveSnapshot({
@@ -886,80 +896,146 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   }
 
   function applyWorkspaceSnapshot(snap: WorkspaceAutosaveSnapshot) {
-    setTitle(snap.title ?? "");
-    if (SOURCE_OPTIONS.includes(snap.source as (typeof SOURCE_OPTIONS)[number])) {
-      setSource(snap.source as (typeof SOURCE_OPTIONS)[number]);
-    }
-    setPrice(snap.price ?? "");
-    if (snap.costCurrency === "TWD" || snap.costCurrency === "CNY") {
-      setCostCurrency(snap.costCurrency);
-    }
-    setTaobaoUrl(snap.taobaoUrl ?? "");
-    setNote(snap.note ?? "");
-    setSpecText(snap.specText ?? "");
-    if (SALE_STATUS_OPTIONS.includes(snap.saleStatus as SaleStatus)) {
-      setSaleStatus(snap.saleStatus as SaleStatus);
-    }
-    setInventoryUnlimited(Boolean(snap.inventoryUnlimited));
-    setInventoryQuantity(snap.inventoryQuantity ?? "");
-    setInventoryOpen(Boolean(snap.inventoryOpen));
-    if (TONE_OPTIONS.some((t) => t.value === snap.tone)) {
-      setTone(snap.tone as (typeof TONE_OPTIONS)[number]["value"]);
-    }
-    if (LENGTH_OPTIONS.includes(snap.copyLength as (typeof LENGTH_OPTIONS)[number])) {
-      setCopyLength(snap.copyLength as (typeof LENGTH_OPTIONS)[number]);
-    }
-    setUseWebSearch(snap.useWebSearch !== false);
-    if (snap.priceMode === "sale" || snap.priceMode === "single") {
-      setPriceMode(snap.priceMode);
-    }
-    setManualPricingEnabled(Boolean(snap.manualPricingEnabled));
-    setManualCompareAtPrice(snap.manualCompareAtPrice ?? "");
-    setManualSellPrice(snap.manualSellPrice ?? "");
-    setProfitDriven(Boolean(snap.profitDriven));
-    setTargetProfitInput(snap.targetProfitInput ?? "");
-    setVariantDimensions(Array.isArray(snap.variantDimensions) ? snap.variantDimensions : []);
-    setVariants(Array.isArray(snap.variants) ? (snap.variants as VariantFormRow[]) : []);
+    const fields = formFieldsFromAutosaveSnapshot(snap);
 
-    if (snap.draftId) {
-      draftIdRef.current = snap.draftId;
-      setDraftId(snap.draftId);
+    // Always write every restorable field (unconditional), so a missing optional
+    // match on tone/source cannot skip title/price/etc.
+    setTitle(fields.title);
+    if (SOURCE_OPTIONS.includes(fields.source as (typeof SOURCE_OPTIONS)[number])) {
+      setSource(fields.source as (typeof SOURCE_OPTIONS)[number]);
+    }
+    setPrice(fields.price);
+    setCostCurrency(fields.costCurrency === "TWD" ? "TWD" : "CNY");
+    setTaobaoUrl(fields.taobaoUrl);
+    setNote(fields.note);
+    setSpecText(fields.specText);
+    if (SALE_STATUS_OPTIONS.includes(fields.saleStatus as SaleStatus)) {
+      setSaleStatus(fields.saleStatus as SaleStatus);
+    }
+    setInventoryUnlimited(fields.inventoryUnlimited);
+    setInventoryQuantity(fields.inventoryQuantity);
+    setInventoryOpen(fields.inventoryOpen);
+    if (TONE_OPTIONS.some((t) => t.value === fields.tone)) {
+      setTone(fields.tone as (typeof TONE_OPTIONS)[number]["value"]);
+    }
+    if (LENGTH_OPTIONS.includes(fields.copyLength as (typeof LENGTH_OPTIONS)[number])) {
+      setCopyLength(fields.copyLength as (typeof LENGTH_OPTIONS)[number]);
+    }
+    setUseWebSearch(fields.useWebSearch);
+    setPriceMode(fields.priceMode === "single" ? "single" : "sale");
+    setManualPricingEnabled(fields.manualPricingEnabled);
+    setManualCompareAtPrice(fields.manualCompareAtPrice);
+    setManualSellPrice(fields.manualSellPrice);
+    setProfitDriven(fields.profitDriven);
+    setTargetProfitInput(fields.targetProfitInput);
+    setVariantDimensions(fields.variantDimensions);
+    setVariants(fields.variants as VariantFormRow[]);
+
+    if (fields.draftId) {
+      draftIdRef.current = fields.draftId;
+      setDraftId(fields.draftId);
     } else {
       draftIdRef.current = null;
       setDraftId(null);
     }
+    // Remount ImageUploader only (not the whole form) so previews clear without
+    // losing the title/price state we just applied.
     setFormKey((k) => k + 1);
     setServerImageHint(
-      snap.draftId
+      fields.draftId
         ? "此草稿在伺服器上可能已有圖片，可再補圖或直接生成（預覽不會自動載回）。"
         : null
     );
+    setFieldErrors({});
   }
 
-  async function continueRestore() {
-    if (!restorePrompt) return;
-    const snap = restorePrompt;
-    applyWorkspaceSnapshot(snap);
-    setRestorePrompt(null);
-    setAutosaveEnabled(true);
+  /**
+   * fix(B13): restore must (1) re-read localStorage as source of truth,
+   * (2) flushSync-apply fields so the controlled inputs commit before paint,
+   * (3) keep autosave suppressed until after the restored render is live.
+   * Previous bug: setRestorePrompt(null)+setAutosaveEnabled(true) in the same
+   * turn as setTitle could leave the form empty while localStorage still had data.
+   */
+  function continueRestore() {
+    const storage = typeof window !== "undefined" ? window.localStorage : null;
+    const loaded = loadWorkspaceAutosave(storage);
+    const snap =
+      loaded.kind === "ready" ? loaded.snapshot : restorePrompt;
+    if (!snap) {
+      setRestorePrompt(null);
+      setAutosaveEnabled(true);
+      return;
+    }
 
-    // If draftId was saved, verify the row still exists (not archived / deleted).
-    if (snap.draftId) {
-      const { data, error } = await supabase
-        .from("product_drafts")
-        .select("id, status")
-        .eq("id", snap.draftId)
-        .maybeSingle();
-      if (error || !data || data.status === "archived") {
-        draftIdRef.current = null;
-        setDraftId(null);
-        setServerImageHint(null);
-        setMessage("原草稿已不在（可能已封存），欄位已回填；再生成會建立新草稿。");
-      } else {
+    suppressAutosaveRef.current = true;
+
+    // Commit restored field state + hide bar in one synchronous paint.
+    flushSync(() => {
+      applyWorkspaceSnapshot(snap);
+      setRestorePrompt(null);
+      setMessage("已恢復未送出的草稿，可繼續編輯或按生成。");
+    });
+
+    // Keep the snapshot alive (refresh savedAt) so a mid-restore refresh still works.
+    const fields = formFieldsFromAutosaveSnapshot(snap);
+    writeWorkspaceAutosave(
+      storage,
+      buildWorkspaceAutosaveSnapshot({
+        draftId: fields.draftId,
+        title: fields.title,
+        source: fields.source || source,
+        price: fields.price,
+        costCurrency: fields.costCurrency,
+        taobaoUrl: fields.taobaoUrl,
+        note: fields.note,
+        specText: fields.specText,
+        saleStatus: fields.saleStatus || saleStatus,
+        inventoryUnlimited: fields.inventoryUnlimited,
+        inventoryQuantity: fields.inventoryQuantity,
+        inventoryOpen: fields.inventoryOpen,
+        tone: fields.tone || tone,
+        copyLength: fields.copyLength,
+        useWebSearch: fields.useWebSearch,
+        priceMode: fields.priceMode,
+        manualPricingEnabled: fields.manualPricingEnabled,
+        manualCompareAtPrice: fields.manualCompareAtPrice,
+        manualSellPrice: fields.manualSellPrice,
+        profitDriven: fields.profitDriven,
+        targetProfitInput: fields.targetProfitInput,
+        variantDimensions: fields.variantDimensions,
+        variants: fields.variants
+      })
+    );
+
+    // Enable autosave only after restored values are on screen (next macrotask).
+    window.setTimeout(() => {
+      suppressAutosaveRef.current = false;
+      setAutosaveEnabled(true);
+    }, 100);
+
+    // Draft existence check is best-effort and must not clear restored fields.
+    if (fields.draftId) {
+      const draftToCheck = fields.draftId;
+      void (async () => {
+        const { data, error } = await supabase
+          .from("product_drafts")
+          .select("id, status")
+          .eq("id", draftToCheck)
+          .maybeSingle();
+        if (error || !data || data.status === "archived") {
+          // Only drop draftId binding; keep form text the operator just restored.
+          if (draftIdRef.current === draftToCheck) {
+            draftIdRef.current = null;
+            setDraftId(null);
+          }
+          setServerImageHint(null);
+          setMessage("原草稿已不在（可能已封存），欄位已回填；再生成會建立新草稿。");
+          return;
+        }
         const { count } = await supabase
           .from("product_images")
           .select("id", { count: "exact", head: true })
-          .eq("draft_id", snap.draftId);
+          .eq("draft_id", draftToCheck);
         if ((count ?? 0) > 0) {
           setServerImageHint(
             `此草稿伺服器上已有 ${count} 張圖，可再補圖或直接生成（預覽不會自動載回）。`
@@ -967,7 +1043,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         } else {
           setServerImageHint(null);
         }
-      }
+      })();
     }
   }
 

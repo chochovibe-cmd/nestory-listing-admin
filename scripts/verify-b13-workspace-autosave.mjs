@@ -246,12 +246,112 @@ await check("clear removes key (success generate / discard / light reset)", () =
   assert.equal(load(storage).kind, "empty");
 });
 
+// --- formFieldsFromAutosaveSnapshot mirror ---
+function formFieldsFromAutosaveSnapshot(snap) {
+  return {
+    draftId: typeof snap.draftId === "string" && snap.draftId ? snap.draftId : null,
+    title: typeof snap.title === "string" ? snap.title : "",
+    source: typeof snap.source === "string" ? snap.source : "",
+    price: typeof snap.price === "string" ? snap.price : snap.price != null ? String(snap.price) : "",
+    costCurrency: snap.costCurrency === "TWD" ? "TWD" : "CNY",
+    taobaoUrl: typeof snap.taobaoUrl === "string" ? snap.taobaoUrl : "",
+    note: typeof snap.note === "string" ? snap.note : "",
+    specText: typeof snap.specText === "string" ? snap.specText : "",
+    saleStatus: typeof snap.saleStatus === "string" ? snap.saleStatus : "",
+    inventoryUnlimited: snap.inventoryUnlimited !== false,
+    inventoryQuantity: typeof snap.inventoryQuantity === "string" ? snap.inventoryQuantity : "",
+    inventoryOpen: Boolean(snap.inventoryOpen),
+    tone: typeof snap.tone === "string" ? snap.tone : "",
+    copyLength: typeof snap.copyLength === "string" ? snap.copyLength : "標準",
+    useWebSearch: snap.useWebSearch !== false,
+    priceMode: snap.priceMode === "single" ? "single" : "sale",
+    manualPricingEnabled: Boolean(snap.manualPricingEnabled),
+    manualCompareAtPrice:
+      typeof snap.manualCompareAtPrice === "string" ? snap.manualCompareAtPrice : "",
+    manualSellPrice: typeof snap.manualSellPrice === "string" ? snap.manualSellPrice : "",
+    profitDriven: Boolean(snap.profitDriven),
+    targetProfitInput: typeof snap.targetProfitInput === "string" ? snap.targetProfitInput : "",
+    variantDimensions: Array.isArray(snap.variantDimensions)
+      ? snap.variantDimensions.map((d) => ({ name: String(d?.name ?? "") }))
+      : [],
+    variants: Array.isArray(snap.variants)
+      ? snap.variants.map((row, i) => ({
+          optionValues: [
+            String(row?.optionValues?.[0] ?? ""),
+            String(row?.optionValues?.[1] ?? ""),
+            String(row?.optionValues?.[2] ?? ""),
+          ],
+          cost: String(row?.cost ?? ""),
+          sellPrice: String(row?.sellPrice ?? ""),
+          compareAt: String(row?.compareAt ?? ""),
+          priceLocked: Boolean(row?.priceLocked),
+          qty: String(row?.qty ?? ""),
+          sku: String(row?.sku ?? ""),
+          imageId: row?.imageId ?? null,
+          sortOrder: typeof row?.sortOrder === "number" ? row.sortOrder : i,
+        }))
+      : [],
+  };
+}
+
+await check("formFieldsFromAutosaveSnapshot restores all product fields", () => {
+  const fields = formFieldsFromAutosaveSnapshot({
+    version: VERSION,
+    savedAt: new Date().toISOString(),
+    draftId: "uuid-1",
+    title: "自動保存測試：三麗鷗美樂蒂掛飾",
+    source: "淘寶",
+    price: "79.11",
+    costCurrency: "CNY",
+    taobaoUrl: "https://example.com/item",
+    note: "含底座",
+    specText: "材質：PVC",
+    saleStatus: "海外代購（約14天）",
+    inventoryUnlimited: true,
+    inventoryQuantity: "",
+    inventoryOpen: false,
+    tone: "可愛周邊輕鬆感",
+    copyLength: "標準",
+    useWebSearch: true,
+    priceMode: "sale",
+    manualPricingEnabled: false,
+    manualCompareAtPrice: "",
+    manualSellPrice: "",
+    profitDriven: false,
+    targetProfitInput: "",
+    variantDimensions: [{ name: "款式" }],
+    variants: [
+      {
+        optionValues: ["粉色", "", ""],
+        cost: "50",
+        sellPrice: "380",
+        compareAt: "480",
+        priceLocked: false,
+        qty: "",
+        sku: "",
+        imageId: null,
+        sortOrder: 0,
+      },
+    ],
+  });
+  assert.equal(fields.title, "自動保存測試：三麗鷗美樂蒂掛飾");
+  assert.equal(fields.price, "79.11");
+  assert.equal(fields.note, "含底座");
+  assert.equal(fields.specText, "材質：PVC");
+  assert.equal(fields.draftId, "uuid-1");
+  assert.equal(fields.variants.length, 1);
+  assert.equal(fields.variants[0].optionValues[0], "粉色");
+  assert.equal(fields.variants[0].cost, "50");
+  assert.equal(fields.variantDimensions[0].name, "款式");
+});
+
 await check("source: workspaceAutosave module + panel wiring hooks", () => {
   const mod = fs.readFileSync(path.join(root, "src/lib/drafts/workspaceAutosave.ts"), "utf8");
   assert.ok(mod.includes("WORKSPACE_AUTOSAVE_KEY"));
   assert.ok(mod.includes("多分頁同開時後寫贏") || mod.includes("last write wins"));
   assert.ok(mod.includes("7 * 24"));
   assert.ok(mod.includes("formatAutosaveAgeLabel"));
+  assert.ok(mod.includes("formFieldsFromAutosaveSnapshot"));
 
   const panel = fs.readFileSync(
     path.join(root, "src/components/listing/WorkspaceInputPanel.tsx"),
@@ -264,6 +364,16 @@ await check("source: workspaceAutosave module + panel wiring hooks", () => {
   assert.ok(panel.includes("continueRestore"));
   assert.ok(panel.includes("discardRestore"));
   assert.ok(panel.includes("formatAutosaveAgeLabel"));
+  // fix(B13): restore path must flushSync + re-read storage + suppress autosave
+  assert.ok(panel.includes("flushSync"), "continueRestore must flushSync apply");
+  assert.ok(panel.includes("suppressAutosaveRef"), "must suppress autosave during restore");
+  assert.ok(panel.includes("formFieldsFromAutosaveSnapshot"));
+  assert.ok(
+    panel.includes("loadWorkspaceAutosave(storage)") ||
+      panel.includes("loadWorkspaceAutosave(\n") ||
+      /loadWorkspaceAutosave\(\s*storage/.test(panel),
+    "continueRestore must re-read localStorage"
+  );
   // light reset clears autosave (continuous listing)
   assert.ok(panel.includes("resetForNextItem"));
   assert.ok(

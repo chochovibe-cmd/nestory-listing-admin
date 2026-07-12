@@ -141,6 +141,82 @@ export function buildWorkspaceAutosaveSnapshot(
   };
 }
 
+/**
+ * Normalize a loaded snapshot into plain form field values.
+ * Used by restore so UI always applies the same shape localStorage wrote
+ * (defensive against partial / older keys).
+ */
+export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot): {
+  draftId: string | null;
+  title: string;
+  source: string;
+  price: string;
+  costCurrency: string;
+  taobaoUrl: string;
+  note: string;
+  specText: string;
+  saleStatus: string;
+  inventoryUnlimited: boolean;
+  inventoryQuantity: string;
+  inventoryOpen: boolean;
+  tone: string;
+  copyLength: string;
+  useWebSearch: boolean;
+  priceMode: string;
+  manualPricingEnabled: boolean;
+  manualCompareAtPrice: string;
+  manualSellPrice: string;
+  profitDriven: boolean;
+  targetProfitInput: string;
+  variantDimensions: Array<{ name: string }>;
+  variants: WorkspaceAutosaveSnapshot["variants"];
+} {
+  return {
+    draftId: typeof snap.draftId === "string" && snap.draftId ? snap.draftId : null,
+    title: typeof snap.title === "string" ? snap.title : "",
+    source: typeof snap.source === "string" ? snap.source : "",
+    price: typeof snap.price === "string" ? snap.price : snap.price != null ? String(snap.price) : "",
+    costCurrency: snap.costCurrency === "TWD" ? "TWD" : "CNY",
+    taobaoUrl: typeof snap.taobaoUrl === "string" ? snap.taobaoUrl : "",
+    note: typeof snap.note === "string" ? snap.note : "",
+    specText: typeof snap.specText === "string" ? snap.specText : "",
+    saleStatus: typeof snap.saleStatus === "string" ? snap.saleStatus : "",
+    inventoryUnlimited: snap.inventoryUnlimited !== false,
+    inventoryQuantity: typeof snap.inventoryQuantity === "string" ? snap.inventoryQuantity : "",
+    inventoryOpen: Boolean(snap.inventoryOpen),
+    tone: typeof snap.tone === "string" ? snap.tone : "",
+    copyLength: typeof snap.copyLength === "string" ? snap.copyLength : "標準",
+    useWebSearch: snap.useWebSearch !== false,
+    priceMode: snap.priceMode === "single" ? "single" : "sale",
+    manualPricingEnabled: Boolean(snap.manualPricingEnabled),
+    manualCompareAtPrice:
+      typeof snap.manualCompareAtPrice === "string" ? snap.manualCompareAtPrice : "",
+    manualSellPrice: typeof snap.manualSellPrice === "string" ? snap.manualSellPrice : "",
+    profitDriven: Boolean(snap.profitDriven),
+    targetProfitInput: typeof snap.targetProfitInput === "string" ? snap.targetProfitInput : "",
+    variantDimensions: Array.isArray(snap.variantDimensions)
+      ? snap.variantDimensions.map((d) => ({ name: String(d?.name ?? "") }))
+      : [],
+    variants: Array.isArray(snap.variants)
+      ? snap.variants.map((row, i) => ({
+          optionValues: [
+            String(row?.optionValues?.[0] ?? ""),
+            String(row?.optionValues?.[1] ?? ""),
+            String(row?.optionValues?.[2] ?? "")
+          ] as [string, string, string],
+          cost: String(row?.cost ?? ""),
+          sellPrice: String(row?.sellPrice ?? ""),
+          compareAt: String(row?.compareAt ?? ""),
+          priceLocked: Boolean(row?.priceLocked),
+          qty: String(row?.qty ?? ""),
+          sku: String(row?.sku ?? ""),
+          imageId: row?.imageId ?? null,
+          sortOrder: typeof row?.sortOrder === "number" ? row.sortOrder : i
+        }))
+      : []
+  };
+}
+
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export function loadWorkspaceAutosave(

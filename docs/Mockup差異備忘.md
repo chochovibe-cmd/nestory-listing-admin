@@ -102,6 +102,21 @@
 - **誰拍板**：老闆，2026-07-12（B3 設計 1A/2A/3A/4A＋三補要求）。
 - **現況**：✅ **B3 已對齊（2026-07-12）**。腳本補驗通過（見施工清單 B3 註記）。
 
+### 差異 7：B7 款式多維度／發布接線（相對 Mockup 的定案）
+
+- **差在哪**：
+  1. 拖曳排序 ⠿ **本包不做**（加入順序＝sort_order）；Mockup 有長按拖曳。
+  2. 款式圖「另外上傳」**不做第二上傳口**，請用上方商品圖區再選圖。
+  3. 角色名單讀 `ip_characters`（可搜尋），生成前也能勾；不是 Mockup 寫死示範角色。
+  4. 只建立表單有的列（不自動笛卡尔積）；Shopify 用 productOptions＋BulkUpdate 首列＋BulkCreate 其餘。
+  5. 款式圖掛 Shopify media **best-effort 不硬擋**（D 階段圖床再強化）。
+  6. 列數上限 **50**（黃字），Mockup 未寫。
+  7. `cny_price` 語意改為「成本（來源幣）」；舊表單從未寫此欄、曾把混雜數字寫進 `twd_price`（見 migration 022 註解）。
+- **為什麼**：避免幽靈款式與爆量列；發布端補齊 A14 發現的缺口；與 B2／B3 對齊。
+- **誰拍板**：老闆，2026-07-12（B7 設計 D1–D8 全 A＋四補要求）。
+- **現況**：✅ **B7 已對齊（2026-07-12）**。migration 022 只產檔；`VariantEditor`＋發布 `productVariantsBulkCreate`；
+  腳本 `scripts/verify-b7-variants.mjs`。
+
 ### 差異 6：B4 一鍵新增角色只寫 ip_characters（pending），不寫 tag_rules
 
 - **差在哪**：Mockup Tags 分頁文案寫「一鍵新增進規則庫（tag_rules＋ip_characters）」。
@@ -120,6 +135,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-12（Grok）：差異 7 **B7 已對齊**——多維度／選圖／✎／角色多選／發布 BulkCreate；
+  migration 022 只產檔。
 - 2026-07-12（Grok）：差異 6 **B4 已對齊**——一鍵只寫 ip_characters（pending），不寫 tag_rules；
   021 只產檔。
 - 2026-07-12（Grok）：差異 5 **B3 已對齊**；差異 4 補定價嚴格高於售價。

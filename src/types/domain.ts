@@ -39,6 +39,9 @@ export type ImageStatus = "pending" | "processing" | "done" | "failed" | "skippe
 /** B5: how the Phase D pipeline should process this product image. null = unmarked. */
 export type ImageProcessIntent = "keep" | "de_text" | "regenerate";
 
+/** B6: sale = 售價＋定價劃線；single = 單一售價（不填 compare_at）。 */
+export type PriceMode = "sale" | "single";
+
 export interface ProductDraft {
   id: string;
   source_url: string | null;
@@ -48,6 +51,8 @@ export interface ProductDraft {
   cny_price: number;
   twd_cost: number | null;
   twd_price: number | null;
+  /** B6: 特價／單一售價；migration 020。未跑 migration 時可能缺欄。 */
+  price_mode?: PriceMode | null;
   pricing_formula: Record<string, unknown>;
   category: string | null;
   vendor: string;

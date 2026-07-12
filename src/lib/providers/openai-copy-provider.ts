@@ -24,7 +24,8 @@ export class OpenAICopyProvider implements CopyProvider {
     const regenField = input.regenerateField;
     // A9 item 2: 依IP自動匹配 is resolved to a concrete tone here, before it
     // ever reaches a prompt string.
-    const resolvedTone = resolveCopyTone(input.tone, input.detectedIpName);
+    // Manual tones pass through; map only applies for 依IP自動匹配.
+    const resolvedTone = resolveCopyTone(input.tone, input.detectedIpName, input.ipToneMap);
     const secondhandInfo: SecondhandInfo | null = input.isSecondhand
       ? { grade: input.secondhandGrade, condition: input.secondhandCondition, notes: input.secondhandNotes }
       : null;

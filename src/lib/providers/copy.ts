@@ -94,6 +94,9 @@ export interface CopyProviderInput {
    * 依IP自動匹配 to a concrete tone. Unknown on a draft's first-ever
    * generation (falls back to a default); known on regenerations. */
   detectedIpName?: string | null;
+  /** B8: DEFAULT_IP_TONE_MAP merged with team_settings overrides. Only used
+   * when tone === 依IP自動匹配; manual tones ignore this map. */
+  ipToneMap?: Partial<Record<string, CopyTone>>;
 }
 
 // A13: token usage a provider reports for one generation, normalised across

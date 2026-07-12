@@ -84,13 +84,23 @@ async function persistProductVariants(
   return { ok: true };
 }
 
+// B8: 6 tones aligned with COPY_TONES / Mockup tone-cards (A9 backend already had all 6).
 const TONE_OPTIONS = [
-  { value: "黑膠文藝收藏感", emoji: "🎙️", desc: "像懂收藏的選物店，沉穩、有故事感" },
-  { value: "日系選物店溫柔感", emoji: "🌸", desc: "溫柔清楚，適合同事快速審稿" },
-  { value: "可愛周邊輕鬆感", emoji: "🧸", desc: "可愛但不浮誇，適合小物與周邊" }
+  { value: "黑膠文藝收藏感", emoji: "🎙️", desc: "沉穩、有故事感" },
+  { value: "日系選物店溫柔感", emoji: "🌸", desc: "溫柔清楚好審稿" },
+  { value: "可愛周邊輕鬆感", emoji: "🧸", desc: "可愛不浮誇" },
+  { value: "中二熱血宣言", emoji: "🔥", desc: "動漫梗、招式感" },
+  { value: "小編聊天口吻", emoji: "💬", desc: "像 IG 限動推坑" },
+  { value: "依IP自動匹配", emoji: "✨", desc: "鬼滅→熱血、吉伊卡哇→軟萌" },
 ] as const;
 
 const LENGTH_OPTIONS = ["精簡", "標準", "詳細"] as const;
+const MODEL_CYCLE: Array<"claude" | "openai"> = ["claude", "openai"];
+const MODEL_LABEL = {
+  claude: "Claude",
+  openai: "GPT",
+} as const;
+type ModelLabel = (typeof MODEL_LABEL)["claude"] | (typeof MODEL_LABEL)["openai"];
 const SOURCE_OPTIONS = ["淘寶", "閑魚", "蝦皮"] as const;
 
 type InventoryPolicy = "deny" | "continue";
@@ -154,7 +164,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   // B6 A 案：利潤手改驅動售價；成本／幣別／匯率變動時必須清掉，避免殘留舊值。
   const [profitDriven, setProfitDriven] = useState(false);
   const [targetProfitInput, setTargetProfitInput] = useState("");
-  const [useWebSearch, setUseWebSearch] = useState(false);
+  // B8: default ON once Tavily backend is wired (老闆 2026-07-12); turn off when rushed.
+  const [useWebSearch, setUseWebSearch] = useState(true);
+  // B8 D3-A: form model override is single-shot; after generate, fall back to header default.
+  const [sessionProvider, setSessionProvider] = useState<"openai" | "claude" | null>(null);
+  const [defaultProviderLabel, setDefaultProviderLabel] = useState<ModelLabel>("GPT");
   // B3: 網址抓取入口（誠實停用）＋截圖辨識＋網址查重
   const [fetchBoxOpen, setFetchBoxOpen] = useState(false);
   const [specShotOpen, setSpecShotOpen] = useState(false);
@@ -195,6 +209,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     }
     window.addEventListener("nestory:pricing-settings-changed", onChange);
     return () => window.removeEventListener("nestory:pricing-settings-changed", onChange);
+  }, []);
+
+  // B8: label for「預設 X」next to the one-shot model button (D3-A).
+  useEffect(() => {
+    setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
   }, []);
 
   function updatePricingSetting(key: keyof PricingSettings, value: number) {
@@ -804,6 +823,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setMessage("生成文案中...");
     emitProgress(stepModel(cardTitle, ["done", step2, "active", "pending"]));
 
+    // B8 D3-A: one-shot provider override; after this request falls back to header default.
+    const providerForThisRun = sessionProvider ?? readStoredAiProvider();
+
     let response: Response;
     try {
       response = await fetch("/api/generate", {
@@ -811,7 +833,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           draftId: id,
-          provider: readStoredAiProvider(),
+          provider: providerForThisRun,
           mode: readStoredRunMode(),
           useWebSearch,
           source,
@@ -830,6 +852,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       });
     } catch {
       setSubmitting(false);
+      setSessionProvider(null);
       setMessage("生成連線失敗，可以到右側卡片按「重新生成」再試一次");
       emitProgress(stepModel(cardTitle, ["done", step2, "error", "pending"], "生成連線失敗"));
       router.refresh();
@@ -838,6 +861,10 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
 
     const payload = await response.json().catch(() => ({}));
     setSubmitting(false);
+    // Always clear one-shot override after the attempt (success or fail) so the
+    // next generate uses the global default unless the operator clicks again.
+    setSessionProvider(null);
+    setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
 
     if (!response.ok) {
       const errorText = payload.error ?? "生成失敗";
@@ -863,6 +890,14 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     }
 
     router.refresh();
+  }
+
+  function cycleSessionModel() {
+    const base = sessionProvider ?? readStoredAiProvider();
+    const idx = MODEL_CYCLE.indexOf(base);
+    const next = MODEL_CYCLE[(idx + 1) % MODEL_CYCLE.length];
+    setSessionProvider(next);
+    setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
   }
 
   return (
@@ -1160,7 +1195,15 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
           <div className="copy-settings-block">
             <div className="copy-block-title"><span>✎</span> AI 文案設定</div>
             <div className="field">
-              <label>AI 文案風格</label>
+              <label className="copy-style-label">
+                <span>AI 文案風格</span>
+                <span className="model-quick">
+                  <button className="mq-btn" onClick={cycleSessionModel} type="button">
+                    🤖 本次：{MODEL_LABEL[sessionProvider ?? readStoredAiProvider()]}
+                  </button>
+                  <span className="mq-note">預設 {defaultProviderLabel} · 生成後回預設</span>
+                </span>
+              </label>
               <div className="tone-cards">
                 {TONE_OPTIONS.map((option) => (
                   <button
@@ -1178,8 +1221,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 ))}
               </div>
             </div>
-            <div className="field">
-              <label>文案長度</label>
+            <div className="copy-len-row field">
+              <label style={{ margin: 0 }}>文案長度</label>
               <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
                 {LENGTH_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
@@ -1189,7 +1232,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             <div className="wsearch-row">
               <div className="wsearch-label">
                 🔍 Web Search 補充資訊
-                <span>冷門 IP、資訊不足或不確定角色名稱時開啟；會多花一些時間</span>
+                <span>預設開啟（冷門 IP／規格更準）；趕時間可關。查來的內容會提醒核實</span>
               </div>
               <div className="toggle-wrap">
                 <label className="toggle">
@@ -1200,7 +1243,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   />
                   <span className="toggle-slider" />
                 </label>
-                <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "+約 5 秒"}</span>
+                <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "已關閉"}</span>
               </div>
             </div>
           </div>

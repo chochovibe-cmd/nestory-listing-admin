@@ -14,3 +14,6 @@ Thumbs.db
 
 # boss local test screenshots (B3/B4 acceptance) - never commit
 淘寶截圖測試照片/
+
+# b15 style-probe headless chrome profiles
+.tmp-b15-chrome-*/

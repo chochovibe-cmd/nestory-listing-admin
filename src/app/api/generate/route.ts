@@ -37,6 +37,10 @@ import {
   getCopyFieldValue,
 } from "@/lib/providers/copy";
 import type { GenerationProvider, ImageType, ProductDraft } from "@/types/domain";
+import {
+  buildClassificationDuplicateWarning,
+  queryDuplicateMatches,
+} from "@/lib/drafts/checkDuplicate";
 
 const COPY_PROVIDERS: Record<"openai" | "claude", CopyProvider> = {
   openai: new OpenAICopyProvider(),
@@ -48,11 +52,16 @@ const PROVIDER_TO_GENERATION_PROVIDER: Record<"openai" | "claude", GenerationPro
   claude: "anthropic",
 };
 
-// tag_rules-sourced errors are meaningless once Tags V2 (a hardcoded dictionary,
-// no DB lookups) takes over shopify_tags -- mirrors listingGeneration.ts's
-// isLegacyTagRuleMappingError() from the boss's tool.
-function isLegacyTagRuleMappingError(message: string): boolean {
+// tag_rules-sourced errors/warnings are meaningless once Tags V2 takes over
+// shopify_tags (B4 1A: also filter warnings so one-click + regen does not leave
+// a ghost「尚未建立 tag_rules」line next to the real V2 dictionary warning).
+function isLegacyTagRuleMappingMessage(message: string): boolean {
   return message.includes("tag_rules") || message.includes("找不到二手商品屬性標籤");
+}
+
+/** @deprecated name kept for call-site clarity; same predicate as warnings filter. */
+function isLegacyTagRuleMappingError(message: string): boolean {
+  return isLegacyTagRuleMappingMessage(message);
 }
 
 function uniqueMessages(values: string[]): string[] {
@@ -134,6 +143,11 @@ function applyTagsV2(
     ...tagResult.missing,
   ]);
 
+  // B4 1A: drop legacy tag_rules mapping warnings (V2 is authoritative).
+  const legacyFilteredWarnings = generatedContent.validation_warnings.filter(
+    (message) => !isLegacyTagRuleMappingMessage(message),
+  );
+
   return {
     ...generatedContent,
     draft_state: validationErrors.length > 0 ? "blocked" : "ready",
@@ -141,7 +155,7 @@ function applyTagsV2(
     seo_title: seoContent.seo_title,
     shopify_tags: tagResult.tags,
     validation_errors: validationErrors,
-    validation_warnings: uniqueMessages([...generatedContent.validation_warnings, ...tagResult.warnings]),
+    validation_warnings: uniqueMessages([...legacyFilteredWarnings, ...tagResult.warnings]),
   };
 }
 
@@ -712,7 +726,28 @@ export async function POST(request: NextRequest) {
   }
 
   const nextStatus = localizedOutput.draft_state === "blocked" ? "needs_revision" : "ready_for_review";
-  const allWarnings = uniqueMessages([...localizedOutput.validation_warnings, ...extraWarnings]);
+
+  // B4 3A: after detect, three-dimension (IP+角色+類型) duplicate check → yellow only.
+  try {
+    if (detected.ip && detected.productType) {
+      const dup = await queryDuplicateMatches(serviceSupabase, {
+        ip: detected.ip,
+        character: detected.character || undefined,
+        productType: detected.productType,
+        excludeDraftId: draftId,
+      });
+      const classificationWarning = buildClassificationDuplicateWarning(dup.classificationMatches);
+      if (classificationWarning) extraWarnings.push(classificationWarning);
+    }
+  } catch {
+    // Duplicate check must never fail generation; skip on query errors.
+  }
+
+  const allWarnings = uniqueMessages(
+    [...localizedOutput.validation_warnings, ...extraWarnings].filter(
+      (message) => !isLegacyTagRuleMappingMessage(message),
+    ),
+  );
 
   const { error: updateError } = await serviceSupabase
     .from("product_drafts")

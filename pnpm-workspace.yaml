@@ -1,10 +1,10 @@
 packages:
   - .
 
+# D3: sharp needs native build (libvips) on install; unrs-resolver stays blocked.
 allowBuilds:
-  sharp: false
+  sharp: true
   unrs-resolver: false
 
 ignoredBuiltDependencies:
-  - sharp
   - unrs-resolver

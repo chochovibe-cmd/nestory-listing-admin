@@ -11,7 +11,8 @@ import {
 } from "@/lib/nav";
 
 /**
- * C1 mobile tabbar — 4 cells (Q2-C): 新增 / 佇列 / 圖審 / 更多.
+ * C1 mobile tabbar — 4 cells: 新增 / 圖審 / 紀錄 / 更多（2026-07-14 對齊 Mockup 主線）。
+ * 「全部草稿」在更多抽屜、設定前（不再佔主 tab）。
  * 「更多」opens bottom sheet (modal-overlay pattern, same as B7/B11).
  * BX6 raised center「＋」is NOT in this package.
  */

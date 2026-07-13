@@ -1,6 +1,10 @@
 /**
  * C1/C2 App Shell — shared nav destinations for desktop sidebar + mobile tabbar.
  * Future pages use dead placeholders until their Phase lands.
+ *
+ * 2026-07-14 nav demotion (老闆): 商品佇列 ≠ 一級主線。
+ * 對齊 Mockup 主流程順序：新增 → 圖審 → 紀錄 → …；佇列改次要（側欄最底、手機「更多」、設定前）。
+ * 完整「刪／改造成 Shopify 草稿連動」分歧點留給 Fable 討論（見代理紀錄／差異 26）。
  */
 
 export type NavHref =
@@ -20,14 +24,25 @@ export type NavItem = {
   shortLabel: string;
 };
 
-/** Desktop sidebar main order (Q5-A: 佇列 kept; Mockup items + 佇列). */
+/** 全部草稿列表（次要入口；路由仍為 /drafts） */
+export const QUEUE_NAV: NavItem = {
+  href: "/drafts",
+  icon: "☰",
+  label: "全部草稿",
+  shortLabel: "草稿"
+};
+
+/**
+ * Desktop sidebar main order — Mockup-first, 佇列墊底（設定仍在 sidebar-bottom）。
+ * 順序：新增 → 圖審 → 發布紀錄 → 儀表板 → 選品 → 全部草稿
+ */
 export const SIDEBAR_NAV: readonly NavItem[] = [
   { href: "/drafts/new", icon: "✦", label: "新增商品", shortLabel: "新增" },
-  { href: "/drafts", icon: "☰", label: "商品佇列", shortLabel: "佇列" },
   { href: "/review", icon: "🖼", label: "圖片審核", shortLabel: "圖審" },
   { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" },
   { href: "/dashboard", icon: "📈", label: "儀表板", shortLabel: "儀表板" },
-  { href: "/scouting", icon: "🔭", label: "選品情報", shortLabel: "選品" }
+  { href: "/scouting", icon: "🔭", label: "選品情報", shortLabel: "選品" },
+  QUEUE_NAV
 ] as const;
 
 /**
@@ -41,19 +56,21 @@ export const SETTINGS_NAV: NavItem = {
   shortLabel: "設定"
 };
 
-/** Mobile primary tabs (Q2-C): 新增 / 佇列 / 圖審 / 更多 */
+/**
+ * Mobile primary tabs — Mockup 向：新增／圖審／紀錄／更多。
+ * 佇列不再佔四格之一（2026-07-14）。
+ */
 export const MOBILE_PRIMARY_TABS: readonly NavItem[] = [
   { href: "/drafts/new", icon: "✦", label: "新增商品", shortLabel: "新增" },
-  { href: "/drafts", icon: "☰", label: "商品佇列", shortLabel: "佇列" },
-  { href: "/review", icon: "🖼", label: "圖片審核", shortLabel: "圖審" }
+  { href: "/review", icon: "🖼", label: "圖片審核", shortLabel: "圖審" },
+  { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" }
 ] as const;
 
 /**
- * Q2-C「更多」sheet + C2 settings (Q1-C): 紀錄 / 儀表板 / 選品 / 設定.
- * Topbar does not get a settings gear.
+ * 「更多」抽屜：全部草稿（設定前）／儀表板／選品／設定。
  */
 export const MOBILE_MORE_LINKS: readonly NavItem[] = [
-  { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" },
+  QUEUE_NAV,
   { href: "/dashboard", icon: "📈", label: "儀表板", shortLabel: "儀表板" },
   { href: "/scouting", icon: "🔭", label: "選品情報", shortLabel: "選品" },
   SETTINGS_NAV

@@ -47,7 +47,7 @@ export default async function DraftQueuePage() {
     <main className="container">
       <section className="panel">
         <div className="panel-header">
-          <h1>商品佇列</h1>
+          <h1>全部草稿</h1>
           <Link className="button primary" href="/drafts/new">新增商品</Link>
         </div>
         <div className="panel-body">

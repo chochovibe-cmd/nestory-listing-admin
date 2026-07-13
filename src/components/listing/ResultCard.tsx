@@ -817,7 +817,11 @@ export function ResultCard({
         body: JSON.stringify({ publishMode, confirmActive: publishMode === "active" }),
       });
       const payload = await publishResponse.json();
-      setMessage(publishResponse.ok ? "已核准並發布" : payload.error ?? "發布失敗");
+      setMessage(
+        publishResponse.ok
+          ? payload.message ?? "已核准並發布（可至發布紀錄查詢）"
+          : [payload.error, payload.hint].filter(Boolean).join(" — ") || "發布失敗"
+      );
       router.refresh();
     } catch {
       setMessage("核准／發布連線失敗");

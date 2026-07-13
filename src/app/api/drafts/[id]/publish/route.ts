@@ -1,7 +1,15 @@
+/**
+ * D7-open Q4-A: single-draft publish also creates a 1-item publish_batches row
+ * via the same runPublishBatch path (rate ledger + records).
+ */
 import { NextRequest } from "next/server";
-import { publishDraft } from "@/lib/shopify/publishDraft";
+import { canPublish } from "@/lib/auth/roles";
+import { runPublishBatch } from "@/lib/shopify/runPublishBatch";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
-import type { PublishMode } from "@/types/domain";
+import type { PublishMode, UserRole } from "@/types/domain";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,25 +25,57 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const authSupabase = await createServerSupabaseClient();
-  const { data: { user } } = await authSupabase.auth.getUser();
+  const {
+    data: { user }
+  } = await authSupabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await authSupabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const { data: profile } = await authSupabase.from("profiles").select("role").eq("id", user.id).single();
 
-  if (!profile || !["admin", "reviewer"].includes(profile.role)) {
+  if (!canPublish(profile?.role as UserRole | undefined)) {
     return Response.json({ error: "Reviewer role is required to publish" }, { status: 403 });
   }
 
   const serviceSupabase = createServiceSupabaseClient();
-  const result = await publishDraft(serviceSupabase, id, publishMode);
+  const result = await runPublishBatch({
+    serviceSupabase,
+    draftIds: [id],
+    publishMode,
+    createdBy: user.id
+  });
 
   if (!result.ok) {
-    return Response.json({ error: result.error }, { status: result.status });
+    return Response.json(
+      {
+        error: result.error,
+        hint: result.hint,
+        batchId: result.batchId ?? null
+      },
+      { status: result.status }
+    );
   }
 
-  return Response.json(result);
+  const first = result.results[0];
+  if (!first?.ok) {
+    return Response.json(
+      {
+        error: first?.error ?? "發布失敗",
+        batchId: result.batchId,
+        batchStatus: result.batchStatus,
+        results: result.results
+      },
+      { status: 409 }
+    );
+  }
+
+  // Backward-compatible single-publish shape + batchId for records.
+  return Response.json({
+    ok: true,
+    batchId: result.batchId,
+    batchStatus: result.batchStatus,
+    mock: first.mock === true,
+    productId: first.productId,
+    adminUrl: first.adminUrl ?? null,
+    message: result.message
+  });
 }

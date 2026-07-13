@@ -161,6 +161,60 @@ export interface ProductDraft {
    * Re-send updates pointer only; history stays in image_batch_items (3A simplified).
    */
   current_image_batch_id?: string | null;
+  /**
+   * D7: latest publish batch (migration 027).
+   * Retry-failed (Q3 A-lite) updates pointer only; history stays in publish_batch_items.
+   */
+  current_publish_batch_id?: string | null;
+}
+
+/** D7: publish_batches.status — always terminal after runPublishBatch (Q2-A). */
+export type PublishBatchStatus =
+  | "queued"
+  | "processing"
+  | "completed"
+  | "partial_failed"
+  | "failed";
+
+/** D7: publish_batch_items.item_status */
+export type PublishBatchItemStatus =
+  | "queued"
+  | "processing"
+  | "done"
+  | "failed"
+  | "skipped";
+
+/** D7: one Shopify publish batch header (publish_batches). */
+export interface PublishBatch {
+  id: string;
+  kind: "shopify_api";
+  status: PublishBatchStatus;
+  publish_mode: PublishMode;
+  total_count: number;
+  done_count: number;
+  failed_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  /** Event #2 hook only; D7-open leaves null. */
+  notify_sent_at: string | null;
+  error_summary: string | null;
+  snapshot_json: unknown;
+}
+
+/** D7: draft membership in a publish batch. */
+export interface PublishBatchItem {
+  id: string;
+  batch_id: string;
+  draft_id: string;
+  item_status: PublishBatchItemStatus;
+  error_message: string | null;
+  shopify_product_id: string | null;
+  shopify_admin_url: string | null;
+  created_at: string;
+  completed_at: string | null;
 }
 
 /** B14: one 送圖 batch header (image_batches). */

@@ -1703,6 +1703,141 @@ textarea {
   border-top: 1px solid var(--border-soft);
   padding: 14px 15px;
 }
+
+/* ── D7 publish records — layout-only; reuses ir-* / .schip / pills ── */
+.rec-page {
+  width: 100%;
+  max-width: 920px;
+}
+.rec-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.rec-filter-muted {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.rec-list {
+  margin-top: 4px;
+}
+.rec-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0;
+  min-height: 0;
+}
+.rec-head-main {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 15px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  min-height: 44px;
+}
+.rec-head-main:hover {
+  background: color-mix(in srgb, var(--surface2) 55%, transparent);
+}
+.rec-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.rec-head-text {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rec-title {
+  word-break: break-word;
+}
+.rec-meta {
+  font-size: 11px;
+  font-weight: 500;
+}
+.rec-retry {
+  margin: 8px 12px 8px 0;
+  align-self: center;
+  min-height: 40px;
+  flex-shrink: 0;
+}
+.rec-summary {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.rec-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rec-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 44px;
+  padding: 4px 0;
+}
+.rec-item-text {
+  flex: 1;
+  min-width: 140px;
+  word-break: break-word;
+}
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+.rec-dot--ok {
+  background: var(--success);
+}
+.rec-dot--ng {
+  background: var(--danger);
+}
+.rec-dot--skip {
+  background: var(--warn);
+}
+.rec-dot--run {
+  background: var(--accent);
+}
+.rec-mode-hint {
+  margin: 12px 0 0;
+  font-size: 11px;
+}
+.rec-empty {
+  margin: 8px 0 16px;
+}
+@media (max-width: 959px) {
+  .rec-retry {
+    margin: 0 12px 12px;
+    width: calc(100% - 24px);
+    min-height: 44px;
+  }
+}
+
 .ir-actions {
   display: flex;
   gap: 8px;

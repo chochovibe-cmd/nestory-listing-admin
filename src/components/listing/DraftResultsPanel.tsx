@@ -252,8 +252,11 @@ export function DraftResultsPanel({
       const payload = await response.json();
       setMessage(
         response.ok
-          ? `成功 ${payload.succeeded} 筆／失敗 ${payload.failed} 筆`
-          : payload.error ?? "批次發布失敗"
+          ? payload.message ??
+              `成功 ${payload.succeeded} 筆／失敗 ${payload.failed} 筆${
+                payload.skipped ? `／略過 ${payload.skipped}` : ""
+              }`
+          : [payload.error, payload.hint].filter(Boolean).join(" — ") || "批次發布失敗"
       );
       setBatchPublishSummary(null);
       setSelectedIds(new Set());

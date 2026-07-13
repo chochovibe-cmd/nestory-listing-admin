@@ -36,8 +36,9 @@
  *     Thin stub: POST /api/images/finalize → NOT_IMPLEMENTED (D1 skeleton)
  *     Real upload: ❌ later D1 completion (not D-open)
  *
- *  9. Image review UI (D5) — ❌ not this package
- *     image_status: we reuse "done" after successful sharp (Q3-A), not a new awaiting_review enum.
+ *  9. Image review UI (D5) — ✅ /review + review-confirm/reject
+ *     image_status stays "done" after sharp; human pass = image_flags.image_review=approved
+ *     (not a new awaiting_review enum; see Mockup diff 21).
  *
  * 10. Publish productCreateMedia attaching Files CDN URLs
  *     Current publish still falls back to processed || original (Supabase URLs OK for now).

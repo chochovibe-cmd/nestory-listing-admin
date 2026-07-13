@@ -336,6 +336,24 @@
 - **現況**：✅ **C4 已對齊（2026-07-13）**。`ProductLibraryModal`／`productLibrary` helpers／
   `HeaderControls` 入口／`DraftFocusScroll`；樣式 `library-modal`／`lib-row` layout-only。
 
+### 差異 21：D5 圖審語意（done＋image_flags，非 awaiting_review）
+
+- **差在哪**：
+  1. 自動化 Scenario 寫 sharp 後 `image_status=awaiting_review`；DB enum **沒有**此值。
+     正式版：**處理完成＝`done`**（D3）；**人審通過＝`image_flags.image_review=approved`**
+     （可選 `image_reviewed_at` ISO），**不**新增 migration／enum。
+  2. Mockup 橫幅有「預估 N 分鐘＋Email 通知」；正式版 D5 **只報誠實件數**（processing／failed／待審），
+     無假 ETA；通知屬 **D6**。
+  3. Mockup「拒絕，重新生成」示意會重排 AI；正式版 D5 **只記原因＋`image_status=failed`**，
+     **不**呼叫 Image API（D4）；processed 暫存 URL **保留**。
+  4. 滑桿標籤右圖為「處理後（**暫存**）」——對齊差異 20（非 Shopify CDN）。
+  5. 一鍵全確認：**未展開 viewed 硬擋**（比 Mockup 雙擊確認更嚴，Q4-A）。
+  6. admin 有「我的／全部」；operator 固定自己的；零 SQL。
+- **為什麼**：零 migration 可上圖審；與 D3 `done` 語意銜接；避免假通知／假重生。
+- **誰拍板**：總指揮，2026-07-13（D5 裁決 Q1–Q7 全 A）。
+- **現況**：✅ **D5 已對齊（2026-07-13）**。`/review`＋`ImageReviewPanel`＋
+  `POST /api/images/review-confirm|reject`；腳本 `scripts/verify-d5-image-review.mjs`。
+
 ### 差異 20：D-open 圖片 sharp／圖床骨架（相對 Mockup 完整圖審＋CDN）
 
 - **差在哪**：
@@ -358,6 +376,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 21 **D5**——圖審通過用 image_flags.approved；拒絕 failed＋warnings；
+  無假 ETA／無 D4 重生；滑桿標暫存；viewed 硬擋一鍵確認。
 - 2026-07-13（Grok）：差異 20 **D-open**——processed＝Supabase temp 非 CDN；image_status 用 done；
   de_text/regen skip；B14 不自動 sharp；finalize 501。
 - 2026-07-13（Grok）：差異 19 **C4** 定案並對齊——頂欄 Modal、RLS 範圍、預設三狀態、

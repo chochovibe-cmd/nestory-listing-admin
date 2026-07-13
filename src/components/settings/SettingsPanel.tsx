@@ -21,6 +21,13 @@ import {
   getStoredPricingSettings,
   setStoredPricingSettings
 } from "@/lib/pricingSettingsStore";
+import {
+  FX_REFERENCE_CHANGED_EVENT,
+  getStoredFxReference,
+  isFreshFxReference,
+  setStoredFxReference,
+  type FxReference
+} from "@/lib/fx/fxReferenceStore";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 import type { UserRole } from "@/types/domain";
 
@@ -133,6 +140,11 @@ export function SettingsPanel() {
     setProvider(readStoredAiProvider());
     setPricing(getStoredPricingSettings());
     setAutomation(getStoredAutomationPrefs());
+    // Hydrate 今日參考 from device store when still Taiwan-calendar-day fresh.
+    const ref = getStoredFxReference();
+    if (isFreshFxReference(ref) && ref) {
+      setLiveRate(ref.rate);
+    }
     try {
       const stored = window.localStorage.getItem("nestory_theme") as ThemeId | null;
       if (stored === "dark" || stored === "nordic" || stored === "kitty") {
@@ -155,26 +167,55 @@ export function SettingsPanel() {
       if (detail) setAutomation({ ...defaultAutomationPrefs, ...detail });
       else setAutomation(getStoredAutomationPrefs());
     }
+    function onFxRef(event: Event) {
+      const detail = (event as CustomEvent<FxReference>).detail;
+      if (detail && isFreshFxReference(detail)) {
+        setLiveRate(detail.rate);
+      }
+    }
     window.addEventListener("nestory:pricing-settings-changed", onPricing);
     window.addEventListener("nestory:automation-prefs-changed", onAuto);
+    window.addEventListener(FX_REFERENCE_CHANGED_EVENT, onFxRef);
     return () => {
       window.removeEventListener("nestory:pricing-settings-changed", onPricing);
       window.removeEventListener("nestory:automation-prefs-changed", onAuto);
+      window.removeEventListener(FX_REFERENCE_CHANGED_EVENT, onFxRef);
     };
   }, []);
 
+  /** C6: fetch via server /api/fx/cny-twd only — never browser→open.er-api direct. */
   const fetchLiveRate = useCallback(async () => {
     setLiveRateLoading(true);
     setLiveRateError(null);
+    setApplyNotice(null);
     try {
-      const response = await fetch("https://open.er-api.com/v6/latest/CNY");
-      if (!response.ok) throw new Error("http");
-      const data = (await response.json()) as { rates?: { TWD?: number } };
-      const twdRate = data?.rates?.TWD;
-      if (typeof twdRate !== "number" || !Number.isFinite(twdRate)) {
-        throw new Error("parse");
+      const response = await fetch("/api/fx/cny-twd", { cache: "no-store" });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        rate?: number;
+        asOf?: string;
+        source?: string;
+        message?: string;
+      };
+      if (
+        !response.ok ||
+        !data.ok ||
+        typeof data.rate !== "number" ||
+        !Number.isFinite(data.rate)
+      ) {
+        setLiveRate(null);
+        setLiveRateError(
+          data.message || "無法取得今日匯率，請稍後再試（不影響已套用中的匯率）。"
+        );
+        return;
       }
-      const rounded = Math.round(twdRate * 100) / 100;
+      const rounded = Math.round(data.rate * 100) / 100;
+      // Reference only — does not change nestory_pricing_settings.rate.
+      setStoredFxReference({
+        rate: rounded,
+        source: typeof data.source === "string" ? data.source : "api",
+        asOf: typeof data.asOf === "string" ? data.asOf : undefined
+      });
       setLiveRate(rounded);
     } catch {
       setLiveRate(null);
@@ -227,8 +268,9 @@ export function SettingsPanel() {
       setApplyNotice("請先按「抓取今日匯率」再套用。");
       return;
     }
+    // Only this action mutates applied rate (pricing store).
     updatePricing("rate", liveRate);
-    setApplyNotice(`已套用今日匯率 ${liveRate.toFixed(2)}（本裝置；頂欄會同步顯示）。`);
+    setApplyNotice(`已套用今日匯率 ${liveRate.toFixed(2)}（本裝置；頂欄套用中與公式會同步）。`);
   }
 
   function patchAutomation(patch: Partial<AutomationPrefs>) {
@@ -387,7 +429,7 @@ export function SettingsPanel() {
           {liveRateError ? <div className="notice">{liveRateError}</div> : null}
           {applyNotice ? <div className="notice">{applyNotice}</div> : null}
           <p className="settings-section-hint">
-            每日自動抓匯率是 C6；本頁只做手動抓取與套用。頂欄只顯示「套用中」數字。
+            開頁自動抓與每日 Cron 只更新「今日參考」，不會改算價。要把參考寫進公式請按「套用今日匯率」。頂欄顯示套用中＋今日參考；無一鍵直接改套用中。
           </p>
 
           <div className="settings-grid">

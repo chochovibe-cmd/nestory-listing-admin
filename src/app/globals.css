@@ -3315,6 +3315,13 @@ textarea {
 
 /* ── Header: live rate + deployment status dropdown ── */
 .rate-val { font-weight: 800; }
+/* C6: 今日參考 next to applied rate — muted, tokens only */
+.fx-ref {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-left: 2px;
+}
 /* !important on padding/font-size: as an <a> tag (the 登入 link), .hdr-btn
    loses to ".nav a" on pure specificity (that selector has an extra element
    qualifier, 0,1,1 vs .hdr-btn's 0,1,0) regardless of source order, so the

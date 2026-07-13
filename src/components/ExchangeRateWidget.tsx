@@ -1,41 +1,118 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { defaultPricingSettings } from "@/lib/pricing";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
+import {
+  FX_REFERENCE_CHANGED_EVENT,
+  getStoredFxReference,
+  isFreshFxReference,
+  setStoredFxReference,
+  type FxReference
+} from "@/lib/fx/fxReferenceStore";
 
 /**
- * C2 Q7-A: topbar shows applied CNY→TWD rate only.
- * Fetch / apply live rate lives on /settings (pricing section). Cron = C6.
+ * C6: topbar shows applied CNY→TWD + today's reference (display only).
+ * Never one-click applies; fetch/apply live on /settings (pricing).
+ * Open-page auto-fetch updates nestory_fx_reference only — not pricing rate.
  */
 export function ExchangeRateWidget() {
-  // Starts at the SSR-safe default and only reads localStorage after mount
-  // (see useEffect below) — initializing useState directly from
-  // getStoredPricingSettings() here would make the server-rendered markup
-  // (no localStorage) mismatch the client's first render, triggering a
-  // React hydration error.
-  const [rate, setRate] = useState(defaultPricingSettings.rate);
+  // SSR-safe defaults: read localStorage only after mount (hydration).
+  const [applied, setApplied] = useState(defaultPricingSettings.rate);
+  const [reference, setReference] = useState<FxReference | null>(null);
+  const autoFetchStarted = useRef(false);
 
   useEffect(() => {
-    setRate(getStoredPricingSettings().rate);
+    setApplied(getStoredPricingSettings().rate);
+    setReference(getStoredFxReference());
 
-    function onChange(event: Event) {
+    function onPricing(event: Event) {
       const detail = (event as CustomEvent<{ rate?: number }>).detail;
       if (typeof detail?.rate === "number" && Number.isFinite(detail.rate)) {
-        setRate(detail.rate);
+        setApplied(detail.rate);
         return;
       }
-      setRate(getStoredPricingSettings().rate);
+      setApplied(getStoredPricingSettings().rate);
     }
-    window.addEventListener("nestory:pricing-settings-changed", onChange);
-    return () => window.removeEventListener("nestory:pricing-settings-changed", onChange);
+
+    function onReference(event: Event) {
+      const detail = (event as CustomEvent<FxReference>).detail;
+      if (detail && typeof detail.rate === "number") {
+        setReference(detail);
+        return;
+      }
+      setReference(getStoredFxReference());
+    }
+
+    window.addEventListener("nestory:pricing-settings-changed", onPricing);
+    window.addEventListener(FX_REFERENCE_CHANGED_EVENT, onReference);
+    return () => {
+      window.removeEventListener("nestory:pricing-settings-changed", onPricing);
+      window.removeEventListener(FX_REFERENCE_CHANGED_EVENT, onReference);
+    };
   }, []);
+
+  // Q1-A: auto-fetch today's reference once when missing or not Taiwan calendar day.
+  // Failures leave 今日 — with no toast spam.
+  useEffect(() => {
+    if (autoFetchStarted.current) return;
+    const existing = getStoredFxReference();
+    if (isFreshFxReference(existing)) {
+      setReference(existing);
+      return;
+    }
+
+    autoFetchStarted.current = true;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/fx/cny-twd", { cache: "no-store" });
+        const data = (await response.json()) as {
+          ok?: boolean;
+          rate?: number;
+          asOf?: string;
+          source?: string;
+        };
+        if (cancelled) return;
+        if (!response.ok || !data.ok || typeof data.rate !== "number") {
+          // Honest: do not invent a number; leave reference as-is / null.
+          return;
+        }
+        setStoredFxReference({
+          rate: data.rate,
+          source: typeof data.source === "string" ? data.source : "api",
+          asOf: typeof data.asOf === "string" ? data.asOf : undefined
+        });
+        // setStoredFxReference dispatches event; local state also updates via listener.
+      } catch {
+        // Silent fail for auto path — settings page shows explicit errors on manual fetch.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const todayLabel =
+    reference && isFreshFxReference(reference)
+      ? reference.rate.toFixed(2)
+      : "—";
+
+  const todayTitle =
+    reference && isFreshFxReference(reference)
+      ? `今日參考匯率 ${reference.rate.toFixed(2)}（僅顯示；到設定頁按「套用」才改算價）`
+      : "今日參考尚未取得或抓取失敗（不影響套用中匯率）";
 
   return (
     <>
       <span title="套用中匯率（到設定頁可套用今日匯率）">CNY/TWD</span>
-      <span className="rate-val" title="套用中匯率">
-        {rate.toFixed(2)}
+      <span className="rate-val" title={`套用中匯率 ${applied.toFixed(2)}`}>
+        {applied.toFixed(2)}
+      </span>
+      <span className="fx-ref" title={todayTitle}>
+        今日 {todayLabel}
       </span>
     </>
   );

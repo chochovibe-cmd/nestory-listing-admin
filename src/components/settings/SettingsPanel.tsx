@@ -1,0 +1,645 @@
+"use client";
+
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
+import {
+  AI_PROVIDER_STORAGE_KEY,
+  readStoredAiProvider
+} from "@/components/ProviderSwitcher";
+import {
+  defaultAutomationPrefs,
+  getStoredAutomationPrefs,
+  setStoredAutomationPrefs,
+  type AutomationPrefs,
+  type WorkerMode
+} from "@/lib/automationPrefsStore";
+import { canAccessSettings, isAdmin } from "@/lib/auth/roles";
+import { defaultPricingSettings, type PricingSettings } from "@/lib/pricing";
+import {
+  getStoredPricingSettings,
+  setStoredPricingSettings
+} from "@/lib/pricingSettingsStore";
+import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
+import type { UserRole } from "@/types/domain";
+
+type AiProvider = "openai" | "claude";
+type ThemeId = "dark" | "nordic" | "kitty";
+
+type StatusPayload = {
+  supabase: boolean;
+  aiProvider: { openai: boolean; claude: boolean };
+  shopify: boolean;
+  shopifyMock: boolean;
+};
+
+const THEMES: { value: ThemeId; icon: string; title: string }[] = [
+  { value: "dark", icon: "🌑", title: "夜色" },
+  { value: "nordic", icon: "🐰", title: "奶茶" },
+  { value: "kitty", icon: "🎀", title: "海鹽" }
+];
+
+const SECTION_IDS = ["model", "pricing", "automation", "appearance", "connection"] as const;
+type SectionId = (typeof SECTION_IDS)[number];
+
+function isSectionId(value: string | null): value is SectionId {
+  return SECTION_IDS.includes(value as SectionId);
+}
+
+/**
+ * C2 settings page body — five B17 collapsible sections.
+ * Write locks: System Prompt + automation prefs = admin; pricing/theme/model default = all operators.
+ * No secrets / webhook URL in client storage (Q8-A-restricted).
+ */
+export function SettingsPanel() {
+  const searchParams = useSearchParams();
+  const initialSection = searchParams.get("section");
+
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [roleReady, setRoleReady] = useState(false);
+
+  const [open, setOpen] = useState<Record<SectionId, boolean>>({
+    model: false,
+    pricing: false,
+    automation: false,
+    appearance: false,
+    connection: false
+  });
+
+  const [provider, setProvider] = useState<AiProvider>("openai");
+  const [pricing, setPricing] = useState<PricingSettings>(defaultPricingSettings);
+  const [liveRate, setLiveRate] = useState<number | null>(null);
+  const [liveRateLoading, setLiveRateLoading] = useState(false);
+  const [liveRateError, setLiveRateError] = useState<string | null>(null);
+  const [applyNotice, setApplyNotice] = useState<string | null>(null);
+
+  const [automation, setAutomation] = useState<AutomationPrefs>(defaultAutomationPrefs);
+  const [theme, setTheme] = useState<ThemeId>("dark");
+
+  const [status, setStatus] = useState<StatusPayload | null>(null);
+  const [statusChecking, setStatusChecking] = useState(false);
+  const statusAttemptedRef = useRef(false);
+
+  const admin = isAdmin(role);
+  const allowed = canAccessSettings(role);
+
+  useEffect(() => {
+    if (isSectionId(initialSection)) {
+      setOpen((prev) => ({ ...prev, [initialSection]: true }));
+    }
+  }, [initialSection]);
+
+  useEffect(() => {
+    if (!hasSupabaseBrowserEnv()) {
+      setRoleReady(true);
+      return;
+    }
+    const supabase = createClient();
+    let cancelled = false;
+
+    async function loadRole() {
+      const { data: auth } = await supabase.auth.getUser();
+      const user = auth.user;
+      if (!user) {
+        if (!cancelled) {
+          setRole(null);
+          setRoleReady(true);
+        }
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      if (!cancelled) {
+        setRole((profile?.role as UserRole | undefined) ?? null);
+        setRoleReady(true);
+      }
+    }
+
+    void loadRole();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      void loadRole();
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    setProvider(readStoredAiProvider());
+    setPricing(getStoredPricingSettings());
+    setAutomation(getStoredAutomationPrefs());
+    try {
+      const stored = window.localStorage.getItem("nestory_theme") as ThemeId | null;
+      if (stored === "dark" || stored === "nordic" || stored === "kitty") {
+        setTheme(stored);
+      } else if (document.body.dataset.theme) {
+        const t = document.body.dataset.theme as ThemeId;
+        if (t === "dark" || t === "nordic" || t === "kitty") setTheme(t);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    function onPricing(event: Event) {
+      const detail = (event as CustomEvent<PricingSettings>).detail;
+      if (detail) setPricing({ ...defaultPricingSettings, ...detail });
+      else setPricing(getStoredPricingSettings());
+    }
+    function onAuto(event: Event) {
+      const detail = (event as CustomEvent<AutomationPrefs>).detail;
+      if (detail) setAutomation({ ...defaultAutomationPrefs, ...detail });
+      else setAutomation(getStoredAutomationPrefs());
+    }
+    window.addEventListener("nestory:pricing-settings-changed", onPricing);
+    window.addEventListener("nestory:automation-prefs-changed", onAuto);
+    return () => {
+      window.removeEventListener("nestory:pricing-settings-changed", onPricing);
+      window.removeEventListener("nestory:automation-prefs-changed", onAuto);
+    };
+  }, []);
+
+  const fetchLiveRate = useCallback(async () => {
+    setLiveRateLoading(true);
+    setLiveRateError(null);
+    try {
+      const response = await fetch("https://open.er-api.com/v6/latest/CNY");
+      if (!response.ok) throw new Error("http");
+      const data = (await response.json()) as { rates?: { TWD?: number } };
+      const twdRate = data?.rates?.TWD;
+      if (typeof twdRate !== "number" || !Number.isFinite(twdRate)) {
+        throw new Error("parse");
+      }
+      const rounded = Math.round(twdRate * 100) / 100;
+      setLiveRate(rounded);
+    } catch {
+      setLiveRate(null);
+      setLiveRateError("無法取得今日匯率，請稍後再試（不影響已套用中的匯率）。");
+    } finally {
+      setLiveRateLoading(false);
+    }
+  }, []);
+
+  const checkStatus = useCallback(async () => {
+    statusAttemptedRef.current = true;
+    setStatusChecking(true);
+    try {
+      const response = await fetch("/api/status");
+      setStatus((await response.json()) as StatusPayload);
+    } catch {
+      setStatus(null);
+    } finally {
+      setStatusChecking(false);
+    }
+  }, []);
+
+  // First open of connection section (incl. ?section=connection) probes once.
+  useEffect(() => {
+    if (open.connection && !statusAttemptedRef.current && !statusChecking) {
+      void checkStatus();
+    }
+  }, [open.connection, statusChecking, checkStatus]);
+
+  function toggle(id: SectionId) {
+    setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function chooseProvider(next: AiProvider) {
+    setProvider(next);
+    window.localStorage.setItem(AI_PROVIDER_STORAGE_KEY, next);
+  }
+
+  function updatePricing(key: keyof PricingSettings, value: number) {
+    if (!Number.isFinite(value)) return;
+    setPricing((current) => {
+      const next = { ...current, [key]: value };
+      setStoredPricingSettings({ [key]: value });
+      return next;
+    });
+  }
+
+  function applyLiveRate() {
+    if (liveRate == null) {
+      setApplyNotice("請先按「抓取今日匯率」再套用。");
+      return;
+    }
+    updatePricing("rate", liveRate);
+    setApplyNotice(`已套用今日匯率 ${liveRate.toFixed(2)}（本裝置；頂欄會同步顯示）。`);
+  }
+
+  function patchAutomation(patch: Partial<AutomationPrefs>) {
+    if (!admin) return;
+    setAutomation((current) => {
+      const next = { ...current, ...patch };
+      setStoredAutomationPrefs(patch);
+      return next;
+    });
+  }
+
+  function chooseTheme(value: ThemeId) {
+    setTheme(value);
+    document.body.dataset.theme = value;
+    try {
+      window.localStorage.setItem("nestory_theme", value);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (!roleReady) {
+    return (
+      <main className="container settings-page">
+        <h1 className="settings-page-title">⚙ 設定</h1>
+        <p className="settings-page-lead">載入中…</p>
+      </main>
+    );
+  }
+
+  if (!allowed) {
+    return (
+      <main className="container settings-page">
+        <h1 className="settings-page-title">⚙ 設定</h1>
+        <p className="settings-page-lead">
+          請先登入具上架權限的帳號（admin／operator）才能使用設定。
+        </p>
+        <p>
+          <Link className="button" href="/login">
+            前往登入
+          </Link>
+        </p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="container settings-page">
+      <h1 className="settings-page-title">⚙ 設定</h1>
+      <p className="settings-page-lead">
+        分類收合。定價與本機偏好會立刻生效；System Prompt 版本庫與自動化管線標示「待接線」的項目不會假裝已通。
+        {admin ? null : " 你目前是 operator：可改定價／模型／外觀；System Prompt 與自動化僅 Admin 可改。"}
+      </p>
+
+      <div className="settings-stack">
+        {/* ── 1. Model + System Prompt ── */}
+        <CollapsibleSection
+          open={open.model}
+          onToggle={() => toggle("model")}
+          summary={provider === "claude" ? "預設 Claude" : "預設 GPT"}
+          title="🤖 AI 模型與 System Prompt"
+        >
+          <p className="settings-section-hint">
+            這裡的 Provider 是<strong>全域預設</strong>。工作檯「本次模型」仍只影響單次生成（B8）。
+          </p>
+          <div className="pill-group" aria-label="預設文案 Provider" style={{ marginBottom: 12 }}>
+            <button
+              className={`pill-btn${provider === "claude" ? " active" : ""}`}
+              onClick={() => chooseProvider("claude")}
+              type="button"
+            >
+              Claude
+            </button>
+            <button
+              className={`pill-btn${provider === "openai" ? " active" : ""}`}
+              onClick={() => chooseProvider("openai")}
+              type="button"
+            >
+              GPT
+            </button>
+            <button className="pill-btn" disabled title="未來：分欄位分 Provider" type="button">
+              DeepSeek（未來）
+            </button>
+          </div>
+
+          <div className="label-with-help" style={{ marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)" }}>
+              System Prompt（逐版記錄）
+            </span>
+            <span className="settings-admin-tag">Admin</span>
+          </div>
+          {admin ? (
+            <div>
+              <textarea
+                disabled
+                rows={4}
+                style={{ width: "100%", fontSize: 12 }}
+                value="（待接線）正式 System Prompt 仍由程式／環境設定提供。此區為版本管理骨架，不會在本包改動 generate 讀取路徑。"
+              />
+              <p className="notice" style={{ marginTop: 8 }}>
+                待 SQL／待接線：版本表 migration 已預留（026，可之後再執行）。本包<strong>不要求</strong>
+                立刻跑 SQL；generate <strong>不會</strong>改讀資料庫 prompt。
+              </p>
+              <div className="settings-actions">
+                <span className="settings-muted">目前：程式內建版 · 未接版本庫</span>
+                <button className="btn-mini" disabled type="button">
+                  歷史版本
+                </button>
+                <button className="btn-mini" disabled type="button">
+                  儲存新版
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="settings-section-hint">僅 Admin 可檢視與編輯 System Prompt 版本。</p>
+          )}
+        </CollapsibleSection>
+
+        {/* ── 2. Pricing ── */}
+        <CollapsibleSection
+          open={open.pricing}
+          onToggle={() => toggle("pricing")}
+          summary={`匯率 ${pricing.rate.toFixed(2)} · Showmore +${pricing.showmoreMarkupPercent}%`}
+          title="💰 定價規則"
+        >
+          <div className="settings-row">
+            <span>
+              套用中匯率{" "}
+              <b className="rate-val">{pricing.rate.toFixed(2)}</b>
+            </span>
+            <span className="settings-muted">
+              今日匯率{" "}
+              {liveRate != null ? (
+                <b>{liveRate.toFixed(2)}</b>
+              ) : (
+                <span>—</span>
+              )}
+            </span>
+            <button
+              className="btn-mini"
+              disabled={liveRateLoading}
+              onClick={() => void fetchLiveRate()}
+              type="button"
+            >
+              {liveRateLoading ? "抓取中…" : "抓取今日匯率"}
+            </button>
+            <button
+              className="btn-mini"
+              disabled={liveRate == null}
+              onClick={applyLiveRate}
+              type="button"
+            >
+              套用今日匯率
+            </button>
+          </div>
+          {liveRateError ? <div className="notice">{liveRateError}</div> : null}
+          {applyNotice ? <div className="notice">{applyNotice}</div> : null}
+          <p className="settings-section-hint">
+            每日自動抓匯率是 C6；本頁只做手動抓取與套用。頂欄只顯示「套用中」數字。
+          </p>
+
+          <div className="settings-grid">
+            <div className="field">
+              <label>CNY 匯率</label>
+              <input
+                onChange={(e) => updatePricing("rate", Number(e.target.value))}
+                step="0.01"
+                type="number"
+                value={pricing.rate}
+              />
+            </div>
+            <div className="field">
+              <label>成本係數</label>
+              <input
+                onChange={(e) => updatePricing("costMultiplier", Number(e.target.value))}
+                step="0.01"
+                type="number"
+                value={pricing.costMultiplier}
+              />
+            </div>
+            <div className="field">
+              <label>利潤加成</label>
+              <input
+                onChange={(e) => updatePricing("marginMultiplier", Number(e.target.value))}
+                step="0.01"
+                type="number"
+                value={pricing.marginMultiplier}
+              />
+            </div>
+            <div className="field">
+              <label>定價加成（原價）</label>
+              <input
+                onChange={(e) => updatePricing("compareAtMultiplier", Number(e.target.value))}
+                step="0.01"
+                type="number"
+                value={pricing.compareAtMultiplier}
+              />
+            </div>
+            <div className="field">
+              <label>最低售價 TWD</label>
+              <input
+                onChange={(e) => updatePricing("minPrice", Number(e.target.value))}
+                step="1"
+                type="number"
+                value={pricing.minPrice}
+              />
+            </div>
+            <div className="field">
+              <label>Showmore 加價 %</label>
+              <input
+                onChange={(e) => updatePricing("showmoreMarkupPercent", Number(e.target.value))}
+                step="0.5"
+                type="number"
+                value={pricing.showmoreMarkupPercent}
+              />
+            </div>
+          </div>
+          <div className="formula-preview">
+            售價 ＝ 成本 × {pricing.rate.toFixed(2)} × {pricing.costMultiplier.toFixed(2)} ×{" "}
+            {pricing.marginMultiplier.toFixed(2)}
+            <br />
+            定價 ＝ 成本 × {pricing.rate.toFixed(2)} × {pricing.costMultiplier.toFixed(2)} ×{" "}
+            {pricing.compareAtMultiplier.toFixed(2)}
+            <br />
+            Showmore 匯出時另加 {pricing.showmoreMarkupPercent}% 後再尾數美化（管線 D8 接通後生效）
+          </div>
+          <div className="settings-note">
+            與工作檯底部「定價規則設定」共用本機儲存，雙向同步。
+            <br />
+            ✨ 尾數美化：低／中／高價帶順眼數字；手填利潤時跳最近美化價。
+            <br />
+            Showmore +% 暫存本機（Q9-A）；日後可轉 team_settings。
+          </div>
+        </CollapsibleSection>
+
+        {/* ── 3. Automation ── */}
+        <CollapsibleSection
+          open={open.automation}
+          onToggle={() => toggle("automation")}
+          summary={
+            automation.workerMode === "off"
+              ? "Worker 關閉"
+              : automation.workerMode === "codex"
+                ? "Codex"
+                : "Make"
+          }
+          title="⚙️ 自動化與通知"
+        >
+          <p className="settings-section-hint">
+            非敏感偏好可先存本機。Make Webhook URL <strong>禁止</strong>存在瀏覽器；未有伺服器端安全儲存前欄位停用。
+            {!admin ? " 僅 Admin 可改此區。" : null}
+          </p>
+          <div className="pill-group" aria-label="Worker 模式" style={{ marginBottom: 10 }}>
+            {(
+              [
+                ["make", "Make（預設）"],
+                ["codex", "Codex"],
+                ["off", "關閉"]
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                className={`pill-btn${automation.workerMode === mode ? " active" : ""}`}
+                disabled={!admin}
+                key={mode}
+                onClick={() => patchAutomation({ workerMode: mode as WorkerMode })}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+            <button className="pill-btn" disabled title="穩定後自架" type="button">
+              n8n（未來）
+            </button>
+          </div>
+          <div className="settings-row">
+            <label className="check-row">
+              <input
+                checked={automation.emailNotify}
+                disabled={!admin}
+                onChange={(e) => patchAutomation({ emailNotify: e.target.checked })}
+                type="checkbox"
+              />
+              Email 通知（預設開 · Phase D 接通後生效）
+            </label>
+            <label className="check-row">
+              <input
+                checked={automation.lineNotify}
+                disabled={!admin}
+                onChange={(e) => patchAutomation({ lineNotify: e.target.checked })}
+                type="checkbox"
+              />
+              LINE Bot（後期）
+            </label>
+          </div>
+          <div className={`field settings-field-disabled`} style={{ marginTop: 8 }}>
+            <label>Make Webhook URL</label>
+            <input
+              disabled
+              placeholder="Phase D 接通後由伺服器端安全儲存"
+              type="url"
+              value=""
+            />
+            <p className="settings-muted" style={{ marginTop: 6 }}>
+              不會寫入 localStorage。管線 Phase D 接通後再生效。
+            </p>
+          </div>
+        </CollapsibleSection>
+
+        {/* ── 4. Appearance ── */}
+        <CollapsibleSection
+          open={open.appearance}
+          onToggle={() => toggle("appearance")}
+          summary={THEMES.find((t) => t.value === theme)?.title ?? "主題"}
+          title="🎨 外觀主題"
+        >
+          <div className="pill-group" aria-label="主題">
+            {THEMES.map((item) => (
+              <button
+                className={`pill-btn${theme === item.value ? " active" : ""}`}
+                key={item.value}
+                onClick={() => chooseTheme(item.value)}
+                type="button"
+              >
+                {item.icon} {item.title}
+              </button>
+            ))}
+          </div>
+          <p className="settings-section-hint" style={{ marginTop: 10 }}>
+            每個裝置各自記住（與頂欄主題切換同一資料）。不改全站間距字級（BX-P）。
+          </p>
+        </CollapsibleSection>
+
+        {/* ── 5. Connection ── */}
+        <CollapsibleSection
+          open={open.connection}
+          onToggle={() => toggle("connection")}
+          summary={status ? "已檢查" : "點開檢查"}
+          title="🔌 連線狀態"
+        >
+          <div className="settings-conn-list">
+            <ConnRow
+              label="Supabase"
+              ok={status?.supabase}
+              text={
+                !status ? "未檢查" : status.supabase ? "已連線" : "連線失敗"
+              }
+            />
+            <ConnRow
+              label="OpenAI"
+              ok={status?.aiProvider.openai}
+              text={
+                !status ? "未檢查" : status.aiProvider.openai ? "已設定" : "未設定"
+              }
+            />
+            <ConnRow
+              label="Claude"
+              ok={status?.aiProvider.claude}
+              text={
+                !status ? "未檢查" : status.aiProvider.claude ? "已設定" : "未設定"
+              }
+            />
+            <ConnRow
+              label="Shopify Admin API"
+              ok={status?.shopify}
+              text={
+                !status
+                  ? "未檢查"
+                  : status.shopify
+                    ? status.shopifyMock
+                      ? "已設定（mock）"
+                      : "已設定"
+                    : "未設定"
+              }
+            />
+            <ConnRow label="Vision / Image Provider" ok={null} text="Phase D 圖管線" />
+          </div>
+          <div className="settings-actions">
+            <button
+              className="btn-mini"
+              disabled={statusChecking}
+              onClick={() => void checkStatus()}
+              type="button"
+            >
+              {statusChecking ? "檢查中…" : "重新檢查連線"}
+            </button>
+          </div>
+        </CollapsibleSection>
+      </div>
+    </main>
+  );
+}
+
+function ConnRow({
+  label,
+  text,
+  ok
+}: {
+  label: string;
+  text: string;
+  ok: boolean | null | undefined;
+}) {
+  const schip =
+    ok === true
+      ? "schip schip--ok"
+      : ok === false
+        ? "schip schip--error"
+        : "schip schip--idle";
+  return (
+    <div className="settings-conn-row">
+      <span>{label}</span>
+      <span className={schip}>{text}</span>
+    </div>
+  );
+}

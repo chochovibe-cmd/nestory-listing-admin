@@ -1953,14 +1953,27 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                   value={pricingSettings.minPrice}
                 />
               </div>
+              <div className="field">
+                <label>Showmore 加價 %</label>
+                <input
+                  onChange={(e) =>
+                    updatePricingSetting("showmoreMarkupPercent", Number(e.target.value))
+                  }
+                  step="0.5"
+                  type="number"
+                  value={pricingSettings.showmoreMarkupPercent}
+                />
+              </div>
             </div>
             <div className="formula-preview">
               售價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.marginMultiplier.toFixed(2)}
               <br />
               定價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.compareAtMultiplier.toFixed(2)}
+              <br />
+              Showmore +{pricingSettings.showmoreMarkupPercent}%（D8 匯出管線接通後生效）
             </div>
             <div className="settings-note">
-              成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝。
+              成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝。與「設定 → 定價」共用本機儲存。
               <br />
               ✨ 算出的售價會自動「尾數美化」到順眼的價格帶（如 199／299／399／599／990…）。
               <br />

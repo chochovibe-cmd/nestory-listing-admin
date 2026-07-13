@@ -17,6 +17,12 @@ export interface PricingSettings {
   marginMultiplier: number;
   compareAtMultiplier: number;
   minPrice: number;
+  /**
+   * C2 Q9-A: Showmore export markup % (default +5).
+   * Stored with device localStorage for now; D8 may move to team_settings.
+   * Export pipeline still Phase D — this value is settings UI only until then.
+   */
+  showmoreMarkupPercent: number;
 }
 
 export interface CalculatePriceOptions {
@@ -63,7 +69,8 @@ export const defaultPricingSettings: PricingSettings = {
   costMultiplier: 1.3,
   marginMultiplier: 1.4,
   compareAtMultiplier: 1.8,
-  minPrice: 199
+  minPrice: 199,
+  showmoreMarkupPercent: 5
 };
 
 function profitMetrics(sellPrice: number, costTwd: number) {

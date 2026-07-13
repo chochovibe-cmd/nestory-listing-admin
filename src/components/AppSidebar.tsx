@@ -6,13 +6,14 @@ import { useEffect, useState } from "react";
 import {
   isNavActive,
   NAV_STORAGE_KEY,
+  SETTINGS_NAV,
   SIDEBAR_NAV
 } from "@/lib/nav";
 
 /**
- * C1 desktop collapsible sidebar.
+ * C1 desktop collapsible sidebar + C2 settings pin at bottom (Q1-C).
  * Default collapsed (icon column); preference in localStorage `nestory_nav`.
- * Parent `.shell` receives `.nav-open` via `document` class on the shell node.
+ * Parent `.shell` receives `.nav-open` via class on the shell node.
  */
 export function AppSidebar() {
   const pathname = usePathname();
@@ -52,6 +53,8 @@ export function AppSidebar() {
     });
   }
 
+  const settingsActive = isNavActive(pathname, SETTINGS_NAV.href);
+
   return (
     <nav
       aria-label="主導覽"
@@ -83,7 +86,19 @@ export function AppSidebar() {
           </Link>
         );
       })}
-      <div className="sidebar-foot">Nestory Admin</div>
+      <div className="sidebar-bottom">
+        <Link
+          className={`sidebar-item${settingsActive ? " active" : ""}`}
+          href={SETTINGS_NAV.href}
+          title={SETTINGS_NAV.label}
+        >
+          <span aria-hidden className="sidebar-ic">
+            {SETTINGS_NAV.icon}
+          </span>
+          <span className="sidebar-label">{SETTINGS_NAV.label}</span>
+        </Link>
+        <div className="sidebar-foot">Nestory Admin</div>
+      </div>
     </nav>
   );
 }

@@ -521,6 +521,7 @@ export function SettingsPanel() {
         >
           <p className="settings-section-hint">
             非敏感偏好可先存本機。Make Webhook URL <strong>禁止</strong>存在瀏覽器；未有伺服器端安全儲存前欄位停用。
+            圖片批次完成通知（D6）以伺服器環境變數為準（RESEND_*／LINE_*）；下方勾選暫不擋 server 寄送。
             {!admin ? " 僅 Admin 可改此區。" : null}
           </p>
           <div className="pill-group" aria-label="Worker 模式" style={{ marginBottom: 10 }}>
@@ -553,7 +554,7 @@ export function SettingsPanel() {
                 onChange={(e) => patchAutomation({ emailNotify: e.target.checked })}
                 type="checkbox"
               />
-              Email 通知（預設開 · Phase D 接通後生效）
+              Email 通知（本機偏好 · 真寄需 RESEND_API_KEY／RESEND_FROM／NOTIFY_EMAIL_TO）
             </label>
             <label className="check-row">
               <input
@@ -562,7 +563,7 @@ export function SettingsPanel() {
                 onChange={(e) => patchAutomation({ lineNotify: e.target.checked })}
                 type="checkbox"
               />
-              LINE Bot（後期）
+              LINE Messaging（本機偏好 · 真推需 LINE_CHANNEL_ACCESS_TOKEN／LINE_USER_ID；非 LINE Notify）
             </label>
           </div>
           <div className={`field settings-field-disabled`} style={{ marginTop: 8 }}>

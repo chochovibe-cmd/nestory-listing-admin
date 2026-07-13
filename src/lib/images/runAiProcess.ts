@@ -24,6 +24,7 @@ import {
   modelSupportsImageEdit
 } from "@/lib/providers/openai-image-provider";
 import type { ImageProvider } from "@/lib/providers/image";
+import { safeTryNotifyImageBatchIfComplete } from "@/lib/notifications/tryNotifyImageBatchIfComplete";
 import { isShopifyCdnUrl } from "@/lib/shopify/filesUpload";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
@@ -322,6 +323,9 @@ export async function updateBatchStatusAfterAiProcess(
         updated_at: new Date().toISOString()
       })
       .eq("id", batchId);
+
+    // D6-open: item-level terminal gate inside tryNotify; never throw
+    await safeTryNotifyImageBatchIfComplete(batchId, { serviceSupabase });
 
     return true;
   } catch {

@@ -16,6 +16,7 @@ import {
 } from "@/lib/images/runAiProcess";
 import { runFinalizeForDraft } from "@/lib/images/runFinalize";
 import { runSharpBatchForDraft, type SharpBatchServiceClient } from "@/lib/images/runSharpBatch";
+import { safeTryNotifyImageBatchIfComplete } from "@/lib/notifications/tryNotifyImageBatchIfComplete";
 import type { ImageBatchItemStatus, ImageBatchStatus, ImageProcessIntent } from "@/types/domain";
 
 /** Align with route maxDuration = 60. */
@@ -730,6 +731,9 @@ export async function runSendImagesAutoChain(
       updated_at: new Date().toISOString()
     })
     .eq("id", batchId);
+
+  // D6-open: notify only if all items terminal; never throw into send-images
+  await safeTryNotifyImageBatchIfComplete(batchId, { serviceSupabase });
 
   return {
     batchStatus: agg.batchStatus,

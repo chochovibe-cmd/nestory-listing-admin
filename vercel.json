@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/fx",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/stuck-batches",
+      "schedule": "0 17 * * *"
     }
   ]
 }

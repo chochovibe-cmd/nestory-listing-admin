@@ -60,10 +60,17 @@
  *     (not a new awaiting_review enum; see Mockup diff 21).
  *     Slider label may still say「處理後（暫存）」even after CDN (Q5-extra: no UI change).
  *
- * 10. Publish productCreateMedia attaching Files CDN URLs
+ * 10. D6-open batch notify — ✅ tryNotifyImageBatchIfComplete
+ *     After auto-chain / ai-process updates batch: if ALL image_batch_items are
+ *     done|failed|skipped → Email (Resend) + LINE Messaging Flex (not LINE Notify).
+ *     Idempotent notify_sent_at (claim only if ≥1 channel sent). Missing keys → skip.
+ *     Daily Cron /api/cron/stuck-batches (>24h → status stuck + stuck_notified_at).
+ *     Events #2–#4 not implemented (publish / scouting / budget).
+ *
+ * 11. Publish productCreateMedia attaching Files CDN URLs
  *     Current publish still falls back to processed || original (CDN preferred once finalized).
  *
- * 11. On published/archived → delete Supabase temp originals (+ rejected Files via fileDelete)
+ * 12. On published/archived → delete Supabase temp originals (+ rejected Files via fileDelete)
  *     ❌ full cleanup Cron — not this package (D1 only deletes processed temp after CDN success)
  *
  * Auth for pipeline APIs:

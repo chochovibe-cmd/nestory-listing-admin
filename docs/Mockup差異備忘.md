@@ -354,6 +354,24 @@
 - **現況**：✅ **D5 已對齊（2026-07-13）**。`/review`＋`ImageReviewPanel`＋
   `POST /api/images/review-confirm|reject`；腳本 `scripts/verify-d5-image-review.mjs`。
 
+### 差異 22：D1 finalize 後才是 Shopify CDN（銜接差異 20）
+
+- **差在哪**：
+  1. **sharp 成功後**仍為 Supabase temp（`storage: supabase_temp`，差異 20 不變）。
+  2. **`POST /api/images/finalize` 成功後**才覆寫 `processed_file_url`＝Shopify Files CDN
+     （`cdn.shopify.com` 等官方 image/preview URL），API 標 `storage: "shopify_cdn"`。
+  3. 只上傳 **main + variant**；spec／detail skip（規格圖不上 Files，對齊 A10／圖床架構）。
+  4. finalize **不**重跑 sharp；來源優先 processed temp → fallback original；已是 CDN 則 skip。
+  5. CDN 未 READY：短輪詢最多約 5×800ms；逾時 fail、**不塞假 CDN**。
+  6. 成功後 best-effort 刪該張 Supabase `…/processed/{imageId}.webp`；**不刪 original**；
+     全站 published／archived 清原圖仍屬後續。
+  7. D5 滑桿文案仍可寫「處理後（暫存）」（Q5-extra 本包不改 UI）；實際 URL 可能已是 CDN。
+  8. 未接 Make（D2）；publish 仍 `processed || original`（CDN 到位後自然優先）。
+- **為什麼**：圖床定案「暫存→永久 CDN」兩段式；與 D3／D5 零 migration 銜接。
+- **誰拍板**：總指揮，2026-07-13（D1 裁決 Q1–Q5 全 A）。
+- **現況**：✅ **D1 真 CDN 完成（2026-07-13）**。`filesUpload`＋`finalize`＋
+  `verify-d1-files.mjs`；零 SQL。
+
 ### 差異 20：D-open 圖片 sharp／圖床骨架（相對 Mockup 完整圖審＋CDN）
 
 - **差在哪**：
@@ -365,21 +383,22 @@
   3. `de_text`／`regenerate` **本包 skip**（等 D4 Image API）；只對 `keep`（與工程用明確
      `imageIds` 的未標記）跑 sharp。
   4. B14 送圖**仍不**自動呼叫 sharp（Q5-A）；Make webhook 屬 D2。
-  5. `POST /api/images/finalize` 固定 **501 NOT_IMPLEMENTED**——禁止假成功 CDN。
-  6. 無圖審頁 UI（D5）、無通知（D6）；本包純 API。
+  5. ~~`POST /api/images/finalize` 固定 501~~ → **已由差異 22／D1 真上傳取代**（2026-07-13）。
+  6. 無圖審頁 UI（D5 後已有）、無通知（D6）；D-open 當時純 API。
 - **為什麼**：先把可單測的 sharp 產能打通；Files 上傳需 `write_files`＋實機，拆下包。
 - **誰拍板**：總指揮，2026-07-13（D-open 裁決 Q1–Q6 全 A）。
-- **現況**：✅ **D3 完成＋D1 骨架**（2026-07-13）。`sharpProcess`／`sharp-batch`／
-  `imagePipeline`／`filesUpload` stub／`verify-d3-sharp.mjs`；零 SQL。
+- **現況**：✅ **D3 完成**；D1 骨架已升級為 **差異 22 真 CDN**。
 
 ---
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 22 **D1**——finalize 成功＝shopify_cdn；sharp 仍 temp；
+  main+variant only；短輪詢 CDN；best-effort 刪 processed temp；不刪 original；D5 文案不改。
 - 2026-07-13（Grok）：差異 21 **D5**——圖審通過用 image_flags.approved；拒絕 failed＋warnings；
   無假 ETA／無 D4 重生；滑桿標暫存；viewed 硬擋一鍵確認。
 - 2026-07-13（Grok）：差異 20 **D-open**——processed＝Supabase temp 非 CDN；image_status 用 done；
-  de_text/regen skip；B14 不自動 sharp；finalize 501。
+  de_text/regen skip；B14 不自動 sharp；finalize 原 501（後由差異 22 取代）。
 - 2026-07-13（Grok）：差異 19 **C4** 定案並對齊——頂欄 Modal、RLS 範圍、預設三狀態、
   深連結非站內嵌、無批次、手機不進更多抽屜、零 SQL。
 - 2026-07-13（Grok）：差異 18 **C6** 定案並對齊——今日參考本機 store、Cron 不寫 DB、

@@ -273,13 +273,38 @@
 - **誰拍板**：老闆／總指揮，2026-07-13（C1 裁決 Q1-A／Q2-C／Q3-A／Q4-A／Q5-A＋四條施工要求）。
 - **現況**：✅ **C1 已對齊（2026-07-13）**。`AppSidebar`／`MobileTabbar`／`lib/nav.ts`／
   佔位頁 `review|records|dashboard|scouting`；無 SQL。
+  （設定入口已由 **差異 17／C2** 補上：側欄底＋更多抽屜。）
+
+### 差異 17：C2 設定頁（分類收合／入口／匯率／Prompt 骨架）
+
+- **差在哪**：
+  1. **入口 Q1-C**：**不是** Mockup 頂欄「⚙ 設定」Modal；正式版入口只在
+     **桌機側欄底部**＋**手機「更多」抽屜**，頂欄不加設定齒輪（頂欄維持工具列：模型／模式／部署／匯率顯示／主題／登出）。
+  2. **形態 Q3-A**：**獨立頁 `/settings`**，不是 Mockup 全站 Modal；內部分類用 **B17 `CollapsibleSection`**
+     （`.adv-section`），不新造 Mockup `.set-sec`。
+  3. **誰看得到 Q2-A**：admin + operator 都進得了；頁內鎖寫入——System Prompt／自動化偏好僅 Admin；
+     定價／預設模型／外觀 operator 可改（與現站 localStorage 工作流一致）。
+  4. **匯率 Q7-A**：頂欄 **只顯示套用中匯率**（拿掉 ↻ 直接改匯率）；「抓取今日／套用」只在設定→定價。
+     每日 Cron 仍是 **C6**，本包不做。
+  5. **定價 Q5-A／Q6-A／Q9-A**：沿用 `nestory_pricing_settings` localStorage + 事件；
+     工作檯底部「定價規則設定」**保留可編**並雙向同步；新增 **Showmore 加價 %**（預設 5，本機暫存，D8 再轉 team_settings）。
+  6. **System Prompt Q4-A-lite**：Admin UI 骨架＋誠實「待 SQL／待接線」；migration **026 只產檔、驗收不依賴**；
+     **generate 不改**讀 DB prompt。
+  7. **自動化 Q8-A-restricted**：Worker／Email／LINE 非敏感偏好可存本機；**Make Webhook URL 禁用**、
+     禁止寫 localStorage；標 Phase D。
+  8. **外觀**：三主題 dark／nordic／kitty（現站有；Mockup 只畫兩主題）——只加不減。
+- **為什麼**：安全（webhook 不上前端）、不逼老闆當場跑 SQL、對齊 C1 導覽分工、BX-P 不順手美化。
+- **誰拍板**：老闆／總指揮，2026-07-13（C2 裁決 Q1-C／Q2-A／Q3-A／Q4-A-lite／Q5-A／Q6-A／Q7-A／Q8-A-restricted／Q9-A）。
+- **現況**：✅ **C2 已對齊（2026-07-13）**。`/settings`＋`SettingsPanel`；026 可選。
 
 ---
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 17 **C2** 定案並對齊——獨立設定頁、側欄底／更多入口、頂欄匯率只顯示、
+  Prompt 骨架不依賴 SQL、Showmore % 本機、Webhook 禁用。
 - 2026-07-13（Grok）：差異 16 **C1** 定案並對齊——側欄含佇列、四格 Q2-C、斷點 960、
-  頂欄分頁移除、死佔位、更多抽屜不含設定。
+  頂欄分頁移除、死佔位、更多抽屜不含設定（後由差異 17 補設定）。
 - 2026-07-13（Grok）：差異 14 **B16**、差異 15 **B17** 定案並對齊——手機子分頁 960／tabbar 768、
   密度收合＋?＋手風琴不硬擋＋B13 恢復開區。（**tabbar 768 已被差異 16 覆寫為 960**）
 - 2026-07-12（Grok）：差異 13 **B14 定案並對齊**——送圖建 image_batches／items／snapshot；

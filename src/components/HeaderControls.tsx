@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AuthNav } from "@/components/AuthNav";
 import { DeploymentStatus } from "@/components/DeploymentStatus";
 import { ExchangeRateWidget } from "@/components/ExchangeRateWidget";
+import { ProductLibraryModal } from "@/components/library/ProductLibraryModal";
 import { ModeSwitcher } from "@/components/ModeSwitcher";
 import { ProviderSwitcher } from "@/components/ProviderSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
@@ -13,11 +14,13 @@ import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 /**
  * C1 Q1-A: page links moved to AppSidebar / MobileTabbar.
  * Header keeps tools only (provider, mode, deploy, FX, theme, auth).
+ * C4: signed-in users also get 🔍 商品庫 modal (Q6-A: same control in mobile ☰ tools).
  */
 export function HeaderControls() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   // Collapse the mobile tools menu after navigating.
   useEffect(() => {
@@ -54,6 +57,16 @@ export function HeaderControls() {
       <nav className={`nav${open ? " open" : ""}`}>
         {signedIn ? (
           <>
+            <button
+              className="hdr-btn"
+              onClick={() => {
+                setLibraryOpen(true);
+                setOpen(false);
+              }}
+              type="button"
+            >
+              🔍 商品庫
+            </button>
             <ProviderSwitcher />
             <ModeSwitcher />
             <DeploymentStatus />
@@ -63,6 +76,7 @@ export function HeaderControls() {
         <ThemeSwitcher />
         <AuthNav />
       </nav>
+      <ProductLibraryModal open={libraryOpen} onClose={() => setLibraryOpen(false)} />
     </>
   );
 }

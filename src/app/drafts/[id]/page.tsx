@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { DraftFocusScroll } from "@/components/library/DraftFocusScroll";
 import { ImageUploader } from "@/components/listing/ImageUploader";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { SetupNotice } from "@/components/listing/SetupNotice";
@@ -9,12 +10,19 @@ import type { ProductDraft, ProductImage } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
-export default async function DraftDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DraftDetailPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ focus?: string }>;
+}) {
   if (!hasSupabaseServerEnv()) {
     return <SetupNotice title="商品詳情需要 Supabase 測試環境" />;
   }
 
   const { id } = await params;
+  const { focus } = await searchParams;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -40,6 +48,7 @@ export default async function DraftDetailPage({ params }: { params: Promise<{ id
 
   return (
     <main className="container">
+      <DraftFocusScroll focus={focus} />
       <section className="panel" style={{ marginBottom: 18 }}>
         <div className="panel-header">
           <h1>{typedDraft.title_zh || typedDraft.taobao_title || "商品草稿"}</h1>
@@ -64,7 +73,8 @@ export default async function DraftDetailPage({ params }: { params: Promise<{ id
       </section>
 
       <div style={{ display: "grid", gap: 18 }}>
-        <section className="panel">
+        {/* C4 Q4-A: deep link target for 商品庫「編輯圖片」 */}
+        <section className="panel" id="draft-images">
           <div className="panel-header">
             <h2>圖片上傳</h2>
           </div>

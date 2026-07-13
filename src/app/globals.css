@@ -1478,6 +1478,118 @@ textarea {
   }
 }
 
+/* C4 product library modal — layout-only; reuses modal / mini-btn / schip tokens */
+.modal-box.library-modal {
+  width: min(560px, 94vw);
+  max-height: 86vh;
+}
+.library-search {
+  width: 100%;
+  margin-bottom: 12px;
+  min-height: 40px;
+}
+.library-state {
+  margin: 8px 0 4px;
+}
+.library-empty-cta {
+  display: inline-flex;
+  margin-top: 10px;
+  min-height: 40px;
+}
+.lib-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: min(58vh, 520px);
+  overflow-y: auto;
+}
+.lib-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.lib-row:last-child {
+  border-bottom: none;
+}
+.lib-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-s);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.lib-thumb--empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.lib-body {
+  flex: 1;
+  min-width: 0;
+}
+.lib-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.lib-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+.lib-meta .schip {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 10px;
+}
+.lib-meta-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.lib-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 959px) {
+  .modal-box.library-modal {
+    width: 100%;
+    max-height: 88vh;
+  }
+  .lib-row {
+    flex-wrap: wrap;
+  }
+  .lib-actions {
+    flex-direction: row;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .lib-actions .mini-btn {
+    min-height: 44px;
+  }
+  .library-search {
+    min-height: 44px;
+  }
+}
+
 /* Variant (款式) editor — B7 multi-dimension (tokens only; layout from mockup IA) */
 .variant-box { border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface2); padding: 10px; margin: 4px 0; position: relative; }
 .variant-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; font-size: 10px; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }

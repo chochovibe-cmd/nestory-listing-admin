@@ -336,10 +336,30 @@
 - **現況**：✅ **C4 已對齊（2026-07-13）**。`ProductLibraryModal`／`productLibrary` helpers／
   `HeaderControls` 入口／`DraftFocusScroll`；樣式 `library-modal`／`lib-row` layout-only。
 
+### 差異 20：D-open 圖片 sharp／圖床骨架（相對 Mockup 完整圖審＋CDN）
+
+- **差在哪**：
+  1. Mockup／圖床定案終態是 **Shopify Files CDN**（`cdn.shopify.com`）；D-open 的 sharp 成功後
+     `processed_file_url` 寫的是 **Supabase 暫存 WebP**（路徑 `…/processed/{imageId}.webp`），
+     API 標 `storage: "supabase_temp"`，**不是**永久 CDN。
+  2. Scenario 文件有 `awaiting_review`；DB `image_status` 仍用既有 enum——sharp 成功＝**`done`**
+     （Q3-A），不新增 migration。
+  3. `de_text`／`regenerate` **本包 skip**（等 D4 Image API）；只對 `keep`（與工程用明確
+     `imageIds` 的未標記）跑 sharp。
+  4. B14 送圖**仍不**自動呼叫 sharp（Q5-A）；Make webhook 屬 D2。
+  5. `POST /api/images/finalize` 固定 **501 NOT_IMPLEMENTED**——禁止假成功 CDN。
+  6. 無圖審頁 UI（D5）、無通知（D6）；本包純 API。
+- **為什麼**：先把可單測的 sharp 產能打通；Files 上傳需 `write_files`＋實機，拆下包。
+- **誰拍板**：總指揮，2026-07-13（D-open 裁決 Q1–Q6 全 A）。
+- **現況**：✅ **D3 完成＋D1 骨架**（2026-07-13）。`sharpProcess`／`sharp-batch`／
+  `imagePipeline`／`filesUpload` stub／`verify-d3-sharp.mjs`；零 SQL。
+
 ---
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 20 **D-open**——processed＝Supabase temp 非 CDN；image_status 用 done；
+  de_text/regen skip；B14 不自動 sharp；finalize 501。
 - 2026-07-13（Grok）：差異 19 **C4** 定案並對齊——頂欄 Modal、RLS 範圍、預設三狀態、
   深連結非站內嵌、無批次、手機不進更多抽屜、零 SQL。
 - 2026-07-13（Grok）：差異 18 **C6** 定案並對齊——今日參考本機 store、Cron 不寫 DB、

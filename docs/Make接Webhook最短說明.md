@@ -78,6 +78,30 @@
 |---|---|
 | `event` | 固定 `image_batch_submitted`（收單＋可選自動鏈結果） |
 | `batchId` | 本批送圖 ID |
+
+---
+
+## 四-b、可選：批次發布收單（D7-open）
+
+同一 `MAKE_WEBHOOK_URL` 也可能收到：
+
+```json
+{
+  "event": "publish_batch_submitted",
+  "batchId": "uuid",
+  "publishMode": "draft",
+  "batchStatus": "completed",
+  "totalCount": 3,
+  "doneCount": 3,
+  "failedCount": 0,
+  "skippedCount": 0,
+  "snapshot": [{ "draftId": "…", "title": "…" }],
+  "results": [{ "draftId": "…", "itemStatus": "done", "ok": true }]
+}
+```
+
+**不必**為了發布另建場景——沒設 webhook 時批次發布照常在 Vercel 內以 ≥600ms 間隔逐件執行。  
+Make 場景若要分流：Router 依 `event` 欄位區分 `image_batch_submitted` vs `publish_batch_submitted`。
 | `snapshot` | 建立當下的標記摘要（Make 應優先用這個，不要事後重讀標記） |
 | `autoChain` | 伺服器已跑過的 sharp／finalize／有限 AI 摘要；混標可能 `awaiting_d4` |
 | `d4` | 可選：本批 AI 嘗試摘要（無混標時可為 null） |

@@ -276,6 +276,25 @@
   （設定入口已由 **差異 17／C2** 補上：側欄底＋更多抽屜。）
   **導覽順序已由差異 26 覆寫**（2026-07-14）：佇列不再主線第二位／不再佔手機主 tab。
 
+### 差異 27：D7 批次發布＝伺服器限速＋發布紀錄骨架（非完整 Make Scenario 2／非完整 C5）
+
+- **差在哪**：
+  1. **限速位置**：【自動·Scenario 2】寫 Make 排隊逐件；**定案**＝Vercel `runPublishBatch` 內聚
+     逐件 `publishDraft`＋件間 ≥600ms（`PUBLISH_ITEM_GAP_MS` 可覆寫）；Make webhook
+     `publish_batch_submitted` **可選**，無 webhook 也能發。
+  2. **時間預算 Q2-A**：`maxDuration=60`、剩餘 &lt;8s 停；未跑完 item → `skipped`＋
+     `time_budget`；batch **必進終態**（completed／partial_failed／failed），不整批卡 processing。
+  3. **單件也建批 Q4-A**（比照 B14）；帳本表 `publish_batches`／`publish_batch_items`（027），
+     與 `image_batches` 分離。
+  4. **紀錄頁 C5-lite**：`/records` 批次卡＋明細＋「重送失敗件＝**新建** batch」；
+     Mockup 的 Showmore／Matrixify／商品庫更新 filter 與完整 C5 **本包不做**（誠實灰字／不假列表）。
+  5. **事件 #2** 只留 `notify_sent_at` 欄，**不真寄**。
+  6. 表未建（027 未跑）→ 誠實提示，**不假資料**。
+- **為什麼**：對齊 D2「伺服器主路徑、Make 可選」；避開 Vercel 逾時用時間預算誠實略過；
+  紀錄頁要有真帳本才能脫離 ComingSoon，但不假裝完整 C5。
+- **誰拍板**：總指揮放行 D7-open，2026-07-14（Q1–Q5 A／A-lite、Q6 角色矩陣不動）。
+- **現況**：✅ **D7-open 已實作（2026-07-14）**。C5 清單不勾滿。⚠ 027 待 SQL Editor。
+
 ### 差異 26：導覽降級「全部草稿」（佇列移後；刪頁／Shopify 連動爭議暫緩）
 
 - **差在哪**：
@@ -465,6 +484,7 @@
 
 ## 修訂紀錄
 
+- 2026-07-14（Grok）：差異 27 **D7-open**——伺服器 600ms 限速批次發布＋`/records` 骨架；C5 不勾滿；027 只產檔。
 - 2026-07-14（Grok）：差異 26 **導覽**——全部草稿移後／手機出主 tab；Mockup 主線四格；去留爭議交 Fable。
 - 2026-07-13（Grok）：差異 25 **D6-open**——事件 #1＋卡住 Cron；Resend＋LINE Flex；
   item 終態；Q3b 成功才 claim；零 migration；非四事件／非 Make 專責通知。

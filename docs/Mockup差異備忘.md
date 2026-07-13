@@ -354,6 +354,24 @@
 - **現況**：✅ **D5 已對齊（2026-07-13）**。`/review`＋`ImageReviewPanel`＋
   `POST /api/images/review-confirm|reject`；腳本 `scripts/verify-d5-image-review.mjs`。
 
+### 差異 23：D2-open 送圖後自動鏈（覆寫差異 20「B14 不自動 sharp」）
+
+- **差在哪**：
+  1. **B14 送圖成功後**會跑伺服器端自動鏈（`runSendImagesAutoChain`），**不再**只建 batch 就結束。
+  2. **Q1-A**：整件 pipeline 圖皆 `keep` 才自動 `runSharpBatchForDraft`；有 `de_text`／`regenerate`
+     → **不**自動 sharp／finalize；item 維持 `queued`；response 註 `awaiting_d4`；**batch 維持 `queued`**。
+  3. **Q2-A**：sharp **至少 1 張成功** → 預設 `runFinalizeForDraft`（CDN）；失敗不塞假 CDN。
+  4. **內聚函式**：禁止 HTTP 自打 `/api/images/sharp-batch`／`finalize`（route 改薄殼）。
+  5. **Q4-A**：序向、`maxDuration=60`、剩餘 &lt;8s 停；未跑 item 維持 `queued`；batch `partial_failed` 誠實。
+  6. **Make 可選**：有 `MAKE_WEBHOOK_URL` → 收單一封 `image_batch_submitted`（含 chain 摘要）；
+     無值跳過；webhook 失敗**不**讓送圖 500。完整 Make 節點／D4 AI **非本包**。
+  7. **Q6-A**：只改 API `message` 誠實字串；**無**圖審／列表大 UI；b15 跳過。
+  8. 失敗短句寫入 draft `warnings`（Q5b-A）；零 migration。
+- **為什麼**：D3／D1／D5 已齊，日常缺口是「送圖後還要手動轉檔／上圖床」；Make 完整 Scenario 可後補。
+- **誰拍板**：總指揮，2026-07-13 晚（D2-open 裁決 Q1–Q6 全 A）。
+- **現況**：✅ **D2-open 完成**。`runSharpBatch`／`runFinalize`／`sendImagesAutoChain`；
+  `docs/Make接Webhook最短說明.md`；`verify-d2-auto-chain.mjs`。
+
 ### 差異 22：D1 finalize 後才是 Shopify CDN（銜接差異 20）
 
 - **差在哪**：
@@ -366,7 +384,8 @@
   6. 成功後 best-effort 刪該張 Supabase `…/processed/{imageId}.webp`；**不刪 original**；
      全站 published／archived 清原圖仍屬後續。
   7. D5 滑桿文案仍可寫「處理後（暫存）」（Q5-extra 本包不改 UI）；實際 URL 可能已是 CDN。
-  8. 未接 Make（D2）；publish 仍 `processed || original`（CDN 到位後自然優先）。
+  8. ~~未接 Make（D2）~~ → **已由差異 23／D2-open 可選 webhook＋自動鏈銜接**；publish 仍
+     `processed || original`（CDN 到位後自然優先）。
 - **為什麼**：圖床定案「暫存→永久 CDN」兩段式；與 D3／D5 零 migration 銜接。
 - **誰拍板**：總指揮，2026-07-13（D1 裁決 Q1–Q5 全 A）。
 - **現況**：✅ **D1 真 CDN 完成（2026-07-13）**。`filesUpload`＋`finalize`＋
@@ -382,23 +401,26 @@
      （Q3-A），不新增 migration。
   3. `de_text`／`regenerate` **本包 skip**（等 D4 Image API）；只對 `keep`（與工程用明確
      `imageIds` 的未標記）跑 sharp。
-  4. B14 送圖**仍不**自動呼叫 sharp（Q5-A）；Make webhook 屬 D2。
+  4. ~~B14 送圖**仍不**自動呼叫 sharp（Q5-A）；Make webhook 屬 D2。~~
+     → **已由差異 23 覆寫**：送圖後全 keep 自動 sharp（＋預設 finalize）；Make webhook 可選。
   5. ~~`POST /api/images/finalize` 固定 501~~ → **已由差異 22／D1 真上傳取代**（2026-07-13）。
   6. 無圖審頁 UI（D5 後已有）、無通知（D6）；D-open 當時純 API。
 - **為什麼**：先把可單測的 sharp 產能打通；Files 上傳需 `write_files`＋實機，拆下包。
 - **誰拍板**：總指揮，2026-07-13（D-open 裁決 Q1–Q6 全 A）。
-- **現況**：✅ **D3 完成**；D1 骨架已升級為 **差異 22 真 CDN**。
+- **現況**：✅ **D3 完成**；D1 骨架已升級為 **差異 22 真 CDN**；送圖自動鏈見 **差異 23**。
 
 ---
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 23 **D2-open**——送圖後全 keep→sharp→finalize；混標 awaiting_d4；
+  可選 Make `image_batch_submitted`；內聚函式禁止自 fetch；覆寫差異 20 條 4。
 - 2026-07-13（Grok）：差異 22 **D1**——finalize 成功＝shopify_cdn；sharp 仍 temp；
   main+variant only；短輪詢 CDN；best-effort 刪 processed temp；不刪 original；D5 文案不改。
 - 2026-07-13（Grok）：差異 21 **D5**——圖審通過用 image_flags.approved；拒絕 failed＋warnings；
   無假 ETA／無 D4 重生；滑桿標暫存；viewed 硬擋一鍵確認。
 - 2026-07-13（Grok）：差異 20 **D-open**——processed＝Supabase temp 非 CDN；image_status 用 done；
-  de_text/regen skip；B14 不自動 sharp；finalize 原 501（後由差異 22 取代）。
+  de_text/regen skip；B14 原不自動 sharp（後由差異 23 覆寫）；finalize 原 501（後由差異 22 取代）。
 - 2026-07-13（Grok）：差異 19 **C4** 定案並對齊——頂欄 Modal、RLS 範圍、預設三狀態、
   深連結非站內嵌、無批次、手機不進更多抽屜、零 SQL。
 - 2026-07-13（Grok）：差異 18 **C6** 定案並對齊——今日參考本機 store、Cron 不寫 DB、

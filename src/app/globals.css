@@ -177,8 +177,150 @@ select {
   font: inherit;
 }
 
-.shell {
+/* ── C1 App Shell: topbar + (sidebar | main) + mobile tabbar ── */
+.app-root {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-main {
+  min-width: 0;
+}
+
+/* Desktop collapsible sidebar (default icon column; .shell.nav-open expands) */
+.sidebar {
+  width: 60px;
+  transition: width 0.18s ease;
+  border-right: 1px solid var(--border);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  max-height: 100vh;
+  background: var(--bg);
+  overflow: hidden;
+  z-index: 90;
+}
+
+.shell.nav-open .sidebar {
+  width: 196px;
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 40px;
+  min-height: 40px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: var(--radius-s);
+  margin-bottom: 6px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  white-space: nowrap;
+  position: relative;
+  text-decoration: none;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.sidebar-ic {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.sidebar-label {
+  opacity: 0;
+  transition: opacity 0.15s;
+  overflow: hidden;
+}
+
+.shell.nav-open .sidebar-label {
+  opacity: 1;
+}
+
+.sidebar-item:hover {
+  background: var(--surface2);
+  color: var(--text-dim, var(--text));
+}
+
+.sidebar-item.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.shell.nav-open .sidebar-foot {
+  opacity: 1;
+}
+
+/* Dead placeholder (Q4-A) — no fake controls */
+.coming-soon {
+  padding-top: 48px;
+  max-width: 420px;
+}
+
+.coming-soon-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.coming-soon-msg {
+  color: var(--text-muted);
+  margin: 0 0 20px;
+  font-size: 14px;
 }
 
 /* ── Header ── */
@@ -236,11 +378,9 @@ body[data-theme="kitty"] .topbar {
   text-transform: uppercase;
 }
 
-/* Visible by default on desktop -- only the 3 page-link tabs get their own
-   collapsible dropdown (.nav-links-menu below); the rest of the control
-   cluster (AI provider/mode, deploy status, exchange rate, theme, login)
-   stays on the header row at all times on desktop. Collapsed entirely
-   behind .nav-toggle only on mobile (see the 768px media query). */
+/* Desktop: tools stay on the header row. Collapsed behind .nav-toggle
+   on mobile (<960px, aligned with C1 tabbar — Q3-A). Page links live in
+   AppSidebar / MobileTabbar (C1 Q1-A removed .nav-links-menu). */
 .nav {
   display: flex;
   flex-wrap: wrap;
@@ -261,57 +401,7 @@ body[data-theme="kitty"] .topbar {
   min-height: 0 !important;
 }
 
-/* Desktop-only dropdown for 新增商品/商品佇列/待審核. Hidden on mobile,
-   where the same 3 links live in the fixed bottom MobileTabbar instead. */
-.nav-links-menu {
-  position: relative;
-  display: inline-flex;
-}
-
-.nav-links-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 10px;
-  min-height: 0;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.nav-links-dropdown {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 8px);
-  z-index: 300;
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 140px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  padding: 8px;
-  box-shadow: var(--shadow-m);
-}
-
-.nav-links-dropdown.open {
-  display: flex;
-}
-
-.nav-links-dropdown a {
-  padding: 6px 8px;
-  border-radius: var(--radius-s);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-/* Mobile-only hamburger for the rest of the control cluster. */
+/* Mobile-only hamburger for the header tool cluster (not page nav). */
 .nav-toggle {
   display: none;
   font-family: 'Space Grotesk', sans-serif;
@@ -381,7 +471,7 @@ body[data-theme="kitty"] .topbar {
 }
 
 /* Single button + dropdown theme picker, same widget pattern as
-   .nav-links-menu / .header-status-wrap. */
+   .header-status-wrap. */
 .theme-picker {
   position: relative;
   display: inline-flex;
@@ -2521,7 +2611,7 @@ textarea {
   background: var(--border);
 }
 
-/* ── Mobile floating tab bar (hidden until <=768px; ported from 分支) ── */
+/* ── Mobile floating tab bar (C1: 4 cells, shown <960px; Q3-A) ── */
 .mobile-tabbar {
   display: none;
 }
@@ -2531,14 +2621,168 @@ textarea {
   line-height: 1;
 }
 
+/* Q2-C「更多」sheet list — reuses .modal-overlay / .modal-box (B11) */
+.mobile-more-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.mobile-more-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.mobile-more-link:hover {
+  background: var(--surface2);
+}
+
+.mobile-more-link.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.mobile-more-ic {
+  width: 24px;
+  text-align: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
 @media (max-width: 860px) {
   .grid {
     grid-template-columns: 1fr;
   }
 }
 
-/* B16: mobile workbench — 輸入／結果 sub-tabs; breakpoint 960 (tabbar stays 768) */
+/*
+ * C1 + B16 shared <960px shell:
+ * - hide desktop sidebar, show 4-cell tabbar
+ * - topbar tools collapse (same breakpoint as tabbar — Q3-A, no 768–959 dead zone)
+ * - B16 workbench sub-tabs
+ */
 @media (max-width: 959px) {
+  /* C1 App Shell */
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    display: none;
+  }
+
+  /* Leave room for the fixed bottom tab bar. */
+  body {
+    padding-bottom: 84px;
+  }
+
+  .topbar {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    row-gap: 8px;
+  }
+
+  /* Collapsed by default: brand + tools toggle only. */
+  .brand {
+    order: 1;
+    flex: 1 1 auto;
+  }
+  .nav-toggle {
+    display: inline-flex;
+    order: 2;
+    margin-left: auto;
+  }
+  .nav {
+    order: 3;
+    width: 100%;
+    display: none;
+  }
+  .nav.open {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .header-status-wrap {
+    order: 5;
+    flex-basis: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .header-status.status-body {
+    position: static;
+    width: 100%;
+    margin-top: 6px;
+  }
+  .header-status.status-body.open {
+    grid-template-columns: 1fr 1fr;
+  }
+  .header-status .status-pill {
+    justify-content: center;
+  }
+
+  .mobile-tabbar {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 900;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 8px;
+    background: var(--surface);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-l);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  .mobile-tabbar a,
+  .mobile-tabbar button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 1.5px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-m);
+    padding: 8px 2px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: "Noto Sans TC", sans-serif;
+    min-height: 52px;
+    transition: all 0.2s;
+    cursor: pointer;
+    width: 100%;
+  }
+  .mobile-tabbar a.active,
+  .mobile-tabbar button.active {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+  body[data-theme="dark"] .mobile-tabbar {
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.26);
+  }
+  body[data-theme="dark"] .mobile-tabbar a,
+  body[data-theme="dark"] .mobile-tabbar button {
+    border-width: 1px;
+  }
+
+  /* B16 workbench */
   .workbench-panes {
     grid-template-columns: 1fr;
   }
@@ -2678,44 +2922,9 @@ textarea {
   }
 }
 
+/* Phone-narrow extras (BX-P: only keep pre-existing form density rules here;
+   shell/tabbar/topbar collapse already live at 959 — C1 Q3-A). */
 @media (max-width: 768px) {
-  /* Leave room for the fixed bottom tab bar. */
-  body { padding-bottom: 84px; }
-
-  .topbar {
-    padding: 10px 14px;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    row-gap: 8px;
-  }
-  /* The 3 page links move to the bottom tab bar on mobile instead of the
-     desktop-only dropdown. */
-  .nav-links-menu { display: none; }
-
-  /* Collapsed by default: only brand + toggle show (~56px tall). Tapping the
-     toggle reveals the control cluster on its own full-width row below. This
-     keeps the sticky header from eating half the screen and from covering
-     (and blocking taps on) the content beneath it. */
-  .brand { order: 1; flex: 1 1 auto; }
-  .nav-toggle {
-    display: inline-flex;
-    order: 2;
-    margin-left: auto;
-  }
-  .nav {
-    order: 3;
-    width: 100%;
-    display: none;
-  }
-  .nav.open {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-  }
-
   .container { padding: 12px; }
   .grid,
   .row,
@@ -2753,66 +2962,11 @@ textarea {
   .currency-toggle button,
   .pill-btn { padding: 8px 10px; font-size: 12px; }
 
-  .header-status-wrap {
-    order: 5;
-    flex-basis: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .header-status.status-body { position: static; width: 100%; margin-top: 6px; }
-  .header-status.status-body.open { grid-template-columns: 1fr 1fr; }
-  .header-status .status-pill { justify-content: center; }
-
   .theme-btn { width: 32px; height: 32px; min-height: 32px; font-size: 15px; }
   .hdr-btn { padding: 7px 12px; font-size: 12px; }
 
   /* 44px minimum touch target for the primary action. */
   .btn-add { min-height: 44px; }
-
-  .mobile-tabbar {
-    position: fixed;
-    left: 10px;
-    right: 10px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    z-index: 900;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 8px;
-    background: var(--surface);
-    border: 1.5px solid var(--line);
-    border-radius: var(--radius-l);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
-  }
-  .mobile-tabbar a {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    border: 1.5px solid transparent;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-m);
-    padding: 8px 4px;
-    font-size: 11px;
-    font-weight: 700;
-    font-family: 'Noto Sans TC', sans-serif;
-    min-height: 52px;
-    transition: all .2s;
-  }
-  .mobile-tabbar a.active {
-    background: var(--accent);
-    color: var(--accent-fg);
-  }
-  body[data-theme="dark"] .mobile-tabbar {
-    border: 1px solid var(--border);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, .26);
-  }
-  body[data-theme="dark"] .mobile-tabbar a {
-    border-width: 1px;
-  }
 }
 
 @media (max-width: 420px) {
@@ -3253,7 +3407,6 @@ select:focus {
 .pill-group,
 .btn-add,
 .btn-mini,
-.nav-links-toggle,
 .theme-picker-toggle {
   border: var(--frame-w) solid var(--border);
   box-shadow: var(--control-shadow);
@@ -3265,7 +3418,6 @@ select:focus {
 }
 .hdr-btn,
 .btn-mini,
-.nav-links-toggle,
 .theme-picker-toggle {
   background: var(--surface);
   color: var(--text);
@@ -3278,7 +3430,6 @@ select:focus {
 .btn-mini:hover,
 .theme-btn:hover,
 .hdr-btn:hover,
-.nav-links-toggle:hover,
 .theme-picker-toggle:hover {
   transform: var(--hover-transform);
   box-shadow: var(--hover-shadow);
@@ -3290,7 +3441,9 @@ select:focus {
   font-weight: 700;
 }
 .currency-toggle button.active,
+.mobile-tabbar a.active,
 .mobile-tabbar button.active,
+.sidebar-item.active,
 .sel--fill {
   border-color: var(--border);
   background: var(--accent);

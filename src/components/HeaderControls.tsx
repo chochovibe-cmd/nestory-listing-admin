@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthNav } from "@/components/AuthNav";
@@ -11,22 +10,22 @@ import { ProviderSwitcher } from "@/components/ProviderSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 
+/**
+ * C1 Q1-A: page links moved to AppSidebar / MobileTabbar.
+ * Header keeps tools only (provider, mode, deploy, FX, theme, auth).
+ */
 export function HeaderControls() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [navMenuOpen, setNavMenuOpen] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
 
-  // Collapse the mobile menu and the desktop page-link dropdown automatically
-  // after navigating to another page.
+  // Collapse the mobile tools menu after navigating.
   useEffect(() => {
     setOpen(false);
-    setNavMenuOpen(false);
   }, [pathname]);
 
-  // Defaults to signed-out so the operator toolbar (nav links, AI
-  // provider/mode switches, deployment status, exchange rate) never flashes
-  // on the login screen before Supabase confirms there's no session.
+  // Defaults to signed-out so the operator toolbar never flashes on the
+  // login screen before Supabase confirms there's no session.
   useEffect(() => {
     if (!hasSupabaseBrowserEnv()) return;
     const supabase = createClient();
@@ -53,22 +52,6 @@ export function HeaderControls() {
         {open ? "✕ 關閉" : "☰ 選單"}
       </button>
       <nav className={`nav${open ? " open" : ""}`}>
-        {signedIn ? (
-          <div className="nav-links-menu">
-            <button
-              aria-expanded={navMenuOpen}
-              className="nav-links-toggle"
-              onClick={() => setNavMenuOpen((current) => !current)}
-              type="button"
-            >
-              ☰ 分頁 <span>{navMenuOpen ? "▴" : "▾"}</span>
-            </button>
-            <div className={`nav-links-dropdown${navMenuOpen ? " open" : ""}`}>
-              <Link href="/drafts/new">新增商品</Link>
-              <Link href="/drafts">商品佇列</Link>
-            </div>
-          </div>
-        ) : null}
         {signedIn ? (
           <>
             <ProviderSwitcher />

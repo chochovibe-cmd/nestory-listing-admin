@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { AppSidebar } from "@/components/AppSidebar";
 import { HeaderControls } from "@/components/HeaderControls";
 import { MobileTabbar } from "@/components/MobileTabbar";
 import "./globals.css";
@@ -28,6 +29,16 @@ const themeInitScript = `
   } catch (e) {}
 `;
 
+// C1: restore sidebar open preference before paint (matches Mockup nestory_nav).
+const navInitScript = `
+  try {
+    if (window.localStorage.getItem('nestory_nav') === 'open') {
+      var shell = document.getElementById('app-shell');
+      if (shell) shell.classList.add('nav-open');
+    }
+  } catch (e) {}
+`;
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-Hant">
@@ -36,7 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           server's "dark" attribute intentionally differs from the client's. */}
       <body data-theme="dark" suppressHydrationWarning>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <div className="shell">
+        <div className="app-root">
           <header className="topbar">
             <Link className="brand" href="/">
               <span className="brand-dot" />
@@ -47,9 +58,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </Link>
             <HeaderControls />
           </header>
-          {children}
+          <div className="shell" id="app-shell">
+            <AppSidebar />
+            <div className="shell-main">{children}</div>
+          </div>
           <MobileTabbar />
         </div>
+        <script dangerouslySetInnerHTML={{ __html: navInitScript }} />
       </body>
     </html>
   );

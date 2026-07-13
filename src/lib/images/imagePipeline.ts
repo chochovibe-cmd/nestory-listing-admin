@@ -30,21 +30,26 @@
  *  7. de_text / regenerate → Image API (Make waits 20–60s) — ❌ D4
  *     then re-enter sharp/finalize. sharp-batch SKIPS these with honest reason (Q4-A).
  *
- *  8. finalize → Shopify Files permanent CDN
- *     stagedUploadsCreate (JSON) → browser/server PUT to Shopify bucket (not via Vercel body)
- *     → fileCreate → cdn.shopify.com URL → overwrite processed_file_url
- *     Thin stub: POST /api/images/finalize → NOT_IMPLEMENTED (D1 skeleton)
- *     Real upload: ❌ later D1 completion (not D-open)
+ *  8. finalize → Shopify Files permanent CDN  ✅ D1
+ *     POST /api/images/finalize { draftId, imageIds? }
+ *     → only main+variant (spec/detail skip); no sharp re-run
+ *     → source: already CDN skip | processed_file_url | fallback original
+ *     → stagedUploadsCreate → multipart direct to staged URL → fileCreate
+ *     → short poll fileStatus (~5×800ms) for image.url / preview
+ *     → overwrite processed_file_url with CDN; storage: shopify_cdn
+ *     → best-effort delete old Supabase …/processed/{imageId}.webp (not original)
+ *     Failures keep prior URL; no fake CDN. Auth: worker Bearer or session+canOperate.
  *
  *  9. Image review UI (D5) — ✅ /review + review-confirm/reject
  *     image_status stays "done" after sharp; human pass = image_flags.image_review=approved
  *     (not a new awaiting_review enum; see Mockup diff 21).
+ *     Slider label may still say「處理後（暫存）」even after CDN (Q5-extra: no UI change).
  *
  * 10. Publish productCreateMedia attaching Files CDN URLs
- *     Current publish still falls back to processed || original (Supabase URLs OK for now).
+ *     Current publish still falls back to processed || original (CDN preferred once finalized).
  *
  * 11. On published/archived → delete Supabase temp originals (+ rejected Files via fileDelete)
- *     ❌ cleanup Cron / job — not this package
+ *     ❌ full cleanup Cron — not this package (D1 only deletes processed temp after CDN success)
  *
  * Auth for pipeline APIs:
  *   - Operator cookie session (canOperate), or

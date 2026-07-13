@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
       storageDefault: STORAGE_LABEL,
       finalize: {
         status: "not_run",
-        note: "D1 skeleton: POST /api/images/finalize later for Shopify Files (not implemented)."
+        note: "Call POST /api/images/finalize for Shopify Files CDN (D1)."
       },
       message: "No product_images rows to consider."
     });
@@ -366,10 +366,10 @@ export async function POST(request: NextRequest) {
     imageStatus,
     storageDefault: STORAGE_LABEL,
     note:
-      "processed_file_url is Supabase temp WebP (supabase_temp), NOT Shopify CDN. Finalize (Files) is not run in D-open.",
+      "processed_file_url is Supabase temp WebP (supabase_temp), NOT Shopify CDN until finalize.",
     finalize: {
       status: "not_run",
-      note: "D1 skeleton: POST /api/images/finalize → stagedUploadsCreate → fileCreate (not implemented)."
+      note: "Call POST /api/images/finalize → stagedUploadsCreate → fileCreate → shopify_cdn (D1)."
     }
   });
 }

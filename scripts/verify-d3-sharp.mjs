@@ -177,18 +177,20 @@ await check("sharp-batch route: dual auth markers + limits + supabase_temp", () 
   assert.ok(!/cdn\.shopify\.com/.test(src) || /NOT.*CDN|not.*shopify/i.test(src));
 });
 
-await check("finalize route returns NOT_IMPLEMENTED / 501", () => {
+await check("finalize route exists and wires Files upload (D1 real, not D-open 501 stub)", () => {
   const src = read("src/app/api/images/finalize/route.ts");
-  assert.match(src, /501|NOT_IMPLEMENTED/);
+  // D1 replaced the 501 skeleton; sharp-batch must still not claim CDN itself.
   assert.match(src, /uploadProcessedImageToShopifyFiles/);
-  assert.match(src, /stagedUploadsCreate|fileCreate/);
+  assert.match(src, /draftId/);
+  assert.doesNotMatch(src, /D-open finalize stub only/);
 });
 
-await check("filesUpload stub is not_implemented", () => {
+await check("filesUpload implements stagedUploadsCreate + fileCreate (D1)", () => {
   const src = read("src/lib/shopify/filesUpload.ts");
-  assert.match(src, /NOT_IMPLEMENTED/);
   assert.match(src, /stagedUploadsCreate/);
   assert.match(src, /fileCreate/);
+  assert.match(src, /uploadProcessedImageToShopifyFiles/);
+  assert.doesNotMatch(src, /Shopify Files upload not implemented in D-open/);
 });
 
 await check("decideSharpAction: keep / de_text / detail / unmarked", () => {

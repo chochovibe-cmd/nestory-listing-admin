@@ -296,11 +296,32 @@
 - **為什麼**：安全（webhook 不上前端）、不逼老闆當場跑 SQL、對齊 C1 導覽分工、BX-P 不順手美化。
 - **誰拍板**：老闆／總指揮，2026-07-13（C2 裁決 Q1-C／Q2-A／Q3-A／Q4-A-lite／Q5-A／Q6-A／Q7-A／Q8-A-restricted／Q9-A）。
 - **現況**：✅ **C2 已對齊（2026-07-13）**。`/settings`＋`SettingsPanel`；026 可選。
+  （頂欄「今日參考」與 Cron 由 **差異 18／C6** 補齊。）
+
+### 差異 18：C6 匯率（今日參考本機、Cron 不寫 DB、預設 4.5）
+
+- **差在哪**：
+  1. Mockup／計畫示意「全隊每日自動抓、Bar 顯示套用中＋今日」；正式版 **C6** 頂欄已顯示
+     **套用中＋今日參考**，但「今日參考」先存 **本機** `nestory_fx_reference`（台灣日曆日快取），
+     **不是**全隊共用 DB 欄位。
+  2. **Vercel Cron**（`/api/cron/fx`，`0 16 * * *`＝16:00 UTC≈台北 00:00）只做伺服器端抓取＋log，
+     本包 **`persisted: false`、不寫 team_settings**；全隊共用等 Supabase 可測再接。
+  3. 開頁／Cron／手動抓取成功 → **只更新今日參考**；算價變新匯率必須設定頁「套用今日匯率」
+    （寫入 `nestory_pricing_settings.rate`）。無頂欄 ↻ 一鍵套用。
+  4. 預設套用中匯率維持程式 **4.5**（不改成 Mockup 示意 4.70）。
+  5. 抓取走 **server** `GET /api/fx/cny-twd`（open.er-api.com），失敗誠實顯示、不塞假數字。
+  6. 誰可套用：admin＋operator（對齊 C2 本機定價，Q4-A）。
+- **為什麼**：外部網路／Supabase 登入暫不穩時不阻塞匯率可用性；兩數字語意不可混；免費 Cron 額度留一支給 D6。
+- **誰拍板**：老闆／總指揮，2026-07-13（C6 裁決 Q1-A／Q2-A／Q3-A／Q4-A）。
+- **現況**：✅ **C6 已對齊（2026-07-13）**。`fetchCnyTwdRate`／`fxReferenceStore`／
+  `/api/fx/cny-twd`／`/api/cron/fx`／頂欄＋設定；腳本 `scripts/verify-c6-fx.mjs`。
 
 ---
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 18 **C6** 定案並對齊——今日參考本機 store、Cron 不寫 DB、
+  頂欄套用中＋今日、預設 4.5、server 抓取誠實失敗。
 - 2026-07-13（Grok）：差異 17 **C2** 定案並對齊——獨立設定頁、側欄底／更多入口、頂欄匯率只顯示、
   Prompt 骨架不依賴 SQL、Showmore % 本機、Webhook 禁用。
 - 2026-07-13（Grok）：差異 16 **C1** 定案並對齊——側欄含佇列、四格 Q2-C、斷點 960、

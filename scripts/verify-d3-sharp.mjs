@@ -166,12 +166,16 @@ await check("sharpProcess is server-oriented (no client components import sharp)
 
 await check("sharp-batch route: dual auth markers + limits + supabase_temp", () => {
   const src = read("src/app/api/images/sharp-batch/route.ts");
+  const lib = read("src/lib/images/runSharpBatch.ts");
   assert.match(src, /export const runtime\s*=\s*["']nodejs["']/);
   assert.match(src, /requireWorkerToken/);
   assert.match(src, /canOperate/);
+  assert.match(src, /runSharpBatchForDraft/);
   assert.match(src, /SHARP_BATCH_MAX_IMAGES|max.*12/);
   assert.match(src, /supabase_temp/);
-  assert.match(src, /processImageBuffer/);
+  // Core transform lives in runSharpBatch (D2 thin shell)
+  assert.match(lib, /processImageBuffer/);
+  assert.match(lib, /supabase_temp|STORAGE_LABEL/);
   assert.ok(!/multipart/i.test(src) || /no multipart|not accept multipart/i.test(src));
   // Must not claim shopify CDN success
   assert.ok(!/cdn\.shopify\.com/.test(src) || /NOT.*CDN|not.*shopify/i.test(src));
@@ -179,9 +183,11 @@ await check("sharp-batch route: dual auth markers + limits + supabase_temp", () 
 
 await check("finalize route exists and wires Files upload (D1 real, not D-open 501 stub)", () => {
   const src = read("src/app/api/images/finalize/route.ts");
-  // D1 replaced the 501 skeleton; sharp-batch must still not claim CDN itself.
-  assert.match(src, /uploadProcessedImageToShopifyFiles/);
+  const lib = read("src/lib/images/runFinalize.ts");
+  // D1 replaced the 501 skeleton; thin shell → runFinalizeForDraft
+  assert.match(src, /runFinalizeForDraft/);
   assert.match(src, /draftId/);
+  assert.match(lib, /uploadProcessedImageToShopifyFiles/);
   assert.doesNotMatch(src, /D-open finalize stub only/);
 });
 

@@ -15,23 +15,33 @@
  *  3. Operator marks process_intent per pipeline image (keep | de_text | regenerate)
  *     ✅ DONE (B5 ResultCard / ImageUploader)
  *
- *  4. 送圖 creates image_batches + items (status queued); does NOT change image_status
- *     ✅ DONE (B14 /api/drafts/batch/send-images) — Q5-A: still does NOT auto-call sharp
+ *  4. 送圖 creates image_batches + items (status starts queued)
+ *     ✅ DONE (B14 /api/drafts/batch/send-images)
  *
- *  5. Make Scenario 1 webhook (batch_id + draft list + flags)
- *     ❌ D2 — not this package
+ *  5. D2-open auto chain (server-side, after batch insert) ✅
+ *     - Prefer snapshot_json marks (anti drift)
+ *     - Q1-A: whole draft all pipeline images = keep → run sharp in-process
+ *       (runSharpBatchForDraft); any de_text/regenerate → item stays queued
+ *       (awaiting_d4), batch may stay queued; no auto sharp/finalize
+ *     - Q2-A: if sharp ≥1 success → runFinalizeForDraft (default on)
+ *     - Q4-A: serial drafts; maxDuration 60s; stop when remaining <8s
+ *     - Never HTTP self-fetch /api/images/* (auth/deadlock)
+ *     - Optional MAKE_WEBHOOK_URL → notifyMake("image_batch_submitted") once
+ *       after receipt (+ chain summary); missing/fail never fails 送圖
+ *     - Failures: draft.warnings short lines; no fake CDN
  *
- *  6. keep_as_is → POST /api/images/sharp-batch (one draft, ≤12 images)
+ *  6. keep_as_is → runSharpBatchForDraft / POST /api/images/sharp-batch
+ *     (one draft, ≤12 images) — also used standalone
  *     → WebP q82, long edge ≤2048, write processed WebP to Supabase temp
  *     → product_images.processed_file_url = supabase public URL (NOT shopify CDN)
  *     → storage label: supabase_temp
- *     ✅ D3 (this package)
+ *     ✅ D3
  *
  *  7. de_text / regenerate → Image API (Make waits 20–60s) — ❌ D4
  *     then re-enter sharp/finalize. sharp-batch SKIPS these with honest reason (Q4-A).
  *
  *  8. finalize → Shopify Files permanent CDN  ✅ D1
- *     POST /api/images/finalize { draftId, imageIds? }
+ *     runFinalizeForDraft / POST /api/images/finalize { draftId, imageIds? }
  *     → only main+variant (spec/detail skip); no sharp re-run
  *     → source: already CDN skip | processed_file_url | fallback original
  *     → stagedUploadsCreate → multipart direct to staged URL → fileCreate

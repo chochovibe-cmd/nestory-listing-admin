@@ -71,7 +71,7 @@ function formatUnmarkedBlockMessage(images) {
 }
 
 function formatImageBatchCreatedMessage(readyCount) {
-  return `已建立送圖批次（${readyCount} 件），處理管線 Phase D 接通後自動執行`;
+  return `已建立送圖批次（${readyCount} 件），將依標記自動處理（全 keep→轉檔→圖床；去字/重生等 D4）`;
 }
 
 function draftHasRegenerateMark(images) {
@@ -214,7 +214,7 @@ await check("all marked → ready batch message (B14 copy)", () => {
   assert.equal(r.blockedCount, 0);
   assert.equal(
     formatCreateImageBatchResponseMessage(r),
-    "已建立送圖批次（2 件），處理管線 Phase D 接通後自動執行"
+    "已建立送圖批次（2 件），將依標記自動處理（全 keep→轉檔→圖床；去字/重生等 D4）"
   );
 });
 
@@ -335,10 +335,14 @@ await check("API route exists and uses service insert + 2A guards", () => {
   assert.match(src, /current_image_batch_id/);
   assert.match(src, /snapshot_json/);
   assert.match(src, /evaluateCreateImageBatch/);
+  // D2 may set processing via auto chain lib; route itself must not hardcode image_status processing
   assert.doesNotMatch(src, /image_status:\s*["']processing["']/);
-  // Comments may mention Make webhook; ensure we do not call one
-  assert.doesNotMatch(src, /fetch\s*\(\s*['"`]https?:\/\/.*make/i);
-  assert.doesNotMatch(src, /callMake|MAKE_WEBHOOK|make\.com/i);
+  // D2-open: optional notifyMake path allowed; must use lib (not raw make.com URL)
+  assert.match(src, /notifyMake|runSendImagesAutoChain/);
+  assert.doesNotMatch(src, /fetch\s*\(\s*['"`]https?:\/\/hook\.eu/i);
+  // Never HTTP self-call pipeline endpoints
+  assert.doesNotMatch(src, /fetch\s*\(\s*[^)]*\/api\/images\/sharp-batch/);
+  assert.doesNotMatch(src, /fetch\s*\(\s*[^)]*\/api\/images\/finalize/);
 });
 
 await check("UI wires batch + single send to API (1A)", () => {

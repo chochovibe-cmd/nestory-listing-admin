@@ -1,17 +1,27 @@
 /**
- * B14: create image_batches + items when operator sends marked images.
- * Does NOT call Make webhook; does NOT change draft.image_status / status (2A).
- * Single-item 送圖 also uses this route (1A).
+ * B14 + D2-open: create image_batches + items, then optional auto chain.
+ *
+ * - Create batch (status queued) when marks ready
+ * - D2: runSendImagesAutoChain (all-keep → sharp → finalize in-process; no HTTP self-fetch)
+ * - Optional MAKE_WEBHOOK_URL notifyMake("image_batch_submitted"); missing/fail never 500
+ * - Does not invent fake CDN URLs
  */
 import { NextRequest } from "next/server";
 import { canOperate } from "@/lib/auth/roles";
 import {
   evaluateCreateImageBatch,
-  formatCreateImageBatchResponseMessage,
   type ImageBatchItemInput
 } from "@/lib/drafts/createImageBatch";
+import {
+  formatAutoChainOperatorMessage,
+  runSendImagesAutoChain
+} from "@/lib/images/sendImagesAutoChain";
+import { notifyMake } from "@/lib/notifications/make";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/domain";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
@@ -21,7 +31,6 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "draftIds must be a non-empty string array" }, { status: 400 });
   }
 
-  // Dedupe while preserving order
   const uniqueIds = [...new Set(draftIds as string[])];
 
   const authSupabase = await createServerSupabaseClient();
@@ -53,7 +62,6 @@ export async function POST(request: NextRequest) {
     .order("sort_order", { ascending: true });
 
   if (imageError) {
-    // migration 019 may be missing process_intent — fail clearly
     return Response.json(
       {
         error: imageError.message,
@@ -75,7 +83,6 @@ export async function POST(request: NextRequest) {
 
   const draftById = new Map((drafts ?? []).map((d) => [d.id, d]));
 
-  // Preserve request order; unknown ids still appear as blocked-ish empty titles
   const items: ImageBatchItemInput[] = uniqueIds.map((id) => {
     const draft = draftById.get(id);
     const title =
@@ -102,7 +109,6 @@ export async function POST(request: NextRequest) {
 
   const evaluated = evaluateCreateImageBatch(knownItems);
 
-  // Append missing as blocked for message completeness
   for (const id of missingIds) {
     evaluated.blocked.push({
       draftId: id,
@@ -172,7 +178,6 @@ export async function POST(request: NextRequest) {
 
   const { error: itemsError } = await serviceSupabase.from("image_batch_items").insert(itemRows);
   if (itemsError) {
-    // Best-effort cleanup of empty batch header
     await serviceSupabase.from("image_batches").delete().eq("id", batchId);
     return Response.json(
       {
@@ -185,28 +190,76 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 3A simplified: update current pointer only; leave older items untouched
   const readyIds = evaluated.ready.map((r) => r.draftId);
+  let pointerUpdateFailed = false;
   const { error: pointerError } = await serviceSupabase
     .from("product_drafts")
     .update({ current_image_batch_id: batchId })
     .in("id", readyIds);
 
   if (pointerError) {
-    // Batch already useful; surface soft warning rather than rolling back
-    const message = formatCreateImageBatchResponseMessage(evaluated, { batchCreated: true });
-    return Response.json({
-      ok: true,
-      batchId,
-      readyCount: evaluated.readyCount,
-      blockedCount: evaluated.blockedCount,
-      blocked: evaluated.blocked,
-      regenerateItemCount: evaluated.regenerateItemCount,
-      snapshot: evaluated.snapshot,
-      message: `${message}\n（提醒：批次已建立，但草稿指標更新失敗：${pointerError.message}）`,
-      pointerUpdateFailed: true
-    });
+    pointerUpdateFailed = true;
   }
+
+  // D2-open: in-process auto chain (never fetch self sharp-batch/finalize URLs)
+  let chain: Awaited<ReturnType<typeof runSendImagesAutoChain>> | null = null;
+  let chainError: string | null = null;
+  try {
+    chain = await runSendImagesAutoChain({
+      serviceSupabase,
+      batchId,
+      readyDrafts: evaluated.ready.map((r) => ({ draftId: r.draftId, title: r.title })),
+      snapshot: evaluated.snapshot,
+      autoFinalize: true
+    });
+  } catch (err) {
+    // Batch already created — do not 500 the whole send
+    chainError = err instanceof Error ? err.message : String(err);
+    chain = null;
+  }
+
+  const blockedLines = evaluated.blocked.map((b) => `「${b.title}」：${b.reason}`);
+  let message = formatAutoChainOperatorMessage({
+    readyCount: evaluated.readyCount,
+    blockedLines,
+    chain
+  });
+  if (chainError) {
+    message = `${message}\n（提醒：自動處理鏈發生例外，批次已建立：${chainError.slice(0, 120)}）`;
+  }
+  if (pointerUpdateFailed) {
+    message = `${message}\n（提醒：批次已建立，但草稿指標更新失敗：${pointerError?.message}）`;
+  }
+
+  // Q3-A: one image_batch_submitted webhook after receipt (+ chain summary if any)
+  await notifyMake("image_batch_submitted", {
+    batchId,
+    readyCount: evaluated.readyCount,
+    blockedCount: evaluated.blockedCount,
+    blocked: evaluated.blocked,
+    regenerateItemCount: evaluated.regenerateItemCount,
+    snapshot: evaluated.snapshot,
+    autoChain: chain
+      ? {
+          policy: chain.policy,
+          batchStatus: chain.batchStatus,
+          doneCount: chain.doneCount,
+          failedCount: chain.failedCount,
+          stoppedEarly: chain.stoppedEarly,
+          elapsedMs: chain.elapsedMs,
+          drafts: chain.drafts.map((d) => ({
+            draftId: d.draftId,
+            decision: d.decision,
+            outcome: d.outcome,
+            sharp: d.sharp,
+            finalize: d.finalize,
+            reason: d.reason
+          }))
+        }
+      : chainError
+        ? { error: chainError, policy: "all_keep_then_sharp_then_finalize" }
+        : null
+  });
 
   return Response.json({
     ok: true,
@@ -216,6 +269,9 @@ export async function POST(request: NextRequest) {
     blocked: evaluated.blocked,
     regenerateItemCount: evaluated.regenerateItemCount,
     snapshot: evaluated.snapshot,
-    message: formatCreateImageBatchResponseMessage(evaluated, { batchCreated: true })
+    autoChain: chain,
+    chainError,
+    message,
+    pointerUpdateFailed: pointerUpdateFailed || undefined
   });
 }

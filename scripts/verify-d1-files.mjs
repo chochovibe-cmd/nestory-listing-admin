@@ -150,14 +150,20 @@ await check("filesUpload.ts exists and is not NOT_IMPLEMENTED stub", () => {
 await check("finalize route is real (not fixed 501 stub)", () => {
   assert.ok(exists("src/app/api/images/finalize/route.ts"));
   const src = read("src/app/api/images/finalize/route.ts");
+  const lib = exists("src/lib/images/runFinalize.ts")
+    ? read("src/lib/images/runFinalize.ts")
+    : "";
   assert.match(src, /draftId is required/);
   assert.match(src, /canOperate/);
   assert.match(src, /requireWorkerToken/);
-  assert.match(src, /uploadProcessedImageToShopifyFilesWithRetry|uploadProcessedImageToShopifyFiles/);
-  assert.match(src, /shopify_cdn/);
-  assert.match(src, /isFinalizeUploadImageType|main.*variant/);
-  assert.match(src, /isOwnProcessedTempPath|processed\/\$\{/);
+  assert.match(src, /runFinalizeForDraft|uploadProcessedImageToShopifyFilesWithRetry|uploadProcessedImageToShopifyFiles/);
   assert.match(src, /maxDuration/);
+  // Core CDN upload lives in runFinalize (D2 thin shell) or still inline
+  const combined = src + "\n" + lib;
+  assert.match(combined, /uploadProcessedImageToShopifyFilesWithRetry|uploadProcessedImageToShopifyFiles/);
+  assert.match(combined, /shopify_cdn/);
+  assert.match(combined, /isFinalizeUploadImageType|main.*variant/);
+  assert.match(combined, /isOwnProcessedTempPath|processed\/\$\{/);
   // Must not always return 501
   assert.doesNotMatch(src, /status:\s*501/);
   assert.doesNotMatch(src, /D-open finalize stub only/);

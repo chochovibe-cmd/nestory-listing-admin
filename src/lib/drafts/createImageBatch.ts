@@ -45,9 +45,13 @@ export type EvaluateCreateImageBatchResult = {
   emptyMessage: string | null;
 };
 
-/** Success notice after batch row is written (Phase D not wired). */
+/**
+ * Success notice after batch row is written.
+ * D2-open: prefer formatAutoChainOperatorMessage when chain ran;
+ * this string remains a short fallback for verify / partial paths.
+ */
 export function formatImageBatchCreatedMessage(readyCount: number): string {
-  return `已建立送圖批次（${readyCount} 件），處理管線 Phase D 接通後自動執行`;
+  return `已建立送圖批次（${readyCount} 件），將依標記自動處理（全 keep→轉檔→圖床；去字/重生等 D4）`;
 }
 
 export function formatImageBatchPartialMessage(

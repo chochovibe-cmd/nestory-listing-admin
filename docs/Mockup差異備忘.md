@@ -354,6 +354,27 @@
 - **現況**：✅ **D5 已對齊（2026-07-13）**。`/review`＋`ImageReviewPanel`＋
   `POST /api/images/review-confirm|reject`；腳本 `scripts/verify-d5-image-review.mjs`。
 
+### 差異 25：D6-open 圖片批次通知（事件 #1＋卡住 Cron；非四事件全做）
+
+- **差在哪**：
+  1. 【自動·二】寫四種 Email 事件＋team_settings 開關＋Make 查完成度後打
+     `/api/notify/batch-done`；正式版 **D6-open** 只做 **事件 #1 圖片批次完成**＋
+     **每日卡住 Cron**；#2 發布／#3 週選品／#4 月預算僅 type stub。
+  2. **觸發**：終態時 **Vercel 同步** `tryNotifyImageBatchIfComplete`（auto chain／ai-process），
+     **不**另開 Make 專責通知；無公開 `POST /api/notify/batch-done`（本包）。
+  3. **終態判定**：只看 `image_batch_items` 全為 `done|failed|skipped`——**不可**只看
+     `batch.status`（hybrid 的 `partial_failed` 可能仍有 queued）。
+  4. **雙通道**：Resend Email＋LINE **Messaging API Flex**（禁 LINE Notify）；無 key →
+     各 skip、不 500、不假寄；收件人 **env 白名單**（非 profiles／非 localStorage）。
+  5. **冪等 Q3b B′**：`notify_sent_at`／`stuck_notified_at` 用 025 既有欄（**零 migration**）；
+     **至少一通道 sent 才 claim**；全 skip／全 error 不 claim；條件更新防雙寄。
+  6. 卡住：>24h 未終態 → `status=stuck`＋可選通知；Cron `/api/cron/stuck-batches`（與 fx 並列第二支）。
+  7. C2 設定區 **只改說明文案**（真寄靠 env；本機勾選暫不擋 server）；禁 BX-P 打磨。
+- **為什麼**：D1–D5 已齊；「批做完沒人知」最高 ROI；四事件一次做會空殼。
+- **誰拍板**：總指揮，2026-07-13 夜（D6-open 裁決 Q1–Q8 A、Q3b B′）。
+- **現況**：✅ **D6-open 完成**。`src/lib/notifications/*`＋cron＋接線；
+  `scripts/verify-d6-notify.mjs`。
+
 ### 差異 24：D4 AI 去字／重生（Vercel Image API；Make 非必直呼）
 
 - **差在哪**：
@@ -432,6 +453,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 25 **D6-open**——事件 #1＋卡住 Cron；Resend＋LINE Flex；
+  item 終態；Q3b 成功才 claim；零 migration；非四事件／非 Make 專責通知。
 - 2026-07-13（Grok）：差異 24 **D4**——Vercel 跑 Image API（ai-process）；Make 非必直呼 OpenAI；
   generated→sharp→finalize；hybrid 混標；覆寫差異 23 整件 awaiting_d4 為有限 AI。
 - 2026-07-13（Grok）：差異 23 **D2-open**——送圖後全 keep→sharp→finalize；混標 awaiting_d4；

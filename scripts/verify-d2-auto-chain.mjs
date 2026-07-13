@@ -45,8 +45,8 @@ function decideDraftAutoChainFromSnapshot(snapshotImages) {
   );
   if (hasD4) {
     return {
-      action: "awaiting_d4",
-      reason: "contains de_text/regenerate; wait for D4/Make (Q1-A)"
+      action: "run_mixed",
+      reason: "contains de_text/regenerate; hybrid keep + limited D4 (Q1-C)"
     };
   }
   const allKeep = snapshotImages.every((img) => img.processIntent === "keep");
@@ -58,7 +58,7 @@ function decideDraftAutoChainFromSnapshot(snapshotImages) {
   }
   return {
     action: "awaiting_d4",
-    reason: "non-keep intents present; skip auto sharp (Q1-A)"
+    reason: "non-keep intents present; skip auto sharp"
   };
 }
 
@@ -166,6 +166,8 @@ await check("auto chain exports Q1/Q2/Q4 constants and helpers", () => {
   assert.match(src, /runSharpBatchForDraft/);
   assert.match(src, /runFinalizeForDraft/);
   assert.match(src, /awaiting_d4/);
+  assert.match(src, /run_mixed/);
+  assert.match(src, /runAiProcessForDraft/);
 });
 
 await check("notifyMake skips when MAKE_WEBHOOK_URL empty; catches errors", () => {
@@ -183,17 +185,17 @@ await check("decideDraftAutoChainFromSnapshot: all keep → run", () => {
   assert.equal(d.action, "run_all_keep");
 });
 
-await check("decideDraftAutoChainFromSnapshot: de_text → awaiting_d4 (Q1-A)", () => {
+await check("decideDraftAutoChainFromSnapshot: de_text → run_mixed (Q1-C hybrid)", () => {
   const d = decideDraftAutoChainFromSnapshot([
     { processIntent: "keep" },
     { processIntent: "de_text" }
   ]);
-  assert.equal(d.action, "awaiting_d4");
+  assert.equal(d.action, "run_mixed");
 });
 
-await check("decideDraftAutoChainFromSnapshot: regenerate → awaiting_d4", () => {
+await check("decideDraftAutoChainFromSnapshot: regenerate → run_mixed", () => {
   const d = decideDraftAutoChainFromSnapshot([{ processIntent: "regenerate" }]);
-  assert.equal(d.action, "awaiting_d4");
+  assert.equal(d.action, "run_mixed");
 });
 
 await check("time budget: remaining < 8s stops", () => {

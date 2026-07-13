@@ -13,6 +13,7 @@ import {
   type ImageBatchItemInput
 } from "@/lib/drafts/createImageBatch";
 import {
+  buildMakeD4Summary,
   formatAutoChainOperatorMessage,
   runSendImagesAutoChain
 } from "@/lib/images/sendImagesAutoChain";
@@ -231,7 +232,9 @@ export async function POST(request: NextRequest) {
     message = `${message}\n（提醒：批次已建立，但草稿指標更新失敗：${pointerError?.message}）`;
   }
 
-  // Q3-A: one image_batch_submitted webhook after receipt (+ chain summary if any)
+  // Q3-A: one image_batch_submitted webhook after receipt (+ chain + optional d4 summary)
+  // Webhook failure must never 500 (notifyMake swallows errors).
+  const d4Summary = buildMakeD4Summary(chain);
   await notifyMake("image_batch_submitted", {
     batchId,
     readyCount: evaluated.readyCount,
@@ -253,12 +256,16 @@ export async function POST(request: NextRequest) {
             outcome: d.outcome,
             sharp: d.sharp,
             finalize: d.finalize,
+            d4: d.d4,
+            d4Processed: d.d4Processed,
+            d4Failed: d.d4Failed,
             reason: d.reason
           }))
         }
       : chainError
-        ? { error: chainError, policy: "all_keep_then_sharp_then_finalize" }
-        : null
+        ? { error: chainError, policy: "all_keep_then_sharp_then_finalize_hybrid_d4" }
+        : null,
+    d4: d4Summary
   });
 
   return Response.json({

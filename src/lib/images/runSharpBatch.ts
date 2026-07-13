@@ -27,6 +27,7 @@ export type SharpBatchImageRow = {
   image_type: ImageType | string;
   original_file_url: string | null;
   processed_file_url: string | null;
+  generated_file_url?: string | null;
   process_intent: ImageProcessIntent | null;
   processing_status: string;
   sort_order: number;
@@ -49,6 +50,11 @@ export type RunSharpBatchForDraftInput = {
   draftId: string;
   /** When set, only these image ids; enables engineering mode for unmarked. */
   imageIds?: string[] | null;
+  /**
+   * D4: after AI wrote generated_file_url, sharp de_text/regenerate from that URL.
+   * Default false — de_text/regen still skipped.
+   */
+  afterAi?: boolean;
 };
 
 export type RunSharpBatchForDraftResult =
@@ -117,6 +123,7 @@ export async function runSharpBatchForDraft(
 
   let explicitImageIds = false;
   let imageIdsFilter: string[] | null = null;
+  const afterAi = input.afterAi === true;
   if (input.imageIds !== undefined && input.imageIds !== null) {
     if (!Array.isArray(input.imageIds) || !input.imageIds.every((id) => typeof id === "string")) {
       return { ok: false, draftId, error: "imageIds must be a string array when provided", httpStatus: 400 };
@@ -152,7 +159,7 @@ export async function runSharpBatchForDraft(
   let query = serviceSupabase
     .from("product_images")
     .select(
-      "id, draft_id, image_type, original_file_url, processed_file_url, process_intent, processing_status, sort_order"
+      "id, draft_id, image_type, original_file_url, processed_file_url, generated_file_url, process_intent, processing_status, sort_order"
     )
     .eq("draft_id", draftId)
     .order("sort_order", { ascending: true });
@@ -209,7 +216,9 @@ export async function runSharpBatchForDraft(
       imageType: img.image_type,
       processIntent: img.process_intent,
       originalFileUrl: img.original_file_url,
-      explicitImageIds
+      explicitImageIds,
+      afterAi,
+      generatedFileUrl: img.generated_file_url
     });
     return d.action === "process_sharp";
   });
@@ -228,7 +237,9 @@ export async function runSharpBatchForDraft(
       imageType: img.image_type,
       processIntent: img.process_intent,
       originalFileUrl: img.original_file_url,
-      explicitImageIds
+      explicitImageIds,
+      afterAi,
+      generatedFileUrl: img.generated_file_url
     });
 
     if (decision.action === "skip") {
@@ -249,12 +260,20 @@ export async function runSharpBatchForDraft(
         .update({ processing_status: "processing", processing_error: null })
         .eq("id", img.id);
 
-      const originalUrl = img.original_file_url!.trim();
-      const buffer = await fetchOriginalBuffer(originalUrl);
+      // afterAi: source = generated_file_url; else original
+      const sourceUrl = afterAi
+        ? (img.generated_file_url || "").trim()
+        : (img.original_file_url || "").trim();
+      if (!sourceUrl) {
+        throw new Error(afterAi ? "missing generated_file_url" : "missing original_file_url");
+      }
+      const buffer = await fetchOriginalBuffer(sourceUrl);
       const out = await processImageBuffer(buffer, { square: false });
 
-      const originalPath = storagePathFromProductImagesPublicUrl(originalUrl);
-      const owner = ownerSegmentFromOriginalPath(originalPath, "system");
+      const pathHint = storagePathFromProductImagesPublicUrl(
+        img.original_file_url || sourceUrl
+      );
+      const owner = ownerSegmentFromOriginalPath(pathHint, "system");
       const storagePath = buildProcessedStoragePath({
         ownerSegment: owner,
         draftId,

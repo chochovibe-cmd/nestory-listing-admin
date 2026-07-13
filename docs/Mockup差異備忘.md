@@ -316,10 +316,32 @@
 - **現況**：✅ **C6 已對齊（2026-07-13）**。`fetchCnyTwdRate`／`fxReferenceStore`／
   `/api/fx/cny-twd`／`/api/cron/fx`／頂欄＋設定；腳本 `scripts/verify-c6-fx.mjs`。
 
+### 差異 19：C4 商品庫（頂欄 Modal／RLS 範圍／預設三狀態／深連結）
+
+- **差在哪**：
+  1. 與 Mockup 一致：商品庫＝**上方 Bar 彈窗**（非獨立整頁、非 tabbar 第五格）；設定仍走
+     **差異 17**（側欄底／更多），頂欄不加 ⚙。
+  2. **資料範圍 Q1-A**：瀏覽器 session＋既有 RLS（operator 只見自己的 drafts；admin／reviewer
+     見全部）。本包不做「全隊唯讀 service API」、**零 migration**。
+  3. **上架人 Q2-A**：`profiles.name` 解得到就顯示；否則「成員」或短 ID；**不假造**人名；
+     不做放寬 profiles RLS 的 SQL。
+  4. **預設列表 Q3-A**：僅 `status ∈ {active_published, draft_created, csv_ready}`（已發布側），
+     **不是**佇列的「全部未封存」；本包無「含進行中」開關。
+  5. **操作**：編輯文案 → `/drafts/[id]`；編輯圖片 → `/drafts/[id]?focus=images` 捲到圖片區。
+     **不是** Modal 內嵌編輯／補圖 worker／Shopify 同步（Phase D）；**無批次操作**（佇列保留）。
+  6. **搜尋 Q5-A**：開窗載約 150 筆後**前端過濾**；不做 `/api/library?q=` server ilike。
+  7. **手機 Q6-A**：與桌機同一顆「🔍 商品庫」在頂欄工具選單（☰）內；**不**進「更多」抽屜。
+- **為什麼**：日常找已上架／已建草稿商品修文案補圖；沿用既有草稿詳情；不插隊 D／C5。
+- **誰拍板**：總指揮，2026-07-13（C4 裁決 Q1–Q6 全 A）。
+- **現況**：✅ **C4 已對齊（2026-07-13）**。`ProductLibraryModal`／`productLibrary` helpers／
+  `HeaderControls` 入口／`DraftFocusScroll`；樣式 `library-modal`／`lib-row` layout-only。
+
 ---
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 19 **C4** 定案並對齊——頂欄 Modal、RLS 範圍、預設三狀態、
+  深連結非站內嵌、無批次、手機不進更多抽屜、零 SQL。
 - 2026-07-13（Grok）：差異 18 **C6** 定案並對齊——今日參考本機 store、Cron 不寫 DB、
   頂欄套用中＋今日、預設 4.5、server 抓取誠實失敗。
 - 2026-07-13（Grok）：差異 17 **C2** 定案並對齊——獨立設定頁、側欄底／更多入口、頂欄匯率只顯示、

@@ -354,23 +354,42 @@
 - **現況**：✅ **D5 已對齊（2026-07-13）**。`/review`＋`ImageReviewPanel`＋
   `POST /api/images/review-confirm|reject`；腳本 `scripts/verify-d5-image-review.mjs`。
 
+### 差異 24：D4 AI 去字／重生（Vercel Image API；Make 非必直呼）
+
+- **差在哪**：
+  1. 交接／Scenario 1 寫「AI 去字／重生由 **Make 直呼 Image API** 長等」；正式版 **D4** 改為：
+     **Vercel 內聚** `runAiProcessForDraft`＋`POST /api/images/ai-process` 呼叫 OpenAI Images
+     （`OPENAI_API_KEY`＋`OPENAI_IMAGE_MODEL` 等 env）；**Make 不必直呼 OpenAI**，
+     可選只排程／重試打我們的 `ai-process`。
+  2. 產物：`generated_file_url`（AI 成功才寫 temp）→ post-AI sharp → `processed` temp →
+     預設 finalize CDN；失敗**不覆寫**已是 Shopify CDN 的 processed、不塞假 URL。
+  3. **Q1-C Hybrid**：送圖鏈混標＝keep 先 sharp／finalize＋時間夠時有限張 AI（每 draft 最多 1 張）；
+     未完 → item `queued`／`awaiting_d4`；獨立 API 為 Make／腳本主路徑。
+  4. 全 keep 路徑維持 D2（sharp→finalize）不變。
+  5. Auth 同 sharp／finalize（session `canOperate` 或 `WORKER_API_TOKEN`）。
+  6. 不能 edit 的模型（如 dall-e-3）→ `de_text` 誠實失敗（見 `.env.example`）。
+  7. **無 UI**（b15 跳過）；零 migration；不做 D6／D5 大改。
+- **為什麼**：key 已在 Vercel；可重入 API 分張消化長等待，比強迫老闆在 Make 放第二份 OpenAI key 務實。
+- **誰拍板**：總指揮，2026-07-13 晚（D4 裁決 Q1-C／Q2-A…Q9-A）。
+- **現況**：✅ **D4 完成**。`openai-image-provider`／`runAiProcess`／`ai-process` route；
+  hybrid `sendImagesAutoChain`；`verify-d4-ai-process.mjs`；Make 最短說明補呼叫範例。
+
 ### 差異 23：D2-open 送圖後自動鏈（覆寫差異 20「B14 不自動 sharp」）
 
 - **差在哪**：
   1. **B14 送圖成功後**會跑伺服器端自動鏈（`runSendImagesAutoChain`），**不再**只建 batch 就結束。
-  2. **Q1-A**：整件 pipeline 圖皆 `keep` 才自動 `runSharpBatchForDraft`；有 `de_text`／`regenerate`
-     → **不**自動 sharp／finalize；item 維持 `queued`；response 註 `awaiting_d4`；**batch 維持 `queued`**。
+  2. **原 Q1-A**：整件 pipeline 圖皆 `keep` 才自動 sharp；有 `de_text`／`regenerate` 整件不自動。
+     → **已由差異 24／D4 Q1-C 覆寫為 hybrid**：混標可跑 keep＋有限 AI；未完仍 `awaiting_d4`。
   3. **Q2-A**：sharp **至少 1 張成功** → 預設 `runFinalizeForDraft`（CDN）；失敗不塞假 CDN。
   4. **內聚函式**：禁止 HTTP 自打 `/api/images/sharp-batch`／`finalize`（route 改薄殼）。
   5. **Q4-A**：序向、`maxDuration=60`、剩餘 &lt;8s 停；未跑 item 維持 `queued`；batch `partial_failed` 誠實。
-  6. **Make 可選**：有 `MAKE_WEBHOOK_URL` → 收單一封 `image_batch_submitted`（含 chain 摘要）；
-     無值跳過；webhook 失敗**不**讓送圖 500。完整 Make 節點／D4 AI **非本包**。
+  6. **Make 可選**：有 `MAKE_WEBHOOK_URL` → 收單一封 `image_batch_submitted`（含 chain 摘要；
+     D4 後可加 `d4`）；無值跳過；webhook 失敗**不**讓送圖 500。
   7. **Q6-A**：只改 API `message` 誠實字串；**無**圖審／列表大 UI；b15 跳過。
   8. 失敗短句寫入 draft `warnings`（Q5b-A）；零 migration。
 - **為什麼**：D3／D1／D5 已齊，日常缺口是「送圖後還要手動轉檔／上圖床」；Make 完整 Scenario 可後補。
-- **誰拍板**：總指揮，2026-07-13 晚（D2-open 裁決 Q1–Q6 全 A）。
-- **現況**：✅ **D2-open 完成**。`runSharpBatch`／`runFinalize`／`sendImagesAutoChain`；
-  `docs/Make接Webhook最短說明.md`；`verify-d2-auto-chain.mjs`。
+- **誰拍板**：總指揮，2026-07-13 晚（D2-open 裁決 Q1–Q6 全 A）；混標 hybrid 見差異 24。
+- **現況**：✅ **D2-open 完成**；混標 AI 見 **差異 24／D4**。
 
 ### 差異 22：D1 finalize 後才是 Shopify CDN（銜接差異 20）
 
@@ -413,6 +432,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-13（Grok）：差異 24 **D4**——Vercel 跑 Image API（ai-process）；Make 非必直呼 OpenAI；
+  generated→sharp→finalize；hybrid 混標；覆寫差異 23 整件 awaiting_d4 為有限 AI。
 - 2026-07-13（Grok）：差異 23 **D2-open**——送圖後全 keep→sharp→finalize；混標 awaiting_d4；
   可選 Make `image_batch_submitted`；內聚函式禁止自 fetch；覆寫差異 20 條 4。
 - 2026-07-13（Grok）：差異 22 **D1**——finalize 成功＝shopify_cdn；sharp 仍 temp；

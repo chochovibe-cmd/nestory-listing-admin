@@ -12,6 +12,17 @@ import {
   type FunnelRowDef
 } from "@/lib/dashboard/funnelStats";
 import {
+  COST_DETAIL_UI_LIMIT,
+  COST_DRAFT_FETCH_LIMIT,
+  COST_DRAFT_SELECT_COLUMNS,
+  computeCostBudgetView,
+  costBudgetMigrationHint,
+  formatNtd,
+  formatUsd,
+  type CostBudgetView,
+  type CostDraftRow
+} from "@/lib/dashboard/costBudgetStats";
+import {
   computeMakeQuotaView,
   makeQuotaMigrationHint,
   taiwanMonthRange,
@@ -37,8 +48,8 @@ const BATCH_SELECT = "id, total_count, created_at, created_by";
 const QUOTA_BATCH_FETCH_LIMIT = 500;
 
 /**
- * E1-open + E2-open + E3-open:
- * 今日待辦 + 流程漏斗（same fetch/scope）+ Make 額度（全隊、與 scope 脫鉤）.
+ * E1-open + E2-open + E3-open + E4-open:
+ * 今日待辦 + 流程漏斗（same fetch/scope）+ Make 額度（全隊）+ 月預算成本（全隊語意）.
  */
 export function DashboardTodoPanel() {
   const [role, setRole] = useState<UserRole | null>(null);
@@ -55,6 +66,13 @@ export function DashboardTodoPanel() {
   const [quotaTableHint, setQuotaTableHint] = useState<string | null>(null);
   const [quotaFetchError, setQuotaFetchError] = useState<string | null>(null);
 
+  // E4: separate cost fetch by copy_generated_at (Q1-A / Q2-A; not E1 scope)
+  const [costLoading, setCostLoading] = useState(true);
+  const [costRows, setCostRows] = useState<CostDraftRow[]>([]);
+  const [costTableHint, setCostTableHint] = useState<string | null>(null);
+  const [costFetchError, setCostFetchError] = useState<string | null>(null);
+  const [costDetailOpen, setCostDetailOpen] = useState(true);
+
   const admin = isAdmin(role);
 
   const load = useCallback(async () => {
@@ -63,15 +81,19 @@ export function DashboardTodoPanel() {
       setRows([]);
       setLoading(false);
       setQuotaLoading(false);
+      setCostLoading(false);
       setRoleReady(true);
       return;
     }
 
     setLoading(true);
     setQuotaLoading(true);
+    setCostLoading(true);
     setError(null);
     setQuotaFetchError(null);
     setQuotaTableHint(null);
+    setCostFetchError(null);
+    setCostTableHint(null);
 
     try {
       const supabase = createClient();
@@ -85,6 +107,7 @@ export function DashboardTodoPanel() {
         setRows([]);
         setRoleReady(true);
         setQuotaLoading(false);
+        setCostLoading(false);
         return;
       }
       if (!user) {
@@ -93,6 +116,7 @@ export function DashboardTodoPanel() {
         setRole(null);
         setRoleReady(true);
         setQuotaLoading(false);
+        setCostLoading(false);
         return;
       }
 
@@ -130,7 +154,7 @@ export function DashboardTodoPanel() {
 
       // E3 Q2-A: always team-wide (no created_by); Taiwan month server filter
       const month = taiwanMonthRange();
-      const [imgRes, pubRes] = await Promise.all([
+      const [imgRes, pubRes, costRes] = await Promise.all([
         supabase
           .from("image_batches")
           .select(BATCH_SELECT)
@@ -144,7 +168,16 @@ export function DashboardTodoPanel() {
           .gte("created_at", month.startIso)
           .lt("created_at", month.endIso)
           .order("created_at", { ascending: false })
-          .limit(QUOTA_BATCH_FETCH_LIMIT)
+          .limit(QUOTA_BATCH_FETCH_LIMIT),
+        // E4 Q1-A: copy_generated_at month; Q2-A no created_by (team intent; RLS may still limit)
+        supabase
+          .from("product_drafts")
+          .select(COST_DRAFT_SELECT_COLUMNS)
+          .not("copy_generated_at", "is", null)
+          .gte("copy_generated_at", month.startIso)
+          .lt("copy_generated_at", month.endIso)
+          .order("copy_generated_at", { ascending: false })
+          .limit(COST_DRAFT_FETCH_LIMIT)
       ]);
 
       const imgErr = imgRes.error?.message ?? null;
@@ -164,12 +197,25 @@ export function DashboardTodoPanel() {
         setImageBatches((imgRes.data ?? []) as MakeQuotaBatchRow[]);
         setPublishBatches((pubRes.data ?? []) as MakeQuotaBatchRow[]);
       }
+
+      const costErr = costRes.error?.message ?? null;
+      const costHint = costBudgetMigrationHint(costErr);
+      setCostTableHint(costHint);
+      if (costHint) {
+        setCostRows([]);
+      } else if (costErr) {
+        setCostFetchError(costErr);
+        setCostRows([]);
+      } else {
+        setCostRows((costRes.data ?? []) as CostDraftRow[]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setRows([]);
     } finally {
       setLoading(false);
       setQuotaLoading(false);
+      setCostLoading(false);
     }
   }, [scope]);
 
@@ -198,6 +244,14 @@ export function DashboardTodoPanel() {
       publishBatches
     });
   }, [imageBatches, publishBatches, quotaTableHint]);
+
+  const costView: CostBudgetView | null = useMemo(() => {
+    if (costTableHint) return null;
+    return computeCostBudgetView({
+      rows: costRows,
+      visibilityPartial: role === "operator"
+    });
+  }, [costRows, costTableHint, role]);
 
   function onCardClick(card: (typeof cards)[number], e: MouseEvent<HTMLAnchorElement>) {
     // Allow modified-click / middle-click / new tab to skip storage write
@@ -234,7 +288,7 @@ export function DashboardTodoPanel() {
         <div className="ir-page-header dash-header">
           <div className="ir-title-row">
             <h1>📈 儀表板</h1>
-            <span className="ir-sub">初版 · 待辦＋漏斗＋額度 · 成本後期接</span>
+            <span className="ir-sub">初版 · 待辦＋漏斗＋額度＋月預算</span>
           </div>
           {roleReady && admin ? (
             <div className="ir-scope">
@@ -441,8 +495,161 @@ export function DashboardTodoPanel() {
           </div>
         </section>
 
+        {/* E4-open: 月預算＋AI 成本 — below E3; team-wide intent (Q2-A), not scope */}
+        <section
+          className="panel dash-quota-panel dash-cost-panel"
+          aria-labelledby="dash-cost-title"
+        >
+          <div className="panel-header">
+            <h2 id="dash-cost-title">月預算 · AI 成本</h2>
+            <span className="dash-todo-hint">估算 · 非信用卡帳單</span>
+          </div>
+          <div className="panel-body dash-quota-body">
+            {costLoading ? (
+              <p className="dash-todo-status">載入中…</p>
+            ) : costTableHint ? (
+              <p className="dash-todo-status dash-todo-error" role="alert">
+                {costTableHint}
+              </p>
+            ) : costFetchError && !costView ? (
+              <p className="dash-todo-status dash-todo-error" role="alert">
+                {costFetchError}
+              </p>
+            ) : costView ? (
+              <>
+                {costFetchError ? (
+                  <p className="dash-todo-trunc" role="status">
+                    部分資料讀取失敗：{costFetchError}
+                  </p>
+                ) : null}
+                {costView.truncationNote ? (
+                  <p className="dash-todo-trunc" role="status">
+                    {costView.truncationNote}
+                  </p>
+                ) : null}
+                <div className="dash-quota-card">
+                  <div className="dash-quota-card-top">
+                    <span className="dash-quota-label">本月合計（估算）</span>
+                    <span
+                      className={
+                        costView.warn
+                          ? "schip schip--warn"
+                          : "schip schip--idle"
+                      }
+                    >
+                      {costView.warn ? "接近預算" : "估算"}
+                    </span>
+                  </div>
+                  <div
+                    className="dash-quota-value"
+                    aria-label={`本月約 ${formatNtd(costView.totalNtd)}，預算 ${formatNtd(costView.budgetNtd)}`}
+                  >
+                    {formatNtd(costView.totalNtd)}
+                    <span className="dash-quota-sep">／</span>
+                    {formatNtd(costView.budgetNtd)}
+                  </div>
+                  <p className="dash-quota-remain">
+                    剩餘{" "}
+                    <strong>{formatNtd(costView.remainingNtd)}</strong>
+                    {" · "}
+                    已用約 {Math.round(costView.usedRatio * 100)}%
+                    {" · "}
+                    <span className="dash-cost-usd">
+                      {formatUsd(costView.totalUsd)} USD
+                    </span>
+                  </p>
+                  <div
+                    className="dash-quota-bar-track"
+                    role="progressbar"
+                    aria-valuenow={costView.barPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="月預算使用比例"
+                  >
+                    <i
+                      className={
+                        costView.warn
+                          ? "dash-quota-bar-fill dash-quota-bar-fill--warn"
+                          : "dash-quota-bar-fill"
+                      }
+                      style={{ width: `${costView.barPct}%` }}
+                    />
+                  </div>
+                  <p className="dash-quota-honesty">{costView.honestyLabel}</p>
+                  <p className="dash-quota-sub">{costView.subHint}</p>
+                  <p className="dash-quota-detail">
+                    有成本 {costView.withCostCount} 件
+                    {costView.missingCostCount > 0
+                      ? ` · 缺成本 ${costView.missingCostCount} 件（未計 $0）`
+                      : null}
+                  </p>
+                  {costView.emptyText ? (
+                    <p className="dash-todo-status" role="status">
+                      {costView.emptyText}
+                    </p>
+                  ) : null}
+                  {costView.warnText ? (
+                    <p className="dash-quota-warn" role="status">
+                      {costView.warnText}
+                    </p>
+                  ) : null}
+
+                  {costView.detailTotal > 0 ? (
+                    <div className="dash-cost-detail">
+                      <button
+                        type="button"
+                        className="dash-cost-detail-toggle"
+                        aria-expanded={costDetailOpen}
+                        onClick={() => setCostDetailOpen((o) => !o)}
+                      >
+                        {costDetailOpen ? "收合" : "展開"}明細 · 本月有成本{" "}
+                        {costView.detailTotal} 件
+                        {costView.detailTotal > COST_DETAIL_UI_LIMIT
+                          ? `（顯示前 ${COST_DETAIL_UI_LIMIT}）`
+                          : null}
+                      </button>
+                      {costDetailOpen ? (
+                        <ul className="dash-cost-list" role="list">
+                          {costView.detailItems.map((item) => (
+                            <li key={item.id}>
+                              <Link
+                                href={item.href}
+                                className="dash-cost-row"
+                              >
+                                <span className="dash-cost-row-title">
+                                  {item.title}
+                                </span>
+                                <span className="dash-cost-row-meta">
+                                  <span className="dash-cost-row-amt">
+                                    {formatUsd(item.costUsd)}
+                                    <span className="dash-cost-row-ntd">
+                                      {" "}
+                                      · 約 {formatNtd(item.costNtd)}
+                                    </span>
+                                  </span>
+                                  {item.model ? (
+                                    <span className="dash-cost-row-model">
+                                      {item.model}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p className="dash-todo-status">—</p>
+            )}
+          </div>
+        </section>
+
         <p className="dash-later-note">
-          月預算成本／熱圖／AI 顧問 → 後續版本（E4–E6）
+          熱圖／AI 顧問 → 後續版本（E5–E6）
         </p>
       </div>
     </main>

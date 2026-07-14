@@ -2079,6 +2079,96 @@ textarea {
   line-height: 1.45;
 }
 
+/* E4-open: cost detail list — reuses quota card / funnel row tokens */
+.dash-cost-usd {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.dash-cost-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+.dash-cost-detail-toggle {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dash-cost-detail-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.dash-cost-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dash-cost-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.dash-cost-row:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-s);
+}
+.dash-cost-row-title {
+  flex: 1 1 12rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+.dash-cost-row-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.dash-cost-row-amt {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--text);
+}
+.dash-cost-row-ntd {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.dash-cost-row-model {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 959px) {
   .dash-todo-grid {
     grid-template-columns: 1fr;
@@ -2098,6 +2188,12 @@ textarea {
     font-size: 24px;
   }
   .dash-quota-card {
+    min-height: 44px;
+  }
+  .dash-cost-detail-toggle {
+    min-height: 44px;
+  }
+  .dash-cost-row {
     min-height: 44px;
   }
 }

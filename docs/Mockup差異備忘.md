@@ -18,6 +18,26 @@
 
 ## 差異清單
 
+### 差異 31：D8a-open 描述嵌圖（Shopify／Matrixify 邊界；Showmore 預設不插）
+
+- **差在哪**：
+  1. 【文案·三之五】「發布時描述後插 1 主圖＋1 詳情（含 ALT，可關）」；正式版 **D8a-open**
+     在 **`buildShopifyProductPayload` 與 Matrixify `Body HTML`** 邊界追加，**不寫** DB
+     `description_html`（與 A23 純文字契約一致）。
+  2. 最多 **2** 張；略 `spec`；選圖：main → detail → `generated_detail`（當 scene）→ 其他；
+     URL＝processed→original→generated；有 alt 用 alt，否則標題。
+  3. **可關 Q1-A**：env `DESCRIPTION_EMBED_IMAGES`／`NESTORY_DESCRIPTION_EMBED_IMAGES`—
+     未設＝**開**；`0`/`false`/`off`＝關（與嵌圖前相同）。
+  4. **Showmore Q4-A**：**預設不插**（後台 HTML `<img>` 未實測）；僅
+     `SHOWMORE_DESCRIPTION_EMBED_IMAGES=true` 才用同一 builder。
+  5. **CDN 誠實**：同次 productCreate 無法保證 CDN；優先用現有 URL（含已 finalize 的
+     shopify CDN）；非 CDN 仍可嵌（Q6-A），不硬擋。
+  6. 串接順序：body HTML → **嵌圖** → 內部連結 → FAQ JSON-LD。無 Settings UI（Q3-A）。
+- **為什麼**：發布頁資訊密度／描述內 SEO 圖；包小、可 mock、接既有圖欄。
+- **誰拍板**：總指揮放行 D8a-open，2026-07-14（Q1–Q6 全 A）。
+- **現況**：✅ **D8a-open 已實作（2026-07-14）**。`descriptionEmbed.ts`；
+  `scripts/verify-d8a-description-embed.mjs`。
+
 ### 差異 30：#2-open 發布批次完成通知（publish_batch_done；非 #3/#4）
 
 - **差在哪**：

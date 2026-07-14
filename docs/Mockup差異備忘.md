@@ -18,6 +18,27 @@
 
 ## 差異清單
 
+### 差異 32：E1-open 儀表板今日待辦（優先於 Mockup metric 整頁）
+
+- **差在哪**：
+  1. Mockup 儀表板頁示意＝今日上架／成員／AI 花費／成本明細／IP 佔比；正式版 **E1-open**
+     **先做「今日待辦」四卡**（文案待審／圖片待審／失敗／待發布），**不做** Mockup 那排
+     metric／成本／IP 榜（留給 E2–E6）。
+  2. 「今日」＝**積壓待辦（backlog）**，**不**用日曆「今天」過濾；舊案未清仍顯示。
+  3. 分桶：文案＝`ready_for_review`；圖審＝D5 `pending_review`（done 且未
+     `image_flags.image_review=approved`）；失敗＝draft/api/generation 失敗 **∪**
+     `image_status=failed`（同件不雙算總數，副標「含圖失敗 n」）；待發布＝
+     `approved|publishing`。
+  4. 可點跳轉：文案→`/drafts/new`＋sessionStorage stage `copy_review`；圖審→`/review`；
+     失敗／待發布→`/drafts`＋queue stage；**無** `?stage=` URL（本包不改 query）。
+  5. admin 預設「只看我的」、可切全部；operator 只看自己；session+RLS；統計上限 200 筆
+     誠實提示；**0 件四卡仍顯示**。
+  6. 樣式：現站 `.panel`／`.schip`／tokens；BX-P 禁止；零 migration。
+- **為什麼**：開工第一眼要能清佇列；Mockup metric 需量產與成本資料，E1 先交付最高 CP 值。
+- **誰拍板**：總指揮放行 E1-open，2026-07-14（Q1–Q6 全 A）。
+- **現況**：✅ **E1-open 已實作（2026-07-14）**。`todoBuckets.ts`＋`DashboardTodoPanel`；
+  `scripts/verify-e1-todo-buckets.mjs`。統一實機／登入畫面未代測。
+
 ### 差異 31：D8a-open 描述嵌圖（Shopify／Matrixify 邊界；Showmore 預設不插）
 
 - **差在哪**：

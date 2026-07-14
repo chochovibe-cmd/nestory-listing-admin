@@ -4,6 +4,7 @@ import { appendDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/descript
 import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
 import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildImageFileNameSlug } from "@/lib/contentGenerator/imageFileNameGenerator";
+import { buildExternalVideoMedia } from "@/lib/media/videoUrls";
 import type { ProductDraft, ProductImage, ProductVariantRow, PublishMode } from "@/types/domain";
 import {
   buildVariantPublishPlan,
@@ -132,6 +133,15 @@ export function buildShopifyProductPayload(
       };
     })
     .filter((image): image is { originalSource: string; alt: string; mediaContentType: string } => image !== null);
+
+  // D10-open: YouTube EXTERNAL_VIDEO after images (productCreate media).
+  // Non-YouTube entries skipped with warnings (merged onto draft at publish).
+  const videoBuild = buildExternalVideoMedia(
+    draft.video_urls,
+    draft.title_zh || draft.taobao_title
+  );
+  const mediaWithVideos = [...images, ...videoBuild.media];
+
   const { sku } = generateSku({
     productType: draft.product_type ?? "",
     ipName: draft.ip_name ?? draft.category ?? "",
@@ -201,7 +211,8 @@ export function buildShopifyProductPayload(
 
   return {
     product: productWithOptions,
-    media: Array.isArray(generatedPayload.media) ? generatedPayload.media : images,
+    // Prefer explicit generated media only when present; else images + EXTERNAL_VIDEO.
+    media: Array.isArray(generatedPayload.media) ? generatedPayload.media : mediaWithVideos,
     variantSeed: {
       sku,
       price: draft.twd_price ?? 0,
@@ -219,7 +230,9 @@ export function buildShopifyProductPayload(
     variantPlan,
     shopifyCollections: draft.shopify_collections ?? [],
     collectionSuggestion: draft.collection_suggestion,
-    generationRuleVersion: draft.generation_rule_version
+    generationRuleVersion: draft.generation_rule_version,
+    /** D10: non-YouTube skips for draft.warnings (publishDraft merges). */
+    videoWarnings: videoBuild.warnings
   };
 }
 

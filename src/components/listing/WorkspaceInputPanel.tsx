@@ -37,6 +37,7 @@ import {
 } from "@/lib/variants";
 import { VariantEditor, repriceVariants } from "@/components/listing/VariantEditor";
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
+import { parseVideoUrlsFromTextarea } from "@/lib/media/videoUrls";
 import { FieldHelp } from "@/components/listing/FieldHelp";
 import {
   buildWorkspaceAutosaveSnapshot,
@@ -173,6 +174,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   // B1 (Mockup差異備忘 差異2): 規格以「系統自動整理」為主，此欄是常駐可編輯的補充/修正入口，
   // 預設留空。留空時生成會用 LLM 從證據池整理的規格回寫 spec_text；有填則以此為準不被覆蓋。
   const [specText, setSpecText] = useState("");
+  // D10-open: YouTube links (one per line, max 3) → product_drafts.video_urls
+  const [videoUrlsText, setVideoUrlsText] = useState("");
   // B7 multi-dimension variants
   const [variantDimensions, setVariantDimensions] = useState<VariantDimension[]>([]);
   const [variants, setVariants] = useState<VariantFormRow[]>([]);
@@ -190,10 +193,12 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [variantSectionOpen, setVariantSectionOpen] = useState(false);
   const [specSectionOpen, setSpecSectionOpen] = useState(false);
   const [noteSectionOpen, setNoteSectionOpen] = useState(false);
+  const [videoSectionOpen, setVideoSectionOpen] = useState(false);
   const prevAiContentRef = useRef(false);
   const prevVariantContentRef = useRef(false);
   const prevSpecContentRef = useRef(false);
   const prevNoteContentRef = useRef(false);
+  const prevVideoContentRef = useRef(false);
   // B17 mobile accordion: 1基本 2圖片 3價格規格 4風格；never hard-block manual jumps
   type AccordionStep = 1 | 2 | 3 | 4;
   const [isNarrow, setIsNarrow] = useState(false);
@@ -264,6 +269,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const variantHasContent = variants.length > 0 || variantDimensions.length > 0;
   const specHasContent = specText.trim().length > 0;
   const noteHasContent = note.trim().length > 0;
+  const videoHasContent = videoUrlsText.trim().length > 0;
 
   useEffect(() => {
     if (aiHasContent && !prevAiContentRef.current) setAiSectionOpen(true);
@@ -281,6 +287,10 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     if (noteHasContent && !prevNoteContentRef.current) setNoteSectionOpen(true);
     prevNoteContentRef.current = noteHasContent;
   }, [noteHasContent]);
+  useEffect(() => {
+    if (videoHasContent && !prevVideoContentRef.current) setVideoSectionOpen(true);
+    prevVideoContentRef.current = videoHasContent;
+  }, [videoHasContent]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -358,6 +368,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
           taobaoUrl,
           note,
           specText,
+          videoUrlsText,
           saleStatus,
           inventoryUnlimited,
           inventoryQuantity,
@@ -387,6 +398,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     costCurrency,
     taobaoUrl,
     note,
+    videoUrlsText,
     specText,
     saleStatus,
     inventoryUnlimited,
@@ -846,6 +858,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       pricing_formula: pricing?.pricingFormula ?? {},
       note: note.trim() || null,
       spec_text: specText.trim() || null,
+      // D10-open: max 3 YouTube URL strings (non-YouTube kept in DB; publish skips + warns)
+      video_urls: parseVideoUrlsFromTextarea(videoUrlsText),
       sale_status: saleStatus,
       source_platform: source,
       inventory_quantity: inventoryFields.inventory_quantity,
@@ -947,6 +961,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setTaobaoUrl("");
     setNote("");
     setSpecText("");
+    setVideoUrlsText("");
     setVariants([]);
     setVariantDimensions([]);
     setVariantWarning(null);
@@ -969,9 +984,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setVariantSectionOpen(false);
     setSpecSectionOpen(false);
     setNoteSectionOpen(false);
+    setVideoSectionOpen(false);
     prevVariantContentRef.current = false;
     prevSpecContentRef.current = false;
     prevNoteContentRef.current = false;
+    prevVideoContentRef.current = false;
     setMobileStep(1);
     autoAdv12Ref.current = false;
     autoAdv34Ref.current = false;
@@ -993,6 +1010,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setTaobaoUrl(fields.taobaoUrl);
     setNote(fields.note);
     setSpecText(fields.specText);
+    setVideoUrlsText(fields.videoUrlsText);
     if (SALE_STATUS_OPTIONS.includes(fields.saleStatus as SaleStatus)) {
       setSaleStatus(fields.saleStatus as SaleStatus);
     }
@@ -1024,15 +1042,18 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       (fields.variants?.length ?? 0) > 0 || (fields.variantDimensions?.length ?? 0) > 0;
     const restoredSpec = Boolean(fields.specText?.trim());
     const restoredNote = Boolean(fields.note?.trim());
+    const restoredVideo = Boolean(fields.videoUrlsText?.trim());
     if (restoredAi) setAiSectionOpen(true);
     if (restoredVariants) setVariantSectionOpen(true);
     if (restoredSpec) setSpecSectionOpen(true);
     if (restoredNote) setNoteSectionOpen(true);
+    if (restoredVideo) setVideoSectionOpen(true);
     // Align prev refs so effects don't fight manual collapse right after restore
     prevAiContentRef.current = restoredAi;
     prevVariantContentRef.current = restoredVariants;
     prevSpecContentRef.current = restoredSpec;
     prevNoteContentRef.current = restoredNote;
+    prevVideoContentRef.current = restoredVideo;
 
     if (fields.draftId) {
       draftIdRef.current = fields.draftId;
@@ -1092,6 +1113,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
         taobaoUrl: fields.taobaoUrl,
         note: fields.note,
         specText: fields.specText,
+        videoUrlsText: fields.videoUrlsText,
         saleStatus: fields.saleStatus || saleStatus,
         inventoryUnlimited: fields.inventoryUnlimited,
         inventoryQuantity: fields.inventoryQuantity,
@@ -1891,6 +1913,29 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 </FieldHelp>
               </label>
               <input onChange={(e) => setNote(e.target.value)} placeholder="例如：含底座、預購款、限定版..." value={note} />
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            className="adv-video"
+            onToggle={() => setVideoSectionOpen((v) => !v)}
+            open={videoSectionOpen}
+            summary={videoHasContent ? "已填" : undefined}
+            title="影片連結"
+          >
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label-with-help">
+                <span>YouTube 影片網址</span>
+                <FieldHelp label="影片連結說明">
+                  選填。先在 YouTube 上傳後貼連結（最多 3 條，一行一個）。發布時會掛進 Shopify 商品媒體輪播；Showmore 匯出會在內文尾附連結。僅支援 YouTube。
+                </FieldHelp>
+              </label>
+              <textarea
+                onChange={(e) => setVideoUrlsText(e.target.value)}
+                placeholder={"https://www.youtube.com/watch?v=xxxxxxxx\n（可再貼第二、第三條，一行一個）"}
+                rows={3}
+                value={videoUrlsText}
+              />
             </div>
           </CollapsibleSection>
 

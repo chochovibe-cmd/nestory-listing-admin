@@ -133,7 +133,8 @@ export interface ProductDraft {
   detected_category: string | null;
   sku: string | null;
   source_platform: string | null;
-  video_urls: unknown[];
+  /** D10: YouTube URL strings (max 3). migration 005; empty = []. */
+  video_urls: string[];
   copy_generated_at: string | null;
   reviewed_at: string | null;
   published_at: string | null;

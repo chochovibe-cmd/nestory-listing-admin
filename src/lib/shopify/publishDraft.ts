@@ -108,13 +108,21 @@ export async function publishDraft(
 
   const mockMode = process.env.SHOPIFY_PUBLISH_MOCK !== "false";
 
+  // D10: non-YouTube video_urls skipped at payload build → yellow warnings (do not block publish).
+  const videoWarnings = Array.isArray(
+    (payload as { videoWarnings?: string[] }).videoWarnings
+  )
+    ? ((payload as { videoWarnings?: string[] }).videoWarnings as string[])
+    : [];
+
   if (mockMode || !hasShopifyAdminCredentials()) {
     await serviceSupabase.from("publish_jobs").insert({
       ...publishJobBase,
       publish_status: publishMode === "active" ? "active_published" : "draft_created",
       response_payload: {
         mock: true,
-        note: "SHOPIFY_PUBLISH_MOCK is enabled or Shopify credentials are missing"
+        note: "SHOPIFY_PUBLISH_MOCK is enabled or Shopify credentials are missing",
+        ...(videoWarnings.length ? { videoWarnings } : {})
       },
       completed_at: new Date().toISOString()
     });
@@ -126,7 +134,10 @@ export async function publishDraft(
         shopify_product_id: "mock-product-id",
         shopify_admin_url: null,
         error_message: null,
-        published_at: new Date().toISOString() // A13: publish-stage timestamp
+        published_at: new Date().toISOString(), // A13: publish-stage timestamp
+        ...(videoWarnings.length
+          ? { warnings: [...(draft.warnings ?? []), ...videoWarnings] }
+          : {})
       })
       .eq("id", id);
 
@@ -452,10 +463,17 @@ export async function publishDraft(
       "Shopify 未回傳預設款式 ID，價格／成本未同步，請至 Shopify 後台手動確認並設定價格。";
   }
 
+  const publishWarnings = [
+    ...(priceSyncWarning ? [priceSyncWarning] : []),
+    ...videoWarnings
+  ];
+
   await serviceSupabase.from("publish_jobs").insert({
     ...publishJobBase,
     publish_status: publishMode === "active" ? "active_published" : "draft_created",
-    response_payload: priceSyncWarning ? { ...result, warning: priceSyncWarning } : result,
+    response_payload: publishWarnings.length
+      ? { ...result, warning: priceSyncWarning ?? undefined, videoWarnings: videoWarnings.length ? videoWarnings : undefined }
+      : result,
     completed_at: new Date().toISOString()
   });
   await serviceSupabase
@@ -467,7 +485,9 @@ export async function publishDraft(
       shopify_admin_url: shopifyAdminUrl(productId),
       error_message: null,
       published_at: new Date().toISOString(), // A13: publish-stage timestamp
-      ...(priceSyncWarning ? { warnings: [...(draft.warnings ?? []), priceSyncWarning] } : {})
+      ...(publishWarnings.length
+        ? { warnings: [...(draft.warnings ?? []), ...publishWarnings] }
+        : {})
     })
     .eq("id", id);
 

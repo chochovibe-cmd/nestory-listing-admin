@@ -24,6 +24,8 @@ export type WorkspaceAutosaveSnapshot = {
   taobaoUrl: string;
   note: string;
   specText: string;
+  /** D10: multi-line YouTube URLs (one per line); optional. */
+  videoUrlsText: string;
   saleStatus: string;
   inventoryUnlimited: boolean;
   inventoryQuantity: string;
@@ -67,6 +69,7 @@ export function shouldPersistWorkspaceAutosave(
     | "taobaoUrl"
     | "note"
     | "specText"
+    | "videoUrlsText"
     | "variants"
     | "manualSellPrice"
     | "manualCompareAtPrice"
@@ -79,6 +82,7 @@ export function shouldPersistWorkspaceAutosave(
   if (input.taobaoUrl.trim()) return true;
   if (input.note.trim()) return true;
   if (input.specText.trim()) return true;
+  if ((input.videoUrlsText ?? "").trim()) return true;
   if (input.manualSellPrice.trim() || input.manualCompareAtPrice.trim()) return true;
   if (input.targetProfitInput.trim()) return true;
   if (input.variants.some((row) => row.optionValues.some((v) => v.trim()) || row.cost.trim())) {
@@ -155,6 +159,7 @@ export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot):
   taobaoUrl: string;
   note: string;
   specText: string;
+  videoUrlsText: string;
   saleStatus: string;
   inventoryUnlimited: boolean;
   inventoryQuantity: string;
@@ -180,6 +185,7 @@ export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot):
     taobaoUrl: typeof snap.taobaoUrl === "string" ? snap.taobaoUrl : "",
     note: typeof snap.note === "string" ? snap.note : "",
     specText: typeof snap.specText === "string" ? snap.specText : "",
+    videoUrlsText: typeof snap.videoUrlsText === "string" ? snap.videoUrlsText : "",
     saleStatus: typeof snap.saleStatus === "string" ? snap.saleStatus : "",
     inventoryUnlimited: snap.inventoryUnlimited !== false,
     inventoryQuantity: typeof snap.inventoryQuantity === "string" ? snap.inventoryQuantity : "",

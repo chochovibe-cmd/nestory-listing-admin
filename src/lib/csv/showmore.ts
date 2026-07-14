@@ -1,5 +1,6 @@
 import { appendShowmoreDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/descriptionEmbed";
 import { formatPlainTextAsHtml } from "@/lib/contentGenerator/htmlFormat";
+import { appendVideoLinksHtml } from "@/lib/media/videoUrls";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 import {
   applyShowmoreCompareAt,
@@ -68,11 +69,15 @@ export function buildShowmoreRows(
 
     // Body at export boundary only (A25 / A23): DB stays plain text.
     // D8a Q4-A: HTML img embed OFF by default (Showmore untested); opt-in env.
+    // D10-open Q5-A: append YouTube links at tail when video_urls present.
     const bodySource = draft.description_html || draft.description_plain || "";
-    const bodyHtml = appendShowmoreDescriptionEmbedIfEnabled(
-      formatPlainTextAsHtml(bodySource),
-      draft.product_images,
-      draft.title_zh || draft.taobao_title
+    const bodyHtml = appendVideoLinksHtml(
+      appendShowmoreDescriptionEmbedIfEnabled(
+        formatPlainTextAsHtml(bodySource),
+        draft.product_images,
+        draft.title_zh || draft.taobao_title
+      ),
+      draft.video_urls
     );
 
     return {

@@ -51,6 +51,11 @@ import {
   isPublishedArchiveStatus
 } from "@/lib/drafts/archiveDrafts";
 import { ApproveSummaryModal } from "@/components/listing/ApproveSummaryModal";
+import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
+import {
+  runExportPreflight,
+  type ExportPreflightReport
+} from "@/lib/csv/exportPreflight";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -222,6 +227,10 @@ export function ResultCard({
   const [comboSaving, setComboSaving] = useState(false);
   // B11 D1-B: summary only for Shopify-affecting「核准並發布」(not pure ✓)
   const [approveSummaryOpen, setApproveSummaryOpen] = useState(false);
+  // D9-open Q5-A: single Matrixify also goes through preflight
+  const [exportPreflightReport, setExportPreflightReport] =
+    useState<ExportPreflightReport | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
   const [approveSummaryBusy, setApproveSummaryBusy] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
@@ -931,27 +940,64 @@ export function ResultCard({
     }
   }
 
-  async function exportCsv() {
-    const response = await fetch("/api/exports/matrixify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: [draft.id] })
-    });
+  function openMatrixifyPreflight() {
+    // Prefer on-screen title/price if user edited (export API still uses DB — honest warn via status)
+    const report = runExportPreflight(
+      [
+        {
+          id: draft.id,
+          title_zh: title || draft.title_zh,
+          taobao_title: draft.taobao_title,
+          original_title: draft.original_title,
+          status: draft.status,
+          twd_price: sellPrice ? Number(sellPrice) : draft.twd_price,
+          twd_cost: draft.twd_cost,
+          compare_at_price: compareAtPrice
+            ? Number(compareAtPrice)
+            : draft.compare_at_price,
+          price_mode: draft.price_mode,
+          description_html: description || draft.description_html,
+          description_plain: draft.description_plain,
+          variant_dimensions: draft.variant_dimensions,
+          product_images: images
+        }
+      ],
+      { kind: "matrixify" }
+    );
+    setExportPreflightReport(report);
+  }
 
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      setMessage(payload.error ?? "CSV 產生失敗");
-      return;
+  async function confirmMatrixifyExport() {
+    if (!exportPreflightReport?.canExport) return;
+    setExportBusy(true);
+    setMessage("產生 CSV 中...");
+    try {
+      const response = await fetch("/api/exports/matrixify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: [draft.id] })
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setMessage(payload.error ?? "CSV 產生失敗");
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `nestory-matrixify-${draft.id}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("CSV 備援檔已產生");
+      setExportPreflightReport(null);
+    } catch {
+      setMessage("CSV 下載連線失敗");
+    } finally {
+      setExportBusy(false);
     }
-
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `nestory-matrixify-${draft.id}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setMessage("CSV 備援檔已產生");
   }
 
   function selectTab(tab: ResultCardTabId) {
@@ -1629,7 +1675,14 @@ export function ResultCard({
                   <button disabled={archiveBusy} onClick={() => void archiveOne()} type="button">
                     🗄 封存
                   </button>
-                  <button onClick={() => void exportCsv()} type="button">產生 CSV</button>
+                  <button
+                    disabled={exportBusy}
+                    onClick={() => openMatrixifyPreflight()}
+                    title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
+                    type="button"
+                  >
+                    產生 CSV
+                  </button>
                 </>
               )}
             </span>
@@ -1662,6 +1715,16 @@ export function ResultCard({
           />
         );
       })()}
+
+      <ExportPreflightModal
+        busy={exportBusy}
+        onCancel={() => {
+          if (!exportBusy) setExportPreflightReport(null);
+        }}
+        onConfirm={() => void confirmMatrixifyExport()}
+        open={Boolean(exportPreflightReport)}
+        report={exportPreflightReport}
+      />
     </div>
   );
 }

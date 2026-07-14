@@ -1,0 +1,388 @@
+/**
+ * D9-open: pure export preflight (no LLM).
+ * error → block download; warn → allow with explicit confirm.
+ * Showmore prices use the same helpers as CSV export (showmorePricing).
+ */
+
+import { truncateTitle } from "@/lib/drafts/approveSummary";
+import type { ProductDraft, ProductImage } from "@/types/domain";
+import {
+  applyShowmoreCompareAt,
+  applyShowmoreMarkup,
+  DEFAULT_SHOWMORE_MARKUP_PERCENT,
+  normalizeShowmoreMarkupPercent
+} from "./showmorePricing";
+
+export type ExportKind = "showmore" | "matrixify";
+
+export type PreflightLevel = "error" | "warn" | "info";
+
+export const EXPORTABLE_STATUSES = ["approved", "api_failed", "csv_ready"] as const;
+
+export type ExportableStatus = (typeof EXPORTABLE_STATUSES)[number];
+
+export function isExportableStatus(status: string | null | undefined): boolean {
+  return EXPORTABLE_STATUSES.includes(status as ExportableStatus);
+}
+
+export interface PreflightIssue {
+  level: PreflightLevel;
+  code: string;
+  message: string;
+}
+
+/** Minimal draft shape for rules + price preview (full ProductDraft works). */
+export type PreflightDraftInput = {
+  id: string;
+  title_zh?: string | null;
+  taobao_title?: string | null;
+  original_title?: string | null;
+  status?: string | null;
+  twd_price?: number | null;
+  twd_cost?: number | null;
+  compare_at_price?: number | null;
+  price_mode?: ProductDraft["price_mode"];
+  description_html?: string | null;
+  description_plain?: string | null;
+  variant_dimensions?: ProductDraft["variant_dimensions"];
+  product_images?: Array<
+    Pick<
+      ProductImage,
+      "image_type" | "processed_file_url" | "original_file_url" | "sort_order"
+    >
+  >;
+};
+
+export interface PreflightItem {
+  draftId: string;
+  titleFull: string;
+  titleShort: string;
+  status: string;
+  /** After Showmore markup+beautify, or raw Matrixify sell. null if missing. */
+  sellPriceDisplay: number | null;
+  compareAtDisplay: number | null;
+  costDisplay: number | null;
+  issues: PreflightIssue[];
+  hasError: boolean;
+  hasWarn: boolean;
+}
+
+export interface ExportPreflightReport {
+  kind: ExportKind;
+  /** Showmore only; null for Matrixify. */
+  markupPercent: number | null;
+  totalSelected: number;
+  items: PreflightItem[];
+  /** Flattened error messages (item + batch). */
+  errorMessages: string[];
+  /** Flattened warn messages (item + batch). info does not count. */
+  warningMessages: string[];
+  /** Non-blocking tips (e.g. Showmore default stock/weight). */
+  infoMessages: string[];
+  errorCount: number;
+  warnCount: number;
+  infoCount: number;
+  hasErrors: boolean;
+  /** True when there is at least one warn-level issue (info alone does not flip this). */
+  hasWarnings: boolean;
+  /** True when no errors and at least one selected item. */
+  canExport: boolean;
+}
+
+export interface RunExportPreflightOptions {
+  kind: ExportKind;
+  /** Client/settings value; server default 5 when showmore. */
+  showmoreMarkupPercent?: number;
+}
+
+function draftTitle(draft: PreflightDraftInput): string {
+  return (
+    (draft.title_zh ?? "").trim() ||
+    (draft.taobao_title ?? "").trim() ||
+    (draft.original_title ?? "").trim() ||
+    ""
+  );
+}
+
+/** Product images for export (exclude spec), sorted. */
+export function pickExportableImages(
+  images: PreflightDraftInput["product_images"] | undefined
+) {
+  return (images ?? [])
+    .filter((image) => image.image_type !== "spec")
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+}
+
+function imageUrl(
+  image: Pick<ProductImage, "processed_file_url" | "original_file_url"> | undefined
+): string {
+  if (!image) return "";
+  return image.processed_file_url || image.original_file_url || "";
+}
+
+export function hasProductImageUrl(
+  images: PreflightDraftInput["product_images"] | undefined
+): boolean {
+  return pickExportableImages(images).some((image) => Boolean(imageUrl(image)));
+}
+
+/** True when there is at least one product image URL, but none is processed/CDN. */
+export function hasOnlyOriginalImageUrls(
+  images: PreflightDraftInput["product_images"] | undefined
+): boolean {
+  const list = pickExportableImages(images);
+  if (!list.length) return false;
+  const withUrl = list.filter((image) => Boolean(imageUrl(image)));
+  if (!withUrl.length) return false;
+  return withUrl.every((image) => !image.processed_file_url && Boolean(image.original_file_url));
+}
+
+function hasDescription(draft: PreflightDraftInput): boolean {
+  return Boolean(
+    (draft.description_html ?? "").trim() || (draft.description_plain ?? "").trim()
+  );
+}
+
+function hasMultiVariantHint(draft: PreflightDraftInput): boolean {
+  const dims = draft.variant_dimensions;
+  return Array.isArray(dims) && dims.length > 0;
+}
+
+function checkItem(
+  draft: PreflightDraftInput,
+  kind: ExportKind,
+  markupPercent: number
+): PreflightItem {
+  const titleFull = draftTitle(draft) || "未命名草稿";
+  const titleShort = truncateTitle(titleFull);
+  const issues: PreflightIssue[] = [];
+
+  const rawTitle = draftTitle(draft);
+  if (!rawTitle) {
+    issues.push({
+      level: "error",
+      code: "title_empty",
+      message: "標題空白"
+    });
+  }
+
+  const sellRaw = draft.twd_price;
+  const hasSell =
+    sellRaw != null && Number.isFinite(Number(sellRaw)) && Number(sellRaw) > 0;
+  if (!hasSell) {
+    issues.push({
+      level: "error",
+      code: "price_empty",
+      message: "無售價"
+    });
+  }
+
+  if (!isExportableStatus(draft.status)) {
+    issues.push({
+      level: "error",
+      code: "status_not_exportable",
+      message: `狀態「${draft.status || "?"}」不可匯出（需核准／API失敗／CSV已備妥）`
+    });
+  }
+
+  const hasImage = hasProductImageUrl(draft.product_images);
+  if (!hasImage) {
+    if (kind === "showmore") {
+      issues.push({
+        level: "error",
+        code: "image_empty",
+        message: "無商品圖（Showmore 主要圖片必填）"
+      });
+    } else {
+      issues.push({
+        level: "warn",
+        code: "image_empty",
+        message: "無商品圖（Matrixify 可空，匯入後請補圖）"
+      });
+    }
+  } else if (hasOnlyOriginalImageUrls(draft.product_images)) {
+    issues.push({
+      level: "warn",
+      code: "image_original_only",
+      message: "圖僅原圖、尚無處理後／CDN 網址"
+    });
+  }
+
+  if (!hasDescription(draft)) {
+    issues.push({
+      level: "warn",
+      code: "description_empty",
+      message: "商品介紹空白"
+    });
+  }
+
+  const cost = draft.twd_cost;
+  if (cost == null || !Number.isFinite(Number(cost)) || Number(cost) <= 0) {
+    issues.push({
+      level: "warn",
+      code: "cost_empty",
+      message: "缺成本"
+    });
+  }
+
+  if (draft.price_mode === "sale") {
+    const cmp = draft.compare_at_price;
+    if (cmp == null || !Number.isFinite(Number(cmp)) || Number(cmp) <= 0) {
+      issues.push({
+        level: "warn",
+        code: "compare_at_empty",
+        message: "特價模式缺原價"
+      });
+    }
+  }
+
+  if (hasMultiVariantHint(draft)) {
+    issues.push({
+      level: "warn",
+      code: "multi_variant_single_row",
+      message: "多款式未展開（CSV 仍為單一款式）"
+    });
+  }
+
+  let sellPriceDisplay: number | null = null;
+  let compareAtDisplay: number | null = null;
+  if (hasSell) {
+    if (kind === "showmore") {
+      const sell = applyShowmoreMarkup(Number(sellRaw), markupPercent);
+      sellPriceDisplay = typeof sell === "number" ? sell : null;
+      const compare = applyShowmoreCompareAt(
+        draft.compare_at_price,
+        sell,
+        markupPercent
+      );
+      compareAtDisplay = typeof compare === "number" ? compare : null;
+    } else {
+      sellPriceDisplay = Number(sellRaw);
+      const cmp = draft.compare_at_price;
+      compareAtDisplay =
+        cmp != null && Number.isFinite(Number(cmp)) && Number(cmp) > 0
+          ? Number(cmp)
+          : null;
+    }
+  } else if (kind === "showmore" && draft.compare_at_price != null) {
+    // Still show marked-up compare if sell missing (rare)
+    const compare = applyShowmoreCompareAt(draft.compare_at_price, "", markupPercent);
+    compareAtDisplay = typeof compare === "number" ? compare : null;
+  } else if (draft.compare_at_price != null && Number(draft.compare_at_price) > 0) {
+    compareAtDisplay = Number(draft.compare_at_price);
+  }
+
+  const costDisplay =
+    cost != null && Number.isFinite(Number(cost)) && Number(cost) > 0
+      ? Number(cost)
+      : null;
+
+  const hasError = issues.some((i) => i.level === "error");
+  const hasWarn = issues.some((i) => i.level === "warn");
+
+  return {
+    draftId: draft.id,
+    titleFull,
+    titleShort,
+    status: draft.status ?? "",
+    sellPriceDisplay,
+    compareAtDisplay,
+    costDisplay,
+    issues,
+    hasError,
+    hasWarn
+  };
+}
+
+/**
+ * Run field preflight for one or more drafts (pure; no I/O).
+ */
+export function runExportPreflight(
+  drafts: PreflightDraftInput[],
+  options: RunExportPreflightOptions
+): ExportPreflightReport {
+  const kind = options.kind;
+  const markupPercent =
+    kind === "showmore"
+      ? normalizeShowmoreMarkupPercent(
+          options.showmoreMarkupPercent ?? DEFAULT_SHOWMORE_MARKUP_PERCENT
+        )
+      : null;
+
+  const batchIssues: PreflightIssue[] = [];
+  if (!drafts.length) {
+    batchIssues.push({
+      level: "error",
+      code: "empty_selection",
+      message: "未選擇任何商品"
+    });
+  }
+
+  const items = drafts.map((draft) =>
+    checkItem(draft, kind, markupPercent ?? DEFAULT_SHOWMORE_MARKUP_PERCENT)
+  );
+
+  if (kind === "showmore" && drafts.length > 0) {
+    batchIssues.push({
+      level: "info",
+      code: "showmore_defaults",
+      message: "庫存 999／重量 0.1kg 為預設；上傳前請在 Showmore 確認"
+    });
+  }
+
+  const errorMessages: string[] = [];
+  const warningMessages: string[] = [];
+  const infoMessages: string[] = [];
+
+  for (const issue of batchIssues) {
+    if (issue.level === "error") errorMessages.push(issue.message);
+    else if (issue.level === "warn") warningMessages.push(issue.message);
+    else infoMessages.push(issue.message);
+  }
+
+  for (const item of items) {
+    for (const issue of item.issues) {
+      const line = `${item.titleShort}：${issue.message}`;
+      if (issue.level === "error") errorMessages.push(line);
+      else if (issue.level === "warn") warningMessages.push(line);
+      else infoMessages.push(line);
+    }
+  }
+
+  const errorCount = errorMessages.length;
+  const warnCount = warningMessages.length;
+  const infoCount = infoMessages.length;
+  const hasErrors = errorCount > 0;
+  const hasWarnings = warnCount > 0;
+
+  return {
+    kind,
+    markupPercent,
+    totalSelected: drafts.length,
+    items,
+    errorMessages,
+    warningMessages,
+    infoMessages,
+    errorCount,
+    warnCount,
+    infoCount,
+    hasErrors,
+    hasWarnings,
+    canExport: !hasErrors && drafts.length > 0
+  };
+}
+
+export function exportPreflightHeading(kind: ExportKind): string {
+  return kind === "showmore" ? "匯出 Showmore 預覽" : "匯出 Matrixify 預覽";
+}
+
+export function exportPrimaryLabel(report: ExportPreflightReport): string {
+  if (!report.canExport) return "無法下載（請先修正錯誤）";
+  if (report.hasWarnings) return "仍要下載（含警告）";
+  return "確認下載 CSV";
+}
+
+export function formatPriceCell(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `$${Math.round(value)}`;
+}

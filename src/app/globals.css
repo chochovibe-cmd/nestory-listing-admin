@@ -1451,6 +1451,73 @@ textarea {
   color: var(--danger);
 }
 
+/* D9-open export preflight — layout only; reuses modal / schip / st-dot tokens */
+.modal-box.export-preflight-modal {
+  width: min(480px, 94vw);
+}
+.export-pf-overview {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.45;
+}
+.export-pf-items {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+.export-pf-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.export-pf-item:last-child {
+  border-bottom: none;
+}
+.export-pf-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 4px;
+}
+.export-pf-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 0;
+  word-break: break-word;
+}
+.export-pf-prices {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.export-pf-item-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.export-pf-ok-chip {
+  font-size: 11px;
+}
+.export-pf-summary-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 2px;
+}
+.export-pf-all-ok {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+}
+
 @media (max-width: 959px) {
   .modal-overlay {
     align-items: flex-end;

@@ -4,8 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { ApproveSummaryModal } from "@/components/listing/ApproveSummaryModal";
+import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
+import {
+  runExportPreflight,
+  type ExportKind,
+  type ExportPreflightReport,
+  type PreflightDraftInput
+} from "@/lib/csv/exportPreflight";
 import {
   buildBatchApproveSummary,
   modalHeading,
@@ -62,6 +69,14 @@ export function DraftResultsPanel({
     draftIds: string[];
   }>(null);
   const [batchSummaryBusy, setBatchSummaryBusy] = useState(false);
+  // D9-open: export preflight before downloadCsv
+  const [exportPreflight, setExportPreflight] = useState<null | {
+    kind: ExportKind;
+    report: ExportPreflightReport;
+    draftIds: string[];
+    markupPercent?: number;
+  }>(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   // B1: the input panel (left) drives the 生成 progress card via a window event;
   // this panel (right) renders it at the top of the results list, matching the
@@ -420,37 +435,97 @@ export function DraftResultsPanel({
     }
   }
 
-  async function downloadCsv(
-    endpoint: string,
-    filenamePrefix: string,
-    note?: string,
-    extraBody?: Record<string, unknown>
-  ) {
-    if (!selectedArray.length) return;
+  function openExportPreflight(kind: ExportKind) {
+    if (!selectedArray.length) {
+      setMessage("請先勾選商品再匯出。");
+      return;
+    }
+    const markup = getStoredPricingSettings().showmoreMarkupPercent;
+    const inputs: PreflightDraftInput[] = selectedArray.map((id) => {
+      const draft = drafts.find((row) => row.id === id);
+      const imgs = imagesByDraft.get(id) ?? [];
+      if (!draft) {
+        return {
+          id,
+          title_zh: null,
+          status: "missing",
+          product_images: []
+        };
+      }
+      return {
+        id: draft.id,
+        title_zh: draft.title_zh,
+        taobao_title: draft.taobao_title,
+        original_title: draft.original_title,
+        status: draft.status,
+        twd_price: draft.twd_price,
+        twd_cost: draft.twd_cost,
+        compare_at_price: draft.compare_at_price,
+        price_mode: draft.price_mode,
+        description_html: draft.description_html,
+        description_plain: draft.description_plain,
+        variant_dimensions: draft.variant_dimensions,
+        product_images: imgs
+      };
+    });
+    const report = runExportPreflight(inputs, {
+      kind,
+      showmoreMarkupPercent: markup
+    });
+    setExportPreflight({
+      kind,
+      report,
+      draftIds: selectedArray,
+      markupPercent: kind === "showmore" ? markup : undefined
+    });
+  }
+
+  async function confirmExportDownload() {
+    if (!exportPreflight || !exportPreflight.report.canExport) return;
+    const { kind, draftIds, markupPercent } = exportPreflight;
+    const endpoint =
+      kind === "showmore" ? "/api/exports/showmore" : "/api/exports/matrixify";
+    const filenamePrefix =
+      kind === "showmore" ? "nestory-showmore" : "nestory-matrixify";
+    const note =
+      kind === "showmore"
+        ? `已套 Showmore +${markupPercent ?? 5}% 並美化；庫存 999／重量 0.1kg 為預設；多款式未展開；上傳前請確認。`
+        : undefined;
+    const extraBody =
+      kind === "showmore" ? { showmoreMarkupPercent: markupPercent } : undefined;
+
+    setExportBusy(true);
     setBusy(true);
     setLastArchiveIds(null);
     setMessage("產生 CSV 中...");
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: selectedArray, ...extraBody })
-    });
-    setBusy(false);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds, ...extraBody })
+      });
 
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      setMessage(payload.error ?? "CSV 產生失敗");
-      return;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setMessage(payload.error ?? "CSV 產生失敗");
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${filenamePrefix}-${Date.now()}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage(note ? `CSV 已下載。${note}` : "CSV 已下載");
+      setExportPreflight(null);
+    } catch {
+      setMessage("CSV 下載連線失敗");
+    } finally {
+      setExportBusy(false);
+      setBusy(false);
     }
-
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${filenamePrefix}-${Date.now()}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setMessage(note ? `CSV 已下載。${note}` : "CSV 已下載");
   }
 
   const showToolbar = drafts.length > 0;
@@ -572,8 +647,8 @@ export function DraftResultsPanel({
                     <button
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
-                      onClick={() => void downloadCsv("/api/exports/matrixify", "nestory-matrixify")}
-                      title="下載 Matrixify 格式 CSV，供 Shopify 後台批次匯入"
+                      onClick={() => openExportPreflight("matrixify")}
+                      title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
                       type="button"
                     >
                       ⬇ Matrixify
@@ -581,16 +656,8 @@ export function DraftResultsPanel({
                     <button
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
-                      onClick={() => {
-                        const markup = getStoredPricingSettings().showmoreMarkupPercent;
-                        void downloadCsv(
-                          "/api/exports/showmore",
-                          "nestory-showmore",
-                          `已套 Showmore +${markup}% 並美化；庫存 999／重量 0.1kg 為預設；多款式未展開；上傳前請確認。`,
-                          { showmoreMarkupPercent: markup }
-                        );
-                      }}
-                      title="下載 Showmore CSV（加價%＋美化；庫存/重量預設；多款式請後台補）"
+                      onClick={() => openExportPreflight("showmore")}
+                      title="匯出前健檢＋預覽（加價%／售價），確認後下載 Showmore CSV"
                       type="button"
                     >
                       ⬇ Showmore
@@ -679,6 +746,16 @@ export function DraftResultsPanel({
           rows={batchSummaryView.summary.rows}
         />
       ) : null}
+
+      <ExportPreflightModal
+        busy={exportBusy}
+        onCancel={() => {
+          if (!exportBusy) setExportPreflight(null);
+        }}
+        onConfirm={() => void confirmExportDownload()}
+        open={Boolean(exportPreflight)}
+        report={exportPreflight?.report ?? null}
+      />
     </section>
   );
 }

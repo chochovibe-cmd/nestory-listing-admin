@@ -16,10 +16,15 @@ import {
   buildImageBatchStuckEmail,
   buildImageBatchStuckFlex
 } from "@/lib/notifications/templates/imageBatch";
+import {
+  buildPublishBatchDoneEmail,
+  buildPublishBatchDoneFlex
+} from "@/lib/notifications/templates/publishBatch";
 import type {
   ImageBatchNotifyPayload,
   NotifyDispatchResult,
   NotifyEventType,
+  PublishBatchNotifyPayload,
   StuckBatchNotifyPayload
 } from "@/lib/notifications/types";
 
@@ -78,6 +83,33 @@ export async function dispatchImageBatchStuck(
   ]);
 
   return finalize("image_batch_stuck", [email, line]);
+}
+
+/** Event #2: publish batch terminal → Email detail + LINE counts. */
+export async function dispatchPublishBatchDone(
+  payload: PublishBatchNotifyPayload,
+  deps: NotifyCenterDeps = {}
+): Promise<NotifyDispatchResult> {
+  const config = deps.config ?? loadNotifyConfig();
+  const emailBody = buildPublishBatchDoneEmail(payload);
+  const flex = buildPublishBatchDoneFlex(payload);
+
+  const [email, line] = await Promise.all([
+    sendResendEmail({
+      config: config.email,
+      subject: emailBody.subject,
+      text: emailBody.text,
+      html: emailBody.html,
+      fetchImpl: deps.fetchImpl
+    }),
+    sendLineFlex({
+      config: config.line,
+      flexMessage: flex,
+      fetchImpl: deps.fetchImpl
+    })
+  ]);
+
+  return finalize("publish_batch_done", [email, line]);
 }
 
 function finalize(

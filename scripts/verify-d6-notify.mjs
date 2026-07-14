@@ -1,8 +1,8 @@
 /**
- * D6-open verification (mock — no real Resend / LINE / DB).
+ * D6 + #2-open verification (mock — no real Resend / LINE / DB).
  *
- * - Static wiring: notify center, tryNotify, cron, auto-chain/ai-process hooks
- * - Pure: item terminal, claim rule Q3b, email/flex builders
+ * - Static wiring: notify center, tryNotify image + publish, cron, hooks
+ * - Pure: item terminal, claim rule Q3b, email/flex builders, publish lists
  * - No LINE Notify endpoint
  * - Forbidden: fake-send when no keys
  *
@@ -103,7 +103,53 @@ function buildDoneSubject(doneCount, failedCount) {
   return `潮巢｜圖片批次完成（成功 ${doneCount}／失敗 ${failedCount}）`;
 }
 
-console.log("\nD6-open notify verification\n");
+function buildPublishDoneSubject(doneCount, failedCount) {
+  return `潮巢｜發布批次完成（成功 ${doneCount}／失敗 ${failedCount}）`;
+}
+
+/** Mirror templates/publishBatch.ts Q2-B list builder. */
+const PUBLISH_NOTIFY_MAX_SUCCESS_LINES = 20;
+const PUBLISH_NOTIFY_TITLE_MAX = 28;
+
+function truncateNotifyTitle(title, max = PUBLISH_NOTIFY_TITLE_MAX) {
+  const t = (title || "未命名草稿").trim() || "未命名草稿";
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function formatPublishNotifyLine(title, errorMessage) {
+  const t = truncateNotifyTitle(title);
+  const reason = (errorMessage || "").trim();
+  if (!reason) return t;
+  return `${t} — ${reason}`;
+}
+
+function buildPublishNotifyLineLists(items, maxSuccess = PUBLISH_NOTIFY_MAX_SUCCESS_LINES) {
+  const successAll = [];
+  const failedLines = [];
+  const skippedLines = [];
+  for (const item of items) {
+    const title = item.title || "未命名草稿";
+    if (item.itemStatus === "done") {
+      successAll.push(truncateNotifyTitle(title));
+    } else if (item.itemStatus === "failed") {
+      failedLines.push(formatPublishNotifyLine(title, item.errorMessage || "未知錯誤"));
+    } else if (item.itemStatus === "skipped") {
+      skippedLines.push(formatPublishNotifyLine(title, item.errorMessage || "已略過"));
+    }
+  }
+  return {
+    successLines: successAll.slice(0, maxSuccess),
+    failedLines,
+    skippedLines,
+    successTruncated: successAll.length > maxSuccess,
+    doneCount: successAll.length,
+    failedCount: failedLines.length,
+    skippedCount: skippedLines.length
+  };
+}
+
+console.log("\nD6-open + #2-open notify verification\n");
 
 // --- Static files ---
 await check("notify modules exist", () => {
@@ -113,10 +159,12 @@ await check("notify modules exist", () => {
     "src/lib/notifications/itemTerminal.ts",
     "src/lib/notifications/notifyCenter.ts",
     "src/lib/notifications/tryNotifyImageBatchIfComplete.ts",
+    "src/lib/notifications/tryNotifyPublishBatchIfComplete.ts",
     "src/lib/notifications/scanStuckBatches.ts",
     "src/lib/notifications/channels/resend.ts",
     "src/lib/notifications/channels/lineMessaging.ts",
     "src/lib/notifications/templates/imageBatch.ts",
+    "src/lib/notifications/templates/publishBatch.ts",
     "src/app/api/cron/stuck-batches/route.ts"
   ]) {
     assert.ok(exists(rel), `missing ${rel}`);
@@ -305,9 +353,107 @@ await check("mock: missing email config → skipped shape", () => {
   assert.equal(shouldClaimAfterDispatch([result, { status: "skipped", channel: "line" }]), false);
 });
 
+// --- #2-open publish_batch_done ---
+await check("#2: types include publish_batch_done", () => {
+  const t = read("src/lib/notifications/types.ts");
+  assert.ok(t.includes("publish_batch_done"), "event type");
+  assert.ok(t.includes("PublishBatchNotifyPayload"), "payload type");
+  assert.ok(t.includes("recordsUrl"), "records deep link field");
+});
+
+await check("#2: notifyCenter dispatches publish_batch_done", () => {
+  const src = read("src/lib/notifications/notifyCenter.ts");
+  assert.ok(src.includes("dispatchPublishBatchDone"), "dispatch fn");
+  assert.ok(src.includes("buildPublishBatchDoneEmail"), "email template");
+  assert.ok(src.includes("buildPublishBatchDoneFlex"), "flex template");
+  assert.ok(src.includes('"publish_batch_done"') || src.includes("'publish_batch_done'"), "event id");
+});
+
+await check("#2: tryNotify items terminal + Q3b claim on publish_batches", () => {
+  const src = read("src/lib/notifications/tryNotifyPublishBatchIfComplete.ts");
+  assert.ok(src.includes("areAllBatchItemsTerminal"), "item-level terminal Q1-A");
+  assert.ok(src.includes("publish_batches"), "publish table");
+  assert.ok(src.includes("publish_batch_items"), "items table");
+  assert.ok(src.includes("notify_sent_at"), "idempotent column");
+  assert.ok(
+    src.includes('.is("notify_sent_at", null)') || src.includes("notify_sent_at\", null"),
+    "conditional claim"
+  );
+  assert.ok(src.includes("shouldClaimAfterDispatch"), "Q3b");
+  assert.ok(src.includes("no_channel_configured") || src.includes("anyChannelReady"), "no key skip");
+  assert.ok(src.includes('"/records"') || src.includes("'/records'") || src.includes("/records"), "records path");
+  assert.ok(src.includes("buildPublishNotifyLineLists"), "Q2-B lists");
+});
+
+await check("#2: runPublishBatch hooks safeTry after terminal update", () => {
+  const src = read("src/lib/shopify/runPublishBatch.ts");
+  assert.ok(src.includes("safeTryNotifyPublishBatchIfComplete"), "hook present");
+  // Call site (not import) must follow terminal done_count write
+  const terminalIdx = src.indexOf("done_count: doneCount");
+  const callIdx = src.indexOf("await safeTryNotifyPublishBatchIfComplete");
+  assert.ok(terminalIdx > 0, "terminal done_count write");
+  assert.ok(callIdx > terminalIdx, "notify call after terminal counts write");
+  assert.ok(src.includes("ok: true"), "success return still ok true");
+  assert.ok(!src.includes("event #2 not wired") && !src.includes("event #2 not sent"), "stale not-wired comment gone");
+});
+
+await check("#2: Email lists fail/skip; success ≤20; LINE counts only", () => {
+  const tpl = read("src/lib/notifications/templates/publishBatch.ts");
+  assert.ok(tpl.includes("PUBLISH_NOTIFY_MAX_SUCCESS_LINES"), "cap constant");
+  assert.ok(tpl.includes("= 20") || tpl.includes("20"), "cap 20");
+  assert.ok(tpl.includes("失敗清單") || tpl.includes("failedLines"), "fail list");
+  assert.ok(tpl.includes("略過清單") || tpl.includes("skippedLines"), "skip list");
+  assert.ok(tpl.includes("buildPublishBatchDoneFlex"), "flex");
+  // Flex must not dump successLines into body
+  const flexFn = tpl.slice(tpl.indexOf("buildPublishBatchDoneFlex"));
+  assert.ok(flexFn.includes("成功 ${doneCount}") || flexFn.includes("doneCount"), "counts in flex");
+  assert.ok(!flexFn.includes("successLines"), "LINE must not list success titles");
+  assert.ok(!flexFn.includes("failedLines"), "LINE must not list fail titles");
+  assert.ok(tpl.includes("recordsUrl") || tpl.includes("打開紀錄"), "records CTA");
+  assert.ok(!tpl.includes("notify-api.line.me"), "no LINE Notify");
+});
+
+await check("#2 pure: buildPublishNotifyLineLists Q2-B", () => {
+  const items = [
+    { itemStatus: "done", title: "成功A" },
+    { itemStatus: "failed", title: "失敗B", errorMessage: "Shopify 401" },
+    { itemStatus: "skipped", title: "略過C", errorMessage: "時間不足略過（time_budget）" }
+  ];
+  const lists = buildPublishNotifyLineLists(items);
+  assert.equal(lists.doneCount, 1);
+  assert.equal(lists.failedCount, 1);
+  assert.equal(lists.skippedCount, 1);
+  assert.equal(lists.successLines[0], "成功A");
+  assert.ok(lists.failedLines[0].includes("失敗B"));
+  assert.ok(lists.failedLines[0].includes("401"));
+  assert.ok(lists.skippedLines[0].includes("略過C"));
+  assert.equal(lists.successTruncated, false);
+
+  const many = Array.from({ length: 25 }, (_, i) => ({
+    itemStatus: "done",
+    title: `商品${i + 1}`
+  }));
+  const cap = buildPublishNotifyLineLists(many);
+  assert.equal(cap.successLines.length, 20);
+  assert.equal(cap.doneCount, 25);
+  assert.equal(cap.successTruncated, true);
+});
+
+await check("#2 pure: publish subject + records URL", () => {
+  assert.ok(buildPublishDoneSubject(18, 2).includes("發布批次完成"));
+  assert.ok(buildPublishDoneSubject(18, 2).includes("成功 18"));
+  assert.equal(buildReviewUrl("https://app.example", "/records"), "https://app.example/records");
+});
+
+await check("#2: no LINE Notify in publish template", () => {
+  const tpl = read("src/lib/notifications/templates/publishBatch.ts");
+  assert.ok(tpl.includes("Not LINE Notify") || tpl.includes("Messaging"), "document ban");
+  assert.ok(!tpl.includes("notify-api.line.me"));
+});
+
 console.log("");
 if (failures.length) {
   console.error(`FAILED ${failures.length} check(s)`);
   process.exit(1);
 }
-console.log("All D6-open checks passed.\n");
+console.log("All D6-open + #2-open checks passed.\n");

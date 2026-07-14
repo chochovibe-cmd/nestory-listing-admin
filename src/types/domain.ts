@@ -198,7 +198,7 @@ export interface PublishBatch {
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
-  /** Event #2 hook only; D7-open leaves null. */
+  /** Event #2 publish_batch_done: claimed when ≥1 notify channel sent (Q3b). */
   notify_sent_at: string | null;
   error_summary: string | null;
   snapshot_json: unknown;

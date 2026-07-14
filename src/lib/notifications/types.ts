@@ -1,16 +1,16 @@
 /**
- * D6-open: Notify center event types.
+ * D6 notify center event types.
  *
- * Implemented this package: image_batch_done (#1), image_batch_stuck (cron).
- * Stub only (not implemented): publish_batch_done (#2), weekly_scouting (#3),
- * budget_80 (#4) — see docs/自動化流程設計-2026-07-08.md【二】.
+ * Implemented: image_batch_done (#1), image_batch_stuck (cron),
+ * publish_batch_done (#2, D6-#2 / notify2).
+ * Stub only: weekly_scouting (#3), budget_80 (#4) — see 自動化流程【二】.
  */
 
 export type NotifyEventType =
   | "image_batch_done"
   | "image_batch_stuck"
+  | "publish_batch_done" // #2 after runPublishBatch terminal
   // --- stubs for later packages (do not dispatch yet) ---
-  | "publish_batch_done" // #2 D7
   | "weekly_scouting" // #3 Phase F
   | "budget_80"; // #4 Phase E
 
@@ -62,6 +62,27 @@ export type StuckBatchNotifyPayload = {
   updatedAt: string | null;
 };
 
+/** Event #2: publish batch finished (Email lists; LINE counts only). */
+export type PublishBatchNotifyPayload = {
+  batchId: string;
+  batchIdShort: string;
+  totalCount: number;
+  doneCount: number;
+  failedCount: number;
+  skippedCount: number;
+  /** Email only: success titles (already capped ≤20 by builder path). */
+  successLines: string[];
+  /** Email only: "title — reason" for failed items (all). */
+  failedLines: string[];
+  /** Email only: "title — reason" for skipped items (all). */
+  skippedLines: string[];
+  /** True when more than successLines.length successes exist. */
+  successTruncated: boolean;
+  recordsUrl: string | null;
+  batchStatus?: string | null;
+  publishMode?: string | null;
+};
+
 export type TryNotifyReason =
   | "not_terminal"
   | "already_notified"
@@ -80,3 +101,6 @@ export type TryNotifyImageBatchResult = {
   claimed?: boolean;
   message?: string;
 };
+
+/** Same shape as image tryNotify result (shared reasons). */
+export type TryNotifyPublishBatchResult = TryNotifyImageBatchResult;

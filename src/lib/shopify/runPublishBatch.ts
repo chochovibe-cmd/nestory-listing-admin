@@ -5,7 +5,8 @@
  * - Time budget 60s / stop <8s remaining → remaining items skipped (Q2-A)
  * - Never HTTP self-fetch; never rewrites publishDraft GraphQL
  * - Optional MAKE_WEBHOOK_URL publish_batch_submitted; fail never 500
- * - notify_sent_at left null (event #2 not sent)
+ * - D6-#2: after terminal batch update → safeTryNotifyPublishBatchIfComplete
+ *   (Q3b claim; notify failure never changes run ok)
  */
 
 import {
@@ -24,6 +25,7 @@ import {
   PUBLISH_BATCH_MIN_REMAINING_MS
 } from "@/lib/drafts/publishBatch";
 import { notifyMake } from "@/lib/notifications/make";
+import { safeTryNotifyPublishBatchIfComplete } from "@/lib/notifications/tryNotifyPublishBatchIfComplete";
 import { publishDraft, type PublishDraftResult } from "@/lib/shopify/publishDraft";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { PublishBatchStatus, PublishMode } from "@/types/domain";
@@ -432,9 +434,12 @@ export async function runPublishBatch(
       error_summary: errorSummaryParts.length ? errorSummaryParts.join("；") : null,
       completed_at: completedAt,
       updated_at: completedAt
-      // notify_sent_at intentionally left null (event #2 not wired)
+      // notify_sent_at claimed only by tryNotify when ≥1 channel sent (Q3b)
     })
     .eq("id", batchId);
+
+  // Event #2: after terminal write; never throws into publish result
+  await safeTryNotifyPublishBatchIfComplete(batchId, { serviceSupabase });
 
   let makeWebhook: "sent" | "skipped" | "error" = "skipped";
   if (!skipMakeWebhook && process.env.MAKE_WEBHOOK_URL) {

@@ -18,6 +18,28 @@
 
 ## 差異清單
 
+### 差異 39：E5-open 儀表板健康指標（E4 下方；熱圖／重做率／Tag 提醒）
+
+- **差在哪**：
+  1. Mockup 儀表板＝metric 卡＋成本分項／IP 佔比；正式版在 **E4 月預算下方** 加 **健康指標** 一區
+     （文案重做率＋Tag 提醒率＋生成日曆熱圖），**不做** Mockup metric 整頁、**不做** E6 顧問、假 GSC。
+  2. **生成熱圖 Q1-A／Q2-A**：`product_drafts.copy_generated_at`、**台灣日**、**近 8 週**（週一格網）；
+     深度 0／1／2–3／≥4 用 `--accent` 透明度；當日 0＝空格；缺 014 欄 → 誠實提示。
+  3. **文案重做率 Q3-A／Q4-A**：`generation_history` 近 **30 台灣日**；
+     分母＝有 ≥1 筆 history 的草稿；分子＝至少一欄 `field_name` 列數 **≥2**；
+     **不是** history 總列數÷草稿（避免把首次 7 欄生成當重生）；無資料 **—**；
+     常駐「含 AI 重生與手動存版」；可附 AI 二次／僅手動小字。
+  4. **Tag 提醒率 Q5-A**：同窗非 archived 且有 `copy_generated_at`；
+     warnings **白名單**（V2 字典／IP_·角色_·類型_ tag／tag_rules 等），**不含** SEO 長度／禁忌詞；
+     副項：需修改件數、Tag 空；常駐「依 warnings 字樣 · 非外部 SEO 分數」。
+  5. **範圍 Q6-A**：店級語意、**不跟** E1 scope；operator 受 RLS 副標誠實。
+  6. 零 migration；BX-P 禁止；頁底延後改 **E6**。
+- **為什麼**：要「健康感」可觀測，但不能假精準（無 regen 類型欄、無 SEO 分數 API）。
+- **誰拍板**：總指揮放行 E5-open，2026-07-14（Q1–Q6 全 A）。
+- **現況**：✅ **E5-open 已實作（2026-07-14）**。`healthMetrics.ts`＋
+  `DashboardTodoPanel` 健康區；`scripts/verify-e5-health-metrics.mjs`。
+  不宣稱實機通過。
+
 ### 差異 38：E4-open 儀表板月預算＋AI 成本明細（E3 下方；估算非帳單）
 
 - **差在哪**：
@@ -708,6 +730,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-14（Grok）：差異 39 **E5-open**——儀表板健康指標（E4 下）；
+  生成熱圖 8 週／文案重做率（欄≥2）／Tag 提醒率（warnings 白名單）；零 SQL。
 - 2026-07-14（Grok）：差異 38 **E4-open**——儀表板月預算＋AI 成本（E3 下）；
   copy_generated_at 台灣月、NT$600@32、僅文案 token、明細 `/drafts/[id]`、
   null 不計 0、分模型本包合計 only；零 SQL。

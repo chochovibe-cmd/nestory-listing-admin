@@ -18,6 +18,28 @@
 
 ## 差異清單
 
+### 差異 37：E3-open 儀表板 Make 額度錶（E2 下方；估算非 Make 帳單）
+
+- **差在哪**：
+  1. Mockup 儀表板示意＝今日上架／AI 花費等 metric；正式版在 **E2 流程漏斗下方**
+     加 **Make 額度**卡（本月 N／上限預設 1000、剩餘、bar、≥80% 黃字），
+     **仍不做** E4 成本全文／E5 熱圖／E6 顧問。
+  2. **數字來源 Q1-A**：本系統可觀測批次加權估算——
+     `Σ image_batches.total_count × 8 ＋ Σ publish_batches.total_count × 3`
+     （本月、`created_at`）；**不是** Make 官方 billing API。
+  3. 常駐標示 **「估算 · 非 Make 帳單」**；副標說明加權與台北月界。
+  4. **月界**：`Asia/Taipei` 當月 1 日 00:00～下月 1 日（開頁「今天」）。
+  5. **範圍 Q2-A**：額度卡 **永遠全隊**（與 E1/E2 scope 下拉脫鉤）；
+     待辦／漏斗仍跟 scope。RLS 仍約束 operator 可見列。
+  6. **缺表 Q4-A**：025／027 未建 → 誠實提示 migration，不假 0。
+  7. 上限／權重：code 預設 1000／8／3；本包無 Settings UI（Q3-A）；
+     不改 `notifyMake` 落庫（Q5-A）。零 migration；BX-P 禁止。
+- **為什麼**：一眼看離免費額度多近；無 Make API 時只能誠實估算。
+- **誰拍板**：總指揮放行 E3-open，2026-07-14（Q1–Q5 全 A）。
+- **現況**：✅ **E3-open 已實作（2026-07-14）**。`makeQuotaStats.ts`＋
+  `DashboardTodoPanel` 額度區；`scripts/verify-e3-make-quota.mjs`。
+  不宣稱實機通過。
+
 ### 差異 35：E2-open 儀表板流程漏斗（E1 下方；非 Mockup metric 整頁）
 
 - **差在哪**：
@@ -666,6 +688,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-14（Grok）：差異 37 **E3-open**——儀表板 Make 額度（E2 下）；
+  全隊加權估算 8+3、台灣本月、估算非帳單、缺表誠實；零 SQL。
 - 2026-07-14（Grok）：差異 36 **B3-fetch-open**——`POST /api/fetch-source-url` 輕量試抓；
   2A 只填空；淘寶擋 info 黃字；SSRF 擋私網；覆寫差異 5 條 1「完全停用」；零 SQL。
 - 2026-07-14（Grok）：差異 35 **E2-open**——儀表板流程漏斗（E1 下）；主幹互斥＋圖審副列；

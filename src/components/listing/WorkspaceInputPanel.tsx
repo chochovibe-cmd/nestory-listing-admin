@@ -225,6 +225,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [b3Status, setB3Status] = useState<B3Status>(null);
   const [specShotStatus, setSpecShotStatus] = useState<B3Status>(null);
   const [recognizing, setRecognizing] = useState(false);
+  /** B3-fetch-open: URL fetch busy (separate from screenshot recognizing). */
+  const [sourceFetching, setSourceFetching] = useState(false);
+  const b3Busy = recognizing || sourceFetching;
   const [dedupeHits, setDedupeHits] = useState<DedupeHit[]>([]);
   const [dedupeDismissed, setDedupeDismissed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -621,18 +624,96 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     setDedupeDismissed(false);
   }
 
-  function handleFetchClick() {
-    // 誠實停用：爬蟲屬後期 Phase；仍保留網址並跑查重。
+  async function handleFetchClick() {
+    // B3-fetch-open：server 輕量試抓；2A 只填空；查重並行；淘寶擋＝info 黃字。
     const url = taobaoUrl.trim();
     if (!url) {
       setB3Status({ kind: "error", text: "請先貼上商品網址。" });
       return;
     }
-    setB3Status({
-      kind: "info",
-      text: "網址抓取尚未啟用（爬蟲後期才接）。網址已保留供查重／日後使用；請改用「上傳截圖自動辨識」或手動貼標題。"
-    });
+    if (!/^https?:\/\//i.test(url)) {
+      setB3Status({ kind: "error", text: "請貼可公開讀取的 http(s) 商品網址。" });
+      return;
+    }
+
+    setSourceFetching(true);
+    setB3Status({ kind: "info", text: "抓取中…可同時繼續手填其他欄位" });
+    // Q5-A：查重與抓取並行，不依賴抓取成功
     void runUrlDedupe(url);
+
+    try {
+      const response = await fetch("/api/fetch-source-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceUrl: url })
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.status === 401 || response.status === 403) {
+        setB3Status({
+          kind: "error",
+          text: `${payload.error ?? "沒有權限或未登入"}。表單仍可手動填寫。`
+        });
+        return;
+      }
+
+      // Hard client errors (ssrf / invalid) → red; anti-bot / empty → yellow info
+      if (payload.ok === false || response.status === 400) {
+        const reason = typeof payload.reason === "string" ? payload.reason : "";
+        const hard =
+          response.status === 400 ||
+          reason === "ssrf" ||
+          reason === "scheme" ||
+          reason === "invalid";
+        const text =
+          typeof payload.message === "string" && payload.message.trim()
+            ? payload.message
+            : hard
+              ? "請貼可公開讀取的 http(s) 商品網址。"
+              : "這個網址目前抓不到商品資料（平台常擋自動讀取）。網址已保留供查重；請改用「上傳截圖自動辨識」或手動貼標題。";
+        setB3Status({ kind: hard ? "error" : "info", text });
+        return;
+      }
+
+      if (!response.ok) {
+        setB3Status({
+          kind: "info",
+          text:
+            typeof payload.message === "string" && payload.message.trim()
+              ? payload.message
+              : "暫時連不上來源頁。網址已保留；請截圖或手填。"
+        });
+        return;
+      }
+
+      const fields = (payload.fields ?? {}) as RecognitionFields;
+      const snap = formSnapshotRef.current;
+      const plan = planScreenshotFill(
+        {
+          title: snap.title,
+          price: snap.price,
+          note: snap.note,
+          specText: snap.specText,
+          variants: snap.variants
+        },
+        {
+          title: fields.title ?? null,
+          costCny: fields.costCny ?? null,
+          features: fields.features ?? null,
+          specText: fields.specText ?? null,
+          variants: []
+        },
+        "product"
+      );
+      applyFillPlan(plan, setB3Status);
+    } catch (error) {
+      setB3Status({
+        kind: "info",
+        text: `${error instanceof Error ? error.message : "抓取連線失敗"}。網址已保留；請截圖或手填。`
+      });
+    } finally {
+      setSourceFetching(false);
+    }
   }
 
   /** 暫存截圖 → 公開 URL；路徑 {userId}/temp-screenshots/{uuid}.ext（4A 不建草稿） */
@@ -1448,11 +1529,11 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             />
             {fieldErrors.title ? <div className="field-msg">請輸入商品標題</div> : null}
 
-            {/* B3: Mockup 標題區 helper — 網址抓取（誠實停用）＋截圖辨識 */}
+            {/* B3: Mockup 標題區 helper — 網址輕量抓取（B3-fetch-open）＋截圖辨識 */}
             <div className="helper-links">
               <button
                 className="helper-link"
-                disabled={recognizing}
+                disabled={b3Busy}
                 onClick={() => setFetchBoxOpen((open) => !open)}
                 type="button"
               >
@@ -1460,7 +1541,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               </button>
               <button
                 className="helper-link"
-                disabled={recognizing}
+                disabled={b3Busy}
                 onClick={() => productShotInputRef.current?.click()}
                 type="button"
               >
@@ -1485,8 +1566,13 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 type="url"
                 value={taobaoUrl}
               />
-              <button className="btn-mini" disabled={recognizing} onClick={handleFetchClick} type="button">
-                自動抓取
+              <button
+                className="btn-mini"
+                disabled={b3Busy}
+                onClick={() => void handleFetchClick()}
+                type="button"
+              >
+                {sourceFetching ? "抓取中…" : "自動抓取"}
               </button>
             </div>
             {b3Status ? <div className={`b3-status ${b3Status.kind}`}>{b3Status.text}</div> : null}

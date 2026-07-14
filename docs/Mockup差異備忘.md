@@ -276,6 +276,28 @@
   （設定入口已由 **差異 17／C2** 補上：側欄底＋更多抽屜。）
   **導覽順序已由差異 26 覆寫**（2026-07-14）：佇列不再主線第二位／不再佔手機主 tab。
 
+### 差異 28：D8-open Showmore 匯出可用化（非完整 D8／非 D8b 改寫）
+
+- **差在哪**：
+  1. **加價**：匯出當下套用本機 `showmoreMarkupPercent`（body 帶入；server 預設 5）→
+     `beautifyNestoryPrice`；**成本不加價**；原價美化後必須 **> 售價**（必要時
+     `nextBeautifiedPriceAbove`）。**不寫** showmore 專用價欄、**零 SQL**。
+  2. **A25**：Showmore「商品介紹」＋ Matrixify「Body HTML」皆 `formatPlainTextAsHtml`
+     （`isLikelyHtml` 防二次包）；DB 仍存純文字。
+  3. **圖＝案 A**：`processed_file_url` → `original_file_url`；略 `spec`；無圖空欄。
+     **案 B zip 不做**（需實測 Showmore 是否吃外部 CDN 後再開）。
+  4. **樣式**：維持「單一款式」一列；多款式不展開（請後台補）。
+  5. **簡述**：空字串（輕量行銷模板／LLM 改寫 → **D8b**）。
+  6. **匯出後**：標 `status`／`publish_status`＝`csv_ready`（對齊 Matrixify 階段可見性）；
+     `publish_method` 無 `showmore_csv` enum（零 SQL）→ jobs 用 `manual`＋payload
+     `export:"showmore"` 誠實標示。
+  7. **紀錄頁**：灰字「Showmore／Matrixify 匯出不進本頁批次帳」（非完整 C5 filter）。
+  8. 設定文案改「**匯出時已套用**」。完整 D8（模板 v2／改寫欄／team_settings 尾段）**不勾滿**。
+- **為什麼**：老闆痛點「Showmore 跟規格差很多」；先把匯出主路徑可測可用，改寫全套另包防爆。
+- **誰拍板**：總指揮放行 D8-open，2026-07-14（Q1–Q7 裁決定案）。
+- **現況**：✅ **D8-open 已實作（2026-07-14）**。完整 D8／D8a／D8b／D9 未做。
+  腳本 `scripts/verify-d8-showmore.mjs`。**未**宣稱實機通過 Showmore 後台匯入。
+
 ### 差異 27：D7 批次發布＝伺服器限速＋發布紀錄骨架（非完整 Make Scenario 2／非完整 C5）
 
 - **差在哪**：
@@ -484,6 +506,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-14（Grok）：差異 28 **D8-open**——Showmore 匯出加價＋美化、A25 HTML、案 A 圖欄、
+  csv_ready、單一款式；完整 D8／D8b 不勾滿；零 SQL。
 - 2026-07-14（Grok）：差異 27 **D7-open**——伺服器 600ms 限速批次發布＋`/records` 骨架；C5 不勾滿；027 只產檔。
 - 2026-07-14（Grok）：差異 26 **導覽**——全部草稿移後／手機出主 tab；Mockup 主線四格；去留爭議交 Fable。
 - 2026-07-13（Grok）：差異 25 **D6-open**——事件 #1＋卡住 Cron；Resend＋LINE Flex；

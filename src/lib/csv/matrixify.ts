@@ -1,4 +1,5 @@
-﻿import { categoryLabel } from "@/lib/categories";
+import { categoryLabel } from "@/lib/categories";
+import { formatPlainTextAsHtml } from "@/lib/contentGenerator/htmlFormat";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 export interface MatrixifyDraft extends ProductDraft {
@@ -34,7 +35,10 @@ export function buildMatrixifyRows(drafts: MatrixifyDraft[]) {
       Command: "NEW",
       Handle: handle,
       Title: draft.title_zh || draft.taobao_title || "",
-      "Body HTML": draft.description_html || draft.description_plain || "",
+      // A25 / D8-open: convert plain description at CSV boundary (same as Shopify payload).
+      "Body HTML": formatPlainTextAsHtml(
+        draft.description_html || draft.description_plain || ""
+      ),
       // A24 (2026-07-10 A14 finding): same fallback fix as payload.ts.
       Vendor: draft.vendor || "潮巢 Nestory",
       Type: draft.product_type || categoryLabel(draft.category),

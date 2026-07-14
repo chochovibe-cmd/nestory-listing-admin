@@ -495,14 +495,14 @@ export function SettingsPanel() {
             定價 ＝ 成本 × {pricing.rate.toFixed(2)} × {pricing.costMultiplier.toFixed(2)} ×{" "}
             {pricing.compareAtMultiplier.toFixed(2)}
             <br />
-            Showmore 匯出時另加 {pricing.showmoreMarkupPercent}% 後再尾數美化（管線 D8 接通後生效）
+            Showmore 匯出時另加 {pricing.showmoreMarkupPercent}% 後再尾數美化（匯出時已套用）
           </div>
           <div className="settings-note">
             與工作檯底部「定價規則設定」共用本機儲存，雙向同步。
             <br />
             ✨ 尾數美化：低／中／高價帶順眼數字；手填利潤時跳最近美化價。
             <br />
-            Showmore +% 暫存本機（Q9-A）；日後可轉 team_settings。
+            Showmore +% 暫存本機（Q9-A），匯出 CSV 時帶入；日後可轉 team_settings。
           </div>
         </CollapsibleSection>
 

@@ -249,8 +249,11 @@ export function PublishRecordsPanel() {
         >
           有失敗
         </button>
-        <span className="rec-filter-muted" title="D8 接通後">
-          Showmore／Matrixify（尚未）
+        <span
+          className="rec-filter-muted"
+          title="Showmore／Matrixify 走 CSV 下載，不進本頁 Shopify 批次帳"
+        >
+          Showmore／Matrixify 匯出不進本頁批次帳
         </span>
       </div>
 

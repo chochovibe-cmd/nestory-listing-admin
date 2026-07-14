@@ -37,6 +37,7 @@ import {
   type OptimisticHideMap
 } from "@/lib/drafts/optimisticArchiveHide";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
+import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 export function DraftResultsPanel({
@@ -419,7 +420,12 @@ export function DraftResultsPanel({
     }
   }
 
-  async function downloadCsv(endpoint: string, filenamePrefix: string, note?: string) {
+  async function downloadCsv(
+    endpoint: string,
+    filenamePrefix: string,
+    note?: string,
+    extraBody?: Record<string, unknown>
+  ) {
     if (!selectedArray.length) return;
     setBusy(true);
     setLastArchiveIds(null);
@@ -427,7 +433,7 @@ export function DraftResultsPanel({
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: selectedArray })
+      body: JSON.stringify({ draftIds: selectedArray, ...extraBody })
     });
     setBusy(false);
 
@@ -575,14 +581,16 @@ export function DraftResultsPanel({
                     <button
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
-                      onClick={() =>
+                      onClick={() => {
+                        const markup = getStoredPricingSettings().showmoreMarkupPercent;
                         void downloadCsv(
                           "/api/exports/showmore",
                           "nestory-showmore",
-                          "重量欄位為預設值 0.1kg，上傳前請手動確認。"
-                        )
-                      }
-                      title="下載 Showmore 格式 CSV，官網庫存/重量為預設值，上傳前請手動確認"
+                          `已套 Showmore +${markup}% 並美化；庫存 999／重量 0.1kg 為預設；多款式未展開；上傳前請確認。`,
+                          { showmoreMarkupPercent: markup }
+                        );
+                      }}
+                      title="下載 Showmore CSV（加價%＋美化；庫存/重量預設；多款式請後台補）"
                       type="button"
                     >
                       ⬇ Showmore

@@ -18,9 +18,9 @@ export interface PricingSettings {
   compareAtMultiplier: number;
   minPrice: number;
   /**
-   * C2 Q9-A: Showmore export markup % (default +5).
-   * Stored with device localStorage for now; D8 may move to team_settings.
-   * Export pipeline still Phase D — this value is settings UI only until then.
+   * C2 Q9-A / D8-open: Showmore export markup % (default +5).
+   * Stored in device localStorage for now; may later move to team_settings.
+   * Applied at CSV export time (body.showmoreMarkupPercent), then 尾數美化.
    */
   showmoreMarkupPercent: number;
 }

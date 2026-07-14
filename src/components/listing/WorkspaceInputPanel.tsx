@@ -1970,7 +1970,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               <br />
               定價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.compareAtMultiplier.toFixed(2)}
               <br />
-              Showmore +{pricingSettings.showmoreMarkupPercent}%（D8 匯出管線接通後生效）
+              Showmore +{pricingSettings.showmoreMarkupPercent}%（匯出時已套用）
             </div>
             <div className="settings-note">
               成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝。與「設定 → 定價」共用本機儲存。

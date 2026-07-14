@@ -18,12 +18,32 @@
 
 ## 差異清單
 
+### 差異 38：E4-open 儀表板月預算＋AI 成本明細（E3 下方；估算非帳單）
+
+- **差在哪**：
+  1. Mockup 示意＝metric「本月 AI 花費 NT$／預算」＋「算力成本明細」分 **文案／Vision／生圖／截圖**；
+     正式版在 **E3 Make 額度下方** 加 **月預算 · AI 成本**卡，**仍不做** E5 熱圖／E6 顧問、
+     **不做** Mockup 分項假帳（Vision／Image 未進 draft 成本）。
+  2. **數字來源**：`product_drafts.generation_cost_estimate`（A13 文案 token 估算 USD）合計；
+     **null 不計 $0**；本月歸屬 **Q1-A**＝`copy_generated_at` 台灣月界（缺戳不硬塞）。
+  3. **顯示 Q3-A**：預算預設 **NT$600**；USD→NT$ **固定 32**（標「約」，非牌告）；
+     主 NT$／副 USD；≥80% 黃字；常駐 **「估算 · 非信用卡帳單」**＋**僅文案 token**。
+  4. **範圍 Q2-A**：成本卡 **不跟** E1/E2 scope；店級語意（operator 受 RLS，副標誠實）。
+  5. **明細 Q5-A**：前 20 筆可點 **`/drafts/[id]`**；可附最近 `generation_model` 小字。
+  6. **分模型 Q4-A**：本包 **合計 only**（累加成本＋最後 model 無法誠實拆 Claude/GPT 金額）。
+  7. 缺 014 欄 → 誠實 migration 提示；零 migration；BX-P 禁止；無 Settings 改預算 UI。
+- **為什麼**：老闆要月預算警戒與單件成本；只能顯示系統真有記的文案估算，不能裝帳單。
+- **誰拍板**：總指揮放行 E4-open，2026-07-14（Q1–Q6 全 A）。
+- **現況**：✅ **E4-open 已實作（2026-07-14）**。`costBudgetStats.ts`＋
+  `DashboardTodoPanel` 成本區；`scripts/verify-e4-cost-budget.mjs`。
+  不宣稱實機通過。
+
 ### 差異 37：E3-open 儀表板 Make 額度錶（E2 下方；估算非 Make 帳單）
 
 - **差在哪**：
   1. Mockup 儀表板示意＝今日上架／AI 花費等 metric；正式版在 **E2 流程漏斗下方**
      加 **Make 額度**卡（本月 N／上限預設 1000、剩餘、bar、≥80% 黃字），
-     **仍不做** E4 成本全文／E5 熱圖／E6 顧問。
+     **E4 成本已另包**；**仍不做** E5 熱圖／E6 顧問。
   2. **數字來源 Q1-A**：本系統可觀測批次加權估算——
      `Σ image_batches.total_count × 8 ＋ Σ publish_batches.total_count × 3`
      （本月、`created_at`）；**不是** Make 官方 billing API。
@@ -688,6 +708,9 @@
 
 ## 修訂紀錄
 
+- 2026-07-14（Grok）：差異 38 **E4-open**——儀表板月預算＋AI 成本（E3 下）；
+  copy_generated_at 台灣月、NT$600@32、僅文案 token、明細 `/drafts/[id]`、
+  null 不計 0、分模型本包合計 only；零 SQL。
 - 2026-07-14（Grok）：差異 37 **E3-open**——儀表板 Make 額度（E2 下）；
   全隊加權估算 8+3、台灣本月、估算非帳單、缺表誠實；零 SQL。
 - 2026-07-14（Grok）：差異 36 **B3-fetch-open**——`POST /api/fetch-source-url` 輕量試抓；

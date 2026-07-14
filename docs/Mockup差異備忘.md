@@ -18,6 +18,24 @@
 
 ## 差異清單
 
+### 差異 30：#2-open 發布批次完成通知（publish_batch_done；非 #3/#4）
+
+- **差在哪**：
+  1. 【自動·二】事件 #2「發布批次完成」＋ D7 `publish_batches.notify_sent_at` 本只留欄；
+     正式版 **#2-open** 接線：`runPublishBatch` 終態寫入後
+     `safeTryNotifyPublishBatchIfComplete`（對稱 D6 事件 #1）。
+  2. **終態 Q1-A**：只看 `publish_batch_items` 全為 `done|failed|skipped`——不單靠 batch.status。
+  3. **文案 Q2-B**：Email 失敗／略過**必列**標題+原因；成功清單 **≤20**（其餘引導去紀錄頁）；
+     LINE Flex **只件數**＋按鈕「打開紀錄」→ `/records`（不用長清單）。
+  4. **雙通道／Q3b**：Resend + LINE Messaging Flex（禁 LINE Notify）；**≥1 通道 sent 才 claim**
+     `notify_sent_at`；全 skip／全 error 不 claim；條件更新防雙寄。
+  5. 通知失敗**不改** `runPublishBatch.ok`；無 key skip 不 500；**零 migration**；
+     不做 #3/#4、不擴 stuck Cron 補寄 publish、不改 Settings（Q5-A）、禁 BX-P。
+- **為什麼**：D6 中心＋D7 帳本已齊，補「發布做完通知我」閉環；包小可 mock。
+- **誰拍板**：總指揮放行 #2-open，2026-07-14（Q1 A／Q2 B／Q3 A／Q4 A／Q5 A）。
+- **現況**：✅ **#2-open 已實作（2026-07-14）**。`tryNotifyPublishBatchIfComplete`＋
+  `templates/publishBatch.ts`；`scripts/verify-d6-notify.mjs` 含 #2 cases。
+
 ### 差異 1：生成進度卡不做「假串流動畫」
 
 - **差在哪**：Mockup 的生成卡有「規則引擎先吐 Tags」＋「LLM 文案逐字串流打字機效果」的
@@ -432,8 +450,8 @@
 
 - **差在哪**：
   1. 【自動·二】寫四種 Email 事件＋team_settings 開關＋Make 查完成度後打
-     `/api/notify/batch-done`；正式版 **D6-open** 只做 **事件 #1 圖片批次完成**＋
-     **每日卡住 Cron**；#2 發布／#3 週選品／#4 月預算僅 type stub。
+     `/api/notify/batch-done`；正式版 **D6-open** 先做 **事件 #1 圖片批次完成**＋
+     **每日卡住 Cron**；#2 發布見 **差異 30**；#3 週選品／#4 月預算仍 type stub。
   2. **觸發**：終態時 **Vercel 同步** `tryNotifyImageBatchIfComplete`（auto chain／ai-process），
      **不**另開 Make 專責通知；無公開 `POST /api/notify/batch-done`（本包）。
   3. **終態判定**：只看 `image_batch_items` 全為 `done|failed|skipped`——**不可**只看

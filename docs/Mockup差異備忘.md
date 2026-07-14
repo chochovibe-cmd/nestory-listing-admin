@@ -18,6 +18,25 @@
 
 ## 差異清單
 
+### 差異 33：D10-open 影片欄位（YouTube → Shopify EXTERNAL_VIDEO）
+
+- **差在哪**：
+  1. Mockup **無**影片欄；正式版依【自動·四之一b】在工作檯第 4 段加**收合**「影片連結」
+     （選填、最多 3 條 YouTube，一行一個）；**不**進核心四項常駐。
+  2. 存 `product_drafts.video_urls`（migration **005** 既有 jsonb，型別 `string[]`）；
+     **零新 SQL**；不存影片檔、不走 Storage。
+  3. 發布：`productCreate` 的 `media` 在 IMAGE 後併 `EXTERNAL_VIDEO`（`originalSource`＝
+     正規化後的 YouTube watch URL）；**不**另呼叫 `productCreateMedia`（新建路徑）。
+  4. 非 YouTube／無法解析：DB 可暫存原字串；**發布時 skip** 並寫 `warnings` 黃字，不擋發布。
+  5. Showmore 匯出：內文尾輕量附 `▶ 商品影片：` 連結（有合法 YouTube 才加）；**不寫回** DB 描述。
+  6. **Matrixify 不動**（無標準影片欄；Shopify 走 API）。ResultCard 本包不編影片（Q7-A）。
+  7. 第二階段（YouTube Data API 自動上傳／Shopify 原生影片檔）不做。
+- **為什麼**：沿用店主「手動上傳 YouTube 再貼連結」習慣；商品頁可播＋轉換，操作最輕。
+- **誰拍板**：總指揮放行 D10-open，2026-07-14（Q1–Q8 全 A）。
+- **現況**：✅ **D10-open 已實作（2026-07-14）**。`src/lib/media/videoUrls.ts`；
+  payload／publishDraft／showmore／WorkspaceInputPanel／autosave；
+  `scripts/verify-d10-video.mjs`。真店輪播／Showmore 後台歸週五統一實機。
+
 ### 差異 32：E1-open 儀表板今日待辦（優先於 Mockup metric 整頁）
 
 - **差在哪**：

@@ -1878,6 +1878,110 @@ textarea {
   color: var(--text-muted);
   line-height: 1.45;
 }
+
+/* E2-open: 流程漏斗 — reuses panel / schip / tokens; list rows under E1 */
+.dash-funnel-panel {
+  margin-top: 14px;
+}
+.dash-funnel-panel .panel-header {
+  gap: 10px;
+}
+.dash-funnel-body {
+  gap: 12px;
+}
+.dash-funnel-section-label {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.dash-funnel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dash-funnel-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m);
+  background: var(--surface2);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: var(--shadow-s);
+  transition: transform 0.12s ease, border-color 0.12s ease;
+  cursor: pointer;
+}
+.dash-funnel-row:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.dash-funnel-row:active {
+  transform: scale(0.99);
+}
+.dash-funnel-row--side {
+  /* same tokens; slightly softer border via existing soft */
+  border-style: dashed;
+}
+.dash-funnel-row--image {
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--border-soft));
+}
+.dash-funnel-row-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.dash-funnel-label {
+  font-size: 13px;
+  font-weight: 700;
+  flex: 1;
+  min-width: 4em;
+}
+.dash-funnel-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border-soft) 80%, var(--surface2));
+  overflow: hidden;
+}
+.dash-funnel-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.18s ease;
+}
+.dash-funnel-row--side .dash-funnel-bar-fill {
+  background: color-mix(in srgb, var(--accent2) 55%, var(--accent));
+}
+.dash-funnel-row--image .dash-funnel-bar-fill {
+  background: var(--warn);
+}
+.dash-funnel-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.dash-funnel-count {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: -0.02em;
+}
+.dash-funnel-dwell {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 @media (max-width: 959px) {
   .dash-todo-grid {
     grid-template-columns: 1fr;
@@ -1885,6 +1989,13 @@ textarea {
   .dash-todo-card {
     min-height: 44px;
     padding: 14px 15px;
+  }
+  .dash-funnel-row {
+    min-height: 44px;
+    padding: 14px 15px;
+  }
+  .dash-funnel-count {
+    font-size: 20px;
   }
 }
 

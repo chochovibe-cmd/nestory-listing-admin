@@ -30,12 +30,18 @@ export type TodoDraftRow = {
   image_flags?: unknown;
   created_by?: string | null;
   updated_at?: string | null;
+  /** E2 funnel dwell (A13 timestamps; optional for E1-only callers) */
+  created_at?: string | null;
+  copy_generated_at?: string | null;
+  reviewed_at?: string | null;
+  published_at?: string | null;
 };
 
 export const TODO_FETCH_LIMIT = 200;
 
+/** Shared E1+E2 dashboard select (timestamps for funnel dwell). */
 export const TODO_DRAFT_SELECT_COLUMNS =
-  "id, status, generation_status, image_status, image_flags, created_by, updated_at";
+  "id, status, generation_status, image_status, image_flags, created_by, updated_at, created_at, copy_generated_at, reviewed_at, published_at";
 
 const FLOW_FAILED_STATUSES = new Set(["failed", "api_failed"]);
 const READY_PUBLISH_STATUSES = new Set(["approved", "publishing"]);

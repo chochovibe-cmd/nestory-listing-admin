@@ -23,6 +23,20 @@ import {
   type CostDraftRow
 } from "@/lib/dashboard/costBudgetStats";
 import {
+  HEALTH_DRAFT_FETCH_LIMIT,
+  HEALTH_DRAFT_SELECT_COLUMNS,
+  HEALTH_HISTORY_FETCH_LIMIT,
+  HEALTH_HISTORY_SELECT_COLUMNS,
+  computeHealthMetricsView,
+  healthDraftMigrationHint,
+  healthHistoryMigrationHint,
+  taiwanHeatmapRange,
+  taiwanLastNDaysRange,
+  type HealthDraftRow,
+  type HealthHistoryRow,
+  type HealthMetricsView
+} from "@/lib/dashboard/healthMetrics";
+import {
   computeMakeQuotaView,
   makeQuotaMigrationHint,
   taiwanMonthRange,
@@ -48,8 +62,8 @@ const BATCH_SELECT = "id, total_count, created_at, created_by";
 const QUOTA_BATCH_FETCH_LIMIT = 500;
 
 /**
- * E1-open + E2-open + E3-open + E4-open:
- * 今日待辦 + 流程漏斗（same fetch/scope）+ Make 額度（全隊）+ 月預算成本（全隊語意）.
+ * E1-open + E2-open + E3-open + E4-open + E5-open:
+ * 今日待辦 + 流程漏斗 + Make 額度 + 月預算成本 + 健康指標（熱圖／重做率／Tag）.
  */
 export function DashboardTodoPanel() {
   const [role, setRole] = useState<UserRole | null>(null);
@@ -73,6 +87,15 @@ export function DashboardTodoPanel() {
   const [costFetchError, setCostFetchError] = useState<string | null>(null);
   const [costDetailOpen, setCostDetailOpen] = useState(true);
 
+  // E5: team-wide health (Q6-A; not E1 scope)
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [healthDrafts, setHealthDrafts] = useState<HealthDraftRow[]>([]);
+  const [healthHistory, setHealthHistory] = useState<HealthHistoryRow[]>([]);
+  const [healthDraftHint, setHealthDraftHint] = useState<string | null>(null);
+  const [healthHistoryHint, setHealthHistoryHint] = useState<string | null>(null);
+  const [healthDraftError, setHealthDraftError] = useState<string | null>(null);
+  const [healthHistoryError, setHealthHistoryError] = useState<string | null>(null);
+
   const admin = isAdmin(role);
 
   const load = useCallback(async () => {
@@ -82,6 +105,7 @@ export function DashboardTodoPanel() {
       setLoading(false);
       setQuotaLoading(false);
       setCostLoading(false);
+      setHealthLoading(false);
       setRoleReady(true);
       return;
     }
@@ -89,11 +113,16 @@ export function DashboardTodoPanel() {
     setLoading(true);
     setQuotaLoading(true);
     setCostLoading(true);
+    setHealthLoading(true);
     setError(null);
     setQuotaFetchError(null);
     setQuotaTableHint(null);
     setCostFetchError(null);
     setCostTableHint(null);
+    setHealthDraftHint(null);
+    setHealthHistoryHint(null);
+    setHealthDraftError(null);
+    setHealthHistoryError(null);
 
     try {
       const supabase = createClient();
@@ -108,6 +137,7 @@ export function DashboardTodoPanel() {
         setRoleReady(true);
         setQuotaLoading(false);
         setCostLoading(false);
+        setHealthLoading(false);
         return;
       }
       if (!user) {
@@ -117,6 +147,7 @@ export function DashboardTodoPanel() {
         setRoleReady(true);
         setQuotaLoading(false);
         setCostLoading(false);
+        setHealthLoading(false);
         return;
       }
 
@@ -154,31 +185,61 @@ export function DashboardTodoPanel() {
 
       // E3 Q2-A: always team-wide (no created_by); Taiwan month server filter
       const month = taiwanMonthRange();
-      const [imgRes, pubRes, costRes] = await Promise.all([
-        supabase
-          .from("image_batches")
-          .select(BATCH_SELECT)
-          .gte("created_at", month.startIso)
-          .lt("created_at", month.endIso)
-          .order("created_at", { ascending: false })
-          .limit(QUOTA_BATCH_FETCH_LIMIT),
-        supabase
-          .from("publish_batches")
-          .select(BATCH_SELECT)
-          .gte("created_at", month.startIso)
-          .lt("created_at", month.endIso)
-          .order("created_at", { ascending: false })
-          .limit(QUOTA_BATCH_FETCH_LIMIT),
-        // E4 Q1-A: copy_generated_at month; Q2-A no created_by (team intent; RLS may still limit)
-        supabase
-          .from("product_drafts")
-          .select(COST_DRAFT_SELECT_COLUMNS)
-          .not("copy_generated_at", "is", null)
-          .gte("copy_generated_at", month.startIso)
-          .lt("copy_generated_at", month.endIso)
-          .order("copy_generated_at", { ascending: false })
-          .limit(COST_DRAFT_FETCH_LIMIT)
-      ]);
+      // E5: heatmap needs ~8 weeks of copy_generated_at; rates use 30d (subset)
+      const heatRange = taiwanHeatmapRange();
+      const rateRange = taiwanLastNDaysRange(30);
+      const healthDraftStart =
+        Date.parse(heatRange.startIso) <= Date.parse(rateRange.startIso)
+          ? heatRange.startIso
+          : rateRange.startIso;
+      const healthDraftEnd =
+        Date.parse(heatRange.endIso) >= Date.parse(rateRange.endIso)
+          ? heatRange.endIso
+          : rateRange.endIso;
+
+      const [imgRes, pubRes, costRes, healthDraftRes, healthHistRes] =
+        await Promise.all([
+          supabase
+            .from("image_batches")
+            .select(BATCH_SELECT)
+            .gte("created_at", month.startIso)
+            .lt("created_at", month.endIso)
+            .order("created_at", { ascending: false })
+            .limit(QUOTA_BATCH_FETCH_LIMIT),
+          supabase
+            .from("publish_batches")
+            .select(BATCH_SELECT)
+            .gte("created_at", month.startIso)
+            .lt("created_at", month.endIso)
+            .order("created_at", { ascending: false })
+            .limit(QUOTA_BATCH_FETCH_LIMIT),
+          // E4 Q1-A: copy_generated_at month; Q2-A no created_by (team intent; RLS may still limit)
+          supabase
+            .from("product_drafts")
+            .select(COST_DRAFT_SELECT_COLUMNS)
+            .not("copy_generated_at", "is", null)
+            .gte("copy_generated_at", month.startIso)
+            .lt("copy_generated_at", month.endIso)
+            .order("copy_generated_at", { ascending: false })
+            .limit(COST_DRAFT_FETCH_LIMIT),
+          // E5 Q1-A / Q6-A: team-wide drafts for heatmap + tag health
+          supabase
+            .from("product_drafts")
+            .select(HEALTH_DRAFT_SELECT_COLUMNS)
+            .not("copy_generated_at", "is", null)
+            .gte("copy_generated_at", healthDraftStart)
+            .lt("copy_generated_at", healthDraftEnd)
+            .order("copy_generated_at", { ascending: false })
+            .limit(HEALTH_DRAFT_FETCH_LIMIT),
+          // E5 Q3-A: generation_history for rework rate (30d)
+          supabase
+            .from("generation_history")
+            .select(HEALTH_HISTORY_SELECT_COLUMNS)
+            .gte("created_at", rateRange.startIso)
+            .lt("created_at", rateRange.endIso)
+            .order("created_at", { ascending: false })
+            .limit(HEALTH_HISTORY_FETCH_LIMIT)
+        ]);
 
       const imgErr = imgRes.error?.message ?? null;
       const pubErr = pubRes.error?.message ?? null;
@@ -209,6 +270,32 @@ export function DashboardTodoPanel() {
       } else {
         setCostRows((costRes.data ?? []) as CostDraftRow[]);
       }
+
+      // E5 drafts
+      const hdErr = healthDraftRes.error?.message ?? null;
+      const hdHint = healthDraftMigrationHint(hdErr);
+      setHealthDraftHint(hdHint);
+      if (hdHint) {
+        setHealthDrafts([]);
+      } else if (hdErr) {
+        setHealthDraftError(hdErr);
+        setHealthDrafts([]);
+      } else {
+        setHealthDrafts((healthDraftRes.data ?? []) as HealthDraftRow[]);
+      }
+
+      // E5 history
+      const hhErr = healthHistRes.error?.message ?? null;
+      const hhHint = healthHistoryMigrationHint(hhErr);
+      setHealthHistoryHint(hhHint);
+      if (hhHint) {
+        setHealthHistory([]);
+      } else if (hhErr) {
+        setHealthHistoryError(hhErr);
+        setHealthHistory([]);
+      } else {
+        setHealthHistory((healthHistRes.data ?? []) as HealthHistoryRow[]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setRows([]);
@@ -216,6 +303,7 @@ export function DashboardTodoPanel() {
       setLoading(false);
       setQuotaLoading(false);
       setCostLoading(false);
+      setHealthLoading(false);
     }
   }, [scope]);
 
@@ -253,6 +341,22 @@ export function DashboardTodoPanel() {
     });
   }, [costRows, costTableHint, role]);
 
+  const healthView: HealthMetricsView | null = useMemo(() => {
+    // Still compute partial views even if one source failed (heatmap/tag from drafts, rework from history)
+    if (healthDraftHint && healthHistoryHint) return null;
+    return computeHealthMetricsView({
+      drafts: healthDraftHint ? [] : healthDrafts,
+      historyRows: healthHistoryHint ? [] : healthHistory,
+      visibilityPartial: role === "operator"
+    });
+  }, [
+    healthDrafts,
+    healthHistory,
+    healthDraftHint,
+    healthHistoryHint,
+    role
+  ]);
+
   function onCardClick(card: (typeof cards)[number], e: MouseEvent<HTMLAnchorElement>) {
     // Allow modified-click / middle-click / new tab to skip storage write
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
@@ -288,7 +392,7 @@ export function DashboardTodoPanel() {
         <div className="ir-page-header dash-header">
           <div className="ir-title-row">
             <h1>📈 儀表板</h1>
-            <span className="ir-sub">初版 · 待辦＋漏斗＋額度＋月預算</span>
+            <span className="ir-sub">初版 · 待辦＋漏斗＋額度＋成本＋健康</span>
           </div>
           {roleReady && admin ? (
             <div className="ir-scope">
@@ -648,8 +752,210 @@ export function DashboardTodoPanel() {
           </div>
         </section>
 
+        {/* E5-open: 健康指標 — below E4; team-wide (Q6-A) */}
+        <section
+          className="panel dash-quota-panel dash-health-panel"
+          aria-labelledby="dash-health-title"
+        >
+          <div className="panel-header">
+            <h2 id="dash-health-title">健康指標</h2>
+            <span className="dash-todo-hint">生成熱圖 · 重做率 · Tag 提醒</span>
+          </div>
+          <div className="panel-body dash-quota-body">
+            {healthLoading ? (
+              <p className="dash-todo-status">載入中…</p>
+            ) : healthDraftHint && healthHistoryHint ? (
+              <p className="dash-todo-status dash-todo-error" role="alert">
+                {healthDraftHint}
+                <br />
+                {healthHistoryHint}
+              </p>
+            ) : healthView ? (
+              <>
+                {healthDraftHint ? (
+                  <p className="dash-todo-trunc" role="status">
+                    {healthDraftHint}
+                  </p>
+                ) : null}
+                {healthHistoryHint ? (
+                  <p className="dash-todo-trunc" role="status">
+                    {healthHistoryHint}
+                  </p>
+                ) : null}
+                {healthDraftError ? (
+                  <p className="dash-todo-trunc" role="status">
+                    草稿資料讀取失敗：{healthDraftError}
+                  </p>
+                ) : null}
+                {healthHistoryError ? (
+                  <p className="dash-todo-trunc" role="status">
+                    版本紀錄讀取失敗：{healthHistoryError}
+                  </p>
+                ) : null}
+
+                {/* Rates row */}
+                <div className="dash-health-rates" role="list">
+                  <div className="dash-quota-card dash-health-rate-card" role="listitem">
+                    <div className="dash-quota-card-top">
+                      <span className="dash-quota-label">文案重做率</span>
+                      <span className="schip schip--idle">近 30 日</span>
+                    </div>
+                    <div
+                      className="dash-quota-value"
+                      aria-label={
+                        healthView.rework.ratePct === null
+                          ? "文案重做率無資料"
+                          : `文案重做率 ${healthView.rework.ratePct}%`
+                      }
+                    >
+                      {healthView.rework.displayLabel}
+                    </div>
+                    {healthView.rework.ratePct !== null ? (
+                      <p className="dash-quota-remain">
+                        {healthView.rework.numerator}／
+                        {healthView.rework.denominator} 件有版本紀錄
+                        {healthView.rework.denominator > 0 ? (
+                          <>
+                            {" · "}
+                            AI 二次 {healthView.rework.aiSecondaryCount}
+                            {" · "}
+                            僅手動 {healthView.rework.manualOnlyCount}
+                          </>
+                        ) : null}
+                      </p>
+                    ) : null}
+                    <p className="dash-quota-honesty">
+                      {healthView.rework.honestyLabel}
+                    </p>
+                    <p className="dash-quota-sub">{healthView.rework.subHint}</p>
+                    {healthView.rework.emptyText ? (
+                      <p className="dash-todo-status" role="status">
+                        {healthView.rework.emptyText}
+                      </p>
+                    ) : null}
+                    {healthView.rework.truncationNote ? (
+                      <p className="dash-todo-trunc" role="status">
+                        {healthView.rework.truncationNote}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="dash-quota-card dash-health-rate-card" role="listitem">
+                    <div className="dash-quota-card-top">
+                      <span className="dash-quota-label">Tag 提醒率</span>
+                      <span className="schip schip--idle">近 30 日</span>
+                    </div>
+                    <div
+                      className="dash-quota-value"
+                      aria-label={
+                        healthView.tagHealth.ratePct === null
+                          ? "Tag 提醒率無資料"
+                          : `Tag 提醒率 ${healthView.tagHealth.ratePct}%`
+                      }
+                    >
+                      {healthView.tagHealth.displayLabel}
+                    </div>
+                    {healthView.tagHealth.ratePct !== null ? (
+                      <p className="dash-quota-remain">
+                        {healthView.tagHealth.numerator}／
+                        {healthView.tagHealth.denominator} 件有生成時間
+                        {" · "}
+                        需修改 {healthView.tagHealth.needsRevisionCount}
+                        {" · "}
+                        Tag 空 {healthView.tagHealth.emptyTagsCount}
+                      </p>
+                    ) : null}
+                    <p className="dash-quota-honesty">
+                      {healthView.tagHealth.honestyLabel}
+                    </p>
+                    <p className="dash-quota-sub">{healthView.tagHealth.subHint}</p>
+                    {healthView.tagHealth.emptyText ? (
+                      <p className="dash-todo-status" role="status">
+                        {healthView.tagHealth.emptyText}
+                      </p>
+                    ) : null}
+                    {healthView.tagHealth.truncationNote ? (
+                      <p className="dash-todo-trunc" role="status">
+                        {healthView.tagHealth.truncationNote}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Heatmap */}
+                <div className="dash-quota-card dash-heat-card">
+                  <div className="dash-quota-card-top">
+                    <span className="dash-quota-label">生成日曆</span>
+                    <span className="schip schip--idle">近 8 週</span>
+                  </div>
+                  <p className="dash-quota-honesty">
+                    {healthView.heatmap.honestyLabel}
+                  </p>
+                  <p className="dash-quota-sub">{healthView.heatmap.subHint}</p>
+                  {healthDraftHint ? (
+                    <p className="dash-todo-status" role="status">
+                      —
+                    </p>
+                  ) : (
+                    <>
+                      <div
+                        className="dash-heat-grid"
+                        role="img"
+                        aria-label={`近 8 週生成熱圖，合計 ${healthView.heatmap.totalCount} 件`}
+                      >
+                        <div className="dash-heat-ydays" aria-hidden="true">
+                          <span>一</span>
+                          <span>三</span>
+                          <span>五</span>
+                          <span>日</span>
+                        </div>
+                        <div className="dash-heat-cells">
+                          {healthView.heatmap.cells.map((cell) => (
+                            <i
+                              key={cell.dayKey}
+                              className={`dash-heat-cell dash-heat-cell--l${cell.level}${
+                                cell.isFuture ? " dash-heat-cell--future" : ""
+                              }`}
+                              title={cell.title}
+                              aria-label={cell.title}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="dash-heat-legend" aria-hidden="true">
+                        <span>少</span>
+                        <i className="dash-heat-cell dash-heat-cell--l0" />
+                        <i className="dash-heat-cell dash-heat-cell--l1" />
+                        <i className="dash-heat-cell dash-heat-cell--l2" />
+                        <i className="dash-heat-cell dash-heat-cell--l3" />
+                        <span>多</span>
+                      </div>
+                      <p className="dash-quota-detail">
+                        合計 {healthView.heatmap.totalCount} 件 · 有生成{" "}
+                        {healthView.heatmap.daysWithActivity} 天
+                      </p>
+                      {healthView.heatmap.emptyText ? (
+                        <p className="dash-todo-status" role="status">
+                          {healthView.heatmap.emptyText}
+                        </p>
+                      ) : null}
+                      {healthView.heatmap.truncationNote ? (
+                        <p className="dash-todo-trunc" role="status">
+                          {healthView.heatmap.truncationNote}
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="dash-todo-status">—</p>
+            )}
+          </div>
+        </section>
+
         <p className="dash-later-note">
-          熱圖／AI 顧問 → 後續版本（E5–E6）
+          AI 顧問 → 後續版本（E6）
         </p>
       </div>
     </main>

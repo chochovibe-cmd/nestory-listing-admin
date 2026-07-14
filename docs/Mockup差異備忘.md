@@ -18,6 +18,28 @@
 
 ## 差異清單
 
+### 差異 35：E2-open 儀表板流程漏斗（E1 下方；非 Mockup metric 整頁）
+
+- **差在哪**：
+  1. Mockup 儀表板示意＝今日上架／成員／AI 花費／IP 榜；正式版在 **E1 今日待辦下方**
+     加 **流程漏斗**（各階段件數＋平均停留），**仍不做** Mockup metric／成本／IP 榜
+     （E3–E6）。
+  2. **主幹**（status **互斥**）：待輸入／進行中（`pending_input|pending_copy|processing`）
+     → 文案待審（`ready_for_review`）→ 已核准・待發布（`approved|publishing`）
+     → 已發布（`draft_created|active_published|csv_ready`）。
+  3. **側翼**（不進主幹）：需修改／失敗（失敗含 `generation_status=failed`，與
+     stageFilter 對齊；`pending_input`+生成失敗只算失敗、不雙算待輸入）。
+  4. **圖審副列（A′）**：D5 `pending_review`；**可與主幹重疊**；平均停留本包 **—**。
+  5. **平均停留（Q2-A）**：積壓件 `now − 進入時間戳`；可靠欄＝
+     待輸入 `created_at`、文案待審 `copy_generated_at`、已核准 `reviewed_at`；
+     缺戳／終態／側翼 → 誠實 **—**（**不用** `updated_at` 假算）。
+  6. 資料＝E1 **同 fetch／scope／上限 200**；可點 sessionStorage stage 跳轉（同 E1）；
+     樣式 `.panel`／`.schip`／tokens＋相對寬 bar；零 migration；BX-P 禁止。
+- **為什麼**：開工一眼看卡關階段；A13 時間戳夠用的先顯示，不夠的不裝懂。
+- **誰拍板**：總指揮放行 E2-open，2026-07-14（Q1 A+A′、Q2–Q6 全 A）。
+- **現況**：✅ **E2-open 已實作（2026-07-14）**。`funnelStats.ts`＋`DashboardTodoPanel`
+  漏斗區；`scripts/verify-e2-funnel.mjs`。不宣稱實機通過。
+
 ### 差異 34：D8b-open Showmore 文案改寫輕量（規則模板 v2；非完整 LLM 改寫）
 
 - **差在哪**：
@@ -628,6 +650,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-14（Grok）：差異 35 **E2-open**——儀表板流程漏斗（E1 下）；主幹互斥＋圖審副列；
+  平均停留可靠時間戳否則 —；同 E1 scope/fetch；零 SQL。
 - 2026-07-14（Grok）：差異 34 **D8b-open**——Showmore 規則模板 v2（匯出邊界）；
   標題／簡述／結構／FAQ／code 尾段；無 showmore_* 欄、無真 LLM、零 SQL；完整 D8 不勾滿。
 - 2026-07-14（Grok）：差異 29 **D9-open**——匯出前健檢 error/warn＋CSV 預覽 Modal；

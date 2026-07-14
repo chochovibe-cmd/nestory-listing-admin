@@ -1771,6 +1771,123 @@ textarea {
   padding: 14px 15px;
 }
 
+/* ── E1 dashboard 今日待辦 — layout-only; tokens + .panel + .schip ── */
+.dash-page {
+  width: 100%;
+  max-width: 920px;
+}
+.dash-header {
+  display: flex;
+  margin-bottom: 14px;
+}
+.dash-todo-panel .panel-header {
+  gap: 10px;
+}
+.dash-todo-hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: inherit;
+}
+.dash-todo-body {
+  gap: 12px;
+}
+.dash-todo-status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.dash-todo-error {
+  color: var(--accent2);
+}
+.dash-todo-trunc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--warn);
+  line-height: 1.45;
+}
+.dash-todo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.dash-todo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m);
+  background: var(--surface2);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: var(--shadow-s);
+  transition: transform 0.12s ease, border-color 0.12s ease;
+  cursor: pointer;
+}
+.dash-todo-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.dash-todo-card:active {
+  transform: scale(0.99);
+}
+.dash-todo-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.dash-todo-label {
+  font-size: 13px;
+  font-weight: 700;
+  flex: 1;
+  min-width: 4em;
+}
+.dash-todo-count {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: -0.02em;
+}
+.dash-todo-unit {
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 4px;
+  color: var(--text-muted);
+}
+.dash-todo-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.dash-todo-action {
+  margin-top: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.dash-later-note {
+  margin: 16px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+@media (max-width: 959px) {
+  .dash-todo-grid {
+    grid-template-columns: 1fr;
+  }
+  .dash-todo-card {
+    min-height: 44px;
+    padding: 14px 15px;
+  }
+}
+
 /* ── D7 publish records — layout-only; reuses ir-* / .schip / pills ── */
 .rec-page {
   width: 100%;

@@ -207,7 +207,7 @@ await check("showmorePricing.ts exists", () => {
   assert.ok(exists("src/lib/csv/showmorePricing.ts"));
 });
 
-await check("showmore.ts: markup + HTML + exclude spec + empty 簡述", () => {
+await check("showmore.ts: markup + HTML + exclude spec + D8b rewrite brief", () => {
   const src = read("src/lib/csv/showmore.ts");
   assert.match(src, /formatPlainTextAsHtml/);
   assert.match(src, /applyShowmoreMarkup/);
@@ -215,7 +215,9 @@ await check("showmore.ts: markup + HTML + exclude spec + empty 簡述", () => {
   assert.match(src, /image_type !== "spec"/);
   assert.match(src, /processed_file_url/);
   assert.match(src, /original_file_url/);
-  assert.match(src, /"商品簡述":\s*""/);
+  // D8b-open: 簡述／標題來自規則改寫（不再固定空字串）
+  assert.match(src, /assembleShowmoreCopy/);
+  assert.match(src, /"商品簡述":\s*copy\.brief/);
   assert.match(src, /單一款式/);
   assert.ok(!/JSZip|zip/.test(src), "case B zip must not be in showmore.ts");
   // cost not marked up
@@ -229,7 +231,13 @@ await check("showmore.ts: markup + HTML + exclude spec + empty 簡述", () => {
 await check("matrixify.ts: Body HTML uses formatPlainTextAsHtml", () => {
   const src = read("src/lib/csv/matrixify.ts");
   assert.match(src, /formatPlainTextAsHtml/);
-  assert.match(src, /"Body HTML":\s*formatPlainTextAsHtml/);
+  // D8a may wrap with appendDescriptionEmbedIfEnabled(... formatPlainTextAsHtml ...)
+  assert.match(src, /"Body HTML":/);
+  assert.match(src, /formatPlainTextAsHtml\s*\(/);
+  assert.ok(
+    /"Body HTML":[\s\S]{0,200}formatPlainTextAsHtml/.test(src),
+    "Body HTML cell should call formatPlainTextAsHtml"
+  );
 });
 
 await check("export route: body markup + csv_ready", () => {

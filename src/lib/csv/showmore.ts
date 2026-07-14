@@ -2,6 +2,7 @@ import { appendShowmoreDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/
 import { formatPlainTextAsHtml } from "@/lib/contentGenerator/htmlFormat";
 import { appendVideoLinksHtml } from "@/lib/media/videoUrls";
 import type { ProductDraft, ProductImage } from "@/types/domain";
+import { assembleShowmoreCopy } from "./showmoreCopyRewrite";
 import {
   applyShowmoreCompareAt,
   applyShowmoreMarkup,
@@ -67,23 +68,22 @@ export function buildShowmoreRows(
       markupPercent
     );
 
-    // Body at export boundary only (A25 / A23): DB stays plain text.
-    // D8a Q4-A: HTML img embed OFF by default (Showmore untested); opt-in env.
-    // D10-open Q5-A: append YouTube links at tail when video_urls present.
-    const bodySource = draft.description_html || draft.description_plain || "";
+    // D8b-open: rule template v2 at export boundary only (Q1-A).
+    // Does not write showmore_* columns; Shopify/DB title & description stay unchanged.
+    // Q5-A: always rules (no live LLM). Then A25 HTML + D8a embed + D10 video tail.
+    const copy = assembleShowmoreCopy(draft);
     const bodyHtml = appendVideoLinksHtml(
       appendShowmoreDescriptionEmbedIfEnabled(
-        formatPlainTextAsHtml(bodySource),
+        formatPlainTextAsHtml(copy.descriptionPlain),
         draft.product_images,
-        draft.title_zh || draft.taobao_title
+        copy.title || draft.title_zh || draft.taobao_title
       ),
       draft.video_urls
     );
 
     return {
-      "商品名稱*": draft.title_zh || draft.taobao_title || draft.original_title || "",
-      // Q5-B: empty; full marketing template / rewrite is D8b
-      "商品簡述": "",
+      "商品名稱*": copy.title,
+      "商品簡述": copy.brief,
       "商品介紹": bodyHtml,
       "配送限定": "",
       "商品編號(sku)": draft.sku || "",

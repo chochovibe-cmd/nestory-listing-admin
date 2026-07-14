@@ -12,6 +12,13 @@ import {
   type FunnelRowDef
 } from "@/lib/dashboard/funnelStats";
 import {
+  computeMakeQuotaView,
+  makeQuotaMigrationHint,
+  taiwanMonthRange,
+  type MakeQuotaBatchRow,
+  type MakeQuotaView
+} from "@/lib/dashboard/makeQuotaStats";
+import {
   TODO_DRAFT_SELECT_COLUMNS,
   TODO_FETCH_LIMIT,
   buildTodoCards,
@@ -25,9 +32,13 @@ import type { UserRole } from "@/types/domain";
 
 type ScopeMode = "mine" | "all";
 
+const BATCH_SELECT = "id, total_count, created_at, created_by";
+/** Soft cap: free tier planning ≪ this even at high volume. */
+const QUOTA_BATCH_FETCH_LIMIT = 500;
+
 /**
- * E1-open + E2-open: 今日待辦卡 + 流程漏斗（session + RLS, same fetch/scope）.
- * Q3-A admin 預設我的；operator 只看自己；0 件仍顯示。
+ * E1-open + E2-open + E3-open:
+ * 今日待辦 + 流程漏斗（same fetch/scope）+ Make 額度（全隊、與 scope 脫鉤）.
  */
 export function DashboardTodoPanel() {
   const [role, setRole] = useState<UserRole | null>(null);
@@ -37,6 +48,13 @@ export function DashboardTodoPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // E3: separate team-wide batch fetch (Q2-A; not tied to todo scope)
+  const [quotaLoading, setQuotaLoading] = useState(true);
+  const [imageBatches, setImageBatches] = useState<MakeQuotaBatchRow[]>([]);
+  const [publishBatches, setPublishBatches] = useState<MakeQuotaBatchRow[]>([]);
+  const [quotaTableHint, setQuotaTableHint] = useState<string | null>(null);
+  const [quotaFetchError, setQuotaFetchError] = useState<string | null>(null);
+
   const admin = isAdmin(role);
 
   const load = useCallback(async () => {
@@ -44,12 +62,16 @@ export function DashboardTodoPanel() {
       setError("需要設定 Supabase 才能使用儀表板");
       setRows([]);
       setLoading(false);
+      setQuotaLoading(false);
       setRoleReady(true);
       return;
     }
 
     setLoading(true);
+    setQuotaLoading(true);
     setError(null);
+    setQuotaFetchError(null);
+    setQuotaTableHint(null);
 
     try {
       const supabase = createClient();
@@ -62,6 +84,7 @@ export function DashboardTodoPanel() {
         setError(userError.message);
         setRows([]);
         setRoleReady(true);
+        setQuotaLoading(false);
         return;
       }
       if (!user) {
@@ -69,6 +92,7 @@ export function DashboardTodoPanel() {
         setRows([]);
         setRole(null);
         setRoleReady(true);
+        setQuotaLoading(false);
         return;
       }
 
@@ -100,15 +124,52 @@ export function DashboardTodoPanel() {
       if (draftError) {
         setError(draftError.message);
         setRows([]);
-        return;
+      } else {
+        setRows((data ?? []) as TodoDraftRow[]);
       }
 
-      setRows((data ?? []) as TodoDraftRow[]);
+      // E3 Q2-A: always team-wide (no created_by); Taiwan month server filter
+      const month = taiwanMonthRange();
+      const [imgRes, pubRes] = await Promise.all([
+        supabase
+          .from("image_batches")
+          .select(BATCH_SELECT)
+          .gte("created_at", month.startIso)
+          .lt("created_at", month.endIso)
+          .order("created_at", { ascending: false })
+          .limit(QUOTA_BATCH_FETCH_LIMIT),
+        supabase
+          .from("publish_batches")
+          .select(BATCH_SELECT)
+          .gte("created_at", month.startIso)
+          .lt("created_at", month.endIso)
+          .order("created_at", { ascending: false })
+          .limit(QUOTA_BATCH_FETCH_LIMIT)
+      ]);
+
+      const imgErr = imgRes.error?.message ?? null;
+      const pubErr = pubRes.error?.message ?? null;
+      const hint = makeQuotaMigrationHint(imgErr, pubErr);
+      setQuotaTableHint(hint);
+
+      if (hint) {
+        setImageBatches([]);
+        setPublishBatches([]);
+      } else if (imgErr || pubErr) {
+        // Non-migration errors: still use whatever succeeded
+        setQuotaFetchError(imgErr || pubErr);
+        setImageBatches((imgRes.data ?? []) as MakeQuotaBatchRow[]);
+        setPublishBatches((pubRes.data ?? []) as MakeQuotaBatchRow[]);
+      } else {
+        setImageBatches((imgRes.data ?? []) as MakeQuotaBatchRow[]);
+        setPublishBatches((pubRes.data ?? []) as MakeQuotaBatchRow[]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setRows([]);
     } finally {
       setLoading(false);
+      setQuotaLoading(false);
     }
   }, [scope]);
 
@@ -129,6 +190,14 @@ export function DashboardTodoPanel() {
     () => funnelTruncationNotice(funnelStats, TODO_FETCH_LIMIT),
     [funnelStats]
   );
+
+  const quotaView: MakeQuotaView | null = useMemo(() => {
+    if (quotaTableHint) return null;
+    return computeMakeQuotaView({
+      imageBatches,
+      publishBatches
+    });
+  }, [imageBatches, publishBatches, quotaTableHint]);
 
   function onCardClick(card: (typeof cards)[number], e: MouseEvent<HTMLAnchorElement>) {
     // Allow modified-click / middle-click / new tab to skip storage write
@@ -165,7 +234,7 @@ export function DashboardTodoPanel() {
         <div className="ir-page-header dash-header">
           <div className="ir-title-row">
             <h1>📈 儀表板</h1>
-            <span className="ir-sub">初版 · 待辦＋漏斗 · 成本／額度後期接</span>
+            <span className="ir-sub">初版 · 待辦＋漏斗＋額度 · 成本後期接</span>
           </div>
           {roleReady && admin ? (
             <div className="ir-scope">
@@ -281,8 +350,99 @@ export function DashboardTodoPanel() {
           </div>
         </section>
 
+        {/* E3-open: Make 額度 — below E2; team-wide (Q2-A), not scope */}
+        <section
+          className="panel dash-quota-panel"
+          aria-labelledby="dash-quota-title"
+        >
+          <div className="panel-header">
+            <h2 id="dash-quota-title">Make 額度</h2>
+            <span className="dash-todo-hint">估算 · 非 Make 帳單</span>
+          </div>
+          <div className="panel-body dash-quota-body">
+            {quotaLoading ? (
+              <p className="dash-todo-status">載入中…</p>
+            ) : quotaTableHint ? (
+              <p className="dash-todo-status dash-todo-error" role="alert">
+                {quotaTableHint}
+              </p>
+            ) : quotaFetchError && !quotaView ? (
+              <p className="dash-todo-status dash-todo-error" role="alert">
+                {quotaFetchError}
+              </p>
+            ) : quotaView ? (
+              <>
+                {quotaFetchError ? (
+                  <p className="dash-todo-trunc" role="status">
+                    部分資料讀取失敗：{quotaFetchError}
+                  </p>
+                ) : null}
+                <div className="dash-quota-card">
+                  <div className="dash-quota-card-top">
+                    <span className="dash-quota-label">本月操作（估算）</span>
+                    <span
+                      className={
+                        quotaView.warn
+                          ? "schip schip--warn"
+                          : "schip schip--idle"
+                      }
+                    >
+                      {quotaView.warn ? "接近上限" : "估算"}
+                    </span>
+                  </div>
+                  <div
+                    className="dash-quota-value"
+                    aria-label={`本月估算 ${quotaView.used} 操作，上限 ${quotaView.limit}`}
+                  >
+                    {quotaView.used}
+                    <span className="dash-quota-sep">／</span>
+                    {quotaView.limit}
+                  </div>
+                  <p className="dash-quota-remain">
+                    剩餘{" "}
+                    <strong>{quotaView.remaining}</strong>
+                    {" · "}
+                    已用約 {Math.round(quotaView.usedRatio * 100)}%
+                  </p>
+                  <div
+                    className="dash-quota-bar-track"
+                    role="progressbar"
+                    aria-valuenow={quotaView.barPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="額度使用比例"
+                  >
+                    <i
+                      className={
+                        quotaView.warn
+                          ? "dash-quota-bar-fill dash-quota-bar-fill--warn"
+                          : "dash-quota-bar-fill"
+                      }
+                      style={{ width: `${quotaView.barPct}%` }}
+                    />
+                  </div>
+                  <p className="dash-quota-honesty">{quotaView.honestyLabel}</p>
+                  <p className="dash-quota-sub">{quotaView.subHint}</p>
+                  <p className="dash-quota-detail">
+                    送圖 {quotaView.imageBatchCount} 批（{quotaView.imageItemCount}{" "}
+                    件）· 發布 {quotaView.publishBatchCount} 批（
+                    {quotaView.publishItemCount} 件）
+                  </p>
+                  {quotaView.warnText ? (
+                    <p className="dash-quota-warn" role="status">
+                      {quotaView.warnText}
+                    </p>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p className="dash-todo-status">—</p>
+            )}
+          </div>
+        </section>
+
         <p className="dash-later-note">
-          Make 額度／月預算成本／熱圖／AI 顧問 → 後續版本（E3–E6）
+          月預算成本／熱圖／AI 顧問 → 後續版本（E4–E6）
         </p>
       </div>
     </main>

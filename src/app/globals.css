@@ -1982,6 +1982,103 @@ textarea {
   font-weight: 500;
 }
 
+/* E3-open: Make 額度 — reuses panel / schip / funnel bar tokens */
+.dash-quota-panel {
+  margin-top: 14px;
+}
+.dash-quota-panel .panel-header {
+  gap: 10px;
+}
+.dash-quota-body {
+  gap: 12px;
+}
+.dash-quota-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m);
+  background: var(--surface2);
+  box-shadow: var(--shadow-s);
+}
+.dash-quota-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dash-quota-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.dash-quota-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.dash-quota-sep {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+.dash-quota-remain {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.dash-quota-remain strong {
+  color: var(--text);
+  font-weight: 700;
+}
+.dash-quota-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border-soft);
+  overflow: hidden;
+}
+.dash-quota-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  min-width: 0;
+  transition: width 0.2s ease;
+}
+.dash-quota-bar-fill--warn {
+  background: var(--warn);
+}
+.dash-quota-honesty {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.dash-quota-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.dash-quota-detail {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.dash-quota-warn {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warn);
+  line-height: 1.45;
+}
+
 @media (max-width: 959px) {
   .dash-todo-grid {
     grid-template-columns: 1fr;
@@ -1996,6 +2093,12 @@ textarea {
   }
   .dash-funnel-count {
     font-size: 20px;
+  }
+  .dash-quota-value {
+    font-size: 24px;
+  }
+  .dash-quota-card {
+    min-height: 44px;
   }
 }
 

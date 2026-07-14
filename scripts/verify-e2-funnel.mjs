@@ -207,8 +207,13 @@ await check("dashboard panel has funnel section under todo", () => {
   // E1 still present
   assert.ok(src.includes("今日待辦"));
   assert.ok(src.includes("buildTodoCards"));
-  // later note no longer claims E2 pending
-  assert.ok(src.includes("E3–E6") || src.includes("E3-E6"));
+  // later note: E2 done; after E3-open footer is E4–E6 (accept either for older snapshots)
+  assert.ok(
+    src.includes("E4–E6") ||
+      src.includes("E4-E6") ||
+      src.includes("E3–E6") ||
+      src.includes("E3-E6")
+  );
   assert.ok(!src.includes("E2–E6"));
 });
 await check("select columns include A13 timestamps", () => {

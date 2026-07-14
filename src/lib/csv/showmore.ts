@@ -1,3 +1,4 @@
+import { appendShowmoreDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/descriptionEmbed";
 import { formatPlainTextAsHtml } from "@/lib/contentGenerator/htmlFormat";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 import {
@@ -65,9 +66,14 @@ export function buildShowmoreRows(
       markupPercent
     );
 
-    // Body at export boundary only (A25 / A23 pattern): DB stays plain text.
+    // Body at export boundary only (A25 / A23): DB stays plain text.
+    // D8a Q4-A: HTML img embed OFF by default (Showmore untested); opt-in env.
     const bodySource = draft.description_html || draft.description_plain || "";
-    const bodyHtml = formatPlainTextAsHtml(bodySource);
+    const bodyHtml = appendShowmoreDescriptionEmbedIfEnabled(
+      formatPlainTextAsHtml(bodySource),
+      draft.product_images,
+      draft.title_zh || draft.taobao_title
+    );
 
     return {
       "商品名稱*": draft.title_zh || draft.taobao_title || draft.original_title || "",

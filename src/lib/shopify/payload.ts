@@ -1,5 +1,6 @@
 import { generateSku } from "@/lib/contentGenerator/sku";
 import { formatPlainTextAsHtml, htmlFaqToPlainText } from "@/lib/contentGenerator/htmlFormat";
+import { appendDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/descriptionEmbed";
 import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
 import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildImageFileNameSlug } from "@/lib/contentGenerator/imageFileNameGenerator";
@@ -146,11 +147,16 @@ export function buildShopifyProductPayload(
     // formatPlainTextAsHtml also guards isLikelyHtml so legacy HTML rows are
     // not double-wrapped. Conversion to rich HTML only happens here at the
     // Shopify boundary (not at save time).
+    // D8a-open: up to 2 description images after body (env-gated; never DB).
     // A21-2/A21-3: internal link + FAQPage JSON-LD appended the same way --
     // generated at the Shopify boundary only, never written back to the DB
     // column or the app's own FAQ/description UI.
     descriptionHtml:
-      formatPlainTextAsHtml(draft.description_html || draft.description_plain || "") +
+      appendDescriptionEmbedIfEnabled(
+        formatPlainTextAsHtml(draft.description_html || draft.description_plain || ""),
+        draft.product_images,
+        draft.title_zh || draft.taobao_title
+      ) +
       buildInternalLinkHtml(draft.ip_name, internalLinkMap) +
       buildFaqJsonLdScriptTag(draft.generated_faq_html),
     // A24 (2026-07-10 A14 finding): fallback only, real fix is the DB column

@@ -18,6 +18,29 @@
 
 ## 差異清單
 
+### 差異 34：D8b-open Showmore 文案改寫輕量（規則模板 v2；非完整 LLM 改寫）
+
+- **差在哪**：
+  1. **位置**：僅 Showmore **匯出邊界**組裝改寫版（`assembleShowmoreCopy`）；
+     **不寫** `showmore_title`／`showmore_description`／`showmore_faq` 欄（Q1-A）；
+     Shopify／DB 主文案（`title_zh`／`description_html` 等）**不改**。
+  2. **標題 Q2-A**：嚴格模板
+     `【{IP}】{主體}-{特色}｜{類別／情境詞}｜收藏送禮推薦`；缺零件略過、不硬湊。
+  3. **簡述**：規則一句話（有 IP／類型才完整）；不再固定空字串（覆寫差異 28 簡述空）。
+  4. **內文結構**：A–E 字母段 → 商品介紹／商品特色（✔）／商品資訊（➼ 有據才列）／
+     常見問題 FAQ／公版尾段；禁來源平台與內文價格。
+  5. **FAQ Q3-A**：有 `generated_faq_html` 用既有；無則 2 條公版（現貨／色差）。
+  6. **尾段 Q4-B**：**僅 code 預設**（交貨＋運送）；**零 migration**、不讀 team_settings。
+  7. **LLM Q5-A**：本包無真呼叫；`rewriteMode` 永遠 `rules`；無 key 不影響匯出。
+  8. 加價／案 A 圖／D8a 嵌圖預設關／D10 影片尾／D9 健檢 **保留**；案 B zip 不做。
+- **為什麼**：完整 D8 最後一塊「改寫版」用規則先對齊模板 v2 與 SEO 差異化，
+  避免卡金鑰；語意級 LLM 改寫留後續。
+- **誰拍板**：總指揮放行 D8b-open，2026-07-14（Q1-A／Q2-A／Q3-A／Q4-B／Q5-A／Q6-A）。
+- **現況**：✅ **D8b-open 已實作（2026-07-14）**。
+  `src/lib/csv/showmoreCopyRewrite.ts`＋`showmore.ts` 接線；
+  `scripts/verify-d8b-showmore-rewrite.mjs`。完整 D8（案 B／真 LLM 寫欄）**不勾滿**。
+  **未**宣稱 Showmore 後台實機通過。
+
 ### 差異 33：D10-open 影片欄位（YouTube → Shopify EXTERNAL_VIDEO）
 
 - **差在哪**：
@@ -605,6 +628,8 @@
 
 ## 修訂紀錄
 
+- 2026-07-14（Grok）：差異 34 **D8b-open**——Showmore 規則模板 v2（匯出邊界）；
+  標題／簡述／結構／FAQ／code 尾段；無 showmore_* 欄、無真 LLM、零 SQL；完整 D8 不勾滿。
 - 2026-07-14（Grok）：差異 29 **D9-open**——匯出前健檢 error/warn＋CSV 預覽 Modal；
   Showmore／Matrixify 同層；iframe 完整 D9 未做；零 SQL。
 - 2026-07-14（Grok）：差異 28 **D8-open**——Showmore 匯出加價＋美化、A25 HTML、案 A 圖欄、

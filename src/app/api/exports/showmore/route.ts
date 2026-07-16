@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
-import { buildShowmoreCsv } from "@/lib/csv/showmore";
+import { buildShowmoreCsv, type ShowmoreDraft } from "@/lib/csv/showmore";
 import { normalizeShowmoreMarkupPercent } from "@/lib/csv/showmorePricing";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
+import type { ProductVariantRow } from "@/types/domain";
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
@@ -24,13 +25,15 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const ids = Array.isArray(body.draftIds) ? body.draftIds : null;
   const showmoreMarkupPercent = normalizeShowmoreMarkupPercent(body.showmoreMarkupPercent);
+  // R3 Q3: when API failed but still downloading CSV, do not leave queue.
+  const markLeaveQueue = body.markLeaveQueue !== false;
 
   const serviceSupabase = createServiceSupabaseClient();
 
   let query = serviceSupabase
     .from("product_drafts")
     .select("*, product_images(*)")
-    .in("status", ["approved", "api_failed", "csv_ready"]);
+    .or("pipeline_stage.eq.ready,status.in.(approved,api_failed,csv_ready)");
 
   if (ids?.length) {
     query = query.in("id", ids);
@@ -39,14 +42,34 @@ export async function POST(request: NextRequest) {
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
-  const drafts = data ?? [];
-  const csv = buildShowmoreCsv(drafts, { showmoreMarkupPercent });
-  const exportedIds = drafts.map((draft) => draft.id);
+  const drafts = (data ?? []) as ShowmoreDraft[];
+  const draftIds = drafts.map((d) => d.id);
 
-  // Q4-A: mark csv_ready like Matrixify so queue stage filter can show「CSV 已備妥」.
-  // publish_method stays on existing enum (no showmore_csv without migration) —
-  // job payload records export kind for honesty.
-  if (exportedIds.length) {
+  let variantsByDraft = new Map<string, ProductVariantRow[]>();
+  if (draftIds.length) {
+    const { data: variantRows } = await serviceSupabase
+      .from("product_variants")
+      .select("*")
+      .in("draft_id", draftIds)
+      .order("sort_order", { ascending: true });
+    variantsByDraft = new Map();
+    for (const row of (variantRows ?? []) as ProductVariantRow[]) {
+      const list = variantsByDraft.get(row.draft_id) ?? [];
+      list.push(row);
+      variantsByDraft.set(row.draft_id, list);
+    }
+  }
+
+  const withVariants = drafts.map((d) => ({
+    ...d,
+    product_variants: variantsByDraft.get(d.id) ?? []
+  }));
+
+  const csv = buildShowmoreCsv(withVariants, { showmoreMarkupPercent });
+  const exportedIds = withVariants.map((draft) => draft.id);
+
+  // Q4-A / R3 Q2: mark csv_ready when leave-queue allowed (CSV-only or full success).
+  if (exportedIds.length && markLeaveQueue) {
     await serviceSupabase
       .from("product_drafts")
       .update({
@@ -57,10 +80,9 @@ export async function POST(request: NextRequest) {
       .in("id", exportedIds);
 
     await serviceSupabase.from("publish_jobs").insert(
-      drafts.map((draft) => ({
+      withVariants.map((draft) => ({
         draft_id: draft.id,
         publish_mode: draft.publish_mode,
-        // Enum has no showmore_csv yet (zero SQL this pack); manual + payload kind.
         publish_method: "manual",
         publish_status: "csv_ready",
         request_payload: {
@@ -78,7 +100,8 @@ export async function POST(request: NextRequest) {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="nestory-showmore-${Date.now()}.csv"`,
-      "X-Nestory-Showmore-Markup-Percent": String(showmoreMarkupPercent)
+      "X-Nestory-Showmore-Markup-Percent": String(showmoreMarkupPercent),
+      "X-Nestory-Left-Queue": markLeaveQueue ? "1" : "0"
     }
   });
 }

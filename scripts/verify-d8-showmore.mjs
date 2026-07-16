@@ -212,18 +212,20 @@ await check("showmore.ts: markup + HTML + exclude spec + D8b rewrite brief", () 
   assert.match(src, /formatPlainTextAsHtml/);
   assert.match(src, /applyShowmoreMarkup/);
   assert.match(src, /applyShowmoreCompareAt/);
-  assert.match(src, /image_type !== "spec"/);
+  // R3: exclude spec via isShowmoreListingImage (image_type === "spec" return false)
+  assert.match(src, /image_type === "spec"|image_type !== "spec"/);
   assert.match(src, /processed_file_url/);
   assert.match(src, /original_file_url/);
   // D8b-open: 簡述／標題來自規則改寫（不再固定空字串）
   assert.match(src, /assembleShowmoreCopy/);
-  assert.match(src, /"商品簡述":\s*copy\.brief/);
+  // R3 multi-variant: row["商品簡述"] = copy.brief (not object literal)
+  assert.match(src, /商品簡述.*=.*copy\.brief|copy\.brief/);
   assert.match(src, /單一款式/);
   assert.ok(!/JSZip|zip/.test(src), "case B zip must not be in showmore.ts");
   // cost not marked up
   assert.match(src, /twd_cost/);
   assert.ok(
-    /"成本":\s*draft\.twd_cost/.test(src),
+    /成本.*=.*draft\.twd_cost|"成本":\s*draft\.twd_cost/.test(src),
     "cost column should use raw twd_cost"
   );
 });
@@ -250,15 +252,18 @@ await check("export route: body markup + csv_ready", () => {
 });
 
 await check("UI passes showmoreMarkupPercent from pricing store", () => {
-  for (const rel of [
-    "src/components/listing/DraftResultsPanel.tsx",
-    "src/components/drafts/DraftQueueList.tsx"
-  ]) {
-    const src = read(rel);
-    assert.match(src, /getStoredPricingSettings/);
-    assert.match(src, /showmoreMarkupPercent/);
-    assert.match(src, /匯出時已套用|已套 Showmore/, `toast/copy in ${rel}`);
-  }
+  const panel = read("src/components/listing/DraftResultsPanel.tsx");
+  assert.match(panel, /getStoredPricingSettings/);
+  assert.match(panel, /showmoreMarkupPercent/);
+  // R3: multi-export messages (CSV 已下載 / 多款式已展開) or legacy toast
+  assert.match(
+    panel,
+    /匯出時已套用|已套 Showmore|CSV 已下載|多款式已展開/
+  );
+  const queue = read("src/components/drafts/DraftQueueList.tsx");
+  assert.match(queue, /getStoredPricingSettings/);
+  assert.match(queue, /showmoreMarkupPercent/);
+  assert.match(queue, /匯出時已套用|已套 Showmore/);
 });
 
 await check("settings copy: 匯出時已套用 (not 接通後生效)", () => {

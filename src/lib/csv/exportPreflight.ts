@@ -1,11 +1,12 @@
 /**
- * D9-open: pure export preflight (no LLM).
+ * D9-open + R3: pure export preflight (no LLM).
  * error → block download; warn → allow with explicit confirm.
  * Showmore prices use the same helpers as CSV export (showmorePricing).
+ * R3: station③ gate + multi-variant price checks + dual-mode table fields.
  */
 
 import { truncateTitle } from "@/lib/drafts/approveSummary";
-import type { ProductDraft, ProductImage } from "@/types/domain";
+import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
 import {
   applyShowmoreCompareAt,
   applyShowmoreMarkup,
@@ -25,11 +26,32 @@ export function isExportableStatus(status: string | null | undefined): boolean {
   return EXPORTABLE_STATUSES.includes(status as ExportableStatus);
 }
 
+/** R3: ready station or legacy exportable status. */
+export function isExportableDraft(draft: {
+  status?: string | null;
+  pipeline_stage?: string | null;
+}): boolean {
+  if (draft.pipeline_stage === "ready") return true;
+  // api_failed / csv_ready may still re-download (records / R4); approved alone
+  // without ready is station①/② — block unless already left (csv_ready).
+  if (draft.status === "csv_ready" || draft.status === "api_failed") return true;
+  if (draft.status === "approved" && draft.pipeline_stage == null) {
+    // pre-migration rows: allow (legacy D9)
+    return true;
+  }
+  return false;
+}
+
 export interface PreflightIssue {
   level: PreflightLevel;
   code: string;
   message: string;
 }
+
+export type PreflightVariantInput = Pick<
+  ProductVariantRow,
+  "option1_value" | "option2_value" | "option3_value" | "twd_price" | "sku" | "sort_order"
+>;
 
 /** Minimal draft shape for rules + price preview (full ProductDraft works). */
 export type PreflightDraftInput = {
@@ -38,6 +60,8 @@ export type PreflightDraftInput = {
   taobao_title?: string | null;
   original_title?: string | null;
   status?: string | null;
+  pipeline_stage?: string | null;
+  sku?: string | null;
   twd_price?: number | null;
   twd_cost?: number | null;
   compare_at_price?: number | null;
@@ -51,6 +75,7 @@ export type PreflightDraftInput = {
       "image_type" | "processed_file_url" | "original_file_url" | "sort_order"
     >
   >;
+  product_variants?: PreflightVariantInput[];
 };
 
 export interface PreflightItem {
@@ -62,10 +87,25 @@ export interface PreflightItem {
   sellPriceDisplay: number | null;
   compareAtDisplay: number | null;
   costDisplay: number | null;
+  /** Dual-mode table columns (R3 §10). */
+  skuDisplay: string;
+  variantCount: number;
+  imageCount: number;
   issues: PreflightIssue[];
   hasError: boolean;
   hasWarn: boolean;
 }
+
+/** Table-mode column keys for dual preview (6–8). */
+export const EXPORT_TABLE_COLUMNS = [
+  { key: "title", label: "標題" },
+  { key: "sell", label: "售價" },
+  { key: "compare", label: "原價" },
+  { key: "sku", label: "SKU" },
+  { key: "variants", label: "款式" },
+  { key: "images", label: "圖" },
+  { key: "status", label: "燈" }
+] as const;
 
 export interface ExportPreflightReport {
   kind: ExportKind;
@@ -143,9 +183,14 @@ function hasDescription(draft: PreflightDraftInput): boolean {
   );
 }
 
-function hasMultiVariantHint(draft: PreflightDraftInput): boolean {
-  const dims = draft.variant_dimensions;
-  return Array.isArray(dims) && dims.length > 0;
+function filledVariants(draft: PreflightDraftInput): PreflightVariantInput[] {
+  return (draft.product_variants ?? []).filter((v) =>
+    Boolean(
+      (v.option1_value ?? "").trim() ||
+        (v.option2_value ?? "").trim() ||
+        (v.option3_value ?? "").trim()
+    )
+  );
 }
 
 function checkItem(
@@ -156,6 +201,10 @@ function checkItem(
   const titleFull = draftTitle(draft) || "未命名草稿";
   const titleShort = truncateTitle(titleFull);
   const issues: PreflightIssue[] = [];
+  const variants = filledVariants(draft);
+  const imageCount = pickExportableImages(draft.product_images).filter((img) =>
+    Boolean(imageUrl(img))
+  ).length;
 
   const rawTitle = draftTitle(draft);
   if (!rawTitle) {
@@ -166,10 +215,35 @@ function checkItem(
     });
   }
 
-  const sellRaw = draft.twd_price;
+  // R3: multi-variant → each row needs sell price (Showmore expand)
+  if (variants.length > 0) {
+    const missingPrice = variants.filter(
+      (v) =>
+        v.twd_price == null ||
+        !Number.isFinite(Number(v.twd_price)) ||
+        Number(v.twd_price) <= 0
+    );
+    if (missingPrice.length > 0) {
+      issues.push({
+        level: "error",
+        code: "variant_price_empty",
+        message: `有 ${missingPrice.length} 個款式缺售價（請先算好每款售價）`
+      });
+    }
+  }
+
+  const sellRaw =
+    variants.length > 0
+      ? variants.find(
+          (v) =>
+            v.twd_price != null &&
+            Number.isFinite(Number(v.twd_price)) &&
+            Number(v.twd_price) > 0
+        )?.twd_price ?? draft.twd_price
+      : draft.twd_price;
   const hasSell =
     sellRaw != null && Number.isFinite(Number(sellRaw)) && Number(sellRaw) > 0;
-  if (!hasSell) {
+  if (!hasSell && variants.length === 0) {
     issues.push({
       level: "error",
       code: "price_empty",
@@ -177,11 +251,11 @@ function checkItem(
     });
   }
 
-  if (!isExportableStatus(draft.status)) {
+  if (!isExportableDraft(draft)) {
     issues.push({
       level: "error",
       code: "status_not_exportable",
-      message: `狀態「${draft.status || "?"}」不可匯出（需核准／API失敗／CSV已備妥）`
+      message: "這件還沒到「完成待發布」，不能匯出"
     });
   }
 
@@ -191,20 +265,20 @@ function checkItem(
       issues.push({
         level: "error",
         code: "image_empty",
-        message: "無商品圖（Showmore 主要圖片必填）"
+        message: "沒有可上架的商品圖（主要圖片必填）"
       });
     } else {
       issues.push({
         level: "warn",
         code: "image_empty",
-        message: "無商品圖（Matrixify 可空，匯入後請補圖）"
+        message: "沒有商品圖（Matrixify 可空，匯入後請補圖）"
       });
     }
   } else if (hasOnlyOriginalImageUrls(draft.product_images)) {
     issues.push({
       level: "warn",
       code: "image_original_only",
-      message: "圖僅原圖、尚無處理後／CDN 網址"
+      message: "圖還是原圖網址，尚未轉檔／圖床（發布時會補）"
     });
   }
 
@@ -236,14 +310,6 @@ function checkItem(
     }
   }
 
-  if (hasMultiVariantHint(draft)) {
-    issues.push({
-      level: "warn",
-      code: "multi_variant_single_row",
-      message: "多款式未展開（CSV 仍為單一款式）"
-    });
-  }
-
   let sellPriceDisplay: number | null = null;
   let compareAtDisplay: number | null = null;
   if (hasSell) {
@@ -265,7 +331,6 @@ function checkItem(
           : null;
     }
   } else if (kind === "showmore" && draft.compare_at_price != null) {
-    // Still show marked-up compare if sell missing (rare)
     const compare = applyShowmoreCompareAt(draft.compare_at_price, "", markupPercent);
     compareAtDisplay = typeof compare === "number" ? compare : null;
   } else if (draft.compare_at_price != null && Number(draft.compare_at_price) > 0) {
@@ -279,6 +344,8 @@ function checkItem(
 
   const hasError = issues.some((i) => i.level === "error");
   const hasWarn = issues.some((i) => i.level === "warn");
+  const skuDisplay =
+    (variants[0]?.sku ?? draft.sku ?? "").trim() || "—";
 
   return {
     draftId: draft.id,
@@ -288,6 +355,9 @@ function checkItem(
     sellPriceDisplay,
     compareAtDisplay,
     costDisplay,
+    skuDisplay,
+    variantCount: variants.length,
+    imageCount,
     issues,
     hasError,
     hasWarn

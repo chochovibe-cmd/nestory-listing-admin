@@ -74,7 +74,9 @@ function decideStation2Review(images) {
   const marks = countImageMarkSummary(images);
   if (marks.unmarked > 0) return { action: "blocked", reason: "unmarked" };
   const allKeep = marks.aiCount === 0;
-  return { action: "send_images", allKeep, aiCount: marks.aiCount, marks };
+  // R3: all-keep → advance_ready (no send-images)
+  if (allKeep) return { action: "advance_ready", allKeep: true, aiCount: 0, marks };
+  return { action: "send_images", allKeep: false, aiCount: marks.aiCount, marks };
 }
 
 const SUGGEST_PATTERNS = [/使用情境/, /推薦標籤/, /網搜/, /建議/];
@@ -156,12 +158,12 @@ check("station filter three stations", () => {
   assert.match(src, /完成待發布/);
 });
 
-check("inline: all keep decision", () => {
+check("inline: all keep decision (R3 → advance_ready)", () => {
   const d = decideStation2Review([
     { image_type: "main", process_intent: "keep" },
     { image_type: "main", process_intent: "keep" }
   ]);
-  assert.equal(d.action, "send_images");
+  assert.equal(d.action, "advance_ready");
   assert.equal(d.allKeep, true);
   assert.equal(d.aiCount, 0);
 });

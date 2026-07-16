@@ -10,7 +10,15 @@ export const dynamic = "force-dynamic";
 
 export type WorkbenchVariantPrice = Pick<
   ProductVariantRow,
-  "id" | "draft_id" | "twd_price" | "compare_at_price" | "sort_order"
+  | "id"
+  | "draft_id"
+  | "twd_price"
+  | "compare_at_price"
+  | "sort_order"
+  | "option1_value"
+  | "option2_value"
+  | "option3_value"
+  | "sku"
 >;
 
 export default async function NewDraftPage() {
@@ -57,7 +65,9 @@ export default async function NewDraftPage() {
       supabase.from("product_images").select("*").in("draft_id", draftIds).order("sort_order"),
       supabase
         .from("product_variants")
-        .select("id, draft_id, twd_price, compare_at_price, sort_order")
+        .select(
+          "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, sku"
+        )
         .in("draft_id", draftIds)
         .order("sort_order", { ascending: true })
     ]);

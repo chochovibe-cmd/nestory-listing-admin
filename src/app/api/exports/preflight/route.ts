@@ -47,11 +47,32 @@ export async function POST(request: NextRequest) {
   const { data, error } = await serviceSupabase
     .from("product_drafts")
     .select(
-      "id, title_zh, taobao_title, original_title, status, twd_price, twd_cost, compare_at_price, price_mode, description_html, description_plain, variant_dimensions, product_images(image_type, processed_file_url, original_file_url, sort_order)"
+      "id, title_zh, taobao_title, original_title, status, pipeline_stage, sku, twd_price, twd_cost, compare_at_price, price_mode, description_html, description_plain, variant_dimensions, product_images(image_type, processed_file_url, original_file_url, sort_order)"
     )
     .in("id", ids);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
+
+  const { data: variantRows } = await serviceSupabase
+    .from("product_variants")
+    .select("draft_id, option1_value, option2_value, option3_value, twd_price, sku, sort_order")
+    .in("draft_id", ids as string[])
+    .order("sort_order", { ascending: true });
+
+  const variantsByDraft = new Map<string, PreflightDraftInput["product_variants"]>();
+  for (const row of variantRows ?? []) {
+    const draftId = row.draft_id as string;
+    const list = variantsByDraft.get(draftId) ?? [];
+    list.push({
+      option1_value: row.option1_value,
+      option2_value: row.option2_value,
+      option3_value: row.option3_value,
+      twd_price: row.twd_price,
+      sku: row.sku,
+      sort_order: row.sort_order ?? 0
+    });
+    variantsByDraft.set(draftId, list);
+  }
 
   // Preserve client selection order when possible
   const byId = new Map<string, PreflightDraftInput>();
@@ -63,6 +84,8 @@ export async function POST(request: NextRequest) {
       taobao_title: r.taobao_title,
       original_title: r.original_title,
       status: r.status,
+      pipeline_stage: r.pipeline_stage,
+      sku: r.sku,
       twd_price: r.twd_price,
       twd_cost: r.twd_cost,
       compare_at_price: r.compare_at_price,
@@ -70,7 +93,8 @@ export async function POST(request: NextRequest) {
       description_html: r.description_html,
       description_plain: r.description_plain,
       variant_dimensions: r.variant_dimensions,
-      product_images: r.product_images ?? []
+      product_images: r.product_images ?? [],
+      product_variants: variantsByDraft.get(r.id) ?? []
     });
   }
 
@@ -88,6 +112,8 @@ export async function POST(request: NextRequest) {
       taobao_title: null,
       original_title: null,
       status: "missing",
+      pipeline_stage: null,
+      sku: null,
       twd_price: null,
       twd_cost: null,
       compare_at_price: null,
@@ -95,7 +121,8 @@ export async function POST(request: NextRequest) {
       description_html: null,
       description_plain: null,
       variant_dimensions: null,
-      product_images: []
+      product_images: [],
+      product_variants: []
     });
   }
 

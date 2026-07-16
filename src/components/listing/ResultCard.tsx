@@ -57,12 +57,7 @@ import {
   type CopyVersionField,
   versionLabel,
 } from "@/lib/drafts/copyVersionHistory";
-import {
-  buildSingleApproveSummary,
-  modalHeading,
-  primaryConfirmLabel,
-  type FieldVersionInput,
-} from "@/lib/drafts/approveSummary";
+import type { FieldVersionInput } from "@/lib/drafts/approveSummary";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import {
   formatArchiveResultMessage,
@@ -70,12 +65,19 @@ import {
   isArchiveBusyStatus,
   isPublishedArchiveStatus
 } from "@/lib/drafts/archiveDrafts";
-import { ApproveSummaryModal } from "@/components/listing/ApproveSummaryModal";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
+import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import {
   runExportPreflight,
+  type ExportKind,
   type ExportPreflightReport
 } from "@/lib/csv/exportPreflight";
+import {
+  formatStation3ResultMessage,
+  shouldLeaveQueue,
+  type Station3PublishSelection
+} from "@/lib/drafts/station3Publish";
+import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -252,12 +254,19 @@ export function ResultCard({
   const [regenTone, setRegenTone] = useState<CopyTone>(COPY_TONES[0]);
   const [regenNotes, setRegenNotes] = useState("");
   const [lockedPreviewOpen, setLockedPreviewOpen] = useState(false);
-  // B11 D1-B: summary only for Shopify-affecting「核准並發布」(not pure ✓)
-  const [approveSummaryOpen, setApproveSummaryOpen] = useState(false);
-  // D9-open Q5-A: single Matrixify also goes through preflight
+  // R3 station③ multi-select
+  const [station3Open, setStation3Open] = useState(false);
+  const [station3Busy, setStation3Busy] = useState(false);
+  const [station3Selection, setStation3Selection] = useState<Station3PublishSelection | null>(null);
+  const [exportQueue, setExportQueue] = useState<ExportKind[]>([]);
   const [exportPreflightReport, setExportPreflightReport] =
     useState<ExportPreflightReport | null>(null);
+  const [exportMarkLeave, setExportMarkLeave] = useState(true);
   const [exportBusy, setExportBusy] = useState(false);
+  const [cardExportKind, setCardExportKind] = useState<ExportKind>("matrixify");
+  const [pendingApiResult, setPendingApiResult] = useState<{ ok: boolean; message: string } | null>(
+    null
+  );
   const [approveSummaryBusy, setApproveSummaryBusy] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
@@ -769,7 +778,7 @@ export function ResultCard({
     }
   }
 
-  /** R2 station② 審核分流 */
+  /** R2/R3 station② 審核分流：全 keep → ready；有 AI → 生圖工廠 */
   async function stationReview() {
     setMarkMessage("");
     if (hasBlockingWarnings(warningSummary)) {
@@ -781,12 +790,29 @@ export function ResultCard({
       setMarkMessage(decision.reason);
       return;
     }
-    if (decision.action !== "send_images") return;
+    if (decision.action !== "send_images" && decision.action !== "advance_ready") return;
     const estimate = formatAiEstimateMessage(decision.aiCount, decision.allKeep);
     if (!window.confirm(`${estimate}\n\n確定審核送出？`)) return;
     setQuickBusy(true);
     setMarkMessage("審核送出中…");
     try {
+      if (decision.action === "advance_ready") {
+        const response = await fetch("/api/drafts/batch/advance-ready", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draftIds: [draft.id] })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok && !payload.ok) {
+          setMarkMessage(payload.error ?? payload.message ?? "進入完成待發布失敗");
+          return;
+        }
+        setMarkMessage(
+          typeof payload.message === "string" ? payload.message : "已進入完成待發布"
+        );
+        router.refresh();
+        return;
+      }
       const response = await fetch("/api/drafts/batch/send-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -802,6 +828,30 @@ export function ResultCard({
       router.refresh();
     } catch {
       setMarkMessage("審核連線失敗");
+    } finally {
+      setQuickBusy(false);
+    }
+  }
+
+  async function returnFromReady(target: "copy_review" | "image_review") {
+    const label = target === "copy_review" ? "改文案" : "改圖";
+    if (!window.confirm(`確定退回${label}？`)) return;
+    setQuickBusy(true);
+    try {
+      const response = await fetch(`/api/drafts/${draft.id}/return-stage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(payload.error ?? "退回失敗");
+        return;
+      }
+      setMessage(payload.message ?? `已退回${label}`);
+      router.refresh();
+    } catch {
+      setMessage("退回連線失敗");
     } finally {
       setQuickBusy(false);
     }
@@ -897,58 +947,115 @@ export function ResultCard({
     });
   }
 
-  // B11 D1-B: open summary for Shopify path only (replaces window.confirm — D2-A).
-  function openApproveAndPublishSummary() {
-    setApproveSummaryOpen(true);
-  }
-
-  /**
-   * Approve and publish after summary confirm.
-   * D3-B: if dirty, commit via B10 commitCopyCombination first (所見即所核).
-   */
-  async function confirmApproveAndPublishFromSummary() {
+  async function runStation3CardFlow(selection: Station3PublishSelection) {
+    setStation3Open(false);
+    setStation3Selection(selection);
+    setStation3Busy(true);
     setApproveSummaryBusy(true);
+    let apiSucceeded: boolean | null = null;
+    let apiMessage = "";
     try {
       if (hasUncommittedCopy()) {
         setMessage("定案文案組合中…");
         const combo = await commitCopyCombination();
         if (!combo.ok) {
-          setMessage(combo.error ?? "文案組合定案失敗，已取消發布");
+          setMessage(combo.error ?? "文案組合定案失敗，已取消");
           return;
         }
       }
 
-      setApproveSummaryOpen(false);
-      setMessage("核准中...");
-      const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      if (!approveResponse.ok) {
-        const payload = await approveResponse.json().catch(() => ({}));
-        setMessage(payload.error ?? "核准失敗");
+      if (selection.shopify !== "none") {
+        setMessage(
+          selection.shopify === "active" ? "正式上架中（含轉檔／圖床）…" : "建立草稿中（含轉檔／圖床）…"
+        );
+        const publishResponse = await fetch(`/api/drafts/${draft.id}/publish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            publishMode: selection.shopify,
+            confirmActive: selection.shopify === "active"
+          })
+        });
+        const payload = await publishResponse.json().catch(() => ({}));
+        apiSucceeded = publishResponse.ok && payload.ok !== false;
+        apiMessage = publishResponse.ok
+          ? payload.message ?? "Shopify 完成"
+          : payload.error ?? "發布失敗";
+        setPendingApiResult({ ok: Boolean(apiSucceeded), message: apiMessage });
+      }
+
+      const csvKinds: ExportKind[] = [];
+      if (selection.matrixify) csvKinds.push("matrixify");
+      if (selection.showmore) csvKinds.push("showmore");
+
+      if (!csvKinds.length) {
+        const left = shouldLeaveQueue({
+          selection,
+          apiSucceeded,
+          csvSucceeded: null
+        });
+        setMessage(
+          formatStation3ResultMessage({
+            selection,
+            apiSucceeded,
+            apiMessage,
+            csvSucceeded: null,
+            leftQueue: left
+          })
+        );
+        setStation3Selection(null);
+        setPendingApiResult(null);
+        router.refresh();
         return;
       }
 
-      setMessage("發布中...");
-      const publishResponse = await fetch(`/api/drafts/${draft.id}/publish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ publishMode, confirmActive: publishMode === "active" }),
+      const markLeave = shouldLeaveQueue({
+        selection,
+        apiSucceeded: selection.shopify === "none" ? null : apiSucceeded,
+        csvSucceeded: true
       });
-      const payload = await publishResponse.json();
-      setMessage(
-        publishResponse.ok
-          ? payload.message ?? "已核准並發布（可至發布紀錄查詢）"
-          : [payload.error, payload.hint].filter(Boolean).join(" — ") || "發布失敗"
-      );
-      router.refresh();
+      setExportMarkLeave(markLeave);
+      openNextCardExport(csvKinds, markLeave);
     } catch {
-      setMessage("核准／發布連線失敗");
+      setMessage("發布／匯出連線失敗");
+      setStation3Selection(null);
+      setPendingApiResult(null);
     } finally {
+      setStation3Busy(false);
       setApproveSummaryBusy(false);
     }
+  }
+
+  function openNextCardExport(kinds: ExportKind[], markLeave: boolean) {
+    if (!kinds.length) return;
+    const [kind, ...rest] = kinds;
+    const markup = getStoredPricingSettings().showmoreMarkupPercent;
+    const report = runExportPreflight(
+      [
+        {
+          id: draft.id,
+          title_zh: title || draft.title_zh,
+          taobao_title: draft.taobao_title,
+          original_title: draft.original_title,
+          status: draft.status,
+          pipeline_stage: draft.pipeline_stage,
+          sku: draft.sku,
+          twd_price: sellPrice ? Number(sellPrice) : draft.twd_price,
+          twd_cost: draft.twd_cost,
+          compare_at_price: compareAtPrice ? Number(compareAtPrice) : draft.compare_at_price,
+          price_mode: draft.price_mode,
+          description_html: description || draft.description_html,
+          description_plain: draft.description_plain,
+          variant_dimensions: draft.variant_dimensions,
+          product_images: images
+        }
+      ],
+      { kind, showmoreMarkupPercent: markup }
+    );
+    setExportQueue(rest);
+    setExportMarkLeave(markLeave);
+    setCardExportKind(kind);
+    setExportPreflightReport(report);
   }
 
   async function removeImage(image: ProductImage) {
@@ -1052,42 +1159,25 @@ export function ResultCard({
     }
   }
 
-  function openMatrixifyPreflight() {
-    // Prefer on-screen title/price if user edited (export API still uses DB — honest warn via status)
-    const report = runExportPreflight(
-      [
-        {
-          id: draft.id,
-          title_zh: title || draft.title_zh,
-          taobao_title: draft.taobao_title,
-          original_title: draft.original_title,
-          status: draft.status,
-          twd_price: sellPrice ? Number(sellPrice) : draft.twd_price,
-          twd_cost: draft.twd_cost,
-          compare_at_price: compareAtPrice
-            ? Number(compareAtPrice)
-            : draft.compare_at_price,
-          price_mode: draft.price_mode,
-          description_html: description || draft.description_html,
-          description_plain: draft.description_plain,
-          variant_dimensions: draft.variant_dimensions,
-          product_images: images
-        }
-      ],
-      { kind: "matrixify" }
-    );
-    setExportPreflightReport(report);
-  }
-
-  async function confirmMatrixifyExport() {
+  async function confirmCardExport() {
     if (!exportPreflightReport?.canExport) return;
+    const kind = cardExportKind;
     setExportBusy(true);
     setMessage("產生 CSV 中...");
     try {
-      const response = await fetch("/api/exports/matrixify", {
+      const endpoint =
+        kind === "showmore" ? "/api/exports/showmore" : "/api/exports/matrixify";
+      const body: Record<string, unknown> = {
+        draftIds: [draft.id],
+        markLeaveQueue: exportMarkLeave
+      };
+      if (kind === "showmore") {
+        body.showmoreMarkupPercent = getStoredPricingSettings().showmoreMarkupPercent;
+      }
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftIds: [draft.id] })
+        body: JSON.stringify(body)
       });
 
       if (!response.ok) {
@@ -1100,11 +1190,36 @@ export function ResultCard({
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `nestory-matrixify-${draft.id}.csv`;
+      anchor.download = `nestory-${kind}-${draft.id}.csv`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setMessage("CSV 備援檔已產生");
+
+      if (exportQueue.length) {
+        setExportPreflightReport(null);
+        openNextCardExport(exportQueue, exportMarkLeave);
+        return;
+      }
+
+      const sel = station3Selection ?? {
+        shopify: "none" as const,
+        matrixify: kind === "matrixify",
+        showmore: kind === "showmore"
+      };
+      const api = pendingApiResult;
+      setMessage(
+        formatStation3ResultMessage({
+          selection: sel,
+          apiSucceeded: sel.shopify === "none" ? null : api?.ok ?? null,
+          apiMessage: api?.message,
+          csvSucceeded: true,
+          csvNote: "CSV 已下載",
+          leftQueue: exportMarkLeave
+        })
+      );
       setExportPreflightReport(null);
+      setStation3Selection(null);
+      setPendingApiResult(null);
+      router.refresh();
     } catch {
       setMessage("CSV 下載連線失敗");
     } finally {
@@ -1290,12 +1405,30 @@ export function ResultCard({
             <>
               <button
                 className="mini-btn rc-quick-btn"
-                disabled={approveSummaryBusy || comboSaving}
-                onClick={openApproveAndPublishSummary}
-                title="核准並發布（站③完整功能；R3 將升級多選）"
+                disabled={approveSummaryBusy || comboSaving || station3Busy}
+                onClick={() => setStation3Open(true)}
+                title="發布／匯出（API 與 CSV 可多選）"
                 type="button"
               >
-                ✓ 發布
+                發布／匯出
+              </button>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={quickBusy}
+                onClick={() => void returnFromReady("copy_review")}
+                title="退回改文案"
+                type="button"
+              >
+                ↩ 改文案
+              </button>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={quickBusy}
+                onClick={() => void returnFromReady("image_review")}
+                title="退回改圖"
+                type="button"
+              >
+                ↩ 改圖
               </button>
             </>
           ) : null}
@@ -1918,20 +2051,25 @@ export function ResultCard({
                 ) : (
                   <>
                     <button
-                      className={publishMode === "active" ? "danger" : ""}
-                      disabled={approveSummaryBusy || comboSaving}
-                      onClick={openApproveAndPublishSummary}
+                      disabled={approveSummaryBusy || comboSaving || station3Busy}
+                      onClick={() => setStation3Open(true)}
                       type="button"
                     >
-                      ✓ 核准並發布
+                      發布／匯出
                     </button>
                     <button
-                      disabled={exportBusy}
-                      onClick={() => openMatrixifyPreflight()}
-                      title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
+                      disabled={quickBusy}
+                      onClick={() => void returnFromReady("copy_review")}
                       type="button"
                     >
-                      產生 CSV
+                      ↩ 退回改文案
+                    </button>
+                    <button
+                      disabled={quickBusy}
+                      onClick={() => void returnFromReady("image_review")}
+                      type="button"
+                    >
+                      ↩ 退回改圖
                     </button>
                   </>
                 )}
@@ -1941,38 +2079,25 @@ export function ResultCard({
         </div>
       ) : null}
 
-      {/* B11 D1-B: Shopify 不可逆入口才開摘要；純 ✓ 核准不掛 */}
-      {(() => {
-        const dirty = hasUncommittedCopy();
-        const summary = buildSingleApproveSummary({
-          fieldVersions: buildFieldVersionInputs(),
-          images: imageMarks,
-          warnings: draft.warnings,
-          hasDirtyCopy: dirty,
-        });
-        const mode = publishMode === "active" ? "active" : "draft";
-        return (
-          <ApproveSummaryModal
-            busy={approveSummaryBusy}
-            heading={modalHeading({})}
-            onCancel={() => {
-              if (!approveSummaryBusy) setApproveSummaryOpen(false);
-            }}
-            onConfirm={() => void confirmApproveAndPublishFromSummary()}
-            open={approveSummaryOpen}
-            primaryDanger={mode === "active"}
-            primaryLabel={primaryConfirmLabel({ publishMode: mode, hasDirtyCopy: dirty })}
-            rows={summary.rows}
-          />
-        );
-      })()}
+      <Station3PublishModal
+        busy={station3Busy}
+        draftCount={1}
+        onCancel={() => {
+          if (!station3Busy) setStation3Open(false);
+        }}
+        onConfirm={(sel) => void runStation3CardFlow(sel)}
+        open={station3Open}
+      />
 
       <ExportPreflightModal
         busy={exportBusy}
         onCancel={() => {
-          if (!exportBusy) setExportPreflightReport(null);
+          if (!exportBusy) {
+            setExportPreflightReport(null);
+            setExportQueue([]);
+          }
         }}
-        onConfirm={() => void confirmMatrixifyExport()}
+        onConfirm={() => void confirmCardExport()}
         open={Boolean(exportPreflightReport)}
         report={exportPreflightReport}
       />

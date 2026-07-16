@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
-import { ApproveSummaryModal } from "@/components/listing/ApproveSummaryModal";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
+import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
 import {
@@ -14,10 +14,10 @@ import {
   type PreflightDraftInput
 } from "@/lib/csv/exportPreflight";
 import {
-  buildBatchApproveSummary,
-  modalHeading,
-  primaryConfirmLabel,
-} from "@/lib/drafts/approveSummary";
+  formatStation3ResultMessage,
+  shouldLeaveQueue,
+  type Station3PublishSelection
+} from "@/lib/drafts/station3Publish";
 import {
   RESULT_SORT_OPTIONS,
   type ResultSortMode,
@@ -54,7 +54,15 @@ import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/doma
 
 export type VariantPriceRow = Pick<
   ProductVariantRow,
-  "id" | "draft_id" | "twd_price" | "compare_at_price" | "sort_order"
+  | "id"
+  | "draft_id"
+  | "twd_price"
+  | "compare_at_price"
+  | "sort_order"
+  | "option1_value"
+  | "option2_value"
+  | "option3_value"
+  | "sku"
 >;
 
 export function DraftResultsPanel({
@@ -76,20 +84,25 @@ export function DraftResultsPanel({
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
   const [sortMode, setSortMode] = useState<ResultSortMode>("newest");
   const [stage, setStage] = useState<StationFilterKey>("copy_review");
-  // B11 D1-B: summary only for batch Shopify paths (建草稿／上架), not pure 批次核准
-  const [batchPublishSummary, setBatchPublishSummary] = useState<null | {
-    mode: "draft" | "active";
-    draftIds: string[];
-  }>(null);
-  const [batchSummaryBusy, setBatchSummaryBusy] = useState(false);
-  // D9-open: export preflight before downloadCsv
+  // R3: station③ multi-select publish/export
+  const [station3Open, setStation3Open] = useState(false);
+  const [station3DraftIds, setStation3DraftIds] = useState<string[]>([]);
+  const [station3Selection, setStation3Selection] = useState<Station3PublishSelection | null>(null);
+  const [station3Busy, setStation3Busy] = useState(false);
+  // CSV preflight queue for multi-export (after selection confirmed)
+  const [exportQueue, setExportQueue] = useState<ExportKind[]>([]);
   const [exportPreflight, setExportPreflight] = useState<null | {
     kind: ExportKind;
     report: ExportPreflightReport;
     draftIds: string[];
     markupPercent?: number;
+    markLeaveQueue: boolean;
   }>(null);
   const [exportBusy, setExportBusy] = useState(false);
+  const [pendingApiResult, setPendingApiResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
   // B1: the input panel (left) drives the 生成 progress card via a window event;
   // this panel (right) renders it at the top of the results list, matching the
@@ -258,81 +271,18 @@ export function DraftResultsPanel({
     router.refresh();
   }
 
-  // B11 D1-B: open one aggregated summary (D4-A), never N modals. D2-A replaces window.confirm.
-  function openBatchApproveAndPublishSummary(mode: "draft" | "active") {
-    if (!selectedArray.length) return;
-    setBatchPublishSummary({ mode, draftIds: [...selectedArray] });
-  }
-
-  async function confirmBatchApproveAndPublish() {
-    if (!batchPublishSummary) return;
-    const { mode, draftIds } = batchPublishSummary;
-    setBatchSummaryBusy(true);
-    setBusy(true);
-    try {
-      setMessage("批次核准中...");
-      setLastArchiveIds(null);
-      const approveResponse = await fetch("/api/drafts/batch/approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftIds }),
-      });
-      if (!approveResponse.ok) {
-        const payload = await approveResponse.json().catch(() => ({}));
-        setMessage(payload.error ?? "批次核准失敗");
-        return;
-      }
-
-      setMessage(mode === "active" ? "批次上架中..." : "批次建立草稿中...");
-      const response = await fetch("/api/drafts/batch/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          draftIds,
-          publishMode: mode,
-          confirmActive: mode === "active",
-        }),
-      });
-      const payload = await response.json();
-      setMessage(
-        response.ok
-          ? payload.message ??
-              `成功 ${payload.succeeded} 筆／失敗 ${payload.failed} 筆${
-                payload.skipped ? `／略過 ${payload.skipped}` : ""
-              }`
-          : [payload.error, payload.hint].filter(Boolean).join(" — ") || "批次發布失敗"
-      );
-      setBatchPublishSummary(null);
-      setSelectedIds(new Set());
-      router.refresh();
-    } catch {
-      setMessage("批次核准／發布連線失敗");
-    } finally {
-      setBatchSummaryBusy(false);
-      setBusy(false);
+  function openStation3Modal(ids?: string[]) {
+    const draftIds = ids?.length ? ids : selectedArray;
+    if (!draftIds.length) {
+      setMessage("請先勾選商品再發布／匯出。");
+      return;
     }
+    setStation3DraftIds(draftIds);
+    setStation3Open(true);
   }
-
-  const batchSummaryView = useMemo(() => {
-    if (!batchPublishSummary) return null;
-    const items = batchPublishSummary.draftIds.map((id) => {
-      const draft = drafts.find((row) => row.id === id);
-      return {
-        draftId: id,
-        title: draft?.title_zh || draft?.taobao_title || "未命名草稿",
-        warnings: draft?.warnings ?? [],
-        images: imagesByDraft.get(id) ?? [],
-      };
-    });
-    return {
-      mode: batchPublishSummary.mode,
-      summary: buildBatchApproveSummary(items),
-      count: batchPublishSummary.draftIds.length,
-    };
-  }, [batchPublishSummary, drafts, imagesByDraft]);
 
   /**
-   * R2 station② 審核＝分流器：confirm AI 張數後走既有 send-images（Q3-B 全 keep 仍走鏈）。
+   * R3: station② 審核分流 — 全 keep → advance-ready；有 AI → send-images。
    */
   async function batchStationReview() {
     if (!selectedArray.length) {
@@ -340,8 +290,9 @@ export function DraftResultsPanel({
       return;
     }
     const selectedDrafts = drafts.filter((d) => selectedArray.includes(d.id));
+    const advanceIds: string[] = [];
+    const sendIds: string[] = [];
     let totalAi = 0;
-    let allKeepAll = true;
     for (const d of selectedDrafts) {
       const imgs = imagesByDraft.get(d.id) ?? [];
       const decision = decideStation2Review({ images: imgs });
@@ -349,39 +300,318 @@ export function DraftResultsPanel({
         setMessage(`「${d.title_zh || d.taobao_title || "未命名"}」：${decision.reason}`);
         return;
       }
-      if (decision.action === "send_images") {
+      if (decision.action === "advance_ready") {
+        advanceIds.push(d.id);
+      } else if (decision.action === "send_images") {
+        sendIds.push(d.id);
         totalAi += decision.aiCount;
-        if (!decision.allKeep) allKeepAll = false;
       }
     }
-    const estimate = formatAiEstimateMessage(totalAi, allKeepAll);
+    const estimate = formatAiEstimateMessage(
+      totalAi,
+      sendIds.length === 0 && advanceIds.length > 0
+    );
     if (!window.confirm(`批次審核 ${selectedArray.length} 件\n\n${estimate}\n\n確定送出？`)) {
       return;
     }
     setBusy(true);
     setLastArchiveIds(null);
-    setMessage("批次審核／送圖中…");
+    setMessage("批次審核中…");
+    const messages: string[] = [];
     try {
-      const response = await fetch("/api/drafts/batch/send-images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftIds: selectedArray })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const hint = typeof payload.hint === "string" ? `\n${payload.hint}` : "";
-        setMessage((payload.error ?? "批次審核失敗") + hint);
-        return;
+      if (advanceIds.length) {
+        const response = await fetch("/api/drafts/batch/advance-ready", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draftIds: advanceIds })
+        });
+        const payload = await response.json().catch(() => ({}));
+        messages.push(
+          typeof payload.message === "string"
+            ? payload.message
+            : `全保留 ${advanceIds.length} 件 → 完成待發布`
+        );
+        if (!response.ok && !payload.ok) {
+          setMessage(messages.join("\n"));
+          return;
+        }
       }
-      setMessage(typeof payload.message === "string" ? payload.message : "批次審核完成");
-      if (payload.ok && payload.batchId) {
-        scheduleRouterRefresh(() => router.refresh());
+      if (sendIds.length) {
+        const response = await fetch("/api/drafts/batch/send-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draftIds: sendIds })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const hint = typeof payload.hint === "string" ? `\n${payload.hint}` : "";
+          messages.push((payload.error ?? "送生圖工廠失敗") + hint);
+          setMessage(messages.join("\n"));
+          return;
+        }
+        messages.push(
+          typeof payload.message === "string" ? payload.message : `已送生圖 ${sendIds.length} 件`
+        );
       }
+      setMessage(messages.join("\n") || "批次審核完成");
+      setSelectedIds(new Set());
+      scheduleRouterRefresh(() => router.refresh());
     } catch {
       setMessage("批次審核連線失敗");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function downloadCsvBlob(
+    kind: ExportKind,
+    draftIds: string[],
+    markLeaveQueue: boolean,
+    markupPercent?: number
+  ): Promise<{ ok: boolean; error?: string }> {
+    const endpoint =
+      kind === "showmore" ? "/api/exports/showmore" : "/api/exports/matrixify";
+    const filenamePrefix =
+      kind === "showmore" ? "nestory-showmore" : "nestory-matrixify";
+    const extraBody =
+      kind === "showmore" ? { showmoreMarkupPercent: markupPercent } : {};
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds, markLeaveQueue, ...extraBody })
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        return { ok: false, error: payload.error ?? "CSV 產生失敗" };
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${filenamePrefix}-${Date.now()}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "CSV 下載連線失敗" };
+    }
+  }
+
+  function buildPreflightInputs(draftIds: string[]): PreflightDraftInput[] {
+    return draftIds.map((id) => {
+      const draft = drafts.find((row) => row.id === id);
+      const imgs = imagesByDraft.get(id) ?? [];
+      const vars = variantsByDraft.get(id) ?? [];
+      if (!draft) {
+        return {
+          id,
+          title_zh: null,
+          status: "missing",
+          pipeline_stage: null,
+          product_images: [],
+          product_variants: []
+        };
+      }
+      return {
+        id: draft.id,
+        title_zh: draft.title_zh,
+        taobao_title: draft.taobao_title,
+        original_title: draft.original_title,
+        status: draft.status,
+        pipeline_stage: draft.pipeline_stage,
+        sku: draft.sku,
+        twd_price: draft.twd_price,
+        twd_cost: draft.twd_cost,
+        compare_at_price: draft.compare_at_price,
+        price_mode: draft.price_mode,
+        description_html: draft.description_html,
+        description_plain: draft.description_plain,
+        variant_dimensions: draft.variant_dimensions,
+        product_images: imgs,
+        product_variants: vars.map((v) => ({
+          option1_value: v.option1_value ?? null,
+          option2_value: v.option2_value ?? null,
+          option3_value: v.option3_value ?? null,
+          twd_price: v.twd_price,
+          sku: v.sku ?? null,
+          sort_order: v.sort_order
+        }))
+      };
+    });
+  }
+
+  function openNextExportPreflight(
+    kinds: ExportKind[],
+    draftIds: string[],
+    markLeaveQueue: boolean
+  ) {
+    if (!kinds.length) return;
+    const [kind, ...rest] = kinds;
+    const markup = getStoredPricingSettings().showmoreMarkupPercent;
+    const report = runExportPreflight(buildPreflightInputs(draftIds), {
+      kind,
+      showmoreMarkupPercent: markup
+    });
+    setExportQueue(rest);
+    setExportPreflight({
+      kind,
+      report,
+      draftIds,
+      markupPercent: kind === "showmore" ? markup : undefined,
+      markLeaveQueue
+    });
+  }
+
+  async function runStation3Flow(selection: Station3PublishSelection) {
+    const draftIds = station3DraftIds;
+    if (!draftIds.length) return;
+    setStation3Open(false);
+    setStation3Selection(selection);
+    setStation3Busy(true);
+    setBusy(true);
+    setLastArchiveIds(null);
+
+    let apiSucceeded: boolean | null = null;
+    let apiMessage = "";
+
+    try {
+      if (selection.shopify !== "none") {
+        setMessage(
+          selection.shopify === "active" ? "正式上架中（含轉檔／圖床）…" : "建立草稿中（含轉檔／圖床）…"
+        );
+        const response = await fetch("/api/drafts/batch/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            draftIds,
+            publishMode: selection.shopify,
+            confirmActive: selection.shopify === "active"
+          })
+        });
+        const payload = await response.json().catch(() => ({}));
+        const allOk =
+          response.ok &&
+          (payload.failed == null || payload.failed === 0) &&
+          (payload.succeeded == null || payload.succeeded > 0);
+        // partial: treat as not full success for leave-queue
+        apiSucceeded = Boolean(allOk);
+        apiMessage = response.ok
+          ? payload.message ??
+            `成功 ${payload.succeeded ?? 0}／失敗 ${payload.failed ?? 0}`
+          : [payload.error, payload.hint].filter(Boolean).join(" — ") || "發布失敗";
+        setPendingApiResult({ ok: apiSucceeded, message: apiMessage });
+      }
+
+      const csvKinds: ExportKind[] = [];
+      if (selection.matrixify) csvKinds.push("matrixify");
+      if (selection.showmore) csvKinds.push("showmore");
+
+      if (csvKinds.length === 0) {
+        const left = shouldLeaveQueue({
+          selection,
+          apiSucceeded,
+          csvSucceeded: null
+        });
+        setMessage(
+          formatStation3ResultMessage({
+            selection,
+            apiSucceeded,
+            apiMessage,
+            csvSucceeded: null,
+            leftQueue: left
+          })
+        );
+        setSelectedIds(new Set());
+        setStation3Selection(null);
+        setPendingApiResult(null);
+        scheduleRouterRefresh(() => router.refresh());
+        return;
+      }
+
+      // Q3: mark leave only when API ok or CSV-only
+      const markLeaveQueue = shouldLeaveQueue({
+        selection,
+        apiSucceeded: selection.shopify === "none" ? null : apiSucceeded,
+        csvSucceeded: true
+      });
+      openNextExportPreflight(csvKinds, draftIds, markLeaveQueue);
+    } catch {
+      setMessage("發布／匯出連線失敗");
+      setStation3Selection(null);
+      setPendingApiResult(null);
+    } finally {
+      setStation3Busy(false);
+      setBusy(false);
+    }
+  }
+
+  async function confirmExportDownload() {
+    if (!exportPreflight || !exportPreflight.report.canExport) return;
+    const { kind, draftIds, markupPercent, markLeaveQueue } = exportPreflight;
+    const selection = station3Selection;
+    setExportBusy(true);
+    setBusy(true);
+    setMessage("產生 CSV 中...");
+    const result = await downloadCsvBlob(kind, draftIds, markLeaveQueue, markupPercent);
+    if (!result.ok) {
+      setMessage(result.error ?? "CSV 失敗");
+      setExportBusy(false);
+      setBusy(false);
+      return;
+    }
+
+    const rest = exportQueue;
+    if (rest.length) {
+      setExportPreflight(null);
+      setExportBusy(false);
+      setBusy(false);
+      openNextExportPreflight(rest, draftIds, markLeaveQueue);
+      return;
+    }
+
+    // All CSV done
+    const api = pendingApiResult;
+    const sel = selection ?? {
+      shopify: "none" as const,
+      matrixify: kind === "matrixify",
+      showmore: kind === "showmore"
+    };
+    const left = shouldLeaveQueue({
+      selection: sel,
+      apiSucceeded: api ? api.ok : sel.shopify === "none" ? null : null,
+      csvSucceeded: true
+    });
+    // Fix: when selection had API, use api result
+    const leftFinal = selection
+      ? shouldLeaveQueue({
+          selection,
+          apiSucceeded: selection.shopify === "none" ? null : api?.ok ?? false,
+          csvSucceeded: true
+        })
+      : left;
+
+    setMessage(
+      formatStation3ResultMessage({
+        selection: sel,
+        apiSucceeded: selection?.shopify === "none" ? null : api?.ok ?? null,
+        apiMessage: api?.message,
+        csvSucceeded: true,
+        csvNote:
+          kind === "showmore" || selection?.showmore
+            ? "CSV 已下載（多款式已展開；庫存／重量為預設）"
+            : "CSV 已下載",
+        leftQueue: leftFinal
+      })
+    );
+    setExportPreflight(null);
+    setExportQueue([]);
+    setStation3Selection(null);
+    setPendingApiResult(null);
+    setSelectedIds(new Set());
+    setExportBusy(false);
+    setBusy(false);
+    scheduleRouterRefresh(() => router.refresh());
   }
 
   // B12: batch archive / unarchive — busy statuses skipped per-item (like 送圖).
@@ -479,99 +709,6 @@ export function DraftResultsPanel({
     } catch {
       setMessage("解除封存連線失敗");
     } finally {
-      setBusy(false);
-    }
-  }
-
-  function openExportPreflight(kind: ExportKind) {
-    if (!selectedArray.length) {
-      setMessage("請先勾選商品再匯出。");
-      return;
-    }
-    const markup = getStoredPricingSettings().showmoreMarkupPercent;
-    const inputs: PreflightDraftInput[] = selectedArray.map((id) => {
-      const draft = drafts.find((row) => row.id === id);
-      const imgs = imagesByDraft.get(id) ?? [];
-      if (!draft) {
-        return {
-          id,
-          title_zh: null,
-          status: "missing",
-          product_images: []
-        };
-      }
-      return {
-        id: draft.id,
-        title_zh: draft.title_zh,
-        taobao_title: draft.taobao_title,
-        original_title: draft.original_title,
-        status: draft.status,
-        twd_price: draft.twd_price,
-        twd_cost: draft.twd_cost,
-        compare_at_price: draft.compare_at_price,
-        price_mode: draft.price_mode,
-        description_html: draft.description_html,
-        description_plain: draft.description_plain,
-        variant_dimensions: draft.variant_dimensions,
-        product_images: imgs
-      };
-    });
-    const report = runExportPreflight(inputs, {
-      kind,
-      showmoreMarkupPercent: markup
-    });
-    setExportPreflight({
-      kind,
-      report,
-      draftIds: selectedArray,
-      markupPercent: kind === "showmore" ? markup : undefined
-    });
-  }
-
-  async function confirmExportDownload() {
-    if (!exportPreflight || !exportPreflight.report.canExport) return;
-    const { kind, draftIds, markupPercent } = exportPreflight;
-    const endpoint =
-      kind === "showmore" ? "/api/exports/showmore" : "/api/exports/matrixify";
-    const filenamePrefix =
-      kind === "showmore" ? "nestory-showmore" : "nestory-matrixify";
-    const note =
-      kind === "showmore"
-        ? `已套 Showmore +${markupPercent ?? 5}% 並美化；庫存 999／重量 0.1kg 為預設；多款式未展開；上傳前請確認。`
-        : undefined;
-    const extraBody =
-      kind === "showmore" ? { showmoreMarkupPercent: markupPercent } : undefined;
-
-    setExportBusy(true);
-    setBusy(true);
-    setLastArchiveIds(null);
-    setMessage("產生 CSV 中...");
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftIds, ...extraBody })
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        setMessage(payload.error ?? "CSV 產生失敗");
-        return;
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${filenamePrefix}-${Date.now()}.csv`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      setMessage(note ? `CSV 已下載。${note}` : "CSV 已下載");
-      setExportPreflight(null);
-    } catch {
-      setMessage("CSV 下載連線失敗");
-    } finally {
-      setExportBusy(false);
       setBusy(false);
     }
   }
@@ -682,47 +819,15 @@ export function DraftResultsPanel({
                   </>
                 ) : null}
                 {isReadyStation ? (
-                  <>
-                    <button
-                      className="btn-mini"
-                      disabled={busy || !selectedArray.length}
-                      onClick={() => openBatchApproveAndPublishSummary("draft")}
-                      title="在 Shopify 建立草稿商品（R3 將升級多選匯出）"
-                      type="button"
-                    >
-                      核准並建草稿
-                    </button>
-                    <button
-                      className="btn-mini danger"
-                      disabled={busy || !selectedArray.length}
-                      onClick={() => openBatchApproveAndPublishSummary("active")}
-                      title="正式上架 Shopify（R3 將升級多選匯出）"
-                      type="button"
-                    >
-                      核准並上架
-                    </button>
-                    <button
-                      className="btn-mini"
-                      disabled={busy || !selectedArray.length}
-                      onClick={() => openExportPreflight("matrixify")}
-                      title="Matrixify CSV（R3 將升級多選匯出）"
-                      type="button"
-                    >
-                      ⬇ Matrixify
-                    </button>
-                    <button
-                      className="btn-mini"
-                      disabled={busy || !selectedArray.length}
-                      onClick={() => openExportPreflight("showmore")}
-                      title="Showmore CSV（R3 將升級多選匯出）"
-                      type="button"
-                    >
-                      ⬇ Showmore
-                    </button>
-                    <span className="muted" style={{ fontSize: 11, alignSelf: "center" }}>
-                      R3 將升級為多選匯出
-                    </span>
-                  </>
+                  <button
+                    className="btn-mini"
+                    disabled={busy || station3Busy || !selectedArray.length}
+                    onClick={() => openStation3Modal()}
+                    title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
+                    type="button"
+                  >
+                    發布／匯出
+                  </button>
                 ) : null}
               </div>
               <label className="results-sort-label">
@@ -790,28 +895,23 @@ export function DraftResultsPanel({
         )}
       </div>
 
-      {batchSummaryView ? (
-        <ApproveSummaryModal
-          busy={batchSummaryBusy}
-          heading={modalHeading({ batchCount: batchSummaryView.count })}
-          onCancel={() => {
-            if (!batchSummaryBusy) setBatchPublishSummary(null);
-          }}
-          onConfirm={() => void confirmBatchApproveAndPublish()}
-          open={Boolean(batchPublishSummary)}
-          primaryDanger={batchSummaryView.mode === "active"}
-          primaryLabel={primaryConfirmLabel({
-            publishMode: batchSummaryView.mode,
-            hasDirtyCopy: false,
-          })}
-          rows={batchSummaryView.summary.rows}
-        />
-      ) : null}
+      <Station3PublishModal
+        busy={station3Busy}
+        draftCount={station3DraftIds.length}
+        onCancel={() => {
+          if (!station3Busy) setStation3Open(false);
+        }}
+        onConfirm={(sel) => void runStation3Flow(sel)}
+        open={station3Open}
+      />
 
       <ExportPreflightModal
         busy={exportBusy}
         onCancel={() => {
-          if (!exportBusy) setExportPreflight(null);
+          if (!exportBusy) {
+            setExportPreflight(null);
+            setExportQueue([]);
+          }
         }}
         onConfirm={() => void confirmExportDownload()}
         open={Boolean(exportPreflight)}

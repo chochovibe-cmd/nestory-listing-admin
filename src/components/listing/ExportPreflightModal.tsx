@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
+  EXPORT_TABLE_COLUMNS,
   exportPreflightHeading,
   exportPrimaryLabel,
   formatPriceCell,
@@ -9,27 +10,32 @@ import {
 } from "@/lib/csv/exportPreflight";
 
 /**
- * D9-open: export preflight + CSV price preview.
+ * D9-open + R3 §10: export preflight + dual-mode preview (list / table).
  * Shell = B11 ApproveSummaryModal (modal-overlay / modal-box / <960 bottom sheet).
  */
 export function ExportPreflightModal({
   open,
   report,
   busy = false,
+  confirmLabel,
   onCancel,
   onConfirm
 }: {
   open: boolean;
   report: ExportPreflightReport | null;
   busy?: boolean;
+  /** Override primary button (e.g. multi-export flow). */
+  confirmLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   const titleId = useId();
   const primaryRef = useRef<HTMLButtonElement>(null);
+  const [viewMode, setViewMode] = useState<"list" | "table">("list");
 
   useEffect(() => {
     if (!open) return;
+    setViewMode("list");
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const t = window.setTimeout(() => primaryRef.current?.focus(), 30);
@@ -54,7 +60,7 @@ export function ExportPreflightModal({
   if (!open || !report) return null;
 
   const heading = exportPreflightHeading(report.kind);
-  const primaryLabel = exportPrimaryLabel(report);
+  const primaryLabel = confirmLabel ?? exportPrimaryLabel(report);
   const canExport = report.canExport && !busy;
 
   return (
@@ -67,7 +73,7 @@ export function ExportPreflightModal({
       }}
       role="dialog"
     >
-      <div className="modal-box approve-summary-modal export-preflight-modal" ref={undefined}>
+      <div className="modal-box approve-summary-modal export-preflight-modal">
         <div className="modal-hdr">
           <span id={titleId}>{heading}</span>
           <button
@@ -94,7 +100,28 @@ export function ExportPreflightModal({
             )}
           </p>
 
-          {report.items.length > 0 ? (
+          <div className="export-pf-mode-toggle" role="tablist" aria-label="預覽模式">
+            <button
+              aria-selected={viewMode === "list"}
+              className={`btn-mini${viewMode === "list" ? " sel" : ""}`}
+              onClick={() => setViewMode("list")}
+              role="tab"
+              type="button"
+            >
+              條列摘要
+            </button>
+            <button
+              aria-selected={viewMode === "table"}
+              className={`btn-mini${viewMode === "table" ? " sel" : ""}`}
+              onClick={() => setViewMode("table")}
+              role="tab"
+              type="button"
+            >
+              表格模式
+            </button>
+          </div>
+
+          {viewMode === "list" && report.items.length > 0 ? (
             <ul className="export-pf-items" aria-label="售價摘要">
               {report.items.map((item) => (
                 <li
@@ -110,6 +137,10 @@ export function ExportPreflightModal({
                         <span className="muted"> / 原 {formatPriceCell(item.compareAtDisplay)}</span>
                       ) : null}
                     </span>
+                    <span
+                      aria-label={item.hasError ? "紅燈" : item.hasWarn ? "黃燈" : "綠燈"}
+                      className={`export-pf-lamp ${item.hasError ? "is-err" : item.hasWarn ? "is-warn" : "is-ok"}`}
+                    />
                   </div>
                   {item.issues.length > 0 ? (
                     <ul className="export-pf-item-issues">
@@ -132,6 +163,40 @@ export function ExportPreflightModal({
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {viewMode === "table" && report.items.length > 0 ? (
+            <div className="export-pf-table-wrap">
+              <table className="export-pf-table">
+                <thead>
+                  <tr>
+                    {EXPORT_TABLE_COLUMNS.map((col) => (
+                      <th key={col.key}>{col.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.items.map((item) => (
+                    <tr
+                      className={item.hasError ? "has-error" : item.hasWarn ? "has-warn" : ""}
+                      key={item.draftId}
+                    >
+                      <td title={item.titleFull}>{item.titleShort}</td>
+                      <td>{formatPriceCell(item.sellPriceDisplay)}</td>
+                      <td>{formatPriceCell(item.compareAtDisplay)}</td>
+                      <td className="export-pf-sku">{item.skuDisplay || "—"}</td>
+                      <td>{item.variantCount > 0 ? item.variantCount : "1"}</td>
+                      <td>{item.imageCount}</td>
+                      <td>
+                        <span
+                          className={`export-pf-lamp ${item.hasError ? "is-err" : item.hasWarn ? "is-warn" : "is-ok"}`}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : null}
 
           {report.errorCount > 0 || report.warnCount > 0 || report.infoCount > 0 ? (

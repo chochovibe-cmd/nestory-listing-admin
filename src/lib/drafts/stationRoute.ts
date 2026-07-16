@@ -1,8 +1,8 @@
 /**
- * R2: station② 「審核」分流器 (回饋 54) + AI mark estimates.
+ * R2/R3: station② 「審核」分流器 (回饋 54) + AI mark estimates.
  * Pure helpers — no DB.
  *
- * Q3-B: all-keep still runs batch→sharp→finalize (not skip pipeline).
+ * R3: all-keep → advance_ready only（sharp/finalize 改站③發布時）。
  * AI cost count = to_trad + de_text + regenerate only.
  */
 
@@ -33,10 +33,17 @@ export type ImageMarkSummary = {
 
 export type StationRouteDecision =
   | {
+      /** R3: all keep → station③ without image pipeline. */
+      action: "advance_ready";
+      allKeep: true;
+      aiCount: 0;
+      marks: ImageMarkSummary;
+      nextStage: "ready";
+    }
+  | {
       action: "send_images";
-      /** Always true for R2: even all-keep uses batch chain (Q3-B). */
       needsBatch: true;
-      allKeep: boolean;
+      allKeep: false;
       aiCount: number;
       marks: ImageMarkSummary;
       nextStageIfNoAiQueue: PipelineStage;
@@ -91,8 +98,7 @@ export function formatMarkSummaryLine(marks: ImageMarkSummary): string {
 }
 
 /**
- * Confirm copy before station② 審核 sends images.
- * allKeep still needs batch (Q3-B); aiCount for cost estimate UI.
+ * Station② 審核分流：全保留 → ready；有 AI 標記 → 生圖工廠。
  */
 export function decideStation2Review(input: {
   images: Array<Pick<ProductImage, "image_type" | "process_intent">>;
@@ -115,14 +121,21 @@ export function decideStation2Review(input: {
     };
   }
   const allKeep = marks.aiCount === 0 && marks.unmarked === 0;
+  if (allKeep) {
+    return {
+      action: "advance_ready",
+      allKeep: true,
+      aiCount: 0,
+      marks,
+      nextStage: "ready",
+    };
+  }
   return {
     action: "send_images",
     needsBatch: true,
-    allKeep,
+    allKeep: false,
     aiCount: marks.aiCount,
     marks,
-    /** After all-keep chain completes, review-confirm / chain should land ready;
-     *  R2 UI treats post-send as image_review until chain finishes → ready. */
     nextStageIfNoAiQueue: "ready",
   };
 }
@@ -136,7 +149,7 @@ export function isAiProcessIntent(
 /** Estimate line for confirm modal. */
 export function formatAiEstimateMessage(aiCount: number, allKeep: boolean): string {
   if (allKeep || aiCount <= 0) {
-    return "全部保留原圖：不呼叫 AI 生圖，仍會走轉檔與圖床（不額外 AI 費用）。";
+    return "全部保留原圖：直接進入「完成待發布」（轉檔與圖床改到發布時處理，不額外 AI 費用）。";
   }
   return `預估 AI 處理 ${aiCount} 張（簡轉繁／去字／重生）。確認後送生圖工廠佇列。`;
 }

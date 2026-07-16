@@ -6,7 +6,9 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/s
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data: profile } = await supabase
@@ -21,13 +23,14 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const ids = Array.isArray(body.draftIds) ? body.draftIds : null;
+  const markLeaveQueue = body.markLeaveQueue !== false;
 
   const serviceSupabase = createServiceSupabaseClient();
 
   let query = serviceSupabase
     .from("product_drafts")
     .select("*, product_images(*)")
-    .in("status", ["approved", "api_failed", "csv_ready"]);
+    .or("pipeline_stage.eq.ready,status.in.(approved,api_failed,csv_ready)");
 
   if (ids?.length) {
     query = query.in("id", ids);
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest) {
   const csv = buildMatrixifyCsv(data ?? []);
   const exportedIds = (data ?? []).map((draft) => draft.id);
 
-  if (exportedIds.length) {
+  if (exportedIds.length && markLeaveQueue) {
     await serviceSupabase
       .from("product_drafts")
       .update({
@@ -68,7 +71,8 @@ export async function POST(request: NextRequest) {
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="nestory-matrixify-${Date.now()}.csv"`
+      "Content-Disposition": `attachment; filename="nestory-matrixify-${Date.now()}.csv"`,
+      "X-Nestory-Left-Queue": markLeaveQueue ? "1" : "0"
     }
   });
 }

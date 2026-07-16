@@ -1,5 +1,6 @@
 import { notifyMake } from "@/lib/notifications/make";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
+import { prepareImagesForPublish } from "@/lib/images/prepareImagesForPublish";
 import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/payload";
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
@@ -58,9 +59,34 @@ export async function publishDraft(
     return { ok: false, status: 404, error: error?.message ?? "Draft not found" };
   }
 
-  if (!["approved", "ready_for_review", "api_failed"].includes(draft.status)) {
+  // R3: station③ ready (status usually approved) + legacy paths.
+  const publishableStatuses = ["approved", "ready_for_review", "api_failed", "publishing"];
+  const allowed =
+    publishableStatuses.includes(draft.status) || draft.pipeline_stage === "ready";
+  if (!allowed) {
     return { ok: false, status: 409, error: `Draft status ${draft.status} cannot be published` };
   }
+
+  // R3: sharp → finalize at publish time (no longer at station② all-keep).
+  const prep = await prepareImagesForPublish({ serviceSupabase, draftId: id });
+  if (prep.warnings.length) {
+    const merged = [
+      ...(Array.isArray(draft.warnings) ? draft.warnings : []),
+      ...prep.warnings.map((w) => `發布前圖處理：${w}`)
+    ].slice(-30);
+    await serviceSupabase
+      .from("product_drafts")
+      .update({ warnings: merged })
+      .eq("id", id);
+  }
+
+  // Re-load images after prepare so payload uses CDN URLs when available.
+  const { data: draftFresh } = await serviceSupabase
+    .from("product_drafts")
+    .select("*, product_images(*)")
+    .eq("id", id)
+    .single();
+  const draftForPayload = draftFresh ?? draft;
 
   // B7: load product_variants (publish previously ignored this table).
   const { data: variantRows } = await serviceSupabase
@@ -83,7 +109,7 @@ export async function publishDraft(
 
   const payload = buildShopifyProductPayload(
     {
-      ...draft,
+      ...draftForPayload,
       product_variants: (variantRows ?? []) as ProductVariantRow[]
     },
     publishMode,

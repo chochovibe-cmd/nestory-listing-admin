@@ -83,7 +83,22 @@ export function generateSku(input: GenerateSkuInput): GenerateSkuResult {
     typeCode === FALLBACK_ABBREVIATION || !ipAlias || (Boolean(input.characterName) && !characterAlias);
 
   return {
-    sku: `CHO-${typeCode}-${ipCode}-${characterCode}-001`,
+    sku: collapseSkuHyphens(`CHO-${typeCode}-${ipCode}-${characterCode}-001`),
     usedFallbackAbbreviation,
   };
+}
+
+/**
+ * R3 / 回饋 55：收斂空段造成的雙連字號（CHO-KSH-SRO--001 → CHO-KSH-SRO-001）。
+ * 空字串段丟掉後再以 `-` 接合；頭尾 `-` 去掉。
+ */
+export function collapseSkuHyphens(sku: string | null | undefined): string {
+  if (sku == null) return "";
+  const trimmed = String(sku).trim();
+  if (!trimmed) return "";
+  return trimmed
+    .split("-")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .join("-");
 }

@@ -1565,6 +1565,95 @@ textarea {
   font-size: 12.5px;
 }
 
+/* R3 dual-mode preview + station③ multi-select */
+.export-pf-mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+  flex-wrap: wrap;
+}
+.export-pf-lamp {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+}
+.export-pf-lamp.is-ok {
+  background: color-mix(in srgb, var(--success) 55%, transparent);
+  border-color: var(--chip-ok-border);
+}
+.export-pf-lamp.is-warn {
+  background: color-mix(in srgb, var(--warn) 55%, transparent);
+  border-color: var(--chip-run-border);
+}
+.export-pf-lamp.is-err {
+  background: color-mix(in srgb, var(--danger) 55%, transparent);
+  border-color: var(--chip-warn-border);
+}
+.export-pf-table-wrap {
+  overflow-x: auto;
+  max-height: 42vh;
+  margin: 0 0 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.export-pf-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.export-pf-table th,
+.export-pf-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+}
+.export-pf-table th {
+  font-weight: 700;
+  color: var(--text-dim);
+  position: sticky;
+  top: 0;
+  background: var(--panel, var(--bg));
+}
+.export-pf-table td.export-pf-sku {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.export-pf-table tr.has-error td {
+  color: var(--accent2);
+}
+.station3-fieldset {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-m, 8px);
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+.station3-legend {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 4px;
+  color: var(--text-dim);
+}
+.station3-fieldset .check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.station3-single-warn {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--accent2);
+}
+
 @media (max-width: 959px) {
   .modal-overlay {
     align-items: flex-end;

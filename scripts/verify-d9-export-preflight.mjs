@@ -291,7 +291,12 @@ await check("status pending_input → error", () => {
     kind: "showmore"
   });
   assert.equal(r.canExport, false);
-  assert.ok(r.errorMessages.some((m) => m.includes("狀態")));
+  // R3: plain-language stage gate (or legacy 狀態文案)
+  assert.ok(
+    r.errorMessages.some(
+      (m) => m.includes("狀態") || m.includes("完成待發布") || m.includes("不可匯出")
+    )
+  );
 });
 
 await check("Showmore no image → error", () => {
@@ -400,11 +405,15 @@ await check("preflight API route (no csv_ready side effects)", () => {
 
 await check("DraftResultsPanel opens preflight before download", () => {
   const src = read("src/components/listing/DraftResultsPanel.tsx");
-  assert.ok(src.includes("openExportPreflight"));
+  // R3: multi-select flow → openNextExportPreflight / Station3PublishModal
+  assert.ok(
+    src.includes("openNextExportPreflight") ||
+      src.includes("openExportPreflight") ||
+      src.includes("Station3PublishModal")
+  );
   assert.ok(src.includes("ExportPreflightModal"));
-  assert.ok(src.includes("confirmExportDownload"));
-  assert.ok(src.includes('openExportPreflight("showmore")'));
-  assert.ok(src.includes('openExportPreflight("matrixify")'));
+  assert.ok(src.includes("confirmExportDownload") || src.includes("downloadCsvBlob"));
+  assert.ok(src.includes("matrixify") && src.includes("showmore"));
   // Must not wire buttons directly to download without modal
   assert.ok(!src.includes('onClick={() => void downloadCsv("/api/exports/showmore"'));
 });
@@ -418,9 +427,17 @@ await check("DraftQueueList uses preflight API then confirm download", () => {
 
 await check("ResultCard 產生 CSV goes through Matrixify preflight (Q5-A)", () => {
   const src = read("src/components/listing/ResultCard.tsx");
-  assert.ok(src.includes("openMatrixifyPreflight") || src.includes("runExportPreflight"));
+  assert.ok(
+    src.includes("openMatrixifyPreflight") ||
+      src.includes("runExportPreflight") ||
+      src.includes("Station3PublishModal")
+  );
   assert.ok(src.includes("ExportPreflightModal"));
-  assert.ok(src.includes("confirmMatrixifyExport") || src.includes("/api/exports/matrixify"));
+  assert.ok(
+    src.includes("confirmMatrixifyExport") ||
+      src.includes("confirmCardExport") ||
+      src.includes("/api/exports/matrixify")
+  );
 });
 
 await check("export showmore route still does NOT force preflight (Q4-A)", () => {

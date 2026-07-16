@@ -9,6 +9,7 @@
  */
 
 import {
+  buildPublishRecordsBatchUrl,
   buildReviewUrl,
   loadNotifyConfig,
   shouldClaimAfterDispatch,
@@ -130,7 +131,10 @@ export async function tryNotifyPublishBatchIfComplete(
 
     const lists = buildPublishNotifyLineLists(lineSource);
     const counts = countItemStatuses(statuses);
-    const recordsUrl = buildReviewUrl(config.appBaseUrl, "/records");
+    // R4 §12: deep link to the batch card
+    const recordsUrl =
+      buildPublishRecordsBatchUrl(config.appBaseUrl, batchId) ??
+      buildReviewUrl(config.appBaseUrl, "/records");
 
     const payload = {
       batchId,

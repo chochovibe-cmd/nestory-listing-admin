@@ -27,9 +27,14 @@ export const TIME_BUDGET_SKIP_REASON = "時間不足略過（time_budget）";
 export const MIGRATION_027_HINT =
   "請先在 Supabase SQL Editor 執行 migration 027（publish_batches 發布批次表）。";
 
+/** R4 §9 / 回饋 44: processing badge frozen at publish time (Q3-A). */
+export type PublishProcessTag = "含生圖" | "原圖直發";
+
 export type PublishBatchSnapshotDraft = {
   draftId: string;
   title: string;
+  /** Absent on pre-R4 batches → UI shows no badge (honest). */
+  processTag?: PublishProcessTag;
 };
 
 export type PublishBatchItemResult = {
@@ -78,13 +83,61 @@ export function shouldStopForTimeBudget(
   return remainingBudgetMs(startedAtMs, nowMs, deadlineMs) < minRemainingMs;
 }
 
+/**
+ * R4: AI image intents → 含生圖; otherwise 原圖直發.
+ * Only pipeline image types count (main/spec/variant).
+ */
+export function processTagFromImageIntents(
+  images: Array<{ image_type?: string | null; process_intent?: string | null }>
+): PublishProcessTag {
+  const pipeline = images.filter((img) => {
+    const t = img.image_type;
+    return t === "main" || t === "spec" || t === "variant";
+  });
+  const ai = pipeline.some(
+    (img) =>
+      img.process_intent === "de_text" ||
+      img.process_intent === "regenerate" ||
+      img.process_intent === "to_trad"
+  );
+  return ai ? "含生圖" : "原圖直發";
+}
+
+/**
+ * Batch-level badge from item tags.
+ * If no item has processTag (old snapshot) → null (do not guess).
+ */
+export function batchProcessTagFromItems(
+  tags: Array<PublishProcessTag | null | undefined>
+): PublishProcessTag | null {
+  let sawAny = false;
+  let sawAi = false;
+  for (const t of tags) {
+    if (t !== "含生圖" && t !== "原圖直發") continue;
+    sawAny = true;
+    if (t === "含生圖") sawAi = true;
+  }
+  if (!sawAny) return null;
+  return sawAi ? "含生圖" : "原圖直發";
+}
+
 export function buildPublishSnapshot(
-  items: Array<{ draftId: string; title: string }>
+  items: Array<{
+    draftId: string;
+    title: string;
+    processTag?: PublishProcessTag | null;
+  }>
 ): PublishBatchSnapshotDraft[] {
-  return items.map((item) => ({
-    draftId: item.draftId,
-    title: (item.title || "未命名草稿").trim() || "未命名草稿"
-  }));
+  return items.map((item) => {
+    const row: PublishBatchSnapshotDraft = {
+      draftId: item.draftId,
+      title: (item.title || "未命名草稿").trim() || "未命名草稿"
+    };
+    if (item.processTag === "含生圖" || item.processTag === "原圖直發") {
+      row.processTag = item.processTag;
+    }
+    return row;
+  });
 }
 
 /**

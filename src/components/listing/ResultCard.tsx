@@ -1241,7 +1241,10 @@ export function ResultCard({
   }
 
   return (
-    <div className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}`}>
+    <div
+      className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}`}
+      id={`draft-card-${draft.id}`}
+    >
       <div className="rc-header" onClick={() => tryToggleExpand()}>
         {onToggle ? (
           <input

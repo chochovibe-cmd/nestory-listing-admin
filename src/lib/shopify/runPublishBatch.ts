@@ -15,6 +15,7 @@ import {
   buildPublishSnapshot,
   formatPublishBatchOperatorMessage,
   isMissingPublishBatchesError,
+  processTagFromImageIntents,
   resolvePublishItemGapMs,
   shouldStopForTimeBudget,
   sleepMs,
@@ -119,13 +120,39 @@ export async function runPublishBatch(
     return { ok: false, error: draftError.message, status: 500 };
   }
 
+  // R4 Q3-A: freeze processTag into snapshot at publish time (no migration).
+  const { data: imageRows } = await serviceSupabase
+    .from("product_images")
+    .select("draft_id, image_type, process_intent")
+    .in("draft_id", uniqueIds);
+
+  const imagesByDraft = new Map<
+    string,
+    Array<{ image_type?: string | null; process_intent?: string | null }>
+  >();
+  for (const img of imageRows ?? []) {
+    const draftId = img.draft_id as string;
+    const list = imagesByDraft.get(draftId) ?? [];
+    list.push({
+      image_type: img.image_type as string | null,
+      process_intent: img.process_intent as string | null
+    });
+    imagesByDraft.set(draftId, list);
+  }
+
   const draftById = new Map((drafts ?? []).map((d) => [d.id as string, d]));
-  const ordered: Array<{ draftId: string; title: string }> = [];
+  const ordered: Array<{
+    draftId: string;
+    title: string;
+    processTag: ReturnType<typeof processTagFromImageIntents>;
+  }> = [];
   for (const id of uniqueIds) {
     const row = draftById.get(id) ?? null;
+    const imgs = imagesByDraft.get(id) ?? [];
     ordered.push({
       draftId: id,
-      title: row ? draftTitle(row) : "找不到草稿"
+      title: row ? draftTitle(row) : "找不到草稿",
+      processTag: processTagFromImageIntents(imgs)
     });
   }
 

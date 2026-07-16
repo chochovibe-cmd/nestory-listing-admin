@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { HeaderControls } from "@/components/HeaderControls";
 import { MobileTabbar } from "@/components/MobileTabbar";
@@ -62,7 +63,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <AppSidebar />
             <div className="shell-main">{children}</div>
           </div>
-          <MobileTabbar />
+          <Suspense fallback={null}>
+            <MobileTabbar />
+          </Suspense>
         </div>
         <script dangerouslySetInnerHTML={{ __html: navInitScript }} />
       </body>

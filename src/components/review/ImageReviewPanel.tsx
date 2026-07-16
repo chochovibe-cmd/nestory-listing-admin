@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ImageCompareSlider } from "@/components/review/ImageCompareSlider";
 import { isAdmin } from "@/lib/auth/roles";
@@ -38,6 +39,8 @@ type QueueCard = {
  * Q3-A kinds · Q4-A viewed hard-block · Q5-A canOperate · Q6-A admin scope.
  */
 export function ImageReviewPanel() {
+  const searchParams = useSearchParams();
+  const section = searchParams.get("section");
   const [role, setRole] = useState<UserRole | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [roleReady, setRoleReady] = useState(false);
@@ -175,6 +178,24 @@ export function ImageReviewPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // R4 §12: /review?section=pending → scroll to 生成完成待審
+  useEffect(() => {
+    if (loading || section !== "pending") return;
+    const firstPending = cards.find((c) => c.kind === "pending_review");
+    if (!firstPending) {
+      document
+        .getElementById("ir-section-pending")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    setOpenIds((prev) => new Set(prev).add(firstPending.draft.id));
+    window.setTimeout(() => {
+      document
+        .getElementById(`ir-card-${firstPending.draft.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }, [loading, section, cards]);
 
   const banner = useMemo(() => countBanner(cards), [cards]);
   const pendingIds = useMemo(
@@ -351,7 +372,7 @@ export function ImageReviewPanel() {
             </div>
           ) : null}
 
-          <div className="ir-list">
+          <div className="ir-list" id="ir-section-pending">
             {cards.map((card) => {
               const { draft, kind, images } = card;
               const open = openIds.has(draft.id);
@@ -363,7 +384,12 @@ export function ImageReviewPanel() {
               const isBusy = busyId === draft.id;
 
               return (
-                <article key={draft.id} className="ir-card">
+                <article
+                  key={draft.id}
+                  className="ir-card"
+                  id={`ir-card-${draft.id}`}
+                  data-kind={kind}
+                >
                   <button
                     type="button"
                     className={`ir-head${viewed.has(draft.id) ? " ir-head--viewed" : ""}`}

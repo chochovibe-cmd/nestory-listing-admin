@@ -186,9 +186,10 @@ export function buildTodoCards(counts: TodoBucketCounts): TodoCardDef[] {
       sub: failedSub,
       schipClass: "schip schip--error",
       schipLabel: "失敗",
-      href: "/drafts",
+      // R4: /drafts queue offline → workbench results or records failed tab
+      href: "/drafts/new?pane=results",
       stage: "failed",
-      stageStorageKey: STAGE_FILTER_STORAGE_KEY_QUEUE
+      stageStorageKey: STAGE_FILTER_STORAGE_KEY_RESULTS
     },
     {
       key: "ready_to_publish",
@@ -198,9 +199,9 @@ export function buildTodoCards(counts: TodoBucketCounts): TodoCardDef[] {
       sub: null,
       schipClass: "schip schip--ok",
       schipLabel: "已核准・待發布",
-      href: "/drafts",
+      href: "/drafts/new?pane=results",
       stage: "approved",
-      stageStorageKey: STAGE_FILTER_STORAGE_KEY_QUEUE
+      stageStorageKey: STAGE_FILTER_STORAGE_KEY_RESULTS
     }
   ];
 }

@@ -1,12 +1,14 @@
 /**
- * D7-open / C5 skeleton: pure helpers for 發布紀錄 page (no DB secrets).
+ * D7-open / C5 skeleton + R4 §9 four-tab 發布紀錄 (no DB secrets).
  */
 
 import {
   MIGRATION_027_HINT,
+  batchProcessTagFromItems,
   isMissingPublishBatchesError,
   publishBatchTitle,
-  shortBatchId
+  shortBatchId,
+  type PublishProcessTag
 } from "@/lib/drafts/publishBatch";
 import type {
   PublishBatch,
@@ -18,7 +20,36 @@ import type {
 
 export const RECORDS_FETCH_LIMIT = 40;
 
+/** R4 §9 four tabs */
+export type PublishRecordsTab =
+  | "batches"
+  | "failed"
+  | "shopify_drafts"
+  | "published";
+
+export const PUBLISH_RECORDS_TABS: {
+  key: PublishRecordsTab;
+  label: string;
+}[] = [
+  { key: "batches", label: "批次紀錄" },
+  { key: "failed", label: "失敗重試" },
+  { key: "shopify_drafts", label: "Shopify 草稿" },
+  { key: "published", label: "已發布／封存" }
+];
+
+/** @deprecated R4 uses PublishRecordsTab; kept for verify-d7 mirrors */
 export type PublishRecordsFilter = "all" | "has_failed";
+
+/** Light archive list (tab 已發布／封存) */
+export const RECORDS_PUBLISHED_LIMIT = 30;
+
+export const RECORDS_PUBLISHED_STATUSES = [
+  "active_published",
+  "csv_ready",
+  "archived"
+] as const;
+
+export const RECORDS_SHOPIFY_DRAFT_STATUS = "draft_created";
 
 export type PublishBatchListRow = Pick<
   PublishBatch,
@@ -72,6 +103,30 @@ export function filterPublishBatches(
     );
   }
   return rows;
+}
+
+/** R4: batches tab shows all; failed tab only has_failed. */
+export function filterBatchesForTab(
+  rows: PublishBatchListRow[],
+  tab: PublishRecordsTab
+): PublishBatchListRow[] {
+  if (tab === "failed") return filterPublishBatches(rows, "has_failed");
+  if (tab === "batches") return rows;
+  return [];
+}
+
+export function parseRecordsTab(
+  raw: string | null | undefined
+): PublishRecordsTab {
+  if (
+    raw === "batches" ||
+    raw === "failed" ||
+    raw === "shopify_drafts" ||
+    raw === "published"
+  ) {
+    return raw;
+  }
+  return "batches";
 }
 
 export function batchCardTitle(row: Pick<PublishBatchListRow, "publish_mode" | "kind">): string {
@@ -171,6 +226,119 @@ export function snapshotTitleMap(snapshotJson: unknown): Map<string, string> {
   }
   return map;
 }
+
+/** R4 Q3-A: only explicit processTag; never invent for old snapshots. */
+export function snapshotProcessTagMap(
+  snapshotJson: unknown
+): Map<string, PublishProcessTag> {
+  const map = new Map<string, PublishProcessTag>();
+  if (!Array.isArray(snapshotJson)) return map;
+  for (const row of snapshotJson) {
+    if (!row || typeof row !== "object") continue;
+    const o = row as { draftId?: unknown; processTag?: unknown };
+    if (typeof o.draftId !== "string") continue;
+    if (o.processTag === "含生圖" || o.processTag === "原圖直發") {
+      map.set(o.draftId, o.processTag);
+    }
+  }
+  return map;
+}
+
+/** Batch card badge; null when snapshot has no processTag (pre-R4). */
+export function batchProcessTagLabel(
+  snapshotJson: unknown
+): PublishProcessTag | null {
+  if (!Array.isArray(snapshotJson)) return null;
+  const tags: Array<PublishProcessTag | null> = [];
+  for (const row of snapshotJson) {
+    if (!row || typeof row !== "object") continue;
+    const o = row as { processTag?: unknown };
+    if (o.processTag === "含生圖" || o.processTag === "原圖直發") {
+      tags.push(o.processTag);
+    } else {
+      tags.push(null);
+    }
+  }
+  // If every entry lacks processTag → honest null (Q3-A, no fallback)
+  if (tags.length === 0 || tags.every((t) => t == null)) return null;
+  return batchProcessTagFromItems(tags);
+}
+
+/** Flat failed rows for 失敗重試 tab (Q6-A). */
+export type FlatFailedRecordItem = {
+  batchId: string;
+  batchCreatedAt: string;
+  draftId: string;
+  title: string;
+  errorMessage: string;
+  processTag: PublishProcessTag | null;
+  itemId: string;
+};
+
+export function flattenFailedItems(
+  batches: PublishBatchListRow[],
+  itemsByBatch: Record<string, PublishBatchItemListRow[]>
+): FlatFailedRecordItem[] {
+  const out: FlatFailedRecordItem[] = [];
+  for (const batch of batches) {
+    const items = itemsByBatch[batch.id] ?? [];
+    const titles = snapshotTitleMap(batch.snapshot_json);
+    const tags = snapshotProcessTagMap(batch.snapshot_json);
+    for (const item of items) {
+      if (item.item_status !== "failed") continue;
+      out.push({
+        batchId: batch.id,
+        batchCreatedAt: batch.created_at,
+        draftId: item.draft_id,
+        title: titles.get(item.draft_id) || "未命名草稿",
+        errorMessage: item.error_message?.trim() || "未知錯誤",
+        processTag: tags.get(item.draft_id) ?? null,
+        itemId: item.id
+      });
+    }
+  }
+  out.sort((a, b) =>
+    (b.batchCreatedAt || "").localeCompare(a.batchCreatedAt || "")
+  );
+  return out;
+}
+
+export type RecordsProductRow = {
+  id: string;
+  title_zh: string | null;
+  taobao_title: string | null;
+  original_title: string | null;
+  status: string;
+  category: string | null;
+  ip_name: string | null;
+  character_name: string | null;
+  shopify_product_id: string | null;
+  shopify_admin_url: string | null;
+  published_at: string | null;
+  updated_at: string | null;
+  created_at: string;
+  thumb_url?: string | null;
+};
+
+export function recordsProductTitle(row: RecordsProductRow): string {
+  return (
+    row.title_zh?.trim() ||
+    row.taobao_title?.trim() ||
+    row.original_title?.trim() ||
+    "未命名"
+  );
+}
+
+export function recordsProductStatusLabel(status: string): string {
+  if (status === "active_published") return "已上架";
+  if (status === "draft_created") return "Shopify 草稿";
+  if (status === "csv_ready") return "CSV 已備妥";
+  if (status === "archived") return "已封存";
+  return status;
+}
+
+export const RECORDS_PRODUCT_SELECT =
+  "id, title_zh, taobao_title, original_title, status, category, ip_name, character_name, shopify_product_id, shopify_admin_url, published_at, updated_at, created_at";
 
 /** Failed draft ids for Q3 A-lite re-run (new batch). */
 export function failedDraftIdsFromItems(items: PublishBatchItemListRow[]): string[] {

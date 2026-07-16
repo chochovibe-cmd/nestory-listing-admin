@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import {
   isMoreSectionActive,
@@ -11,20 +11,21 @@ import {
 } from "@/lib/nav";
 
 /**
- * C1 mobile tabbar — 4 cells: 新增 / 圖審 / 紀錄 / 更多（2026-07-14 對齊 Mockup 主線）。
- * 「全部草稿」在更多抽屜、設定前（不再佔主 tab）。
+ * C1 mobile tabbar — R4 §14-4: 新增 / 審核 / 圖審 / 更多.
+ * 紀錄收進更多；審核 = /drafts/new?pane=results.
  * 「更多」opens bottom sheet (modal-overlay pattern, same as B7/B11).
- * BX6 raised center「＋」is NOT in this package.
  */
 export function MobileTabbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
   const [moreOpen, setMoreOpen] = useState(false);
   const titleId = useId();
-  const moreActive = isMoreSectionActive(pathname) || moreOpen;
+  const moreActive = isMoreSectionActive(pathname, search) || moreOpen;
 
   useEffect(() => {
     setMoreOpen(false);
-  }, [pathname]);
+  }, [pathname, search]);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -48,7 +49,11 @@ export function MobileTabbar() {
       <nav aria-label="行動導覽" className="mobile-tabbar">
         {MOBILE_PRIMARY_TABS.map((tab) => (
           <Link
-            className={isNavActive(pathname, tab.href) ? "active" : ""}
+            className={
+              isNavActive(pathname, tab.href, search, tab.workbenchPane)
+                ? "active"
+                : ""
+            }
             href={tab.href}
             key={tab.href}
           >
@@ -94,7 +99,9 @@ export function MobileTabbar() {
               {MOBILE_MORE_LINKS.map((item) => (
                 <Link
                   className={`mobile-more-link${
-                    isNavActive(pathname, item.href) ? " active" : ""
+                    isNavActive(pathname, item.href, search, item.workbenchPane)
+                      ? " active"
+                      : ""
                   }`}
                   href={item.href}
                   key={item.href}

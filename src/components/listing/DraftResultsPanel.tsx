@@ -8,6 +8,11 @@ import { Station3PublishModal } from "@/components/listing/Station3PublishModal"
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
 import {
+  JUMP_TO_DRAFT_EVENT,
+  scrollToDraftCard,
+  type JumpToDraftDetail
+} from "@/lib/drafts/jumpToDraft";
+import {
   runExportPreflight,
   type ExportKind,
   type ExportPreflightReport,
@@ -29,6 +34,7 @@ import {
   countStations,
   filterDraftsByStation,
   filterWorkQueueDrafts,
+  isStationFilterKey,
   readStoredStation,
   STATION_FILTER_STORAGE_KEY_RESULTS,
   type StationFilterKey,
@@ -125,6 +131,26 @@ export function DraftResultsPanel({
     }
     window.addEventListener(GENERATION_PROGRESS_EVENT, onProgress);
     return () => window.removeEventListener(GENERATION_PROGRESS_EVENT, onProgress);
+  }, []);
+
+  // R4 §7: jump strip → switch station + scroll to card
+  useEffect(() => {
+    function onJump(event: Event) {
+      const detail = (event as CustomEvent<JumpToDraftDetail>).detail;
+      if (!detail?.draftId) return;
+      if (detail.station && isStationFilterKey(detail.station)) {
+        setStage(detail.station);
+        writeStoredStation(
+          detail.station,
+          typeof window !== "undefined" ? window.sessionStorage : null,
+          STATION_FILTER_STORAGE_KEY_RESULTS
+        );
+      }
+      // Wait a tick for filter re-render then scroll
+      window.setTimeout(() => scrollToDraftCard(detail.draftId), 80);
+    }
+    window.addEventListener(JUMP_TO_DRAFT_EVENT, onJump);
+    return () => window.removeEventListener(JUMP_TO_DRAFT_EVENT, onJump);
   }, []);
 
   // B9: remember sort preference for this browser tab session.

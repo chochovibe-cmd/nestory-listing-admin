@@ -41,6 +41,8 @@ import { VariantEditor, repriceVariants } from "@/components/listing/VariantEdit
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
 import { parseVideoUrlsFromTextarea } from "@/lib/media/videoUrls";
 import { FieldHelp } from "@/components/listing/FieldHelp";
+import { StationJumpStrip } from "@/components/listing/StationJumpStrip";
+import type { JumpStripDraft } from "@/lib/drafts/stationJumpStrip";
 import {
   buildWorkspaceAutosaveSnapshot,
   clearWorkspaceAutosave,
@@ -153,7 +155,14 @@ function storagePathFromPublicUrl(url: string | null | undefined): string | null
   }
 }
 
-export function WorkspaceInputPanel({ userId }: { userId: string }) {
+export function WorkspaceInputPanel({
+  userId,
+  jumpDrafts = []
+}: {
+  userId: string;
+  /** R4 §7: work-queue + input drafts for 各站掛件總覽 */
+  jumpDrafts?: JumpStripDraft[];
+}) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -2062,9 +2071,26 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             </div>
           </CollapsibleSection>
 
-          <button className="btn-add" disabled={submitting || imagesUploading} type="submit">
-            {submitting ? "處理中..." : imagesUploading ? "圖片上傳中，請稍候…" : "建立商品並生成文案"}
+          <button
+            className="btn-add btn-gen"
+            disabled={submitting || imagesUploading}
+            type="submit"
+            title="✦ 生成（規則引擎 → Vision → 文案串流 → 定價）"
+          >
+            {submitting
+              ? "處理中..."
+              : imagesUploading
+                ? "圖片上傳中，請稍候…"
+                : (
+                  <>
+                    <span className="btn-gen-full">
+                      ✦ 生成（規則引擎 → Vision → 文案串流 → 定價）
+                    </span>
+                    <span className="btn-gen-short">✦ 生成</span>
+                  </>
+                )}
           </button>
+          <StationJumpStrip drafts={jumpDrafts} />
           {message ? <div className="notice">{message}</div> : null}
             </div>
           </div>

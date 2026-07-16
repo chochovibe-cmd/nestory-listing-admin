@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { DraftResultsPanel } from "@/components/listing/DraftResultsPanel";
 import { SetupNotice } from "@/components/listing/SetupNotice";
 import { WorkbenchMobileShell } from "@/components/listing/WorkbenchMobileShell";
@@ -77,16 +78,33 @@ export default async function NewDraftPage() {
 
   return (
     <main className="container">
-      <WorkbenchMobileShell
-        input={<WorkspaceInputPanel userId={user.id} />}
-        results={
-          <DraftResultsPanel
-            drafts={typedDrafts}
-            images={typedImages}
-            variants={typedVariants}
-          />
-        }
-      />
+      <Suspense fallback={<p className="muted">載入工作檯…</p>}>
+        <WorkbenchMobileShell
+          input={
+            <WorkspaceInputPanel
+              userId={user.id}
+              jumpDrafts={typedDrafts.map((d) => ({
+                id: d.id,
+                title_zh: d.title_zh,
+                taobao_title: d.taobao_title,
+                original_title: d.original_title,
+                status: d.status,
+                pipeline_stage: d.pipeline_stage,
+                shopify_product_id: d.shopify_product_id,
+                created_at: d.created_at,
+                updated_at: d.updated_at
+              }))}
+            />
+          }
+          results={
+            <DraftResultsPanel
+              drafts={typedDrafts}
+              images={typedImages}
+              variants={typedVariants}
+            />
+          }
+        />
+      </Suspense>
     </main>
   );
 }

@@ -2448,6 +2448,149 @@ textarea {
   font-size: 11px;
   color: var(--text-muted);
   margin-left: 4px;
+  margin-bottom: 8px;
+}
+.rec-process-tag {
+  flex-shrink: 0;
+}
+.rec-item-tag {
+  font-size: 11px;
+}
+.rec-failed-panel,
+.rec-product-panel {
+  margin-top: 4px;
+}
+.rec-failed-list,
+.rec-product-list {
+  margin-top: 10px;
+}
+.rec-product-card {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.rec-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.rec-search-row .library-search {
+  flex: 1;
+  min-width: 180px;
+  min-height: 40px;
+}
+.rec-limit-hint {
+  font-size: 11px;
+  margin: 0 0 8px;
+}
+.rec-library-hits {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+
+/* ── R4 §7 jump strip + mobile continue ── */
+.queue-strip {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface2) 60%, transparent);
+}
+.queue-strip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.queue-strip .qtitle {
+  font-size: 12px;
+  font-weight: 800;
+}
+.queue-strip .queue-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.queue-strip-group {
+  margin-top: 8px;
+}
+.queue-strip-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.queue-strip-date,
+.queue-strip-count {
+  font-weight: 500;
+}
+.queue-strip-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.queue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.queue-chip:hover {
+  border-color: var(--accent);
+}
+.queue-chip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12em;
+}
+.queue-chip-date {
+  font-size: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.wb-continue-bar {
+  display: none;
+}
+.btn-gen-short {
+  display: none;
+}
+.btn-gen-full {
+  display: inline;
+}
+@media (max-width: 959px) {
+  .wb-continue-bar {
+    display: block;
+    padding: 8px 0 4px;
+  }
+  .wb-continue-btn {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    align-items: center;
+  }
+  .btn-gen-full {
+    display: none;
+  }
+  .btn-gen-short {
+    display: inline;
+  }
+  .queue-chip {
+    min-height: 44px;
+  }
 }
 .rec-list {
   margin-top: 4px;

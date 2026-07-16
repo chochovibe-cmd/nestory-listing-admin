@@ -11,6 +11,7 @@
  */
 
 import {
+  buildImageReviewPendingUrl,
   buildReviewUrl,
   loadNotifyConfig,
   shouldClaimAfterDispatch,
@@ -117,7 +118,10 @@ export async function tryNotifyImageBatchIfComplete(
     }
 
     const counts = countItemStatuses(statuses);
-    const reviewUrl = buildReviewUrl(config.appBaseUrl);
+    // R4 §12: deep link to 生成完成待審
+    const reviewUrl =
+      buildImageReviewPendingUrl(config.appBaseUrl) ??
+      buildReviewUrl(config.appBaseUrl);
     const payload = {
       batchId,
       batchIdShort: shortBatchId(batchId),

@@ -236,9 +236,10 @@ export function buildFunnelRows(stats: FunnelStats): FunnelRowDef[] {
       schipClass: "schip",
       schipLabel: "待輸入",
       barPct: barPct(s.input.count, max),
-      href: "/drafts",
+      // R4: workbench input / results; published → records
+      href: "/drafts/new",
       stage: "pending_input",
-      stageStorageKey: STAGE_FILTER_STORAGE_KEY_QUEUE
+      stageStorageKey: STAGE_FILTER_STORAGE_KEY_RESULTS
     },
     {
       key: "copy_review",
@@ -250,7 +251,7 @@ export function buildFunnelRows(stats: FunnelStats): FunnelRowDef[] {
       schipClass: "schip schip--warn",
       schipLabel: "文案已生成・待審核",
       barPct: barPct(s.copy_review.count, max),
-      href: "/drafts/new",
+      href: "/drafts/new?pane=results",
       stage: "copy_review",
       stageStorageKey: STAGE_FILTER_STORAGE_KEY_RESULTS
     },
@@ -264,9 +265,9 @@ export function buildFunnelRows(stats: FunnelStats): FunnelRowDef[] {
       schipClass: "schip schip--ok",
       schipLabel: "已核准・待發布",
       barPct: barPct(s.approved.count, max),
-      href: "/drafts",
+      href: "/drafts/new?pane=results",
       stage: "approved",
-      stageStorageKey: STAGE_FILTER_STORAGE_KEY_QUEUE
+      stageStorageKey: STAGE_FILTER_STORAGE_KEY_RESULTS
     },
     {
       key: "published",
@@ -278,9 +279,9 @@ export function buildFunnelRows(stats: FunnelStats): FunnelRowDef[] {
       schipClass: "schip schip--ok",
       schipLabel: "已發布",
       barPct: barPct(s.published.count, max),
-      href: "/drafts",
+      href: "/records?tab=published",
       stage: "published",
-      stageStorageKey: STAGE_FILTER_STORAGE_KEY_QUEUE
+      stageStorageKey: STAGE_FILTER_STORAGE_KEY_RESULTS
     }
   ];
 
@@ -295,9 +296,9 @@ export function buildFunnelRows(stats: FunnelStats): FunnelRowDef[] {
       schipClass: "schip schip--warn",
       schipLabel: "需修改",
       barPct: barPct(s.needs_revision.count, max),
-      href: "/drafts",
+      href: "/drafts/new?pane=results",
       stage: "needs_revision",
-      stageStorageKey: STAGE_FILTER_STORAGE_KEY_QUEUE
+      stageStorageKey: STAGE_FILTER_STORAGE_KEY_RESULTS
     },
     {
       key: "failed",
@@ -309,9 +310,9 @@ export function buildFunnelRows(stats: FunnelStats): FunnelRowDef[] {
       schipClass: "schip schip--error",
       schipLabel: "失敗",
       barPct: barPct(s.failed.count, max),
-      href: "/drafts",
+      href: "/drafts/new?pane=results",
       stage: "failed",
-      stageStorageKey: STAGE_FILTER_STORAGE_KEY_QUEUE
+      stageStorageKey: STAGE_FILTER_STORAGE_KEY_RESULTS
     }
   ];
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isAdmin } from "@/lib/auth/roles";
 import {
@@ -10,47 +11,93 @@ import {
 import {
   PUBLISH_BATCH_ITEM_SELECT,
   PUBLISH_BATCH_SELECT,
+  PUBLISH_RECORDS_TABS,
   RECORDS_FETCH_LIMIT,
+  RECORDS_PRODUCT_SELECT,
+  RECORDS_PUBLISHED_LIMIT,
+  RECORDS_PUBLISHED_STATUSES,
+  RECORDS_SHOPIFY_DRAFT_STATUS,
   batchCardTitle,
   batchMetaLine,
+  batchProcessTagLabel,
   batchStatusSchip,
   canRetryFailedBatch,
   failedDraftIdsFromItems,
-  filterPublishBatches,
+  filterBatchesForTab,
+  flattenFailedItems,
   itemLineText,
   itemStatusDotClass,
+  parseRecordsTab,
   recordsMigrationHintFromError,
+  recordsProductStatusLabel,
+  recordsProductTitle,
+  snapshotProcessTagMap,
   snapshotTitleMap,
   type PublishBatchItemListRow,
   type PublishBatchListRow,
-  type PublishRecordsFilter
+  type PublishRecordsTab,
+  type RecordsProductRow
 } from "@/lib/drafts/publishRecords";
+import {
+  filterLibraryRows,
+  type LibraryDraftRow
+} from "@/lib/library/productLibrary";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 import type { PublishMode, UserRole } from "@/types/domain";
 
 type ScopeMode = "mine" | "all";
 
 /**
- * D7-open / C5 skeleton: publish batch cards + detail + retry-failed (new batch).
- * Style: layout-only tokens + .schip (no BX-P).
+ * D7 + R4 §9: four-tab 發布紀錄（批次／失敗重試／Shopify 草稿／已發布封存）.
+ * Style: layout-only tokens + .schip / pills (no new color values).
  */
 export function PublishRecordsPanel() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabFromUrl = parseRecordsTab(searchParams.get("tab"));
+  const batchFromUrl = searchParams.get("batch");
+
   const [role, setRole] = useState<UserRole | null>(null);
   const [roleReady, setRoleReady] = useState(false);
   const [scope, setScope] = useState<ScopeMode>("mine");
-  const [filter, setFilter] = useState<PublishRecordsFilter>("all");
+  const [tab, setTab] = useState<PublishRecordsTab>(tabFromUrl);
   const [rows, setRows] = useState<PublishBatchListRow[]>([]);
-  const [itemsByBatch, setItemsByBatch] = useState<Record<string, PublishBatchItemListRow[]>>({});
+  const [itemsByBatch, setItemsByBatch] = useState<
+    Record<string, PublishBatchItemListRow[]>
+  >({});
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [migrationHint, setMigrationHint] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
+  const [failedSelected, setFailedSelected] = useState<Set<string>>(() => new Set());
+  const [failedRetryBusy, setFailedRetryBusy] = useState(false);
+
+  // Product tabs
+  const [productRows, setProductRows] = useState<RecordsProductRow[]>([]);
+  const [productLoading, setProductLoading] = useState(false);
+  const [productError, setProductError] = useState<string | null>(null);
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryHits, setLibraryHits] = useState<LibraryDraftRow[]>([]);
+  const [librarySearching, setLibrarySearching] = useState(false);
+  const [promoteBusyId, setPromoteBusyId] = useState<string | null>(null);
 
   const admin = isAdmin(role);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    setTab(tabFromUrl);
+  }, [tabFromUrl]);
+
+  function setTabAndUrl(next: PublishRecordsTab) {
+    setTab(next);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", next);
+    if (next !== "batches") params.delete("batch");
+    router.replace(`/records?${params.toString()}`, { scroll: false });
+  }
+
+  const loadBatches = useCallback(async () => {
     if (!hasSupabaseBrowserEnv()) {
       setError("需要設定 Supabase 才能使用發布紀錄");
       setRows([]);
@@ -84,7 +131,11 @@ export function PublishRecordsPanel() {
         return;
       }
 
-      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
       const nextRole = (profile?.role as UserRole | undefined) ?? null;
       setRole(nextRole);
       setRoleReady(true);
@@ -97,9 +148,7 @@ export function PublishRecordsPanel() {
 
       const useMine =
         nextRole === "operator" || (isAdmin(nextRole) && scope === "mine");
-      // Reviewer sees all by RLS; operator forced mine
       if (useMine || (nextRole === "reviewer" && scope === "mine")) {
-        // admin mine / operator: filter created_by
         if (nextRole === "operator" || (isAdmin(nextRole) && scope === "mine")) {
           query = query.eq("created_by", user.id);
         }
@@ -110,11 +159,7 @@ export function PublishRecordsPanel() {
       if (batchError) {
         const hint = recordsMigrationHintFromError(batchError.message);
         setMigrationHint(hint);
-        setError(
-          hint
-            ? "發布批次表尚未建立"
-            : batchError.message
-        );
+        setError(hint ? "發布批次表尚未建立" : batchError.message);
         setRows([]);
         return;
       }
@@ -130,11 +175,89 @@ export function PublishRecordsPanel() {
     }
   }, [scope]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const loadProducts = useCallback(
+    async (mode: "shopify_drafts" | "published") => {
+      if (!hasSupabaseBrowserEnv()) {
+        setProductError("需要設定 Supabase");
+        return;
+      }
+      setProductLoading(true);
+      setProductError(null);
+      try {
+        const supabase = createClient();
+        const {
+          data: { user }
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setProductError("請先登入");
+          setProductRows([]);
+          return;
+        }
 
-  const visible = useMemo(() => filterPublishBatches(rows, filter), [rows, filter]);
+        let query = supabase
+          .from("product_drafts")
+          .select(RECORDS_PRODUCT_SELECT)
+          .order("updated_at", { ascending: false })
+          .limit(RECORDS_PUBLISHED_LIMIT);
+
+        if (mode === "shopify_drafts") {
+          query = query.eq("status", RECORDS_SHOPIFY_DRAFT_STATUS);
+        } else {
+          query = query.in("status", [...RECORDS_PUBLISHED_STATUSES]);
+        }
+
+        if (
+          role === "operator" ||
+          (isAdmin(role) && scope === "mine")
+        ) {
+          query = query.eq("created_by", user.id);
+        }
+
+        const { data, error: qErr } = await query;
+        if (qErr) {
+          setProductError(qErr.message);
+          setProductRows([]);
+          return;
+        }
+        setProductRows((data ?? []) as RecordsProductRow[]);
+      } catch (e) {
+        setProductError(e instanceof Error ? e.message : String(e));
+        setProductRows([]);
+      } finally {
+        setProductLoading(false);
+      }
+    },
+    [role, scope]
+  );
+
+  useEffect(() => {
+    void loadBatches();
+  }, [loadBatches]);
+
+  useEffect(() => {
+    if (tab === "shopify_drafts" || tab === "published") {
+      void loadProducts(tab);
+    }
+  }, [tab, loadProducts]);
+
+  // Deep link: open batch card
+  useEffect(() => {
+    if (!batchFromUrl || rows.length === 0) return;
+    setOpenIds((prev) => new Set(prev).add(batchFromUrl));
+    void ensureItems(batchFromUrl).then(() => {
+      window.setTimeout(() => {
+        document
+          .getElementById(`rec-batch-${batchFromUrl}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when rows land
+  }, [batchFromUrl, rows]);
+
+  const visibleBatches = useMemo(
+    () => filterBatchesForTab(rows, tab === "failed" ? "failed" : "batches"),
+    [rows, tab]
+  );
 
   async function ensureItems(batchId: string): Promise<PublishBatchItemListRow[]> {
     if (itemsByBatch[batchId]) return itemsByBatch[batchId];
@@ -154,6 +277,21 @@ export function PublishRecordsPanel() {
     return list;
   }
 
+  // Prefetch failed items when on failed tab
+  useEffect(() => {
+    if (tab !== "failed") return;
+    const failedBatches = filterBatchesForTab(rows, "failed");
+    for (const b of failedBatches) {
+      if (!itemsByBatch[b.id]) void ensureItems(b.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, rows]);
+
+  const flatFailed = useMemo(
+    () => flattenFailedItems(filterBatchesForTab(rows, "failed"), itemsByBatch),
+    [rows, itemsByBatch]
+  );
+
   async function toggleOpen(batchId: string) {
     setOpenIds((prev) => {
       const next = new Set(prev);
@@ -166,9 +304,6 @@ export function PublishRecordsPanel() {
     }
   }
 
-  /**
-   * Q3 A-lite: re-run failed drafts as a NEW batch (same publishMode).
-   */
   async function retryFailed(row: PublishBatchListRow) {
     setRetryBusyId(row.id);
     setNotice(null);
@@ -179,13 +314,20 @@ export function PublishRecordsPanel() {
         setNotice("此批沒有可重送的失敗件");
         return;
       }
+      await runRetryPublish(failedIds, row.publish_mode === "active" ? "active" : "draft");
+    } finally {
+      setRetryBusyId(null);
+    }
+  }
 
-      const publishMode = (row.publish_mode === "active" ? "active" : "draft") as PublishMode;
+  async function runRetryPublish(draftIds: string[], publishMode: PublishMode) {
+    setNotice(null);
+    try {
       const response = await fetch("/api/drafts/batch/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          draftIds: failedIds,
+          draftIds,
           publishMode,
           confirmActive: publishMode === "active"
         })
@@ -201,11 +343,79 @@ export function PublishRecordsPanel() {
         payload.message ??
           `已新建批次重送：成功 ${payload.succeeded ?? 0}／失敗 ${payload.failed ?? 0}`
       );
-      await load();
+      setFailedSelected(new Set());
+      await loadBatches();
     } catch {
       setNotice("重送連線失敗");
+    }
+  }
+
+  async function retrySelectedFailed() {
+    if (failedSelected.size === 0) return;
+    setFailedRetryBusy(true);
+    try {
+      // Default draft mode for mixed history; active if any selected from active batch
+      let mode: PublishMode = "draft";
+      for (const draftId of failedSelected) {
+        const hit = flatFailed.find((f) => f.draftId === draftId);
+        if (!hit) continue;
+        const batch = rows.find((r) => r.id === hit.batchId);
+        if (batch?.publish_mode === "active") {
+          mode = "active";
+          break;
+        }
+      }
+      await runRetryPublish([...failedSelected], mode);
     } finally {
-      setRetryBusyId(null);
+      setFailedRetryBusy(false);
+    }
+  }
+
+  async function promoteDraft(draftId: string) {
+    setPromoteBusyId(draftId);
+    setNotice(null);
+    try {
+      await runRetryPublish([draftId], "active");
+      if (tab === "shopify_drafts") await loadProducts("shopify_drafts");
+    } finally {
+      setPromoteBusyId(null);
+    }
+  }
+
+  async function searchLibrary() {
+    const q = librarySearch.trim();
+    if (!q) {
+      setLibraryHits([]);
+      return;
+    }
+    setLibrarySearching(true);
+    try {
+      const supabase = createClient();
+      const { data, error: qErr } = await supabase
+        .from("product_drafts")
+        .select(
+          "id, title_zh, taobao_title, original_title, status, created_by, published_at, created_at, shopify_product_id, ip_name, character_name"
+        )
+        .in("status", [
+          "active_published",
+          "draft_created",
+          "csv_ready",
+          "archived"
+        ])
+        .order("updated_at", { ascending: false })
+        .limit(150);
+      if (qErr) {
+        setNotice(qErr.message);
+        setLibraryHits([]);
+        return;
+      }
+      const rowsLib = (data ?? []) as LibraryDraftRow[];
+      setLibraryHits(filterLibraryRows(rowsLib, q));
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "搜尋失敗");
+      setLibraryHits([]);
+    } finally {
+      setLibrarySearching(false);
     }
   }
 
@@ -214,7 +424,9 @@ export function PublishRecordsPanel() {
       <div className="ir-page-header">
         <div className="ir-title-row">
           <h1>🧾 發布紀錄</h1>
-          <span className="ir-sub">批次發布結果（Shopify API）· 失敗可重送新批</span>
+          <span className="ir-sub">
+            終點站＋補救站 · 批次／失敗重試／Shopify 草稿／已發布
+          </span>
         </div>
         {roleReady && admin ? (
           <div className="ir-scope">
@@ -234,28 +446,26 @@ export function PublishRecordsPanel() {
         ) : null}
       </div>
 
-      <div className="rec-filters stage-filter-pills" role="tablist" aria-label="紀錄篩選">
-        <button
-          type="button"
-          className={`pill-btn${filter === "all" ? " sel sel--fill" : ""}`}
-          onClick={() => setFilter("all")}
-        >
-          全部
-        </button>
-        <button
-          type="button"
-          className={`pill-btn${filter === "has_failed" ? " sel sel--fill" : ""}`}
-          onClick={() => setFilter("has_failed")}
-        >
-          有失敗
-        </button>
-        <span
-          className="rec-filter-muted"
-          title="Showmore／Matrixify 走 CSV 下載，不進本頁 Shopify 批次帳"
-        >
-          Showmore／Matrixify 匯出不進本頁批次帳
-        </span>
+      <div className="rec-filters stage-filter-pills" role="tablist" aria-label="紀錄分頁">
+        {PUBLISH_RECORDS_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            className={`pill-btn${tab === t.key ? " sel sel--fill" : ""}`}
+            onClick={() => setTabAndUrl(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
+
+      {tab === "batches" ? (
+        <p className="rec-filter-muted">
+          Showmore／Matrixify 匯出不進本頁批次帳（下載即走）
+        </p>
+      ) : null}
 
       {notice ? (
         <div className="notice" role="status">
@@ -263,138 +473,438 @@ export function PublishRecordsPanel() {
         </div>
       ) : null}
 
+      {tab === "batches" || tab === "failed" ? (
+        loading ? (
+          <p className="muted">載入中…</p>
+        ) : error ? (
+          <div className="notice notice-warn rec-empty">
+            <p>
+              <strong>{error}</strong>
+            </p>
+            {migrationHint ? (
+              <p className="muted" style={{ marginTop: 8 }}>
+                {migrationHint}
+              </p>
+            ) : null}
+            {!migrationHint ? (
+              <p style={{ marginTop: 10 }}>
+                <button type="button" className="mini-btn" onClick={() => void loadBatches()}>
+                  重試
+                </button>
+              </p>
+            ) : (
+              <p className="muted" style={{ marginTop: 8 }}>
+                {MIGRATION_027_HINT}
+              </p>
+            )}
+          </div>
+        ) : tab === "failed" ? (
+          <FailedRetrySection
+            items={flatFailed}
+            selected={failedSelected}
+            setSelected={setFailedSelected}
+            busy={failedRetryBusy}
+            onRetry={() => void retrySelectedFailed()}
+            itemsLoading={
+              filterBatchesForTab(rows, "failed").some((b) => !itemsByBatch[b.id])
+            }
+          />
+        ) : visibleBatches.length === 0 ? (
+          <div className="notice rec-empty ir-empty">
+            <p>
+              <strong>尚無發布批次</strong>
+            </p>
+            <p className="muted" style={{ marginTop: 6 }}>
+              在工作檯站③「發布／匯出」後，結果會出現在這裡。
+            </p>
+            <p style={{ marginTop: 12 }}>
+              <Link href="/drafts/new?pane=results" className="mini-btn">
+                去審核佇列
+              </Link>
+            </p>
+          </div>
+        ) : (
+          <div className="rec-list ir-list">
+            {visibleBatches.map((row) => {
+              const open = openIds.has(row.id);
+              const statusMeta = batchStatusSchip(row.status);
+              const items = itemsByBatch[row.id] ?? [];
+              const titles = snapshotTitleMap(row.snapshot_json);
+              const processTags = snapshotProcessTagMap(row.snapshot_json);
+              const batchTag = batchProcessTagLabel(row.snapshot_json);
+              const showRetry = canRetryFailedBatch(
+                row,
+                items.length ? items : undefined
+              );
+              const retryBusy = retryBusyId === row.id;
+
+              return (
+                <article
+                  key={row.id}
+                  className="rec-card ir-card"
+                  id={`rec-batch-${row.id}`}
+                >
+                  <div className="rec-head ir-head">
+                    <button
+                      type="button"
+                      className="rec-head-main"
+                      onClick={() => void toggleOpen(row.id)}
+                      aria-expanded={open}
+                    >
+                      <span className="rec-icon" aria-hidden>
+                        🛍
+                      </span>
+                      <span className="rec-head-text">
+                        <span className="rec-title">{batchCardTitle(row)}</span>
+                        <span className="rec-meta muted">{batchMetaLine(row)}</span>
+                      </span>
+                      {batchTag ? (
+                        <span className="schip schip--idle rec-process-tag">{batchTag}</span>
+                      ) : null}
+                      <span className={statusMeta.className}>{statusMeta.label}</span>
+                      {row.done_count > 0 ? (
+                        <span className="schip schip--ok">成功 {row.done_count}</span>
+                      ) : null}
+                      {row.failed_count > 0 ? (
+                        <span className="schip schip--error">失敗 {row.failed_count}</span>
+                      ) : null}
+                      <span className="ir-head-chev">{open ? "▴" : "▾"}</span>
+                    </button>
+                    {showRetry ? (
+                      <button
+                        type="button"
+                        className="mini-btn rec-retry"
+                        disabled={retryBusy || !!retryBusyId}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void retryFailed(row);
+                        }}
+                      >
+                        {retryBusy ? "重送中…" : "↻ 重送失敗件"}
+                      </button>
+                    ) : null}
+                  </div>
+                  {open ? (
+                    <div className="rec-body ir-body">
+                      {row.error_summary ? (
+                        <p className="muted rec-summary">{row.error_summary}</p>
+                      ) : null}
+                      {items.length === 0 ? (
+                        <p className="muted">載入明細…</p>
+                      ) : (
+                        <ul className="rec-items">
+                          {items.map((item) => {
+                            const pTag = processTags.get(item.draft_id) ?? null;
+                            return (
+                              <li key={item.id} className="rec-item">
+                                <span
+                                  className={itemStatusDotClass(item.item_status)}
+                                  aria-hidden
+                                />
+                                <span className="rec-item-text">
+                                  {itemLineText(item, titles.get(item.draft_id))}
+                                  {pTag ? (
+                                    <span className="rec-item-tag muted"> · {pTag}</span>
+                                  ) : null}
+                                </span>
+                                {item.shopify_admin_url ? (
+                                  <a
+                                    className="mini-btn"
+                                    href={item.shopify_admin_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    後台
+                                  </a>
+                                ) : null}
+                                <Link className="mini-btn" href={`/drafts/${item.draft_id}`}>
+                                  草稿
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                      <p className="muted rec-mode-hint">
+                        {publishBatchTitle(
+                          row.publish_mode === "active" ? "active" : "draft"
+                        )}
+                        {" · "}
+                        共 {row.total_count} 件
+                      </p>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        )
+      ) : null}
+
+      {tab === "shopify_drafts" || tab === "published" ? (
+        <ProductListSection
+          mode={tab}
+          rows={productRows}
+          loading={productLoading}
+          error={productError}
+          onRetry={() => void loadProducts(tab)}
+          promoteBusyId={promoteBusyId}
+          onPromote={(id) => void promoteDraft(id)}
+          showSearch={tab === "published"}
+          librarySearch={librarySearch}
+          setLibrarySearch={setLibrarySearch}
+          onSearch={() => void searchLibrary()}
+          libraryHits={libraryHits}
+          librarySearching={librarySearching}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function FailedRetrySection({
+  items,
+  selected,
+  setSelected,
+  busy,
+  onRetry,
+  itemsLoading
+}: {
+  items: ReturnType<typeof flattenFailedItems>;
+  selected: Set<string>;
+  setSelected: (s: Set<string>) => void;
+  busy: boolean;
+  onRetry: () => void;
+  itemsLoading: boolean;
+}) {
+  if (itemsLoading && items.length === 0) {
+    return <p className="muted">載入失敗件…</p>;
+  }
+  if (items.length === 0) {
+    return (
+      <div className="notice rec-empty">
+        <p>
+          <strong>目前沒有失敗件</strong>
+        </p>
+        <p className="muted" style={{ marginTop: 6 }}>
+          發布失敗的商品會出現在這裡，可勾選後一次重送。
+        </p>
+      </div>
+    );
+  }
+
+  const allSelected = items.every((i) => selected.has(i.draftId));
+
+  return (
+    <div className="rec-failed-panel">
+      <div className="results-batch-toolbar" role="toolbar" aria-label="失敗件批次">
+        <label className="check-row results-batch-check">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => {
+              if (allSelected) setSelected(new Set());
+              else setSelected(new Set(items.map((i) => i.draftId)));
+            }}
+          />
+          全選
+        </label>
+        <span className="batch-selected-count">
+          {selected.size > 0 ? `已選 ${selected.size} 筆` : "勾選失敗件以重送"}
+        </span>
+        <button
+          type="button"
+          className="button primary"
+          disabled={busy || selected.size === 0}
+          onClick={onRetry}
+        >
+          {busy ? "重送中…" : "↻ 重送勾選"}
+        </button>
+      </div>
+      <ul className="rec-items rec-failed-list">
+        {items.map((item) => (
+          <li key={item.itemId} className="rec-item">
+            <label className="check-row" style={{ margin: 0 }}>
+              <input
+                type="checkbox"
+                checked={selected.has(item.draftId)}
+                onChange={() => {
+                  const next = new Set(selected);
+                  if (next.has(item.draftId)) next.delete(item.draftId);
+                  else next.add(item.draftId);
+                  setSelected(next);
+                }}
+              />
+            </label>
+            <span className="rec-dot rec-dot--ng" aria-hidden />
+            <span className="rec-item-text">
+              <strong>{item.title}</strong>
+              {item.processTag ? (
+                <span className="muted"> · {item.processTag}</span>
+              ) : null}
+              <br />
+              <span className="muted">{item.errorMessage}</span>
+            </span>
+            <Link className="mini-btn" href={`/drafts/${item.draftId}`}>
+              草稿
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ProductListSection({
+  mode,
+  rows,
+  loading,
+  error,
+  onRetry,
+  promoteBusyId,
+  onPromote,
+  showSearch,
+  librarySearch,
+  setLibrarySearch,
+  onSearch,
+  libraryHits,
+  librarySearching
+}: {
+  mode: "shopify_drafts" | "published";
+  rows: RecordsProductRow[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  promoteBusyId: string | null;
+  onPromote: (id: string) => void;
+  showSearch: boolean;
+  librarySearch: string;
+  setLibrarySearch: (v: string) => void;
+  onSearch: () => void;
+  libraryHits: LibraryDraftRow[];
+  librarySearching: boolean;
+}) {
+  return (
+    <div className="rec-product-panel">
+      {showSearch ? (
+        <div className="rec-search-row">
+          <input
+            className="library-search"
+            type="search"
+            placeholder="搜尋更早的商品（名稱／IP／角色）…"
+            value={librarySearch}
+            onChange={(e) => setLibrarySearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSearch();
+            }}
+            aria-label="商品庫搜尋"
+          />
+          <button
+            type="button"
+            className="mini-btn"
+            disabled={librarySearching}
+            onClick={onSearch}
+          >
+            {librarySearching ? "搜尋中…" : "搜尋"}
+          </button>
+        </div>
+      ) : null}
+
+      {libraryHits.length > 0 ? (
+        <div className="rec-library-hits">
+          <p className="muted" style={{ marginBottom: 8 }}>
+            搜尋結果（商品庫，最多顯示已載入命中）
+          </p>
+          <ul className="rec-items">
+            {libraryHits.map((row) => (
+              <li key={row.id} className="rec-item rec-product-card">
+                <span className="rec-item-text">
+                  <strong>
+                    {row.title_zh || row.taobao_title || row.original_title || "未命名"}
+                  </strong>
+                  <br />
+                  <span className="muted">
+                    {recordsProductStatusLabel(row.status)}
+                    {row.ip_name ? ` · ${row.ip_name}` : ""}
+                  </span>
+                </span>
+                <Link className="mini-btn" href={`/drafts/${row.id}`}>
+                  開啟
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {loading ? (
         <p className="muted">載入中…</p>
       ) : error ? (
-        <div className="notice notice-warn rec-empty">
-          <p>
-            <strong>{error}</strong>
-          </p>
-          {migrationHint ? (
-            <p className="muted" style={{ marginTop: 8 }}>
-              {migrationHint}
-            </p>
-          ) : null}
-          {!migrationHint ? (
-            <p style={{ marginTop: 10 }}>
-              <button type="button" className="mini-btn" onClick={() => void load()}>
-                重試
-              </button>
-            </p>
-          ) : (
-            <p className="muted" style={{ marginTop: 8 }}>
-              執行 SQL 後重新整理本頁即可。在此之前不會顯示假資料。
-            </p>
-          )}
+        <div className="notice notice-warn">
+          <p>{error}</p>
+          <button type="button" className="mini-btn" onClick={onRetry}>
+            重試
+          </button>
         </div>
-      ) : visible.length === 0 ? (
-        <div className="notice rec-empty ir-empty">
+      ) : rows.length === 0 ? (
+        <div className="notice rec-empty">
           <p>
-            <strong>尚無發布批次</strong>
+            <strong>
+              {mode === "shopify_drafts" ? "尚無 Shopify 草稿" : "尚無已發布／封存商品"}
+            </strong>
           </p>
           <p className="muted" style={{ marginTop: 6 }}>
-            在工作檯「核准並建草稿／上架」後，結果會出現在這裡。
-          </p>
-          <p style={{ marginTop: 12 }}>
-            <Link href="/drafts/new" className="mini-btn">
-              去工作檯
-            </Link>
+            {mode === "shopify_drafts"
+              ? "站③選擇「API 建草稿」成功後會出現在這裡，可轉正式上架。"
+              : `最近 ${RECORDS_PUBLISHED_LIMIT} 筆；更早請用上方搜尋。`}
           </p>
         </div>
       ) : (
-        <div className="rec-list ir-list">
-          {visible.map((row) => {
-            const open = openIds.has(row.id);
-            const statusMeta = batchStatusSchip(row.status);
-            const items = itemsByBatch[row.id] ?? [];
-            const titles = snapshotTitleMap(row.snapshot_json);
-            const showRetry = canRetryFailedBatch(row, items.length ? items : undefined);
-            const retryBusy = retryBusyId === row.id;
-
-            return (
-              <article key={row.id} className="rec-card ir-card">
-                <div className="rec-head ir-head">
+        <>
+          {mode === "published" ? (
+            <p className="muted rec-limit-hint">
+              顯示最近 {RECORDS_PUBLISHED_LIMIT} 筆；更早請用搜尋（接商品庫）
+            </p>
+          ) : null}
+          <ul className="rec-items rec-product-list">
+            {rows.map((row) => (
+              <li key={row.id} className="rec-item rec-product-card">
+                <span className="rec-item-text">
+                  <strong>{recordsProductTitle(row)}</strong>
+                  <br />
+                  <span className="muted">
+                    {recordsProductStatusLabel(row.status)}
+                    {row.category ? ` · ${row.category}` : ""}
+                    {row.ip_name ? ` · ${row.ip_name}` : ""}
+                  </span>
+                </span>
+                {mode === "shopify_drafts" ? (
                   <button
                     type="button"
-                    className="rec-head-main"
-                    onClick={() => void toggleOpen(row.id)}
-                    aria-expanded={open}
+                    className="mini-btn"
+                    disabled={promoteBusyId === row.id}
+                    onClick={() => onPromote(row.id)}
                   >
-                    <span className="rec-icon" aria-hidden>
-                      🛍
-                    </span>
-                    <span className="rec-head-text">
-                      <span className="rec-title">{batchCardTitle(row)}</span>
-                      <span className="rec-meta muted">{batchMetaLine(row)}</span>
-                    </span>
-                    <span className={statusMeta.className}>{statusMeta.label}</span>
-                    {row.done_count > 0 ? (
-                      <span className="schip schip--ok">成功 {row.done_count}</span>
-                    ) : null}
-                    {row.failed_count > 0 ? (
-                      <span className="schip schip--error">失敗 {row.failed_count}</span>
-                    ) : null}
-                    <span className="ir-head-chev">{open ? "▴" : "▾"}</span>
+                    {promoteBusyId === row.id ? "上架中…" : "轉正式上架"}
                   </button>
-                  {showRetry ? (
-                    <button
-                      type="button"
-                      className="mini-btn rec-retry"
-                      disabled={retryBusy || !!retryBusyId}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void retryFailed(row);
-                      }}
-                    >
-                      {retryBusy ? "重送中…" : "↻ 重送失敗件"}
-                    </button>
-                  ) : null}
-                </div>
-                {open ? (
-                  <div className="rec-body ir-body">
-                    {row.error_summary ? (
-                      <p className="muted rec-summary">{row.error_summary}</p>
-                    ) : null}
-                    {items.length === 0 ? (
-                      <p className="muted">載入明細…</p>
-                    ) : (
-                      <ul className="rec-items">
-                        {items.map((item) => (
-                          <li key={item.id} className="rec-item">
-                            <span className={itemStatusDotClass(item.item_status)} aria-hidden />
-                            <span className="rec-item-text">
-                              {itemLineText(item, titles.get(item.draft_id))}
-                            </span>
-                            {item.shopify_admin_url ? (
-                              <a
-                                className="mini-btn"
-                                href={item.shopify_admin_url}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                後台
-                              </a>
-                            ) : null}
-                            <Link className="mini-btn" href={`/drafts/${item.draft_id}`}>
-                              草稿
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <p className="muted rec-mode-hint">
-                      {publishBatchTitle(
-                        row.publish_mode === "active" ? "active" : "draft"
-                      )}
-                      {" · "}
-                      共 {row.total_count} 件
-                    </p>
-                  </div>
                 ) : null}
-              </article>
-            );
-          })}
-        </div>
+                {row.shopify_admin_url ? (
+                  <a
+                    className="mini-btn"
+                    href={row.shopify_admin_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    後台
+                  </a>
+                ) : null}
+                <Link className="mini-btn" href={`/drafts/${row.id}`}>
+                  開啟
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );

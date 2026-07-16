@@ -57,6 +57,28 @@ export function buildReviewUrl(
   return `${base}${p}`;
 }
 
+/** R4 §12: image batch done → 生圖工廠「生成完成待審」. */
+export function buildImageReviewPendingUrl(
+  appBaseUrl: string | null
+): string | null {
+  return buildReviewUrl(appBaseUrl, "/review?section=pending");
+}
+
+/** R4 §12: publish batch done → 發布紀錄批次卡. */
+export function buildPublishRecordsBatchUrl(
+  appBaseUrl: string | null,
+  batchId: string
+): string | null {
+  if (!batchId?.trim()) {
+    return buildReviewUrl(appBaseUrl, "/records?tab=batches");
+  }
+  const q = new URLSearchParams({
+    tab: "batches",
+    batch: batchId.trim()
+  });
+  return buildReviewUrl(appBaseUrl, `/records?${q.toString()}`);
+}
+
 export function loadNotifyConfig(env: NodeJS.ProcessEnv = process.env): NotifyAppConfig {
   const resendKey = env.RESEND_API_KEY?.trim() || "";
   const resendFrom = env.RESEND_FROM?.trim() || "";

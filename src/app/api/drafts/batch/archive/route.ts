@@ -8,6 +8,7 @@ import {
   isPublishedArchiveStatus,
   resolveUnarchiveStatus
 } from "@/lib/drafts/archiveDrafts";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/domain";
 
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
   const { data: rows, error: loadError } = await serviceSupabase
     .from("product_drafts")
     .select(
-      "id, status, generation_status, title_zh, taobao_title, original_title, status_before_archive, description_html, description_plain"
+      "id, status, generation_status, title_zh, taobao_title, original_title, status_before_archive, description_html, description_plain, shopify_product_id"
     )
     .in("id", draftIds as string[]);
 
@@ -48,7 +49,9 @@ export async function POST(request: NextRequest) {
     // 024 not applied: status_before_archive missing — retry without restore columns.
     const fallback = await serviceSupabase
       .from("product_drafts")
-      .select("id, status, generation_status, title_zh, taobao_title, original_title, description_html, description_plain")
+      .select(
+        "id, status, generation_status, title_zh, taobao_title, original_title, description_html, description_plain, shopify_product_id"
+      )
       .in("id", draftIds as string[]);
     if (fallback.error) {
       return Response.json({ error: fallback.error.message }, { status: 500 });
@@ -97,7 +100,10 @@ async function archiveRows(
     const priorStatus = String(row.status);
     if (isPublishedArchiveStatus(priorStatus)) includesPublished = true;
 
-    const patch: Record<string, unknown> = { status: "archived" };
+    const patch: Record<string, unknown> = {
+      status: "archived",
+      pipeline_stage: mapStatusToPipelineStage("archived")
+    };
     if (!missingRestoreColumns) {
       patch.status_before_archive = priorStatus === "archived" ? null : priorStatus;
       patch.archived_at = now;
@@ -163,7 +169,13 @@ async function unarchiveRows(
       hasCopy
     });
 
-    const patch: Record<string, unknown> = { status: restoreStatus };
+    // Q6-A: restore status then map (no pipeline_stage_before_archive this pack).
+    const patch: Record<string, unknown> = {
+      status: restoreStatus,
+      pipeline_stage: mapStatusToPipelineStage(restoreStatus, {
+        shopifyProductId: (row.shopify_product_id as string | null) ?? null
+      })
+    };
     if (!missingRestoreColumns) {
       patch.status_before_archive = null;
       patch.archived_at = null;

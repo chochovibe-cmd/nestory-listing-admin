@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { buildMatrixifyCsv } from "@/lib/csv/matrixify";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { notifyMake } from "@/lib/notifications/make";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
       .from("product_drafts")
       .update({
         status: "csv_ready",
+        pipeline_stage: mapStatusToPipelineStage("csv_ready"),
         publish_method: "matrixify_csv",
         publish_status: "csv_ready"
       })

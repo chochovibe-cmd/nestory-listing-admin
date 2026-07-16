@@ -1,4 +1,5 @@
 import { notifyMake } from "@/lib/notifications/make";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/payload";
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
@@ -92,6 +93,7 @@ export async function publishDraft(
     .from("product_drafts")
     .update({
       status: "publishing",
+      pipeline_stage: mapStatusToPipelineStage("publishing"),
       publish_status: "publishing",
       publish_mode: publishMode,
       shopify_payload_preview: payload
@@ -126,11 +128,13 @@ export async function publishDraft(
       },
       completed_at: new Date().toISOString()
     });
+    const mockStatus = publishMode === "active" ? "active_published" : "draft_created";
     await serviceSupabase
       .from("product_drafts")
       .update({
-        status: publishMode === "active" ? "active_published" : "draft_created",
-        publish_status: publishMode === "active" ? "active_published" : "draft_created",
+        status: mockStatus,
+        pipeline_stage: mapStatusToPipelineStage(mockStatus),
+        publish_status: mockStatus,
         shopify_product_id: "mock-product-id",
         shopify_admin_url: null,
         error_message: null,
@@ -201,7 +205,12 @@ export async function publishDraft(
     });
     await serviceSupabase
       .from("product_drafts")
-      .update({ status: "api_failed", publish_status: "api_failed", error_message: message })
+      .update({
+        status: "api_failed",
+        pipeline_stage: mapStatusToPipelineStage("api_failed"),
+        publish_status: "api_failed",
+        error_message: message
+      })
       .eq("id", id);
     await notifyMake("api_failed", { draftId: id, error: message });
     return { ok: false, status: 502, error: message };
@@ -222,7 +231,12 @@ export async function publishDraft(
     });
     await serviceSupabase
       .from("product_drafts")
-      .update({ status: "api_failed", publish_status: "api_failed", error_message: message })
+      .update({
+        status: "api_failed",
+        pipeline_stage: mapStatusToPipelineStage("api_failed"),
+        publish_status: "api_failed",
+        error_message: message
+      })
       .eq("id", id);
     await notifyMake("api_failed", { draftId: id, error: message });
     return { ok: false, status: 502, error: message };
@@ -265,6 +279,7 @@ export async function publishDraft(
       .from("product_drafts")
       .update({
         status: "api_failed",
+        pipeline_stage: mapStatusToPipelineStage("api_failed"),
         publish_status: "api_failed",
         shopify_product_id: productId,
         shopify_admin_url: shopifyAdminUrl(productId),
@@ -476,11 +491,13 @@ export async function publishDraft(
       : result,
     completed_at: new Date().toISOString()
   });
+  const publishedStatus = publishMode === "active" ? "active_published" : "draft_created";
   await serviceSupabase
     .from("product_drafts")
     .update({
-      status: publishMode === "active" ? "active_published" : "draft_created",
-      publish_status: publishMode === "active" ? "active_published" : "draft_created",
+      status: publishedStatus,
+      pipeline_stage: mapStatusToPipelineStage(publishedStatus),
+      publish_status: publishedStatus,
       shopify_product_id: productId,
       shopify_admin_url: shopifyAdminUrl(productId),
       error_message: null,

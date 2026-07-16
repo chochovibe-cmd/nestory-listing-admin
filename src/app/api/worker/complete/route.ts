@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireWorkerToken, jsonError } from "@/lib/api/auth";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { notifyMake } from "@/lib/notifications/make";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
     spec_text: output.spec_text ?? null,
     warnings: output.warnings ?? [],
     status: "ready_for_review",
+    pipeline_stage: mapStatusToPipelineStage("ready_for_review"),
     generation_status: "completed",
     generation_rule_version: body.ruleVersion ?? null,
     generation_model: body.model ?? "codex_skill",

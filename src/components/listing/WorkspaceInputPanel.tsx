@@ -22,6 +22,7 @@ import {
   type StepStatus
 } from "@/components/listing/generationProgress";
 import { createClient } from "@/lib/supabase/client";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import {
   MAX_SCREENSHOT_IMAGES,
   planScreenshotFill,
@@ -896,6 +897,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
           inventory_quantity: null,
           inventory_policy: "continue",
           status: "pending_input",
+          pipeline_stage: mapStatusToPipelineStage("pending_input"),
           created_by: userId
         })
         .select("id")
@@ -959,6 +961,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       // B7: dimension defs (empty when single SKU)
       variant_dimensions: variantDimensions,
       status: "pending_copy",
+      pipeline_stage: mapStatusToPipelineStage("pending_copy"),
       generation_mode: "api_llm" as const,
       generation_provider: "codex" as const,
       generation_status: "pending" as const,

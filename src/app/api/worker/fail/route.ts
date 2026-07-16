@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireWorkerToken, jsonError } from "@/lib/api/auth";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { notifyMake } from "@/lib/notifications/make";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
@@ -13,10 +14,12 @@ export async function POST(request: NextRequest) {
   const supabase = createServiceSupabaseClient();
   const retryable = body.retryable === true;
 
+  const nextStatus = retryable ? "pending_copy" : "failed";
   const { error } = await supabase
     .from("product_drafts")
     .update({
-      status: retryable ? "pending_copy" : "failed",
+      status: nextStatus,
+      pipeline_stage: mapStatusToPipelineStage(nextStatus),
       generation_status: retryable ? "pending" : "failed",
       generation_error: String(body.error),
       worker_id: null,

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireWorkerToken, jsonError } from "@/lib/api/auth";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 type ClaimedDraft = {
@@ -32,6 +33,12 @@ export async function POST(request: NextRequest) {
   const claimedDrafts = (claimedDraftRows ?? []) as ClaimedDraft[];
   const ids = claimedDrafts.map((draft) => draft.id);
   if (!ids.length) return Response.json({ claimed: [] });
+
+  // R1 dual-write: RPC claim sets status=processing but not pipeline_stage.
+  await supabase
+    .from("product_drafts")
+    .update({ pipeline_stage: mapStatusToPipelineStage("processing") })
+    .in("id", ids);
 
   const { data: draftRowsWithImages, error: readError } = await supabase
     .from("product_drafts")

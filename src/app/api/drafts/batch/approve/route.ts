@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
@@ -26,7 +27,11 @@ export async function POST(request: NextRequest) {
   const serviceSupabase = createServiceSupabaseClient();
   const { data: updated, error } = await serviceSupabase
     .from("product_drafts")
-    .update({ status: "approved", reviewed_by: user.id })
+    .update({
+      status: "approved",
+      pipeline_stage: mapStatusToPipelineStage("approved"),
+      reviewed_by: user.id
+    })
     .in("id", draftIds)
     .select("id");
 

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { buildShowmoreCsv } from "@/lib/csv/showmore";
 import { normalizeShowmoreMarkupPercent } from "@/lib/csv/showmorePricing";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
       .from("product_drafts")
       .update({
         status: "csv_ready",
+        pipeline_stage: mapStatusToPipelineStage("csv_ready"),
         publish_status: "csv_ready"
       })
       .in("id", exportedIds);

@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .from("product_drafts")
     .update({
       status: "needs_revision",
+      pipeline_stage: mapStatusToPipelineStage("needs_revision"),
       reviewed_by: user.id,
       error_message: comment
     })

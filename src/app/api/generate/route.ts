@@ -48,6 +48,7 @@ import {
   buildClassificationDuplicateWarning,
   queryDuplicateMatches,
 } from "@/lib/drafts/checkDuplicate";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { mergeRegenCurrentValues } from "@/lib/drafts/copyVersionHistory";
 
 const COPY_PROVIDERS: Record<"openai" | "claude", CopyProvider> = {
@@ -628,10 +629,12 @@ export async function POST(request: NextRequest) {
         );
       }
     } catch (providerError) {
+      // Q7-A: park failure light on copy_review without changing legacy status.
       await serviceSupabase
         .from("product_drafts")
         .update({
           generation_status: "failed",
+          pipeline_stage: mapStatusToPipelineStage("failed"),
           generation_error: providerError instanceof Error ? providerError.message : "Copy provider failed",
         })
         .eq("id", draftId);
@@ -826,6 +829,7 @@ export async function POST(request: NextRequest) {
       sku: detected.sku || null,
       warnings: allWarnings,
       status: nextStatus,
+      pipeline_stage: mapStatusToPipelineStage(nextStatus),
       generation_mode: "api_llm",
       generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
       generation_status: localizedOutput.draft_state === "blocked" ? "failed" : "completed",

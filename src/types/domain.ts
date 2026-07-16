@@ -18,6 +18,18 @@ export type DraftStatus =
   | "failed"
   | "archived";
 
+/**
+ * R1: three-station pipeline stage (migration 029).
+ * Dual-written with status; R2+ may retire status gradually.
+ */
+export type PipelineStage =
+  | "input"
+  | "copy_review"
+  | "image_review"
+  | "ready"
+  | "published"
+  | "archived";
+
 export type GenerationMode = "codex_skill" | "api_llm" | "manual";
 export type GenerationProvider = "codex" | "openai" | "anthropic" | "other";
 export type GenerationStatus = "pending" | "processing" | "completed" | "failed";
@@ -89,6 +101,11 @@ export interface ProductDraft {
   spec_text: string | null;
   warnings: string[];
   status: DraftStatus;
+  /**
+   * R1: three-station stage (migration 029). Optional until SQL applied;
+   * dual-written with status. Prefer this for R2+ queue filters.
+   */
+  pipeline_stage?: PipelineStage | null;
   generation_mode: GenerationMode;
   generation_provider: GenerationProvider;
   generation_status: GenerationStatus;

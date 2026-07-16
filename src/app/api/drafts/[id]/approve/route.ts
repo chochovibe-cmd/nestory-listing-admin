@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,10 +21,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const serviceSupabase = createServiceSupabaseClient();
+  // New approve → image_review (no GID); map without shopifyProductId.
   const { error } = await serviceSupabase
     .from("product_drafts")
     .update({
       status: "approved",
+      pipeline_stage: mapStatusToPipelineStage("approved"),
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString() // A13: review-stage timestamp
     })

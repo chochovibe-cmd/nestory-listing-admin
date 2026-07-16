@@ -50,6 +50,10 @@ export type ProductDraftPayload = {
   image_description?: string | null;
   variants?: ProductVariant[] | null;
   sku: string | null;
+  /** 夜工包（回饋 27）：聯名品牌（如 Razer）；「品牌 × IP」標題/SEO 骨架用。 */
+  product_brand?: string | null;
+  /** 夜工包（回饋 29）：款式摘要文字，供標題引擎從中比對出多角色名。 */
+  variant_text?: string | null;
   secondhand_grade: string | null;
   secondhand_condition: string | null;
   secondhand_notes: string | null;

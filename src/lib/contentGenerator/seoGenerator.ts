@@ -8,11 +8,14 @@ import {
   removeDuplicateDisplayTerms,
 } from './displayLabels';
 import { ListingDraftInput } from './types';
+import { collectCharacterNames } from './titleGenerator';
 import type { IpCatalogEntry, IpCharacter } from './sourceTypes';
 import { normalizeProductTypeForDisplay } from '../productTypeLabels';
 
-const SEO_TITLE_MAX_LENGTH = 60;
-const META_DESCRIPTION_MAX_LENGTH = 60;
+// 夜工包（回饋 33，2026-07-18 老闆定案）：SEO 標題重要字前置後可繼續堆受眾關鍵字
+// （Google 截斷不懲罰），60→80；Meta 描述寫滿 Google 行動版約 78 字的顯示額度，60→80。
+const SEO_TITLE_MAX_LENGTH = 80;
+const META_DESCRIPTION_MAX_LENGTH = 80;
 const FORBIDDEN_META_TERMS = [
   '現貨',
   '約14天',
@@ -265,11 +268,20 @@ export function generateSeoContent(
   seo_title: string;
 } {
   const ip = normalizeText(draft.ip);
-  const ipDisplayName = formatListingIpDisplayNameFromContext(ip, options);
+  const rawIpDisplayName = formatListingIpDisplayNameFromContext(ip, options);
+  // 夜工包（回饋 27）：品牌 × IP 同步套進 SEO 標題骨架
+  const productBrand = normalizeText(draft.product_brand);
+  const ipDisplayName = productBrand ? productBrand + ' × ' + rawIpDisplayName : rawIpDisplayName;
   const primaryCharacter = getPrimaryCharacter(draft);
   const characterDisplayName = formatCharacterDisplayNameFromContext(primaryCharacter, ip, options);
   const characterShortName = formatCharacterShortNameFromContext(primaryCharacter, ip, options);
-  const character = isCharacterRedundantWithIpDisplay(characterShortName, ipDisplayName) ? '' : characterDisplayName;
+  // 夜工包（回饋 27/29）：多角色用「・」列出（超過 3 個隱藏，取前三）
+  const allCharacters = collectCharacterNames(draft, options, rawIpDisplayName);
+  const multiCharacterText = allCharacters.length > 1 ? allCharacters.slice(0, 3).join('・') : '';
+  const singleCharacter = isCharacterRedundantWithIpDisplay(characterShortName, rawIpDisplayName)
+    ? ''
+    : characterDisplayName;
+  const character = multiCharacterText || singleCharacter;
   const productType = getProductTypeText(draft);
   const feature = getFeatureKeyword(draft);
   const featureTerms = extractFeatureTerms(draft.image_description, getFeatureSourceText(draft));

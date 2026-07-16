@@ -142,6 +142,8 @@ export interface ProductDraft {
   image_flags: Record<string, string>;
   image_status: ImageStatus;
   is_secondhand: boolean;
+  /** 夜工包（回饋 27）：聯名品牌；migration 031（未跑時為 undefined，程式視同 null）。 */
+  product_brand?: string | null;
   secondhand_grade: string | null;
   secondhand_condition: string | null;
   secondhand_notes: string | null;

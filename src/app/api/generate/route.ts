@@ -95,12 +95,19 @@ type DetectedClassification = {
   sku: string;
 };
 
-function toListingDraftInput(draft: ProductDraft, detected: DetectedClassification): ListingDraftInput {
+function toListingDraftInput(
+  draft: ProductDraft,
+  detected: DetectedClassification,
+  variantSummary?: string | null
+): ListingDraftInput {
   return {
     source_url: draft.source_url,
     product_status: draft.is_secondhand ? "secondhand" : "general",
     ip: detected.ip,
     characters: detected.character ? [detected.character] : [],
+    // 夜工包（回饋 27/29）：聯名品牌與款式文字進標題/SEO 骨架
+    product_brand: draft.product_brand ?? null,
+    variant_text: variantSummary ?? null,
     product_types: detected.productType ? [detected.productType] : [],
     use_cases: [],
     sale_status: draft.sale_status,
@@ -684,7 +691,7 @@ export async function POST(request: NextRequest) {
     displayContext,
   );
 
-  const listingInput = toListingDraftInput(draft, detected);
+  const listingInput = toListingDraftInput(draft, detected, variantSummary);
   const ruleOutput = applyTagsV2(
     generateListingContent(listingInput, tagRules, displayContext),
     listingInput,

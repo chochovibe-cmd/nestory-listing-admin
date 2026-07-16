@@ -16,7 +16,8 @@
     "verify:pwa-smoke": "node scripts/verify-pwa-smoke.mjs",
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
     "verify:d3-sharp": "node scripts/verify-d3-sharp.mjs",
-    "verify:all": "node scripts/verify-all.mjs"
+    "verify:all": "node scripts/verify-all.mjs",
+    "prod": "next build && next start -p 3019"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

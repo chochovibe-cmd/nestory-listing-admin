@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3018,
       "autoPort": true
+    },
+    {
+      "name": "nestory-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "prod"],
+      "port": 3019
     }
   ]
 }

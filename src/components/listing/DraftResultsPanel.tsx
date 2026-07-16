@@ -45,14 +45,22 @@ import {
 } from "@/lib/drafts/optimisticArchiveHide";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
-import type { ProductDraft, ProductImage } from "@/types/domain";
+import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
+
+export type VariantPriceRow = Pick<
+  ProductVariantRow,
+  "id" | "draft_id" | "twd_price" | "compare_at_price" | "sort_order"
+>;
 
 export function DraftResultsPanel({
   drafts,
-  images
+  images,
+  variants = []
 }: {
   drafts: ProductDraft[];
   images: ProductImage[];
+  /** P1-5: multi-variant sell prices for card range display */
+  variants?: VariantPriceRow[];
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -131,6 +139,16 @@ export function DraftResultsPanel({
     }
     return map;
   }, [images]);
+
+  const variantsByDraft = useMemo(() => {
+    const map = new Map<string, VariantPriceRow[]>();
+    for (const row of variants) {
+      const list = map.get(row.draft_id) ?? [];
+      list.push(row);
+      map.set(row.draft_id, list);
+    }
+    return map;
+  }, [variants]);
 
   const stageImages = useMemo(
     () =>
@@ -723,6 +741,7 @@ export function DraftResultsPanel({
                 images={imagesByDraft.get(draft.id) ?? []}
                 key={draft.id}
                 onToggle={() => toggleOne(draft.id)}
+                variantPrices={variantsByDraft.get(draft.id) ?? []}
               />
             ))}
           </div>

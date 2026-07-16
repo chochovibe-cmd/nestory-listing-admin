@@ -21,6 +21,10 @@ import {
   type ResultCardTabId
 } from "@/lib/drafts/resultCardTabs";
 import {
+  collectSellPricesForCard,
+  formatPriceRangeLabel
+} from "@/lib/variants/priceDisplay";
+import {
   anyCopyDirty,
   buildDraftCopyPatch,
   buildFieldVersions,
@@ -192,13 +196,16 @@ export function ResultCard({
   images,
   checked,
   onToggle,
-  defaultExpanded = false
+  defaultExpanded = false,
+  variantPrices = []
 }: {
   draft: ProductDraft;
   images: ProductImage[];
   checked?: boolean;
   onToggle?: () => void;
   defaultExpanded?: boolean;
+  /** P1-5: multi-variant sell prices for header range (e.g. 269~279) */
+  variantPrices?: Array<{ twd_price?: number | null }>;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -250,6 +257,14 @@ export function ResultCard({
   // B6: 卡片只跟讀 price_mode（不做完整切換 UI）；migration 020 前 fallback 特價。
   const priceMode: PriceMode = draft.price_mode === "single" ? "single" : "sale";
   const profit = draft.twd_price != null && draft.twd_cost != null ? draft.twd_price - draft.twd_cost : null;
+  // P1-5 / 回饋 49: multi-variant → price range on collapsed card
+  const priceRangeLabel = useMemo(() => {
+    const prices = collectSellPricesForCard({
+      draftPrice: draft.twd_price,
+      variantPrices: variantPrices.map((v) => v.twd_price)
+    });
+    return formatPriceRangeLabel(prices);
+  }, [draft.twd_price, variantPrices]);
   const profitPct =
     profit != null && draft.twd_price && draft.twd_price > 0
       ? Math.round((profit / draft.twd_price) * 100)
@@ -1046,13 +1061,13 @@ export function ResultCard({
             </span>
           ) : null}
         </span>
-        {draft.twd_price ? (
+        {priceRangeLabel ? (
           <div className="rc-price-stack">
-            <span className="rc-price">NT${draft.twd_price.toLocaleString()}</span>
-            {priceMode === "sale" && draft.compare_at_price ? (
+            <span className="rc-price">{priceRangeLabel}</span>
+            {priceMode === "sale" && draft.compare_at_price && !priceRangeLabel.includes("~") ? (
               <span className="rc-compare muted">定價 NT${draft.compare_at_price.toLocaleString()}</span>
             ) : null}
-            {profit != null ? (
+            {profit != null && !priceRangeLabel.includes("~") ? (
               <span className="rc-profit">
                 利潤 NT${profit.toLocaleString()}
                 {profitPct != null ? `（約 ${profitPct}%）` : ""}

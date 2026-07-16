@@ -4,9 +4,14 @@ import { SetupNotice } from "@/components/listing/SetupNotice";
 import { WorkbenchMobileShell } from "@/components/listing/WorkbenchMobileShell";
 import { WorkspaceInputPanel } from "@/components/listing/WorkspaceInputPanel";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
-import type { ProductDraft, ProductImage } from "@/types/domain";
+import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
+
+export type WorkbenchVariantPrice = Pick<
+  ProductVariantRow,
+  "id" | "draft_id" | "twd_price" | "compare_at_price" | "sort_order"
+>;
 
 export default async function NewDraftPage() {
   if (!hasSupabaseServerEnv()) {
@@ -14,7 +19,9 @@ export default async function NewDraftPage() {
   }
 
   const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect("/login");
@@ -42,17 +49,33 @@ export default async function NewDraftPage() {
   ];
   const draftIds = typedDrafts.map((draft) => draft.id);
 
-  const { data: images } = draftIds.length
-    ? await supabase.from("product_images").select("*").in("draft_id", draftIds).order("sort_order")
-    : { data: [] as ProductImage[] };
+  let typedImages: ProductImage[] = [];
+  let typedVariants: WorkbenchVariantPrice[] = [];
 
-  const typedImages = (images ?? []) as ProductImage[];
+  if (draftIds.length > 0) {
+    const [{ data: images }, { data: variants }] = await Promise.all([
+      supabase.from("product_images").select("*").in("draft_id", draftIds).order("sort_order"),
+      supabase
+        .from("product_variants")
+        .select("id, draft_id, twd_price, compare_at_price, sort_order")
+        .in("draft_id", draftIds)
+        .order("sort_order", { ascending: true })
+    ]);
+    typedImages = (images ?? []) as ProductImage[];
+    typedVariants = (variants ?? []) as WorkbenchVariantPrice[];
+  }
 
   return (
     <main className="container">
       <WorkbenchMobileShell
         input={<WorkspaceInputPanel userId={user.id} />}
-        results={<DraftResultsPanel drafts={typedDrafts} images={typedImages} />}
+        results={
+          <DraftResultsPanel
+            drafts={typedDrafts}
+            images={typedImages}
+            variants={typedVariants}
+          />
+        }
       />
     </main>
   );

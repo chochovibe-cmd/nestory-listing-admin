@@ -33,6 +33,8 @@ type Props = {
   currency: CostCurrency;
   priceMode: PriceMode;
   pricingSettings: PricingSettings;
+  /** P1-5: product-level cost; blank variant cost inherits this. */
+  productCost?: number | null;
   /** Product images for picker (main preferred). */
   images: VariantImageOption[];
   /** Optional: draft id for loading characters — not required. */
@@ -48,6 +50,7 @@ export function VariantEditor({
   dimensions,
   rows,
   onDimensionsChange,
+  productCost = null,
   onRowsChange,
   currency,
   priceMode,
@@ -152,7 +155,8 @@ export function VariantEditor({
     next = recalculateUnlockedVariantPrices(next, {
       currency,
       priceMode,
-      settings: pricingSettings
+      settings: pricingSettings,
+      productCost
     });
     setRowsSafe(next);
   }
@@ -463,7 +467,11 @@ export function VariantEditor({
                 <input
                   aria-label={costLabel}
                   onChange={(e) => onCostChange(index, e.target.value)}
-                  placeholder="成本"
+                  placeholder={
+                    productCost != null && productCost > 0
+                      ? `同商品成本 ${currency === "CNY" ? "¥" : "NT$"}${productCost}`
+                      : "成本"
+                  }
                   type="number"
                   value={row.cost}
                 />
@@ -485,7 +493,7 @@ export function VariantEditor({
               </div>
               <div className="vgrid-sub">
                 <span className="twd">
-                  {formatVariantPriceLine(row, priceMode)}
+                  {formatVariantPriceLine(row, priceMode, { productCost })}
                   {isVariantRowFilled(row) ? (
                     <>
                       {" · "}
@@ -554,10 +562,15 @@ export function VariantEditor({
   );
 }
 
-/** Parent can call when currency/settings/priceMode change. */
+/** Parent can call when currency/settings/priceMode/productCost change. */
 export function repriceVariants(
   rows: VariantFormRow[],
-  opts: { currency: CostCurrency; priceMode: PriceMode; settings: PricingSettings }
+  opts: {
+    currency: CostCurrency;
+    priceMode: PriceMode;
+    settings: PricingSettings;
+    productCost?: number | null;
+  }
 ): VariantFormRow[] {
   return recalculateUnlockedVariantPrices(rows, opts);
 }

@@ -93,15 +93,27 @@ function failedDraftIdsFromItems(items) {
   return items.filter((i) => i.item_status === "failed").map((i) => i.draft_id);
 }
 
+/** P1-4: only true missing-table signals (not bare table name / 42P17). */
 function isMissingPublishBatchesError(message) {
   if (!message) return false;
   const m = message.toLowerCase();
-  return (
+  if (m.includes("42p01") || m.includes("pgrst205")) {
+    return (
+      m.includes("publish_batch") ||
+      m.includes("publish_batches") ||
+      m.includes("publish_batch_items") ||
+      m.includes("current_publish_batch")
+    );
+  }
+  const mentionsPublishTable =
     m.includes("publish_batches") ||
     m.includes("publish_batch_items") ||
-    m.includes("current_publish_batch_id") ||
+    m.includes("current_publish_batch_id");
+  if (!mentionsPublishTable) return false;
+  return (
+    m.includes("does not exist") ||
     m.includes("schema cache") ||
-    (m.includes("does not exist") && m.includes("publish"))
+    m.includes("could not find the table")
   );
 }
 
@@ -169,10 +181,23 @@ await check("buildPublishSnapshot + filter + failed ids (Q3 A-lite)", () => {
   assert.deepEqual(ids, ["y"]);
 });
 
-await check("missing table error detection", () => {
+await check("missing table error detection (P1-4 tightened)", () => {
   assert.equal(isMissingPublishBatchesError('relation "publish_batches" does not exist'), true);
-  assert.equal(isMissingPublishBatchesError("Could not find the table in the schema cache"), true);
+  assert.equal(
+    isMissingPublishBatchesError("Could not find the table 'publish_batches' in the schema cache"),
+    true
+  );
+  // Bare schema cache without table name — no longer a hit
+  assert.equal(isMissingPublishBatchesError("Could not find the table in the schema cache"), false);
   assert.equal(isMissingPublishBatchesError("permission denied"), false);
+  // 42P17 RLS recursion must NOT look like missing table
+  assert.equal(
+    isMissingPublishBatchesError(
+      'infinite recursion detected in policy for relation "publish_batches"'
+    ),
+    false
+  );
+  assert.equal(isMissingPublishBatchesError("42P01 publish_batches"), true);
   assert.ok(TIME_BUDGET_SKIP_REASON.includes("time_budget"));
 });
 

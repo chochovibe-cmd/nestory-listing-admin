@@ -260,17 +260,26 @@ export function computeMakeQuotaView(input: {
   };
 }
 
-/** Supabase / PostgREST missing-relation messages → Q4-A honest UI. */
+/**
+ * Supabase / PostgREST missing-relation messages → Q4-A honest UI.
+ * P1-4: require missing-table phrase or codes — bare table name (42P17) is NOT enough.
+ */
 export function isMissingBatchTableError(message: string | null | undefined): boolean {
   if (!message) return false;
   const m = message.toLowerCase();
+  const mentionsBatchTable =
+    m.includes("image_batches") ||
+    m.includes("image_batch_items") ||
+    m.includes("publish_batches") ||
+    m.includes("publish_batch_items");
+  if (m.includes("42p01") || m.includes("pgrst205")) {
+    return mentionsBatchTable || m.includes("batch");
+  }
+  if (!mentionsBatchTable) return false;
   return (
     m.includes("does not exist") ||
     m.includes("schema cache") ||
-    m.includes("could not find the table") ||
-    m.includes("image_batches") ||
-    m.includes("publish_batches") ||
-    (m.includes("relation") && m.includes("does not exist"))
+    m.includes("could not find the table")
   );
 }
 

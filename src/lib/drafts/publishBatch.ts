@@ -149,15 +149,32 @@ export function publishBatchTitle(publishMode: PublishMode): string {
     : "匯入 Shopify（API 建草稿）";
 }
 
+/**
+ * P1-4: only true missing-table signals → 027 hint.
+ * RLS recursion (42P17), permission errors, etc. must show raw message.
+ */
 export function isMissingPublishBatchesError(message: string | null | undefined): boolean {
   if (!message) return false;
   const m = message.toLowerCase();
-  return (
+  // Explicit PostgREST / Postgres missing-relation codes
+  if (m.includes("42p01") || m.includes("pgrst205")) {
+    return (
+      m.includes("publish_batch") ||
+      m.includes("publish_batches") ||
+      m.includes("publish_batch_items") ||
+      m.includes("current_publish_batch")
+    );
+  }
+  const mentionsPublishTable =
     m.includes("publish_batches") ||
     m.includes("publish_batch_items") ||
-    m.includes("current_publish_batch_id") ||
+    m.includes("current_publish_batch_id");
+  if (!mentionsPublishTable) return false;
+  // Phrase + table name (not bare table name — 42P17 includes table names)
+  return (
+    m.includes("does not exist") ||
     m.includes("schema cache") ||
-    (m.includes("does not exist") && m.includes("publish"))
+    m.includes("could not find the table")
   );
 }
 

@@ -187,16 +187,23 @@ function computeMakeQuotaView(input) {
   };
 }
 
+/** P1-4: require missing-table phrase + batch table name (not bare name / 42P17). */
 function isMissingBatchTableError(message) {
   if (!message) return false;
   const m = message.toLowerCase();
+  const mentionsBatchTable =
+    m.includes("image_batches") ||
+    m.includes("image_batch_items") ||
+    m.includes("publish_batches") ||
+    m.includes("publish_batch_items");
+  if (m.includes("42p01") || m.includes("pgrst205")) {
+    return mentionsBatchTable || m.includes("batch");
+  }
+  if (!mentionsBatchTable) return false;
   return (
     m.includes("does not exist") ||
     m.includes("schema cache") ||
-    m.includes("could not find the table") ||
-    m.includes("image_batches") ||
-    m.includes("publish_batches") ||
-    (m.includes("relation") && m.includes("does not exist"))
+    m.includes("could not find the table")
   );
 }
 
@@ -378,7 +385,9 @@ await check("resolveMakeOpsLimit", () => {
 
 await check("zero SQL / no new migration for E3", () => {
   const migrations = fs.readdirSync(path.join(root, "supabase/migrations"));
-  assert.ok(!migrations.some((f) => /028|e3|make_quota/i.test(f)));
+  // 028 is unrelated (publish_batches RLS recursion). E3 itself must not add migrations.
+  assert.ok(!migrations.some((f) => /e3|make_quota/i.test(f)));
+  assert.ok(!migrations.some((f) => /^029_.*make/i.test(f)));
 });
 
 if (failures.length) {

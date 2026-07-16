@@ -14,7 +14,7 @@ import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricin
 import { SALE_STATUS_OPTIONS } from "@/lib/saleStatus";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
-import { ImageUploader } from "@/components/listing/ImageUploader";
+import { ImageUploader, type SeedImageRow } from "@/components/listing/ImageUploader";
 import {
   GENERATION_PROGRESS_EVENT,
   GENERATION_STEP_LABELS,
@@ -32,6 +32,7 @@ import type { SaleStatus } from "@/types/domain";
 import {
   formRowsToDbInserts,
   recalculateUnlockedVariantPrices,
+  validateCostRequirement,
   type VariantDimension,
   type VariantFormRow
 } from "@/lib/variants";
@@ -237,7 +238,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
   const [fieldErrors, setFieldErrors] = useState<{ title?: boolean; price?: boolean; inventory?: boolean }>({});
   // B13 / BX4: restore bar when localStorage has an unsent form snapshot.
   const [restorePrompt, setRestorePrompt] = useState<WorkspaceAutosaveSnapshot | null>(null);
-  const [serverImageHint, setServerImageHint] = useState<string | null>(null);
+  /** P1-2: seed ImageUploader previews from product_images on restore (回饋 16). */
+  const [seedImages, setSeedImages] = useState<SeedImageRow[] | null>(null);
   const [discardBusy, setDiscardBusy] = useState(false);
   /** Skip debounce write until restore bar is resolved (avoid clobbering snapshot with empty form). */
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
@@ -524,14 +526,15 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     priceMode
   ]);
 
-  // B7: reprice unlocked variant rows when currency / rate / price mode changes
+  // B7 + P1-5: reprice unlocked variant rows when currency / rate / price mode / product cost changes
   useEffect(() => {
     setVariants((current) => {
       if (current.length === 0) return current;
       return repriceVariants(current, {
         currency: costCurrency,
         priceMode,
-        settings: pricingSettings
+        settings: pricingSettings,
+        productCost: parsedPrice > 0 ? parsedPrice : null
       });
     });
   }, [
@@ -541,7 +544,8 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     pricingSettings.costMultiplier,
     pricingSettings.marginMultiplier,
     pricingSettings.compareAtMultiplier,
-    pricingSettings.minPrice
+    pricingSettings.minPrice,
+    parsedPrice
   ]);
 
   // B7: load product images for per-variant picker
@@ -765,10 +769,17 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     if (plan.variants) {
       // B7: screenshot fill is 1-dimension 「款式」; reprice unlocked rows.
       setVariantDimensions([{ name: "款式" }]);
+      const productCostForFill =
+        plan.costCny != null && plan.costCny > 0
+          ? plan.costCny
+          : parsedPrice > 0
+            ? parsedPrice
+            : null;
       const priced = recalculateUnlockedVariantPrices(plan.variants, {
         currency: costCurrency,
         priceMode,
-        settings: pricingSettings
+        settings: pricingSettings,
+        productCost: productCostForFill
       });
       setVariants(priced);
     }
@@ -1028,7 +1039,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     // B13: clear localStorage with the same light-reset rules so refresh won't re-prompt.
     clearWorkspaceAutosave(typeof window !== "undefined" ? window.localStorage : null);
     setRestorePrompt(null);
-    setServerImageHint(null);
+    setSeedImages(null);
     setAutosaveEnabled(true);
 
     draftIdRef.current = null;
@@ -1144,13 +1155,9 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
       setDraftId(null);
     }
     // Remount ImageUploader only (not the whole form) so previews clear without
-    // losing the title/price state we just applied.
+    // losing the title/price state we just applied. seedImages applied after fetch.
+    setSeedImages(null);
     setFormKey((k) => k + 1);
-    setServerImageHint(
-      fields.draftId
-        ? "此草稿在伺服器上可能已有圖片，可再補圖或直接生成（預覽不會自動載回）。"
-        : null
-    );
     setFieldErrors({});
   }
 
@@ -1178,7 +1185,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     flushSync(() => {
       applyWorkspaceSnapshot(snap);
       setRestorePrompt(null);
-      setMessage("已恢復未送出的草稿，可繼續編輯或按生成。");
+      setMessage("已還原上次未完成的填寫，可繼續編輯或按生成。");
     });
 
     // Keep the snapshot alive (refresh savedAt) so a mid-restore refresh still works.
@@ -1220,6 +1227,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     }, 100);
 
     // Draft existence check is best-effort and must not clear restored fields.
+    // P1-2 / 回饋 16: load product_images into ImageUploader previews (not text hint).
     if (fields.draftId) {
       const draftToCheck = fields.draftId;
       void (async () => {
@@ -1234,20 +1242,27 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             draftIdRef.current = null;
             setDraftId(null);
           }
-          setServerImageHint(null);
+          setSeedImages(null);
           setMessage("原草稿已不在（可能已封存），欄位已回填；再生成會建立新草稿。");
           return;
         }
-        const { count } = await supabase
+        const { data: imageRows, error: imageError } = await supabase
           .from("product_images")
-          .select("id", { count: "exact", head: true })
-          .eq("draft_id", draftToCheck);
-        if ((count ?? 0) > 0) {
-          setServerImageHint(
-            `此草稿伺服器上已有 ${count} 張圖，可再補圖或直接生成（預覽不會自動載回）。`
-          );
-        } else {
-          setServerImageHint(null);
+          .select(
+            "id, image_type, original_file_url, processed_file_url, sort_order, process_intent, is_spec_process"
+          )
+          .eq("draft_id", draftToCheck)
+          .in("image_type", ["main", "detail"])
+          .order("sort_order", { ascending: true });
+        if (imageError) {
+          setSeedImages(null);
+          return;
+        }
+        const seeds = (imageRows ?? []) as SeedImageRow[];
+        setSeedImages(seeds.length > 0 ? seeds : null);
+        // Remount uploader so seedImages effect applies cleanly after restore.
+        if (seeds.length > 0) {
+          setFormKey((k) => k + 1);
         }
       })();
     }
@@ -1261,7 +1276,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
     const draftToDrop = snap?.draftId ?? null;
     clearWorkspaceAutosave(typeof window !== "undefined" ? window.localStorage : null);
     setRestorePrompt(null);
-    setServerImageHint(null);
+    setSeedImages(null);
     setAutosaveEnabled(true);
 
     if (!draftToDrop) {
@@ -1317,11 +1332,22 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
 
     const errors: { title?: boolean; price?: boolean } = {};
     if (!title.trim()) errors.title = true;
-    if (!parsedPrice || parsedPrice <= 0) errors.price = true;
+    // P1-5 / 回饋 49: 上方成本 或 每一有填選項的款式列成本齊全，擇一即可
+    const costError = validateCostRequirement({
+      productCost: parsedPrice,
+      variants
+    });
+    if (costError) errors.price = true;
 
     if (errors.title || errors.price) {
       setFieldErrors(errors);
-      setMessage("請輸入商品標題與有效成本價格");
+      setMessage(
+        errors.title && costError
+          ? `請輸入商品標題；${costError}`
+          : errors.title
+            ? "請輸入商品標題"
+            : costError ?? "請輸入有效成本價格"
+      );
       (errors.title ? titleRef.current : priceRef.current)?.focus();
       return;
     }
@@ -1479,11 +1505,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             </div>
           ) : null}
 
-          {serverImageHint ? (
-            <div className="notice" role="status">
-              {serverImageHint}
-            </div>
-          ) : null}
+
 
           {/* B17: mobile accordion steps (headers always clickable; desktop shows all bodies) */}
           <div className={`form-acc-step${mobileStep === 1 || !isNarrow ? " open" : ""}`} data-step="1">
@@ -1654,6 +1676,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
               ensureDraftId={ensureDraftId}
               key={formKey}
               onUploadingChange={setImagesUploading}
+              seedImages={seedImages}
               trackUpload={(promise) => uploadPromisesRef.current.push(promise)}
               userId={userId}
             />
@@ -1701,7 +1724,12 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
                 </button>
               </div>
             </div>
-            {fieldErrors.price ? <div className="field-msg">請輸入有效的成本價格</div> : null}
+            {fieldErrors.price ? (
+              <div className="field-msg">
+                {validateCostRequirement({ productCost: parsedPrice, variants }) ??
+                  "請輸入有效的成本價格"}
+              </div>
+            ) : null}
 
             {/* B6: 特價 / 單一售價二選一（預設特價） */}
             <div className="price-mode" role="group" aria-label="定價模式">
@@ -1826,6 +1854,7 @@ export function WorkspaceInputPanel({ userId }: { userId: string }) {
             <VariantEditor
               currency={costCurrency}
               dimensions={variantDimensions}
+              productCost={parsedPrice > 0 ? parsedPrice : null}
               footer={
                 <>
                   <button

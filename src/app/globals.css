@@ -1253,6 +1253,29 @@ textarea {
   border-radius: 999px;
   line-height: 1.2;
 }
+/* P1-2: optimistic upload status on thumbs (tokens only) */
+.pthumb-status-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: var(--radius-s);
+  text-align: center;
+  padding: 2px;
+  pointer-events: none;
+}
+.pthumb-status-fail {
+  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent2) 18%, var(--surface));
+}
+.pthumb-failed .pthumb-img {
+  border-color: color-mix(in srgb, var(--accent2) 55%, var(--border-soft));
+}
 /* 使用者選取＝外框強調（與 source-pill / 選取語意一致） */
 .img-mark-btn {
   font-size: 11px;

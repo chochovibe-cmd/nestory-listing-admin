@@ -1,33 +1,31 @@
 "use client";
 
 import {
-  STAGE_OPTIONS,
-  type StageKey
-} from "@/lib/drafts/stageFilter";
+  STATION_OPTIONS,
+  type StationFilterKey,
+} from "@/lib/drafts/stationFilter";
+import type { PipelineStationCounts } from "@/lib/drafts/pipelineStage";
 
 export function StageFilterPills({
   stage,
   counts,
   onChange,
-  /** Hide stages that need images when queue has none (e.g. 圖片未標記). */
-  hideWhenZero,
-  ariaLabel = "依階段篩選"
+  ariaLabel = "依站篩選",
 }: {
-  stage: StageKey;
-  counts: Record<StageKey, number>;
-  onChange: (next: StageKey) => void;
-  hideWhenZero?: StageKey[];
+  stage: StationFilterKey;
+  counts: PipelineStationCounts;
+  onChange: (next: StationFilterKey) => void;
   ariaLabel?: string;
 }) {
-  const hidden = new Set(hideWhenZero ?? []);
-
   return (
     <div className="pill-group stage-filter-pills" aria-label={ariaLabel} role="toolbar">
-      {STAGE_OPTIONS.map(({ key, label }) => {
-        if (hidden.has(key) && (counts[key] ?? 0) === 0 && stage !== key) {
+      {STATION_OPTIONS.map(({ key, label }) => {
+        const count = counts[key] ?? 0;
+        const fail = counts.fail?.[key] ?? 0;
+        // R2 §6 / 回饋 18: hide zero-count stations unless selected
+        if (count === 0 && stage !== key) {
           return null;
         }
-        const count = counts[key] ?? 0;
         return (
           <button
             className={`pill-btn${stage === key ? " active" : ""}`}
@@ -36,6 +34,12 @@ export function StageFilterPills({
             type="button"
           >
             {label} {count}
+            {fail > 0 ? (
+              <span className="station-fail-count" title={`${fail} 件失敗`}>
+                {" "}
+                · <span className="station-fail-num">{fail}</span>
+              </span>
+            ) : null}
           </button>
         );
       })}

@@ -3,8 +3,8 @@
  * Future pages use dead placeholders until their Phase lands.
  *
  * 2026-07-14 nav demotion (老闆): 商品佇列 ≠ 一級主線。
- * 對齊 Mockup 主流程順序：新增 → 圖審 → 紀錄 → …；佇列改次要（側欄最底、手機「更多」、設定前）。
- * 完整「刪／改造成 Shopify 草稿連動」分歧點留給 Fable 討論（見代理紀錄／差異 26）。
+ * 對齊 Mockup 主流程順序：新增 → 生圖工廠 → 紀錄 → …；佇列改次要（側欄最底、手機「更多」、設定前）。
+ * R2 §14：/review 頁名「生圖工廠」；站②佇列籤仍叫「圖片審核」。
  */
 
 export type NavHref =
@@ -38,7 +38,7 @@ export const QUEUE_NAV: NavItem = {
  */
 export const SIDEBAR_NAV: readonly NavItem[] = [
   { href: "/drafts/new", icon: "✦", label: "新增商品", shortLabel: "新增" },
-  { href: "/review", icon: "🖼", label: "圖片審核", shortLabel: "圖審" },
+  { href: "/review", icon: "🏭", label: "生圖工廠", shortLabel: "生圖" },
   { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" },
   { href: "/dashboard", icon: "📈", label: "儀表板", shortLabel: "儀表板" },
   { href: "/scouting", icon: "🔭", label: "選品情報", shortLabel: "選品" },
@@ -62,7 +62,7 @@ export const SETTINGS_NAV: NavItem = {
  */
 export const MOBILE_PRIMARY_TABS: readonly NavItem[] = [
   { href: "/drafts/new", icon: "✦", label: "新增商品", shortLabel: "新增" },
-  { href: "/review", icon: "🖼", label: "圖片審核", shortLabel: "圖審" },
+  { href: "/review", icon: "🏭", label: "生圖工廠", shortLabel: "生圖" },
   { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" }
 ] as const;
 

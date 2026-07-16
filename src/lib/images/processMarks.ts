@@ -65,7 +65,7 @@ export function formatUnmarkedBlockMessage(images: ProductImage[]): string | nul
     return imageSlotLabel(image, position);
   });
 
-  return `還有 ${unmarked.length} 張沒標記：${labels.join("、")}。請先為每張選「保留原圖／去簡體字／重生主圖」後再送圖。`;
+  return `還有 ${unmarked.length} 張沒標記：${labels.join("、")}。請先為每張選「保留原圖／簡轉繁／去字／重生」後再審核。`;
 }
 
 /**
@@ -83,12 +83,26 @@ export function formatReadyBatchQueuedHint(images: ProductImage[]): string {
   return `已標記完成（${count} 張）。將建立送圖批次；處理管線 Phase D 接通後自動執行。`;
 }
 
+/** R2 §5 labels. to_trad requires migration 030 before write. */
 export const PROCESS_INTENT_LABELS: Record<ImageProcessIntent, string> = {
   keep: "保留原圖",
-  de_text: "去簡體字",
-  regenerate: "重生主圖"
+  to_trad: "簡轉繁",
+  de_text: "去字",
+  regenerate: "重生",
 };
 
+/** Full station② mark options (order for UI). */
+export const PROCESS_INTENT_OPTIONS: ImageProcessIntent[] = [
+  "keep",
+  "to_trad",
+  "de_text",
+  "regenerate",
+];
+
+/**
+ * Spec toggle: still maps to de_text when on (pipeline hint).
+ * Turning off returns unmarked null (approve will write keep).
+ */
 export function intentForSpecToggle(on: boolean): {
   is_spec_process: boolean;
   process_intent: ImageProcessIntent | null;
@@ -96,21 +110,29 @@ export function intentForSpecToggle(on: boolean): {
   if (on) {
     return { is_spec_process: true, process_intent: "de_text" };
   }
-  // Turning off 規格圖 returns the row to unmarked (default blank).
   return { is_spec_process: false, process_intent: null };
 }
 
 /**
  * Apply a full process-intent pick from the result card.
- * If operator picks de_text while already 規格圖, keep is_spec_process.
+ * If operator picks de_text/to_trad while already 規格圖, keep is_spec_process.
  * Other intents always clear the 規格圖 flag.
  */
 export function patchForProcessIntentPick(
   intent: ImageProcessIntent,
   currentlySpec: boolean
 ): { process_intent: ImageProcessIntent; is_spec_process: boolean } {
-  if (intent === "de_text") {
-    return { process_intent: "de_text", is_spec_process: currentlySpec };
+  if (intent === "de_text" || intent === "to_trad") {
+    return { process_intent: intent, is_spec_process: currentlySpec };
   }
   return { process_intent: intent, is_spec_process: false };
+}
+
+/** Pipeline image ids that still need default keep (null process_intent). */
+export function unmarkedPipelineImageIds(
+  images: Array<Pick<ProductImage, "id" | "image_type" | "process_intent">>
+): string[] {
+  return images
+    .filter((img) => isPipelineImage(img) && img.process_intent == null)
+    .map((img) => img.id);
 }

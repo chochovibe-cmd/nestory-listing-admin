@@ -12,8 +12,24 @@ import {
   listPipelineImages,
   listUnmarkedPipelineImages,
   patchForProcessIntentPick,
-  PROCESS_INTENT_LABELS
+  PROCESS_INTENT_LABELS,
+  PROCESS_INTENT_OPTIONS
 } from "@/lib/images/processMarks";
+import {
+  countImageMarkSummary,
+  formatAiEstimateMessage,
+  formatMarkSummaryLine,
+  decideStation2Review
+} from "@/lib/drafts/stationRoute";
+import { resolveDraftStation } from "@/lib/drafts/stationFilter";
+import {
+  gradeDraftWarnings,
+  hasBlockingWarnings,
+  countConfirmOnly
+} from "@/lib/drafts/warningTiers";
+import { RegenCopyModal } from "@/components/listing/RegenCopyModal";
+import { LockedCopyPreview } from "@/components/listing/LockedCopyPreview";
+import { COPY_TONES, type CopyTone } from "@/lib/providers/copy";
 import {
   isResultCardTabId,
   RESULT_CARD_TABS,
@@ -232,6 +248,10 @@ export function ResultCard({
   const [regenerating, setRegenerating] = useState(false);
   const [regeneratingField, setRegeneratingField] = useState<CopyVersionField | null>(null);
   const [comboSaving, setComboSaving] = useState(false);
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenTone, setRegenTone] = useState<CopyTone>(COPY_TONES[0]);
+  const [regenNotes, setRegenNotes] = useState("");
+  const [lockedPreviewOpen, setLockedPreviewOpen] = useState(false);
   // B11 D1-B: summary only for Shopify-affecting「核准並發布」(not pure ✓)
   const [approveSummaryOpen, setApproveSummaryOpen] = useState(false);
   // D9-open Q5-A: single Matrixify also goes through preflight
@@ -274,7 +294,28 @@ export function ResultCard({
   const unmarkedBlockMessage = formatUnmarkedBlockMessage(imageMarks);
   const missingCharacters = extractMissingCharacterNames(draft.warnings);
   const characterChipWarned = isCharacterMissingInWarnings(draft.character_name, draft.warnings);
-  const warnCount = draft.warnings?.length ?? 0;
+  const station = resolveDraftStation(draft);
+  const isCopyStation = station === "copy_review";
+  const isImageStation = station === "image_review";
+  const isReadyStation = station === "ready";
+  const copyLocked = isImageStation || isReadyStation;
+  const warningSummary = useMemo(
+    () =>
+      gradeDraftWarnings(draft.warnings, {
+        ip_name: draft.ip_name,
+        character_name: draft.character_name,
+        title_zh: draft.title_zh,
+        twd_price: draft.twd_price,
+        twd_cost: draft.twd_cost,
+        missingCharacterInDict: missingCharacters.length > 0,
+        missingIp: !draft.ip_name?.trim(),
+      }),
+    [draft.warnings, draft.ip_name, draft.character_name, draft.title_zh, draft.twd_price, draft.twd_cost, missingCharacters.length]
+  );
+  const confirmWarnCount = countConfirmOnly(warningSummary);
+  const blockWarnCount = warningSummary.blockCount;
+  const suggestWarnCount = warningSummary.suggestCount;
+  const markSummary = useMemo(() => countImageMarkSummary(imageMarks), [imageMarks]);
   const detectTypeLabel = draft.product_type || draft.detected_category || "";
   const thumbUrl = mainThumbUrl(imageMarks);
   const isArchived = draft.status === "archived";
@@ -700,17 +741,98 @@ export function ResultCard({
   async function regenerate() {
     setRegenerating(true);
     setMessage("重新生成中...");
-    const response = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftId: draft.id, provider: readStoredAiProvider(), mode: readStoredRunMode() })
-    });
-    const payload = await response.json();
-    setRegenerating(false);
-    setMessage(response.ok ? "重新生成完成" : payload.error ?? "重新生成失敗");
-    setCopyDirty(emptyDirtyMap());
-    if (expanded) await loadHistory();
-    router.refresh();
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftId: draft.id,
+          provider: readStoredAiProvider(),
+          mode: readStoredRunMode(),
+          tone: regenTone,
+          regenNotes: regenNotes.trim() || undefined
+        })
+      });
+      const payload = await response.json();
+      setMessage(response.ok ? "重新生成完成" : payload.error ?? "重新生成失敗");
+      setCopyDirty(emptyDirtyMap());
+      if (response.ok) {
+        setRegenOpen(false);
+        setRegenNotes("");
+      }
+      if (expanded) await loadHistory();
+      router.refresh();
+    } catch {
+      setMessage("重新生成連線失敗");
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  /** R2 station② 審核分流 */
+  async function stationReview() {
+    setMarkMessage("");
+    if (hasBlockingWarnings(warningSummary)) {
+      setMarkMessage(`⛔ 必修：${warningSummary.block.map((w) => w.text).join("；")}`);
+      return;
+    }
+    const decision = decideStation2Review({ images: imageMarks });
+    if (decision.action === "blocked") {
+      setMarkMessage(decision.reason);
+      return;
+    }
+    if (decision.action !== "send_images") return;
+    const estimate = formatAiEstimateMessage(decision.aiCount, decision.allKeep);
+    if (!window.confirm(`${estimate}\n\n確定審核送出？`)) return;
+    setQuickBusy(true);
+    setMarkMessage("審核送出中…");
+    try {
+      const response = await fetch("/api/drafts/batch/send-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: [draft.id] })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const hint = typeof payload.hint === "string" ? `\n${payload.hint}` : "";
+        setMarkMessage((payload.error ?? "審核失敗") + hint);
+        return;
+      }
+      setMarkMessage(typeof payload.message === "string" ? payload.message : "審核完成");
+      router.refresh();
+    } catch {
+      setMarkMessage("審核連線失敗");
+    } finally {
+      setQuickBusy(false);
+    }
+  }
+
+  async function approveOnly() {
+    if (hasBlockingWarnings(warningSummary)) {
+      setMessage(`⛔ 必修：${warningSummary.block.map((w) => w.text).join("；")}`);
+      return;
+    }
+    setMarkMessage("");
+    setQuickBusy(true);
+    setMessage("核准中...");
+    try {
+      const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const payload = await approveResponse.json().catch(() => ({}));
+      if (!approveResponse.ok) {
+        setMessage(payload.error ?? "核准失敗");
+        return;
+      }
+      setMessage("已核准文案 → 進入圖片審核（文案已鎖定）");
+      router.refresh();
+    } catch {
+      setMessage("核准連線失敗");
+    } finally {
+      setQuickBusy(false);
+    }
   }
 
   // B4: one-click write ip_characters (pending). Does not auto-regenerate (5A).
@@ -753,33 +875,8 @@ export function ResultCard({
       body: JSON.stringify({ comment })
     });
     const payload = await response.json();
-    setMessage(response.ok ? "已退回修改" : payload.error ?? "退回失敗");
+    setMessage(response.ok ? "已退回文案審核（已解鎖）" : payload.error ?? "退回失敗");
     router.refresh();
-  }
-
-  // B9 D1-C: collapsed quick ✓ = pure approve (no publish).
-  async function approveOnly() {
-    setMarkMessage("");
-    setQuickBusy(true);
-    setMessage("核准中...");
-    try {
-      const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({})
-      });
-      const payload = await approveResponse.json().catch(() => ({}));
-      if (!approveResponse.ok) {
-        setMessage(payload.error ?? "核准失敗");
-        return;
-      }
-      setMessage("已核准文案（尚未發布）");
-      router.refresh();
-    } catch {
-      setMessage("核准連線失敗");
-    } finally {
-      setQuickBusy(false);
-    }
   }
 
   /** B11: on-screen dirty (D3-B) — same signals as B10 save path. */
@@ -1020,9 +1117,17 @@ export function ResultCard({
     setActiveTab(tab);
   }
 
+  function tryToggleExpand() {
+    if (expanded && hasUncommittedCopy()) {
+      const ok = window.confirm("有未儲存的編輯，確定要收合嗎？（不會自動儲存）");
+      if (!ok) return;
+    }
+    setExpanded((current) => !current);
+  }
+
   return (
-    <div className={`result-card${expanded ? " active" : ""}`}>
-      <div className="rc-header" onClick={() => setExpanded((current) => !current)}>
+    <div className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}`}>
+      <div className="rc-header" onClick={() => tryToggleExpand()}>
         {onToggle ? (
           <input
             checked={checked ?? false}
@@ -1045,7 +1150,7 @@ export function ResultCard({
         <span className="rc-headmain">
           <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
           {/* B4: 收合列即可見 IP／角色／類型 chips＋⚠（不用展開才發現未建檔） */}
-          {draft.ip_name || draft.character_name || detectTypeLabel || warnCount > 0 ? (
+          {draft.ip_name || draft.character_name || detectTypeLabel || confirmWarnCount > 0 || blockWarnCount > 0 || suggestWarnCount > 0 || copyLocked ? (
             <span className="rc-detect-chips">
               {draft.ip_name ? <span className="rc-detect-chip">{draft.ip_name}</span> : null}
               {draft.character_name ? (
@@ -1055,13 +1160,32 @@ export function ResultCard({
                 </span>
               ) : null}
               {detectTypeLabel ? <span className="rc-detect-chip">{detectTypeLabel}</span> : null}
-              {warnCount > 0 ? (
-                <span className="rc-detect-warn">⚠ {warnCount} 項待確認</span>
+              {blockWarnCount > 0 ? (
+                <span className="rc-detect-warn is-block" title={warningSummary.block.map((w) => w.text).join("\n")}>
+                  ⛔ {blockWarnCount}
+                </span>
               ) : null}
+              {confirmWarnCount > 0 ? (
+                <span className="rc-detect-warn" title={warningSummary.confirm.map((w) => w.text).join("\n")}>
+                  ⚠ {confirmWarnCount} 項待確認
+                </span>
+              ) : null}
+              {suggestWarnCount > 0 ? (
+                <span
+                  className="rc-detect-chip"
+                  title={warningSummary.suggest.map((w) => w.text).join("\n")}
+                >
+                  🔍 {suggestWarnCount}
+                </span>
+              ) : null}
+              {copyLocked ? <span className="rc-detect-chip" title="文案已鎖定">🔒 已鎖定</span> : null}
             </span>
           ) : null}
+          {isImageStation ? (
+            <span className="rc-meta-marks muted">{formatMarkSummaryLine(markSummary)}</span>
+          ) : null}
         </span>
-        {priceRangeLabel ? (
+        {isCopyStation && priceRangeLabel ? (
           <div className="rc-price-stack">
             <span className="rc-price">{priceRangeLabel}</span>
             {priceMode === "sale" && draft.compare_at_price && !priceRangeLabel.includes("~") ? (
@@ -1075,25 +1199,40 @@ export function ResultCard({
             ) : null}
           </div>
         ) : null}
-        {/* B9 quick actions; B12: archived view hides ✓/▶ — only 解除封存 */}
+        {isReadyStation && priceRangeLabel ? (
+          <div className="rc-price-stack">
+            <span className="rc-price">{priceRangeLabel}</span>
+          </div>
+        ) : null}
+        {/* R2: station-scoped quick actions */}
         <span className="rc-quick" onClick={(event) => event.stopPropagation()}>
           {isArchived ? (
             <button
               className="mini-btn rc-quick-btn"
               disabled={archiveBusy}
               onClick={() => void unarchiveOne()}
-              title="解除封存，回到列表預設篩選可見"
+              title="解除封存"
               type="button"
             >
               {archiveBusy ? "…" : "解除封存"}
             </button>
-          ) : (
+          ) : isCopyStation ? (
             <>
               <button
                 className="mini-btn rc-quick-btn"
-                disabled={quickBusy || regenerating || regeneratingField != null || !canQuickApprove}
+                disabled={
+                  quickBusy ||
+                  regenerating ||
+                  regeneratingField != null ||
+                  !canQuickApprove ||
+                  hasBlockingWarnings(warningSummary)
+                }
                 onClick={() => void approveOnly()}
-                title="只核准文案，不會發布到 Shopify"
+                title={
+                  hasBlockingWarnings(warningSummary)
+                    ? "有必修警告，無法核准"
+                    : "核准文案 → 圖片審核（未標記寫入保留原圖）"
+                }
                 type="button"
               >
                 {quickBusy ? "…" : "✓ 核准"}
@@ -1101,23 +1240,65 @@ export function ResultCard({
               <button
                 className="mini-btn rc-quick-btn"
                 disabled={quickBusy || regenerating || regeneratingField != null}
-                onClick={() => void sendImages()}
-                title="送圖；未標記會擋下並列出哪幾張；標記齊全會建立送圖批次"
+                onClick={() => setRegenOpen(true)}
+                title="重新生成（可換語氣／填方向）"
                 type="button"
               >
-                ▶ 送圖
+                ↻ 重生
               </button>
               <button
                 className="mini-btn rc-quick-btn"
                 disabled={archiveBusy || quickBusy || regenerating || regeneratingField != null}
                 onClick={() => void archiveOne()}
-                title="軟刪除：從預設列表隱藏，可從「已封存」找回"
+                title="移出工作佇列（可救回）"
                 type="button"
               >
-                {archiveBusy ? "…" : "🗄 封存"}
+                {archiveBusy ? "…" : "🗄 移出"}
               </button>
             </>
-          )}
+          ) : isImageStation ? (
+            <>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={quickBusy || hasBlockingWarnings(warningSummary)}
+                onClick={() => void stationReview()}
+                title="審核＝分流（全保留→轉檔；有 AI 標記→生圖工廠）"
+                type="button"
+              >
+                {quickBusy ? "…" : "✓ 審核"}
+              </button>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={quickBusy}
+                onClick={() => setLockedPreviewOpen(true)}
+                title="定稿預覽（唯讀）"
+                type="button"
+              >
+                📄
+              </button>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={quickBusy}
+                onClick={() => void requestRevision()}
+                title="退回修改文案（解鎖）"
+                type="button"
+              >
+                ↩ 退回
+              </button>
+            </>
+          ) : isReadyStation ? (
+            <>
+              <button
+                className="mini-btn rc-quick-btn"
+                disabled={approveSummaryBusy || comboSaving}
+                onClick={openApproveAndPublishSummary}
+                title="核准並發布（站③完整功能；R3 將升級多選）"
+                type="button"
+              >
+                ✓ 發布
+              </button>
+            </>
+          ) : null}
         </span>
         <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
       </div>
@@ -1162,23 +1343,36 @@ export function ResultCard({
 
       {expanded ? (
         <div className="rc-body">
-          {/* B9: 5 underline tabs — SEO is its own page (Mockup; boss reconfirmed). */}
-          <div className="rc-tabs" role="tablist" aria-label="卡片分頁">
-            {RESULT_CARD_TABS.map((tab) => (
+          {/* R2: station② only image marks; station① keeps full tabs; station③ full + publish */}
+          {isImageStation ? (
+            <div className="rc-tabs" role="tablist" aria-label="卡片分頁">
               <button
-                aria-selected={activeTab === tab.id}
-                className={`rc-tab${activeTab === tab.id ? " active" : ""}`}
-                key={tab.id}
-                onClick={() => selectTab(tab.id)}
+                aria-selected
+                className="rc-tab active"
                 role="tab"
                 type="button"
               >
-                {tabLabelWithWarn(tab.id, warnCount)}
+                圖片標記
               </button>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="rc-tabs" role="tablist" aria-label="卡片分頁">
+              {RESULT_CARD_TABS.map((tab) => (
+                <button
+                  aria-selected={activeTab === tab.id}
+                  className={`rc-tab${activeTab === tab.id ? " active" : ""}`}
+                  key={tab.id}
+                  onClick={() => selectTab(tab.id)}
+                  role="tab"
+                  type="button"
+                >
+                  {tabLabelWithWarn(tab.id, confirmWarnCount + blockWarnCount)}
+                </button>
+              ))}
+            </div>
+          )}
 
-          {activeTab === "copy" ? (
+          {!isImageStation && activeTab === "copy" ? (
             <div className="rc-tabpanel" role="tabpanel">
               {/* Desktop two-col balanced grid (same idea as .row AI類型/SKU); mobile stacks. */}
               <div className="rc-tabpanel-grid">
@@ -1398,7 +1592,7 @@ export function ResultCard({
             </div>
           ) : null}
 
-          {activeTab === "pricing" ? (
+          {!isImageStation && activeTab === "pricing" ? (
             <div className="rc-tabpanel" role="tabpanel">
               <div className="rc-tabpanel-grid">
                 <div className="rc-field rc-span-2">
@@ -1428,20 +1622,20 @@ export function ResultCard({
             </div>
           ) : null}
 
-          {activeTab === "images" ? (
+          {isImageStation || activeTab === "images" ? (
             <div className="rc-tabpanel" role="tabpanel">
               {imageMarks.length > 0 ? (
                 <div className="rc-field">
-                  <div className="rc-label">圖片處理標記（預設不選，未標記不能送圖）</div>
+                  <div className="rc-label">
+                    圖片處理標記（預設保留原圖；簡轉繁需先跑 migration 030）
+                  </div>
                   {pipelineImages.length > 0 ? (
                     <div className="imgmark-list">
                       {pipelineImages.map((image, index) => {
                         const src =
                           image.processed_file_url ?? image.original_file_url ?? image.generated_file_url ?? "";
                         const slot = imageSlotLabel(image, index + 1);
-                        const intents = (image.is_spec_process
-                          ? (["de_text"] as ImageProcessIntent[])
-                          : (["keep", "de_text", "regenerate"] as ImageProcessIntent[]));
+                        const intents = PROCESS_INTENT_OPTIONS;
                         return (
                           <div className="imgmark-row" key={image.id}>
                             <div className="thumb-wrap">
@@ -1464,9 +1658,16 @@ export function ResultCard({
                                   className={`img-mark-btn${image.process_intent === intent ? " active" : ""}`}
                                   key={intent}
                                   onClick={() => void setProcessIntent(image, intent)}
+                                  title={
+                                    intent === "to_trad"
+                                      ? "需先在 Supabase 執行 migration 030；D4 尚未真的做圖編會誠實跳過"
+                                      : PROCESS_INTENT_LABELS[intent]
+                                  }
                                   type="button"
                                 >
-                                  {image.process_intent === intent ? `✓ ${PROCESS_INTENT_LABELS[intent]}` : PROCESS_INTENT_LABELS[intent]}
+                                  {image.process_intent === intent
+                                    ? `✓ ${PROCESS_INTENT_LABELS[intent]}`
+                                    : PROCESS_INTENT_LABELS[intent]}
                                 </button>
                               ))}
                               {!image.is_spec_process ? (
@@ -1527,7 +1728,7 @@ export function ResultCard({
             </div>
           ) : null}
 
-          {activeTab === "tags" ? (
+          {!isImageStation && activeTab === "tags" ? (
             <div className="rc-tabpanel" role="tabpanel">
               <div className="rc-tabpanel-grid">
                 <div className="field">
@@ -1569,7 +1770,7 @@ export function ResultCard({
             </div>
           ) : null}
 
-          {activeTab === "seo" ? (
+          {!isImageStation && activeTab === "seo" ? (
             <div className="rc-tabpanel" role="tabpanel">
               <div className="rc-tabpanel-grid">
                 {!historyLoaded ? (
@@ -1634,14 +1835,19 @@ export function ResultCard({
             </div>
           ) : null}
 
-          {/* Footer actions — all tabs share; only-add (D1-C keeps 核准並發布) */}
-          <div className="field">
-            <label>發布模式</label>
-            <select onChange={(event) => setPublishMode(event.target.value as "active" | "draft")} value={publishMode}>
-              <option value="active">active：審核後直接發布</option>
-              <option value="draft">draft：只建立 Shopify 草稿</option>
-            </select>
-          </div>
+          {/* R2 footer: station-scoped actions only */}
+          {isReadyStation ? (
+            <div className="field">
+              <label>發布模式</label>
+              <select onChange={(event) => setPublishMode(event.target.value as "active" | "draft")} value={publishMode}>
+                <option value="active">active：審核後直接發布</option>
+                <option value="draft">draft：只建立 Shopify 草稿</option>
+              </select>
+              <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                R3 將升級為多選匯出
+              </p>
+            </div>
+          ) : null}
           {message ? (
             <div
               className={
@@ -1656,51 +1862,81 @@ export function ResultCard({
             </div>
           ) : null}
           <div className="rc-actions">
-            <span className="rc-actions-group">
-              <button disabled={comboSaving || regeneratingField != null} onClick={() => void save()} type="button">
-                儲存修改
-              </button>
-              <button
-                disabled={regenerating || regeneratingField != null || comboSaving}
-                onClick={() => void regenerate()}
-                type="button"
-              >
-                {regenerating ? "生成中..." : "↺ 重新生成"}
-              </button>
-            </span>
-            <span className="rc-actions-group rc-actions-group-review">
-              {isArchived ? (
-                <button disabled={archiveBusy} onClick={() => void unarchiveOne()} type="button">
-                  {archiveBusy ? "處理中…" : "解除封存"}
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => void requestRevision()} type="button">退回修改</button>
-                  <button onClick={() => void sendImages()} type="button">
-                    ▶ 送圖
-                  </button>
+            {isCopyStation ? (
+              <>
+                <span className="rc-actions-group">
+                  {hasUncommittedCopy() ? (
+                    <button disabled={comboSaving || regeneratingField != null} onClick={() => void save()} type="button">
+                      儲存此版本
+                    </button>
+                  ) : null}
                   <button
-                    className={publishMode === "active" ? "danger" : ""}
-                    disabled={approveSummaryBusy || comboSaving}
-                    onClick={openApproveAndPublishSummary}
+                    disabled={regenerating || regeneratingField != null || comboSaving}
+                    onClick={() => setRegenOpen(true)}
                     type="button"
                   >
-                    ✓ 核准並發布
+                    {regenerating ? "生成中..." : "↻ 重新生成"}
+                  </button>
+                </span>
+                <span className="rc-actions-group rc-actions-group-review">
+                  <button
+                    disabled={quickBusy || hasBlockingWarnings(warningSummary)}
+                    onClick={() => void approveOnly()}
+                    type="button"
+                  >
+                    ✓ 核准
                   </button>
                   <button disabled={archiveBusy} onClick={() => void archiveOne()} type="button">
-                    🗄 封存
+                    🗄 移出佇列
                   </button>
-                  <button
-                    disabled={exportBusy}
-                    onClick={() => openMatrixifyPreflight()}
-                    title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
-                    type="button"
-                  >
-                    產生 CSV
+                </span>
+              </>
+            ) : null}
+            {isImageStation ? (
+              <span className="rc-actions-group rc-actions-group-review">
+                <button
+                  disabled={quickBusy || hasBlockingWarnings(warningSummary)}
+                  onClick={() => void stationReview()}
+                  type="button"
+                >
+                  ✓ 審核
+                </button>
+                <button onClick={() => setLockedPreviewOpen(true)} type="button">
+                  📄 定稿預覽
+                </button>
+                <button onClick={() => void requestRevision()} type="button">
+                  ↩ 退回修改文案
+                </button>
+              </span>
+            ) : null}
+            {isReadyStation ? (
+              <span className="rc-actions-group rc-actions-group-review">
+                {isArchived ? (
+                  <button disabled={archiveBusy} onClick={() => void unarchiveOne()} type="button">
+                    {archiveBusy ? "處理中…" : "解除封存"}
                   </button>
-                </>
-              )}
-            </span>
+                ) : (
+                  <>
+                    <button
+                      className={publishMode === "active" ? "danger" : ""}
+                      disabled={approveSummaryBusy || comboSaving}
+                      onClick={openApproveAndPublishSummary}
+                      type="button"
+                    >
+                      ✓ 核准並發布
+                    </button>
+                    <button
+                      disabled={exportBusy}
+                      onClick={() => openMatrixifyPreflight()}
+                      title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
+                      type="button"
+                    >
+                      產生 CSV
+                    </button>
+                  </>
+                )}
+              </span>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1739,6 +1975,36 @@ export function ResultCard({
         onConfirm={() => void confirmMatrixifyExport()}
         open={Boolean(exportPreflightReport)}
         report={exportPreflightReport}
+      />
+
+      <RegenCopyModal
+        busy={regenerating}
+        costHint={
+          draft.generation_cost_estimate != null
+            ? `上次文案成本約 US$${Number(draft.generation_cost_estimate).toFixed(4)}（本次重生約略相當）`
+            : "預估：約一次完整文案生成費用（依模型計價）"
+        }
+        notes={regenNotes}
+        onCancel={() => {
+          if (!regenerating) setRegenOpen(false);
+        }}
+        onConfirm={() => void regenerate()}
+        onNotesChange={setRegenNotes}
+        onToneChange={setRegenTone}
+        open={regenOpen}
+        tone={regenTone}
+      />
+
+      <LockedCopyPreview
+        open={lockedPreviewOpen}
+        onClose={() => setLockedPreviewOpen(false)}
+        title={title}
+        tags={tags}
+        sellPrice={sellPrice}
+        compareAt={compareAtPrice}
+        why={whyWeChoseIt}
+        highlights={productHighlights}
+        description={description}
       />
     </div>
   );

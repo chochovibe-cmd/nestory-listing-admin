@@ -285,8 +285,9 @@ export function reviewImageFieldLabel(
 ): string {
   const base = imageSlotLabel(image, position1Based);
   const intent = image.process_intent as ImageProcessIntent | null;
-  if (intent === "de_text") return `${base} · 去簡體字`;
-  if (intent === "regenerate") return `${base} · 重生主圖`;
+  if (intent === "de_text") return `${base} · 去字`;
+  if (intent === "to_trad") return `${base} · 簡轉繁`;
+  if (intent === "regenerate") return `${base} · 重生`;
   if (intent === "keep") return `${base} · 保留原圖`;
   return base;
 }

@@ -78,12 +78,15 @@ export function decideDraftAutoChainFromSnapshot(
   }
 
   const hasD4 = snapshotImages.some(
-    (img) => img.processIntent === "de_text" || img.processIntent === "regenerate"
+    (img) =>
+      img.processIntent === "de_text" ||
+      img.processIntent === "regenerate" ||
+      img.processIntent === "to_trad"
   );
   if (hasD4) {
     return {
       action: "run_mixed",
-      reason: "contains de_text/regenerate; hybrid keep + limited D4 (Q1-C)"
+      reason: "contains de_text/regenerate/to_trad; hybrid keep + limited D4 (Q1-C/R2)"
     };
   }
 
@@ -242,9 +245,28 @@ function snapshotD4Ids(snap: ImageBatchSnapshotDraft | undefined): string[] {
   return snap.images
     .filter(
       (img) =>
-        (img.processIntent === "de_text" || img.processIntent === "regenerate") && img.imageId
+        (img.processIntent === "de_text" ||
+          img.processIntent === "regenerate" ||
+          img.processIntent === "to_trad") &&
+        img.imageId
     )
     .map((img) => img.imageId as string);
+}
+
+/** R2: all-keep chain done → station③ ready (still dual-write status=approved). */
+async function advanceDraftToReadyStation(
+  serviceSupabase: SharpBatchServiceClient,
+  draftId: string
+): Promise<void> {
+  try {
+    await serviceSupabase
+      .from("product_drafts")
+      .update({ pipeline_stage: "ready" })
+      .eq("id", draftId)
+      .in("pipeline_stage", ["image_review", "ready"]);
+  } catch {
+    // best-effort; station UI may lag until refresh
+  }
 }
 
 async function runKeepSharpFinalize(input: {
@@ -568,6 +590,11 @@ export async function runSendImagesAutoChain(
         .eq("batch_id", batchId)
         .eq("draft_id", plan.draftId);
 
+      // R2 Q3-B path complete → station③ (all-keep does not need 生圖工廠 review)
+      if (itemStatus === "done") {
+        await advanceDraftToReadyStation(serviceSupabase, plan.draftId);
+      }
+
       summaries.push({
         draftId: plan.draftId,
         title: baseTitle,
@@ -781,7 +808,7 @@ export function formatAutoChainOperatorMessage(input: {
       parts.push(`時間預算不足，部分商品未處理完，可稍後重送或手動執行轉檔／AI。`);
     }
     if (chain.batchStatus === "completed" && done > 0) {
-      parts.push(`可至「圖片審核」查看處理結果。`);
+      parts.push(`可至「生圖工廠」查看處理結果。`);
     }
   }
 

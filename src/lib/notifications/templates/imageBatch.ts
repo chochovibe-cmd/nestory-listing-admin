@@ -26,7 +26,7 @@ export function buildImageBatchDoneEmail(payload: ImageBatchNotifyPayload): {
 
   const regenNote =
     regenerateItemCount > 0
-      ? `（其中 ${regenerateItemCount} 件含重生類，建議優先在圖審查看）`
+      ? `（其中 ${regenerateItemCount} 件含重生類，建議優先在生圖工廠查看）`
       : "";
 
   const subject = `潮巢｜圖片批次完成（成功 ${doneCount}／失敗 ${failedCount}）`;
@@ -40,7 +40,7 @@ export function buildImageBatchDoneEmail(payload: ImageBatchNotifyPayload): {
     `失敗：${failedCount} 件`,
     skippedCount > 0 ? `略過：${skippedCount} 件` : null,
     ``,
-    reviewUrl ? `打開圖審：${reviewUrl}` : `請到 App 的「圖片審核」頁查看。`,
+    reviewUrl ? `打開生圖工廠：${reviewUrl}` : `請到 App 的「生圖工廠」頁查看。`,
     ``,
     `— Nestory 上架系統（自動通知）`
   ].filter((x) => x !== null) as string[];
@@ -57,8 +57,8 @@ export function buildImageBatchDoneEmail(payload: ImageBatchNotifyPayload): {
     </ul>
     <p>${
       reviewUrl
-        ? `<a href="${escapeHtml(reviewUrl)}">打開圖審</a>`
-        : "請到 App 的「圖片審核」頁查看。"
+        ? `<a href="${escapeHtml(reviewUrl)}">打開生圖工廠</a>`
+        : "請到 App 的「生圖工廠」頁查看。"
     }</p>
     <p style="color:#888;font-size:12px">— Nestory 上架系統（自動通知）</p>
   `.trim();
@@ -83,7 +83,7 @@ export function buildImageBatchStuckEmail(payload: StuckBatchNotifyPayload): {
     `已等待約 ${Math.floor(ageHours)} 小時`,
     `進度：成功 ${doneCount}／失敗 ${failedCount}／合計 ${totalCount}`,
     ``,
-    reviewUrl ? `打開圖審：${reviewUrl}` : `請到 App 檢查送圖批次或重試 AI 處理。`,
+    reviewUrl ? `打開生圖工廠：${reviewUrl}` : `請到 App 檢查送圖批次或重試 AI 處理。`,
     ``,
     `— Nestory 上架系統（自動通知）`
   ].join("\n");
@@ -98,7 +98,7 @@ export function buildImageBatchStuckEmail(payload: StuckBatchNotifyPayload): {
     </ul>
     <p>${
       reviewUrl
-        ? `<a href="${escapeHtml(reviewUrl)}">打開圖審</a>`
+        ? `<a href="${escapeHtml(reviewUrl)}">打開生圖工廠</a>`
         : "請到 App 檢查送圖批次或重試 AI 處理。"
     }</p>
     <p style="color:#888;font-size:12px">— Nestory 上架系統（自動通知）</p>
@@ -151,7 +151,7 @@ export function buildImageBatchDoneFlex(payload: ImageBatchNotifyPayload): Recor
           style: "primary",
           action: {
             type: "uri",
-            label: "打開圖審",
+            label: "打開生圖工廠",
             uri: reviewUrl
           }
         }
@@ -159,7 +159,7 @@ export function buildImageBatchDoneFlex(payload: ImageBatchNotifyPayload): Recor
     : [
         {
           type: "text",
-          text: "請到 App「圖片審核」查看",
+          text: "請到 App「生圖工廠」查看",
           size: "sm",
           wrap: true,
           align: "center"
@@ -195,7 +195,7 @@ export function buildImageBatchStuckFlex(payload: StuckBatchNotifyPayload): Reco
           style: "primary",
           action: {
             type: "uri",
-            label: "打開圖審",
+            label: "打開生圖工廠",
             uri: reviewUrl
           }
         }

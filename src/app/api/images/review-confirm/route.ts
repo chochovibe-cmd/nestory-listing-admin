@@ -94,9 +94,13 @@ export async function POST(request: NextRequest) {
     }
 
     const nextFlags = mergeImageReviewApproved(draft.image_flags, reviewedAt);
+    // R2: 圖審通過 → station③ ready
     const { error: updateError } = await service
       .from("product_drafts")
-      .update({ image_flags: nextFlags })
+      .update({
+        image_flags: nextFlags,
+        pipeline_stage: "ready"
+      })
       .eq("id", id);
 
     if (updateError) {

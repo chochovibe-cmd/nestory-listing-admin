@@ -409,6 +409,11 @@ export async function POST(request: NextRequest) {
     ? body.tone
     : "黑膠文藝收藏感";
   const copyLength: CopyLength = ["精簡", "標準", "詳細"].includes(body.copyLength) ? body.copyLength : "標準";
+  // R2 §4: 重新生成彈窗「修改方向／補充」— prepend into note for this run only
+  const regenNotes =
+    typeof body.regenNotes === "string" && body.regenNotes.trim()
+      ? body.regenNotes.trim().slice(0, 2000)
+      : "";
   // B1: analyze-images runs client-side before generate and must never block it
   // (requirement: skip image info, still generate). Any image-analysis failures
   // arrive here as strings so they end up in the draft's warnings (黃字), rather
@@ -580,6 +585,9 @@ export async function POST(request: NextRequest) {
 
   if (runMode !== "test") {
     try {
+      const noteForRun = regenNotes
+        ? [draft.note?.trim() || null, `【重新生成方向】${regenNotes}`].filter(Boolean).join("\n")
+        : draft.note;
       const raw = await COPY_PROVIDERS[providerKey].generate({
         rawTitle: rawTitleForSearch,
         saleStatus: draft.sale_status,
@@ -587,7 +595,7 @@ export async function POST(request: NextRequest) {
         variantSummary,
         price: draft.twd_price,
         compareAtPrice: draft.compare_at_price,
-        note: draft.note,
+        note: noteForRun,
         imageDescription: draft.image_description ?? undefined,
         // A3: spec_text (規格圖 OCR from analyze-images) was never passed to the
         // copy provider even though CopyProviderInput/buildCopyUserMessage

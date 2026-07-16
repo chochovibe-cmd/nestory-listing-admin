@@ -1007,6 +1007,30 @@ textarea {
   cursor: pointer;
 }
 
+/* R2: station fail light on pills (red count, not solid chip) */
+.station-fail-count {
+  font-weight: 700;
+}
+.station-fail-num {
+  color: var(--danger, var(--accent2));
+}
+
+.rc-detect-warn.is-block {
+  color: var(--danger, var(--accent2));
+  background: color-mix(in srgb, var(--danger, var(--accent2)) 13%, var(--surface));
+}
+
+.rc-meta-marks {
+  display: block;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.result-card.is-copy-locked .rc-title::after {
+  content: " 🔒";
+  font-size: 12px;
+}
+
 .results-batch-notice {
   white-space: pre-wrap;
   scroll-margin-top: 64px;

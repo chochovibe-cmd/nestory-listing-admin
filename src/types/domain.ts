@@ -48,8 +48,12 @@ export type ImageType = "main" | "detail" | "spec" | "generated_detail" | "varia
 
 export type ImageStatus = "pending" | "processing" | "done" | "failed" | "skipped";
 
-/** B5: how the Phase D pipeline should process this product image. null = unmarked. */
-export type ImageProcessIntent = "keep" | "de_text" | "regenerate";
+/**
+ * B5/R2: how the Phase D pipeline should process this product image.
+ * null = unmarked (legacy; R2 station① approve writes keep for pipeline images).
+ * to_trad = 簡轉繁 — requires migration 030; do not write until SQL applied.
+ */
+export type ImageProcessIntent = "keep" | "de_text" | "regenerate" | "to_trad";
 
 /** B14: image_batches.status — queued until Phase D pipeline runs. */
 export type ImageBatchStatus =

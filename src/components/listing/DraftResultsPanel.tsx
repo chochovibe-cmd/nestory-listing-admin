@@ -26,13 +26,18 @@ import {
   writeStoredResultSort
 } from "@/lib/drafts/resultSort";
 import {
-  countByStage,
-  filterDraftsByStage,
-  readStoredStage,
-  STAGE_FILTER_STORAGE_KEY_RESULTS,
-  type StageKey,
-  writeStoredStage
-} from "@/lib/drafts/stageFilter";
+  countStations,
+  filterDraftsByStation,
+  filterWorkQueueDrafts,
+  readStoredStation,
+  STATION_FILTER_STORAGE_KEY_RESULTS,
+  type StationFilterKey,
+  writeStoredStation
+} from "@/lib/drafts/stationFilter";
+import {
+  formatAiEstimateMessage,
+  decideStation2Review
+} from "@/lib/drafts/stationRoute";
 import {
   formatArchiveResultMessage,
   formatUnarchiveResultMessage
@@ -70,7 +75,7 @@ export function DraftResultsPanel({
   // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
   const [sortMode, setSortMode] = useState<ResultSortMode>("newest");
-  const [stage, setStage] = useState<StageKey>("all");
+  const [stage, setStage] = useState<StationFilterKey>("copy_review");
   // B11 D1-B: summary only for batch Shopify paths (建草稿／上架), not pure 批次核准
   const [batchPublishSummary, setBatchPublishSummary] = useState<null | {
     mode: "draft" | "active";
@@ -110,11 +115,11 @@ export function DraftResultsPanel({
   }, []);
 
   // B9: remember sort preference for this browser tab session.
-  // B12: remember stage filter for this tab session.
+  // R2: remember three-station filter for this tab session.
   useEffect(() => {
     const storage = typeof window !== "undefined" ? window.sessionStorage : null;
     setSortMode(readStoredResultSort(storage));
-    setStage(readStoredStage(storage, STAGE_FILTER_STORAGE_KEY_RESULTS));
+    setStage(readStoredStation(storage, STATION_FILTER_STORAGE_KEY_RESULTS));
   }, []);
 
   // Drop optimistic hides once server props already reflect archive/unarchive.
@@ -160,11 +165,17 @@ export function DraftResultsPanel({
     [images]
   );
 
-  const stageCounts = useMemo(() => countByStage(drafts, stageImages), [drafts, stageImages]);
+  // R2: work queue excludes input / published / archived
+  const workQueueDrafts = useMemo(() => filterWorkQueueDrafts(drafts), [drafts]);
+
+  const stageCounts = useMemo(
+    () => countStations(workQueueDrafts),
+    [workQueueDrafts]
+  );
 
   const stageFiltered = useMemo(
-    () => filterDraftsByStage(drafts, stage, stageImages),
-    [drafts, stage, stageImages]
+    () => filterDraftsByStation(workQueueDrafts, stage),
+    [workQueueDrafts, stage]
   );
 
   const sortedDrafts = useMemo(
@@ -215,18 +226,17 @@ export function DraftResultsPanel({
     writeStoredResultSort(next, typeof window !== "undefined" ? window.sessionStorage : null);
   }
 
-  function onStageChange(next: StageKey) {
+  function onStageChange(next: StationFilterKey) {
     setStage(next);
     setSelectedIds(new Set());
-    writeStoredStage(
+    writeStoredStation(
       next,
       typeof window !== "undefined" ? window.sessionStorage : null,
-      STAGE_FILTER_STORAGE_KEY_RESULTS
+      STATION_FILTER_STORAGE_KEY_RESULTS
     );
   }
 
-  // B9 D1-C: pure approve (status only), no publish.
-  // B11 D1-B: pure batch approve stays one-click (reversible via 退回修改) — no summary modal.
+  // R2 station①: pure approve → image_review + default keep
   async function batchApproveOnly() {
     if (!selectedArray.length) return;
     setBusy(true);
@@ -321,15 +331,36 @@ export function DraftResultsPanel({
     };
   }, [batchPublishSummary, drafts, imagesByDraft]);
 
-  // B9 + B14: batch send images — B5 gate server-side; create image_batches when ready.
-  async function batchSendImages() {
+  /**
+   * R2 station② 審核＝分流器：confirm AI 張數後走既有 send-images（Q3-B 全 keep 仍走鏈）。
+   */
+  async function batchStationReview() {
     if (!selectedArray.length) {
-      setMessage("請先勾選商品再批次送圖。");
+      setMessage("請先勾選商品再批次審核。");
+      return;
+    }
+    const selectedDrafts = drafts.filter((d) => selectedArray.includes(d.id));
+    let totalAi = 0;
+    let allKeepAll = true;
+    for (const d of selectedDrafts) {
+      const imgs = imagesByDraft.get(d.id) ?? [];
+      const decision = decideStation2Review({ images: imgs });
+      if (decision.action === "blocked") {
+        setMessage(`「${d.title_zh || d.taobao_title || "未命名"}」：${decision.reason}`);
+        return;
+      }
+      if (decision.action === "send_images") {
+        totalAi += decision.aiCount;
+        if (!decision.allKeep) allKeepAll = false;
+      }
+    }
+    const estimate = formatAiEstimateMessage(totalAi, allKeepAll);
+    if (!window.confirm(`批次審核 ${selectedArray.length} 件\n\n${estimate}\n\n確定送出？`)) {
       return;
     }
     setBusy(true);
     setLastArchiveIds(null);
-    setMessage("建立送圖批次中…");
+    setMessage("批次審核／送圖中…");
     try {
       const response = await fetch("/api/drafts/batch/send-images", {
         method: "POST",
@@ -339,16 +370,15 @@ export function DraftResultsPanel({
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const hint = typeof payload.hint === "string" ? `\n${payload.hint}` : "";
-        setMessage((payload.error ?? "建立送圖批次失敗") + hint);
+        setMessage((payload.error ?? "批次審核失敗") + hint);
         return;
       }
-      setMessage(typeof payload.message === "string" ? payload.message : "送圖批次處理完成");
-      // Soft refresh so current_image_batch_id is available if UI later shows it
+      setMessage(typeof payload.message === "string" ? payload.message : "批次審核完成");
       if (payload.ok && payload.batchId) {
         scheduleRouterRefresh(() => router.refresh());
       }
     } catch {
-      setMessage("建立送圖批次失敗（網路錯誤）");
+      setMessage("批次審核連線失敗");
     } finally {
       setBusy(false);
     }
@@ -546,13 +576,15 @@ export function DraftResultsPanel({
     }
   }
 
-  const showToolbar = drafts.length > 0;
-  const isArchivedStage = stage === "archived";
+  const showToolbar = workQueueDrafts.length > 0 || drafts.length > 0;
+  const isCopyStation = stage === "copy_review";
+  const isImageStation = stage === "image_review";
+  const isReadyStation = stage === "ready";
 
   return (
     <section className="panel results-panel">
       <div className="panel-header rc-panel-header">
-        <h2>◈ 生成結果</h2>
+        <h2>◈ 生成結果（三站工作佇列）</h2>
       </div>
       <div className="panel-body results-panel-body">
         {progress ? (
@@ -605,23 +637,13 @@ export function DraftResultsPanel({
                 {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
               </span>
               <div className="batch-actions">
-                {isArchivedStage ? (
-                  <button
-                    className="btn-mini"
-                    disabled={busy || !selectedArray.length}
-                    onClick={() => void batchArchiveOrUnarchive("unarchive")}
-                    title="批次解除封存，回到預設列表"
-                    type="button"
-                  >
-                    解除封存
-                  </button>
-                ) : (
+                {isCopyStation ? (
                   <>
                     <button
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
                       onClick={() => void batchApproveOnly()}
-                      title="只核准文案狀態，不會發布到 Shopify"
+                      title="核准文案 → 進入圖片審核；未標記圖寫入保留原圖"
                       type="button"
                     >
                       ✓ 批次核准
@@ -629,17 +651,43 @@ export function DraftResultsPanel({
                     <button
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
-                      onClick={() => void batchSendImages()}
-                      title="批次送圖；標記齊全會建立送圖批次（Phase D 接通後自動處理）"
+                      onClick={() => void batchArchiveOrUnarchive("archive")}
+                      title="移出工作佇列（軟刪除，可救回）"
                       type="button"
                     >
-                      ▶ 批次送圖
+                      🗄 移出佇列
+                    </button>
+                  </>
+                ) : null}
+                {isImageStation ? (
+                  <>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => void batchStationReview()}
+                      title="依標記分流：全保留→轉檔上圖床；有 AI 標記→生圖工廠"
+                      type="button"
+                    >
+                      ✓ 批次審核
                     </button>
                     <button
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
+                      onClick={() => void batchArchiveOrUnarchive("archive")}
+                      title="移出工作佇列（軟刪除，可救回）"
+                      type="button"
+                    >
+                      🗄 移出佇列
+                    </button>
+                  </>
+                ) : null}
+                {isReadyStation ? (
+                  <>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
                       onClick={() => openBatchApproveAndPublishSummary("draft")}
-                      title="核准後在 Shopify 建立草稿商品，不會公開上架（先摘要確認）"
+                      title="在 Shopify 建立草稿商品（R3 將升級多選匯出）"
                       type="button"
                     >
                       核准並建草稿
@@ -648,7 +696,7 @@ export function DraftResultsPanel({
                       className="btn-mini danger"
                       disabled={busy || !selectedArray.length}
                       onClick={() => openBatchApproveAndPublishSummary("active")}
-                      title="核准後直接在 Shopify 建立正式上架商品，會立刻公開，請先確認內容無誤"
+                      title="正式上架 Shopify（R3 將升級多選匯出）"
                       type="button"
                     >
                       核准並上架
@@ -656,17 +704,8 @@ export function DraftResultsPanel({
                     <button
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
-                      onClick={() => void batchArchiveOrUnarchive("archive")}
-                      title="批次軟刪除；生成中／上架中會跳過並彙總回報"
-                      type="button"
-                    >
-                      🗄 批次封存
-                    </button>
-                    <button
-                      className="btn-mini"
-                      disabled={busy || !selectedArray.length}
                       onClick={() => openExportPreflight("matrixify")}
-                      title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
+                      title="Matrixify CSV（R3 將升級多選匯出）"
                       type="button"
                     >
                       ⬇ Matrixify
@@ -675,13 +714,16 @@ export function DraftResultsPanel({
                       className="btn-mini"
                       disabled={busy || !selectedArray.length}
                       onClick={() => openExportPreflight("showmore")}
-                      title="匯出前健檢＋預覽（加價%／售價），確認後下載 Showmore CSV"
+                      title="Showmore CSV（R3 將升級多選匯出）"
                       type="button"
                     >
                       ⬇ Showmore
                     </button>
+                    <span className="muted" style={{ fontSize: 11, alignSelf: "center" }}>
+                      R3 將升級為多選匯出
+                    </span>
                   </>
-                )}
+                ) : null}
               </div>
               <label className="results-sort-label">
                 <span className="sr-only">排序</span>

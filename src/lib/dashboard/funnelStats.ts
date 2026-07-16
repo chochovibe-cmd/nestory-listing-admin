@@ -321,7 +321,7 @@ export function buildFunnelRows(stats: FunnelStats): FunnelRowDef[] {
     label: "圖片待審",
     count: stats.image_review,
     dwellLabel: "—",
-    sub: "可與上方主幹重疊（圖審維度）",
+    sub: "可與上方主幹重疊（生圖工廠維度）",
     schipClass: "schip schip--warn",
     schipLabel: "圖片待審",
     // bar vs exclusive max; image can exceed max → clamp 100

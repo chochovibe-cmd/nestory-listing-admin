@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { applyDefaultKeepMarks } from "@/lib/drafts/approveCopy";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
@@ -22,13 +23,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const serviceSupabase = createServiceSupabaseClient();
   // New approve → image_review (no GID); map without shopifyProductId.
+  // R2 Q2-A: write keep on unmarked pipeline images at approve time.
+  const keepResult = await applyDefaultKeepMarks(serviceSupabase, [id]);
+
   const { error } = await serviceSupabase
     .from("product_drafts")
     .update({
       status: "approved",
       pipeline_stage: mapStatusToPipelineStage("approved"),
       reviewed_by: user.id,
-      reviewed_at: new Date().toISOString() // A13: review-stage timestamp
+      reviewed_at: new Date().toISOString()
     })
     .eq("id", id);
 
@@ -41,5 +45,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     comment: typeof body.comment === "string" ? body.comment : null
   });
 
-  return Response.json({ ok: true, status: "approved" });
+  return Response.json({
+    ok: true,
+    status: "approved",
+    pipeline_stage: "image_review",
+    defaultKeepCount: keepResult.updatedCount,
+    keepError: keepResult.error ?? null
+  });
 }

@@ -280,8 +280,8 @@ export function ImageReviewPanel() {
       <section className="panel ir-panel">
         <div className="panel-header ir-page-header">
           <div className="ir-title-row">
-            <h1>🖼 圖片審核</h1>
-            <span className="ir-sub">預設只看自己的（誰上架誰審）</span>
+            <h1>🏭 生圖工廠</h1>
+            <span className="ir-sub">生成中／待審對比（誰上架誰審）</span>
           </div>
           {roleReady && admin ? (
             <label className="ir-scope">

@@ -50,6 +50,7 @@ export interface ImageMarkCounts {
   keep: number;
   de_text: number;
   regenerate: number;
+  to_trad: number;
   unmarked: number;
   pipeline: number;
 }
@@ -105,6 +106,7 @@ export function countImageMarks(
     keep: 0,
     de_text: 0,
     regenerate: 0,
+    to_trad: 0,
     unmarked: 0,
     pipeline: pipeline.length,
   };
@@ -117,6 +119,7 @@ export function countImageMarks(
     if (intent === "keep") counts.keep += 1;
     else if (intent === "de_text") counts.de_text += 1;
     else if (intent === "regenerate") counts.regenerate += 1;
+    else if (intent === "to_trad") counts.to_trad += 1;
   }
   return counts;
 }
@@ -127,7 +130,7 @@ export function formatImageMarkStatsLine(counts: ImageMarkCounts): string {
     return "圖片標記：尚無可標記商品圖（詳情圖不標記）";
   }
   const parts: string[] = [];
-  const intents: ImageProcessIntent[] = ["keep", "de_text", "regenerate"];
+  const intents: ImageProcessIntent[] = ["keep", "to_trad", "de_text", "regenerate"];
   for (const intent of intents) {
     const n = counts[intent];
     if (n > 0) parts.push(`${PROCESS_INTENT_LABELS[intent]} ×${n}`);

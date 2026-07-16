@@ -247,7 +247,12 @@ await check("Q7 generate failure parks copy_review", () => {
 
 await check("Q6 unarchive maps from restore status", () => {
   const src = read("src/app/api/drafts/batch/archive/route.ts");
-  assert.match(src, /mapStatusToPipelineStage\(restoreStatus/);
+  // R2: prefer resolveUnarchivePipelineStage (ready heuristic); still dual-write archive.
+  assert.ok(
+    /mapStatusToPipelineStage\(restoreStatus/.test(src) ||
+      /resolveUnarchivePipelineStage\(/.test(src),
+    "unarchive must set pipeline_stage from restore status or R2 resolver"
+  );
   assert.match(src, /shopify_product_id/);
   assert.match(src, /mapStatusToPipelineStage\("archived"\)/);
 });

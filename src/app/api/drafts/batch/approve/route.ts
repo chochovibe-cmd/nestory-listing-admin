@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { applyDefaultKeepMarks } from "@/lib/drafts/approveCopy";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
@@ -24,15 +25,21 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Reviewer role is required" }, { status: 403 });
   }
 
+  const uniqueIds = [...new Set(draftIds as string[])];
   const serviceSupabase = createServiceSupabaseClient();
+
+  // R2 Q2-A: default keep before stage flip so DB matches UI.
+  const keepResult = await applyDefaultKeepMarks(serviceSupabase, uniqueIds);
+
   const { data: updated, error } = await serviceSupabase
     .from("product_drafts")
     .update({
       status: "approved",
       pipeline_stage: mapStatusToPipelineStage("approved"),
-      reviewed_by: user.id
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString()
     })
-    .in("id", draftIds)
+    .in("id", uniqueIds)
     .select("id");
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -49,5 +56,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return Response.json({ ok: true, approvedCount: approvedIds.length, approvedIds });
+  return Response.json({
+    ok: true,
+    approvedCount: approvedIds.length,
+    approvedIds,
+    defaultKeepCount: keepResult.updatedCount,
+    keepError: keepResult.error ?? null
+  });
 }

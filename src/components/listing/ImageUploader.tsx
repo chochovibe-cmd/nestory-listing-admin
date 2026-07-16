@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { imageSlotLabel, intentForSpecToggle } from "@/lib/images/processMarks";
+import { intentForSpecToggle } from "@/lib/images/processMarks";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
 // B1 (Mockup差異備忘 差異2): 只有主圖／詳情圖兩框。規格改表單手填欄位，不再上傳規格圖
@@ -389,17 +389,6 @@ export function ImageUploader({
   }
 
   const mainItems = previews.main ?? [];
-  // Local-session unmarked count for main images only (form-side hint).
-  const unmarkedMain = mainItems.filter(
-    (item) => item.status === "ready" && item.process_intent == null
-  );
-  const formUnmarkedLabels = unmarkedMain.map((item) => {
-    const position = mainItems.findIndex((row) => row.clientKey === item.clientKey) + 1;
-    return imageSlotLabel(
-      { image_type: "main", is_spec_process: item.is_spec_process },
-      position
-    );
-  });
 
   return (
     <div className="drop-grid">
@@ -510,10 +499,11 @@ export function ImageUploader({
           </div>
         );
       })}
-      {mainItems.length > 0 && unmarkedMain.length > 0 ? (
-        <div className="img-mark-warn" role="status">
-          ⚠ 還有 {unmarkedMain.length} 張商品圖未標記：{formUnmarkedLabels.join("、")}
-          （送圖前請在右側卡片選處理方式；規格圖＝去簡體字）
+      {/* R2: process marks only on station② card; form only keeps 規格圖 toggle.
+          Default keep is written at station① 核准 (Q2-A). */}
+      {mainItems.length > 0 ? (
+        <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          處理標記（保留／簡轉繁／去字／重生）在文案核准後的「圖片審核」卡片設定；此處可標規格圖。
         </div>
       ) : null}
       {markError ? (

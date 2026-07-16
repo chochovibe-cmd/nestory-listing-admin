@@ -23,13 +23,14 @@ import {
 } from "@/lib/drafts/optimisticArchiveHide";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import {
-  countByStage,
-  filterDraftsByStage,
-  readStoredStage,
-  STAGE_FILTER_STORAGE_KEY_QUEUE,
-  type StageKey,
-  writeStoredStage
-} from "@/lib/drafts/stageFilter";
+  countStations,
+  filterDraftsByStation,
+  filterWorkQueueDrafts,
+  readStoredStation,
+  STATION_FILTER_STORAGE_KEY_QUEUE,
+  type StationFilterKey,
+  writeStoredStation
+} from "@/lib/drafts/stationFilter";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import type { ProductDraft } from "@/types/domain";
 
@@ -45,6 +46,9 @@ export type DraftQueueRow = Pick<
   | "publish_mode"
   | "publish_status"
   | "twd_price"
+  | "pipeline_stage"
+  | "shopify_product_id"
+  | "image_status"
 >;
 
 const PUBLISH_MODE_LABELS: Record<string, string> = {
@@ -54,7 +58,7 @@ const PUBLISH_MODE_LABELS: Record<string, string> = {
 
 export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   const router = useRouter();
-  const [stage, setStage] = useState<StageKey>("all");
+  const [stage, setStage] = useState<StationFilterKey>("copy_review");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -72,9 +76,9 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
 
   useEffect(() => {
     setStage(
-      readStoredStage(
+      readStoredStation(
         typeof window !== "undefined" ? window.sessionStorage : null,
-        STAGE_FILTER_STORAGE_KEY_QUEUE
+        STATION_FILTER_STORAGE_KEY_QUEUE
       )
     );
   }, []);
@@ -83,26 +87,26 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
     setOptimisticHide((prev) => reconcileOptimisticHide(prev, drafts));
   }, [drafts]);
 
-  // Queue has no images → 圖片未標記 always 0 (still show pill for consistency).
-  const stageCounts = useMemo(() => countByStage(drafts), [drafts]);
+  const workQueue = useMemo(() => filterWorkQueueDrafts(drafts), [drafts]);
+  const stageCounts = useMemo(() => countStations(workQueue), [workQueue]);
 
   const filtered = useMemo(() => {
-    const stageRows = filterDraftsByStage(drafts, stage);
+    const stageRows = filterDraftsByStation(workQueue, stage);
     return filterByOptimisticHide(stageRows, optimisticHide);
-  }, [drafts, stage, optimisticHide]);
+  }, [workQueue, stage, optimisticHide]);
 
   const allSelected = filtered.length > 0 && filtered.every((draft) => selectedIds.has(draft.id));
   const someSelected = filtered.some((draft) => selectedIds.has(draft.id)) && !allSelected;
   const selectedArray = Array.from(selectedIds);
-  const isArchivedStage = stage === "archived";
+  const isReadyStation = stage === "ready";
 
-  function onStageChange(next: StageKey) {
+  function onStageChange(next: StationFilterKey) {
     setStage(next);
     setSelectedIds(new Set());
-    writeStoredStage(
+    writeStoredStation(
       next,
       typeof window !== "undefined" ? window.sessionStorage : null,
-      STAGE_FILTER_STORAGE_KEY_QUEUE
+      STATION_FILTER_STORAGE_KEY_QUEUE
     );
   }
 
@@ -389,17 +393,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
           {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
         </span>
         <div className="batch-actions">
-          {isArchivedStage ? (
-            <button
-              className="btn-mini"
-              disabled={busy || !selectedArray.length}
-              onClick={() => void batchArchiveOrUnarchive("unarchive")}
-              title="批次解除封存"
-              type="button"
-            >
-              解除封存
-            </button>
-          ) : (
+          {isReadyStation ? (
             <>
               <button
                 className="btn-mini"
@@ -423,10 +417,10 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                 className="btn-mini"
                 disabled={busy || !selectedArray.length}
                 onClick={() => void batchArchiveOrUnarchive("archive")}
-                title="批次軟刪除；生成中／上架中會跳過並彙總回報"
+                title="移出工作佇列（軟刪除，可救回）"
                 type="button"
               >
-                🗄 批次封存
+                🗄 移出佇列
               </button>
               <button
                 className="btn-mini"
@@ -447,6 +441,16 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                 ⬇ Showmore
               </button>
             </>
+          ) : (
+            <button
+              className="btn-mini"
+              disabled={busy || !selectedArray.length}
+              onClick={() => void batchArchiveOrUnarchive("archive")}
+              title="移出工作佇列（軟刪除，可救回）"
+              type="button"
+            >
+              🗄 移出佇列
+            </button>
           )}
         </div>
       </div>

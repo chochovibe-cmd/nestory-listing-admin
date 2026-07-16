@@ -3,6 +3,11 @@
  * Batch archive skips processing/publishing per-item (like batch 送圖), never fails whole batch.
  */
 
+import {
+  isPipelineStage,
+  mapStatusToPipelineStage,
+  type PipelineStage
+} from "@/lib/drafts/pipelineStage";
 import type { DraftStatus } from "@/types/domain";
 
 /** In-flight statuses: skip on archive, do not fail the batch. */
@@ -124,6 +129,43 @@ export function resolveUnarchiveStatus(input: {
   return "pending_input";
 }
 
+/**
+ * R2: unarchive stage when we have no pipeline_stage_before snapshot.
+ * Infer ready when prior status is publishing, or approved+images fully done
+ * (all-keep / 圖審通過 leave status=approved while stage was ready).
+ */
+export function resolveUnarchivePipelineStage(input: {
+  restoreStatus: string;
+  shopifyProductId?: string | null;
+  imageStatus?: string | null;
+  imageFlags?: unknown;
+  /** Explicit prior stage if ever stored — preferred. */
+  pipelineStageBefore?: string | null;
+}): PipelineStage {
+  if (input.pipelineStageBefore && isPipelineStage(input.pipelineStageBefore)) {
+    return input.pipelineStageBefore;
+  }
+  const mapped = mapStatusToPipelineStage(input.restoreStatus, {
+    shopifyProductId: input.shopifyProductId,
+  });
+  // publishing dual-writes ready
+  if (input.restoreStatus === "publishing") return "ready";
+  // approved without Shopify GID normally → image_review; bump to ready if images done
+  if (
+    mapped === "image_review" &&
+    (input.imageStatus === "done" || imageReviewAlreadyApproved(input.imageFlags))
+  ) {
+    return "ready";
+  }
+  return mapped;
+}
+
+function imageReviewAlreadyApproved(flags: unknown): boolean {
+  if (!flags || typeof flags !== "object") return false;
+  const rec = flags as Record<string, unknown>;
+  return rec.image_review === "approved" || rec.image_review === "passed";
+}
+
 export const SHOPIFY_STILL_LIVE_NOTE = "Shopify 商品仍在店裡，僅從工具列表隱藏";
 
 /**
@@ -143,9 +185,9 @@ export function formatArchiveResultMessage(input: {
   const parts: string[] = [];
 
   if (input.archivedCount > 0) {
-    parts.push(`${input.archivedCount} 件已封存`);
+    parts.push(`${input.archivedCount} 件已移出佇列`);
   } else {
-    parts.push("沒有商品被封存");
+    parts.push("沒有商品被移出佇列");
   }
 
   if (input.skippedBusyCount > 0) {
@@ -160,7 +202,7 @@ export function formatArchiveResultMessage(input: {
   if (input.archivedCount > 0 && input.includesPublished) {
     message += `。${SHOPIFY_STILL_LIVE_NOTE}`;
   } else if (input.archivedCount > 0) {
-    message += "。可用「已封存」篩選找回，或按下方解除封存。";
+    message += "。可從商品庫或解除封存找回（軟刪除，可救回）。";
   }
 
   return message;

@@ -119,15 +119,30 @@ export function isD4ProcessIntent(
   return intent === "de_text" || intent === "regenerate";
 }
 
+/** R2: to_trad is a mark option; D4 image edit not implemented yet → honest skip. */
+export function isUnsupportedAiIntent(
+  intent: ImageProcessIntent | string | null | undefined
+): intent is "to_trad" {
+  return intent === "to_trad";
+}
+
 export function decideAiProcessAction(input: {
   imageType: ImageType | string;
   processIntent: ImageProcessIntent | null | undefined;
   originalFileUrl: string | null | undefined;
-}): { action: "process_ai" | "skip"; reason: string; intent?: "de_text" | "regenerate" } {
+}): { action: "process_ai" | "skip"; reason: string; intent?: "de_text" | "regenerate"; warning?: string } {
   if (!isPipelineImageType(input.imageType)) {
     return {
       action: "skip",
       reason: `image_type=${input.imageType} is not a pipeline image`
+    };
+  }
+  // R2: 簡轉繁 mark is accepted in DB (030) but Image API path not wired yet.
+  if (isUnsupportedAiIntent(input.processIntent)) {
+    return {
+      action: "skip",
+      reason: "process_intent=to_trad; D4 image edit not implemented yet",
+      warning: "簡轉繁標記已記錄，但 AI 圖編尚未支援此選項（本包誠實跳過，不扣假成功）"
     };
   }
   if (!isD4ProcessIntent(input.processIntent)) {

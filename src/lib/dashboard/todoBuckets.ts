@@ -172,7 +172,7 @@ export function buildTodoCards(counts: TodoBucketCounts): TodoCardDef[] {
       key: "image_review",
       label: "圖片待審",
       count: counts.image_review,
-      action: "去圖審",
+      action: "去生圖工廠",
       sub: null,
       schipClass: "schip schip--warn",
       schipLabel: "圖片待審",

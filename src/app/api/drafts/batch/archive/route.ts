@@ -6,6 +6,7 @@ import {
   formatArchiveResultMessage,
   formatUnarchiveResultMessage,
   isPublishedArchiveStatus,
+  resolveUnarchivePipelineStage,
   resolveUnarchiveStatus
 } from "@/lib/drafts/archiveDrafts";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
   const { data: rows, error: loadError } = await serviceSupabase
     .from("product_drafts")
     .select(
-      "id, status, generation_status, title_zh, taobao_title, original_title, status_before_archive, description_html, description_plain, shopify_product_id"
+      "id, status, generation_status, title_zh, taobao_title, original_title, status_before_archive, description_html, description_plain, shopify_product_id, image_status, image_flags"
     )
     .in("id", draftIds as string[]);
 
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     const fallback = await serviceSupabase
       .from("product_drafts")
       .select(
-        "id, status, generation_status, title_zh, taobao_title, original_title, description_html, description_plain, shopify_product_id"
+        "id, status, generation_status, title_zh, taobao_title, original_title, description_html, description_plain, shopify_product_id, image_status, image_flags"
       )
       .in("id", draftIds as string[]);
     if (fallback.error) {
@@ -169,11 +170,14 @@ async function unarchiveRows(
       hasCopy
     });
 
-    // Q6-A: restore status then map (no pipeline_stage_before_archive this pack).
+    // R2: restore status + infer pipeline_stage (ready when images done).
     const patch: Record<string, unknown> = {
       status: restoreStatus,
-      pipeline_stage: mapStatusToPipelineStage(restoreStatus, {
-        shopifyProductId: (row.shopify_product_id as string | null) ?? null
+      pipeline_stage: resolveUnarchivePipelineStage({
+        restoreStatus,
+        shopifyProductId: (row.shopify_product_id as string | null) ?? null,
+        imageStatus: (row.image_status as string | null) ?? null,
+        imageFlags: row.image_flags
       })
     };
     if (!missingRestoreColumns) {

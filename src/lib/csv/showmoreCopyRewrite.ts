@@ -10,6 +10,7 @@
  */
 
 import { extractFaqPairs, normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
+import { isSectionHeaderLine, matchSectionHeader } from "@/lib/contentGenerator/sectionHeaders";
 import { pickScenarioKeywords } from "@/lib/contentGenerator/scenarioKeywords";
 import { normalizeProductTypeForDisplay } from "@/lib/productTypeLabels";
 
@@ -71,7 +72,7 @@ const SOURCE_PLATFORM_RE =
 const PRICE_IN_COPY_RE =
   /(?:NT\$|NT\s*|\$|¥|￥|元|圓)\s*\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s*(?:元|圓|塊錢)|售價\s*[:：]?\s*\d|定價\s*[:：]?\s*\d|成本\s*[:：]?\s*\d/gi;
 
-const SECTION_HEADER_RE = /^([A-E])｜\s*(.*)$/;
+// 文案呈現包：段落標題解析統一走 sectionHeaders.ts（新「◈ 標題」制＋舊「A｜」制）。
 const NOISE_TITLE_TERMS = [
   "日本正版",
   "正版授權",
@@ -133,7 +134,9 @@ function resolveProductType(draft: ShowmoreCopyDraftInput): string {
 }
 
 /**
- * Parse A–E letter sections from Nestory plain description.
+ * Parse description sections from Nestory plain description.
+ * Handles both the new「◈ 標題」format (opening block = A) and legacy
+ * 「A｜」letter headers, via the shared sectionHeaders matcher.
  * Returns map of letter → body lines (without header line).
  */
 export function parseLetterSections(
@@ -144,7 +147,8 @@ export function parseLetterSections(
 
   const lines = text.split(/\r?\n/);
   const out: Partial<Record<"A" | "B" | "C" | "D" | "E", string>> = {};
-  let current: "A" | "B" | "C" | "D" | "E" | null = null;
+  // 新制：第一個標題行之前的內文＝開頭段（A）。
+  let current: "A" | "B" | "C" | "D" | "E" | null = "A";
   const buf: string[] = [];
 
   const flush = () => {
@@ -155,14 +159,15 @@ export function parseLetterSections(
   };
 
   for (const line of lines) {
-    const match = line.trim().match(SECTION_HEADER_RE);
+    const match = matchSectionHeader(line);
     if (match) {
       flush();
-      current = match[1] as "A" | "B" | "C" | "D" | "E";
-      const rest = (match[2] ?? "").trim();
-      // Header may include inline title like "B｜商品亮點" — skip pure labels
-      if (rest && !/^(開頭|商品亮點|適合誰|商品資訊|常見問題|FAQ)/i.test(rest)) {
-        buf.push(rest);
+      // ◈ 未知標題（letter=null）歸入前一段語意最近的 E（購買提醒後備）——
+      // 實務上模型只會產四個已知標題；保守起見未知標題內文不丟棄。
+      current = match.letter ?? "E";
+      if (match.inlineContent) {
+        // 舊制「A｜開頭句…」：同行內文屬於該段
+        buf.push(match.inlineContent);
       }
       continue;
     }
@@ -395,10 +400,10 @@ function buildIntroBlock(
   const plain = sanitizeShowmoreCopyText(plainFallback);
   if (!plain) return "";
 
-  // If it still looks like letter soup without parse, strip letter headers
+  // If it still looks like header soup without parse, strip header lines (both formats)
   const withoutHeaders = plain
     .split(/\n/)
-    .filter((line) => !SECTION_HEADER_RE.test(line.trim()))
+    .filter((line) => !isSectionHeaderLine(line))
     .join("\n")
     .trim();
 

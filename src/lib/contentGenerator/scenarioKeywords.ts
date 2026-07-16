@@ -13,6 +13,8 @@
 // (seller puffery, zero search volume), added 生日禮物 (highest-volume TW gift
 // long-tail), and reordered — pickScenarioKeywords() always takes the FIRST
 // `count` terms, so position 1-2 of each list is what actually ships.
+import { matchSectionHeader } from './sectionHeaders';
+
 export const DEFAULT_SCENARIO_KEYWORDS: Record<string, string[]> = {
   吊飾掛件: ['包包掛飾', '交換禮物', '生日禮物', '書包裝飾'],
   絨毛娃娃: ['療癒小物', '生日禮物', '交換禮物', '房間佈置'],
@@ -56,12 +58,12 @@ export function pickScenarioKeywords(
   return terms;
 }
 
-// A17: D段 in the AI copy pipeline is one plain-text A/B/C/D/E blob (see
-// systemPrompt.ts), not separate fields, so adding a deterministic bullet
-// means locating the "D｜商品資訊" block by its header line and inserting
-// before the next header/end -- never before the header, never fabricating a
-// D段 that the model legitimately omitted (no info beyond the product name).
-const SECTION_HEADER = /^([A-E])｜/;
+// A17: D段 in the AI copy pipeline is one plain-text blob (see systemPrompt.ts),
+// not separate fields, so adding a deterministic bullet means locating the
+// 商品資訊 block by its header line and inserting before the next header/end --
+// never before the header, never fabricating a D段 the model omitted.
+// 文案呈現包：header matching now shared with showmoreCopyRewrite/htmlFormat via
+// sectionHeaders.ts, handling both the new「◈ 商品資訊」and legacy「D｜」forms.
 
 export function appendScenarioBulletToDescription(
   description: string | null | undefined,
@@ -75,11 +77,11 @@ export function appendScenarioBulletToDescription(
   let dEnd = lines.length;
 
   for (let i = 0; i < lines.length; i += 1) {
-    const match = lines[i].match(SECTION_HEADER);
+    const match = matchSectionHeader(lines[i]);
     if (!match) continue;
 
     if (dStart === -1) {
-      if (match[1] === 'D') dStart = i;
+      if (match.letter === 'D') dStart = i;
       continue;
     }
 

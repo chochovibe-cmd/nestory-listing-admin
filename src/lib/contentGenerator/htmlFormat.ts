@@ -11,6 +11,8 @@
 // column. Storage contract is now plain text everywhere; isLikelyHtml guards
 // payload conversion so legacy HTML rows are not double-wrapped.
 
+import { matchSectionHeader } from "./sectionHeaders";
+
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -87,16 +89,56 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean);
-      const bulletLines = lines.filter((line) => BULLET_PREFIX.test(line));
-      const headingLines = lines.filter((line) => !BULLET_PREFIX.test(line));
 
-      if (bulletLines.length > 0) {
-        const heading = headingLines.length > 0 ? `<p>${headingLines.map(escapeHtml).join("<br>")}</p>` : "";
-        const items = bulletLines.map((line) => `<li>${escapeHtml(line.replace(BULLET_PREFIX, ""))}</li>`).join("");
-        return `${heading}<ul>${items}</ul>`;
+      // 文案呈現包：段落標題行升級為真正的 <h3> 標題（視覺層級），
+      // 新制「◈ 商品亮點」與舊制「B｜商品亮點」都認得；
+      // 舊制「A｜開頭句…」帶內文的字母行 → 去前綴當一般段落。
+      const htmlParts: string[] = [];
+      const paragraphLines: string[] = [];
+      const bulletLines: string[] = [];
+
+      const flushParagraph = () => {
+        if (paragraphLines.length === 0) return;
+        htmlParts.push(`<p>${paragraphLines.map(escapeHtml).join("<br>")}</p>`);
+        paragraphLines.length = 0;
+      };
+      const flushBullets = () => {
+        if (bulletLines.length === 0) return;
+        const items = bulletLines
+          .map((line) => `<li>${escapeHtml(line.replace(BULLET_PREFIX, ""))}</li>`)
+          .join("");
+        htmlParts.push(`<ul>${items}</ul>`);
+        bulletLines.length = 0;
+      };
+
+      for (const line of lines) {
+        const header = matchSectionHeader(line);
+        if (header && header.title) {
+          flushParagraph();
+          flushBullets();
+          htmlParts.push(`<h3><strong>◈ ${escapeHtml(header.title)}</strong></h3>`);
+          continue;
+        }
+        if (header && header.inlineContent) {
+          // legacy "A｜開頭句…": strip the letter prefix, keep the sentence
+          flushBullets();
+          paragraphLines.push(header.inlineContent);
+          continue;
+        }
+        if (header) continue; // bare letter header with no title/content — drop
+
+        if (BULLET_PREFIX.test(line)) {
+          flushParagraph();
+          bulletLines.push(line);
+        } else {
+          flushBullets();
+          paragraphLines.push(line);
+        }
       }
+      flushParagraph();
+      flushBullets();
 
-      return `<p>${lines.map(escapeHtml).join("<br>")}</p>`;
+      return htmlParts.join("");
     })
     .join("");
 }

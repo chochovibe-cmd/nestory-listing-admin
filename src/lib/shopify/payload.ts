@@ -1,6 +1,7 @@
 import { generateSku } from "@/lib/contentGenerator/sku";
 import { formatPlainTextAsHtml, htmlFaqToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import { appendDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/descriptionEmbed";
+import { saleStatusNoticeHtml } from "@/lib/contentGenerator/saleStatusNotice";
 import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
 import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildImageFileNameSlug } from "@/lib/contentGenerator/imageFileNameGenerator";
@@ -161,7 +162,10 @@ export function buildShopifyProductPayload(
     // A21-2/A21-3: internal link + FAQPage JSON-LD appended the same way --
     // generated at the Shopify boundary only, never written back to the DB
     // column or the app's own FAQ/description UI.
+    // 文案呈現包：描述最前面加銷售狀態小提醒（海外代購 14 天等），
+    // 同樣只在 Shopify 邊界產生、不寫回 DB。
     descriptionHtml:
+      saleStatusNoticeHtml(draft.sale_status) +
       appendDescriptionEmbedIfEnabled(
         formatPlainTextAsHtml(draft.description_html || draft.description_plain || ""),
         draft.product_images,

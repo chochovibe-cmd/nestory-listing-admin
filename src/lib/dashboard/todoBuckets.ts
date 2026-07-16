@@ -28,6 +28,8 @@ export type TodoDraftRow = {
   generation_status?: string | null;
   image_status?: string | null;
   image_flags?: unknown;
+  /** P1-3: required to count image review / image fail (pipeline only). */
+  current_image_batch_id?: string | null;
   created_by?: string | null;
   updated_at?: string | null;
   /** E2 funnel dwell (A13 timestamps; optional for E1-only callers) */
@@ -41,7 +43,7 @@ export const TODO_FETCH_LIMIT = 200;
 
 /** Shared E1+E2 dashboard select (timestamps for funnel dwell). */
 export const TODO_DRAFT_SELECT_COLUMNS =
-  "id, status, generation_status, image_status, image_flags, created_by, updated_at, created_at, copy_generated_at, reviewed_at, published_at";
+  "id, status, generation_status, image_status, image_flags, current_image_batch_id, created_by, updated_at, created_at, copy_generated_at, reviewed_at, published_at";
 
 const FLOW_FAILED_STATUSES = new Set(["failed", "api_failed"]);
 const READY_PUBLISH_STATUSES = new Set(["approved", "publishing"]);
@@ -52,13 +54,14 @@ export function isCopyReviewTodo(row: TodoDraftRow): boolean {
   return row.status === "ready_for_review";
 }
 
-/** 圖片待審 — D5 pending_review only (not processing/failed) */
+/** 圖片待審 — D5 pending_review only (not processing/failed); requires pipeline batch (P1-3). */
 export function isImageReviewTodo(row: TodoDraftRow): boolean {
   return (
     classifyReviewQueueItem({
       status: row.status,
       image_status: String(row.image_status ?? "pending"),
-      image_flags: row.image_flags
+      image_flags: row.image_flags,
+      current_image_batch_id: row.current_image_batch_id
     }) === "pending_review"
   );
 }
@@ -69,10 +72,12 @@ export function isFlowFailedTodo(row: TodoDraftRow): boolean {
   return FLOW_FAILED_STATUSES.has(row.status) || row.generation_status === "failed";
 }
 
-/** 圖片處理失敗 */
+/** 圖片處理失敗 — only after 送圖 pipeline (P1-3; not Vision-only image_status). */
 export function isImageFailedTodo(row: TodoDraftRow): boolean {
   if (row.status === "archived") return false;
-  return row.image_status === "failed";
+  if (row.image_status !== "failed") return false;
+  const batchId = row.current_image_batch_id;
+  return typeof batchId === "string" && batchId.trim().length > 0;
 }
 
 /** Q2-A: failed union by draft (flow ∪ image) */

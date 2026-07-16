@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
+import { parseImageFlags, VISION_STATUS_FLAG_KEY } from "@/lib/images/imageReview";
 import { describeProductImages } from "@/lib/providers/visionProvider";
 import type { ImageType } from "@/types/domain";
 
@@ -11,8 +12,40 @@ import type { ImageType } from "@/types/domain";
 // 規格圖 OCR 已廢棄（見 docs/Mockup差異備忘.md 差異2）：規格資料改由表單手填欄位
 // （spec_text），未來由 B3 截圖辨識自動填。所以此路由**不再讀規格圖、不再做 OCR、
 // 且絕不回寫 spec_text**——手填的 spec_text 必須被尊重，不能被這支 API 蓋成 null。
+//
+// P1-3 / 回饋 52: Vision MUST NOT write product_drafts.image_status (shared with D3/D5
+// image pipeline). Status lives under image_flags.vision_status only.
 
 type ImageRow = { image_type: ImageType; original_file_url: string | null; sort_order: number };
+
+type VisionStatus = "processing" | "done" | "failed" | "skipped";
+
+async function mergeVisionStatus(
+  serviceSupabase: ReturnType<typeof createServiceSupabaseClient>,
+  draftId: string,
+  visionStatus: VisionStatus,
+  extra: Record<string, unknown> = {}
+) {
+  const { data: row } = await serviceSupabase
+    .from("product_drafts")
+    .select("image_flags")
+    .eq("id", draftId)
+    .maybeSingle();
+
+  const flags = {
+    ...parseImageFlags(row?.image_flags),
+    [VISION_STATUS_FLAG_KEY]: visionStatus
+  };
+
+  return serviceSupabase
+    .from("product_drafts")
+    .update({
+      ...extra,
+      image_flags: flags
+      // intentionally never touch image_status here
+    })
+    .eq("id", draftId);
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
@@ -63,11 +96,12 @@ export async function POST(request: NextRequest) {
 
   if (describeUrls.length === 0) {
     // Never touch spec_text here (it may hold a hand-filled value).
-    await serviceSupabase.from("product_drafts").update({ image_status: "skipped" }).eq("id", draftId);
+    // Never touch image_status (pipeline field).
+    await mergeVisionStatus(serviceSupabase, draftId, "skipped");
     return Response.json({ ok: true, skipped: true, imageDescription: null, warnings: [] });
   }
 
-  await serviceSupabase.from("product_drafts").update({ image_status: "processing" }).eq("id", draftId);
+  await mergeVisionStatus(serviceSupabase, draftId, "processing");
 
   const warnings: string[] = [];
   let imageDescription: string | null = null;
@@ -78,22 +112,19 @@ export async function POST(request: NextRequest) {
     warnings.push(`主圖／詳情圖辨識失敗：${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const imageStatus = imageDescription ? "done" : "failed";
+  const visionStatus: VisionStatus = imageDescription ? "done" : "failed";
 
   // Only image_description is written -- spec_text is intentionally left alone.
-  const { error: updateError } = await serviceSupabase
-    .from("product_drafts")
-    .update({
-      image_description: imageDescription,
-      image_status: imageStatus,
-    })
-    .eq("id", draftId);
+  // image_status intentionally left alone (P1-3).
+  const { error: updateError } = await mergeVisionStatus(serviceSupabase, draftId, visionStatus, {
+    image_description: imageDescription
+  });
 
   if (updateError) {
     return Response.json({ error: updateError.message }, { status: 500 });
   }
 
-  if (imageStatus === "failed") {
+  if (visionStatus === "failed") {
     return Response.json({ error: warnings.join("; ") || "圖片辨識失敗", warnings }, { status: 502 });
   }
 

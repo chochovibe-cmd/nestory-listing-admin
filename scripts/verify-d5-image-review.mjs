@@ -63,14 +63,36 @@ function clearImageReviewApproved(existing) {
   return next;
 }
 
+function isImagePipelineEnrolled(input) {
+  const id = input.current_image_batch_id;
+  return typeof id === "string" && id.trim().length > 0;
+}
+
+/** P1-3: require current_image_batch_id (送圖) — Vision-only image_status does not queue. */
 function classifyReviewQueueItem(input) {
   if (input.status === "archived") return null;
+  if (!isImagePipelineEnrolled(input)) return null;
   if (input.image_status === "processing") return "processing";
   if (input.image_status === "failed") return "failed";
   if (input.image_status === "done" && !isImageReviewApproved(input.image_flags)) {
     return "pending_review";
   }
   return null;
+}
+
+function formatReviewFailReasons(input) {
+  const lines = [];
+  for (const img of input.images || []) {
+    const err = (img.processing_error || "").trim();
+    if (err && !lines.includes(err)) lines.push(err);
+  }
+  for (const w of input.warnings || []) {
+    if (typeof w !== "string") continue;
+    const t = w.trim();
+    if (t && t.includes("圖") && !lines.includes(t)) lines.push(t);
+  }
+  if (!lines.length) return "處理失敗（尚無詳細原因）。可填寫拒絕理由留下指令。";
+  return lines.slice(0, 8).join("；");
 }
 
 function hasComparableProcessed(originalUrl, processedUrl) {
@@ -146,35 +168,101 @@ await check("parse + merge flags preserve other keys", () => {
   assert.equal(cleared.image_review, undefined);
 });
 
-await check("classify queue kinds Q3-A", () => {
+await check("classify queue kinds Q3-A + P1-3 pipeline gate", () => {
+  const enrolled = { current_image_batch_id: "batch-1" };
+  assert.equal(
+    classifyReviewQueueItem({
+      status: "ready_for_review",
+      image_status: "done",
+      image_flags: {},
+      ...enrolled
+    }),
+    "pending_review"
+  );
+  // Vision-only pollution: image_status=done without 送圖 batch → not on /review
   assert.equal(
     classifyReviewQueueItem({ status: "ready_for_review", image_status: "done", image_flags: {} }),
-    "pending_review"
+    null
   );
   assert.equal(
     classifyReviewQueueItem({
       status: "ready_for_review",
       image_status: "done",
-      image_flags: { image_review: "approved" }
+      image_flags: { image_review: "approved" },
+      ...enrolled
     }),
     null
   );
   assert.equal(
-    classifyReviewQueueItem({ status: "ready_for_review", image_status: "processing", image_flags: {} }),
+    classifyReviewQueueItem({
+      status: "ready_for_review",
+      image_status: "processing",
+      image_flags: {},
+      ...enrolled
+    }),
     "processing"
   );
   assert.equal(
-    classifyReviewQueueItem({ status: "ready_for_review", image_status: "failed", image_flags: {} }),
+    classifyReviewQueueItem({
+      status: "ready_for_review",
+      image_status: "failed",
+      image_flags: {},
+      ...enrolled
+    }),
     "failed"
   );
   assert.equal(
-    classifyReviewQueueItem({ status: "archived", image_status: "done", image_flags: {} }),
+    classifyReviewQueueItem({
+      status: "archived",
+      image_status: "done",
+      image_flags: {},
+      ...enrolled
+    }),
     null
   );
   assert.equal(
-    classifyReviewQueueItem({ status: "ready_for_review", image_status: "pending", image_flags: {} }),
+    classifyReviewQueueItem({
+      status: "ready_for_review",
+      image_status: "pending",
+      image_flags: {},
+      ...enrolled
+    }),
     null
   );
+});
+
+await check("P1-3 analyze-images uses vision_status not image_status", () => {
+  const src = read("src/app/api/analyze-images/route.ts");
+  assert.ok(src.includes("VISION_STATUS_FLAG_KEY") || src.includes("vision_status"));
+  assert.ok(src.includes("mergeVisionStatus") || src.includes("image_flags"));
+  // Must not write pipeline image_status from Vision
+  assert.ok(!src.includes('image_status: "processing"'));
+  assert.ok(!src.includes('image_status: "done"'));
+  assert.ok(!src.includes('image_status: "failed"'));
+  assert.ok(!src.includes('image_status: "skipped"'));
+});
+
+await check("P1-4 formatReviewFailReasons surfaces errors + warnings", () => {
+  assert.match(
+    formatReviewFailReasons({
+      images: [{ processing_error: "sharp failed" }],
+      warnings: ["圖審拒絕：字太大"]
+    }),
+    /sharp failed/
+  );
+  assert.match(
+    formatReviewFailReasons({ images: [], warnings: ["圖處理逾時"] }),
+    /圖處理逾時/
+  );
+  assert.match(formatReviewFailReasons({ images: [], warnings: [] }), /尚無詳細原因/);
+});
+
+await check("imageReview.ts exports pipeline enrollment + fail reasons", () => {
+  const src = read("src/lib/images/imageReview.ts");
+  assert.ok(src.includes("isImagePipelineEnrolled"));
+  assert.ok(src.includes("formatReviewFailReasons"));
+  assert.ok(src.includes("VISION_STATUS_FLAG_KEY"));
+  assert.ok(src.includes("current_image_batch_id"));
 });
 
 await check("slider comparable rule", () => {

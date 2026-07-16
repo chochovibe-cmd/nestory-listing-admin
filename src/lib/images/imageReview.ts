@@ -4,6 +4,10 @@
  * Q1-A: human pass = image_flags.image_review = "approved" (image_status stays done).
  * Q2-A: reject → image_status failed + warnings line.
  * Q3-A: queue kinds = pending_review | processing | failed.
+ *
+ * P1-3 / 回饋 52: Vision writes image_flags.vision_status only — never image_status.
+ * Review queue requires real pipeline enrollment (current_image_batch_id) so
+ * copy-only / Vision-only drafts never appear on /review.
  */
 
 import { imageSlotLabel, isPipelineImage } from "@/lib/images/processMarks";
@@ -12,6 +16,8 @@ import type { ImageProcessIntent, ImageStatus, ImageType, ProductImage } from "@
 export const IMAGE_REVIEW_FLAG_KEY = "image_review";
 export const IMAGE_REVIEW_APPROVED = "approved";
 export const IMAGE_REVIEWED_AT_KEY = "image_reviewed_at";
+/** P1-3: Vision analyze-images status (not the D3/D5 image pipeline). */
+export const VISION_STATUS_FLAG_KEY = "vision_status";
 
 export type ImageReviewQueueKind = "pending_review" | "processing" | "failed";
 
@@ -20,7 +26,7 @@ export const REVIEW_QUEUE_IMAGE_STATUSES: ImageStatus[] = ["done", "processing",
 export const REVIEW_FETCH_LIMIT = 100;
 
 export const REVIEW_DRAFT_SELECT_COLUMNS =
-  "id, title_zh, taobao_title, original_title, status, image_status, image_flags, warnings, created_by, created_at, updated_at";
+  "id, title_zh, taobao_title, original_title, status, image_status, image_flags, warnings, current_image_batch_id, created_by, created_at, updated_at";
 
 export type ReviewDraftRow = {
   id: string;
@@ -31,6 +37,8 @@ export type ReviewDraftRow = {
   image_status: string;
   image_flags: unknown;
   warnings: string[] | null;
+  /** Set by send-images — required for /review queue (P1-3). */
+  current_image_batch_id?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -91,20 +99,72 @@ export function clearImageReviewApproved(existing: unknown): Record<string, stri
 }
 
 /**
+ * True when this draft was enrolled in the real image pipeline (送圖).
+ * Vision-only analyze-images never sets current_image_batch_id (P1-3).
+ */
+export function isImagePipelineEnrolled(input: {
+  current_image_batch_id?: string | null;
+}): boolean {
+  const id = input.current_image_batch_id;
+  return typeof id === "string" && id.trim().length > 0;
+}
+
+/**
  * Q3-A queue classification. null = not on review page list.
+ * P1-3: without pipeline enrollment, ignore image_status (covers old Vision pollution).
  */
 export function classifyReviewQueueItem(input: {
   status: string;
   image_status: string;
   image_flags: unknown;
+  current_image_batch_id?: string | null;
 }): ImageReviewQueueKind | null {
   if (input.status === "archived") return null;
+  if (!isImagePipelineEnrolled(input)) return null;
   if (input.image_status === "processing") return "processing";
   if (input.image_status === "failed") return "failed";
   if (input.image_status === "done" && !isImageReviewApproved(input.image_flags)) {
     return "pending_review";
   }
   return null;
+}
+
+/**
+ * P1-4 / 回饋 50: human-readable fail reasons for /review failed cards.
+ * Prefer per-image processing_error; also surface draft warnings (pipeline/圖審).
+ */
+export function formatReviewFailReasons(input: {
+  images: Array<{ processing_error?: string | null }>;
+  warnings?: string[] | null;
+}): string {
+  const lines: string[] = [];
+  for (const img of input.images) {
+    const err = img.processing_error?.trim();
+    if (err && !lines.includes(err)) lines.push(err);
+  }
+  const warns = Array.isArray(input.warnings) ? input.warnings : [];
+  for (const w of warns) {
+    if (typeof w !== "string") continue;
+    const t = w.trim();
+    if (!t) continue;
+    // Keep image-pipeline / fail-related lines; skip pure copy tips noise when possible.
+    const lower = t.toLowerCase();
+    const looksImage =
+      t.includes("圖") ||
+      t.includes("處理") ||
+      t.includes("sharp") ||
+      t.includes("CDN") ||
+      t.includes("finalize") ||
+      t.includes("送圖") ||
+      t.includes("Image") ||
+      lower.includes("image") ||
+      t.includes("失敗");
+    if (looksImage && !lines.includes(t)) lines.push(t);
+  }
+  if (lines.length === 0) {
+    return "處理失敗（尚無詳細原因）。可填寫拒絕理由留下指令。";
+  }
+  return lines.slice(0, 8).join("；");
 }
 
 export function canConfirmReviewKind(kind: ImageReviewQueueKind | null): boolean {

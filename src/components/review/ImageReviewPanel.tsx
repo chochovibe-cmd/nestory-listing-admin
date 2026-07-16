@@ -12,6 +12,7 @@ import {
   canConfirmReviewKind,
   classifyReviewQueueItem,
   countBanner,
+  formatReviewFailReasons,
   formatUnviewedBlockMessage,
   pipelineImagesForReview,
   reviewDisplayTitle,
@@ -123,7 +124,8 @@ export function ImageReviewPanel() {
         const kind = classifyReviewQueueItem({
           status: draft.status,
           image_status: draft.image_status,
-          image_flags: draft.image_flags
+          image_flags: draft.image_flags,
+          current_image_batch_id: draft.current_image_batch_id
         });
         if (kind) classified.push({ draft, kind });
       }
@@ -397,16 +399,11 @@ export function ImageReviewPanel() {
                       )}
 
                       {kind === "failed" ? (
-                        <div className="notice ir-fail-note">
-                          {images.some((i) => i.processing_error)
-                            ? images
-                                .filter((i) => i.processing_error)
-                                .map((i) => i.processing_error)
-                                .join("；")
-                            : Array.isArray(draft.warnings) && draft.warnings.length > 0
-                              ? draft.warnings.filter((w) => String(w).includes("圖審拒絕")).join("；") ||
-                                "處理失敗，可填寫拒絕理由留下指令（本包不會自動重生）"
-                              : "處理失敗，可填寫拒絕理由留下指令（本包不會自動重生）"}
+                        <div className="notice ir-fail-note" role="alert">
+                          {formatReviewFailReasons({
+                            images,
+                            warnings: draft.warnings
+                          })}
                         </div>
                       ) : null}
 

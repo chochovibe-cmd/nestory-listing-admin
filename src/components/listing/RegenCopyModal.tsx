@@ -31,7 +31,7 @@ export function RegenCopyModal({
 
   return (
     <div
-      className="modal-overlay"
+      className="modal-overlay open"
       onClick={() => {
         if (!busy) onCancel();
       }}

@@ -27,7 +27,7 @@ export function LockedCopyPreview({
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose} role="presentation">
+    <div className="modal-overlay open" onClick={onClose} role="presentation">
       <div
         className="modal-box"
         onClick={(e) => e.stopPropagation()}

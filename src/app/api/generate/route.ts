@@ -18,6 +18,7 @@ import {
   pickScenarioKeywords,
 } from "@/lib/contentGenerator/scenarioKeywords";
 import { generateShopifyHandleSlug } from "@/lib/contentGenerator/handleGenerator";
+import { buildGenerateSuccessStatusPatch } from "@/lib/drafts/generateSuccessStatus";
 import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
 import { buildMetaContentGapWarning, buildMetaDuplicateWarning } from "@/lib/contentGenerator/metaUniqueness";
 import { normalizeProductTypeForDisplay } from "@/lib/productTypeLabels";
@@ -678,15 +679,15 @@ export async function POST(request: NextRequest) {
     scenarioKeywordMap,
   );
 
-  // A21-1: romanized handle slug off the just-finalised classification, e.g.
-  // "chiikawa-hachiware-keychain" -- written to shopify_handle below so
-  // publish (payload.ts) and the Matrixify CSV export (matrixify.ts) both
-  // pick it up instead of falling back to a raw-Chinese-derived handle.
+  // A21-1 + P0-73: romanized handle slug off classification, with draft-id
+  // short suffix so two same-IP/character/type drafts never share a Handle
+  // (Matrixify would merge them). Written to shopify_handle for publish + CSV.
   const handleSlug = generateShopifyHandleSlug(
     {
       ip: detected.ip,
       character: detected.character,
       productType: normalizeProductTypeForDisplay(detected.productType),
+      draftId,
     },
     displayContext,
   );
@@ -797,7 +798,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const nextStatus = localizedOutput.draft_state === "blocked" ? "needs_revision" : "ready_for_review";
+  // P0-62: single source for status / pipeline_stage / generation_status so a
+  // previously-failed draft cannot keep showing ✗ after a successful regen.
+  const successStatus = buildGenerateSuccessStatusPatch(
+    localizedOutput.draft_state,
+    localizedOutput.validation_errors ?? [],
+  );
 
   // B4 3A: after detect, three-dimension (IP+角色+類型) duplicate check → yellow only.
   try {
@@ -843,11 +849,12 @@ export async function POST(request: NextRequest) {
       detected_category: detected.category || null,
       sku: detected.sku || null,
       warnings: allWarnings,
-      status: nextStatus,
-      pipeline_stage: mapStatusToPipelineStage(nextStatus),
+      // P0-62: successStatus already maps blocked vs ok for the three queue fields.
+      status: successStatus.status,
+      pipeline_stage: successStatus.pipeline_stage,
       generation_mode: "api_llm",
       generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
-      generation_status: localizedOutput.draft_state === "blocked" ? "failed" : "completed",
+      generation_status: successStatus.generation_status,
       generation_model: providerOutput.model,
       // A13: per-draft AI spend + raw tokens (null in test mode) and the copy
       // stage timestamp for the dashboard funnel/budget.
@@ -855,8 +862,7 @@ export async function POST(request: NextRequest) {
       generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
       generation_output_tokens: providerOutput.usage?.outputTokens ?? null,
       copy_generated_at: new Date().toISOString(),
-      generation_error:
-        localizedOutput.draft_state === "blocked" ? localizedOutput.validation_errors.join("; ") : null,
+      generation_error: successStatus.generation_error,
     })
     .eq("id", draftId);
 

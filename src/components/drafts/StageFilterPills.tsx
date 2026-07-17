@@ -1,31 +1,36 @@
 "use client";
 
 import {
+  FAIL_FILTER_LABEL,
   STATION_OPTIONS,
-  type StationFilterKey,
+  stationNonFailCount,
+  totalPipelineFailCount,
+  type ResultsFilterKey,
 } from "@/lib/drafts/stationFilter";
 import type { PipelineStationCounts } from "@/lib/drafts/pipelineStage";
 
+/**
+ * UX-B T6: three station pills always visible (0 shown);
+ * independent 失敗 pill only when fail total > 0.
+ * Display counts = count − fail (non-fail work items).
+ */
 export function StageFilterPills({
   stage,
   counts,
   onChange,
   ariaLabel = "依站篩選",
 }: {
-  stage: StationFilterKey;
+  stage: ResultsFilterKey;
   counts: PipelineStationCounts;
-  onChange: (next: StationFilterKey) => void;
+  onChange: (next: ResultsFilterKey) => void;
   ariaLabel?: string;
 }) {
+  const failTotal = totalPipelineFailCount(counts);
+
   return (
     <div className="pill-group stage-filter-pills" aria-label={ariaLabel} role="toolbar">
       {STATION_OPTIONS.map(({ key, label }) => {
-        const count = counts[key] ?? 0;
-        const fail = counts.fail?.[key] ?? 0;
-        // R2 §6 / 回饋 18: hide zero-count stations unless selected
-        if (count === 0 && stage !== key) {
-          return null;
-        }
+        const count = stationNonFailCount(counts, key);
         return (
           <button
             className={`pill-btn${stage === key ? " active" : ""}`}
@@ -34,15 +39,19 @@ export function StageFilterPills({
             type="button"
           >
             {label} {count}
-            {fail > 0 ? (
-              <span className="station-fail-count" title={`${fail} 件失敗`}>
-                {" "}
-                · <span className="station-fail-num">{fail}</span>
-              </span>
-            ) : null}
           </button>
         );
       })}
+      {failTotal > 0 ? (
+        <button
+          className={`pill-btn station-fail-pill${stage === "fail" ? " active" : ""}`}
+          onClick={() => onChange("fail")}
+          type="button"
+          title={`${failTotal} 件失敗`}
+        >
+          {FAIL_FILTER_LABEL} {failTotal}
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -24,12 +24,12 @@ import {
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import {
   countStations,
-  filterDraftsByStation,
+  filterDraftsByResultsFilter,
   filterWorkQueueDrafts,
-  readStoredStation,
+  readStoredResultsFilter,
   STATION_FILTER_STORAGE_KEY_QUEUE,
-  type StationFilterKey,
-  writeStoredStation
+  type ResultsFilterKey,
+  writeStoredResultsFilter
 } from "@/lib/drafts/stationFilter";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import type { ProductDraft } from "@/types/domain";
@@ -58,7 +58,7 @@ const PUBLISH_MODE_LABELS: Record<string, string> = {
 
 export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   const router = useRouter();
-  const [stage, setStage] = useState<StationFilterKey>("copy_review");
+  const [stage, setStage] = useState<ResultsFilterKey>("copy_review");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -76,7 +76,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
 
   useEffect(() => {
     setStage(
-      readStoredStation(
+      readStoredResultsFilter(
         typeof window !== "undefined" ? window.sessionStorage : null,
         STATION_FILTER_STORAGE_KEY_QUEUE
       )
@@ -91,7 +91,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   const stageCounts = useMemo(() => countStations(workQueue), [workQueue]);
 
   const filtered = useMemo(() => {
-    const stageRows = filterDraftsByStation(workQueue, stage);
+    const stageRows = filterDraftsByResultsFilter(workQueue, stage);
     return filterByOptimisticHide(stageRows, optimisticHide);
   }, [workQueue, stage, optimisticHide]);
 
@@ -100,10 +100,10 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   const selectedArray = Array.from(selectedIds);
   const isReadyStation = stage === "ready";
 
-  function onStageChange(next: StationFilterKey) {
+  function onStageChange(next: ResultsFilterKey) {
     setStage(next);
     setSelectedIds(new Set());
-    writeStoredStation(
+    writeStoredResultsFilter(
       next,
       typeof window !== "undefined" ? window.sessionStorage : null,
       STATION_FILTER_STORAGE_KEY_QUEUE

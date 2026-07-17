@@ -32,13 +32,14 @@ import {
 } from "@/lib/drafts/resultSort";
 import {
   countStations,
-  filterDraftsByStation,
+  filterDraftsByResultsFilter,
   filterWorkQueueDrafts,
+  isResultsFilterKey,
   isStationFilterKey,
-  readStoredStation,
+  readStoredResultsFilter,
   STATION_FILTER_STORAGE_KEY_RESULTS,
-  type StationFilterKey,
-  writeStoredStation
+  type ResultsFilterKey,
+  writeStoredResultsFilter
 } from "@/lib/drafts/stationFilter";
 import {
   formatAiEstimateMessage,
@@ -89,7 +90,7 @@ export function DraftResultsPanel({
   // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
   const [sortMode, setSortMode] = useState<ResultSortMode>("newest");
-  const [stage, setStage] = useState<StationFilterKey>("copy_review");
+  const [stage, setStage] = useState<ResultsFilterKey>("copy_review");
   // R3: station③ multi-select publish/export
   const [station3Open, setStation3Open] = useState(false);
   const [station3DraftIds, setStation3DraftIds] = useState<string[]>([]);
@@ -140,7 +141,7 @@ export function DraftResultsPanel({
       if (!detail?.draftId) return;
       if (detail.station && isStationFilterKey(detail.station)) {
         setStage(detail.station);
-        writeStoredStation(
+        writeStoredResultsFilter(
           detail.station,
           typeof window !== "undefined" ? window.sessionStorage : null,
           STATION_FILTER_STORAGE_KEY_RESULTS
@@ -154,11 +155,11 @@ export function DraftResultsPanel({
   }, []);
 
   // B9: remember sort preference for this browser tab session.
-  // R2: remember three-station filter for this tab session.
+  // R2 / UX-B T6: remember three-station + fail filter for this tab session.
   useEffect(() => {
     const storage = typeof window !== "undefined" ? window.sessionStorage : null;
     setSortMode(readStoredResultSort(storage));
-    setStage(readStoredStation(storage, STATION_FILTER_STORAGE_KEY_RESULTS));
+    setStage(readStoredResultsFilter(storage, STATION_FILTER_STORAGE_KEY_RESULTS));
   }, []);
 
   // Drop optimistic hides once server props already reflect archive/unarchive.
@@ -213,7 +214,7 @@ export function DraftResultsPanel({
   );
 
   const stageFiltered = useMemo(
-    () => filterDraftsByStation(workQueueDrafts, stage),
+    () => filterDraftsByResultsFilter(workQueueDrafts, stage),
     [workQueueDrafts, stage]
   );
 
@@ -265,10 +266,11 @@ export function DraftResultsPanel({
     writeStoredResultSort(next, typeof window !== "undefined" ? window.sessionStorage : null);
   }
 
-  function onStageChange(next: StationFilterKey) {
+  function onStageChange(next: ResultsFilterKey) {
+    if (!isResultsFilterKey(next)) return;
     setStage(next);
     setSelectedIds(new Set());
-    writeStoredStation(
+    writeStoredResultsFilter(
       next,
       typeof window !== "undefined" ? window.sessionStorage : null,
       STATION_FILTER_STORAGE_KEY_RESULTS
@@ -872,11 +874,11 @@ export function DraftResultsPanel({
                 </select>
               </label>
             </div>
-
-            {/* B12 / 差異 9: stage pills under batch toolbar */}
-            <StageFilterPills counts={stageCounts} onChange={onStageChange} stage={stage} />
           </>
         ) : null}
+
+        {/* UX-B T6: three stations always-on (even 0); fail pill when fail > 0 */}
+        <StageFilterPills counts={stageCounts} onChange={onStageChange} stage={stage} />
 
         {message ? (
           <div className="notice results-batch-notice" role="status">

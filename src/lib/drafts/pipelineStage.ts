@@ -116,12 +116,58 @@ function resolveStage(row: PipelineStationDraft): PipelineStage {
   });
 }
 
-function isCopyFail(row: PipelineStationDraft): boolean {
+/** Copy-station fail light (generation / draft status failed). */
+export function isCopyFail(row: PipelineStationDraft): boolean {
   return row.status === "failed" || row.generation_status === "failed";
 }
 
-function isImageFail(row: PipelineStationDraft): boolean {
+/** Image-station fail light (image pipeline failed). */
+export function isImageFail(row: PipelineStationDraft): boolean {
   return row.image_status === "failed";
+}
+
+/**
+ * UX-B T6: draft counts as station-fail for the independent 失敗 pill.
+ * Mirrors countPipelineStations fail lights (no new pipeline_stage).
+ */
+export function isDraftStationFail(row: PipelineStationDraft): boolean {
+  const stage = resolveStage(row);
+  if (stage === "copy_review") return isCopyFail(row);
+  if (stage === "image_review") return isImageFail(row);
+  // Q5-A: ready has no fail light in counts; still no fail.ready rows.
+  return false;
+}
+
+/** Sum of fail.* from countPipelineStations (copy + image + ready). */
+export function totalPipelineFailCount(counts: PipelineStationCounts): number {
+  return (
+    (counts.fail?.copy_review ?? 0) +
+    (counts.fail?.image_review ?? 0) +
+    (counts.fail?.ready ?? 0)
+  );
+}
+
+/** Station pill display count = total at station − fail light (non-fail work items). */
+export function stationNonFailCount(
+  counts: PipelineStationCounts,
+  key: PipelineStationKey
+): number {
+  const total = counts[key] ?? 0;
+  const fail = counts.fail?.[key] ?? 0;
+  return Math.max(0, total - fail);
+}
+
+/** Filter to drafts whose station fail light is true. */
+export function filterFailDrafts<T extends PipelineStationDraft>(rows: T[]): T[] {
+  return rows.filter((row) => isDraftStationFail(row));
+}
+
+/** Work-queue station rows excluding station-fail lights (no double-list with 失敗 pill). */
+export function filterNonFailByStation<T extends PipelineStationDraft>(
+  rows: T[],
+  stage: PipelineStationKey
+): T[] {
+  return filterByPipelineStage(rows, stage).filter((row) => !isDraftStationFail(row));
 }
 
 /**

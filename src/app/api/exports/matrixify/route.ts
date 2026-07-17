@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { buildMatrixifyCsv } from "@/lib/csv/matrixify";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
+import {
+  csvExportDraftTitle,
+  recordCsvExportBatch,
+} from "@/lib/drafts/recordCsvExportBatch";
 import { notifyMake } from "@/lib/notifications/make";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
@@ -39,8 +43,11 @@ export async function POST(request: NextRequest) {
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
-  const csv = buildMatrixifyCsv(data ?? []);
-  const exportedIds = (data ?? []).map((draft) => draft.id);
+  const rows = data ?? [];
+  const csv = buildMatrixifyCsv(rows);
+  const exportedIds = rows.map((draft) => draft.id);
+
+  let exportBatchId: string | null = null;
 
   if (exportedIds.length && markLeaveQueue) {
     await serviceSupabase
@@ -54,7 +61,7 @@ export async function POST(request: NextRequest) {
       .in("id", exportedIds);
 
     await serviceSupabase.from("publish_jobs").insert(
-      (data ?? []).map((draft) => ({
+      rows.map((draft) => ({
         draft_id: draft.id,
         publish_mode: draft.publish_mode,
         publish_method: "matrixify_csv",
@@ -65,14 +72,31 @@ export async function POST(request: NextRequest) {
       }))
     );
 
+    // P1-69: also ledger into publish_batches (best-effort, never block CSV).
+    try {
+      const recorded = await recordCsvExportBatch({
+        serviceSupabase,
+        kind: "matrixify",
+        drafts: rows.map((d) => ({
+          draftId: d.id,
+          title: csvExportDraftTitle(d),
+        })),
+        createdBy: user.id,
+      });
+      exportBatchId = recorded.batchId;
+    } catch {
+      exportBatchId = null;
+    }
+
     await notifyMake("csv_ready", { draftIds: exportedIds });
   }
 
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="nestory-matrixify-${Date.now()}.csv"`,
-      "X-Nestory-Left-Queue": markLeaveQueue ? "1" : "0"
-    }
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="nestory-matrixify-${Date.now()}.csv"`,
+    "X-Nestory-Left-Queue": markLeaveQueue ? "1" : "0",
+  };
+  if (exportBatchId) headers["X-Nestory-Publish-Batch-Id"] = exportBatchId;
+
+  return new Response(csv, { headers });
 }

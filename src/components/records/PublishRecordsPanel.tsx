@@ -463,7 +463,7 @@ export function PublishRecordsPanel() {
 
       {tab === "batches" ? (
         <p className="rec-filter-muted">
-          Showmore／Matrixify 匯出不進本頁批次帳（下載即走）
+          Showmore／Matrixify 匯出（標記離隊）會入本頁批次帳（kind=showmore／matrixify）；篩選 UI 後續再補
         </p>
       ) : null}
 

@@ -2,6 +2,10 @@ import { NextRequest } from "next/server";
 import { buildShowmoreCsv, type ShowmoreDraft } from "@/lib/csv/showmore";
 import { normalizeShowmoreMarkupPercent } from "@/lib/csv/showmorePricing";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
+import {
+  csvExportDraftTitle,
+  recordCsvExportBatch,
+} from "@/lib/drafts/recordCsvExportBatch";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductVariantRow } from "@/types/domain";
 
@@ -67,6 +71,7 @@ export async function POST(request: NextRequest) {
 
   const csv = buildShowmoreCsv(withVariants, { showmoreMarkupPercent });
   const exportedIds = withVariants.map((draft) => draft.id);
+  let exportBatchId: string | null = null;
 
   // Q4-A / R3 Q2: mark csv_ready when leave-queue allowed (CSV-only or full success).
   if (exportedIds.length && markLeaveQueue) {
@@ -94,14 +99,31 @@ export async function POST(request: NextRequest) {
         completed_at: new Date().toISOString()
       }))
     );
+
+    // P1-69: ledger into publish_batches (best-effort, never block CSV).
+    try {
+      const recorded = await recordCsvExportBatch({
+        serviceSupabase,
+        kind: "showmore",
+        drafts: withVariants.map((d) => ({
+          draftId: d.id,
+          title: csvExportDraftTitle(d),
+        })),
+        createdBy: user.id,
+      });
+      exportBatchId = recorded.batchId;
+    } catch {
+      exportBatchId = null;
+    }
   }
 
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="nestory-showmore-${Date.now()}.csv"`,
-      "X-Nestory-Showmore-Markup-Percent": String(showmoreMarkupPercent),
-      "X-Nestory-Left-Queue": markLeaveQueue ? "1" : "0"
-    }
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="nestory-showmore-${Date.now()}.csv"`,
+    "X-Nestory-Showmore-Markup-Percent": String(showmoreMarkupPercent),
+    "X-Nestory-Left-Queue": markLeaveQueue ? "1" : "0",
+  };
+  if (exportBatchId) headers["X-Nestory-Publish-Batch-Id"] = exportBatchId;
+
+  return new Response(csv, { headers });
 }

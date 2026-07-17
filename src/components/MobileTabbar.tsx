@@ -11,7 +11,7 @@ import {
 } from "@/lib/nav";
 
 /**
- * C1 mobile tabbar — R4 §14-4: 新增 / 審核 / 圖審 / 更多.
+ * C1 mobile tabbar — R4 §14-4 + UX-B: 新增 / 審核 / 工廠 / 更多.
  * 紀錄收進更多；審核 = /drafts/new?pane=results.
  * 「更多」opens bottom sheet (modal-overlay pattern, same as B7/B11).
  */

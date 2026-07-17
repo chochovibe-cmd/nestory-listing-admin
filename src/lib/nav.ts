@@ -3,8 +3,9 @@
  * Future pages use dead placeholders until their Phase lands.
  *
  * 2026-07-14 nav demotion (老闆): 商品佇列 ≠ 一級主線.
- * R2 §14：/review 頁名「生圖工廠」；站②佇列籤仍叫「圖片審核」。
- * R4 §14-4：手機 tab 新增／審核／圖審／更多；紀錄收進更多；/drafts 列表下線。
+ * R2 §14：/review 頁名「生圖工廠」.
+ * UX-B §2.2：站② 使用者可見名「標圖」；手機 tab 工廠 shortLabel「工廠」（勿用「圖審」）.
+ * R4 §14-4：手機 tab 新增／審核／工廠／更多；紀錄收進更多；/drafts 列表下線。
  */
 
 export type NavHref =
@@ -50,7 +51,7 @@ export const SETTINGS_NAV: NavItem = {
 };
 
 /**
- * R4 §14-4 mobile primary tabs：新增／審核／圖審／更多.
+ * R4 §14-4 + UX-B §2.2 mobile primary tabs：新增／審核／工廠／更多.
  * 審核 = workbench results (Q1-A: /drafts/new?pane=results).
  */
 export const MOBILE_PRIMARY_TABS: readonly NavItem[] = [
@@ -68,7 +69,7 @@ export const MOBILE_PRIMARY_TABS: readonly NavItem[] = [
     shortLabel: "審核",
     workbenchPane: "results"
   },
-  { href: "/review", icon: "🏭", label: "生圖工廠", shortLabel: "圖審" }
+  { href: "/review", icon: "🏭", label: "生圖工廠", shortLabel: "工廠" }
 ] as const;
 
 /**

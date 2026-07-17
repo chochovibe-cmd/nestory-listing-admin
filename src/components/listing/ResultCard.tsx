@@ -327,6 +327,11 @@ export function ResultCard({
   const suggestWarnCount = warningSummary.suggestCount;
   const markSummary = useMemo(() => countImageMarkSummary(imageMarks), [imageMarks]);
   const detectTypeLabel = draft.product_type || draft.detected_category || "";
+  // T8: migration 034；未寫入／未跑 migration 時 undefined → 不顯示
+  const generationToneLabel =
+    typeof draft.generation_tone === "string" && draft.generation_tone.trim()
+      ? draft.generation_tone.trim()
+      : "";
   const thumbUrl = mainThumbUrl(imageMarks);
   const isArchived = draft.status === "archived";
   const canQuickApprove =
@@ -926,16 +931,34 @@ export function ResultCard({
     }
   }
 
+  /** T9: ②→① 退回只要二次確認，不要求打字理由（API comment optional） */
   async function requestRevision() {
-    const comment = window.prompt("請輸入退回原因：") ?? "";
-    const response = await fetch(`/api/drafts/${draft.id}/request-revision`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ comment })
-    });
-    const payload = await response.json();
-    setMessage(response.ok ? "已退回文案審核（已解鎖）" : payload.error ?? "退回失敗");
-    router.refresh();
+    if (!window.confirm("確定退回文案？文案將解鎖，回到審文案佇列。")) return;
+    setQuickBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/drafts/${draft.id}/request-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: "" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const err =
+          typeof payload.error === "string" ? payload.error : "退回失敗";
+        setMessage(err);
+        showToast(err, "error");
+        return;
+      }
+      setMessage("");
+      showToast("已退回文案（已解鎖）", "success");
+      router.refresh();
+    } catch {
+      setMessage("退回連線失敗");
+      showToast("退回連線失敗", "error");
+    } finally {
+      setQuickBusy(false);
+    }
   }
 
   /** B11: on-screen dirty (D3-B) — same signals as B10 save path. */
@@ -1286,7 +1309,7 @@ export function ResultCard({
         <span className="rc-headmain">
           <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
           {/* B4: 收合列即可見 IP／角色／類型 chips＋⚠（不用展開才發現未建檔） */}
-          {draft.ip_name || draft.character_name || detectTypeLabel || confirmWarnCount > 0 || blockWarnCount > 0 || suggestWarnCount > 0 || copyLocked ? (
+          {draft.ip_name || draft.character_name || detectTypeLabel || generationToneLabel || confirmWarnCount > 0 || blockWarnCount > 0 || suggestWarnCount > 0 || copyLocked ? (
             <span className="rc-detect-chips">
               {draft.ip_name ? <span className="rc-detect-chip">{draft.ip_name}</span> : null}
               {draft.character_name ? (
@@ -1296,6 +1319,12 @@ export function ResultCard({
                 </span>
               ) : null}
               {detectTypeLabel ? <span className="rc-detect-chip">{detectTypeLabel}</span> : null}
+              {/* T8: 有 generation_tone 才顯示；null/空不唬「預設」 */}
+              {generationToneLabel ? (
+                <span className="rc-detect-chip rc-tone-chip" title={`文案語氣：${generationToneLabel}`}>
+                  🎙 {generationToneLabel}
+                </span>
+              ) : null}
               {blockWarnCount > 0 ? (
                 <span className="rc-detect-warn is-block" title={warningSummary.block.map((w) => w.text).join("\n")}>
                   ⛔ {blockWarnCount}

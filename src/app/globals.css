@@ -22,6 +22,8 @@ body[data-theme="dark"] {
   --text-dim: #d8d3e8;
   --success: #3ecfb0;
   --warn: #f5c842;
+  /* Status chip / text on light-ish fills: never use raw --warn alone on pale surfaces */
+  --warn-text: color-mix(in srgb, var(--warn) 55%, var(--text));
   --danger: #ff6b6b;
   --idle: #8a86a0;
   /* B15⁴: text/icon on solid status fills; kitty topbar special bg */
@@ -73,6 +75,7 @@ body[data-theme="nordic"] {
   --text-dim: #33312b;
   --success: #3b8f83;
   --warn: #f6ce45;
+  --warn-text: color-mix(in srgb, var(--warn) 45%, var(--text));
   --danger: #d9272e;
   --idle: #9a948a;
   --on-solid: #ffffff;
@@ -118,8 +121,10 @@ body[data-theme="kitty"] {
   --text: #171717;
   --text-muted: #5b6475;
   --text-dim: #242424;
-  --success: #1d4f91;
+  /* UX-A T12: was #1d4f91 same as --accent3; teal green so ok ≠ link blue ≠ accent orange */
+  --success: #2f8f6b;
   --warn: #ffd966;
+  --warn-text: color-mix(in srgb, var(--warn) 40%, var(--text));
   --danger: #e4002b;
   --idle: #8b93a5;
   --on-solid: #ffffff;
@@ -1578,7 +1583,7 @@ textarea {
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--border-soft);
   background: transparent;
 }
 .export-pf-lamp.is-ok {
@@ -1609,7 +1614,7 @@ textarea {
 .export-pf-table td {
   padding: 6px 8px;
   text-align: left;
-  border-bottom: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--border-soft);
   white-space: nowrap;
 }
 .export-pf-table th {
@@ -1628,7 +1633,7 @@ textarea {
   color: var(--accent2);
 }
 .station3-fieldset {
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-m, 8px);
   margin: 0 0 12px;
   padding: 10px 12px;
@@ -2466,7 +2471,7 @@ textarea {
 }
 .rec-product-card {
   padding: 10px 0;
-  border-bottom: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--border-soft);
 }
 .rec-search-row {
   display: flex;
@@ -2487,15 +2492,15 @@ textarea {
 .rec-library-hits {
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px dashed var(--line-soft);
+  border-bottom: 1px dashed var(--border-soft);
 }
 
 /* ── R4 §7 jump strip + mobile continue ── */
 .queue-strip {
   margin-top: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m);
   background: color-mix(in srgb, var(--surface2) 60%, transparent);
 }
 .queue-strip-head {
@@ -2539,7 +2544,7 @@ textarea {
   min-height: 36px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--border-soft);
   background: var(--surface);
   color: var(--text);
   font-size: 11px;
@@ -3655,7 +3660,7 @@ textarea {
 .rc-status.generating,
 .rc-status.schip--run {
   background: var(--chip-bg);
-  color: var(--warn);
+  color: var(--warn-text);
   border-color: var(--chip-run-border);
   animation: spinStatus 1s linear infinite;
 }
@@ -4794,7 +4799,7 @@ textarea {
 }
 .schip--warn,
 .schip--run {
-  color: var(--warn);
+  color: var(--warn-text);
   border-color: var(--chip-run-border);
   background: var(--chip-bg);
 }
@@ -4958,3 +4963,117 @@ body[data-theme="kitty"] .formula-preview {
 body[data-theme="kitty"] .rate-val {
   color: var(--warn);
 }
+/* ?? Toast / snackbar system ?????????????????????????????????????????????
+   Design note: unlike the v7 mockup's solid-fill accent pill, this uses the
+   app's existing "soft outline chip" language (surface bg + text + coloured
+   left bar) instead of filling the whole toast with --warn/--success as a
+   background. Reason: --warn is a light yellow in the nordic and kitty
+   themes (#f6ce45 / #ffd966) ??filling the toast with that colour and
+   putting white/dark text on top produces poor contrast in at least one
+   theme. Text is always var(--text-dim) on var(--surface), the same pairing
+   used everywhere else in the app, so contrast is guaranteed regardless of
+   theme. The colour only shows up as the left accent bar + icon chip, which
+   is enough to read the status at a glance without risking unreadable text. */
+.toast-host {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 1400;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  max-width: 92vw;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  max-width: 88vw;
+  padding: 10px 14px 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--idle);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow-m);
+  pointer-events: auto;
+  animation: toast-in 0.18s ease;
+}
+.toast:hover {
+  transform: var(--hover-transform);
+}
+.toast-ic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--idle) 16%, var(--surface));
+  color: var(--idle);
+}
+.toast-msg {
+  line-height: 1.4;
+  white-space: pre-line;
+}
+.toast--success {
+  border-left-color: var(--success);
+}
+.toast--success .toast-ic {
+  background: color-mix(in srgb, var(--success) 16%, var(--surface));
+  color: var(--success);
+}
+.toast--error {
+  border-left-color: var(--danger);
+}
+.toast--error .toast-ic {
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  color: var(--danger);
+}
+.toast--warn {
+  border-left-color: var(--warn);
+}
+.toast--warn .toast-ic {
+  background: color-mix(in srgb, var(--warn) 20%, var(--surface));
+  color: color-mix(in srgb, var(--warn) 65%, var(--text));
+}
+.toast--info {
+  border-left-color: var(--accent);
+}
+.toast--info .toast-ic {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 960px) {
+  .toast-host {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+  .toast {
+    min-width: 0;
+  }
+}
+/* Note: uses the existing .sr-only utility already defined in globals.css
+   (~line 1039) for the "??嚗隤歹?瘜冽?嚗?蝷綽?" prefix ??no need to add
+   another one. */
+

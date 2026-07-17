@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
 import { HeaderControls } from "@/components/HeaderControls";
 import { MobileTabbar } from "@/components/MobileTabbar";
+import { ToastHost } from "@/components/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -66,6 +67,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <Suspense fallback={null}>
             <MobileTabbar />
           </Suspense>
+          <ToastHost />
         </div>
         <script dangerouslySetInnerHTML={{ __html: navInitScript }} />
       </body>

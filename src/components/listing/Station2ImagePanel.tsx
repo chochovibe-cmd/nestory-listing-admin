@@ -1,0 +1,452 @@
+"use client";
+
+import { useMemo, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { showToast } from "@/components/Toast";
+import {
+  imageSlotLabel,
+  patchForProcessIntentPick,
+  PROCESS_INTENT_LABELS,
+  PROCESS_INTENT_OPTIONS,
+} from "@/lib/images/processMarks";
+import {
+  filterStation2SubtabImages,
+  isDetailSubtabImage,
+  isMainSubtabImage,
+  isSpecImage,
+  STATION2_IMAGE_SUBTABS,
+  station2SubtabCount,
+  station2UploadImageType,
+  type Station2ImageSubtab,
+} from "@/lib/images/station2ImageTabs";
+import type { ImageProcessIntent, ProductImage } from "@/types/domain";
+
+function sortByOrder(a: ProductImage, b: ProductImage): number {
+  const orderA = a.sort_order ?? 0;
+  const orderB = b.sort_order ?? 0;
+  if (orderA !== orderB) return orderA - orderB;
+  return (a.created_at ?? "").localeCompare(b.created_at ?? "");
+}
+
+function storagePathFromUrl(url: string): string | null {
+  const marker = "/product-images/";
+  const index = url.indexOf(marker);
+  return index === -1 ? null : url.slice(index + marker.length);
+}
+
+/**
+ * UX-F T30: station② 主圖｜規格圖｜詳情圖 + marks + DnD sort + 補圖.
+ * Spec tab = mark semantics only (no dedicated upload).
+ */
+export function Station2ImagePanel({
+  draftId,
+  images,
+  onImagesChange,
+  unmarkedBlockMessage,
+}: {
+  draftId: string;
+  images: ProductImage[];
+  onImagesChange: (next: ProductImage[]) => void;
+  unmarkedBlockMessage?: string | null;
+}) {
+  const supabase = createClient();
+  const [subtab, setSubtab] = useState<Station2ImageSubtab>("main");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [localMsg, setLocalMsg] = useState("");
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const list = useMemo(
+    () => filterStation2SubtabImages(images, subtab),
+    [images, subtab]
+  );
+  const canUpload = station2UploadImageType(subtab) != null;
+  const showMarks = subtab === "main" || subtab === "spec";
+
+  async function setProcessIntent(image: ProductImage, intent: ImageProcessIntent) {
+    const patch = patchForProcessIntentPick(intent, image.is_spec_process);
+    setLocalMsg("");
+    setBusyId(image.id);
+    const { error } = await supabase
+      .from("product_images")
+      .update({
+        process_intent: patch.process_intent,
+        is_spec_process: patch.is_spec_process,
+      })
+      .eq("id", image.id);
+    setBusyId(null);
+    if (error) {
+      setLocalMsg(`標記失敗：${error.message}`);
+      showToast(`標記失敗：${error.message}`, "error");
+      return;
+    }
+    onImagesChange(
+      images.map((row) =>
+        row.id === image.id
+          ? { ...row, process_intent: patch.process_intent, is_spec_process: patch.is_spec_process }
+          : row
+      )
+    );
+  }
+
+  async function toggleSpec(image: ProductImage) {
+    const nextOn = !image.is_spec_process;
+    const patch = nextOn
+      ? { is_spec_process: true, process_intent: "de_text" as const }
+      : { is_spec_process: false, process_intent: null };
+    setLocalMsg("");
+    setBusyId(image.id);
+    const { error } = await supabase.from("product_images").update(patch).eq("id", image.id);
+    setBusyId(null);
+    if (error) {
+      setLocalMsg(`規格圖標記失敗：${error.message}`);
+      showToast(`規格圖標記失敗：${error.message}`, "error");
+      return;
+    }
+    onImagesChange(
+      images.map((row) =>
+        row.id === image.id
+          ? { ...row, is_spec_process: patch.is_spec_process, process_intent: patch.process_intent }
+          : row
+      )
+    );
+  }
+
+  async function removeImage(image: ProductImage) {
+    setBusyId(image.id);
+    const url = image.processed_file_url ?? image.original_file_url;
+    const path = url ? storagePathFromUrl(url) : null;
+    if (path) {
+      await supabase.storage.from("product-images").remove([path]);
+    }
+    const { error } = await supabase.from("product_images").delete().eq("id", image.id);
+    setBusyId(null);
+    if (error) {
+      setLocalMsg(`刪除圖片失敗：${error.message}`);
+      showToast(`刪除圖片失敗：${error.message}`, "error");
+      return;
+    }
+    onImagesChange(images.filter((row) => row.id !== image.id));
+    showToast("已刪除圖片", "success");
+  }
+
+  async function applyReorder(fromId: string, toId: string) {
+    if (fromId === toId) return;
+    const fromIdx = list.findIndex((r) => r.id === fromId);
+    const toIdx = list.findIndex((r) => r.id === toId);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    const nextTab = [...list];
+    const [moved] = nextTab.splice(fromIdx, 1);
+    nextTab.splice(toIdx, 0, moved);
+    const tabQueue = [...nextTab];
+
+    /**
+     * Main/spec share image_type=main pool — rebuild full pool so sort_order
+     * stays unique: keep other-group slots, fill this tab’s new order.
+     * Detail pool is independent.
+     */
+    let pool: ProductImage[];
+    let inThisTab: (img: ProductImage) => boolean;
+    if (subtab === "detail") {
+      pool = images.filter(isDetailSubtabImage).slice().sort(sortByOrder);
+      inThisTab = isDetailSubtabImage;
+    } else {
+      pool = images
+        .filter((img) => img.image_type === "main" || img.image_type === "variant" || img.image_type === "spec")
+        .slice()
+        .sort(sortByOrder);
+      inThisTab = subtab === "main" ? isMainSubtabImage : isSpecImage;
+    }
+
+    const rebuilt: ProductImage[] = [];
+    for (const slot of pool) {
+      if (inThisTab(slot)) {
+        const next = tabQueue.shift();
+        if (next) rebuilt.push(next);
+      } else {
+        rebuilt.push(slot);
+      }
+    }
+    while (tabQueue.length) {
+      const rest = tabQueue.shift();
+      if (rest) rebuilt.push(rest);
+    }
+
+    const reindexed = rebuilt.map((item, index) => ({ ...item, sort_order: index }));
+    const byId = new Map(reindexed.map((r) => [r.id, r]));
+    const nextAll = images.map((row) => {
+      const hit = byId.get(row.id);
+      return hit ? { ...row, sort_order: hit.sort_order } : row;
+    });
+    onImagesChange(nextAll);
+
+    const results = await Promise.all(
+      reindexed.map((item) =>
+        supabase.from("product_images").update({ sort_order: item.sort_order }).eq("id", item.id)
+      )
+    );
+    const firstErr = results.find((r) => r.error)?.error;
+    if (firstErr) {
+      const msg = `排序儲存失敗：${firstErr.message}`;
+      setLocalMsg(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function uploadFiles(fileList: FileList | null) {
+    const imageType = station2UploadImageType(subtab);
+    if (!imageType || !fileList?.length) return;
+
+    const files = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
+    if (!files.length) {
+      showToast("請選擇圖片檔", "error");
+      return;
+    }
+
+    setUploading(true);
+    setLocalMsg("");
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+      if (!userId) {
+        showToast("請先登入再補圖", "error");
+        return;
+      }
+
+      const existingOfType = images.filter((img) =>
+        imageType === "main"
+          ? img.image_type === "main" || img.image_type === "variant"
+          : img.image_type === "detail"
+      );
+      let nextSort =
+        existingOfType.reduce((max, img) => Math.max(max, img.sort_order ?? 0), -1) + 1;
+
+      const added: ProductImage[] = [];
+      for (const file of files) {
+        const ext = file.name.split(".").pop() || "jpg";
+        const path = `${userId}/${draftId}/${imageType}/${crypto.randomUUID()}.${ext}`;
+        const { error: storageError } = await supabase.storage
+          .from("product-images")
+          .upload(path, file, { contentType: file.type, upsert: false });
+        if (storageError) {
+          showToast(`上傳失敗：${storageError.message}`, "error");
+          continue;
+        }
+        const { data: pub } = supabase.storage.from("product-images").getPublicUrl(path);
+        const { data: row, error: insertError } = await supabase
+          .from("product_images")
+          .insert({
+            draft_id: draftId,
+            image_type: imageType,
+            original_file_url: pub.publicUrl,
+            processed_file_url: pub.publicUrl,
+            sort_order: nextSort,
+            processing_status: "uploaded",
+            process_intent: null,
+            is_spec_process: false,
+          })
+          .select("*")
+          .single();
+        if (insertError || !row) {
+          showToast(`寫入失敗：${insertError?.message ?? "未知錯誤"}`, "error");
+          continue;
+        }
+        added.push(row as ProductImage);
+        nextSort += 1;
+      }
+      if (added.length) {
+        onImagesChange([...images, ...added]);
+        showToast(`已補 ${added.length} 張${imageType === "main" ? "主圖" : "詳情圖"}`, "success");
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="s2-img-panel">
+      <div className="s2-img-subtabs" role="tablist" aria-label="圖片類型">
+        {STATION2_IMAGE_SUBTABS.map((tab) => {
+          const count = station2SubtabCount(images, tab.id);
+          const active = subtab === tab.id;
+          return (
+            <button
+              aria-selected={active}
+              className={`s2-img-subtab${active ? " active" : ""}`}
+              key={tab.id}
+              onClick={() => setSubtab(tab.id)}
+              role="tab"
+              type="button"
+            >
+              {tab.label}
+              {count > 0 ? <span className="s2-img-subtab-count">{count}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="rc-field s2-img-body" role="tabpanel">
+        <div className="rc-label">
+          {subtab === "main"
+            ? "主圖標記與排序（拖曳縮圖可改順序）"
+            : subtab === "spec"
+              ? "規格圖（在主圖標「規格圖」後會出現在此）"
+              : "詳情圖（供 AI 參考，不上架）"}
+        </div>
+
+        {list.length > 0 ? (
+          <div className="imgmark-list">
+            {list.map((image, index) => {
+              const src =
+                image.processed_file_url ??
+                image.original_file_url ??
+                image.generated_file_url ??
+                "";
+              const slot = imageSlotLabel(image, index + 1);
+              const isDragging = dragId === image.id;
+              const isOver = overId === image.id && dragId !== image.id;
+              return (
+                <div
+                  className={`imgmark-row s2-img-row${isDragging ? " is-dragging" : ""}${isOver ? " is-drag-over" : ""}`}
+                  draggable
+                  key={image.id}
+                  onDragEnd={() => {
+                    setDragId(null);
+                    setOverId(null);
+                  }}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    if (dragId && dragId !== image.id) setOverId(image.id);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                  }}
+                  onDragStart={(event) => {
+                    setDragId(image.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    try {
+                      event.dataTransfer.setData("text/plain", image.id);
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const from = dragId ?? event.dataTransfer.getData("text/plain");
+                    setDragId(null);
+                    setOverId(null);
+                    if (from) void applyReorder(from, image.id);
+                  }}
+                >
+                  <div className="thumb-wrap s2-img-thumb-wrap" title="拖曳排序">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
+                    <button
+                      className="thumb-remove"
+                      disabled={busyId === image.id}
+                      onClick={() => void removeImage(image)}
+                      title="移除這張圖片"
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <span className="imgmark-slot-label">{slot}</span>
+                  {showMarks ? (
+                    <span className="imgmark-btns">
+                      {PROCESS_INTENT_OPTIONS.map((intent) => (
+                        <button
+                          aria-pressed={image.process_intent === intent}
+                          className={`img-mark-btn${image.process_intent === intent ? " active" : ""}`}
+                          disabled={busyId === image.id}
+                          key={intent}
+                          onClick={() => void setProcessIntent(image, intent)}
+                          type="button"
+                        >
+                          {image.process_intent === intent
+                            ? `✓ ${PROCESS_INTENT_LABELS[intent]}`
+                            : PROCESS_INTENT_LABELS[intent]}
+                        </button>
+                      ))}
+                      {!image.is_spec_process ? (
+                        <button
+                          aria-pressed={false}
+                          className="img-mark-btn"
+                          disabled={busyId === image.id}
+                          onClick={() => void toggleSpec(image)}
+                          type="button"
+                        >
+                          規格圖
+                        </button>
+                      ) : (
+                        <button
+                          aria-pressed
+                          className="img-mark-btn active"
+                          disabled={busyId === image.id}
+                          onClick={() => void toggleSpec(image)}
+                          type="button"
+                        >
+                          ✓ 規格圖
+                        </button>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      詳情圖僅供辨識，無需標記
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="muted s2-img-empty">
+            {subtab === "spec"
+              ? "目前沒有規格圖。請到「主圖」把需要的圖標成「規格圖」。"
+              : subtab === "detail"
+                ? "尚無詳情圖。可用下方補圖上傳（不上架）。"
+                : "尚無主圖。可用下方補圖上傳。"}
+          </div>
+        )}
+
+        {canUpload ? (
+          <div className="s2-img-upload">
+            <input
+              accept="image/*"
+              className="sr-only"
+              multiple
+              onChange={(event) => void uploadFiles(event.currentTarget.files)}
+              ref={fileInputRef}
+              type="file"
+            />
+            <button
+              className="mini-btn"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+              type="button"
+            >
+              {uploading ? "上傳中…" : subtab === "main" ? "＋ 補主圖" : "＋ 補詳情圖"}
+            </button>
+          </div>
+        ) : (
+          <p className="muted s2-img-spec-hint">規格圖請在主圖分頁標記，不另開上傳。</p>
+        )}
+
+        {unmarkedBlockMessage && (subtab === "main" || subtab === "spec") ? (
+          <div className="img-mark-warn" role="status">
+            {unmarkedBlockMessage}
+          </div>
+        ) : null}
+        {localMsg ? (
+          <div className="img-mark-warn" role="status">
+            {localMsg}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}

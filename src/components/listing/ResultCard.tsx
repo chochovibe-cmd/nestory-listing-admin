@@ -18,10 +18,14 @@ import {
 } from "@/lib/images/processMarks";
 import {
   countImageMarkSummary,
-  formatAiEstimateMessage,
+  decideStation2Review,
   formatMarkSummaryLine,
-  decideStation2Review
+  formatStation2ArmLabel,
+  formatStation2ConfirmHint,
+  formatStation2PrimaryLabel,
+  formatStation2SuccessToast,
 } from "@/lib/drafts/stationRoute";
+import { Station2ImagePanel } from "@/components/listing/Station2ImagePanel";
 import { resolveDraftStation } from "@/lib/drafts/stationFilter";
 import {
   gradeDraftWarnings,
@@ -374,6 +378,29 @@ export function ResultCard({
   const blockWarnCount = warningSummary.blockCount;
   const suggestWarnCount = warningSummary.suggestCount;
   const markSummary = useMemo(() => countImageMarkSummary(imageMarks), [imageMarks]);
+  /** UX-F T35: live station② button labels from decideStation2Review */
+  const station2Btn = useMemo(() => {
+    const decision = decideStation2Review({ images: imageMarks });
+    if (decision.action === "advance_ready") {
+      return {
+        primary: formatStation2PrimaryLabel(true, 0),
+        arm: formatStation2ArmLabel(true, 0),
+        title: "全保留 → 待發布（$0／不等工廠）",
+      };
+    }
+    if (decision.action === "send_images") {
+      return {
+        primary: formatStation2PrimaryLabel(false, decision.aiCount),
+        arm: formatStation2ArmLabel(false, decision.aiCount),
+        title: `有 AI 標記 → 生圖工廠（${decision.aiCount} 張）`,
+      };
+    }
+    return {
+      primary: "標圖通過",
+      arm: "⚠ 再點確認",
+      title: decision.action === "blocked" ? decision.reason : "標圖分流",
+    };
+  }, [imageMarks]);
   const detectTypeLabel = draft.product_type || draft.detected_category || "";
   // T8: migration 034；未寫入／未跑 migration 時 undefined → 不顯示
   const generationToneLabel =
@@ -839,7 +866,7 @@ export function ResultCard({
     }
   }
 
-  /** R2/R3 station② 審核分流：全 keep → ready；有 AI → 生圖工廠 */
+  /** R2/R3 + UX-F T35: station② 標圖分流 — 全 keep → 待發布；有 AI → 生圖工廠 */
   async function stationReview() {
     setMarkMessage("");
     if (hasBlockingWarnings(warningSummary)) {
@@ -854,16 +881,15 @@ export function ResultCard({
       return;
     }
     if (decision.action !== "send_images" && decision.action !== "advance_ready") return;
-    const estimate = formatAiEstimateMessage(decision.aiCount, decision.allKeep);
-    // UX-E T28: double-confirm instead of window.confirm
+    // UX-E T28 + T35: double-confirm with 待發布／生圖工廠 wording
     if (actionArm !== "review") {
       setActionArm("review");
-      setMarkMessage(`${estimate}（再點「審核」確認送出）`);
+      setMarkMessage(formatStation2ConfirmHint(decision.allKeep, decision.aiCount));
       return;
     }
     setActionArm(null);
     setQuickBusy(true);
-    setMarkMessage("審核送出中…");
+    setMarkMessage("分流送出中…");
     try {
       if (decision.action === "advance_ready") {
         const response = await fetch("/api/drafts/batch/advance-ready", {
@@ -873,12 +899,15 @@ export function ResultCard({
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok && !payload.ok) {
-          setMarkMessage(payload.error ?? payload.message ?? "進入完成待發布失敗");
+          const err = payload.error ?? payload.message ?? "進入待發布失敗";
+          setMarkMessage(err);
+          showToast(err, "error");
           return;
         }
-        setMarkMessage(
-          typeof payload.message === "string" ? payload.message : "已進入完成待發布"
-        );
+        const okMsg =
+          typeof payload.message === "string" ? payload.message : formatStation2SuccessToast({ advanced: true, sentToFactory: false });
+        setMarkMessage(okMsg);
+        showToast(okMsg, "success");
         router.refresh();
         return;
       }
@@ -890,13 +919,21 @@ export function ResultCard({
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const hint = typeof payload.hint === "string" ? `\n${payload.hint}` : "";
-        setMarkMessage((payload.error ?? "審核失敗") + hint);
+        const err = (payload.error ?? "送生圖工廠失敗") + hint;
+        setMarkMessage(err);
+        showToast(payload.error ?? "送生圖工廠失敗", "error");
         return;
       }
-      setMarkMessage(typeof payload.message === "string" ? payload.message : "審核完成");
+      const okMsg =
+        typeof payload.message === "string"
+          ? payload.message
+          : formatStation2SuccessToast({ advanced: false, sentToFactory: true });
+      setMarkMessage(okMsg.includes("工廠") ? okMsg : `${okMsg} · 可到生圖工廠查看`);
+      showToast(okMsg, "success");
       router.refresh();
     } catch {
-      setMarkMessage("審核連線失敗");
+      setMarkMessage("分流連線失敗");
+      showToast("分流連線失敗", "error");
     } finally {
       setQuickBusy(false);
     }
@@ -1504,12 +1541,19 @@ export function ResultCard({
                 onClick={() => void stationReview()}
                 title={
                   actionArm === "review"
-                    ? "再點確認審核送出"
-                    : "審核＝分流（全保留→轉檔；有 AI 標記→生圖工廠）"
+                    ? formatStation2ConfirmHint(
+                        station2Btn.primary.includes("待發布"),
+                        markSummary.aiCount
+                      )
+                    : station2Btn.title
                 }
                 type="button"
               >
-                {quickBusy ? "…" : actionArm === "review" ? "⚠ 再點確認" : "✓ 審核"}
+                {quickBusy
+                  ? "…"
+                  : actionArm === "review"
+                    ? station2Btn.arm
+                    : station2Btn.primary}
               </button>
               <button
                 className="mini-btn rc-quick-btn"
@@ -1615,7 +1659,7 @@ export function ResultCard({
                 role="tab"
                 type="button"
               >
-                圖片標記
+                圖片
               </button>
             </div>
           ) : (
@@ -1883,14 +1927,23 @@ export function ResultCard({
             </div>
           ) : null}
 
-          {/* T7: 站① 永不渲染圖片 tab panel；站② 專用標記、站③ 可經「圖片」tab */}
-          {isImageStation || (!isCopyStation && activeTab === "images") ? (
+          {/* T7: 站① 永不渲染圖片 tab；站② UX-F T30 三分頁；站③ 可經「圖片」tab 唯讀標記 */}
+          {isImageStation ? (
+            <div className="rc-tabpanel" role="tabpanel">
+              <Station2ImagePanel
+                draftId={draft.id}
+                images={imageMarks}
+                onImagesChange={setImageMarks}
+                unmarkedBlockMessage={
+                  unmarkedImages.length > 0 ? unmarkedBlockMessage : null
+                }
+              />
+            </div>
+          ) : !isCopyStation && activeTab === "images" ? (
             <div className="rc-tabpanel" role="tabpanel">
               {imageMarks.length > 0 ? (
                 <div className="rc-field">
-                  <div className="rc-label">
-                    圖片處理標記（預設保留原圖；簡轉繁需先跑 migration 030）
-                  </div>
+                  <div className="rc-label">圖片（站③ 可檢視；改標記請回標圖站）</div>
                   {pipelineImages.length > 0 ? (
                     <div className="imgmark-list">
                       {pipelineImages.map((image, index) => {
@@ -1985,7 +2038,7 @@ export function ResultCard({
                   ) : null}
                 </div>
               ) : (
-                <div className="muted">尚無商品圖。請在左側上傳主圖後再標記／送圖。</div>
+                <div className="muted">尚無商品圖。</div>
               )}
             </div>
           ) : null}
@@ -2184,9 +2237,14 @@ export function ResultCard({
                   className={actionArm === "review" ? "danger" : undefined}
                   disabled={quickBusy || hasBlockingWarnings(warningSummary)}
                   onClick={() => void stationReview()}
+                  title={station2Btn.title}
                   type="button"
                 >
-                  {quickBusy ? "處理中…" : actionArm === "review" ? "⚠ 再點確認審核" : "✓ 審核"}
+                  {quickBusy
+                    ? "處理中…"
+                    : actionArm === "review"
+                      ? station2Btn.arm
+                      : station2Btn.primary}
                 </button>
                 <button onClick={() => setLockedPreviewOpen(true)} type="button">
                   📄 定稿預覽

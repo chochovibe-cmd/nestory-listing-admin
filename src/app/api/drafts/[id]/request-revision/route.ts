@@ -7,8 +7,9 @@ import { NextRequest } from "next/server";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
-/** P0-63: accept missing / empty / whitespace-only; treat as no reason. */
-export function normalizeOptionalRevisionComment(raw: unknown): string | null {
+/** P0-63: accept missing / empty / whitespace-only; treat as no reason.
+ *  Must NOT be exported — Next.js Route modules only allow HTTP method exports. */
+function normalizeOptionalRevisionComment(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : null;

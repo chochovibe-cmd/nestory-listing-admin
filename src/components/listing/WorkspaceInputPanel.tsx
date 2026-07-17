@@ -41,8 +41,7 @@ import { VariantEditor, repriceVariants } from "@/components/listing/VariantEdit
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
 import { parseVideoUrlsFromTextarea } from "@/lib/media/videoUrls";
 import { FieldHelp } from "@/components/listing/FieldHelp";
-import { StationJumpStrip } from "@/components/listing/StationJumpStrip";
-import type { JumpStripDraft } from "@/lib/drafts/stationJumpStrip";
+
 import { showToast } from "@/components/Toast";
 import {
   buildWorkspaceAutosaveSnapshot,
@@ -158,11 +157,11 @@ function storagePathFromPublicUrl(url: string | null | undefined): string | null
 
 export function WorkspaceInputPanel({
   userId,
-  jumpDrafts = []
+  onDraftIdChange
 }: {
   userId: string;
-  /** R4 §7: work-queue + input drafts for 各站掛件總覽 */
-  jumpDrafts?: JumpStripDraft[];
+  /** UX-B T10: notify parent so QuickPreview can exclude the editing draft */
+  onDraftIdChange?: (draftId: string | null) => void;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -178,6 +177,11 @@ export function WorkspaceInputPanel({
   const [imagesUploading, setImagesUploading] = useState(false);
   // Remounting ImageUploader after a successful generate clears its previews.
   const [formKey, setFormKey] = useState(0);
+
+  // UX-B T10: keep QuickPreview exclude list in sync with form draftId
+  useEffect(() => {
+    onDraftIdChange?.(draftId);
+  }, [draftId, onDraftIdChange]);
 
   const [title, setTitle] = useState("");
   const [source, setSource] = useState<(typeof SOURCE_OPTIONS)[number]>(SOURCE_OPTIONS[0]);
@@ -2111,7 +2115,6 @@ export function WorkspaceInputPanel({
                   </>
                 )}
           </button>
-          <StationJumpStrip drafts={jumpDrafts} />
           {message ? <div className="notice">{message}</div> : null}
             </div>
           </div>

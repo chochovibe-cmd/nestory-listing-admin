@@ -1,6 +1,7 @@
 /**
- * R4 §7: pure helpers for 各站掛件總覽 under the generate button.
+ * R4 §7: pure helpers for 快速預覽 / 各站掛件總覽.
  * Zero DB — callers pass already-loaded drafts.
+ * UX-B T5/T10: §2.2 labels; exclude current editing draft from 未完成草稿.
  */
 
 import {
@@ -32,11 +33,12 @@ export const JUMP_STRIP_GROUP_ORDER: JumpStripGroupKey[] = [
   "ready"
 ];
 
+/** §2.2 / T10: input remnants = 未完成草稿 (not scary 待輸入). */
 export const JUMP_STRIP_GROUP_LABELS: Record<JumpStripGroupKey, string> = {
-  input: "待輸入",
-  copy_review: "文案審核",
-  image_review: "圖片審核",
-  ready: "完成待發布"
+  input: "未完成草稿",
+  copy_review: "審文案",
+  image_review: "標圖",
+  ready: "待發布"
 };
 
 export type JumpStripItem = {
@@ -52,6 +54,15 @@ export type JumpStripGroup = {
   label: string;
   shortDate: string;
   items: JumpStripItem[];
+};
+
+export type BuildJumpStripGroupsOpts = {
+  /**
+   * UX-B T10 scheme A: exclude these ids from the input/未完成草稿 group
+   * (typically the draft currently being edited on the form).
+   * Station groups (①②③) are not filtered by this.
+   */
+  excludeDraftIds?: readonly string[] | null;
 };
 
 export function jumpStripTitle(draft: JumpStripDraft): string {
@@ -90,13 +101,21 @@ export function resolveJumpStripGroup(draft: JumpStripDraft): JumpStripGroupKey 
 }
 
 /** Build grouped hangers; empty groups omitted. Newest first within group. */
-export function buildJumpStripGroups(drafts: JumpStripDraft[]): JumpStripGroup[] {
+export function buildJumpStripGroups(
+  drafts: JumpStripDraft[],
+  opts?: BuildJumpStripGroupsOpts
+): JumpStripGroup[] {
+  const exclude = new Set(
+    (opts?.excludeDraftIds ?? []).filter((id) => typeof id === "string" && id.length > 0)
+  );
   const buckets = new Map<JumpStripGroupKey, JumpStripItem[]>();
   for (const key of JUMP_STRIP_GROUP_ORDER) buckets.set(key, []);
 
   for (const draft of drafts) {
     const group = resolveJumpStripGroup(draft);
     if (!group) continue;
+    // T10-A: current editing draft must not appear under 未完成草稿
+    if (group === "input" && exclude.has(draft.id)) continue;
     const sortAt = draft.updated_at || draft.created_at || "";
     buckets.get(group)!.push({
       draftId: draft.id,

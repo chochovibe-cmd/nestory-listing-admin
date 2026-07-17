@@ -11,18 +11,23 @@ import { JUMP_TO_DRAFT_EVENT, type JumpToDraftDetail } from "@/lib/drafts/jumpTo
 import { workbenchPaneFromSearch } from "@/lib/nav";
 
 export type WorkbenchPane = "input" | "results";
+/** Mobile-only sub-tab when pane=input (新增 tab). */
+export type InputSubTab = "form" | "preview";
 
 /**
- * B16: mobile workbench shell — sticky 輸入／結果 sub-tabs under 960px.
- * Desktop keeps the existing two-column grid (children always mounted).
- * D1-A / R4 Q8-A: when generation progress becomes visible, auto-switch to 結果.
- * R4: ?pane=results deep link (審核 tab) + 頂部「＋ 繼續新增」.
+ * B16 + UX-B T4/T5:
+ * - Desktop: left stack A 輸入 + B 快速預覽；right C 結果
+ * - Mobile 新增 (?pane absent): sub-tabs 輸入｜快速預覽
+ * - Mobile 審核 (?pane=results): results only — no 輸入｜結果 sub-tabs
+ * Generation / jump → pane=results (審核).
  */
 export function WorkbenchMobileShell({
   input,
+  quickPreview,
   results
 }: {
   input: ReactNode;
+  quickPreview: ReactNode;
   results: ReactNode;
 }) {
   const router = useRouter();
@@ -32,11 +37,13 @@ export function WorkbenchMobileShell({
     searchParams?.toString() ? `?${searchParams.toString()}` : ""
   );
   const [pane, setPane] = useState<WorkbenchPane>(urlPane);
+  const [inputSub, setInputSub] = useState<InputSubTab>("form");
   const [genActive, setGenActive] = useState(false);
 
   const setPaneAndUrl = useCallback(
     (next: WorkbenchPane, replace = true) => {
       setPane(next);
+      if (next === "input") setInputSub("form");
       if (pathname !== "/drafts/new") return;
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       if (next === "results") {
@@ -55,6 +62,7 @@ export function WorkbenchMobileShell({
   // Sync from URL (tab bar 審核 / 新增, deep links)
   useEffect(() => {
     setPane(urlPane);
+    if (urlPane === "input") setInputSub("form");
   }, [urlPane]);
 
   useEffect(() => {
@@ -72,7 +80,7 @@ export function WorkbenchMobileShell({
     return () => window.removeEventListener(GENERATION_PROGRESS_EVENT, onProgress);
   }, [setPaneAndUrl]);
 
-  // R4 jump strip / jump event → results pane
+  // R4 jump strip / jump event → results pane (審核)
   useEffect(() => {
     function onJump(event: Event) {
       const detail = (event as CustomEvent<JumpToDraftDetail>).detail;
@@ -85,27 +93,31 @@ export function WorkbenchMobileShell({
 
   return (
     <div className="workbench">
-      <div className="sub-tabs" role="tablist" aria-label="工作檯分頁">
-        <button
-          aria-selected={pane === "input"}
-          className={pane === "input" ? "sub-tab sel sel--fill active" : "sub-tab"}
-          onClick={() => setPaneAndUrl("input")}
-          role="tab"
-          type="button"
-        >
-          ✦ 輸入
-        </button>
-        <button
-          aria-selected={pane === "results"}
-          className={pane === "results" ? "sub-tab sel sel--fill active" : "sub-tab"}
-          onClick={() => setPaneAndUrl("results")}
-          role="tab"
-          type="button"
-        >
-          ◈ 結果
-          {genActive ? <span className="sub-tab-dot" aria-label="生成中" /> : null}
-        </button>
-      </div>
+      {/* T4: only on 新增 (pane=input) — 輸入｜快速預覽. Hidden on 審核. */}
+      {pane === "input" ? (
+        <div className="sub-tabs sub-tabs--input" role="tablist" aria-label="新增分頁">
+          <button
+            aria-selected={inputSub === "form"}
+            className={inputSub === "form" ? "sub-tab sel sel--fill active" : "sub-tab"}
+            onClick={() => setInputSub("form")}
+            role="tab"
+            type="button"
+          >
+            ✦ 輸入
+          </button>
+          <button
+            aria-selected={inputSub === "preview"}
+            className={inputSub === "preview" ? "sub-tab sel sel--fill active" : "sub-tab"}
+            onClick={() => setInputSub("preview")}
+            role="tab"
+            type="button"
+          >
+            ◈ 快速預覽
+            {genActive ? <span className="sub-tab-dot" aria-label="生成中" /> : null}
+          </button>
+        </div>
+      ) : null}
+
       {pane === "results" ? (
         <div className="wb-continue-bar">
           <Link
@@ -120,12 +132,22 @@ export function WorkbenchMobileShell({
           </Link>
         </div>
       ) : null}
+
       <div className="workbench-panes">
         <div
           className={`workbench-pane workbench-pane-input${pane === "input" ? " mob-active" : ""}`}
           id="paneForm"
         >
-          {input}
+          <div
+            className={`wb-form-slot${inputSub === "form" ? " mob-sub-active" : ""}`}
+          >
+            {input}
+          </div>
+          <div
+            className={`wb-preview-slot${inputSub === "preview" ? " mob-sub-active" : ""}`}
+          >
+            {quickPreview}
+          </div>
         </div>
         <div
           className={`workbench-pane workbench-pane-results${pane === "results" ? " mob-active" : ""}`}

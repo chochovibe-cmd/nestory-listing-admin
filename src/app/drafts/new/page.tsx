@@ -1,26 +1,16 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { DraftResultsPanel } from "@/components/listing/DraftResultsPanel";
 import { SetupNotice } from "@/components/listing/SetupNotice";
-import { WorkbenchMobileShell } from "@/components/listing/WorkbenchMobileShell";
-import { WorkspaceInputPanel } from "@/components/listing/WorkspaceInputPanel";
+import {
+  WorkbenchPageClient
+} from "@/components/listing/WorkbenchPageClient";
+import type { VariantPriceRow } from "@/components/listing/DraftResultsPanel";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
-import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
+import type { ProductDraft, ProductImage } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
-export type WorkbenchVariantPrice = Pick<
-  ProductVariantRow,
-  | "id"
-  | "draft_id"
-  | "twd_price"
-  | "compare_at_price"
-  | "sort_order"
-  | "option1_value"
-  | "option2_value"
-  | "option3_value"
-  | "sku"
->;
+export type WorkbenchVariantPrice = VariantPriceRow;
 
 export default async function NewDraftPage() {
   if (!hasSupabaseServerEnv()) {
@@ -79,30 +69,11 @@ export default async function NewDraftPage() {
   return (
     <main className="container">
       <Suspense fallback={<p className="muted">載入工作檯…</p>}>
-        <WorkbenchMobileShell
-          input={
-            <WorkspaceInputPanel
-              userId={user.id}
-              jumpDrafts={typedDrafts.map((d) => ({
-                id: d.id,
-                title_zh: d.title_zh,
-                taobao_title: d.taobao_title,
-                original_title: d.original_title,
-                status: d.status,
-                pipeline_stage: d.pipeline_stage,
-                shopify_product_id: d.shopify_product_id,
-                created_at: d.created_at,
-                updated_at: d.updated_at
-              }))}
-            />
-          }
-          results={
-            <DraftResultsPanel
-              drafts={typedDrafts}
-              images={typedImages}
-              variants={typedVariants}
-            />
-          }
+        <WorkbenchPageClient
+          userId={user.id}
+          drafts={typedDrafts}
+          images={typedImages}
+          variants={typedVariants}
         />
       </Suspense>
     </main>

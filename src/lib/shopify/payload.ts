@@ -165,7 +165,8 @@ export function buildShopifyProductPayload(
     // 文案呈現包：描述最前面加銷售狀態小提醒（海外代購 14 天等），
     // 同樣只在 Shopify 邊界產生、不寫回 DB。
     descriptionHtml:
-      saleStatusNoticeHtml(draft.sale_status) +
+      // P2-81: tone follows this draft's generation_tone (missing → default sentences)
+      saleStatusNoticeHtml(draft.sale_status, draft.generation_tone) +
       appendDescriptionEmbedIfEnabled(
         formatPlainTextAsHtml(draft.description_html || draft.description_plain || ""),
         draft.product_images,

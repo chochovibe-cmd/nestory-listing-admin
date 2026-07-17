@@ -197,6 +197,27 @@ export function formatCharacterText(characters: string[]): string {
   return characters.slice(0, 3).join('・') + '等角色';
 }
 
+// 老闆工具的重複詞收斂（吊飾吊飾→吊飾掛件 這類）；煙霧測試 2026-07-18 抓到後補港。
+const TITLE_DEDUPE_TERMS = [
+  '絨毛吊飾', '吊飾掛件', '絨毛娃娃', '桌面小夜燈', '娃娃抱枕',
+  '吊飾', '掛件', '鑰匙圈', '絨毛', '毛絨', '娃娃', '擺件', '抱枕', '公仔',
+];
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function dedupeRepeatedTitleTerms(value: string): string {
+  let result = normalizeText(value);
+  for (const term of TITLE_DEDUPE_TERMS) {
+    result = result.replace(new RegExp('(?:' + escapeRegExp(term) + '\\s*){2,}', 'g'), term);
+  }
+  return result
+    .replace(/吊飾\s*吊飾/g, '吊飾掛件')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function buildCoreName(
   draft: ListingDraftInput,
   context: DisplayLabelContext,
@@ -205,13 +226,15 @@ function buildCoreName(
 ): string {
   const productTypes = inferProductTypes(draft);
   const characterText = formatCharacterText(characters);
-  const typeText = productTypes.filter((type) => !typeAlreadyPresentIn(type, characterText)).join('');
+  const typeText = dedupeRepeatedTitleTerms(
+    productTypes.filter((type) => !typeAlreadyPresentIn(type, characterText)).join('')
+  );
 
   if (characterText && typeText) {
-    return characterText + ' ' + typeText;
+    return dedupeRepeatedTitleTerms(characterText + ' ' + typeText);
   }
   if (characterText || typeText) {
-    return characterText + typeText;
+    return dedupeRepeatedTitleTerms(characterText + typeText);
   }
 
   return cleanTitleText(draft.product_name).slice(0, 18);

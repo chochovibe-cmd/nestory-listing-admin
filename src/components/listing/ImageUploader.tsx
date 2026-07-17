@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { intentForSpecToggle } from "@/lib/images/processMarks";
 import { showToast } from "@/components/Toast";
@@ -12,6 +12,10 @@ import type { ImageProcessIntent, ImageType } from "@/types/domain";
 // P1-1: never call parent onUploadingChange inside setState updater; no router.refresh on
 // upload/mark (local previews are source of truth; refresh storm wiped the form).
 // P1-2: optimistic blob thumbs, per-file fail/retry, delete ×, optional seed from DB.
+// UX-D T20: Ctrl+V paste image into zone → same upload pipeline.
+// UX-D T21: delete fail → showToast (notice kept).
+// UX-D T22: HTML5 DnD reorder thumbs; persist sort_order for rows with id.
+// UX-D T23: form-side mark copy is short (no long 「未標記／處理標記在核准後」nag).
 const zones: Array<{
   type: ImageType;
   icon: string;
@@ -62,6 +66,21 @@ function storagePathFromPublicUrl(publicUrl: string): string | null {
   return path ? decodeURIComponent(path) : null;
 }
 
+/** UX-D T20: pull image files from paste clipboard (files or items). */
+function imageFilesFromClipboard(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  const fromFiles = Array.from(data.files ?? []).filter((f) => f.type.startsWith("image/"));
+  if (fromFiles.length > 0) return fromFiles;
+  const out: File[] = [];
+  for (const item of Array.from(data.items ?? [])) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) out.push(file);
+    }
+  }
+  return out;
+}
+
 // B1: images are now selected in the form BEFORE the draft is generated and
 // uploaded in the background while the operator keeps filling in the rest.
 // The draft row may not exist yet on first drop, so the new-draft flow passes
@@ -95,6 +114,15 @@ export function ImageUploader({
   const [message, setMessage] = useState("");
   const [markError, setMarkError] = useState("");
   const [seedApplied, setSeedApplied] = useState(false);
+  /** UX-D T22: HTML5 DnD source thumb */
+  const [reorderDrag, setReorderDrag] = useState<{ type: ImageType; clientKey: string } | null>(null);
+  const [reorderOverKey, setReorderOverKey] = useState<string | null>(null);
+
+  // Latest previews for in-flight upload to pick current sort_order after local reorder (T22).
+  const previewsRef = useRef(previews);
+  useEffect(() => {
+    previewsRef.current = previews;
+  }, [previews]);
 
   // P1-1: notify parent outside render / setState updater.
   useEffect(() => {
@@ -165,6 +193,12 @@ export function ImageUploader({
     });
   }
 
+  function currentSortOrder(clientKey: string, imageType: ImageType, fallback: number): number {
+    const list = previewsRef.current[imageType] ?? [];
+    const row = list.find((r) => r.clientKey === clientKey);
+    return row?.sort_order ?? fallback;
+  }
+
   async function uploadOneFile(params: {
     type: ImageType;
     file: File;
@@ -194,6 +228,9 @@ export function ImageUploader({
 
     const { data } = supabase.storage.from("product-images").getPublicUrl(path);
 
+    // T22: if user reordered while uploading, write the live local sort_order.
+    const liveSort = currentSortOrder(clientKey, type, sortOrder);
+
     const { data: row, error: insertError } = await supabase
       .from("product_images")
       .insert({
@@ -201,7 +238,7 @@ export function ImageUploader({
         image_type: type,
         original_file_url: data.publicUrl,
         processed_file_url: data.publicUrl,
-        sort_order: sortOrder,
+        sort_order: liveSort,
         processing_status: "uploaded"
       })
       .select("id, original_file_url, processed_file_url, sort_order, process_intent, is_spec_process")
@@ -222,7 +259,7 @@ export function ImageUploader({
     patchPreview(clientKey, type, {
       id: row.id as string,
       url: publicUrl,
-      sort_order: (row.sort_order as number) ?? sortOrder,
+      sort_order: (row.sort_order as number) ?? liveSort,
       is_spec_process: Boolean(row.is_spec_process),
       process_intent: (row.process_intent as ImageProcessIntent | null) ?? null,
       status: "ready",
@@ -237,14 +274,18 @@ export function ImageUploader({
     }
   }
 
-  async function uploadFiles(type: ImageType, fileList: FileList | null) {
+  async function uploadFiles(type: ImageType, fileList: FileList | File[] | null) {
     if (!fileList?.length) return;
-    const files = Array.from(fileList);
+    const files = Array.from(fileList).filter((f) => f.type.startsWith("image/") || !f.type);
+    // Accept empty type (some OS clipboard) only if file looks like image by name, else filter image/*
+    const imageFiles = files.filter((f) => !f.type || f.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+
     setMessage(`上傳 ${type === "main" ? "主圖" : "詳情圖"} 中…`);
     setMarkError("");
 
     const startIndex = previews[type]?.length ?? 0;
-    const pending: PreviewItem[] = files.map((file, index) => {
+    const pending: PreviewItem[] = imageFiles.map((file, index) => {
       const blobUrl = URL.createObjectURL(file);
       return {
         clientKey: `temp-${crypto.randomUUID()}`,
@@ -306,6 +347,14 @@ export function ImageUploader({
     }
   }
 
+  function handleZonePaste(type: ImageType, event: ClipboardEvent) {
+    const images = imageFilesFromClipboard(event.clipboardData);
+    if (images.length === 0) return; // plain text → do not intercept
+    event.preventDefault();
+    event.stopPropagation();
+    void uploadFiles(type, images);
+  }
+
   async function retryUpload(item: PreviewItem) {
     if (!item.file || item.status !== "failed") return;
     const type = item.imageType;
@@ -326,7 +375,7 @@ export function ImageUploader({
         type,
         file: item.file!,
         clientKey: item.clientKey,
-        sortOrder: item.sort_order,
+        sortOrder: currentSortOrder(item.clientKey, type, item.sort_order),
         resolvedDraftId,
         blobUrl
       });
@@ -354,7 +403,10 @@ export function ImageUploader({
 
     const { error } = await supabase.from("product_images").delete().eq("id", item.id);
     if (error) {
-      setMarkError(`刪除失敗：${error.message}`);
+      const msg = `刪除失敗：${error.message}`;
+      setMarkError(msg);
+      // UX-D T21: strengthen delete-fail feedback
+      showToast(msg, "error");
       return;
     }
     removePreviewLocal(item.clientKey, item.imageType);
@@ -391,6 +443,36 @@ export function ImageUploader({
     });
   }
 
+  /** UX-D T22: reorder list locally, reindex sort_order, persist rows with id. */
+  async function applyReorder(type: ImageType, fromKey: string, toKey: string) {
+    if (fromKey === toKey) return;
+    const list = [...(previewsRef.current[type] ?? [])];
+    const fromIdx = list.findIndex((r) => r.clientKey === fromKey);
+    const toIdx = list.findIndex((r) => r.clientKey === toKey);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    const reindexed = list.map((item, index) => ({ ...item, sort_order: index }));
+
+    setPreviews((current) => ({ ...current, [type]: reindexed }));
+
+    const withIds = reindexed.filter((item) => item.id);
+    if (withIds.length === 0) return;
+
+    const results = await Promise.all(
+      withIds.map((item) =>
+        supabase.from("product_images").update({ sort_order: item.sort_order }).eq("id", item.id!)
+      )
+    );
+    const firstErr = results.find((r) => r.error)?.error;
+    if (firstErr) {
+      const msg = `排序儲存失敗：${firstErr.message}`;
+      setMarkError(msg);
+      showToast(msg, "error");
+    }
+  }
+
   const mainItems = previews.main ?? [];
 
   return (
@@ -400,7 +482,11 @@ export function ImageUploader({
         const count = items.length;
         const readyCount = items.filter((i) => i.status === "ready").length;
         return (
-          <div className="upload-section" key={zone.type}>
+          <div
+            className="upload-section"
+            key={zone.type}
+            onPaste={(event) => handleZonePaste(zone.type, event)}
+          >
             <div className="upload-section-label">
               <span>
                 {zone.icon} {zone.label}
@@ -417,18 +503,21 @@ export function ImageUploader({
               onDrop={(event) => {
                 event.preventDefault();
                 setDragging(null);
-                uploadFiles(zone.type, event.dataTransfer.files);
+                void uploadFiles(zone.type, event.dataTransfer.files);
               }}
+              onPaste={(event) => handleZonePaste(zone.type, event)}
+              tabIndex={0}
             >
               <input
                 accept="image/*"
                 multiple
-                onChange={(event) => uploadFiles(zone.type, event.currentTarget.files)}
+                onChange={(event) => void uploadFiles(zone.type, event.currentTarget.files)}
                 type="file"
               />
               <div className="dz-icon">{zone.icon}</div>
               <div className="dz-text">
                 <div className="dz-title">{zone.dropTitle}</div>
+                <div className="dz-hint muted">可 Ctrl+V 貼上</div>
                 <div className={`dz-status${readyCount > 0 ? " ready" : ""}`}>
                   {readyCount > 0 ? `✓ 已上傳 ${readyCount} 張` : count > 0 ? `處理中 ${count} 張` : ""}
                 </div>
@@ -439,10 +528,47 @@ export function ImageUploader({
                 {items.map((item, index) => {
                   const isMainZone = zone.type === "main";
                   const isFirstMain = isMainZone && index === 0 && item.status === "ready";
+                  const isDragging = reorderDrag?.clientKey === item.clientKey;
+                  const isOver = reorderOverKey === item.clientKey && reorderDrag?.clientKey !== item.clientKey;
                   return (
                     <div
-                      className={`pthumb${isFirstMain ? " is-main" : ""}${item.status === "failed" ? " pthumb-failed" : ""}`}
+                      className={`pthumb${isFirstMain ? " is-main" : ""}${item.status === "failed" ? " pthumb-failed" : ""}${isDragging ? " pthumb-dragging" : ""}${isOver ? " pthumb-drag-over" : ""}`}
+                      draggable
                       key={item.clientKey}
+                      onDragEnd={() => {
+                        setReorderDrag(null);
+                        setReorderOverKey(null);
+                      }}
+                      onDragLeave={() => {
+                        setReorderOverKey((cur) => (cur === item.clientKey ? null : cur));
+                      }}
+                      onDragOver={(event) => {
+                        if (!reorderDrag || reorderDrag.type !== zone.type) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        setReorderOverKey(item.clientKey);
+                      }}
+                      onDragStart={(event) => {
+                        // Avoid starting file-drop on the label while reordering thumbs.
+                        event.stopPropagation();
+                        event.dataTransfer.effectAllowed = "move";
+                        try {
+                          event.dataTransfer.setData("text/plain", item.clientKey);
+                        } catch {
+                          /* ignore */
+                        }
+                        setReorderDrag({ type: zone.type, clientKey: item.clientKey });
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const fromKey = reorderDrag?.clientKey;
+                        const fromType = reorderDrag?.type;
+                        setReorderDrag(null);
+                        setReorderOverKey(null);
+                        if (!fromKey || fromType !== zone.type) return;
+                        void applyReorder(zone.type, fromKey, item.clientKey);
+                      }}
                     >
                       <span className="pthumb-img-wrap">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -502,11 +628,10 @@ export function ImageUploader({
           </div>
         );
       })}
-      {/* R2: process marks only on station② card; form only keeps 規格圖 toggle.
-          Default keep is written at station① 核准 (Q2-A). */}
+      {/* UX-D T23: short form-side tip only; process-intent hard gate stays at station ② / B5. */}
       {mainItems.length > 0 ? (
         <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-          處理標記（保留／簡轉繁／去字／重生）在文案核准後的「圖片審核」卡片設定；此處可標規格圖。
+          主圖可標規格圖
         </div>
       ) : null}
       {markError ? (

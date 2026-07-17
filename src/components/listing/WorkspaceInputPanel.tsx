@@ -271,6 +271,12 @@ export function WorkspaceInputPanel({
   const inventoryRef = useRef<HTMLInputElement>(null);
   const productShotInputRef = useRef<HTMLInputElement>(null);
   const specShotInputRef = useRef<HTMLInputElement>(null);
+  /** UX-D T20: paste → screenshot recognition (mode from open spec panel). */
+  const specShotOpenRef = useRef(false);
+  const runScreenshotRecognitionRef = useRef<
+    ((files: FileList | File[], mode: ScreenshotMode) => Promise<void>) | null
+  >(null);
+  const recognizingRef = useRef(false);
   // 2A 填空時用最新表單值（避免閉包過期）
   const formSnapshotRef = useRef({
     title: "",
@@ -895,6 +901,45 @@ export function WorkspaceInputPanel({
       if (mode === "spec" && specShotInputRef.current) specShotInputRef.current.value = "";
     }
   }
+
+  // UX-D T20: keep paste handler refs current (avoid stale closures on document listener).
+  specShotOpenRef.current = specShotOpen;
+  recognizingRef.current = recognizing;
+  runScreenshotRecognitionRef.current = runScreenshotRecognition;
+
+  useEffect(() => {
+    function imageFilesFromClipboard(data: DataTransfer | null): File[] {
+      if (!data) return [];
+      const fromFiles = Array.from(data.files ?? []).filter((f) => f.type.startsWith("image/"));
+      if (fromFiles.length > 0) return fromFiles;
+      const out: File[] = [];
+      for (const item of Array.from(data.items ?? [])) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) out.push(file);
+        }
+      }
+      return out;
+    }
+
+    function onPaste(event: ClipboardEvent) {
+      const images = imageFilesFromClipboard(event.clipboardData);
+      if (images.length === 0) return; // pure text → never intercept
+
+      const target = event.target as HTMLElement | null;
+      // ImageUploader zones handle their own paste → upload pipeline.
+      if (target?.closest?.(".drop-grid, .upload-section, .dropzone")) return;
+
+      if (recognizingRef.current) return;
+
+      event.preventDefault();
+      const mode: ScreenshotMode = specShotOpenRef.current ? "spec" : "product";
+      void runScreenshotRecognitionRef.current?.(images, mode);
+    }
+
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
 
   function getInventoryFields(): { inventory_quantity: number | null; inventory_policy: InventoryPolicy } | null {
     if (inventoryUnlimited) {
@@ -1619,6 +1664,9 @@ export function WorkspaceInputPanel({
                 type="file"
               />
             </div>
+            <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+              可 Ctrl+V 貼上截圖辨識
+            </div>
             <div className={`fetch-box${fetchBoxOpen ? " open" : ""}`}>
               <input
                 onBlur={() => void runUrlDedupe(taobaoUrl)}
@@ -1918,6 +1966,9 @@ export function WorkspaceInputPanel({
                       tabIndex={0}
                     >
                       <div>拖拉或點擊上傳規格截圖（最多 {MAX_SCREENSHOT_IMAGES} 張）</div>
+                      <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                        可 Ctrl+V 貼上
+                      </div>
                     </div>
                     <input
                       accept="image/*"

@@ -7,7 +7,9 @@ import { ResultCard } from "@/components/listing/ResultCard";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
+import { FactoryBridgeStrip } from "@/components/listing/FactoryBridgeStrip";
 import { showToast } from "@/components/Toast";
+import { buildFactoryBridgeSummary } from "@/lib/images/factoryBridge";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
 import {
   JUMP_TO_DRAFT_EVENT,
@@ -46,8 +48,9 @@ import {
   writeStoredResultsFilter
 } from "@/lib/drafts/stationFilter";
 import {
-  formatAiEstimateMessage,
-  decideStation2Review
+  decideStation2Review,
+  formatStation2BatchRouteSummary,
+  formatStation2SuccessToast,
 } from "@/lib/drafts/stationRoute";
 import {
   formatArchiveResultMessage,
@@ -245,6 +248,12 @@ export function DraftResultsPanel({
   // R2: work queue excludes input / published / archived
   const workQueueDrafts = useMemo(() => filterWorkQueueDrafts(drafts), [drafts]);
 
+  /** UX-F T29: client classify only enrolled pipeline drafts → factory bridge. */
+  const factoryBridgeSummary = useMemo(
+    () => buildFactoryBridgeSummary(workQueueDrafts, imagesByDraft),
+    [workQueueDrafts, imagesByDraft]
+  );
+
   const stageCounts = useMemo(
     () => countStations(workQueueDrafts),
     [workQueueDrafts]
@@ -373,12 +382,12 @@ export function DraftResultsPanel({
   }
 
   /**
-   * R3: station② 審核分流 — 全 keep → advance-ready；有 AI → send-images。
-   * UX-E T28: window.confirm → inline double-confirm; progress on notice + toast.
+   * R3 + UX-F T35: station② 標圖分流 — 全 keep → 待發布；有 AI → 生圖工廠。
+   * UX-E T28: inline double-confirm; progress on notice + toast.
    */
   async function batchStationReview() {
     if (!selectedArray.length) {
-      setMessage("請先勾選商品再批次審核。");
+      setMessage("請先勾選商品再批次標圖通過。");
       return;
     }
     const selectedDrafts = drafts.filter((d) => selectedArray.includes(d.id));
@@ -400,30 +409,33 @@ export function DraftResultsPanel({
         totalAi += decision.aiCount;
       }
     }
-    const estimate = formatAiEstimateMessage(
+    const routeSummary = formatStation2BatchRouteSummary({
+      advanceCount: advanceIds.length,
+      sendCount: sendIds.length,
       totalAi,
-      sendIds.length === 0 && advanceIds.length > 0
-    );
+    });
     if (!batchArm || batchArm.action !== "review") {
       setBatchArm({
         action: "review",
-        hint: `再點確認審核 ${selectedArray.length} 筆 · ${estimate}`
+        hint: `再點確認：${routeSummary}`,
       });
-      setMessage(`批次審核 ${selectedArray.length} 件：${estimate}（再點一次按鈕送出）`);
+      setMessage(
+        `批次標圖 ${selectedArray.length} 件：${routeSummary}（再點一次按鈕送出）`
+      );
       return;
     }
     setBatchArm(null);
     const n = selectedArray.length;
     setBusy(true);
     clearArchiveUndo();
-    setMessage(`審核中（已選 ${n} 筆）…`);
+    setMessage(`分流中（已選 ${n} 筆）…`);
     const messages: string[] = [];
     try {
       if (advanceIds.length) {
         setMessage(
           sendIds.length
-            ? `審核中 1/2（全保留 ${advanceIds.length} 件）…`
-            : `審核中（已選 ${n} 筆）…`
+            ? `分流中 1/2（直達待發布 ${advanceIds.length} 件）…`
+            : `分流中（已選 ${n} 筆）…`
         );
         const response = await fetch("/api/drafts/batch/advance-ready", {
           method: "POST",
@@ -434,19 +446,19 @@ export function DraftResultsPanel({
         messages.push(
           typeof payload.message === "string"
             ? payload.message
-            : `全保留 ${advanceIds.length} 件 → 完成待發布`
+            : `${advanceIds.length} 件已到待發布`
         );
         if (!response.ok && !payload.ok) {
           setMessage(messages.join("\n"));
-          showToast(messages.join("；") || "批次審核失敗", "error");
+          showToast(messages.join("；") || "批次分流失敗", "error");
           return;
         }
       }
       if (sendIds.length) {
         setMessage(
           advanceIds.length
-            ? `審核中 2/2（送生圖 ${sendIds.length} 件）…`
-            : `審核中（已選 ${n} 筆）…`
+            ? `分流中 2/2（送生圖工廠 ${sendIds.length} 件）…`
+            : `分流中（已選 ${n} 筆）…`
         );
         const response = await fetch("/api/drafts/batch/send-images", {
           method: "POST",
@@ -462,17 +474,30 @@ export function DraftResultsPanel({
           return;
         }
         messages.push(
-          typeof payload.message === "string" ? payload.message : `已送生圖 ${sendIds.length} 件`
+          typeof payload.message === "string"
+            ? payload.message
+            : `已送生圖工廠 ${sendIds.length} 件`
         );
       }
-      const okMsg = messages.join("\n") || "批次審核完成";
+      const okMsg =
+        messages.join("\n") ||
+        formatStation2SuccessToast({
+          advanced: advanceIds.length > 0,
+          sentToFactory: sendIds.length > 0,
+        });
+      const toastLine =
+        formatStation2BatchRouteSummary({
+          advanceCount: advanceIds.length,
+          sendCount: sendIds.length,
+          totalAi,
+        }) || okMsg.replace(/\n/g, " · ");
       setMessage(okMsg);
-      showToast(okMsg.replace(/\n/g, " · "), "success");
+      showToast(toastLine, "success");
       setSelectedIds(new Set());
       scheduleRouterRefresh(() => router.refresh());
     } catch {
-      setMessage("批次審核連線失敗");
-      showToast("批次審核連線失敗", "error");
+      setMessage("批次分流連線失敗");
+      showToast("批次分流連線失敗", "error");
     } finally {
       setBusy(false);
     }
@@ -955,13 +980,13 @@ export function DraftResultsPanel({
                         title={
                           batchArm?.action === "review"
                             ? batchArm.hint
-                            : "依標記分流：全保留→轉檔上圖床；有 AI 標記→生圖工廠"
+                            : "標圖分流：全保留→待發布；有 AI 標記→生圖工廠"
                         }
                         type="button"
                       >
                         {batchArm?.action === "review"
-                          ? `⚠ 再點確認審核 ${selectedArray.length} 筆`
-                          : "✓ 批次審核"}
+                          ? `⚠ 再點確認 ${selectedArray.length} 筆`
+                          : "✓ 批次標圖通過"}
                       </button>
                       <details className="batch-more">
                         <summary className="btn-mini">更多 ▾</summary>
@@ -1013,6 +1038,9 @@ export function DraftResultsPanel({
 
         {/* UX-B T6: three stations always-on (even 0); fail pill when fail > 0 */}
         <StageFilterPills counts={stageCounts} onChange={onStageChange} stage={stage} />
+
+        {/* UX-F T29: 工廠橋接（N=M=K=0 時元件自隱藏） */}
+        <FactoryBridgeStrip summary={factoryBridgeSummary} />
 
         {message ? (
           <div className="notice results-batch-notice" role="status">

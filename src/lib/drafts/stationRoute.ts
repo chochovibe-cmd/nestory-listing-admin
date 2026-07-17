@@ -146,10 +146,64 @@ export function isAiProcessIntent(
   return intent != null && AI_PROCESS_INTENTS.has(intent);
 }
 
-/** Estimate line for confirm modal. */
+/**
+ * UX-F T35: estimate / confirm lines for station② 分流.
+ * Naming: 待發布 / 生圖工廠 — not 「圖片審核」.
+ */
 export function formatAiEstimateMessage(aiCount: number, allKeep: boolean): string {
   if (allKeep || aiCount <= 0) {
-    return "全部保留原圖：直接進入「完成待發布」（轉檔與圖床改到發布時處理，不額外 AI 費用）。";
+    return "全部保留原圖：直接進入「待發布」（$0／不進生圖工廠；轉檔改到發布時）。";
   }
-  return `預估 AI 處理 ${aiCount} 張（簡轉繁／去字／重生）。確認後送生圖工廠佇列。`;
+  return `將送進生圖工廠處理 ${aiCount} 張（簡轉繁／去字／重生）。確認後開始排隊。`;
+}
+
+/** Primary action label on station② card (not armed). */
+export function formatStation2PrimaryLabel(allKeep: boolean, aiCount: number): string {
+  if (allKeep || aiCount <= 0) return "通過 → 待發布";
+  return "送進生圖工廠";
+}
+
+/** Armed (double-confirm) short label. */
+export function formatStation2ArmLabel(allKeep: boolean, aiCount: number): string {
+  if (allKeep || aiCount <= 0) return "⚠ 再點確認通過";
+  return "⚠ 再點確認送廠";
+}
+
+/** Full arm / notice line before submit. */
+export function formatStation2ConfirmHint(allKeep: boolean, aiCount: number): string {
+  if (allKeep || aiCount <= 0) {
+    return "通過 → 待發布（$0／不等工廠）。再點一次確認。";
+  }
+  return `送進生圖工廠（${aiCount} 張 · 估價：簡轉繁／去字／重生）。再點一次確認。`;
+}
+
+/** Batch mixed-route summary for arm / toast. */
+export function formatStation2BatchRouteSummary(input: {
+  advanceCount: number;
+  sendCount: number;
+  totalAi: number;
+}): string {
+  const { advanceCount, sendCount, totalAi } = input;
+  if (advanceCount > 0 && sendCount > 0) {
+    return `${advanceCount} 件直達待發布 · ${sendCount} 件進生圖工廠`;
+  }
+  if (sendCount > 0) {
+    return `${sendCount} 件進生圖工廠（共 ${totalAi} 張 AI）`;
+  }
+  if (advanceCount > 0) {
+    return `${advanceCount} 件直達待發布（$0／不等工廠）`;
+  }
+  return "無可分流的商品";
+}
+
+export function formatStation2SuccessToast(input: {
+  advanced: boolean;
+  sentToFactory: boolean;
+}): string {
+  if (input.advanced && input.sentToFactory) {
+    return "已分流：部分待發布 · 部分送生圖工廠";
+  }
+  if (input.sentToFactory) return "已送生圖工廠";
+  if (input.advanced) return "已到待發布";
+  return "標圖分流完成";
 }

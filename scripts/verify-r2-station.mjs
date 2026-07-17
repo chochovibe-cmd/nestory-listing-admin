@@ -153,9 +153,10 @@ check("nav 生圖工廠", () => {
 
 check("station filter three stations", () => {
   const src = read("src/lib/drafts/stationFilter.ts");
-  assert.match(src, /文案審核/);
-  assert.match(src, /圖片審核/);
-  assert.match(src, /完成待發布/);
+  // §2.2 / UX-B T6 user labels（DB key 仍 image_review）
+  assert.match(src, /審文案/);
+  assert.match(src, /標圖/);
+  assert.match(src, /待發布/);
 });
 
 check("inline: all keep decision (R3 → advance_ready)", () => {

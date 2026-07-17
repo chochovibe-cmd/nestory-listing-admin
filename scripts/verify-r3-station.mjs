@@ -203,7 +203,8 @@ check("wiring: publishDraft prepareImagesForPublish", () => {
 check("wiring: stationRoute advance_ready", () => {
   const route = read("src/lib/drafts/stationRoute.ts");
   assert.match(route, /advance_ready/);
-  assert.match(route, /直接進入「完成待發布」/);
+  // UX-F T35: user-facing「待發布」; still advance_ready
+  assert.match(route, /直接進入「待發布」/);
 });
 
 check("wiring: markLeaveQueue on export routes", () => {

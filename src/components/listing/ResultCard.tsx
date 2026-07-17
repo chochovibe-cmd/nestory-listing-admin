@@ -1238,8 +1238,17 @@ export function ResultCard({
 
   function selectTab(tab: ResultCardTabId) {
     if (!isResultCardTabId(tab)) return;
+    // T7: 站① 沒有圖片分頁
+    if (isCopyStation && tab === "images") return;
     setActiveTab(tab);
   }
+
+  // T7: 若卡從他站轉入 copy_review 且仍停在 images，退回文案 tab
+  useEffect(() => {
+    if (isCopyStation && activeTab === "images") {
+      setActiveTab("copy");
+    }
+  }, [isCopyStation, activeTab]);
 
   function tryToggleExpand() {
     if (expanded && hasUncommittedCopy()) {
@@ -1357,8 +1366,8 @@ export function ResultCard({
                 onClick={() => void approveOnly()}
                 title={
                   hasBlockingWarnings(warningSummary)
-                    ? "有必修警告，無法核准"
-                    : "核准文案 → 圖片審核（未標記寫入保留原圖）"
+                    ? "有必修警告，無法核准（⛔ 必修）"
+                    : "核准文案 → 標圖"
                 }
                 type="button"
               >
@@ -1448,10 +1457,10 @@ export function ResultCard({
         <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
       </div>
 
-      {/* Status chips row (always visible when collapsed or expanded) */}
+      {/* Status chips row (always visible when collapsed or expanded). T7: 站① 不顯示圖標記狀態 */}
       <div className="rc-status-chips">
         <StatusBadge status={draft.status} />
-        {pipelineImages.length > 0 && unmarkedImages.length > 0 ? (
+        {!isCopyStation && pipelineImages.length > 0 && unmarkedImages.length > 0 ? (
           <span className="img-mark-status" title={unmarkedBlockMessage ?? undefined}>
             <span className="st-dot" />
             圖片未標記（{unmarkedImages.length}）
@@ -1502,7 +1511,8 @@ export function ResultCard({
             </div>
           ) : (
             <div className="rc-tabs" role="tablist" aria-label="卡片分頁">
-              {RESULT_CARD_TABS.map((tab) => (
+              {/* T7: 站① 無「圖片」分頁；站③ 保留完整 tabs */}
+              {RESULT_CARD_TABS.filter((tab) => !(isCopyStation && tab.id === "images")).map((tab) => (
                 <button
                   aria-selected={activeTab === tab.id}
                   className={`rc-tab${activeTab === tab.id ? " active" : ""}`}
@@ -1767,7 +1777,8 @@ export function ResultCard({
             </div>
           ) : null}
 
-          {isImageStation || activeTab === "images" ? (
+          {/* T7: 站① 永不渲染圖片 tab panel；站② 專用標記、站③ 可經「圖片」tab */}
+          {isImageStation || (!isCopyStation && activeTab === "images") ? (
             <div className="rc-tabpanel" role="tabpanel">
               {imageMarks.length > 0 ? (
                 <div className="rc-field">

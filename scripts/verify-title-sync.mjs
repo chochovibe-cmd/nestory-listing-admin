@@ -75,8 +75,15 @@ await check("payload types + generate route carry product_brand / variant_text",
   assert.match(read("src/lib/contentGenerator/sourceTypes.ts"), /product_brand\?/);
   assert.match(read("src/lib/contentGenerator/sourceTypes.ts"), /variant_text\?/);
   const route = read("src/app/api/generate/route.ts");
-  assert.match(route, /product_brand: draft\.product_brand \?\? null/);
-  assert.match(route, /toListingDraftInput\(draft, detected, variantSummary\)/);
+  // P1-75a: prefer detected brand for this pass, fall back to draft.product_brand
+  assert.match(
+    route,
+    /product_brand:\s*productBrand \?\? draft\.product_brand \?\? null|product_brand: draft\.product_brand \?\? null/
+  );
+  assert.match(
+    route,
+    /toListingDraftInput\(draft, detected, variantSummary(?:, effectiveProductBrand)?\)/
+  );
 });
 
 await check("zhTwLocalizer: new Taiwan terms (釐米→公分 etc.)", () => {

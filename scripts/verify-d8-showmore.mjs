@@ -275,9 +275,11 @@ await check("settings copy: 匯出時已套用 (not 接通後生效)", () => {
   assert.ok(!workspace.includes("D8 匯出管線接通後生效"));
 });
 
-await check("records: honest note that CSV export is not publish batch log", () => {
+await check("records: CSV leave-queue export enters publish batch log (P1-69)", () => {
   const src = read("src/components/records/PublishRecordsPanel.tsx");
-  assert.match(src, /不進本頁批次帳/);
+  // P1-69: CSV exports now ledger into publish_batches; note must not deny that.
+  assert.match(src, /會入本頁批次帳|kind=showmore/);
+  assert.ok(!src.includes("不進本頁批次帳"));
   assert.ok(!src.includes("Showmore／Matrixify（尚未）"));
 });
 

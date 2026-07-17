@@ -14,25 +14,79 @@ const TONE_DESCRIPTIONS: Record<CopyTone, string> = {
   依IP自動匹配: "（系統內部用途，模型不會實際收到這個值——見 resolveCopyTone）",
 };
 
-// A9 item 2a: one concrete demo sentence per tone so the model has a real
-// register to match, not just an abstract description (反模板化設計·4 的簡化版；
-// 真正的「使用者自己得意之作」黃金範例是之後才能做的事，需要老闆挑稿)。
-const TONE_EXAMPLES: Partial<Record<CopyTone, string>> = {
-  黑膠文藝收藏感: "這款吉伊卡哇小八吊飾，絨毛觸感沉靜溫潤，像從唱片行架上取下的珍藏。",
-  日系選物店溫柔感: "軟軟的觸感、剛剛好的重量，放在包包上就是每天的小確幸。",
-  可愛周邊輕鬆感: "圓滾滾的身形配上呆萌表情，掛在包包上瞬間療癒指數爆表！",
-  中二熱血宣言: "覺醒吧，收藏家的靈魂！這尊公仔承載著角色燃燒到底的意志，此刻降臨你的展示櫃。",
-  小編聊天口吻: "欸這個真的太可愛了吧！摸起來軟軟的，放桌上根本捨不得移開視線。",
+// A9 item 2a + P1-76: 2–3 demo sentences per tone so registers diverge clearly.
+// 小編語氣另附老闆點讚的 Hello Kitty 保溫杯靜態錨點（開發期一次撈庫寫死，非 runtime 查詢）。
+const TONE_EXAMPLES: Partial<Record<CopyTone, string[]>> = {
+  黑膠文藝收藏感: [
+    "這款吉伊卡哇小八吊飾，絨毛觸感沉靜溫潤，像從唱片行架上取下的珍藏。",
+    "展示櫃一角多了一點安靜的份量——不喧嘩，卻讓人想多看一眼。",
+    "材質與造型都收在細節裡，適合慢慢欣賞、慢慢擁有。",
+  ],
+  日系選物店溫柔感: [
+    "軟軟的觸感、剛剛好的重量，放在包包上就是每天的小確幸。",
+    "不誇張、不搶戲，就是那種會讓人想溫柔對待的小物。",
+    "挑給在意生活節奏的人：簡單、好用、看了會微笑。",
+  ],
+  可愛周邊輕鬆感: [
+    "圓滾滾的身形配上呆萌表情，掛在包包上瞬間療癒指數爆表！",
+    "一眼就想拍照的小可愛，放桌上也會偷走你的好心情。",
+    "輕巧好帶、可愛不膩，當小禮物也很討喜。",
+  ],
+  中二熱血宣言: [
+    "覺醒吧，收藏家的靈魂！這尊公仔承載著角色燃燒到底的意志，此刻降臨你的展示櫃。",
+    "命運的齒輪咔一聲咬合——這件周邊，就是你旅程的下一枚徽章。",
+    "不是裝飾，是宣言：我選的角色，我守護到底。",
+  ],
+  小編聊天口吻: [
+    "欸這個真的太可愛了吧！摸起來軟軟的，放桌上根本捨不得移開視線 ✨",
+    "認真說，掛上包包之後每天心情都會被偷加一點 ☕",
+    "私心推薦給跟我一樣看到就想凹的人——真的會心動到猶豫三秒就下單 🥹",
+  ],
 };
 
-// 文案呈現包（2026-07-18 老闆定案）：只有兩個輕鬆語氣可以用少量 emoji，
-// 其他語氣一律禁用——選語氣卡時 UI 會標示「含少量Emoji」讓老闆能避開。
+/**
+ * P1-76: static tone anchor from draft 84ef0cba（三麗鷗 Hello Kitty 巨無霸不鏽鋼保溫杯）.
+ * Boss-praised copy; injected only for 小編聊天口吻 as register direction (warm, concrete, not shouty).
+ */
+const XIAOBIAN_STYLE_ANCHOR = {
+  draftId: "84ef0cba-0758-49e4-87f1-3cafffd303bf",
+  title: "三麗鷗 Hello Kitty 巨無霸不鏽鋼保溫杯｜900ml 可愛豹紋設計",
+  opening:
+    "在每一口熱飲中感受Hello Kitty帶來的愉悅心情。這款巨無霸不鏽鋼保溫杯不只高雅實用，還帶著一份可愛的童趣，讓日常生活隨時保持溫暖。",
+  why: "這款保溫杯不僅功能強大，還蘊含獨特的Hello Kitty設計，極具收藏價值與實用性，是品味與愛好的完美結合。",
+};
+
+// 文案呈現包（2026-07-18）＋P1-76 Fable 收斂：
+// - 小編聊天口吻：描述／FAQ **必須**自然使用 1–2 個 emoji
+// - 可愛周邊輕鬆感：鼓勵使用（不強制）
+// - 其他語氣：禁用；標題／SEO 全面禁 emoji
 export const EMOJI_TONES: ReadonlyArray<CopyTone> = ["小編聊天口吻", "可愛周邊輕鬆感"];
 
 function toneEmojiRule(tone: CopyTone): string {
-  return EMOJI_TONES.includes(tone)
-    ? "這個語氣允許在描述與 FAQ 裡自然使用最多 1-2 個貼合語境的 emoji（寧少勿多，標題與 SEO 欄位禁用）。"
-    : "所有欄位一律不使用 emoji。";
+  if (tone === "小編聊天口吻") {
+    return (
+      "這個語氣的「描述」與「FAQ」必須自然使用 1–2 個貼合語境的 emoji（像在限動聊天，不是灑一排貼圖）；" +
+      "標題、enriched_title、seo_title、meta_description 一律禁止 emoji。"
+    );
+  }
+  if (tone === "可愛周邊輕鬆感") {
+    return (
+      "這個語氣鼓勵在描述與 FAQ 自然使用最多 1–2 個 emoji（不強制；有加分感就加，生硬就不要硬塞）；" +
+      "標題與 SEO 欄位禁用 emoji。"
+    );
+  }
+  return "所有欄位一律不使用 emoji。";
+}
+
+function formatToneExamples(tone: CopyTone): string {
+  const examples = TONE_EXAMPLES[tone];
+  if (!examples || examples.length === 0) return "";
+  const bullets = examples.map((s, i) => `  ${i + 1}.「${s}」`).join("\n");
+  let block = `\n語感示範句（不要照抄，只抓這個風格實際讀起來的樣子；共 ${examples.length} 句拉開語感）：\n${bullets}`;
+  if (tone === "小編聊天口吻") {
+    block += `\n老闆點讚的語感錨點（Hello Kitty 保溫杯，方向：溫暖、具體、不叫賣；口吻仍要像小編聊天，可自然帶 1–2 emoji）：\n  ・開頭語感：「${XIAOBIAN_STYLE_ANCHOR.opening}」\n  ・選品理由語感：「${XIAOBIAN_STYLE_ANCHOR.why}」`;
+  }
+  return block;
 }
 
 // B8: DEFAULT_IP_TONE_MAP lives in ipToneMap.ts (+ team_settings overrides).
@@ -111,7 +165,6 @@ export function buildCopySystemPrompt(
   copyLength: CopyLength,
   secondhandInfo?: SecondhandInfo | null,
 ): string {
-  const toneExample = TONE_EXAMPLES[tone];
   return `你是潮巢玩居（CHOCHONEST）商品文案專家。品牌：潮巢 Nestory，台灣日系動漫 IP 選物店。
 
 語氣核心（必須同時達到，缺一不可）：
@@ -121,23 +174,26 @@ export function buildCopySystemPrompt(
 - 一點點幽默（偶爾俏皮，但不要變成搞笑）
 - 不浮誇（不要讓讀者覺得你在賣廣告）
 - 不淘寶感（語言是台灣人說話的方式）
-不要蝦皮叫賣、不要冷淡潮牌、不要官方客服語氣。可以有一點點表情符號，但整篇最多 2-3 個。
+不要蝦皮叫賣、不要冷淡潮牌、不要官方客服語氣。
 
-本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${LENGTH_INSTRUCTIONS[copyLength]}${toneExample ? `
-語感示範句（不要照抄，只是抓這個風格實際讀起來的樣子）：「${toneExample}」` : ""}
+本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${LENGTH_INSTRUCTIONS[copyLength]}${formatToneExamples(tone)}
 ${buildSecondhandSection(secondhandInfo)}
 
-你會收到淘寶原始標題、圖片描述等原始資訊，但「不會」收到現成的 IP／角色／類型。
+你會收到淘寶原始標題、圖片描述等原始資訊，但「不會」收到現成的 IP／角色／類型／品牌。
 你的工作分兩步：
-（1）先從標題與圖片描述判斷這是哪個 IP、哪個角色、什麼商品類型；
+（1）先從標題與圖片描述判斷這是哪個 IP、哪個角色、什麼商品類型、有無聯名品牌；
 （2）再根據你判斷的結果，從頭生成一份完整的品牌語氣文案。
 放手寫，帶著品牌個性去寫，不要寫得像制式模板套公式。
 
-【判斷 IP／角色／類型（第一步，很重要）】
+【判斷 IP／角色／類型／品牌（第一步，很重要）】
 - 系統會附上一份「已建檔 IP 清單」。如果商品明顯屬於清單中的某個 IP，detected_ip_name 必須「原封不動」使用清單裡的中文名稱（用字要完全一致，這是後端比對 Shopify 分類的關鍵）。
 - 如果標題資訊不足以判斷、或商品明顯不屬於清單中任何一個 IP，detected_ip_name 就填你最合理的判斷；不確定時寧可誠實填最接近的，不要亂猜一個清單裡的 IP。
-- detected_character_name：主要角色名稱（例：小八、玉桂狗）；沒有明確角色就留空字串。
-- detected_product_type：具體商品型態（例：吊飾、絨毛娃娃、公仔模型、壓克力立牌），用台灣慣用說法。
+- detected_character_name：主要角色名稱（例：小八、玉桂狗）；多角色時以主角色為主，其餘角色寫進標題骨架；沒有明確角色就留空字串。
+- detected_product_type：具體商品型態（例：吊飾、絨毛娃娃、公仔模型、壓克力立牌、燈具小物），用台灣慣用說法。臺燈／桌燈／夜燈類可寫「燈具小物」或「臺燈」（後端會對齊）。
+- detected_product_brand（聯名／製造商品牌，P1-75a 誠實邊界）：
+  ・要填：標題、圖上文字、規格裡「明確出現」的聯名或製造商品牌字樣（例：TOYUKI、Razer、MINISO）
+  ・不填（留空）：IP 名稱本身（吉伊卡哇、三麗鷗不算 brand）、店名／賣家名、僅憑感覺猜測的品牌
+  ・沒把握就留空，寧可空也不要猜；空字串即可，不要寫「無」或「未知」
 - sku：依規則產生 CHO-{型態縮寫}-{IP縮寫}-{角色縮寫}-001，縮寫用 2-3 碼全大寫英文，序號固定 001。例：吉伊卡哇小八吊飾 → CHO-CHM-CKW-CH8-001。
 
 【GEO 優化（Generative Engine Optimization）】
@@ -150,9 +206,14 @@ FAQ 回答必須寫成可以被 AI 搜尋引擎（ChatGPT、Perplexity 等）單
 - 你只負責「判斷分類」與「寫文案」，最終的正式 tag 由後端規則引擎決定。
 
 【標題】
-根據你判斷的 IP／角色／類型自己擬定標題，格式參考「IP名稱 角色名稱 商品特色｜用途情境」，
-補充具體特色描述（造型、款式、材質關鍵字等），讓標題生動、有畫面感、同時簡潔好認。
-輸出至 enriched_title，總長度建議 45 字，最長不超過 50 字，不要加入輸入資訊沒有提到的規格數字，不可捏造 IP／角色。
+輸出至 enriched_title。骨架規則（P1-75b，必須遵守）：
+1. 有聯名品牌時開頭寫「品牌 × IP」；IP 中文在前、英文別名可接在中文後（例：三麗鷗 Sanrio）；無品牌則直接 IP
+2. 多角色用「・」分隔列出，最多 3 個；超過取最熱門／標題最相關的前三
+3. 款式列（variant）文字裡若含角色名，也要算進角色名單（不要只寫主角色而漏掉款式角色）
+4. 後半補特色／款式詞與用途情境，讓標題有畫面、好認
+骨架示意：〔品牌 × 〕IP中文〔英文〕｜角色〔・角色…≤3〕｜特色
+（也可用空格銜接段落，重點是品牌×IP／多角色・／特色三段資訊都要到位）
+總長度建議 45 字、最長不超過 60 字（後端規則引擎另有 80 字上限）；不要加入輸入資訊沒有提到的規格數字，不可捏造 IP／角色／品牌。
 
 標題清洗（原始標題常帶平台活動詞，不要照抄進 enriched_title）：
 - 剔除：618、雙11、雙12、限時、限定活動、母親節限定、情人節禮物、聖誕節禮物、開學季、
@@ -164,16 +225,17 @@ FAQ 回答必須寫成可以被 AI 搜尋引擎（ChatGPT、Perplexity 等）單
 1. detected_ip_name（見上方判斷規則）
 2. detected_character_name
 3. detected_product_type
-4. detected_category（＝型態_ + detected_product_type，例：型態_吊飾）
-5. sku
-6. enriched_title
-7. generated_description_html
-8. generated_faq_html
-9. seo_title
-10. meta_description
-11. why_we_chose_it（潮巢選品理由，可以有品牌個性，1-2 句，說「為什麼這個商品值得在潮巢出現」，不是重複商品功能）
-12. product_highlights（3-5 點條列式賣點，優先從提供的商品外觀描述/規格文字裡抓具體細節，不要空泛）
-13. spec（自動整理的商品規格，見下方【spec 商品規格產生規則】；沒有可寫的就留「（無）」）
+4. detected_product_brand（聯名／製造商品牌；沒把握留空）
+5. detected_category（＝型態_ + detected_product_type，例：型態_吊飾）
+6. sku
+7. enriched_title
+8. generated_description_html
+9. generated_faq_html
+10. seo_title
+11. meta_description
+12. why_we_chose_it（潮巢選品理由，可以有品牌個性，1-2 句，說「為什麼這個商品值得在潮巢出現」，不是重複商品功能）
+13. product_highlights（3-5 點條列式賣點，優先從提供的商品外觀描述/規格文字裡抓具體細節，不要空泛）
+14. spec（自動整理的商品規格，見下方【spec 商品規格產生規則】；沒有可寫的就留「（無）」）
 
 【描述格式 — 開頭段＋四個「◈ 標題」段，純文字（不要用 HTML 標籤），段落之間空一行】
 段落標題行固定寫成「◈ 標題」（例：◈ 商品亮點）；開頭段沒有標題、直接寫內文。
@@ -266,8 +328,8 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 
 【輸出格式 — 分段標記（重要：不要輸出 JSON、不要用 Markdown 程式碼區塊、不要加任何說明文字）】
 每個欄位用「獨立一整行」的標記 [[欄位名]] 起頭，內容寫在標記的下一行起，一直到下一個標記為止。
-標記名稱要原封不動照抄（英文小寫、雙中括號），並「依下列順序」輸出全部 13 個欄位；
-沒有內容的欄位（例如沒有明確角色）就讓該標記下方留空一行，不要省略標記本身。
+標記名稱要原封不動照抄（英文小寫、雙中括號），並「依下列順序」輸出全部 14 個欄位；
+沒有內容的欄位（例如沒有明確角色或品牌）就讓該標記下方留空一行，不要省略標記本身。
 
 [[detected_ip_name]]
 （IP 中文名，依上方判斷規則）
@@ -275,12 +337,14 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 （主要角色名，沒有就留空）
 [[detected_product_type]]
 （商品型態，用台灣慣用說法）
+[[detected_product_brand]]
+（聯名／製造商品牌；沒把握留空）
 [[detected_category]]
 型態_（同上型態，例：型態_吊飾）
 [[sku]]
 CHO-...-...-...-001
 [[enriched_title]]
-（商品標題）
+（商品標題，見【標題】骨架）
 [[generated_description_html]]
 （開頭段＋「◈ 標題」四段純文字描述，段落之間空一行）
 [[generated_faq_html]]
@@ -323,7 +387,13 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
 
   if (price) lines.push(`台幣售價：NT$${price}`);
   if (compareAtPrice) lines.push(`台幣定價：NT$${compareAtPrice}`);
-  if (variantSummary) lines.push(`款式：${variantSummary}`);
+  if (variantSummary) {
+    lines.push(`款式：${variantSummary}`);
+    // P1-75b: make multi-character-from-variants explicit in the fact block.
+    lines.push(
+      "（款式列可能含角色名／款式名：寫 enriched_title 時，角色請一併列入，多角色用「・」分隔、最多 3 個；特色可取自款式詞。）",
+    );
+  }
   if (note) lines.push(`補充備註：${note}`);
   if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
   if (specText) lines.push(`商品規格（操作者補充，以此為準只做整理）：${specText}`);
@@ -369,7 +439,8 @@ const REGEN_FIELD_LABELS: Record<CopyRegenField, string> = {
 };
 
 const REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
-  enriched_title: "格式參考「IP名稱 角色名稱 商品特色｜用途情境」，建議 45 字、最長 50 字，不可捏造 IP／角色／規格數字。",
+  enriched_title:
+    "骨架：〔品牌 × 〕IP中文〔英文〕｜角色（多角色・分隔≤3，款式含的角色也算）｜特色。建議 45 字、最長 60 字，不可捏造 IP／角色／品牌／規格數字。",
   generated_description_html: "沿用「開頭段＋◈ 標題四段」純文字格式（段落間空一行、標題行寫「◈ 標題」），尺寸材質只能引用已知規格，不要寫入價格。",
   generated_faq_html: "3-5 題，每題 <h3><strong>問題</strong></h3><p>回答</p>，答案自成一段可被單獨引用，導購感優先。",
   seo_title: "25-45 字（最長 75），核心關鍵字（品牌×IP＋角色＋類型）壓在前 25 字，多角色用「・」列出（最多 3 個），之後可堆受眾關鍵字增加覆蓋，不要自己加「｜潮巢 Nestory」尾綴（後端統一附加）。",

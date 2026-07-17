@@ -248,11 +248,15 @@ export function DraftResultsPanel({
   // R2: work queue excludes input / published / archived
   const workQueueDrafts = useMemo(() => filterWorkQueueDrafts(drafts), [drafts]);
 
-  /** UX-F T29: client classify only enrolled pipeline drafts → factory bridge. */
-  const factoryBridgeSummary = useMemo(
-    () => buildFactoryBridgeSummary(workQueueDrafts, imagesByDraft),
-    [workQueueDrafts, imagesByDraft]
-  );
+  /**
+   * UX-F T29: client classify enrolled pipeline drafts → factory bridge.
+   * Use all non-archived loaded drafts (not only 三站 work queue) so
+   * processing/pending factory items still show after leaving 標圖.
+   */
+  const factoryBridgeSummary = useMemo(() => {
+    const active = drafts.filter((d) => d.status !== "archived");
+    return buildFactoryBridgeSummary(active, imagesByDraft);
+  }, [drafts, imagesByDraft]);
 
   const stageCounts = useMemo(
     () => countStations(workQueueDrafts),

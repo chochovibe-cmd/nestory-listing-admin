@@ -144,6 +144,11 @@ export interface ProductDraft {
   is_secondhand: boolean;
   /** 夜工包（回饋 27）：聯名品牌；migration 031（未跑時為 undefined，程式視同 null）。 */
   product_brand?: string | null;
+  /**
+   * P1-66：本次生成實際語氣（resolveCopyTone 後的具體語氣，不含「依IP自動匹配」）。
+   * migration 034；未跑時 undefined。
+   */
+  generation_tone?: string | null;
   secondhand_grade: string | null;
   secondhand_condition: string | null;
   secondhand_notes: string | null;
@@ -208,10 +213,13 @@ export type PublishBatchItemStatus =
   | "failed"
   | "skipped";
 
-/** D7: one Shopify publish batch header (publish_batches). */
+/** D7 + P1-69: publish_batches.kind (migration 035 adds showmore/matrixify). */
+export type PublishBatchKind = "shopify_api" | "showmore" | "matrixify";
+
+/** D7: one publish batch header (Shopify API or CSV export). */
 export interface PublishBatch {
   id: string;
-  kind: "shopify_api";
+  kind: PublishBatchKind;
   status: PublishBatchStatus;
   publish_mode: PublishMode;
   total_count: number;

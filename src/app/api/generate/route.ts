@@ -42,6 +42,7 @@ import { mergeIpToneMap } from "@/lib/providers/ipToneMap";
 import { buildXiaobianMissingEmojiWarning } from "@/lib/providers/emojiPolicy";
 import { normalizeDetectedProductBrand } from "@/lib/providers/productBrand";
 import { resolveCopyTone } from "@/lib/providers/systemPrompt";
+import { resolveCanonicalCharacterName } from "@/lib/characters/resolveCanonicalCharacter";
 import {
   resolveWebSearchForGenerate,
   WEB_SEARCH_USED_WARNING,
@@ -656,9 +657,16 @@ export async function POST(request: NextRequest) {
         ipToneMap,
       });
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
+      // P2-79: character → dictionary canonical (Miffy), not surface alias (米飛)
+      const resolvedCharacter =
+        resolveCanonicalCharacterName(raw.detectedCharacterName, {
+          ipName: resolvedIp,
+          ipCharacters: displayContext.ipCharacters ?? [],
+          ipCatalog: ipCatalogEntries,
+        }) ?? (raw.detectedCharacterName || "");
       detected = {
         ip: resolvedIp,
-        character: raw.detectedCharacterName,
+        character: resolvedCharacter,
         productType: raw.detectedProductType,
         category: raw.detectedCategory || (raw.detectedProductType ? `型態_${raw.detectedProductType}` : ""),
         sku: raw.sku,

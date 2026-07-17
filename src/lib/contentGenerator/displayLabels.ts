@@ -1,4 +1,5 @@
 import type { IpCatalogEntry, IpCharacter } from './sourceTypes';
+import { lookupCharacterAliasPatch } from '@/lib/characters/characterAliasMap';
 
 export type IpDisplayEntry = Pick<IpCatalogEntry, 'aliases' | 'ip_name'>;
 export type CharacterDisplayEntry = Pick<IpCharacter, 'aliases' | 'character_name' | 'ip_name'>;
@@ -157,6 +158,14 @@ function findIpEntry(ipName: string, ipCatalog: IpDisplayEntry[] = []): IpDispla
   return ipCatalog.find((entry) => normalizeKey(entry.ip_name) === target) ?? null;
 }
 
+function characterEntryTerms(entry: CharacterDisplayEntry): string[] {
+  return [entry.character_name, ...(entry.aliases ?? [])].map(normalize).filter(Boolean);
+}
+
+/**
+ * P2-79: match character_name OR aliases (and code-side alias patches).
+ * Previously only character_name was compared, so 「米飛」 never hit Miffy.
+ */
 function findCharacterEntry(
   characterName: string,
   ipName: string,
@@ -164,12 +173,45 @@ function findCharacterEntry(
 ): CharacterDisplayEntry | null {
   const targetCharacter = normalizeKey(characterName);
   const targetIp = normalizeKey(ipName);
+  if (!targetCharacter) return null;
 
-  return ipCharacters.find((entry) => {
-    const entryCharacter = normalizeKey(entry.character_name);
-    const entryIp = normalizeKey(entry.ip_name);
-    return entryCharacter === targetCharacter && (!targetIp || entryIp === targetIp);
-  }) ?? ipCharacters.find((entry) => normalizeKey(entry.character_name) === targetCharacter) ?? null;
+  const matchTerms = (entry: CharacterDisplayEntry) =>
+    characterEntryTerms(entry).some((term) => normalizeKey(term) === targetCharacter);
+
+  if (targetIp) {
+    const inIp = ipCharacters.find((entry) => normalizeKey(entry.ip_name) === targetIp && matchTerms(entry));
+    if (inIp) return inIp;
+  }
+
+  const byAliasOrName = ipCharacters.find(matchTerms);
+  if (byAliasOrName) return byAliasOrName;
+
+  // Code-side patches (032 character-layer gaps, no DB migration)
+  const patch = lookupCharacterAliasPatch(characterName);
+  if (patch) {
+    if (targetIp && targetIp !== normalizeKey(patch.ip_name)) {
+      // keep searching without forcing cross-IP
+    } else {
+      const patched =
+        ipCharacters.find(
+          (entry) =>
+            normalizeKey(entry.ip_name) === normalizeKey(patch.ip_name) &&
+            normalizeKey(entry.character_name) === normalizeKey(patch.character_name),
+        ) ??
+        ipCharacters.find(
+          (entry) => normalizeKey(entry.character_name) === normalizeKey(patch.character_name),
+        );
+      if (patched) return patched;
+      // Synthetic entry so short-name overrides still apply for known patches
+      return {
+        ip_name: patch.ip_name,
+        character_name: patch.character_name,
+        aliases: [normalize(characterName)],
+      };
+    }
+  }
+
+  return null;
 }
 
 export function formatIpDisplayName(ipName: string, aliases: string[] = []): string {

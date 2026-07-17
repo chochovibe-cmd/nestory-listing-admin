@@ -17,7 +17,13 @@ import {
   mergeScenarioKeywordMap,
   pickScenarioKeywords,
 } from "@/lib/contentGenerator/scenarioKeywords";
+import { matchSectionHeader } from "@/lib/contentGenerator/sectionHeaders";
 import { generateShopifyHandleSlug } from "@/lib/contentGenerator/handleGenerator";
+import {
+  clampOfficialTitle,
+  ENRICHED_TITLE_MAX_LENGTH,
+  scrubEnrichedTitleSegment3,
+} from "@/lib/contentGenerator/titleGenerator";
 import { buildGenerateSuccessStatusPatch } from "@/lib/drafts/generateSuccessStatus";
 import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
 import { buildMetaContentGapWarning, buildMetaDuplicateWarning } from "@/lib/contentGenerator/metaUniqueness";
@@ -147,6 +153,34 @@ function toListingDraftInput(
     secondhand_condition: draft.secondhand_condition,
     secondhand_notes: draft.secondhand_notes,
   };
+}
+
+/** P2-82: true when plain-text description has a non-empty 「商品資訊」/ D 段. */
+function descriptionHasProductInfoSection(description: string | null | undefined): boolean {
+  const text = (description ?? "").trim();
+  if (!text) return false;
+  const lines = text.split(/\r?\n/);
+  let dStart = -1;
+  let dEnd = lines.length;
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = matchSectionHeader(lines[i]);
+    if (!match) continue;
+    if (match.letter === "D" && dStart === -1) {
+      dStart = i;
+      continue;
+    }
+    if (dStart !== -1 && match.letter && match.letter !== "D") {
+      dEnd = i;
+      break;
+    }
+  }
+  if (dStart === -1) return false;
+  const body = lines
+    .slice(dStart + 1, dEnd)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("");
+  return body.length >= 4;
 }
 
 // Resolve the AI's detected IP string to a canonical ip_catalog name (matching
@@ -320,21 +354,32 @@ async function handleFieldRegen(params: {
   } else {
     let value = localizeToTaiwanTraditionalText(getCopyFieldValue(raw, regenField));
     // Mirror the main flow's display-title term swap.
-    if (regenField === "enriched_title") value = value.split("包包吊飾").join("包包掛件");
-    // A9 item 6: the model no longer writes the brand suffix itself.
-    if (regenField === "seo_title") {
-      value = appendNestoryBrandSuffix(injectScenarioKeywordsIntoSeoTitle(value, scenarioTerms));
+    if (regenField === "enriched_title") {
+      // P2-80/83: scrub blacklist → history full ≤80; title_zh clamp ≤60
+      const scrubbed = scrubEnrichedTitleSegment3(value.split("包包吊飾").join("包包掛件"));
+      const full =
+        Array.from(scrubbed).length > ENRICHED_TITLE_MAX_LENGTH
+          ? Array.from(scrubbed).slice(0, ENRICHED_TITLE_MAX_LENGTH).join("")
+          : scrubbed;
+      historyContent = full;
+      value = clampOfficialTitle(full);
+      update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
+    } else {
+      // A9 item 6: the model no longer writes the brand suffix itself.
+      if (regenField === "seo_title") {
+        value = appendNestoryBrandSuffix(injectScenarioKeywordsIntoSeoTitle(value, scenarioTerms));
+      }
+      if (regenField === "meta_description") {
+        value = injectScenarioKeywordsIntoMetaDescription(value, scenarioTerms);
+      }
+      if (regenField === "generated_description_html") {
+        value = normalizeDescriptionToPlainText(
+          appendScenarioBulletToDescription(value, scenarioTerms),
+        );
+      }
+      update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
+      historyContent = value;
     }
-    if (regenField === "meta_description") {
-      value = injectScenarioKeywordsIntoMetaDescription(value, scenarioTerms);
-    }
-    if (regenField === "generated_description_html") {
-      value = normalizeDescriptionToPlainText(
-        appendScenarioBulletToDescription(value, scenarioTerms),
-      );
-    }
-    update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
-    historyContent = value;
   }
 
   // A13: a regen is extra spend -- accumulate onto the draft's running totals.
@@ -749,9 +794,20 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("測試模式：未呼叫 AI、未自動偵測 IP；文案為規則引擎產出，tags 依草稿現有資料。");
   }
 
+  // P2-80/83: LLM enriched (≤80, scrub 黑名單) → history; clamp → title_zh ≤60
+  const enrichedTitleFull = (() => {
+    const raw = (providerOutput.enrichedTitle || ruleOutput.display_title || "").trim();
+    const scrubbed = scrubEnrichedTitleSegment3(raw.split("包包吊飾").join("包包掛件"));
+    const chars = Array.from(scrubbed);
+    return chars.length > ENRICHED_TITLE_MAX_LENGTH
+      ? chars.slice(0, ENRICHED_TITLE_MAX_LENGTH).join("")
+      : scrubbed;
+  })();
+  const officialTitleZh = clampOfficialTitle(enrichedTitleFull);
+
   const localizedOutput = localizeGeneratedListingContent({
     ...ruleOutput,
-    display_title: providerOutput.enrichedTitle || ruleOutput.display_title,
+    display_title: officialTitleZh,
     // A17: rule-engine-picked scenario terms appended as a deterministic
     // "➼ 適用情境" bullet inside the model's own D段, never left to the LLM
     // to invent. No-op when the model omitted D段 (nothing to attach to) or
@@ -850,6 +906,16 @@ export async function POST(request: NextRequest) {
         ? "商品規格為系統自動整理（來自款式／標題／圖片文字／網路搜尋），發布前請審核瞄一眼確認無誤、必要時修正。"
         : "商品規格為系統自動整理（來自款式／標題／圖片文字），發布前請審核瞄一眼確認無誤、必要時修正。",
     );
+  }
+
+  // P2-82 (回饋 26)：只警告不自動抽——規格中繼空但描述「商品資訊」段有內容
+  {
+    const specEmpty = !(finalSpecText ?? "").trim() || (finalSpecText ?? "").trim() === "（無）";
+    if (specEmpty && descriptionHasProductInfoSection(localizedOutput.generated_description_html)) {
+      extraWarnings.push(
+        "規格中繼是空的，但描述的商品資訊段有內容——要進 Shopify 規格請補規格欄。",
+      );
+    }
   }
 
   // P0-62: single source for status / pipeline_stage / generation_status so a
@@ -976,7 +1042,11 @@ export async function POST(request: NextRequest) {
     .filter(Boolean)
     .join("\n");
   const historyRows = [
-    { field_name: "enriched_title", content: localizedOutput.display_title },
+    // P2-83: history keeps full enriched (≤80); product_drafts.title_zh is clamped 60
+    {
+      field_name: "enriched_title",
+      content: localizeToTaiwanTraditionalText(enrichedTitleFull) || localizedOutput.display_title,
+    },
     { field_name: "generated_description_html", content: localizedOutput.generated_description_html },
     { field_name: "generated_faq_html", content: localizedOutput.generated_faq_html },
     { field_name: "seo_title", content: localizedOutput.seo_title },

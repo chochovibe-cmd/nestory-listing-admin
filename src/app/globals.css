@@ -1238,6 +1238,8 @@ textarea {
 .dz-text { flex: 1; }
 .dz-title { font-size: 13px; font-weight: 600; color: var(--text-dim); }
 .dz-sub { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+/* UX-D T20: short paste hint under drop title (muted, not long copy) */
+.dz-hint { font-size: 10px; margin-top: 2px; }
 .dz-status { font-size: 10px; font-weight: 700; margin-top: 3px; }
 .dz-status.ready { color: var(--success); }
 .thumb-strip { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
@@ -1278,6 +1280,21 @@ textarea {
   flex-direction: column;
   align-items: center;
   gap: 5px;
+  cursor: grab;
+}
+.pthumb:active {
+  cursor: grabbing;
+}
+/* UX-D T22: thumb reorder feedback (existing shadow tokens only) */
+.pthumb-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+  box-shadow: var(--control-shadow);
+}
+.pthumb-drag-over .pthumb-img {
+  box-shadow: var(--control-shadow);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .pthumb-img-wrap {
   position: relative;
@@ -3018,22 +3035,26 @@ textarea {
 }
 
 /* ── Tone cards (copy style picker) ── */
+/* UX-D T25: compact 2-col grid; desc only on active; min touch 44px */
 .tone-cards {
   display: grid;
-  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
 
 .tone-card {
   border: 1px solid var(--border);
   background: var(--surface2);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: var(--radius-s);
+  padding: 8px 10px;
   display: flex;
-  gap: 9px;
+  gap: 8px;
+  align-items: flex-start;
   text-align: left;
   color: var(--text);
   cursor: pointer;
   transition: all .2s;
+  min-height: 44px;
 }
 
 .tone-card:hover,
@@ -3046,20 +3067,28 @@ textarea {
 }
 
 .tone-emoji {
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.1;
+  flex-shrink: 0;
 }
 
 .tone-title {
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.3;
 }
 
 .tone-desc {
+  display: none;
   font-size: 10px;
   color: var(--text-muted);
-  line-height: 1.45;
+  line-height: 1.4;
   margin-top: 2px;
+}
+
+.tone-card.active .tone-desc,
+.tone-card.sel .tone-desc {
+  display: block;
 }
 
 /* B8: label row with one-shot model switch (Mockup model-quick; tokens only) */

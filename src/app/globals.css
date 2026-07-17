@@ -984,7 +984,45 @@ textarea {
 .batch-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+
+/* UX-E T27: primary batch CTA + overflow "更多" (tokens only). */
+.batch-primary-action {
+  min-height: 36px;
+  font-weight: 600;
+}
+.batch-more {
+  position: relative;
+}
+.batch-more > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+.batch-more > summary::-webkit-details-marker {
+  display: none;
+}
+.batch-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-s);
+}
+.batch-more-menu .btn-mini {
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
 }
 
 /* B9: sticky batch toolbar + sorter above result cards (tokens only). */
@@ -4541,6 +4579,8 @@ textarea {
   .rc-actions { flex-wrap: wrap; }
   .rc-header-actions { margin-left: 0; width: 100%; }
   .results-batch-toolbar { gap: 8px; }
+  .batch-primary-action { min-height: 44px; }
+  .batch-more > summary.btn-mini { min-height: 44px; }
   .results-sort-label { margin-left: 0; width: 100%; }
   .sort-sel { width: 100%; min-height: 44px; }
 

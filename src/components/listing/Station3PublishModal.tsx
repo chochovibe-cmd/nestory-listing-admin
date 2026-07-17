@@ -30,6 +30,7 @@ export function Station3PublishModal({
   onConfirm: (selection: Station3PublishSelection) => void;
 }) {
   const titleId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const [selection, setSelection] = useState<Station3PublishSelection>(DEFAULT_STATION3_SELECTION);
   const [singleWarn, setSingleWarn] = useState(false);
@@ -40,7 +41,8 @@ export function Station3PublishModal({
     setSingleWarn(false);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const t = window.setTimeout(() => primaryRef.current?.focus(), 30);
+    // UX-E T32: destructive publish modal → focus 取消 first
+    const t = window.setTimeout(() => cancelRef.current?.focus(), 30);
     return () => {
       document.body.style.overflow = prev;
       window.clearTimeout(t);
@@ -173,7 +175,13 @@ export function Station3PublishModal({
           ) : null}
 
           <div className="approve-sum-actions">
-            <button className="approve-sum-btn" disabled={busy} onClick={onCancel} type="button">
+            <button
+              className="approve-sum-btn"
+              disabled={busy}
+              onClick={onCancel}
+              ref={cancelRef}
+              type="button"
+            >
               取消
             </button>
             {singleWarn ? (

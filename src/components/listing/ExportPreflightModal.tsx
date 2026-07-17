@@ -30,6 +30,7 @@ export function ExportPreflightModal({
   onConfirm: () => void;
 }) {
   const titleId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
 
@@ -38,7 +39,8 @@ export function ExportPreflightModal({
     setViewMode("list");
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const t = window.setTimeout(() => primaryRef.current?.focus(), 30);
+    // UX-E T32: export leave-queue is high-risk → focus 返回 first
+    const t = window.setTimeout(() => cancelRef.current?.focus(), 30);
     return () => {
       document.body.style.overflow = prev;
       window.clearTimeout(t);
@@ -242,6 +244,7 @@ export function ExportPreflightModal({
               className="approve-sum-btn"
               disabled={busy}
               onClick={onCancel}
+              ref={cancelRef}
               type="button"
             >
               返回處理

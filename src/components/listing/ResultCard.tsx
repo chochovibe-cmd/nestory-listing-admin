@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
@@ -292,6 +292,34 @@ export function ResultCard({
   const [quickBusy, setQuickBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [lastArchiveIds, setLastArchiveIds] = useState<string[] | null>(null);
+  /** UX-E T46: archive undo window (10s). */
+  const archiveUndoTimerRef = useRef<number | null>(null);
+  /** UX-E T28: inline double-confirm for destructive card actions (not discard-edit). */
+  const [actionArm, setActionArm] = useState<
+    null | "review" | "revision" | "return-copy" | "return-image"
+  >(null);
+
+  function clearCardArchiveUndoTimer() {
+    if (archiveUndoTimerRef.current != null) {
+      window.clearTimeout(archiveUndoTimerRef.current);
+      archiveUndoTimerRef.current = null;
+    }
+  }
+
+  function armCardArchiveUndo(ids: string[]) {
+    clearCardArchiveUndoTimer();
+    if (!ids.length) {
+      setLastArchiveIds(null);
+      return;
+    }
+    setLastArchiveIds(ids);
+    archiveUndoTimerRef.current = window.setTimeout(() => {
+      setLastArchiveIds(null);
+      archiveUndoTimerRef.current = null;
+    }, 10_000);
+  }
+
+  useEffect(() => () => clearCardArchiveUndoTimer(), []);
   const [quickAddingCharacter, setQuickAddingCharacter] = useState<string | null>(null);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
   const [descriptionView, setDescriptionView] = useState<"preview" | "source">("preview");
@@ -385,7 +413,7 @@ export function ResultCard({
         return;
       }
       const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
-      setLastArchiveIds(archivedIds.length ? archivedIds : null);
+      armCardArchiveUndo(archivedIds);
       const msg =
         typeof payload.message === "string"
           ? payload.message
@@ -406,7 +434,7 @@ export function ResultCard({
   async function unarchiveOne(ids?: string[]) {
     const targetIds = ids?.length ? ids : [draft.id];
     setArchiveBusy(true);
-    setMarkMessage("解除封存中…");
+    setMarkMessage("復原中…");
     try {
       const response = await fetch("/api/drafts/batch/archive", {
         method: "POST",
@@ -415,9 +443,10 @@ export function ResultCard({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMarkMessage(payload.error ?? "解除封存失敗");
+        setMarkMessage(payload.error ?? "復原失敗");
         return;
       }
+      clearCardArchiveUndoTimer();
       setLastArchiveIds(null);
       setMarkMessage(
         typeof payload.message === "string"
@@ -815,16 +844,24 @@ export function ResultCard({
     setMarkMessage("");
     if (hasBlockingWarnings(warningSummary)) {
       setMarkMessage(`⛔ 必修：${warningSummary.block.map((w) => w.text).join("；")}`);
+      setActionArm(null);
       return;
     }
     const decision = decideStation2Review({ images: imageMarks });
     if (decision.action === "blocked") {
       setMarkMessage(decision.reason);
+      setActionArm(null);
       return;
     }
     if (decision.action !== "send_images" && decision.action !== "advance_ready") return;
     const estimate = formatAiEstimateMessage(decision.aiCount, decision.allKeep);
-    if (!window.confirm(`${estimate}\n\n確定審核送出？`)) return;
+    // UX-E T28: double-confirm instead of window.confirm
+    if (actionArm !== "review") {
+      setActionArm("review");
+      setMarkMessage(`${estimate}（再點「審核」確認送出）`);
+      return;
+    }
+    setActionArm(null);
     setQuickBusy(true);
     setMarkMessage("審核送出中…");
     try {
@@ -866,9 +903,15 @@ export function ResultCard({
   }
 
   async function returnFromReady(target: "copy_review" | "image_review") {
-    // §2.2：標圖（非「圖片審核」）；T9 維持 confirm、不要理由
+    // §2.2：標圖（非「圖片審核」）；T9 / UX-E T28：double-confirm、不要理由
     const label = target === "copy_review" ? "改文案" : "改標圖";
-    if (!window.confirm(`確定退回${label}？`)) return;
+    const armKey = target === "copy_review" ? "return-copy" : "return-image";
+    if (actionArm !== armKey) {
+      setActionArm(armKey);
+      setMessage(`再點一次確認退回${label}`);
+      return;
+    }
+    setActionArm(null);
     setQuickBusy(true);
     try {
       const response = await fetch(`/api/drafts/${draft.id}/return-stage`, {
@@ -958,9 +1001,14 @@ export function ResultCard({
     }
   }
 
-  /** T9: ②→① 退回只要二次確認，不要求打字理由（API comment optional） */
+  /** T9 / UX-E T28: ②→① 退回 double-confirm，不要求打字理由（API comment optional） */
   async function requestRevision() {
-    if (!window.confirm("確定退回文案？文案將解鎖，回到審文案佇列。")) return;
+    if (actionArm !== "revision") {
+      setActionArm("revision");
+      setMessage("再點一次確認退回文案（文案將解鎖）");
+      return;
+    }
+    setActionArm(null);
     setQuickBusy(true);
     setMessage("");
     try {
@@ -1451,13 +1499,17 @@ export function ResultCard({
           ) : isImageStation ? (
             <>
               <button
-                className="mini-btn rc-quick-btn"
+                className={`mini-btn rc-quick-btn${actionArm === "review" ? " danger" : ""}`}
                 disabled={quickBusy || hasBlockingWarnings(warningSummary)}
                 onClick={() => void stationReview()}
-                title="審核＝分流（全保留→轉檔；有 AI 標記→生圖工廠）"
+                title={
+                  actionArm === "review"
+                    ? "再點確認審核送出"
+                    : "審核＝分流（全保留→轉檔；有 AI 標記→生圖工廠）"
+                }
                 type="button"
               >
-                {quickBusy ? "…" : "✓ 審核"}
+                {quickBusy ? "…" : actionArm === "review" ? "⚠ 再點確認" : "✓ 審核"}
               </button>
               <button
                 className="mini-btn rc-quick-btn"
@@ -1469,13 +1521,13 @@ export function ResultCard({
                 📄
               </button>
               <button
-                className="mini-btn rc-quick-btn"
+                className={`mini-btn rc-quick-btn${actionArm === "revision" ? " danger" : ""}`}
                 disabled={quickBusy}
                 onClick={() => void requestRevision()}
-                title="退回修改文案（解鎖）"
+                title={actionArm === "revision" ? "再點確認退回文案" : "退回修改文案（解鎖）"}
                 type="button"
               >
-                ↩ 退回
+                {actionArm === "revision" ? "⚠ 確認退回" : "↩ 退回"}
               </button>
             </>
           ) : isReadyStation ? (
@@ -1490,22 +1542,22 @@ export function ResultCard({
                 發布／匯出
               </button>
               <button
-                className="mini-btn rc-quick-btn"
+                className={`mini-btn rc-quick-btn${actionArm === "return-copy" ? " danger" : ""}`}
                 disabled={quickBusy}
                 onClick={() => void returnFromReady("copy_review")}
-                title="退回改文案"
+                title={actionArm === "return-copy" ? "再點確認退回改文案" : "退回改文案"}
                 type="button"
               >
-                ↩ 改文案
+                {actionArm === "return-copy" ? "⚠ 確認" : "↩ 改文案"}
               </button>
               <button
-                className="mini-btn rc-quick-btn"
+                className={`mini-btn rc-quick-btn${actionArm === "return-image" ? " danger" : ""}`}
                 disabled={quickBusy}
                 onClick={() => void returnFromReady("image_review")}
-                title="退回改圖"
+                title={actionArm === "return-image" ? "再點確認退回改圖" : "退回改圖"}
                 type="button"
               >
-                ↩ 改圖
+                {actionArm === "return-image" ? "⚠ 確認" : "↩ 改圖"}
               </button>
             </>
           ) : null}
@@ -1543,9 +1595,10 @@ export function ResultCard({
               disabled={archiveBusy}
               onClick={() => void unarchiveOne(lastArchiveIds)}
               style={{ marginLeft: 8 }}
+              title="10 秒內可復原"
               type="button"
             >
-              解除封存
+              復原
             </button>
           ) : null}
         </div>
@@ -2128,17 +2181,23 @@ export function ResultCard({
             {isImageStation ? (
               <span className="rc-actions-group rc-actions-group-review">
                 <button
+                  className={actionArm === "review" ? "danger" : undefined}
                   disabled={quickBusy || hasBlockingWarnings(warningSummary)}
                   onClick={() => void stationReview()}
                   type="button"
                 >
-                  ✓ 審核
+                  {quickBusy ? "處理中…" : actionArm === "review" ? "⚠ 再點確認審核" : "✓ 審核"}
                 </button>
                 <button onClick={() => setLockedPreviewOpen(true)} type="button">
                   📄 定稿預覽
                 </button>
-                <button onClick={() => void requestRevision()} type="button">
-                  ↩ 退回修改文案
+                <button
+                  className={actionArm === "revision" ? "danger" : undefined}
+                  disabled={quickBusy}
+                  onClick={() => void requestRevision()}
+                  type="button"
+                >
+                  {actionArm === "revision" ? "⚠ 確認退回文案" : "↩ 退回修改文案"}
                 </button>
               </span>
             ) : null}
@@ -2158,18 +2217,20 @@ export function ResultCard({
                       發布／匯出
                     </button>
                     <button
+                      className={actionArm === "return-copy" ? "danger" : undefined}
                       disabled={quickBusy}
                       onClick={() => void returnFromReady("copy_review")}
                       type="button"
                     >
-                      ↩ 退回改文案
+                      {actionArm === "return-copy" ? "⚠ 確認退回文案" : "↩ 退回改文案"}
                     </button>
                     <button
+                      className={actionArm === "return-image" ? "danger" : undefined}
                       disabled={quickBusy}
                       onClick={() => void returnFromReady("image_review")}
                       type="button"
                     >
-                      ↩ 退回改圖
+                      {actionArm === "return-image" ? "⚠ 確認退回改圖" : "↩ 退回改圖"}
                     </button>
                   </>
                 )}

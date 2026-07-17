@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
+import { showToast } from "@/components/Toast";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
 import {
   JUMP_TO_DRAFT_EVENT,
@@ -32,10 +34,12 @@ import {
 } from "@/lib/drafts/resultSort";
 import {
   countStations,
+  DEFAULT_RESULTS_FILTER,
   filterDraftsByResultsFilter,
   filterWorkQueueDrafts,
   isResultsFilterKey,
   isStationFilterKey,
+  pickDefaultResultsFilter,
   readStoredResultsFilter,
   STATION_FILTER_STORAGE_KEY_RESULTS,
   type ResultsFilterKey,
@@ -87,6 +91,39 @@ export function DraftResultsPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [lastArchiveIds, setLastArchiveIds] = useState<string[] | null>(null);
+  /** UX-E T28: inline singleWarn arm (first click → second click submits). */
+  const [batchArm, setBatchArm] = useState<null | { action: "approve" | "review"; hint: string }>(
+    null
+  );
+  /** UX-E T46: archive undo window (10s). */
+  const archiveUndoTimerRef = useRef<number | null>(null);
+
+  function clearArchiveUndoTimer() {
+    if (archiveUndoTimerRef.current != null) {
+      window.clearTimeout(archiveUndoTimerRef.current);
+      archiveUndoTimerRef.current = null;
+    }
+  }
+
+  function clearArchiveUndo() {
+    clearArchiveUndoTimer();
+    setLastArchiveIds(null);
+  }
+
+  function armArchiveUndo(ids: string[]) {
+    clearArchiveUndoTimer();
+    if (!ids.length) {
+      setLastArchiveIds(null);
+      return;
+    }
+    setLastArchiveIds(ids);
+    archiveUndoTimerRef.current = window.setTimeout(() => {
+      setLastArchiveIds(null);
+      archiveUndoTimerRef.current = null;
+    }, 10_000);
+  }
+
+  useEffect(() => () => clearArchiveUndoTimer(), []);
   // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
   const [sortMode, setSortMode] = useState<ResultSortMode>("newest");
@@ -270,6 +307,7 @@ export function DraftResultsPanel({
     if (!isResultsFilterKey(next)) return;
     setStage(next);
     setSelectedIds(new Set());
+    setBatchArm(null);
     writeStoredResultsFilter(
       next,
       typeof window !== "undefined" ? window.sessionStorage : null,
@@ -277,26 +315,51 @@ export function DraftResultsPanel({
     );
   }
 
+  // Clear double-confirm arm when selection changes
+  useEffect(() => {
+    setBatchArm(null);
+  }, [selectedArray.join("|")]);
+
   // R2 station①: pure approve → image_review + default keep
   async function batchApproveOnly() {
     if (!selectedArray.length) return;
-    setBusy(true);
-    setMessage("批次核准中...");
-    setLastArchiveIds(null);
-    const approveResponse = await fetch("/api/drafts/batch/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: selectedArray })
-    });
-    const payload = await approveResponse.json().catch(() => ({}));
-    setBusy(false);
-    if (!approveResponse.ok) {
-      setMessage(payload.error ?? "批次核准失敗");
+    // UX-E T28: first click arms, second submits
+    if (!batchArm || batchArm.action !== "approve") {
+      setBatchArm({
+        action: "approve",
+        hint: `再點確認核准 ${selectedArray.length} 筆`
+      });
       return;
     }
-    setMessage(`已核准 ${payload.approvedCount ?? selectedArray.length} 筆文案（尚未發布）`);
-    setSelectedIds(new Set());
-    router.refresh();
+    setBatchArm(null);
+    const n = selectedArray.length;
+    setBusy(true);
+    setMessage(`核准中（已選 ${n} 筆）…`);
+    clearArchiveUndo();
+    try {
+      const approveResponse = await fetch("/api/drafts/batch/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: selectedArray })
+      });
+      const payload = await approveResponse.json().catch(() => ({}));
+      if (!approveResponse.ok) {
+        const err = payload.error ?? "批次核准失敗";
+        setMessage(err);
+        showToast(err, "error");
+        return;
+      }
+      const okMsg = `已核准 ${payload.approvedCount ?? n} 筆文案（尚未發布）`;
+      setMessage(okMsg);
+      showToast(okMsg, "success");
+      setSelectedIds(new Set());
+      router.refresh();
+    } catch {
+      setMessage("批次核准連線失敗");
+      showToast("批次核准連線失敗", "error");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function openStation3Modal(ids?: string[]) {
@@ -311,6 +374,7 @@ export function DraftResultsPanel({
 
   /**
    * R3: station② 審核分流 — 全 keep → advance-ready；有 AI → send-images。
+   * UX-E T28: window.confirm → inline double-confirm; progress on notice + toast.
    */
   async function batchStationReview() {
     if (!selectedArray.length) {
@@ -326,6 +390,7 @@ export function DraftResultsPanel({
       const decision = decideStation2Review({ images: imgs });
       if (decision.action === "blocked") {
         setMessage(`「${d.title_zh || d.taobao_title || "未命名"}」：${decision.reason}`);
+        setBatchArm(null);
         return;
       }
       if (decision.action === "advance_ready") {
@@ -339,15 +404,27 @@ export function DraftResultsPanel({
       totalAi,
       sendIds.length === 0 && advanceIds.length > 0
     );
-    if (!window.confirm(`批次審核 ${selectedArray.length} 件\n\n${estimate}\n\n確定送出？`)) {
+    if (!batchArm || batchArm.action !== "review") {
+      setBatchArm({
+        action: "review",
+        hint: `再點確認審核 ${selectedArray.length} 筆 · ${estimate}`
+      });
+      setMessage(`批次審核 ${selectedArray.length} 件：${estimate}（再點一次按鈕送出）`);
       return;
     }
+    setBatchArm(null);
+    const n = selectedArray.length;
     setBusy(true);
-    setLastArchiveIds(null);
-    setMessage("批次審核中…");
+    clearArchiveUndo();
+    setMessage(`審核中（已選 ${n} 筆）…`);
     const messages: string[] = [];
     try {
       if (advanceIds.length) {
+        setMessage(
+          sendIds.length
+            ? `審核中 1/2（全保留 ${advanceIds.length} 件）…`
+            : `審核中（已選 ${n} 筆）…`
+        );
         const response = await fetch("/api/drafts/batch/advance-ready", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -361,10 +438,16 @@ export function DraftResultsPanel({
         );
         if (!response.ok && !payload.ok) {
           setMessage(messages.join("\n"));
+          showToast(messages.join("；") || "批次審核失敗", "error");
           return;
         }
       }
       if (sendIds.length) {
+        setMessage(
+          advanceIds.length
+            ? `審核中 2/2（送生圖 ${sendIds.length} 件）…`
+            : `審核中（已選 ${n} 筆）…`
+        );
         const response = await fetch("/api/drafts/batch/send-images", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -375,17 +458,21 @@ export function DraftResultsPanel({
           const hint = typeof payload.hint === "string" ? `\n${payload.hint}` : "";
           messages.push((payload.error ?? "送生圖工廠失敗") + hint);
           setMessage(messages.join("\n"));
+          showToast(payload.error ?? "送生圖工廠失敗", "error");
           return;
         }
         messages.push(
           typeof payload.message === "string" ? payload.message : `已送生圖 ${sendIds.length} 件`
         );
       }
-      setMessage(messages.join("\n") || "批次審核完成");
+      const okMsg = messages.join("\n") || "批次審核完成";
+      setMessage(okMsg);
+      showToast(okMsg.replace(/\n/g, " · "), "success");
       setSelectedIds(new Set());
       scheduleRouterRefresh(() => router.refresh());
     } catch {
       setMessage("批次審核連線失敗");
+      showToast("批次審核連線失敗", "error");
     } finally {
       setBusy(false);
     }
@@ -498,7 +585,7 @@ export function DraftResultsPanel({
     setStation3Selection(selection);
     setStation3Busy(true);
     setBusy(true);
-    setLastArchiveIds(null);
+    clearArchiveUndo();
 
     let apiSucceeded: boolean | null = null;
     let apiMessage = "";
@@ -658,8 +745,12 @@ export function DraftResultsPanel({
       );
       return;
     }
+    const n = selectedArray.length;
     setBusy(true);
-    setMessage(action === "archive" ? "批次封存中…" : "批次解除封存中…");
+    setBatchArm(null);
+    setMessage(
+      action === "archive" ? `封存中（已選 ${n} 筆）…` : `解除封存中（已選 ${n} 筆）…`
+    );
     try {
       const response = await fetch("/api/drafts/batch/archive", {
         method: "POST",
@@ -668,21 +759,25 @@ export function DraftResultsPanel({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(payload.error ?? (action === "archive" ? "批次封存失敗" : "批次解除封存失敗"));
+        const err =
+          payload.error ?? (action === "archive" ? "批次封存失敗" : "批次解除封存失敗");
+        setMessage(err);
+        showToast(err, "error");
         return;
       }
       if (action === "archive") {
         const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
-        setLastArchiveIds(archivedIds.length ? archivedIds : null);
-        setMessage(
+        armArchiveUndo(archivedIds);
+        const okMsg =
           typeof payload.message === "string"
             ? payload.message
             : formatArchiveResultMessage({
                 archivedCount: payload.archivedCount ?? 0,
                 skippedBusyCount: payload.skippedBusyCount ?? 0,
                 includesPublished: Boolean(payload.includesPublished)
-              })
-        );
+              });
+        setMessage(okMsg);
+        showToast(okMsg, "success");
         if (archivedIds.length) {
           setOptimisticHide((prev) => applyOptimisticHide(prev, archivedIds, "archived"));
         }
@@ -690,12 +785,14 @@ export function DraftResultsPanel({
         const restoredIds =
           (payload.restoredIds as string[] | undefined) ??
           selectedArray.filter((id) => drafts.find((d) => d.id === id)?.status === "archived");
+        clearArchiveUndoTimer();
         setLastArchiveIds(null);
-        setMessage(
+        const okMsg =
           typeof payload.message === "string"
             ? payload.message
-            : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? 0 })
-        );
+            : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? 0 });
+        setMessage(okMsg);
+        showToast(okMsg, "success");
         if (restoredIds.length) {
           setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
         }
@@ -703,7 +800,9 @@ export function DraftResultsPanel({
       setSelectedIds(new Set());
       scheduleRouterRefresh(() => router.refresh());
     } catch {
-      setMessage(action === "archive" ? "批次封存連線失敗" : "批次解除封存連線失敗");
+      const err = action === "archive" ? "批次封存連線失敗" : "批次解除封存連線失敗";
+      setMessage(err);
+      showToast(err, "error");
     } finally {
       setBusy(false);
     }
@@ -712,7 +811,7 @@ export function DraftResultsPanel({
   async function undoLastArchive() {
     if (!lastArchiveIds?.length) return;
     setBusy(true);
-    setMessage("解除封存中…");
+    setMessage("復原中…");
     try {
       const response = await fetch("/api/drafts/batch/archive", {
         method: "POST",
@@ -721,24 +820,34 @@ export function DraftResultsPanel({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(payload.error ?? "解除封存失敗");
+        setMessage(payload.error ?? "復原失敗");
+        showToast(payload.error ?? "復原失敗", "error");
         return;
       }
       const restoredIds =
         (payload.restoredIds as string[] | undefined) ?? lastArchiveIds;
+      clearArchiveUndoTimer();
       setLastArchiveIds(null);
-      setMessage(
+      const okMsg =
         typeof payload.message === "string"
           ? payload.message
-          : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length })
-      );
+          : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length });
+      setMessage(okMsg);
+      showToast(okMsg, "success");
       setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
       scheduleRouterRefresh(() => router.refresh());
     } catch {
-      setMessage("解除封存連線失敗");
+      setMessage("復原連線失敗");
+      showToast("復原連線失敗", "error");
     } finally {
       setBusy(false);
     }
+  }
+
+  /** UX-E T33: leave empty filter → station with items (or default). */
+  function clearResultsFilter() {
+    const next = pickDefaultResultsFilter(stageCounts, DEFAULT_RESULTS_FILTER);
+    onStageChange(next === "fail" ? DEFAULT_RESULTS_FILTER : next);
   }
 
   const showToolbar = workQueueDrafts.length > 0 || drafts.length > 0;
@@ -801,63 +910,88 @@ export function DraftResultsPanel({
               <span className="batch-selected-count">
                 {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
               </span>
-              <div className="batch-actions">
-                {isCopyStation ? (
-                  <>
+              {/* UX-E T27: hide batch actions until selection; primary + 更多 overflow */}
+              {selectedIds.size > 0 ? (
+                <div className="batch-actions">
+                  {isCopyStation ? (
+                    <>
+                      <button
+                        className={`btn-mini batch-primary-action${batchArm?.action === "approve" ? " danger" : ""}`}
+                        disabled={busy || !selectedArray.length}
+                        onClick={() => void batchApproveOnly()}
+                        title={
+                          batchArm?.action === "approve"
+                            ? batchArm.hint
+                            : "核准文案 → 進入圖片審核；未標記圖寫入保留原圖"
+                        }
+                        type="button"
+                      >
+                        {batchArm?.action === "approve"
+                          ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
+                          : "✓ 批次核准"}
+                      </button>
+                      <details className="batch-more">
+                        <summary className="btn-mini">更多 ▾</summary>
+                        <div className="batch-more-menu">
+                          <button
+                            className="btn-mini"
+                            disabled={busy || !selectedArray.length}
+                            onClick={() => void batchArchiveOrUnarchive("archive")}
+                            title="移出工作佇列（軟刪除，可救回）"
+                            type="button"
+                          >
+                            🗄 移出佇列
+                          </button>
+                        </div>
+                      </details>
+                    </>
+                  ) : null}
+                  {isImageStation ? (
+                    <>
+                      <button
+                        className={`btn-mini batch-primary-action${batchArm?.action === "review" ? " danger" : ""}`}
+                        disabled={busy || !selectedArray.length}
+                        onClick={() => void batchStationReview()}
+                        title={
+                          batchArm?.action === "review"
+                            ? batchArm.hint
+                            : "依標記分流：全保留→轉檔上圖床；有 AI 標記→生圖工廠"
+                        }
+                        type="button"
+                      >
+                        {batchArm?.action === "review"
+                          ? `⚠ 再點確認審核 ${selectedArray.length} 筆`
+                          : "✓ 批次審核"}
+                      </button>
+                      <details className="batch-more">
+                        <summary className="btn-mini">更多 ▾</summary>
+                        <div className="batch-more-menu">
+                          <button
+                            className="btn-mini"
+                            disabled={busy || !selectedArray.length}
+                            onClick={() => void batchArchiveOrUnarchive("archive")}
+                            title="移出工作佇列（軟刪除，可救回）"
+                            type="button"
+                          >
+                            🗄 移出佇列
+                          </button>
+                        </div>
+                      </details>
+                    </>
+                  ) : null}
+                  {isReadyStation ? (
                     <button
-                      className="btn-mini"
-                      disabled={busy || !selectedArray.length}
-                      onClick={() => void batchApproveOnly()}
-                      title="核准文案 → 進入圖片審核；未標記圖寫入保留原圖"
+                      className="btn-mini batch-primary-action"
+                      disabled={busy || station3Busy || !selectedArray.length}
+                      onClick={() => openStation3Modal()}
+                      title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
                       type="button"
                     >
-                      ✓ 批次核准
+                      發布／匯出
                     </button>
-                    <button
-                      className="btn-mini"
-                      disabled={busy || !selectedArray.length}
-                      onClick={() => void batchArchiveOrUnarchive("archive")}
-                      title="移出工作佇列（軟刪除，可救回）"
-                      type="button"
-                    >
-                      🗄 移出佇列
-                    </button>
-                  </>
-                ) : null}
-                {isImageStation ? (
-                  <>
-                    <button
-                      className="btn-mini"
-                      disabled={busy || !selectedArray.length}
-                      onClick={() => void batchStationReview()}
-                      title="依標記分流：全保留→轉檔上圖床；有 AI 標記→生圖工廠"
-                      type="button"
-                    >
-                      ✓ 批次審核
-                    </button>
-                    <button
-                      className="btn-mini"
-                      disabled={busy || !selectedArray.length}
-                      onClick={() => void batchArchiveOrUnarchive("archive")}
-                      title="移出工作佇列（軟刪除，可救回）"
-                      type="button"
-                    >
-                      🗄 移出佇列
-                    </button>
-                  </>
-                ) : null}
-                {isReadyStation ? (
-                  <button
-                    className="btn-mini"
-                    disabled={busy || station3Busy || !selectedArray.length}
-                    onClick={() => openStation3Modal()}
-                    title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
-                    type="button"
-                  >
-                    發布／匯出
-                  </button>
-                ) : null}
-              </div>
+                  ) : null}
+                </div>
+              ) : null}
               <label className="results-sort-label">
                 <span className="sr-only">排序</span>
                 <select
@@ -889,9 +1023,10 @@ export function DraftResultsPanel({
                 disabled={busy}
                 onClick={() => void undoLastArchive()}
                 style={{ marginLeft: 10 }}
+                title="10 秒內可復原"
                 type="button"
               >
-                解除封存
+                復原
               </button>
             ) : null}
           </div>
@@ -902,10 +1037,26 @@ export function DraftResultsPanel({
             <div className="empty-icon">◈</div>
             <p className="muted">在左側輸入商品資料並送出，生成結果會出現在這裡</p>
           </div>
+        ) : workQueueDrafts.length === 0 && !progress ? (
+          <div className="empty-state">
+            <div className="empty-icon">◈</div>
+            <p className="muted">目前沒有在工作佇列的商品</p>
+            <Link className="button primary" href="/drafts/new" style={{ marginTop: 12 }}>
+              去新增商品
+            </Link>
+          </div>
         ) : visibleDrafts.length === 0 && !progress ? (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
-            <p className="muted">這個篩選條件下沒有商品</p>
+            <p className="muted">這個篩選下沒有商品</p>
+            <button
+              className="button"
+              onClick={clearResultsFilter}
+              style={{ marginTop: 12 }}
+              type="button"
+            >
+              清除篩選
+            </button>
           </div>
         ) : (
           <div className="results-list" id="results-list">

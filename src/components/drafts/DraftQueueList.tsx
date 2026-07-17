@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/listing/StatusBadge";
@@ -24,8 +24,10 @@ import {
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import {
   countStations,
+  DEFAULT_RESULTS_FILTER,
   filterDraftsByResultsFilter,
   filterWorkQueueDrafts,
+  pickDefaultResultsFilter,
   readStoredResultsFilter,
   STATION_FILTER_STORAGE_KEY_QUEUE,
   type ResultsFilterKey,
@@ -63,8 +65,34 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [lastArchiveIds, setLastArchiveIds] = useState<string[] | null>(null);
+  /** UX-E T28: arm destructive publish (no window.confirm). */
+  const [publishArm, setPublishArm] = useState<null | "draft" | "active">(null);
+  /** UX-E T46: archive undo 10s */
+  const archiveUndoTimerRef = useRef<number | null>(null);
   // B12 fix: hide rows immediately; refresh only corrects server props.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
+
+  function clearArchiveUndoTimer() {
+    if (archiveUndoTimerRef.current != null) {
+      window.clearTimeout(archiveUndoTimerRef.current);
+      archiveUndoTimerRef.current = null;
+    }
+  }
+
+  function armArchiveUndo(ids: string[]) {
+    clearArchiveUndoTimer();
+    if (!ids.length) {
+      setLastArchiveIds(null);
+      return;
+    }
+    setLastArchiveIds(ids);
+    archiveUndoTimerRef.current = window.setTimeout(() => {
+      setLastArchiveIds(null);
+      archiveUndoTimerRef.current = null;
+    }, 10_000);
+  }
+
+  useEffect(() => () => clearArchiveUndoTimer(), []);
   // D9-open: queue rows are light → preflight via API
   const [exportPreflight, setExportPreflight] = useState<null | {
     kind: ExportKind;
@@ -103,11 +131,22 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   function onStageChange(next: ResultsFilterKey) {
     setStage(next);
     setSelectedIds(new Set());
+    setPublishArm(null);
     writeStoredResultsFilter(
       next,
       typeof window !== "undefined" ? window.sessionStorage : null,
       STATION_FILTER_STORAGE_KEY_QUEUE
     );
+  }
+
+  useEffect(() => {
+    setPublishArm(null);
+  }, [selectedArray.join("|")]);
+
+  /** UX-E T33: leave empty filter → station with items */
+  function clearQueueFilter() {
+    const next = pickDefaultResultsFilter(stageCounts, DEFAULT_RESULTS_FILTER);
+    onStageChange(next === "fail" ? DEFAULT_RESULTS_FILTER : next);
   }
 
   function toggleOne(id: string) {
@@ -137,15 +176,22 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   // separate "一鍵審核" pass before publishing is just an extra round trip.
   async function batchApproveAndPublish(mode: "draft" | "active") {
     if (!selectedArray.length) return;
-    if (mode === "active") {
-      const confirmed = window.confirm(
-        `即將核准並對已選取的 ${selectedArray.length} 筆商品建立 Shopify ACTIVE 商品（直接上架），確定嗎？`
+    // UX-E T28: double-confirm (esp. ACTIVE); no native gray dialog
+    if (publishArm !== mode) {
+      setPublishArm(mode);
+      setMessage(
+        mode === "active"
+          ? `⚠ 再點確認：核准並正式上架 ${selectedArray.length} 筆（立刻公開）`
+          : `再點確認：核准並建草稿 ${selectedArray.length} 筆`
       );
-      if (!confirmed) return;
+      return;
     }
+    setPublishArm(null);
+    const n = selectedArray.length;
     setBusy(true);
+    clearArchiveUndoTimer();
     setLastArchiveIds(null);
-    setMessage("批次核准中...");
+    setMessage(mode === "active" ? `上架中（已選 ${n} 筆）…` : `核准建草稿中（已選 ${n} 筆）…`);
     const approveResponse = await fetch("/api/drafts/batch/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -158,7 +204,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
       return;
     }
 
-    setMessage(mode === "active" ? "批次上架中..." : "批次建立草稿中...");
+    setMessage(mode === "active" ? `上架中（已選 ${n} 筆）…` : `建立草稿中（已選 ${n} 筆）…`);
     const response = await fetch("/api/drafts/batch/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -208,7 +254,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
       }
       if (action === "archive") {
         const archivedIds = (payload.archivedIds as string[] | undefined) ?? [];
-        setLastArchiveIds(archivedIds.length ? archivedIds : null);
+        armArchiveUndo(archivedIds);
         setMessage(
           typeof payload.message === "string"
             ? payload.message
@@ -225,6 +271,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
         const restoredIds =
           (payload.restoredIds as string[] | undefined) ??
           selectedArray.filter((id) => drafts.find((d) => d.id === id)?.status === "archived");
+        clearArchiveUndoTimer();
         setLastArchiveIds(null);
         setMessage(
           typeof payload.message === "string"
@@ -247,7 +294,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   async function undoLastArchive() {
     if (!lastArchiveIds?.length) return;
     setBusy(true);
-    setMessage("解除封存中…");
+    setMessage("復原中…");
     try {
       const response = await fetch("/api/drafts/batch/archive", {
         method: "POST",
@@ -256,11 +303,12 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(payload.error ?? "解除封存失敗");
+        setMessage(payload.error ?? "復原失敗");
         return;
       }
       const restoredIds =
         (payload.restoredIds as string[] | undefined) ?? lastArchiveIds;
+      clearArchiveUndoTimer();
       setLastArchiveIds(null);
       setMessage(
         typeof payload.message === "string"
@@ -270,7 +318,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
       setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
       scheduleRouterRefresh(() => router.refresh());
     } catch {
-      setMessage("解除封存連線失敗");
+      setMessage("復原連線失敗");
     } finally {
       setBusy(false);
     }
@@ -392,29 +440,77 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
         <span className="batch-selected-count">
           {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
         </span>
-        <div className="batch-actions">
-          {isReadyStation ? (
-            <>
+        {/* UX-E T27: hide batch actions until selection; primary 1–2 + 更多 */}
+        {selectedIds.size > 0 ? (
+          <div className="batch-actions">
+            {isReadyStation ? (
+              <>
+                <button
+                  className={`btn-mini batch-primary-action${publishArm === "draft" ? " danger" : ""}`}
+                  disabled={busy || !selectedArray.length}
+                  onClick={() => void batchApproveAndPublish("draft")}
+                  title={
+                    publishArm === "draft"
+                      ? `再點確認建草稿 ${selectedArray.length} 筆`
+                      : "核准後在 Shopify 建立草稿商品，不會公開上架"
+                  }
+                  type="button"
+                >
+                  {publishArm === "draft"
+                    ? `⚠ 再點確認建草稿 ${selectedArray.length} 筆`
+                    : "核准並建草稿"}
+                </button>
+                <button
+                  className="btn-mini danger batch-primary-action"
+                  disabled={busy || !selectedArray.length}
+                  onClick={() => void batchApproveAndPublish("active")}
+                  title={
+                    publishArm === "active"
+                      ? `再點確認正式上架 ${selectedArray.length} 筆`
+                      : "核准後直接在 Shopify 建立正式上架商品，會立刻公開，請先確認內容無誤"
+                  }
+                  type="button"
+                >
+                  {publishArm === "active"
+                    ? `⚠ 再點確認上架 ${selectedArray.length} 筆`
+                    : "核准並上架"}
+                </button>
+                <details className="batch-more">
+                  <summary className="btn-mini">更多 ▾</summary>
+                  <div className="batch-more-menu">
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => void batchArchiveOrUnarchive("archive")}
+                      title="移出工作佇列（軟刪除，可救回）"
+                      type="button"
+                    >
+                      🗄 移出佇列
+                    </button>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => void openExportPreflight("matrixify")}
+                      title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
+                      type="button"
+                    >
+                      ⬇ Matrixify
+                    </button>
+                    <button
+                      className="btn-mini"
+                      disabled={busy || !selectedArray.length}
+                      onClick={() => void openExportPreflight("showmore")}
+                      title="匯出前健檢＋預覽（加價%／售價），確認後下載 Showmore CSV"
+                      type="button"
+                    >
+                      ⬇ Showmore
+                    </button>
+                  </div>
+                </details>
+              </>
+            ) : (
               <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={() => void batchApproveAndPublish("draft")}
-                title="核准後在 Shopify 建立草稿商品，不會公開上架"
-                type="button"
-              >
-                核准並建草稿
-              </button>
-              <button
-                className="btn-mini danger"
-                disabled={busy || !selectedArray.length}
-                onClick={() => void batchApproveAndPublish("active")}
-                title="核准後直接在 Shopify 建立正式上架商品，會立刻公開，請先確認內容無誤"
-                type="button"
-              >
-                核准並上架
-              </button>
-              <button
-                className="btn-mini"
+                className="btn-mini batch-primary-action"
                 disabled={busy || !selectedArray.length}
                 onClick={() => void batchArchiveOrUnarchive("archive")}
                 title="移出工作佇列（軟刪除，可救回）"
@@ -422,37 +518,9 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
               >
                 🗄 移出佇列
               </button>
-              <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={() => void openExportPreflight("matrixify")}
-                title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
-                type="button"
-              >
-                ⬇ Matrixify
-              </button>
-              <button
-                className="btn-mini"
-                disabled={busy || !selectedArray.length}
-                onClick={() => void openExportPreflight("showmore")}
-                title="匯出前健檢＋預覽（加價%／售價），確認後下載 Showmore CSV"
-                type="button"
-              >
-                ⬇ Showmore
-              </button>
-            </>
-          ) : (
-            <button
-              className="btn-mini"
-              disabled={busy || !selectedArray.length}
-              onClick={() => void batchArchiveOrUnarchive("archive")}
-              title="移出工作佇列（軟刪除，可救回）"
-              type="button"
-            >
-              🗄 移出佇列
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        ) : null}
       </div>
       {message ? (
         <div className="notice">
@@ -463,18 +531,30 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
               disabled={busy}
               onClick={() => void undoLastArchive()}
               style={{ marginLeft: 10 }}
+              title="10 秒內可復原"
               type="button"
             >
-              解除封存
+              復原
             </button>
           ) : null}
         </div>
       ) : null}
 
-      {filtered.length === 0 ? (
+      {workQueue.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">◈</div>
-          <p className="muted">這個篩選條件下沒有商品</p>
+          <p className="muted">目前沒有在工作佇列的商品</p>
+          <Link className="button primary" href="/drafts/new" style={{ marginTop: 12 }}>
+            去新增商品
+          </Link>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">◈</div>
+          <p className="muted">這個篩選下沒有商品</p>
+          <button className="button" onClick={clearQueueFilter} style={{ marginTop: 12 }} type="button">
+            清除篩選
+          </button>
         </div>
       ) : (
         <>

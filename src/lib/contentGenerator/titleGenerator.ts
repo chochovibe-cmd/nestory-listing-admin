@@ -7,10 +7,28 @@ import {
 } from './displayLabels';
 import { ListingDraftInput } from './types';
 import { normalizeProductTypeForDisplay } from '../productTypeLabels';
+import { pickScenarioKeywords } from './scenarioKeywords';
 
-// 夜工包（回饋 27，2026-07-18）：對齊老闆工具新版骨架——上限 45→80、
-// 多角色「・」列法、品牌 × IP、特色判斷階梯。
-const TITLE_MAX_LENGTH = 80;
+// P2-83（2026-07-18 老闆定案，覆寫夜工統一 80）：
+// 官網 title_zh ≤60；enriched_title／seo_title ≤80。
+export const OFFICIAL_TITLE_MAX_LENGTH = 60;
+export const ENRICHED_TITLE_MAX_LENGTH = 80;
+/** @deprecated use OFFICIAL_TITLE_MAX_LENGTH — kept name only for older verify mirrors */
+const TITLE_MAX_LENGTH = OFFICIAL_TITLE_MAX_LENGTH;
+
+// P2-80：標題第三段永不輸出的萬用詞（SEO／D 段情境詞庫可另用，標題過濾）
+export const TITLE_SEGMENT3_BLACKLIST: readonly string[] = [
+  '生日禮物',
+  '送禮首選',
+  '最佳選擇',
+  '送禮推薦',
+  '熱賣',
+  '爆款',
+  '必買',
+  '超值',
+  '限時',
+];
+
 const NOISE_TERMS = [
   '日本正版',
   '正版授權',
@@ -26,6 +44,8 @@ const NOISE_TERMS = [
   '爆款',
   '官方',
   '正品',
+  '送禮首選',
+  '最佳選擇',
 ];
 
 const PRODUCT_TYPE_ALIASES: ReadonlyArray<readonly [RegExp, string]> = [
@@ -313,14 +333,41 @@ function getSelectableText(sourceText: string): string | null {
   return null;
 }
 
+export function isTitleSegment3Blacklisted(value: string): boolean {
+  const text = normalizeText(value);
+  if (!text) return false;
+  return TITLE_SEGMENT3_BLACKLIST.some(
+    (term) => text === term || text.includes(term),
+  );
+}
+
+/** Strip blacklisted universal fluff from a third-segment candidate (P2-80 A2). */
+export function sanitizeTitleSegment3(value: string): string {
+  let next = normalizeText(value);
+  for (const term of TITLE_SEGMENT3_BLACKLIST) {
+    next = next.split(term).join('');
+  }
+  return next.replace(/\s{2,}/g, ' ').trim();
+}
+
+function pickTitleScenarioFallback(draft: ListingDraftInput): string | null {
+  const productTypes = inferProductTypes(draft);
+  const terms = pickScenarioKeywords(productTypes, undefined, 4).filter(
+    (term) => !isTitleSegment3Blacklisted(term),
+  );
+  return terms[0] ?? null;
+}
+
 function getShortFeatureText(draft: ListingDraftInput, hasMultipleCharacters = false): string {
   const sourceText = [draft.product_name, draft.variant_feature, draft.variant_text, draft.intro]
     .map(normalizeText)
     .join(' ');
-  const featureTerms = extractFeatureTerms(draft.image_description, getFeatureSourceText(draft));
+  const featureTerms = extractFeatureTerms(draft.image_description, getFeatureSourceText(draft)).filter(
+    (term) => !isTitleSegment3Blacklisted(term),
+  );
   const sizeText = getSizeText(sourceText);
 
-  // 階梯：尺寸 → 造型款 → 系列 → 功能 → 圖像特色詞 → 手填款式 → 款式可選 → 標準款
+  // P2-80 階梯：款式/特色優先 → 情境後備（已濾黑名單）→ 中性標準款/款式可選（永不輸出黑名單）
   const styleText = getStyleText(sourceText);
   if (styleText && sizeText) return styleText + ' ' + sizeText;
   if (styleText) return styleText;
@@ -336,30 +383,163 @@ function getShortFeatureText(draft: ListingDraftInput, hasMultipleCharacters = f
   }
 
   if (draft.variant_feature?.trim()) {
-    return cleanTitleText(draft.variant_feature).split(/[、，,。；;]/)[0].slice(0, 12);
+    const cleaned = sanitizeTitleSegment3(
+      cleanTitleText(draft.variant_feature).split(/[、，,。；;]/)[0].slice(0, 12),
+    );
+    if (cleaned) return cleaned;
   }
 
   if (sizeText) return sizeText;
+
+  const scenario = pickTitleScenarioFallback(draft);
+  if (scenario) return scenario;
 
   if (hasMultipleCharacters) return '款式可選';
 
   return getSelectableText(sourceText) ?? '標準款';
 }
 
+function textLen(value: string): number {
+  return Array.from(value).length;
+}
+
+function sliceChars(value: string, max: number): string {
+  return Array.from(value).slice(0, Math.max(0, max)).join('');
+}
+
+/**
+ * P2-83: skeleton clamp — prefer cutting segment 3, never chop brand×IP (seg1).
+ * Separators try " | " first, then fullwidth "｜", then " ".
+ */
+export function enforceSkeletonTitleLength(
+  seg1: string,
+  seg2: string,
+  seg3: string,
+  maxLen: number = OFFICIAL_TITLE_MAX_LENGTH,
+): string {
+  const s1 = normalizeText(seg1);
+  const s2 = normalizeText(seg2);
+  const s3 = normalizeText(seg3);
+  const join3 = (a: string, b: string, c: string) => {
+    if (a && b && c) return `${a} | ${b} | ${c}`;
+    if (a && b) return `${a} | ${b}`;
+    return [a, b, c].filter(Boolean).join(' | ');
+  };
+
+  let feature = s3;
+  let core = s2;
+  let title = join3(s1, core, feature);
+  if (textLen(title) <= maxLen) return title;
+
+  // 1) shrink / drop third segment first
+  while (feature && textLen(join3(s1, core, feature)) > maxLen) {
+    if (textLen(feature) <= 1) {
+      feature = '';
+      break;
+    }
+    feature = sliceChars(feature, textLen(feature) - 1).trim();
+  }
+  title = join3(s1, core, feature);
+  if (textLen(title) <= maxLen) return title;
+
+  // 2) shrink second segment; keep first intact
+  while (core && textLen(join3(s1, core, feature)) > maxLen) {
+    if (textLen(core) <= 1) break;
+    core = sliceChars(core, textLen(core) - 1).trim();
+  }
+  title = join3(s1, core, feature);
+  if (textLen(title) <= maxLen) return title;
+
+  // 3) last resort: seg1 + truncated remainder of max budget (still keep seg1 whole if possible)
+  if (textLen(s1) >= maxLen) {
+    return sliceChars(s1, maxLen);
+  }
+  const restBudget = maxLen - textLen(s1) - 3; // " | "
+  const rest = [core, feature].filter(Boolean).join(' | ');
+  if (restBudget <= 0) return s1;
+  return `${s1} | ${sliceChars(rest, restBudget)}`.trim();
+}
+
 function enforceTitleLength(ip: string, coreName: string, featureText: string): string {
-  const title = ip + ' | ' + coreName + ' | ' + featureText;
+  return enforceSkeletonTitleLength(ip, coreName, featureText, OFFICIAL_TITLE_MAX_LENGTH);
+}
 
-  if (Array.from(title).length <= TITLE_MAX_LENGTH) {
-    return title;
+/**
+ * P2-83: clamp any free-form title (LLM enriched) down to official title_zh ≤60.
+ * - With " | " / "｜" separators: skeleton-aware (prefer cut seg3, never cut seg1).
+ * - Without separators: safe truncate — do not cut mid-word when possible; keep head.
+ */
+export function clampOfficialTitle(
+  title: string | null | undefined,
+  maxLen: number = OFFICIAL_TITLE_MAX_LENGTH,
+): string {
+  const raw = normalizeText(title ?? '');
+  if (!raw) return '';
+  if (textLen(raw) <= maxLen) return raw;
+
+  // Prefer pipe separators (ASCII or fullwidth)
+  const pipeSplit = raw.includes(' | ')
+    ? raw.split(' | ').map((p) => p.trim()).filter(Boolean)
+    : raw.includes('｜')
+      ? raw.split('｜').map((p) => p.trim()).filter(Boolean)
+      : null;
+
+  if (pipeSplit && pipeSplit.length >= 2) {
+    const seg1 = pipeSplit[0];
+    const seg2 = pipeSplit[1] ?? '';
+    const seg3 = pipeSplit.slice(2).join(' | ');
+    return enforceSkeletonTitleLength(seg1, seg2, seg3, maxLen);
   }
 
-  const compactTitle = ip + ' | ' + coreName.slice(0, 18) + ' | ' + featureText.slice(0, 14);
-
-  if (Array.from(compactTitle).length <= TITLE_MAX_LENGTH) {
-    return compactTitle;
+  // No pipe: try to keep a leading brand×IP-ish head before first multi-space or middle-dot run
+  const headMatch = raw.match(/^(.+?(?:×.+?)?)(?:\s{2,}|\s+\/\s+)([\s\S]+)$/);
+  if (headMatch) {
+    return enforceSkeletonTitleLength(headMatch[1], headMatch[2], '', maxLen);
   }
 
-  return ip + ' | ' + coreName.slice(0, 14) + ' | ' + featureText.slice(0, 10);
+  // Safe truncate: prefer cut at last space/、/・ before limit
+  const chars = Array.from(raw);
+  if (chars.length <= maxLen) return raw;
+  const window = chars.slice(0, maxLen);
+  const joined = window.join('');
+  const breakPoints = [' ', '、', '・', '，', ',', '/', '-', '－'];
+  let cut = maxLen;
+  for (let i = window.length - 1; i >= Math.floor(maxLen * 0.55); i -= 1) {
+    if (breakPoints.includes(window[i])) {
+      cut = i;
+      break;
+    }
+  }
+  // Avoid empty / tiny result
+  if (cut < Math.floor(maxLen * 0.4)) cut = maxLen;
+  return chars.slice(0, cut).join('').trim();
+}
+
+/** P2-80: post-process LLM enriched title third segment (blacklist scrub). */
+export function scrubEnrichedTitleSegment3(title: string | null | undefined): string {
+  const raw = normalizeText(title ?? '');
+  if (!raw) return '';
+
+  const parts = raw.includes(' | ')
+    ? raw.split(' | ')
+    : raw.includes('｜')
+      ? raw.split('｜')
+      : null;
+
+  if (!parts || parts.length < 3) {
+    // Flat string: strip blacklist tokens only
+    return sanitizeTitleSegment3(raw) || raw;
+  }
+
+  const seg1 = parts[0].trim();
+  const seg2 = parts[1].trim();
+  let seg3 = parts.slice(2).join(raw.includes('｜') ? '｜' : ' | ').trim();
+  seg3 = sanitizeTitleSegment3(seg3);
+  if (!seg3 || isTitleSegment3Blacklisted(seg3)) {
+    seg3 = '標準款';
+  }
+  const sep = raw.includes('｜') && !raw.includes(' | ') ? '｜' : ' | ';
+  return [seg1, seg2, seg3].filter(Boolean).join(sep);
 }
 
 export function generateDisplayTitle(draft: ListingDraftInput, context: DisplayLabelContext = {}): string | null {

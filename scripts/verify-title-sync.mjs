@@ -34,9 +34,13 @@ function mirrorFormatCharacterText(characters) {
 
 console.log("verify-title-sync:");
 
-await check("titleGenerator: 80-char cap, brand × IP, ladder, replacements", () => {
+await check("titleGenerator: P2-83 60/80 dual cap, brand × IP, ladder, replacements", () => {
   const src = read("src/lib/contentGenerator/titleGenerator.ts");
-  assert.match(src, /TITLE_MAX_LENGTH = 80/);
+  assert.match(src, /OFFICIAL_TITLE_MAX_LENGTH = 60/);
+  assert.match(src, /ENRICHED_TITLE_MAX_LENGTH = 80/);
+  assert.match(src, /clampOfficialTitle/);
+  assert.match(src, /enforceSkeletonTitleLength/);
+  assert.match(src, /TITLE_SEGMENT3_BLACKLIST/);
   assert.match(src, /' × '/);
   assert.match(src, /formatCharacterText/);
   assert.match(src, /collectCharacterNames/);
@@ -44,6 +48,8 @@ await check("titleGenerator: 80-char cap, brand × IP, ladder, replacements", ()
   assert.match(src, /夏威夷衝浪造型/);
   assert.match(src, /款式可選/);
   assert.match(src, /台灯/);
+  // Night-work unified 80 on official title must be gone
+  assert.doesNotMatch(src, /const TITLE_MAX_LENGTH = 80/);
 });
 
 await check("mirror: character list formatting (1/2/3+)", () => {
@@ -63,12 +69,22 @@ await check("seoGenerator: 80 caps, brand, multi-character ・", () => {
   assert.match(src, /productBrand \? productBrand \+ ' × '/);
 });
 
-await check("systemPrompt: SEO/meta guidance updated, brand + ・ rule", () => {
+await check("systemPrompt: P2-83 unique length table, brand + ・ rule", () => {
   const src = read("src/lib/providers/systemPrompt.ts");
+  assert.match(src, /標題長度唯一真相表/);
+  assert.match(src, /enriched_title（你輸出）/);
+  assert.match(src, /官網 title_zh（後端 clamp）/);
+  assert.match(src, /seo_title（你輸出）/);
   assert.match(src, /70-80 字為佳/);
   assert.match(src, /多角色用「・」/);
   assert.match(src, /品牌 × IP/);
   assert.doesNotMatch(src, /70-110 字/);
+  // Old conflicting numbers must be gone
+  assert.doesNotMatch(src, /最長不超過 60 字（後端規則引擎另有 80/);
+  assert.doesNotMatch(src, /最長 75 字/);
+  assert.doesNotMatch(src, /建議 45 字、最長 60 字/);
+  // Positive 送禮首選 example removed (blacklist context only)
+  assert.doesNotMatch(src, /例如「包包吊飾」「桌面擺件」「送禮首選」/);
 });
 
 await check("payload types + generate route carry product_brand / variant_text", () => {

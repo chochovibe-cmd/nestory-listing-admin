@@ -88,6 +88,12 @@ export interface HandleSlugInput {
   ip: string | null | undefined;
   character?: string | null | undefined;
   productType?: string | null | undefined;
+  /**
+   * P0-73: draft UUID (or any stable id). First 6 hex/alphanum chars become a
+   * unique suffix so two chiikawa-hachiware-keychain products never share a
+   * Matrixify/Shopify Handle.
+   */
+  draftId?: string | null | undefined;
 }
 
 /** Ordered [ip, character, type] slug words, de-duped when two segments
@@ -119,12 +125,37 @@ export function buildProductSlugSegments(
 }
 
 const HANDLE_MAX_LENGTH = 80;
+/** P0-73: always-preserved uniqueness tail ("-" + 6 chars). */
+const HANDLE_SUFFIX_LEN = 6;
+
+/**
+ * First 6 lowercase alphanumerics from a draft id (UUID hyphens stripped).
+ * Empty input → empty string (caller may omit the suffix entirely).
+ */
+export function handleUniquenessSuffix(draftId: string | null | undefined): string {
+  const raw = (draftId ?? '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  return raw.slice(0, HANDLE_SUFFIX_LEN);
+}
 
 export function generateShopifyHandleSlug(
   input: HandleSlugInput,
   context: DisplayLabelContext = {},
 ): string {
-  const slug = buildProductSlugSegments(input, context).join('-').replace(/-{2,}/g, '-');
-  const trimmed = slug.slice(0, HANDLE_MAX_LENGTH).replace(/-+$/g, '');
-  return trimmed || 'nestory-product';
+  const base =
+    buildProductSlugSegments(input, context).join('-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '') ||
+    'nestory-product';
+
+  const uniq = handleUniquenessSuffix(input.draftId);
+  if (!uniq) {
+    // No draft id (image filename / unit tests without uniqueness need): keep
+    // legacy max-length truncate of the identity slug alone.
+    return base.slice(0, HANDLE_MAX_LENGTH).replace(/-+$/g, '') || 'nestory-product';
+  }
+
+  // P0-73: suffix must never be truncated away. Reserve room for "-" + 6 chars.
+  const tail = `-${uniq}`;
+  const maxBase = HANDLE_MAX_LENGTH - tail.length;
+  const truncatedBase = base.slice(0, Math.max(1, maxBase)).replace(/-+$/g, '') || 'nestory-product';
+  const full = `${truncatedBase}${tail}`;
+  return full.slice(0, HANDLE_MAX_LENGTH);
 }

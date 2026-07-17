@@ -39,6 +39,7 @@ import {
   getCopyFieldValue,
 } from "@/lib/providers/copy";
 import { mergeIpToneMap } from "@/lib/providers/ipToneMap";
+import { buildXiaobianMissingEmojiWarning } from "@/lib/providers/emojiPolicy";
 import { normalizeDetectedProductBrand } from "@/lib/providers/productBrand";
 import { resolveCopyTone } from "@/lib/providers/systemPrompt";
 import {
@@ -779,6 +780,16 @@ export async function POST(request: NextRequest) {
     ...providerOutput.productHighlights,
   ]);
   if (forbiddenWarning) extraWarnings.push(forbiddenWarning);
+
+  // P1-76 fix: soft-warn when 小編聊天口吻 still has zero emoji after generate
+  // (post-process does not strip emoji — this catches model non-compliance).
+  if (generationTone === "小編聊天口吻") {
+    const emojiWarn = buildXiaobianMissingEmojiWarning(
+      localizedOutput.generated_description_html,
+      localizedOutput.generated_faq_html,
+    );
+    if (emojiWarn) extraWarnings.push(emojiWarn);
+  }
 
   // A21-5: Meta Description uniqueness guard, warn-only (same posture as
   // A11's forbiddenWarning above). Content-gap check is local; the

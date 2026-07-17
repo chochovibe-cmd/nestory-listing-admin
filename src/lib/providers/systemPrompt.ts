@@ -65,8 +65,10 @@ export const EMOJI_TONES: ReadonlyArray<CopyTone> = ["小編聊天口吻", "可�
 function toneEmojiRule(tone: CopyTone): string {
   if (tone === "小編聊天口吻") {
     return (
-      "這個語氣的「描述」與「FAQ」必須自然使用 1–2 個貼合語境的 emoji（像在限動聊天，不是灑一排貼圖）；" +
-      "標題、enriched_title、seo_title、meta_description 一律禁止 emoji。"
+      "【Emoji 硬性｜小編聊天口吻】generated_description_html 與 generated_faq_html " +
+      "各必須自然出現至少 1 個、合計約 1–2 個貼合語境的 emoji（像在限動聊天，不是灑一排貼圖）。" +
+      "沒有 emoji＝本語氣不合格，輸出前必須自檢補上。" +
+      "標題、enriched_title、seo_title、meta_description、spec 一律禁止 emoji。"
     );
   }
   if (tone === "可愛周邊輕鬆感") {
@@ -78,13 +80,71 @@ function toneEmojiRule(tone: CopyTone): string {
   return "所有欄位一律不使用 emoji。";
 }
 
+/** P1-76 fix: field-level emoji rules repeated at description / FAQ sections. */
+function descriptionFieldEmojiRule(tone: CopyTone): string {
+  if (tone === "小編聊天口吻") {
+    return `
+
+【欄位硬性｜generated_description_html｜小編聊天口吻】
+- 開頭段或任一 ◈ 段落的正文裡，必須自然寫入至少 1 個 emoji（整篇描述合計 1–2 個即可）
+- 可放句尾，例如「……捨不得移開視線 ✨」「每天心情都被偷加一點 ☕」
+- 禁止：emoji 進 ◈ 標題行；禁止整段只有 emoji；禁止標題／SEO 欄位出現 emoji
+- 寫完本欄若數不到任何 emoji，請立刻補上再輸出`;
+  }
+  if (tone === "可愛周邊輕鬆感") {
+    return `
+
+【欄位建議｜generated_description_html｜可愛周邊輕鬆感】
+- 鼓勵在開頭或亮點段自然加最多 1–2 個 emoji（不強制）`;
+  }
+  return "";
+}
+
+function faqFieldEmojiRule(tone: CopyTone): string {
+  if (tone === "小編聊天口吻") {
+    return `
+
+【欄位硬性｜generated_faq_html｜小編聊天口吻】
+- 至少一題的 <p> 回答正文必須自然含 1 個 emoji（可與描述合計控制在 1–2 個整體手感；描述已有 2 個時 FAQ 可只留口吻、但「描述與 FAQ 都完全零 emoji」絕對禁止）
+- 更穩妥：描述 1 個 + FAQ 回答 1 個
+- 問題文字（h3）不要放 emoji；回答裡自然帶即可
+- 寫完本欄若描述與 FAQ 合計仍零 emoji，請補上再輸出`;
+  }
+  if (tone === "可愛周邊輕鬆感") {
+    return `
+
+【欄位建議｜generated_faq_html｜可愛周邊輕鬆感】
+- 鼓勵在回答裡自然加 emoji（不強制）`;
+  }
+  return "";
+}
+
+function emojiOutputChecklist(tone: CopyTone): string {
+  if (tone === "小編聊天口吻") {
+    return `
+【輸出前自檢清單（小編聊天口吻必勾）】
+1. generated_description_html 內是否至少有 1 個 emoji？沒有 → 補上
+2. generated_faq_html 的回答裡是否至少有 1 個 emoji（或描述已有 2 個且 FAQ 口吻夠輕鬆）？描述+FAQ 合計為 0 → 不合格，必補
+3. enriched_title／seo_title／meta_description 是否完全沒有 emoji？有 → 刪掉
+4. 全文 emoji 是否過多（>3）？過多 → 刪到 1–2 個`;
+  }
+  return `
+【輸出前自檢清單】
+1. 標題／SEO 欄位是否完全沒有 emoji？
+2. 分段標記 14 欄是否齊全、無 JSON／無 code fence？`;
+}
+
 function formatToneExamples(tone: CopyTone): string {
   const examples = TONE_EXAMPLES[tone];
   if (!examples || examples.length === 0) return "";
   const bullets = examples.map((s, i) => `  ${i + 1}.「${s}」`).join("\n");
   let block = `\n語感示範句（不要照抄，只抓這個風格實際讀起來的樣子；共 ${examples.length} 句拉開語感）：\n${bullets}`;
   if (tone === "小編聊天口吻") {
-    block += `\n老闆點讚的語感錨點（Hello Kitty 保溫杯，方向：溫暖、具體、不叫賣；口吻仍要像小編聊天，可自然帶 1–2 emoji）：\n  ・開頭語感：「${XIAOBIAN_STYLE_ANCHOR.opening}」\n  ・選品理由語感：「${XIAOBIAN_STYLE_ANCHOR.why}」`;
+    block +=
+      `\n老闆點讚的語感錨點（Hello Kitty 保溫杯；只學「溫暖、具體、不叫賣」——` +
+      `注意：錨點原文本身沒有 emoji，你仍必須在描述／FAQ 自己加 1–2 個 emoji，不要學成零 emoji）：\n` +
+      `  ・開頭語感：「${XIAOBIAN_STYLE_ANCHOR.opening}」\n` +
+      `  ・選品理由語感：「${XIAOBIAN_STYLE_ANCHOR.why}」`;
   }
   return block;
 }
@@ -240,7 +300,7 @@ FAQ 回答必須寫成可以被 AI 搜尋引擎（ChatGPT、Perplexity 等）單
 【描述格式 — 開頭段＋四個「◈ 標題」段，純文字（不要用 HTML 標籤），段落之間空一行】
 段落標題行固定寫成「◈ 標題」（例：◈ 商品亮點）；開頭段沒有標題、直接寫內文。
 禁止使用「A｜」「B｜」這類字母前綴（舊格式已淘汰）。
-
+${descriptionFieldEmojiRule(tone)}
 開頭段（無標題）：一句話破題，文青語氣、有畫面感，帶出這個商品的情感價值或使用情境。1-2 句，40 字以內。
 範例語感（不要照抄字句，只是抓語氣）：「把日常的空氣換得更柔軟一點。這款米菲毛絨鑰匙圈掛件，以輕巧的體積留住絨毛玩偶的療癒感……」
 禁止重複開場句式：不要每次都用同一套切入角度（例如每篇都寫「把日常的○○換得更△△」）。
@@ -297,7 +357,7 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 - 鼓勵自由發揮：問題可以導購性強、有趣、吸引人、針對目標客群設計
 - 方向參考（不是必填清單）：這款跟一般款差在哪 / 哪種收藏玩家會喜歡 / 什麼情境適合當禮物 / 為什麼值得入手
 - 避免低價值制式問題：多久到貨、材質是什麼這類太基本的問題盡量避免，但這是建議方向不是硬性規則，重點是讓 FAQ 有導購感而不是公版問答
-
+${faqFieldEmojiRule(tone)}
 【SEO 規則】
 - seo_title：在 enriched_title 基礎上，補充易搜尋的熱門角色別名 / 商品材質 / 使用情境關鍵字，25-45 字為佳，最長 75 字；
   核心關鍵字（品牌×IP＋角色＋類型）壓在前 25 字，之後可繼續堆受眾關鍵字增加搜尋覆蓋（Google 截斷不懲罰）；
@@ -346,13 +406,13 @@ CHO-...-...-...-001
 [[enriched_title]]
 （商品標題，見【標題】骨架）
 [[generated_description_html]]
-（開頭段＋「◈ 標題」四段純文字描述，段落之間空一行）
+（開頭段＋「◈ 標題」四段純文字描述，段落之間空一行${tone === "小編聊天口吻" ? "；正文必須含 1–2 個 emoji" : ""}）
 [[generated_faq_html]]
-（FAQ，每題 <h3><strong>問題</strong></h3><p>回答</p>）
+（FAQ，每題 <h3><strong>問題</strong></h3><p>回答</p>${tone === "小編聊天口吻" ? "；至少一題回答含 emoji" : ""}）
 [[seo_title]]
-（SEO 標題）
+（SEO 標題，禁止 emoji）
 [[meta_description]]
-（meta 描述）
+（meta 描述，禁止 emoji）
 [[why_we_chose_it]]
 （潮巢選品理由 1-2 句）
 [[product_highlights]]
@@ -364,7 +424,8 @@ CHO-...-...-...-001
 尺寸：...（沒有可靠來源就不要寫這行）
 產地：...
 
-product_highlights 每點各自一行、用「・」開頭，列 3-5 點。spec 每項各自一行、用「項目：內容」格式（無資訊則寫「（無）」）。除了各欄位標記與其內容外，不要輸出其他文字。`;
+product_highlights 每點各自一行、用「・」開頭，列 3-5 點。spec 每項各自一行、用「項目：內容」格式（無資訊則寫「（無）」）。除了各欄位標記與其內容外，不要輸出其他文字。
+${emojiOutputChecklist(tone)}`;
 }
 
 // The known-IP list is stable across a whole batch, so A5 caches it. Split out
@@ -440,11 +501,15 @@ const REGEN_FIELD_LABELS: Record<CopyRegenField, string> = {
 
 const REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
   enriched_title:
-    "骨架：〔品牌 × 〕IP中文〔英文〕｜角色（多角色・分隔≤3，款式含的角色也算）｜特色。建議 45 字、最長 60 字，不可捏造 IP／角色／品牌／規格數字。",
-  generated_description_html: "沿用「開頭段＋◈ 標題四段」純文字格式（段落間空一行、標題行寫「◈ 標題」），尺寸材質只能引用已知規格，不要寫入價格。",
-  generated_faq_html: "3-5 題，每題 <h3><strong>問題</strong></h3><p>回答</p>，答案自成一段可被單獨引用，導購感優先。",
-  seo_title: "25-45 字（最長 75），核心關鍵字（品牌×IP＋角色＋類型）壓在前 25 字，多角色用「・」列出（最多 3 個），之後可堆受眾關鍵字增加覆蓋，不要自己加「｜潮巢 Nestory」尾綴（後端統一附加）。",
-  meta_description: "70-80 字為佳（最長 90，寫滿 Google 約 78 字顯示額度），自然涵蓋 IP＋角色＋類型＋材質＋情境＋正版，結尾帶收藏／送禮鉤子，避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端。",
+    "骨架：〔品牌 × 〕IP中文〔英文〕｜角色（多角色・分隔≤3，款式含的角色也算）｜特色。建議 45 字、最長 60 字，不可捏造 IP／角色／品牌／規格數字。禁止 emoji。",
+  generated_description_html:
+    "沿用「開頭段＋◈ 標題四段」純文字格式（段落間空一行、標題行寫「◈ 標題」），尺寸材質只能引用已知規格，不要寫入價格。" +
+    "若本次語氣是小編聊天口吻：正文必須自然含 1–2 個 emoji。",
+  generated_faq_html:
+    "3-5 題，每題 <h3><strong>問題</strong></h3><p>回答</p>，答案自成一段可被單獨引用，導購感優先。" +
+    "若本次語氣是小編聊天口吻：至少一題回答必須含 emoji。",
+  seo_title: "25-45 字（最長 75），核心關鍵字（品牌×IP＋角色＋類型）壓在前 25 字，多角色用「・」列出（最多 3 個），之後可堆受眾關鍵字增加覆蓋，不要自己加「｜潮巢 Nestory」尾綴（後端統一附加）。禁止 emoji。",
+  meta_description: "70-80 字為佳（最長 90，寫滿 Google 約 78 字顯示額度），自然涵蓋 IP＋角色＋類型＋材質＋情境＋正版，結尾帶收藏／送禮鉤子，避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端。禁止 emoji。",
   why_we_chose_it: "1-2 句，說明為什麼這個商品值得在潮巢出現，帶品牌個性，不要只重複商品功能。",
   product_highlights: "3-5 點條列，每點各自一行、用「・」開頭，優先抓具體視覺／規格細節，不要空泛形容。",
 };

@@ -128,7 +128,7 @@ check("75b: title skeleton + variantSummary character hint in prompt", () => {
 // --- 76 ---
 check("76: emoji rules + multi examples + HelloKitty static anchor", () => {
   const prompt = read("src/lib/providers/systemPrompt.ts");
-  assert.match(prompt, /必須自然使用 1–2 個|必須自然使用 1-2 個/);
+  assert.match(prompt, /Emoji 硬性｜小編聊天口吻|必須自然使用 1–2 個|必須自然使用 1-2 個/);
   assert.match(prompt, /可愛周邊輕鬆感[\s\S]*鼓勵/);
   assert.match(prompt, /XIAOBIAN_STYLE_ANCHOR|老闆點讚的語感錨點/);
   assert.match(prompt, /Hello Kitty/);
@@ -139,6 +139,49 @@ check("76: emoji rules + multi examples + HelloKitty static anchor", () => {
     (prompt.match(/黑膠文藝收藏感: \[/s) || prompt.includes("黑膠文藝收藏感: [")),
     "tone examples should be arrays"
   );
+});
+
+check("76-fix: field-level emoji rules + checklist + soft warning wiring", () => {
+  const prompt = read("src/lib/providers/systemPrompt.ts");
+  assert.match(prompt, /欄位硬性｜generated_description_html｜小編聊天口吻/);
+  assert.match(prompt, /欄位硬性｜generated_faq_html｜小編聊天口吻/);
+  assert.match(prompt, /輸出前自檢清單（小編聊天口吻必勾）/);
+  assert.match(prompt, /錨點原文本身沒有 emoji/);
+  assert.match(prompt, /正文必須含 1–2 個 emoji|正文必須含 1-2 個 emoji/);
+
+  assert.ok(exists("src/lib/providers/emojiPolicy.ts"));
+  const pol = read("src/lib/providers/emojiPolicy.ts");
+  assert.match(pol, /textHasEmoji/);
+  assert.match(pol, /buildXiaobianMissingEmojiWarning/);
+
+  const route = read("src/app/api/generate/route.ts");
+  assert.match(route, /buildXiaobianMissingEmojiWarning/);
+  assert.match(route, /generationTone === "小編聊天口吻"/);
+});
+
+check("76: body.tone reaches provider system prompt (wiring)", () => {
+  const route = read("src/app/api/generate/route.ts");
+  assert.match(route, /const tone: CopyTone = \(COPY_TONES/);
+  assert.match(route, /tone,/); // passed into generate({...})
+  const claude = read("src/lib/providers/claude-copy-provider.ts");
+  const openai = read("src/lib/providers/openai-copy-provider.ts");
+  for (const src of [claude, openai]) {
+    assert.match(src, /resolveCopyTone\(input\.tone/);
+    assert.match(src, /buildCopySystemPrompt\(resolvedTone/);
+  }
+  // post-process does not strip emoji
+  const loc = read("src/lib/zhTwLocalizer.ts");
+  assert.doesNotMatch(loc, /emoji|Emoji|pictographic/i);
+  const html = read("src/lib/contentGenerator/htmlFormat.ts");
+  assert.doesNotMatch(html, /stripEmoji|removeEmoji|pictographic/i);
+});
+
+check("76: emojiPolicy detects presence", () => {
+  // inline mirror of textHasEmoji Extended_Pictographic path
+  const has = (t) => /\p{Extended_Pictographic}/u.test(t);
+  assert.equal(has("沒有符號"), false);
+  assert.equal(has("有 ✨ 符號"), true);
+  assert.equal(has("咖啡 ☕"), true);
 });
 
 // --- 66 ---

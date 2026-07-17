@@ -127,6 +127,12 @@ export interface CopyProviderOutput {
   detectedIpName: string;
   detectedCharacterName: string;
   detectedProductType: string;
+  /**
+   * P1-75a: collab / manufacturer brand (e.g. TOYUKI, Razer). Empty when the
+   * model is not confident. Route writes product_brand only when non-empty
+   * after normalizeDetectedProductBrand (never wipe hand-filled brand).
+   */
+  detectedProductBrand: string;
   detectedCategory: string;
   sku: string;
   /** 規格自動化 (Mockup差異備忘 差異2, 老闆 2026-07-11)：the model synthesises a
@@ -183,6 +189,7 @@ type ParsedCopyJson = {
   detected_ip_name?: string;
   detected_character_name?: string;
   detected_product_type?: string;
+  detected_product_brand?: string;
   detected_category?: string;
   sku?: string;
   spec?: string;
@@ -204,6 +211,7 @@ export function parseCopyProviderJson(text: string, provider: string, model: str
     detectedIpName: parsed.detected_ip_name ?? "",
     detectedCharacterName: parsed.detected_character_name ?? "",
     detectedProductType: parsed.detected_product_type ?? "",
+    detectedProductBrand: parsed.detected_product_brand ?? "",
     detectedCategory: parsed.detected_category ?? "",
     sku: parsed.sku ?? "",
     spec: parsed.spec ?? "",
@@ -221,6 +229,7 @@ export const COPY_SEGMENT_KEYS = [
   "detected_ip_name",
   "detected_character_name",
   "detected_product_type",
+  "detected_product_brand",
   "detected_category",
   "sku",
   "enriched_title",
@@ -274,6 +283,7 @@ export function parseCopySegments(text: string, provider: string, model: string)
     detectedIpName: get("detected_ip_name"),
     detectedCharacterName: get("detected_character_name"),
     detectedProductType: get("detected_product_type"),
+    detectedProductBrand: get("detected_product_brand"),
     detectedCategory: get("detected_category"),
     sku: get("sku"),
     spec: get("spec"),

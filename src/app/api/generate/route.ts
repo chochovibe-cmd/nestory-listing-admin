@@ -39,6 +39,8 @@ import {
   getCopyFieldValue,
 } from "@/lib/providers/copy";
 import { mergeIpToneMap } from "@/lib/providers/ipToneMap";
+import { normalizeDetectedProductBrand } from "@/lib/providers/productBrand";
+import { resolveCopyTone } from "@/lib/providers/systemPrompt";
 import {
   resolveWebSearchForGenerate,
   WEB_SEARCH_USED_WARNING,
@@ -96,18 +98,35 @@ type DetectedClassification = {
   sku: string;
 };
 
+/**
+ * P1-66: store the concrete resolved tone (never the meta「依IP自動匹配」).
+ * Invalid → null, never blocks generation.
+ */
+function resolvedGenerationTone(
+  tone: CopyTone,
+  detectedIpName: string | null | undefined,
+  ipToneMap: ReturnType<typeof mergeIpToneMap>,
+): string | null {
+  const resolved = resolveCopyTone(tone, detectedIpName, ipToneMap);
+  if (resolved === "依IP自動匹配") return null;
+  if (!(COPY_TONES as readonly string[]).includes(resolved)) return null;
+  return resolved;
+}
+
 function toListingDraftInput(
   draft: ProductDraft,
   detected: DetectedClassification,
-  variantSummary?: string | null
+  variantSummary?: string | null,
+  /** P1-75a: brand effective for this pass (detected or existing). */
+  productBrand?: string | null,
 ): ListingDraftInput {
   return {
     source_url: draft.source_url,
     product_status: draft.is_secondhand ? "secondhand" : "general",
     ip: detected.ip,
     characters: detected.character ? [detected.character] : [],
-    // 夜工包（回饋 27/29）：聯名品牌與款式文字進標題/SEO 骨架
-    product_brand: draft.product_brand ?? null,
+    // 夜工包（回饋 27/29）+ P1-75a：聯名品牌與款式文字進標題/SEO 骨架
+    product_brand: productBrand ?? draft.product_brand ?? null,
     variant_text: variantSummary ?? null,
     product_types: detected.productType ? [detected.productType] : [],
     use_cases: [],
@@ -200,6 +219,7 @@ function buildTestModeOutput(ruleOutput: GeneratedListingContent, detected: Dete
     detectedIpName: detected.ip,
     detectedCharacterName: detected.character,
     detectedProductType: detected.productType,
+    detectedProductBrand: "",
     detectedCategory: detected.category,
     sku: detected.sku,
     provider: "test",
@@ -330,6 +350,12 @@ async function handleFieldRegen(params: {
   if (updateError) {
     return Response.json({ error: updateError.message }, { status: 500 });
   }
+
+  // P1-66: regen may switch tone — soft write (migration 034).
+  await serviceSupabase
+    .from("product_drafts")
+    .update({ generation_tone: resolvedGenerationTone(tone, draft.ip_name, ipToneMap) })
+    .eq("id", draftId);
 
   if (historyContent.trim()) {
     await serviceSupabase.from("generation_history").insert({
@@ -692,7 +718,16 @@ export async function POST(request: NextRequest) {
     displayContext,
   );
 
-  const listingInput = toListingDraftInput(draft, detected, variantSummary);
+  // P1-75a: brand three-piece — normalize LLM brand; empty must not wipe existing.
+  const detectedBrand = providerOutput
+    ? normalizeDetectedProductBrand(providerOutput.detectedProductBrand)
+    : null;
+  const effectiveProductBrand = detectedBrand ?? draft.product_brand ?? null;
+
+  // P1-66: concrete resolved tone for this generation (not meta 依IP自動匹配).
+  const generationTone = resolvedGenerationTone(tone, detected.ip || draft.ip_name, ipToneMap);
+
+  const listingInput = toListingDraftInput(draft, detected, variantSummary, effectiveProductBrand);
   const ruleOutput = applyTagsV2(
     generateListingContent(listingInput, tagRules, displayContext),
     listingInput,
@@ -827,47 +862,71 @@ export async function POST(request: NextRequest) {
     ),
   );
 
+  const draftUpdate: Record<string, unknown> = {
+    title_zh: localizedOutput.display_title,
+    // fix(B10): description_html storage contract = plain text (A23);
+    // rule/test path used to write HTML — normalize at write boundary.
+    description_html: normalizeDescriptionToPlainText(localizedOutput.generated_description_html),
+    seo_title: localizedOutput.seo_title,
+    seo_description: localizedOutput.meta_description,
+    shopify_handle: handleSlug,
+    tags: localizedOutput.shopify_tags,
+    shopify_tags: localizedOutput.shopify_tags,
+    generated_faq_html: localizedOutput.generated_faq_html,
+    spec_text: finalSpecText,
+    why_we_chose_it: providerOutput.whyWeChoseIt,
+    product_highlights: providerOutput.productHighlights,
+    ip_name: detected.ip || null,
+    character_name: detected.character || null,
+    product_type: detected.productType || null,
+    detected_category: detected.category || null,
+    sku: detected.sku || null,
+    warnings: allWarnings,
+    // P0-62: successStatus already maps blocked vs ok for the three queue fields.
+    status: successStatus.status,
+    pipeline_stage: successStatus.pipeline_stage,
+    generation_mode: "api_llm",
+    generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
+    generation_status: successStatus.generation_status,
+    generation_model: providerOutput.model,
+    // A13: per-draft AI spend + raw tokens (null in test mode) and the copy
+    // stage timestamp for the dashboard funnel/budget.
+    generation_cost_estimate: providerOutput.usage?.costUsd ?? null,
+    generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
+    generation_output_tokens: providerOutput.usage?.outputTokens ?? null,
+    copy_generated_at: new Date().toISOString(),
+    generation_error: successStatus.generation_error,
+  };
+
+  // P1-75a: only overwrite product_brand when detection produced a clean brand.
+  if (detectedBrand) {
+    draftUpdate.product_brand = detectedBrand;
+  }
+
   const { error: updateError } = await serviceSupabase
     .from("product_drafts")
-    .update({
-      title_zh: localizedOutput.display_title,
-      // fix(B10): description_html storage contract = plain text (A23);
-      // rule/test path used to write HTML — normalize at write boundary.
-      description_html: normalizeDescriptionToPlainText(localizedOutput.generated_description_html),
-      seo_title: localizedOutput.seo_title,
-      seo_description: localizedOutput.meta_description,
-      shopify_handle: handleSlug,
-      tags: localizedOutput.shopify_tags,
-      shopify_tags: localizedOutput.shopify_tags,
-      generated_faq_html: localizedOutput.generated_faq_html,
-      spec_text: finalSpecText,
-      why_we_chose_it: providerOutput.whyWeChoseIt,
-      product_highlights: providerOutput.productHighlights,
-      ip_name: detected.ip || null,
-      character_name: detected.character || null,
-      product_type: detected.productType || null,
-      detected_category: detected.category || null,
-      sku: detected.sku || null,
-      warnings: allWarnings,
-      // P0-62: successStatus already maps blocked vs ok for the three queue fields.
-      status: successStatus.status,
-      pipeline_stage: successStatus.pipeline_stage,
-      generation_mode: "api_llm",
-      generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
-      generation_status: successStatus.generation_status,
-      generation_model: providerOutput.model,
-      // A13: per-draft AI spend + raw tokens (null in test mode) and the copy
-      // stage timestamp for the dashboard funnel/budget.
-      generation_cost_estimate: providerOutput.usage?.costUsd ?? null,
-      generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
-      generation_output_tokens: providerOutput.usage?.outputTokens ?? null,
-      copy_generated_at: new Date().toISOString(),
-      generation_error: successStatus.generation_error,
-    })
+    .update(draftUpdate)
     .eq("id", draftId);
 
   if (updateError) {
     return Response.json({ error: updateError.message }, { status: 500 });
+  }
+
+  // P1-66: generation_tone (migration 034) — separate write so missing column
+  // never fails the whole generate (soft warn only).
+  {
+    const { error: toneError } = await serviceSupabase
+      .from("product_drafts")
+      .update({ generation_tone: generationTone })
+      .eq("id", draftId);
+    if (toneError) {
+      extraWarnings.push("generation_tone 寫入略過（請確認已執行 migration 034）。");
+      // Best-effort refresh warnings list (ignore second failure).
+      await serviceSupabase
+        .from("product_drafts")
+        .update({ warnings: uniqueMessages([...allWarnings, ...extraWarnings]) })
+        .eq("id", draftId);
+    }
   }
 
   // B8/B19: persist search cache separately so missing migration 023 never

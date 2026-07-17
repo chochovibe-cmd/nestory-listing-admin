@@ -21,6 +21,33 @@ function handleFor(draft: MatrixifyDraft) {
     .slice(0, 80);
 }
 
+/**
+ * P0-74: map migration 018 inventory semantics onto Matrixify variant columns.
+ * - unlimited (continue / default): Policy continue + Tracker shopify + Qty 0
+ * - finite (deny): Policy deny + actual Qty
+ * Single-SKU main row only (multi-variant CSV = 回饋 55 另案).
+ */
+export function matrixifyInventoryFields(draft: Pick<
+  MatrixifyDraft,
+  "inventory_policy" | "inventory_quantity"
+>): {
+  "Variant Inventory Tracker": string;
+  "Variant Inventory Qty": number;
+  "Variant Inventory Policy": "deny" | "continue";
+} {
+  const isDeny = draft.inventory_policy === "deny";
+  const qtyRaw = draft.inventory_quantity;
+  const qty =
+    isDeny && qtyRaw != null && Number.isFinite(Number(qtyRaw)) && Number(qtyRaw) >= 0
+      ? Number(qtyRaw)
+      : 0;
+  return {
+    "Variant Inventory Tracker": "shopify",
+    "Variant Inventory Qty": qty,
+    "Variant Inventory Policy": isDeny ? "deny" : "continue",
+  };
+}
+
 export function buildMatrixifyRows(drafts: MatrixifyDraft[]) {
   const rows: Record<string, unknown>[] = [];
 
@@ -31,6 +58,7 @@ export function buildMatrixifyRows(drafts: MatrixifyDraft[]) {
       .filter((image) => image.image_type !== "spec")
       .sort((a, b) => a.sort_order - b.sort_order);
     const firstImage = images[0];
+    const inventory = matrixifyInventoryFields(draft);
 
     rows.push({
       Command: "NEW",
@@ -57,9 +85,7 @@ export function buildMatrixifyRows(drafts: MatrixifyDraft[]) {
       "Variant SKU": `NST-${draft.id.slice(0, 8).toUpperCase()}`,
       "Variant Price": draft.twd_price || "",
       "Variant Cost": draft.twd_cost || "",
-      "Variant Inventory Tracker": "shopify",
-      "Variant Inventory Qty": 0,
-      "Variant Inventory Policy": "deny",
+      ...inventory,
       "Variant Requires Shipping": "TRUE",
       "Variant Image": firstImage?.processed_file_url || firstImage?.original_file_url || "",
       "Image Src": firstImage?.processed_file_url || firstImage?.original_file_url || "",

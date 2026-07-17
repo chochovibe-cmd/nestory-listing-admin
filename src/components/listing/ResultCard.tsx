@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
+import { showToast } from "@/components/Toast";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import {
   formatUnmarkedBlockMessage,
@@ -616,7 +617,10 @@ export function ResultCard({
         setMessage(result.error ?? "儲存失敗");
         return;
       }
-      setMessage(result.didCommitCopy ? "已定案此文案組合" : "文案組合無變更");
+      // UX-A T2: transient success → toast (easy to miss setMessage alone)
+      const okMsg = result.didCommitCopy ? "已定案此文案組合" : "文案組合無變更";
+      setMessage("");
+      showToast(okMsg, result.didCommitCopy ? "success" : "info");
       router.refresh();
     } finally {
       setComboSaving(false);
@@ -668,7 +672,10 @@ export function ResultCard({
       setMessage(error.message);
       return;
     }
-    setMessage(comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改");
+    // UX-A T2: transient success → toast
+    const okMsg = comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改";
+    setMessage("");
+    showToast(okMsg, "success");
     router.refresh();
   }
 
@@ -876,7 +883,9 @@ export function ResultCard({
         setMessage(payload.error ?? "核准失敗");
         return;
       }
-      setMessage("已核准文案 → 進入圖片審核（文案已鎖定）");
+      // UX-A T2 + §2.2 站名：標圖（覆寫「圖片審核」）
+      setMessage("");
+      showToast("已核准文案 → 進入標圖（文案已鎖定）", "success");
       router.refresh();
     } catch {
       setMessage("核准連線失敗");

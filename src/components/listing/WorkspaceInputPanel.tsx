@@ -43,6 +43,7 @@ import { parseVideoUrlsFromTextarea } from "@/lib/media/videoUrls";
 import { FieldHelp } from "@/components/listing/FieldHelp";
 import { StationJumpStrip } from "@/components/listing/StationJumpStrip";
 import type { JumpStripDraft } from "@/lib/drafts/stationJumpStrip";
+import { showToast } from "@/components/Toast";
 import {
   buildWorkspaceAutosaveSnapshot,
   clearWorkspaceAutosave,
@@ -798,6 +799,21 @@ export function WorkspaceInputPanel({
 
     const tone = plan.filledLines.length > 0 ? "ok" : "info";
     setStatus({ kind: tone, text: plan.summary });
+    // UX-A T3: toast only lists fields actually written this run (filledLines).
+    if (plan.filledLines.length > 0) {
+      const labels = plan.filledLines.map((line) => {
+        const bare = line.replace(/✓$/u, "").trim();
+        if (bare.startsWith("標題")) return "標題";
+        if (bare.startsWith("成本")) return "成本";
+        if (bare.startsWith("備註")) return "備註";
+        if (bare.startsWith("規格")) return "規格";
+        if (bare.startsWith("款式")) return "款式";
+        return bare;
+      });
+      showToast(`辨識完成：已填 ${labels.join("、")}`, "success");
+    } else {
+      showToast("辨識完成：沒有新填入的欄位（可能已有內容或未辨識到）", "info");
+    }
   }
 
   async function runScreenshotRecognition(files: FileList | File[], mode: ScreenshotMode) {
@@ -805,6 +821,7 @@ export function WorkspaceInputPanel({
     const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (list.length === 0) {
       setStatus({ kind: "error", text: "請選擇圖片檔（截圖）。手動填寫路徑仍可用。" });
+      showToast("請選擇圖片檔（截圖）", "warn");
       return;
     }
     if (list.length > MAX_SCREENSHOT_IMAGES) {
@@ -830,10 +847,12 @@ export function WorkspaceInputPanel({
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        const errText = `${payload.error ?? "截圖辨識失敗"}。表單仍可手動填寫。`;
         setStatus({
           kind: "error",
-          text: `${payload.error ?? "截圖辨識失敗"}。表單仍可手動填寫。`
+          text: errText
         });
+        showToast(payload.error ?? "截圖辨識失敗，請改手填或換圖重試", "error");
         return;
       }
 
@@ -858,10 +877,12 @@ export function WorkspaceInputPanel({
       );
       applyFillPlan(plan, setStatus);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : "截圖辨識連線失敗";
       setStatus({
         kind: "error",
-        text: `${error instanceof Error ? error.message : "截圖辨識連線失敗"}。表單仍可手動填寫。`
+        text: `${msg}。表單仍可手動填寫。`
       });
+      showToast(msg, "error");
     } finally {
       // 成功或失敗都嘗試清暫存（失敗靜默）
       await removeTempScreenshots(paths);

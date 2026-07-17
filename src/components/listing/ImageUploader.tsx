@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { intentForSpecToggle } from "@/lib/images/processMarks";
+import { showToast } from "@/components/Toast";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
 // B1 (Mockup差異備忘 差異2): 只有主圖／詳情圖兩框。規格改表單手填欄位，不再上傳規格圖
@@ -292,7 +293,9 @@ export function ImageUploader({
         )
       );
 
-      setMessage("圖片已寫入資料庫");
+      // UX-A T24: transient success → toast (do not pin form height)
+      setMessage("");
+      showToast("圖片已寫入資料庫", "success");
     })();
 
     trackUpload?.(task);

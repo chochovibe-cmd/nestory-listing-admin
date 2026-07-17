@@ -138,7 +138,7 @@ function CopyButton({ getValue }: { getValue: () => string }) {
   );
 }
 
-/** B10: ← 版本 N/M → ↺ — version switch is local-only; ↺ spends LLM. */
+/** B10: ← 版本 N/M → 重生 — version switch is local-only; 重生 spends LLM. */
 function VersionNav({
   label,
   canPrev,
@@ -187,9 +187,29 @@ function VersionNav({
         title="只重生此欄（會呼叫 AI，需花費）"
         type="button"
       >
-        {regenBusy ? "…" : "↺"}
+        {regenBusy ? "重生中" : "重生"}
       </button>
     </span>
+  );
+}
+
+/** T26: 描述／FAQ 預覽預設限高，可展開全文；local state 不寫 localStorage */
+function CopyPreviewBlock({ html }: { html: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className={`rc-copy-preview${expanded ? " is-expanded" : ""}`}>
+      <div
+        className="rc-html-preview rc-copy-preview-body"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      <button
+        className="mini-btn rc-copy-preview-toggle"
+        onClick={() => setExpanded((v) => !v)}
+        type="button"
+      >
+        {expanded ? "收合" : "展開全文"}
+      </button>
+    </div>
   );
 }
 
@@ -846,7 +866,8 @@ export function ResultCard({
   }
 
   async function returnFromReady(target: "copy_review" | "image_review") {
-    const label = target === "copy_review" ? "改文案" : "改圖";
+    // §2.2：標圖（非「圖片審核」）；T9 維持 confirm、不要理由
+    const label = target === "copy_review" ? "改文案" : "改標圖";
     if (!window.confirm(`確定退回${label}？`)) return;
     setQuickBusy(true);
     try {
@@ -857,13 +878,19 @@ export function ResultCard({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(payload.error ?? "退回失敗");
+        const err = typeof payload.error === "string" ? payload.error : "退回失敗";
+        setMessage(err);
+        showToast(err, "error");
         return;
       }
-      setMessage(payload.message ?? `已退回${label}`);
+      const okMsg =
+        typeof payload.message === "string" ? payload.message : `已退回${label}`;
+      setMessage("");
+      showToast(okMsg, "success");
       router.refresh();
     } catch {
       setMessage("退回連線失敗");
+      showToast("退回連線失敗", "error");
     } finally {
       setQuickBusy(false);
     }
@@ -1337,7 +1364,7 @@ export function ResultCard({
               ) : null}
               {suggestWarnCount > 0 ? (
                 <span
-                  className="rc-detect-chip"
+                  className="rc-detect-chip rc-detect-suggest"
                   title={warningSummary.suggest.map((w) => w.text).join("\n")}
                 >
                   🔍 {suggestWarnCount}
@@ -1714,10 +1741,7 @@ export function ResultCard({
                           </span>
                         </div>
                         {descriptionView === "preview" ? (
-                          <div
-                            className="rc-html-preview"
-                            dangerouslySetInnerHTML={{ __html: descriptionPreviewHtml(description) }}
-                          />
+                          <CopyPreviewBlock html={descriptionPreviewHtml(description)} />
                         ) : (
                           <textarea
                             className="edit-textarea"
@@ -1750,7 +1774,7 @@ export function ResultCard({
                           </span>
                         </div>
                         {faqView === "preview" ? (
-                          <div className="rc-html-preview" dangerouslySetInnerHTML={{ __html: faq || "<p>尚無內容</p>" }} />
+                          <CopyPreviewBlock html={faq || "<p>尚無內容</p>"} />
                         ) : (
                           <textarea
                             className="edit-textarea"
@@ -1925,28 +1949,52 @@ export function ResultCard({
                   </div>
                   <input className="edit-input" onChange={(event) => setTags(event.target.value)} value={tags} />
                 </div>
-                {draft.warnings?.length ? (
+                {blockWarnCount + confirmWarnCount + suggestWarnCount > 0 ? (
                   <div className="rc-field">
                     <div className="rc-label">提醒</div>
-                    {draft.warnings.map((warning) => {
-                      const missingFromLine = extractMissingCharacterNames([warning]);
-                      return (
-                        <div className="rc-warning-line" key={warning}>
-                          <div className="price-soft-warn">{warning}</div>
-                          {missingFromLine.map((name) => (
-                            <button
-                              className="mini-btn"
-                              disabled={!draft.ip_name || quickAddingCharacter === name || regenerating}
-                              key={`${warning}-${name}`}
-                              onClick={() => void quickAddCharacter(name)}
-                              type="button"
-                            >
-                              {quickAddingCharacter === name ? "新增中…" : `一鍵新增「${name}」`}
-                            </button>
-                          ))}
+                    {/* T31 可選：三級分組標題（必修／待確認／建議） */}
+                    {(
+                      [
+                        { key: "block", title: "⛔ 必修", items: warningSummary.block },
+                        { key: "confirm", title: "⚠ 待確認", items: warningSummary.confirm },
+                        { key: "suggest", title: "🔍 建議", items: warningSummary.suggest },
+                      ] as const
+                    ).map((group) =>
+                      group.items.length > 0 ? (
+                        <div className="rc-warn-group" key={group.key}>
+                          <div className="rc-warn-group-title muted">{group.title}</div>
+                          {group.items.map((w) => {
+                            const missingFromLine = extractMissingCharacterNames([w.text]);
+                            return (
+                              <div className="rc-warning-line" key={`${group.key}-${w.text}`}>
+                                <div
+                                  className={
+                                    group.key === "block"
+                                      ? "price-soft-warn rc-warn-line-block"
+                                      : group.key === "confirm"
+                                        ? "price-soft-warn"
+                                        : "muted"
+                                  }
+                                >
+                                  {w.text}
+                                </div>
+                                {missingFromLine.map((name) => (
+                                  <button
+                                    className="mini-btn"
+                                    disabled={!draft.ip_name || quickAddingCharacter === name || regenerating}
+                                    key={`${w.text}-${name}`}
+                                    onClick={() => void quickAddCharacter(name)}
+                                    type="button"
+                                  >
+                                    {quickAddingCharacter === name ? "新增中…" : `一鍵新增「${name}」`}
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      ) : null
+                    )}
                   </div>
                 ) : (
                   <div className="muted">目前沒有待確認提醒。</div>

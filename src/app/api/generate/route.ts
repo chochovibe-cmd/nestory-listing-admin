@@ -29,7 +29,12 @@ import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
 import { buildMetaContentGapWarning, buildMetaDuplicateWarning } from "@/lib/contentGenerator/metaUniqueness";
 import { normalizeProductTypeForDisplay } from "@/lib/productTypeLabels";
 import { buildNestoryTagsV2Result } from "@/lib/nestoryTagsV2";
-import { localizeGeneratedListingContent, localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
+import {
+  localizeGeneratedListingContent,
+  localizeProductVariantOptionFields,
+  localizeToTaiwanTraditionalText,
+  localizeVariantDimensions,
+} from "@/lib/zhTwLocalizer";
 import { listActiveListingTagRules } from "@/lib/tagRules";
 import { ClaudeCopyProvider } from "@/lib/providers/claude-copy-provider";
 import { OpenAICopyProvider } from "@/lib/providers/openai-copy-provider";
@@ -995,6 +1000,55 @@ export async function POST(request: NextRequest) {
 
   if (updateError) {
     return Response.json({ error: updateError.message }, { status: 500 });
+  }
+
+  // PKG2A / 回饋 84：全文 generate 成功路徑才轉款式軸名／值（冪等、不標記）。
+  // 欄位重生（handleFieldRegen）不走此段；表單手填當下不動。
+  try {
+    const dimsRaw = Array.isArray(draft.variant_dimensions)
+      ? (draft.variant_dimensions as Array<{ name?: string | null }>)
+      : null;
+    if (dimsRaw && dimsRaw.length > 0) {
+      const localizedDims = localizeVariantDimensions(dimsRaw);
+      const dimsChanged =
+        localizedDims &&
+        dimsRaw.some((d, i) => (d.name ?? "") !== (localizedDims[i]?.name ?? ""));
+      if (dimsChanged && localizedDims) {
+        await serviceSupabase
+          .from("product_drafts")
+          .update({ variant_dimensions: localizedDims })
+          .eq("id", draftId);
+      }
+    }
+
+    const { data: variantRows } = await serviceSupabase
+      .from("product_variants")
+      .select(
+        "id, option1_name, option1_value, option2_name, option2_value, option3_name, option3_value",
+      )
+      .eq("draft_id", draftId);
+
+    for (const row of variantRows ?? []) {
+      const localized = localizeProductVariantOptionFields(row);
+      if (localized === row) continue;
+      await serviceSupabase
+        .from("product_variants")
+        .update({
+          option1_name: localized.option1_name,
+          option1_value: localized.option1_value,
+          option2_name: localized.option2_name,
+          option2_value: localized.option2_value,
+          option3_name: localized.option3_name,
+          option3_value: localized.option3_value,
+        })
+        .eq("id", row.id);
+    }
+  } catch {
+    extraWarnings.push("款式簡轉繁寫入略過，不影響文案結果；可稍後重新生成。");
+    await serviceSupabase
+      .from("product_drafts")
+      .update({ warnings: uniqueMessages([...allWarnings, ...extraWarnings]) })
+      .eq("id", draftId);
   }
 
   // P1-66: generation_tone (migration 034) — separate write so missing column

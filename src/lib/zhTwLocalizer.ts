@@ -70,6 +70,12 @@ const TAIWAN_TERM_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
   ['移動電源', '行動電源'],
   ['性價比', 'CP值'],
   ['髮卡', '髮夾'],
+  // PKG2A / 回饋 84：款式值常見「鼠标」——OpenCC 先成「鼠標」，用語表再換成台灣「滑鼠」
+  ['鼠标', '滑鼠'],
+  ['鼠標', '滑鼠'],
+  ['鼠标垫', '滑鼠墊'],
+  ['鼠標墊', '滑鼠墊'],
+  ['滑鼠垫', '滑鼠墊'],
 ];
 
 const PROTECTED_TEXT_PATTERN = /https?:\/\/[^\s<>"']+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -187,4 +193,61 @@ export function localizeGeneratedListingContent(
     validation_errors: generatedContent.validation_errors.map(localizeToTaiwanTraditionalText),
     validation_warnings: generatedContent.validation_warnings.map(localizeToTaiwanTraditionalText),
   };
+}
+
+/**
+ * PKG2A / 回饋 84：variant_dimensions 軸名簡轉繁（冪等，不標記）。
+ * 只在全文 generate 成功路徑呼叫；表單手填當下不動。
+ */
+export function localizeVariantDimensions<T extends { name?: string | null }>(
+  dims: T[] | null | undefined,
+): T[] | null | undefined {
+  if (!dims) return dims;
+  if (!Array.isArray(dims)) return dims;
+  return dims.map((d) => {
+    const name = d.name;
+    if (name == null || name === "") return d;
+    const localized = localizeToTaiwanTraditionalText(name);
+    return localized === name ? d : { ...d, name: localized };
+  });
+}
+
+type VariantOptionTextFields = {
+  option1_name?: string | null;
+  option1_value?: string | null;
+  option2_name?: string | null;
+  option2_value?: string | null;
+  option3_name?: string | null;
+  option3_value?: string | null;
+};
+
+/**
+ * PKG2A / 回饋 84：product_variants option 軸名／值簡轉繁（冪等）。
+ * OpenCC + 用語表連跑兩次結果相同（verify-pkg2a 鎖）。
+ */
+export function localizeProductVariantOptionFields<T extends VariantOptionTextFields>(row: T): T {
+  const next = {
+    option1_name: localizeOptionalText(row.option1_name) ?? null,
+    option1_value: localizeOptionalText(row.option1_value) ?? null,
+    option2_name: localizeOptionalText(row.option2_name) ?? null,
+    option2_value: localizeOptionalText(row.option2_value) ?? null,
+    option3_name: localizeOptionalText(row.option3_name) ?? null,
+    option3_value: localizeOptionalText(row.option3_value) ?? null,
+  };
+  if (
+    next.option1_name === (row.option1_name ?? null) &&
+    next.option1_value === (row.option1_value ?? null) &&
+    next.option2_name === (row.option2_name ?? null) &&
+    next.option2_value === (row.option2_value ?? null) &&
+    next.option3_name === (row.option3_name ?? null) &&
+    next.option3_value === (row.option3_value ?? null)
+  ) {
+    return row;
+  }
+  return { ...row, ...next };
+}
+
+/** True when any option name/value field changed after localization. */
+export function productVariantOptionsNeedLocalize(row: VariantOptionTextFields): boolean {
+  return localizeProductVariantOptionFields(row) !== row;
 }

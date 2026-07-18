@@ -2072,8 +2072,15 @@ export function ResultCard({
                     );
                   };
 
+                  const specTextDisplay = (draft.spec_text ?? "").trim();
+
                   return (
                     <>
+                      {/* UX-N T66: destination group labels (R26 UI) */}
+                      <div className="rc-copy-group rc-span-2">
+                        <div className="rc-copy-group-title">標題與賣點</div>
+                        <p className="rc-copy-group-dest muted">→ 標題／賣點 metafield</p>
+                      </div>
                       <div className="field">
                         {renderVersionHdr("enriched_title")}
                         <input
@@ -2100,6 +2107,11 @@ export function ResultCard({
                           rows={4}
                           value={productHighlights}
                         />
+                      </div>
+
+                      <div className="rc-copy-group rc-span-2">
+                        <div className="rc-copy-group-title">上架描述</div>
+                        <p className="rc-copy-group-dest muted">→ 商品介紹內文</p>
                       </div>
                       <div className="field rc-span-2">
                         <div className="rc-view-tabs">
@@ -2133,6 +2145,24 @@ export function ResultCard({
                             value={description}
                           />
                         )}
+                      </div>
+
+                      <div className="rc-copy-group rc-span-2">
+                        <div className="rc-copy-group-title">規格中繼</div>
+                        <p className="rc-copy-group-dest muted">→ Shopify 規格／給 D 段</p>
+                      </div>
+                      <div className="rc-field rc-span-2">
+                        <div className="rc-label">商品規格（唯讀）</div>
+                        {specTextDisplay ? (
+                          <div className="rc-text rc-spec-readonly">{specTextDisplay}</div>
+                        ) : (
+                          <div className="muted">（空）</div>
+                        )}
+                      </div>
+
+                      <div className="rc-copy-group rc-span-2">
+                        <div className="rc-copy-group-title">FAQ</div>
+                        <p className="rc-copy-group-dest muted">→ FAQ metafield</p>
                       </div>
                       <div className="field rc-span-2">
                         <div className="rc-view-tabs">

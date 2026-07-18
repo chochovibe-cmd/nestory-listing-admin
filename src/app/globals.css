@@ -4449,6 +4449,32 @@ textarea {
   /* UX-H T43: Chinese field labels — no uppercase */
   letter-spacing: .02em;
 }
+/* UX-N T66: copy tab destination group headers (reuses .rc-label tokens) */
+.rc-copy-group {
+  margin-top: 10px;
+  margin-bottom: 2px;
+}
+.rc-copy-group:first-child,
+.rc-tabpanel-grid > .rc-copy-group:first-of-type {
+  margin-top: 4px;
+}
+.rc-copy-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: .02em;
+  margin: 0;
+}
+.rc-copy-group-dest {
+  font-size: 10px;
+  margin: 2px 0 0;
+  line-height: 1.35;
+}
+.rc-spec-readonly {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.45;
+}
 .version-nav {
   display: inline-flex;
   align-items: center;

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nestory 擷取設定</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Nestory 擷取設定</h1>
+      <p class="sub">填好後，開商品頁按工具列圖示一鍵擷取</p>
+    </header>
+
+    <label for="apiBaseUrl">API 網址</label>
+    <input
+      id="apiBaseUrl"
+      type="url"
+      placeholder="https://你的站.vercel.app"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <p class="hint">不要加結尾斜線。本機可填 http://localhost:3000</p>
+
+    <label for="captureToken">擷取 Token</label>
+    <input
+      id="captureToken"
+      type="password"
+      placeholder="ncap_…………"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <p class="hint">到上架工具 → 設定 → 產生擷取 token 後貼上</p>
+
+    <button id="saveBtn" type="button">儲存設定</button>
+    <p id="saveMsg" class="msg" role="status"></p>
+
+    <section class="result-box">
+      <h2>最近結果</h2>
+      <p id="lastResult" class="result-line">尚無擷取紀錄</p>
+      <p id="lastAt" class="hint"></p>
+    </section>
+
+    <section class="howto">
+      <h2>使用方式</h2>
+      <ol>
+        <li>先按上方「儲存設定」（會跳權限視窗 → 按<strong>允許</strong>）</li>
+        <li>開淘寶／天貓／蝦皮／官網<strong>商品頁</strong></li>
+        <li>按瀏覽器工具列的 Nestory 圖示</li>
+        <li>再點圖示可回來這裡看結果</li>
+      </ol>
+      <button id="openSettingsMode" type="button" class="linkish">
+        固定開啟此設定頁（方便改 token）
+      </button>
+      <button id="backToCapture" type="button" class="linkish">
+        改回「按圖示＝直接擷取」
+      </button>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

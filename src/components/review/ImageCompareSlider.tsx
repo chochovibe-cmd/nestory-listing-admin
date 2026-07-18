@@ -27,7 +27,11 @@ export function ImageCompareSlider({
         <div className="cmp cmp--single">
           {url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img className="cmp-img" src={url} alt="" />
+            <img
+              className="cmp-img"
+              src={url}
+              alt={label?.trim() ? label : "商品圖"}
+            />
           ) : (
             <div className="cmp-empty">無圖片</div>
           )}

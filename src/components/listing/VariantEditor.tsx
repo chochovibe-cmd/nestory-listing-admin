@@ -405,7 +405,10 @@ export function VariantEditor({
                     {row.imageId ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        alt=""
+                        alt={
+                          images.find((im) => im.id === row.imageId)?.label ??
+                          "規格圖"
+                        }
                         src={images.find((im) => im.id === row.imageId)?.url ?? ""}
                       />
                     ) : (

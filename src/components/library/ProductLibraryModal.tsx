@@ -266,7 +266,7 @@ export function ProductLibraryModal({
                 return (
                   <li className="lib-row" key={row.id}>
                     {thumb ? (
-                      <img alt="" className="lib-thumb" src={thumb} />
+                      <img alt={`${title} 商品圖`} className="lib-thumb" src={thumb} />
                     ) : (
                       <span aria-hidden className="lib-thumb lib-thumb--empty">
                         {title.slice(0, 1)}

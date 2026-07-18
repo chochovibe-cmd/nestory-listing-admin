@@ -64,7 +64,7 @@ function FactoryMiniCard({ item }: { item: FactoryBridgeItem }) {
       <div className="factory-mini-thumb">
         {item.thumbUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img alt="" src={item.thumbUrl} />
+          <img alt={`${item.title} 縮圖`} src={item.thumbUrl} />
         ) : (
           <span className="factory-mini-placeholder" aria-hidden>
             🖼

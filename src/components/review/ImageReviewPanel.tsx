@@ -400,7 +400,11 @@ export function ImageReviewPanel() {
                     <span className="rc-thumb ir-thumb">
                       {thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img className="rc-thumb-img" src={thumb} alt="" />
+                        <img
+                          className="rc-thumb-img"
+                          src={thumb}
+                          alt={`${title} 縮圖`}
+                        />
                       ) : (
                         <span className="rc-thumb-placeholder">🖼</span>
                       )}

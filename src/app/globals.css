@@ -745,12 +745,28 @@ button.primary {
   border-color: var(--accent);
   color: var(--accent-fg);
   font-weight: 700;
+  min-height: 40px;
 }
 
 .button.danger,
 button.danger {
   border-color: var(--accent2);
   color: var(--accent2);
+}
+
+/* UX-H T40: optional success action (e.g. save version) — tokens only */
+.button.success,
+button.success {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, var(--surface2));
+  color: var(--text);
+  font-weight: 700;
+  min-height: 40px;
+}
+.button.success:hover:not(:disabled),
+button.success:hover:not(:disabled) {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 18%, var(--surface2));
 }
 
 .container {
@@ -859,8 +875,8 @@ button.danger {
 .panel-header h1 {
   font-size: 13px;
   margin: 0;
-  text-transform: uppercase;
-  letter-spacing: .1em;
+  /* UX-H T43: Chinese section titles — no uppercase */
+  letter-spacing: .04em;
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -880,8 +896,8 @@ button.danger {
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .08em;
+  /* UX-H T43: Chinese field labels — no uppercase */
+  letter-spacing: .02em;
 }
 
 input,
@@ -891,7 +907,8 @@ select {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
-  font-size: 13px;
+  /* UX-H T42: form primary inputs readable */
+  font-size: 14px;
   min-height: 38px;
   padding: 8px 11px;
   width: 100%;
@@ -1021,6 +1038,14 @@ textarea {
 .status.pending {
   border-color: var(--accent3);
   color: var(--accent3);
+}
+
+/* UX-H T41: csv_ready / archived / unknown — visible muted, not ready-green */
+.status.archived,
+.status.neutral {
+  border-color: color-mix(in srgb, var(--text-muted) 55%, var(--border));
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
 }
 
 /* B9: results panel allows sticky toolbar (overflow:hidden on .panel breaks sticky). */
@@ -1235,7 +1260,8 @@ textarea {
   min-width: 0;
 }
 .factory-mini-title {
-  font-size: 12px;
+  /* UX-H T42 */
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
   overflow: hidden;
@@ -1383,8 +1409,8 @@ textarea {
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .06em;
+  /* UX-H T43: Chinese table headers — no uppercase */
+  letter-spacing: .02em;
 }
 
 /* ── Upload zones ── */
@@ -1432,8 +1458,8 @@ textarea {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: .08em;
+  /* UX-H T43: Chinese upload section labels — no uppercase */
+  letter-spacing: .02em;
   margin-bottom: 6px;
   display: flex;
   align-items: center;
@@ -1490,6 +1516,12 @@ textarea {
   align-items: center;
   gap: 5px;
   cursor: grab;
+}
+/* UX-H T49: thumb soft hover */
+.pthumb:hover .pthumb-img,
+.thumb-wrap:hover .imgmark-thumb,
+.thumb-wrap:hover img {
+  box-shadow: var(--shadow-s);
 }
 .pthumb:active {
   cursor: grabbing;
@@ -2051,6 +2083,11 @@ textarea {
   gap: 10px;
   padding: 10px 0;
   border-bottom: 1px solid var(--border-soft);
+  transition: box-shadow .2s ease;
+}
+/* UX-H T49: library row soft hover */
+.lib-row:hover {
+  box-shadow: var(--shadow-s);
 }
 .lib-row:last-child {
   border-bottom: none;
@@ -2185,8 +2222,9 @@ textarea {
 }
 .ir-batch-confirm {
   margin-left: auto;
-  min-height: 40px;
+  min-height: 44px;
   flex-shrink: 0;
+  font-weight: 800;
 }
 .ir-empty {
   margin: 8px 0 16px;
@@ -2202,6 +2240,11 @@ textarea {
   border-radius: var(--radius-m);
   overflow: hidden;
   box-shadow: var(--shadow-s);
+  transition: box-shadow .2s, border-color .2s, opacity .25s ease;
+}
+/* UX-H T49: soft hover on factory cards */
+.ir-card:hover {
+  box-shadow: var(--shadow-s), var(--shadow-m);
 }
 .ir-head {
   width: 100%;
@@ -3063,6 +3106,7 @@ textarea {
   flex-wrap: wrap;
   margin-top: 8px;
 }
+/* UX-H T40: factory confirm/reject share primary/danger family sizing */
 .ir-btn-confirm,
 .ir-btn-reject,
 .ir-reject-submit {
@@ -3074,6 +3118,7 @@ textarea {
 .ir-btn-reject {
   color: var(--accent2);
   border-color: color-mix(in srgb, var(--accent2) 50%, var(--border));
+  background: var(--surface2);
 }
 .reject-box {
   display: none;
@@ -3187,7 +3232,8 @@ textarea {
 
 /* Variant (款式) editor — B7 multi-dimension (tokens only; layout from mockup IA) */
 .variant-box { border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface2); padding: 10px; margin: 4px 0; position: relative; }
-.variant-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; font-size: 10px; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
+/* UX-H T43: Chinese variant section head — no uppercase */
+.variant-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; font-size: 10px; color: var(--text-muted); letter-spacing: .02em; font-weight: 700; }
 .variant-head .vh-btns { display: flex; gap: 5px; flex-wrap: wrap; position: relative; }
 .variant-empty { font-size: 11px; color: var(--text-muted); padding: 4px 0; }
 .variant-row { display: grid; grid-template-columns: 1.1fr .9fr .8fr .7fr auto; gap: 6px; margin-top: 6px; align-items: center; }
@@ -3222,7 +3268,8 @@ textarea {
 .vgrid-hdr, .vgrid-row {
   display: grid; gap: 6px; align-items: center; padding: 6px 2px;
 }
-.vgrid-hdr { font-size: 9px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; }
+/* UX-H T43: Chinese grid headers — no uppercase */
+.vgrid-hdr { font-size: 9px; font-weight: 800; color: var(--text-muted); }
 .vgrid-row input { min-height: 36px; padding: 5px 8px; font-size: 12px; border-radius: var(--radius-s); }
 .vgrid-block { border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 4px; }
 .vgrid-sub { padding: 0 2px 4px 48px; }
@@ -3717,28 +3764,39 @@ textarea {
 }
 
 /* ── Add / primary action buttons ── */
-.btn-add {
+/* UX-H T40: converge with .button.primary (accent fill CTA family) */
+.btn-add,
+.btn-gen,
+.button.primary.btn-add,
+.button.primary.btn-gen {
   width: 100%;
-  background: var(--surface2);
-  color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
   border: 1px solid var(--accent);
-  border-radius: 8px;
-  padding: 11px;
+  border-radius: var(--radius-s, 8px);
+  padding: 11px 14px;
+  min-height: 40px;
   font-family: 'Space Grotesk', sans-serif;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all .2s;
   letter-spacing: .04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-.btn-add:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+.btn-add:hover,
+.btn-gen:hover {
+  filter: brightness(1.05);
   transform: translateY(-1px);
   box-shadow: var(--shadow-s);
 }
 
-.btn-add:disabled {
+.btn-add:disabled,
+.btn-gen:disabled {
   opacity: .5;
   cursor: not-allowed;
 }
@@ -3838,7 +3896,12 @@ textarea {
   border-radius: var(--frame-radius-panel);
   overflow: hidden;
   box-shadow: var(--frame-shadow);
-  transition: box-shadow .2s, border-color .2s;
+  transition: box-shadow .2s, border-color .2s, opacity .25s ease;
+}
+
+/* UX-H T49: soft hover shadow only when not selected — keep hard-edge active */
+.result-card:hover:not(.active) {
+  box-shadow: var(--shadow-s), var(--shadow-m);
 }
 
 .result-card.active {
@@ -3846,6 +3909,14 @@ textarea {
      matches pre-B15 final computed look after L2→L4 cascade. */
   border-color: var(--border);
   box-shadow: var(--card-active-shadow);
+}
+
+/* UX-H T49: soft-remove / archive leave fade (does not change business timing) */
+.is-fading,
+.is-leaving {
+  opacity: 0.35;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
 }
 
 .rc-header {
@@ -4050,7 +4121,8 @@ textarea {
 }
 
 .rc-title {
-  font-size: 12px;
+  /* UX-H T42: high-frequency titles ≥14px */
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -4139,8 +4211,9 @@ textarea {
   margin-bottom: 6px;
 }
 
-/* B4: auxiliary action (align helper-link / copy-btn density; touch ≥44px on mobile) */
-.mini-btn {
+/* B4 + UX-H T40: mini-btn is canonical small action; btn-mini aliases same rules */
+.mini-btn,
+.btn-mini {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4155,16 +4228,27 @@ textarea {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition: all .2s;
 }
 
-.mini-btn:hover:not(:disabled) {
+.mini-btn:hover:not(:disabled),
+.btn-mini:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-.mini-btn:disabled {
+.mini-btn:disabled,
+.btn-mini:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.mini-btn.danger:hover:not(:disabled),
+.btn-mini.danger:hover:not(:disabled) {
+  border-color: var(--accent2);
+  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent2) 8%, transparent);
 }
 
 .rc-price {
@@ -4195,8 +4279,8 @@ textarea {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: .08em;
+  /* UX-H T43: Chinese field labels — no uppercase */
+  letter-spacing: .02em;
   margin-bottom: 4px;
 }
 
@@ -4216,8 +4300,8 @@ textarea {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: .08em;
+  /* UX-H T43: Chinese field labels — no uppercase */
+  letter-spacing: .02em;
 }
 .version-nav {
   display: inline-flex;
@@ -4266,6 +4350,7 @@ textarea {
   line-height: 1;
   font-weight: 700;
 }
+/* UX-H T40: save-version keeps success tone; size aligned with primary CTA */
 .btn-save-version {
   display: flex;
   width: 100%;
@@ -4275,13 +4360,14 @@ textarea {
   min-height: 40px;
   margin: 12px 0 4px;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-s, 10px);
   border: 1px solid color-mix(in srgb, var(--success) 45%, var(--border));
   background: color-mix(in srgb, var(--success) 12%, var(--surface2));
   color: var(--text);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+  transition: all .2s;
 }
 .btn-save-version:hover:not(:disabled) {
   border-color: var(--success);
@@ -4378,13 +4464,14 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 10px 12px;
-  font-size: 12px;
+  /* UX-H T42: copy preview body readable */
+  font-size: 14px;
   line-height: 1.6;
   min-height: 118px;
   color: var(--text);
 }
 .rc-html-preview h3 {
-  font-size: 13px;
+  font-size: 14px;
   margin: 10px 0 4px;
 }
 .rc-html-preview h3:first-child {
@@ -5114,10 +5201,11 @@ textarea {
 .manual-price-fields.open.single { grid-template-columns: 1fr; }
 
 .copy-settings-block { background: color-mix(in srgb, var(--surface2) 72%, var(--surface)); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 12px; margin: 14px 0; }
-.copy-block-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: var(--text); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
+/* UX-H T43: Chinese block titles / toggles — no uppercase */
+.copy-block-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: var(--text); letter-spacing: .02em; margin-bottom: 10px; }
 .copy-block-title span { font-size: 18px; }
 
-.settings-toggle { width: 100%; background: none; border: none; border-top: 1px solid var(--border); border-radius: 0; min-height: 0; padding: 9px 16px; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; transition: color .2s; }
+.settings-toggle { width: 100%; background: none; border: none; border-top: 1px solid var(--border); border-radius: 0; min-height: 0; padding: 9px 16px; color: var(--text-muted); font-size: 10px; letter-spacing: .04em; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; transition: color .2s; }
 .settings-toggle:hover { color: var(--text); }
 .settings-body { padding: 13px 16px; border-top: 1px solid var(--border); background: var(--surface2); display: none; }
 .settings-body.open { display: block; }
@@ -5170,9 +5258,7 @@ textarea {
    generic 8px/12px padding silently wins over this rule's 4px/10px. */
 .hdr-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px !important; border-radius: 999px; cursor: pointer; font-size: 11px !important; transition: all .2s; }
 .hdr-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.btn-mini { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); border-radius: var(--radius-s); padding: 7px 10px; font-size: 11px; cursor: pointer; transition: all .2s; }
-.btn-mini:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.btn-mini.danger:hover { border-color: var(--accent2); color: var(--accent2); background: color-mix(in srgb, var(--accent2) 8%, transparent); }
+/* UX-H T40: .btn-mini core rules live with .mini-btn above; header-specific overrides remain below */
 
 .header-status-wrap { position: relative; display: inline-flex; }
 .header-status-toggle { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); font-size: 11px; font-weight: 700; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
@@ -5200,8 +5286,8 @@ textarea {
   display: block;
   color: var(--text-muted);
   font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
+  /* UX-H T43: Chinese status pill labels — no uppercase */
+  letter-spacing: .02em;
   margin-bottom: 2px;
 }
 .status-ok,

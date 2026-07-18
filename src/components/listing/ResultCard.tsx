@@ -240,7 +240,8 @@ export function ResultCard({
   checked,
   onToggle,
   defaultExpanded = false,
-  variantPrices = []
+  variantPrices = [],
+  leaving = false
 }: {
   draft: ProductDraft;
   images: ProductImage[];
@@ -249,6 +250,8 @@ export function ResultCard({
   defaultExpanded?: boolean;
   /** P1-5: multi-variant sell prices for header range (e.g. 269~279) */
   variantPrices?: Array<{ twd_price?: number | null }>;
+  /** UX-H T49: archive leave fade (display only) */
+  leaving?: boolean;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -329,6 +332,8 @@ export function ResultCard({
   const [descriptionView, setDescriptionView] = useState<"preview" | "source">("preview");
   // Local mirror of pipeline marks so toggles feel instant; re-synced on refresh.
   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
+  /** UX-H T49: soft-remove fade on delete image */
+  const [fadingImageIds, setFadingImageIds] = useState<Set<string>>(() => new Set());
   // B10: generation_history (read-only for ←→; inserts on regen/manual commit)
   const [historyRows, setHistoryRows] = useState<GenerationHistoryRow[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -1203,6 +1208,8 @@ export function ResultCard({
   }
 
   async function removeImage(image: ProductImage) {
+    setFadingImageIds((prev) => new Set(prev).add(image.id));
+    await new Promise((r) => window.setTimeout(r, 250));
     const url = image.processed_file_url ?? image.original_file_url;
     const path = url ? storagePathFromUrl(url) : null;
     if (path) {
@@ -1210,8 +1217,19 @@ export function ResultCard({
     }
     const { error } = await supabase.from("product_images").delete().eq("id", image.id);
     setMessage(error ? `刪除圖片失敗：${error.message}` : "已刪除圖片");
-    if (!error) {
+    if (error) {
+      setFadingImageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(image.id);
+        return next;
+      });
+    } else {
       setImageMarks((current) => current.filter((row) => row.id !== image.id));
+      setFadingImageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(image.id);
+        return next;
+      });
     }
     router.refresh();
   }
@@ -1395,7 +1413,7 @@ export function ResultCard({
 
   return (
     <div
-      className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}`}
+      className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}${leaving ? " is-leaving" : ""}`}
       id={`draft-card-${draft.id}`}
     >
       <div className="rc-header" onClick={() => tryToggleExpand()}>
@@ -1413,7 +1431,11 @@ export function ResultCard({
         <span className="rc-thumb" aria-hidden={thumbUrl ? undefined : true}>
           {thumbUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img alt="" className="rc-thumb-img" src={thumbUrl} />
+            <img
+              alt={`${draft.title_zh || draft.taobao_title || "商品"} 主圖`}
+              className="rc-thumb-img"
+              src={thumbUrl}
+            />
           ) : (
             <span className="rc-thumb-placeholder">◈</span>
           )}
@@ -1952,7 +1974,10 @@ export function ResultCard({
                         const slot = imageSlotLabel(image, index + 1);
                         const intents = PROCESS_INTENT_OPTIONS;
                         return (
-                          <div className="imgmark-row" key={image.id}>
+                          <div
+                            className={`imgmark-row${fadingImageIds.has(image.id) ? " is-fading" : ""}`}
+                            key={image.id}
+                          >
                             <div className="thumb-wrap">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
@@ -2015,7 +2040,10 @@ export function ResultCard({
                       {imageMarks
                         .filter((image) => image.image_type === "detail")
                         .map((image) => (
-                          <div className="thumb-wrap" key={image.id}>
+                          <div
+                            className={`thumb-wrap${fadingImageIds.has(image.id) ? " is-fading" : ""}`}
+                            key={image.id}
+                          >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               alt={image.alt_text ?? "詳情圖"}

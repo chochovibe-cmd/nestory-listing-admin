@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { emitJumpToDraft } from "@/lib/drafts/jumpToDraft";
 import {
@@ -10,14 +11,14 @@ import {
 
 /**
  * UX-B T5 / T10: 快速預覽（桌機 B 塊 / 手機「新增」子分頁）.
- * Not a full ResultCard — grouped summary chips → emitJumpToDraft.
- * Reuses .queue-strip tokens (same as former StationJumpStrip).
+ * CAP-2.5: input/未完成草稿 → /drafts/new?draft= (full navigation);
+ * other groups keep emitJumpToDraft.
  */
 export function QuickPreviewPanel({
   drafts,
   excludeDraftIds = null,
   title = "快速預覽",
-  hint = "點擊跳到審核區對應卡片"
+  hint = "未完成→開表單；其他→跳審核區"
 }: {
   drafts: JumpStripDraft[];
   /** T10-A: hide currently editing draft from 未完成草稿 group */
@@ -25,6 +26,7 @@ export function QuickPreviewPanel({
   title?: string;
   hint?: string;
 }) {
+  const router = useRouter();
   const groups = useMemo(
     () => buildJumpStripGroups(drafts, { excludeDraftIds }),
     [drafts, excludeDraftIds]
@@ -62,6 +64,11 @@ export function QuickPreviewPanel({
                 className="queue-chip"
                 title={`${item.title} · ${item.shortDate}`}
                 onClick={() => {
+                  if (item.group === "input") {
+                    // CAP-2.5: full page nav so server reloads seed
+                    router.push(`/drafts/new?draft=${encodeURIComponent(item.draftId)}`);
+                    return;
+                  }
                   emitJumpToDraft({
                     draftId: item.draftId,
                     station: jumpGroupToStationFilter(item.group)

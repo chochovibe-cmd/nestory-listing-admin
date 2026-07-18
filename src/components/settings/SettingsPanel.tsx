@@ -29,6 +29,7 @@ import {
   type FxReference
 } from "@/lib/fx/fxReferenceStore";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
+import { showToast } from "@/components/Toast";
 import type { UserRole } from "@/types/domain";
 
 type AiProvider = "openai" | "claude";
@@ -88,6 +89,15 @@ export function SettingsPanel() {
   const [statusChecking, setStatusChecking] = useState(false);
   const statusAttemptedRef = useRef(false);
 
+  // CAP-1: personal capture token (operator+admin); double-confirm for reset (UX-E T28)
+  const [captureHasToken, setCaptureHasToken] = useState(false);
+  const [capturePrefix, setCapturePrefix] = useState<string | null>(null);
+  const [captureCreatedAt, setCaptureCreatedAt] = useState<string | null>(null);
+  const [capturePlainOnce, setCapturePlainOnce] = useState<string | null>(null);
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const [captureResetArm, setCaptureResetArm] = useState(false);
+  const [captureLoaded, setCaptureLoaded] = useState(false);
+
   const admin = isAdmin(role);
   const allowed = canAccessSettings(role);
 
@@ -96,6 +106,88 @@ export function SettingsPanel() {
       setOpen((prev) => ({ ...prev, [initialSection]: true }));
     }
   }, [initialSection]);
+
+  const loadCaptureTokenStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings/capture-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "status" })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.ok) {
+        setCaptureLoaded(true);
+        return;
+      }
+      setCaptureHasToken(Boolean(payload.hasToken));
+      setCapturePrefix(typeof payload.prefix === "string" ? payload.prefix : null);
+      setCaptureCreatedAt(typeof payload.created_at === "string" ? payload.created_at : null);
+      setCaptureLoaded(true);
+    } catch {
+      setCaptureLoaded(true);
+    }
+  }, []);
+
+  async function issueCaptureToken(action: "generate" | "reset") {
+    setCaptureBusy(true);
+    setCapturePlainOnce(null);
+    try {
+      const res = await fetch("/api/settings/capture-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.ok) {
+        const err =
+          typeof payload.message === "string"
+            ? payload.message
+            : typeof payload.error === "string"
+              ? payload.error
+              : "擷取 token 操作失敗";
+        showToast(err, "error");
+        return;
+      }
+      const token = typeof payload.token === "string" ? payload.token : null;
+      setCaptureHasToken(true);
+      setCapturePrefix(typeof payload.prefix === "string" ? payload.prefix : null);
+      setCaptureCreatedAt(typeof payload.created_at === "string" ? payload.created_at : null);
+      setCapturePlainOnce(token);
+      setCaptureResetArm(false);
+      showToast(
+        action === "reset" ? "已重設擷取 token，請複製新金鑰" : "已產生擷取 token，請複製保存",
+        "success"
+      );
+    } catch {
+      showToast("擷取 token 連線失敗", "error");
+    } finally {
+      setCaptureBusy(false);
+    }
+  }
+
+  function onCaptureTokenPrimaryClick() {
+    if (captureBusy) return;
+    if (!captureHasToken) {
+      void issueCaptureToken("generate");
+      return;
+    }
+    // UX-E T28: double-confirm — first click arms, second executes
+    if (!captureResetArm) {
+      setCaptureResetArm(true);
+      return;
+    }
+    void issueCaptureToken("reset");
+  }
+
+  async function copyCaptureToken() {
+    if (!capturePlainOnce) return;
+    try {
+      await navigator.clipboard.writeText(capturePlainOnce);
+      showToast("已複製擷取 token", "success");
+    } catch {
+      showToast("複製失敗，請手動選取複製", "warn");
+    }
+  }
 
   useEffect(() => {
     if (!hasSupabaseBrowserEnv()) {
@@ -182,6 +274,17 @@ export function SettingsPanel() {
       window.removeEventListener(FX_REFERENCE_CHANGED_EVENT, onFxRef);
     };
   }, []);
+
+  // CAP-1: load token mask when settings access is confirmed
+  useEffect(() => {
+    if (!roleReady || !allowed) return;
+    void loadCaptureTokenStatus();
+  }, [roleReady, allowed, loadCaptureTokenStatus]);
+
+  // Clear reset arm when leaving automation section or after idle
+  useEffect(() => {
+    if (!open.automation) setCaptureResetArm(false);
+  }, [open.automation]);
 
   /** C6: fetch via server /api/fx/cny-twd only — never browser→open.er-api direct. */
   const fetchLiveRate = useCallback(async () => {
@@ -578,6 +681,66 @@ export function SettingsPanel() {
             <p className="settings-muted" style={{ marginTop: 6 }}>
               不會寫入 localStorage。管線 Phase D 接通後再生效。
             </p>
+          </div>
+
+          {/* CAP-1: personal capture token — operator+admin; not admin-only */}
+          <div className="settings-row" style={{ marginTop: 14, alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)" }}>
+                擷取 token（Chrome 小工具）
+              </div>
+              <p className="settings-section-hint" style={{ marginTop: 4, marginBottom: 0 }}>
+                Chrome 擷取小工具用的個人金鑰。只能新建草稿，不能改別人的資料。外洩就按重設。
+              </p>
+              <p className="settings-muted" style={{ marginTop: 6 }}>
+                {captureLoaded
+                  ? captureHasToken
+                    ? `目前：${capturePrefix ?? "ncap_••••"}`
+                    : "尚未產生"
+                  : "載入中…"}
+                {captureCreatedAt
+                  ? ` · ${new Date(captureCreatedAt).toLocaleString("zh-TW")}`
+                  : null}
+              </p>
+              {capturePlainOnce ? (
+                <div className="field" style={{ marginTop: 8 }}>
+                  <label>新 token（只顯示一次）</label>
+                  <input readOnly type="text" value={capturePlainOnce} />
+                  <div className="settings-actions" style={{ marginTop: 6 }}>
+                    <button className="btn-mini" onClick={() => void copyCaptureToken()} type="button">
+                      複製
+                    </button>
+                    <span className="settings-muted">離開或重整後無法再顯示完整內容</span>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div className="settings-actions" style={{ flexShrink: 0 }}>
+              <button
+                className="btn-mini"
+                disabled={captureBusy}
+                onClick={onCaptureTokenPrimaryClick}
+                type="button"
+              >
+                {captureBusy
+                  ? "處理中…"
+                  : !captureHasToken
+                    ? "產生"
+                    : captureResetArm
+                      ? "確定重設？"
+                      : "重設"}
+              </button>
+              {captureResetArm ? (
+                <button
+                  className="btn-mini"
+                  disabled={captureBusy}
+                  onClick={() => setCaptureResetArm(false)}
+                  type="button"
+                >
+                  取消
+                </button>
+              ) : null}
+            </div>
           </div>
         </CollapsibleSection>
 

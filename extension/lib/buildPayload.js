@@ -74,6 +74,17 @@
           ? partial.sku_table.axes.length
           : 0;
 
+    var capture_meta = {
+      adapter: det.adapter,
+      page_host: host || undefined,
+      sku_dimensions: sku_dimensions,
+      warnings_from_client: warnings
+    };
+    // CAP-2.6 / 86: promo after discount → meta only (not price_cny)
+    if (partial.promo_price_cny != null && Number.isFinite(Number(partial.promo_price_cny))) {
+      capture_meta.promo_price_cny = Number(partial.promo_price_cny);
+    }
+
     var body = {
       source_url: href || undefined,
       source_platform: det.source_platform,
@@ -98,12 +109,7 @@
       params: partial.params || undefined,
       spec_text: undefined,
       captured_at: new Date().toISOString(),
-      capture_meta: {
-        adapter: det.adapter,
-        page_host: host || undefined,
-        sku_dimensions: sku_dimensions,
-        warnings_from_client: warnings
-      }
+      capture_meta: capture_meta
     };
 
     return omitNulls(body);

@@ -38,7 +38,8 @@
         option3_name: null,
         option3_value: null,
         cny_price: null,
-        sku: null
+        sku: null,
+        image_url: null
       };
       for (var d = 0; d < Math.min(axes.length, 3); d++) {
         var name = axes[d];
@@ -46,7 +47,13 @@
         if (val == null || String(val).trim() === "") {
           // try positional keys
           var keys = Object.keys(row).filter(function (k) {
-            return k !== "price" && k !== "cny_price" && k !== "sku";
+            return (
+              k !== "price" &&
+              k !== "cny_price" &&
+              k !== "sku" &&
+              k !== "image_url" &&
+              k !== "image"
+            );
           });
           val = keys[d] != null ? row[keys[d]] : null;
         }
@@ -65,6 +72,12 @@
       } else {
         flat.sku = null;
       }
+      var imgRaw = row.image_url != null ? row.image_url : row.image;
+      if (imgRaw != null && String(imgRaw).trim()) {
+        flat.image_url = String(imgRaw).trim();
+      } else {
+        flat.image_url = null;
+      }
       // skip completely empty rows
       if (
         !flat.option1_value &&
@@ -78,6 +91,65 @@
     }
 
     return { variants_flat: variants_flat, sku_dimensions: dims };
+  }
+
+  /**
+   * CAP-2.6 / 87: 列成本若等於商品層 price_cny 則留空（表單跟隨上方成本）。
+   * C1：有差異的列保留數字；同價列一律 null。
+   * @param {Array<object>} variants
+   * @param {number|null|undefined} productPrice
+   * @returns {Array<object>}
+   */
+  function omitUniformVariantPrices(variants, productPrice) {
+    if (!Array.isArray(variants) || !variants.length) return variants || [];
+    var product =
+      productPrice != null && Number.isFinite(Number(productPrice))
+        ? Number(productPrice)
+        : null;
+    if (product == null || product <= 0) {
+      return variants.map(function (v) {
+        return stripNullVariantFields(v);
+      });
+    }
+    return variants.map(function (v) {
+      var next = Object.assign({}, v);
+      if (next.cny_price != null && Number.isFinite(Number(next.cny_price))) {
+        if (Math.abs(Number(next.cny_price) - product) < 0.001) {
+          next.cny_price = null;
+        }
+      }
+      return stripNullVariantFields(next);
+    });
+  }
+
+  /** Drop null/undefined keys on a variant row (payload cleanliness). */
+  function stripNullVariantFields(v) {
+    var out = {};
+    if (!v || typeof v !== "object") return out;
+    Object.keys(v).forEach(function (k) {
+      if (v[k] != null && v[k] !== "") out[k] = v[k];
+    });
+    return out;
+  }
+
+  /**
+   * CAP-2.6 / 88: attach image_url from value→url map (first matching option wins).
+   * @param {Array<object>} variants
+   * @param {Record<string, string>} imageByValue
+   */
+  function attachVariantImages(variants, imageByValue) {
+    if (!Array.isArray(variants) || !imageByValue) return variants || [];
+    return variants.map(function (v) {
+      if (v.image_url) return v;
+      var vals = [v.option1_value, v.option2_value, v.option3_value];
+      for (var i = 0; i < vals.length; i++) {
+        var key = vals[i] != null ? String(vals[i]) : "";
+        if (key && imageByValue[key]) {
+          return Object.assign({}, v, { image_url: imageByValue[key] });
+        }
+      }
+      return v;
+    });
   }
 
   /**
@@ -129,11 +201,17 @@
 
   NestoryCap.flattenSkuTable = flattenSkuTable;
   NestoryCap.cartesianSkuTable = cartesianSkuTable;
+  NestoryCap.omitUniformVariantPrices = omitUniformVariantPrices;
+  NestoryCap.attachVariantImages = attachVariantImages;
+  NestoryCap.stripNullVariantFields = stripNullVariantFields;
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       flattenSkuTable: flattenSkuTable,
-      cartesianSkuTable: cartesianSkuTable
+      cartesianSkuTable: cartesianSkuTable,
+      omitUniformVariantPrices: omitUniformVariantPrices,
+      attachVariantImages: attachVariantImages,
+      stripNullVariantFields: stripNullVariantFields
     };
   }
 })(typeof globalThis !== "undefined" ? globalThis : this);

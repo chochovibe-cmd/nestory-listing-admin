@@ -1,5 +1,6 @@
 /**
  * CAP-2: Taobao + Tmall adapter (same file; tmall selectors merge+fallback).
+ * CAP-2.6: 原價優先 price_cny、促銷進 meta、款式同價省略、SKU 縮圖 image_url。
  */
 (function (root) {
   var NestoryCap = root.NestoryCap || (root.NestoryCap = {});
@@ -16,10 +17,46 @@
     return base;
   }
 
-  function extractSkuFromRoot(rootEl, S, dom) {
+  var ORIGIN_LABEL_RE = /优惠前|優惠前|划线价|劃線價|原价|原價|吊牌价|吊牌價/;
+  var PROMO_LABEL_RE = /店铺优惠后|店鋪優惠後|优惠后|優惠後|券后|券後|到手价|到手價|促销价|促銷價/;
+
+  /**
+   * Best-effort thumb URL from a SKU value node (img / data-* / background).
+   */
+  function thumbFromSkuNode(n, baseHref, dom) {
+    if (!n) return null;
+    if (n.querySelector) {
+      var imgs = n.querySelectorAll("img");
+      for (var i = 0; i < imgs.length; i++) {
+        var u = dom.imgUrlFromEl(imgs[i], baseHref);
+        if (u) return u;
+      }
+    }
+    var selfImg = dom.imgUrlFromEl(n, baseHref);
+    if (selfImg) return selfImg;
+    var dataImg =
+      (n.getAttribute &&
+        (n.getAttribute("data-img") ||
+          n.getAttribute("data-image") ||
+          n.getAttribute("data-src") ||
+          n.getAttribute("data-lazy-src"))) ||
+      null;
+    var abs = dom.absUrl(dataImg, baseHref);
+    if (abs) return abs;
+    var style = (n.getAttribute && n.getAttribute("style")) || "";
+    var bg = style.match(/background(?:-image)?\s*:\s*url\(\s*['"]?([^'")\s]+)/i);
+    if (bg && bg[1]) {
+      var bu = dom.absUrl(bg[1], baseHref);
+      if (bu) return bu;
+    }
+    return null;
+  }
+
+  function extractSkuFromRoot(rootEl, S, dom, baseHref) {
     var axes = [];
     var valuesPerAxis = [];
-    if (!rootEl) return { axes: axes, valuesPerAxis: valuesPerAxis };
+    var imageByValue = {};
+    if (!rootEl) return { axes: axes, valuesPerAxis: valuesPerAxis, imageByValue: imageByValue };
 
     // Prefer dl.tb-prop style groups
     var groups = [];
@@ -31,7 +68,6 @@
     } catch (_e) {}
 
     if (!groups.length) {
-      // treat whole root as one blob — try label/value pairs
       groups = [rootEl];
     }
 
@@ -86,6 +122,10 @@
         if (!t || t.length > 60) return;
         if (/^请选择|請選擇|选择|選擇/i.test(t)) return;
         vals.push(t);
+        var thumb = thumbFromSkuNode(n, baseHref, dom);
+        if (thumb && !imageByValue[t]) {
+          imageByValue[t] = thumb;
+        }
       });
       var uniq = [];
       var seen = {};
@@ -101,7 +141,7 @@
       }
     });
 
-    return { axes: axes, valuesPerAxis: valuesPerAxis };
+    return { axes: axes, valuesPerAxis: valuesPerAxis, imageByValue: imageByValue };
   }
 
   function extractParams(doc, S, dom) {
@@ -127,7 +167,6 @@
         if (k && v && k !== v) params[k] = v;
         return;
       }
-      // class* InfoItem style: label + value children
       var children = row.children ? Array.prototype.slice.call(row.children) : [];
       if (children.length >= 2) {
         var k2 = dom.textOf(children[0]).replace(/[:：]\s*$/, "");
@@ -136,6 +175,106 @@
       }
     });
     return params;
+  }
+
+  /**
+   * CAP-2.6 / 86: scan common price nodes for labeled 优惠前 / 券后 text.
+   * @returns {{ original: number|null, promo: number|null, onlyPromo: boolean }}
+   */
+  function extractPrices(doc, S, dom) {
+    var original = null;
+    var promo = null;
+    var saleDisplay = null;
+
+    // Selector-based candidates
+    var originalRaw =
+      dom.firstText(doc, S.originalPrice) || dom.firstText(doc, S.listPrice);
+    original = NestoryCap.parsePrice(originalRaw);
+
+    var promoRaw = dom.firstText(doc, S.promoPrice);
+    promo = NestoryCap.parsePrice(promoRaw);
+
+    var saleRaw = dom.firstText(doc, S.price);
+    saleDisplay = NestoryCap.parsePrice(saleRaw);
+
+    // Labeled text walk (honest: only when label clearly present)
+    try {
+      var walk = doc.querySelectorAll
+        ? doc.querySelectorAll(
+            "[class*='Price'], [class*='price'], .price-box, .tb-detail-hd, del, strong"
+          )
+        : [];
+      for (var i = 0; i < walk.length && i < 80; i++) {
+        var el = walk[i];
+        var txt = dom.textOf(el);
+        if (!txt || txt.length > 80) continue;
+        var p = NestoryCap.parsePrice(txt);
+        if (p == null) continue;
+        if (ORIGIN_LABEL_RE.test(txt) && original == null) {
+          original = p;
+        }
+        if (PROMO_LABEL_RE.test(txt) && promo == null) {
+          promo = p;
+        }
+      }
+    } catch (_e) {}
+
+    // del / line-through as original when still empty
+    if (original == null) {
+      try {
+        var dels = doc.querySelectorAll("del, [class*='lineThrough'], .tb-price-original");
+        for (var d = 0; d < dels.length; d++) {
+          var dp = NestoryCap.parsePrice(dom.textOf(dels[d]));
+          if (dp != null) {
+            original = dp;
+            break;
+          }
+        }
+      } catch (_e2) {}
+    }
+
+    /**
+     * Decision (A1/B1):
+     * - original + promo/sale → price_cny=original, promo_price_cny=promo||sale
+     * - only original → price_cny=original
+     * - only sale/promo → price_cny=that, onlyPromo warning
+     */
+    var price_cny = null;
+    var promo_price_cny = null;
+    var onlyPromo = false;
+
+    if (original != null && (promo != null || saleDisplay != null)) {
+      price_cny = original;
+      // Prefer explicitly labeled promo; else sale display if different from original
+      if (promo != null && Math.abs(promo - original) >= 0.001) {
+        promo_price_cny = promo;
+      } else if (saleDisplay != null && Math.abs(saleDisplay - original) >= 0.001) {
+        promo_price_cny = saleDisplay;
+      } else if (promo != null) {
+        promo_price_cny = promo;
+      }
+    } else if (original != null) {
+      price_cny = original;
+      if (promo != null && Math.abs(promo - original) >= 0.001) {
+        promo_price_cny = promo;
+      }
+    } else if (promo != null) {
+      price_cny = promo;
+      onlyPromo = true;
+    } else if (saleDisplay != null) {
+      // No original found: sale display is the only number (may be promo)
+      price_cny = saleDisplay;
+      // If sale came from highlight/promo-ish selector, treat as only-promo when
+      // no del/original existed — honest B1 warning when promoRaw matched or
+      // we never saw original selectors.
+      onlyPromo = true;
+    }
+
+    return {
+      price_cny: price_cny,
+      promo_price_cny: promo_price_cny,
+      onlyPromo: onlyPromo
+    };
   }
 
   function captureTaobao(doc, baseHref, host, selectorsOverride) {
@@ -154,20 +293,24 @@
         : null);
     if (!title) warnings.push("title: 未抓到");
 
-    var priceRaw = dom.firstText(doc, S.price);
-    var price_cny = NestoryCap.parsePrice(priceRaw);
-    if (price_cny == null) warnings.push("price_cny: 未抓到");
-
-    var listRaw = dom.firstText(doc, S.listPrice);
-    var list_price_cny = NestoryCap.parsePrice(listRaw);
-    if (listRaw && list_price_cny == null) {
-      /* omit */
-    } else if (!listRaw) {
-      warnings.push("list_price_cny: 未抓到");
+    var prices = extractPrices(doc, S, dom);
+    var price_cny = prices.price_cny;
+    var promo_price_cny = prices.promo_price_cny;
+    if (price_cny == null) {
+      warnings.push("price_cny: 未抓到");
+    } else if (prices.onlyPromo) {
+      warnings.push(
+        "只看到促銷價 ¥" +
+          price_cny +
+          "，可能低於原價——成本請自行確認"
+      );
     }
 
+    // A1: list_price_cny optional; do not force when price_cny already holds original
+    var list_price_cny = null;
+
     var skuRoot = dom.firstMatch(doc, S.skuRoot);
-    var skuParts = extractSkuFromRoot(skuRoot, S, dom);
+    var skuParts = extractSkuFromRoot(skuRoot, S, dom, href);
     var sku_table = null;
     var variants_flat = [];
     var sku_dimensions = 0;
@@ -180,10 +323,19 @@
       var flat = NestoryCap.flattenSkuTable(sku_table);
       variants_flat = flat.variants_flat;
       sku_dimensions = flat.sku_dimensions;
+      // 88: attach SKU thumbs by option value
+      if (NestoryCap.attachVariantImages) {
+        variants_flat = NestoryCap.attachVariantImages(
+          variants_flat,
+          skuParts.imageByValue || {}
+        );
+      }
+      // 87: omit cny_price when equals product price_cny
+      if (NestoryCap.omitUniformVariantPrices) {
+        variants_flat = NestoryCap.omitUniformVariantPrices(variants_flat, price_cny);
+      }
       if (!sku_table.rows.length) {
         warnings.push("sku: 僅有規格軸無完整價表");
-      } else if (sku_dimensions >= 2) {
-        // informational only on client; server adds multidim warning
       }
     } else {
       warnings.push("sku: 未抓到");
@@ -235,6 +387,7 @@
       title: title,
       price_cny: price_cny,
       list_price_cny: list_price_cny,
+      promo_price_cny: promo_price_cny,
       sku_table: sku_table,
       variants_flat: variants_flat,
       main_image_urls: main_image_urls,

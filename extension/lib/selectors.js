@@ -16,6 +16,11 @@
       "#J_Title h3",
       "h1"
     ],
+    /**
+     * CAP-2.6 / 86: price = 促銷／現售展示價（不得優先當成本）；
+     * originalPrice / listPrice = 优惠前／劃線原價（優先 → price_cny）；
+     * promoPrice = 券后／店優惠后（→ capture_meta.promo_price_cny）。
+     */
     price: [
       "[class*='Price--priceText']",
       "[class*='priceText--']",
@@ -25,6 +30,19 @@
       "[class*='Price--extraPriceText']",
       "span[class*='price']"
     ],
+    /** 原價優先（CAP-2.6） */
+    originalPrice: [
+      "[class*='originPrice']",
+      "[class*='OriginPrice']",
+      "[data-label*='优惠前']",
+      "[data-label*='優惠前']",
+      "[class*='Price--subPriceText']",
+      "[class*='subPrice']",
+      "del.tb-price-original",
+      ".tb-price-original",
+      "del",
+      "[class*='lineThrough']"
+    ],
     listPrice: [
       "[class*='Price--subPriceText']",
       "[class*='originPrice']",
@@ -32,6 +50,17 @@
       "del",
       ".tb-price-original",
       "[class*='lineThrough']"
+    ],
+    /** 促銷後價標籤／節點（不得當 price_cny） */
+    promoPrice: [
+      "[class*='highlightPrice'] [class*='text']",
+      "[class*='PromoPrice']",
+      "[class*='promoPrice']",
+      "[data-label*='优惠后']",
+      "[data-label*='優惠後']",
+      "[data-label*='券后']",
+      "[data-label*='券後']",
+      "[class*='couponPrice']"
     ],
     skuRoot: [
       "[class*='skuWrapper']",
@@ -63,6 +92,8 @@
       ".tb-img a",
       "span[class*='value']"
     ],
+    /** CAP-2.6 / 88: SKU 選項縮圖（相對於 skuValue 節點） */
+    skuValueThumb: ["img", "[class*='thumb'] img", "[style*='background']"],
     mainGallery: [
       "[class*='thumbnail--'] img",
       "[class*='Thumbnail--'] img",
@@ -114,10 +145,22 @@
       "#J_StrPriceModBox .tm-price",
       ".tm-promo-price .tm-price"
     ],
+    originalPrice: [
+      "[class*='originPrice']",
+      "[class*='Price--subPriceText']",
+      ".tm-price-panel del",
+      ".tm-yen + del",
+      "del"
+    ],
     listPrice: [
       "[class*='Price--subPriceText']",
       ".tm-price-panel del",
       ".tm-yen + del"
+    ],
+    promoPrice: [
+      ".tm-promo-price .tm-price",
+      "[class*='highlightPrice'] [class*='text']",
+      "[class*='PromoPrice']"
     ],
     skuRoot: [
       ".tb-sku",

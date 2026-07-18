@@ -73,6 +73,11 @@ export interface CopyProviderInput {
   imageDescription?: string;
   specText?: string;
   webSearchSummary?: string;
+  /**
+   * P5 層2／3：已組好的 IP 背景區塊（含誠實邊界文案），直接進 user 事實區。
+   * 來源為 knowledge_pack 或冷門 IP 網搜／中性指示；規格事實仍走 webSearchSummary／spec。
+   */
+  ipKnowledgePromptBlock?: string;
   /** Canonical IP names from ip_catalog; the model must pick from this list
    * when the product matches a known IP so the detected name lines up with
    * tag_rules. It may return a new name only when nothing here fits. */

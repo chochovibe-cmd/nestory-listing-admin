@@ -50,6 +50,14 @@ import {
   getCopyFieldValue,
 } from "@/lib/providers/copy";
 import { mergeIpToneMap } from "@/lib/providers/ipToneMap";
+import {
+  buildIpBackgroundSearchPromptBlock,
+  buildIpKnowledgePromptBlock,
+  guessIpNameFromTitle,
+  IP_BACKGROUND_NEUTRAL_INSTRUCTION,
+  lookupKnowledgePack,
+  mergeKnowledgePackMap,
+} from "@/lib/providers/ipKnowledgePack";
 import { buildXiaobianMissingEmojiWarning } from "@/lib/providers/emojiPolicy";
 import { normalizeDetectedProductBrand } from "@/lib/providers/productBrand";
 import {
@@ -59,6 +67,8 @@ import {
 import { resolveCopyTone } from "@/lib/providers/systemPrompt";
 import { resolveCanonicalCharacterName } from "@/lib/characters/resolveCanonicalCharacter";
 import {
+  mergeWebSearchCacheLayers,
+  resolveIpBackgroundSearchForGenerate,
   resolveWebSearchForGenerate,
   WEB_SEARCH_USED_WARNING,
   type WebSearchCache,
@@ -302,7 +312,21 @@ async function handleFieldRegen(params: {
   /** B10 D4: optional on-screen combination as LLM context (falls back to draft). */
   clientCurrentValues?: unknown;
 }): Promise<Response> {
-  const { regenField, providerKey, draft, draftId, userId, serviceSupabase, source, variantSummary, tone, copyLength, scenarioKeywordMap, ipToneMap, clientCurrentValues } = params;
+  const {
+    regenField,
+    providerKey,
+    draft,
+    draftId,
+    userId,
+    serviceSupabase,
+    source,
+    variantSummary,
+    tone,
+    copyLength,
+    scenarioKeywordMap,
+    ipToneMap,
+    clientCurrentValues,
+  } = params;
   const currentValues = mergeRegenCurrentValues(draft, clientCurrentValues);
   // A16/A17: same scenario terms the initial generation would have picked for
   // this draft's already-detected product type, so a single-field regen of
@@ -311,6 +335,21 @@ async function handleFieldRegen(params: {
     [normalizeProductTypeForDisplay(draft.product_type ?? "")],
     scenarioKeywordMap,
   );
+
+  // P5: field regen uses known draft IP pack (no live re-search). DEFAULT + DB overlay.
+  let knowledgePackMap = mergeKnowledgePackMap(null);
+  const packQuery = await serviceSupabase
+    .from("ip_catalog")
+    .select("ip_name, knowledge_pack")
+    .eq("is_active", true);
+  if (!packQuery.error && packQuery.data) {
+    knowledgePackMap = mergeKnowledgePackMap(packQuery.data);
+  }
+  const regenPack = lookupKnowledgePack(draft.ip_name, knowledgePackMap);
+  const regenPackBlock = buildIpKnowledgePromptBlock(regenPack);
+  const regenIpKnowledgePromptBlock =
+    regenPackBlock?.block ??
+    (draft.ip_name ? IP_BACKGROUND_NEUTRAL_INSTRUCTION : undefined);
 
   let raw: CopyProviderOutput;
   try {
@@ -326,6 +365,7 @@ async function handleFieldRegen(params: {
       specText: draft.spec_text ?? undefined,
       // A7: single-field regen does not re-search (cost). Reuse cached summary if present.
       webSearchSummary: parseCachedWebSearchSummary(draft.web_search_cache),
+      ipKnowledgePromptBlock: regenIpKnowledgePromptBlock,
       tone,
       copyLength,
       // A9 items 2/4: 依IP自動匹配 resolution and honest 二手 copy both need
@@ -605,9 +645,22 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const [tagRulesResult, ipCatalogResult, ipCharactersResult] = await Promise.allSettled([
+  // P5: knowledge_pack on ip_catalog (migration 038). If column missing, fall back
+  // without the column so generate still works on DEFAULT packs in code.
+  const ipCatalogWithPack = await serviceSupabase
+    .from("ip_catalog")
+    .select("id,ip_name,aliases,sort_order,is_active,created_at,updated_at,knowledge_pack")
+    .eq("is_active", true);
+  const ipCatalogFallback = ipCatalogWithPack.error
+    ? await serviceSupabase
+        .from("ip_catalog")
+        .select("id,ip_name,aliases,sort_order,is_active,created_at,updated_at")
+        .eq("is_active", true)
+    : null;
+  const ipCatalogResult = ipCatalogFallback ?? ipCatalogWithPack;
+
+  const [tagRulesResult, ipCharactersResult] = await Promise.allSettled([
     listActiveListingTagRules(serviceSupabase),
-    serviceSupabase.from("ip_catalog").select("id,ip_name,aliases,sort_order,is_active,created_at,updated_at").eq("is_active", true),
     serviceSupabase.from("ip_characters").select("id,ip_name,character_name,aliases,sort_order,is_active,created_at,updated_at").eq("is_active", true),
   ]);
 
@@ -618,9 +671,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (ipCatalogResult.status === "rejected" || ipCatalogResult.value.error) {
-    const message = ipCatalogResult.status === "rejected" ? ipCatalogResult.reason?.message : ipCatalogResult.value.error?.message;
-    return Response.json({ error: `Failed to load ip_catalog: ${message}` }, { status: 500 });
+  if (ipCatalogResult.error) {
+    return Response.json({ error: `Failed to load ip_catalog: ${ipCatalogResult.error.message}` }, { status: 500 });
   }
 
   if (ipCharactersResult.status === "rejected" || ipCharactersResult.value.error) {
@@ -629,8 +681,9 @@ export async function POST(request: NextRequest) {
   }
 
   const tagRules = tagRulesResult.value;
+  const ipCatalogRows = ipCatalogResult.data ?? [];
   const displayContext: DisplayLabelContext = {
-    ipCatalog: ipCatalogResult.value.data ?? [],
+    ipCatalog: ipCatalogRows,
     ipCharacters: ipCharactersResult.value.data ?? [],
   };
 
@@ -639,6 +692,12 @@ export async function POST(request: NextRequest) {
     ip_name: entry.ip_name,
     aliases: entry.aliases ?? [],
   }));
+  const knowledgePackMap = mergeKnowledgePackMap(
+    ipCatalogRows.map((row) => ({
+      ip_name: row.ip_name,
+      knowledge_pack: (row as { knowledge_pack?: unknown }).knowledge_pack,
+    })),
+  );
 
   const extraWarnings: string[] = [];
 
@@ -650,12 +709,29 @@ export async function POST(request: NextRequest) {
   // warning, never fake results. Single-field regen does not re-search.
   const rawTitleForSearch = draft.taobao_title ?? draft.original_title ?? "";
   let webSearchSummary: string | undefined;
-  let webSearchCacheToPersist: WebSearchCache | null = null;
+  let productCacheToPersist: WebSearchCache | null = null;
+  let ipBackgroundCacheToPersist: WebSearchCache | null = null;
+  let ipKnowledgePromptBlock: string | undefined;
+
+  // P5 層2: resolve candidate IP for pack (draft first; else title alias guess).
+  const candidateIpForPack =
+    (draft.ip_name ?? "").trim() ||
+    guessIpNameFromTitle(rawTitleForSearch, ipCatalogEntries) ||
+    null;
+  const knowledgePack = lookupKnowledgePack(candidateIpForPack, knowledgePackMap);
+  const packBlock = buildIpKnowledgePromptBlock(knowledgePack);
+  if (packBlock) {
+    ipKnowledgePromptBlock = packBlock.block;
+    if (packBlock.truncated) {
+      extraWarnings.push("IP 背景資料包過長已截斷（上限 600 字），僅保留前段供語感參考。");
+    }
+  }
+
   if (runMode !== "test") {
     const searchOutcome = await resolveWebSearchForGenerate({
       useWebSearch,
       rawTitle: rawTitleForSearch,
-      ipName: draft.ip_name,
+      ipName: draft.ip_name ?? candidateIpForPack,
       characterName: draft.character_name,
       productType: draft.product_type,
       existingCache: draft.web_search_cache,
@@ -666,11 +742,37 @@ export async function POST(request: NextRequest) {
       extraWarnings.push(WEB_SEARCH_USED_WARNING);
     }
     if (searchOutcome.cacheToPersist) {
-      webSearchCacheToPersist = searchOutcome.cacheToPersist;
+      productCacheToPersist = searchOutcome.cacheToPersist;
+    }
+
+    // P5 層3: cold IP / no pack → optional IP-background search (shared cache).
+    if (!knowledgePack) {
+      const ipBg = await resolveIpBackgroundSearchForGenerate({
+        useWebSearch,
+        ipName: candidateIpForPack,
+        hasKnowledgePack: false,
+        existingCache: draft.web_search_cache,
+      });
+      if (ipBg.warnings.length > 0) extraWarnings.push(...ipBg.warnings);
+      if (ipBg.summary) {
+        ipKnowledgePromptBlock = buildIpBackgroundSearchPromptBlock(ipBg.summary);
+        extraWarnings.push("🔍 含冷門 IP 背景網搜，請核實（不得當規格數字來源）。");
+      } else if (ipBg.useNeutralFallback) {
+        ipKnowledgePromptBlock = IP_BACKGROUND_NEUTRAL_INSTRUCTION;
+      }
+      if (ipBg.cacheToPersist) {
+        ipBackgroundCacheToPersist = ipBg.cacheToPersist;
+      }
     }
   } else if (useWebSearch) {
     extraWarnings.push("測試模式未呼叫 Web Search。");
   }
+
+  const webSearchCacheToPersist = mergeWebSearchCacheLayers({
+    existing: draft.web_search_cache,
+    productCache: productCacheToPersist,
+    ipBackground: ipBackgroundCacheToPersist?.ipBackground ?? null,
+  });
 
   // Phase 4: the AI detects IP/character/type from the title+image (form no
   // longer collects them). Test mode has no LLM, so it falls back to whatever
@@ -704,6 +806,7 @@ export async function POST(request: NextRequest) {
         // here (or the spec field), never from Vision's visual guess (風險 #2).
         specText: draft.spec_text ?? undefined,
         webSearchSummary,
+        ipKnowledgePromptBlock,
         knownIpNames,
         tone,
         copyLength,
@@ -718,7 +821,7 @@ export async function POST(request: NextRequest) {
         // only non-null on a later full regeneration of an already-classified
         // draft; the initial pass falls back to the default tone.
         // Manual tones never consult ipToneMap (resolveCopyTone gate).
-        detectedIpName: draft.ip_name,
+        detectedIpName: draft.ip_name ?? candidateIpForPack,
         ipToneMap,
       });
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);

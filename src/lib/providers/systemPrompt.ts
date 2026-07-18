@@ -456,7 +456,24 @@ export function buildKnownIpBlock(knownIpNames?: string[]): string | null {
 }
 
 export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitKnownIpList?: boolean }): string {
-  const { rawTitle, saleStatus, source, variantSummary, price, compareAtPrice, note, imageDescription, specText, webSearchSummary, knownIpNames, isSecondhand, secondhandGrade, secondhandCondition, secondhandNotes } = input;
+  const {
+    rawTitle,
+    saleStatus,
+    source,
+    variantSummary,
+    price,
+    compareAtPrice,
+    note,
+    imageDescription,
+    specText,
+    webSearchSummary,
+    ipKnowledgePromptBlock,
+    knownIpNames,
+    isSecondhand,
+    secondhandGrade,
+    secondhandCondition,
+    secondhandNotes,
+  } = input;
 
   const lines = [
     `商品來源：${source || "淘寶"}`,
@@ -480,6 +497,10 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
     lines.push(
       `網路搜尋補充資訊（內部參考、須核實；可寫入有把握的規格事實，但顧客文案禁止標「來源：網路」或附 URL；不確定勿寫）：\n${webSearchSummary}`,
     );
+  }
+  // P5: IP lore / cold-IP search — after product facts, before secondhand.
+  if (ipKnowledgePromptBlock?.trim()) {
+    lines.push(ipKnowledgePromptBlock.trim());
   }
   // A9 item 4: without this the model has no signal the listing is secondhand.
   if (isSecondhand) {
@@ -581,6 +602,9 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
   ];
   if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
   if (input.specText) lines.push(`商品規格（操作者補充）：${input.specText}`);
+  if (input.ipKnowledgePromptBlock?.trim()) {
+    lines.push(input.ipKnowledgePromptBlock.trim());
+  }
   if (input.isSecondhand) {
     lines.push(
       `這是二手／中古商品：` +

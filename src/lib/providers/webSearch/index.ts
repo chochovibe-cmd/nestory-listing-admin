@@ -70,7 +70,14 @@ export function buildWebSearchQuery(input: {
   return `${head} 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
 }
 
-export function parseWebSearchCache(raw: unknown): WebSearchCache | null {
+function parseWebSearchCacheEntry(raw: unknown): {
+  query: string;
+  queryFingerprint: string;
+  summary: string;
+  sources: { title: string; url: string }[];
+  provider: string;
+  fetchedAt: string;
+} | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
   const query = typeof obj.query === "string" ? obj.query : "";
@@ -102,6 +109,201 @@ export function parseWebSearchCache(raw: unknown): WebSearchCache | null {
     provider: typeof obj.provider === "string" ? obj.provider : "tavily",
     fetchedAt: typeof obj.fetchedAt === "string" ? obj.fetchedAt : "",
   };
+}
+
+export function parseWebSearchCache(raw: unknown): WebSearchCache | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const entry = parseWebSearchCacheEntry(raw);
+  const ipBackground = parseWebSearchCacheEntry(obj.ipBackground) ?? undefined;
+  if (!entry && !ipBackground) return null;
+  // Product-spec path needs a top-level summary; IP-only cache uses empty product shell.
+  if (!entry) {
+    return {
+      query: "",
+      queryFingerprint: "",
+      summary: "",
+      sources: [],
+      provider: ipBackground!.provider,
+      fetchedAt: ipBackground!.fetchedAt,
+      ipBackground,
+    };
+  }
+  return ipBackground ? { ...entry, ipBackground } : entry;
+}
+
+/** Read only nested IP-background cache (P5 層3). */
+export function parseIpBackgroundCacheEntry(
+  raw: unknown,
+): NonNullable<WebSearchCache["ipBackground"]> | null {
+  if (!raw || typeof raw !== "object") return null;
+  return parseWebSearchCacheEntry((raw as Record<string, unknown>).ipBackground);
+}
+
+/** Merge product-spec + IP-background writes into one draft.web_search_cache payload. */
+export function mergeWebSearchCacheLayers(params: {
+  existing?: unknown;
+  productCache?: WebSearchCache | null;
+  ipBackground?: NonNullable<WebSearchCache["ipBackground"]> | null;
+}): WebSearchCache | null {
+  // Only persist when at least one layer is newly produced this request.
+  if (!params.productCache && !params.ipBackground) return null;
+
+  const existing = parseWebSearchCache(params.existing);
+  const product = params.productCache ?? existing;
+  const ipBackground =
+    params.ipBackground ?? existing?.ipBackground ?? undefined;
+
+  if (!product?.summary?.trim() && !ipBackground?.summary?.trim()) return null;
+
+  return {
+    query: product?.query ?? "",
+    queryFingerprint: product?.queryFingerprint ?? "",
+    // parseWebSearchCacheEntry requires non-empty summary for product hits;
+    // keep a non-empty placeholder only when product is empty but IP lore exists.
+    summary: product?.summary?.trim()
+      ? product.summary
+      : ipBackground
+        ? "（無商品規格搜尋）"
+        : "",
+    sources: product?.sources ?? [],
+    provider: product?.provider ?? ipBackground?.provider ?? "tavily",
+    fetchedAt:
+      product?.fetchedAt || ipBackground?.fetchedAt || new Date().toISOString(),
+    ...(ipBackground ? { ipBackground } : {}),
+  };
+}
+
+/** P5 層3：冷門 IP 背景查詢（與商品規格查詢分開 fingerprint）。 */
+export function buildIpBackgroundSearchQuery(ipName: string): string {
+  const name = (ipName ?? "").normalize("NFKC").trim();
+  if (!name) return "";
+  return `${name} 角色 世界觀 簡介 粉絲`.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Resolve IP-background search when catalog has no knowledge_pack (or IP unknown).
+ * Shares draft web_search_cache under `ipBackground`; product-spec cache untouched.
+ */
+export async function resolveIpBackgroundSearchForGenerate(params: {
+  useWebSearch: boolean;
+  ipName: string | null | undefined;
+  /** When true, skip search (pack already covers this IP). */
+  hasKnowledgePack: boolean;
+  existingCache?: unknown;
+  provider?: WebSearchProvider;
+}): Promise<{
+  summary: string | null;
+  /** Full cache object to persist (merges product + ipBackground). null = no write. */
+  cacheToPersist: WebSearchCache | null;
+  warnings: string[];
+  didLiveSearch: boolean;
+  /** True when we should inject the neutral-writing instruction. */
+  useNeutralFallback: boolean;
+}> {
+  const warnings: string[] = [];
+  if (params.hasKnowledgePack) {
+    return {
+      summary: null,
+      cacheToPersist: null,
+      warnings,
+      didLiveSearch: false,
+      useNeutralFallback: false,
+    };
+  }
+
+  const ipName = (params.ipName ?? "").normalize("NFKC").trim();
+  if (!ipName) {
+    return {
+      summary: null,
+      cacheToPersist: null,
+      warnings,
+      didLiveSearch: false,
+      useNeutralFallback: true,
+    };
+  }
+
+  if (!params.useWebSearch) {
+    return {
+      summary: null,
+      cacheToPersist: null,
+      warnings,
+      didLiveSearch: false,
+      useNeutralFallback: true,
+    };
+  }
+
+  const provider = params.provider ?? createWebSearchProvider();
+  if (!provider.isConfigured()) {
+    warnings.push(
+      "冷門 IP 需要背景補充，但伺服器尚未設定搜尋服務（TAVILY_API_KEY），本次以中性寫法處理。",
+    );
+    return {
+      summary: null,
+      cacheToPersist: null,
+      warnings,
+      didLiveSearch: false,
+      useNeutralFallback: true,
+    };
+  }
+
+  const query = buildIpBackgroundSearchQuery(ipName);
+  const fingerprint = fingerprintWebSearchQuery(query);
+  const cachedIp = parseIpBackgroundCacheEntry(params.existingCache);
+  if (cachedIp && cachedIp.queryFingerprint === fingerprint && cachedIp.summary.trim()) {
+    return {
+      summary: cachedIp.summary,
+      cacheToPersist: null,
+      warnings,
+      didLiveSearch: false,
+      useNeutralFallback: false,
+    };
+  }
+
+  try {
+    const live = await provider.search(query);
+    if (!live.summary.trim()) {
+      warnings.push("冷門 IP 背景網搜無可用結果，本次以中性寫法處理。");
+      return {
+        summary: null,
+        cacheToPersist: null,
+        warnings,
+        didLiveSearch: true,
+        useNeutralFallback: true,
+      };
+    }
+
+    const ipBackground = {
+      query: live.query,
+      queryFingerprint: fingerprint,
+      summary: live.summary,
+      sources: live.sources,
+      provider: live.provider,
+      fetchedAt: new Date().toISOString(),
+    };
+
+    return {
+      summary: live.summary,
+      // Route merges with product-spec cache via mergeWebSearchCacheLayers.
+      cacheToPersist: mergeWebSearchCacheLayers({
+        existing: params.existingCache,
+        ipBackground,
+      }),
+      warnings,
+      didLiveSearch: true,
+      useNeutralFallback: false,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    warnings.push(`冷門 IP 背景網搜失敗（${message}），本次以中性寫法處理。`);
+    return {
+      summary: null,
+      cacheToPersist: null,
+      warnings,
+      didLiveSearch: false,
+      useNeutralFallback: true,
+    };
+  }
 }
 
 /**

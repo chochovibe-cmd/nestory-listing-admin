@@ -18,14 +18,23 @@ export interface WebSearchResult {
   fromCache: boolean;
 }
 
-/** Persisted on product_drafts.web_search_cache (migration 023). */
-export interface WebSearchCache {
+/** One cached search payload (product-spec or IP background). */
+export interface WebSearchCacheEntry {
   query: string;
   queryFingerprint: string;
   summary: string;
   sources: WebSearchSource[];
   provider: WebSearchProviderName | string;
   fetchedAt: string;
+}
+
+/**
+ * Persisted on product_drafts.web_search_cache (migration 023 + P5 層3).
+ * Top-level fields = product-spec search (B19).
+ * `ipBackground` = optional cold-IP lore search (P5); same draft, separate fingerprint.
+ */
+export interface WebSearchCache extends WebSearchCacheEntry {
+  ipBackground?: WebSearchCacheEntry;
 }
 
 export interface WebSearchProvider {

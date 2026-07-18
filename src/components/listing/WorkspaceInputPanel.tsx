@@ -14,7 +14,11 @@ import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricin
 import { SALE_STATUS_OPTIONS } from "@/lib/saleStatus";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
-import { ImageUploader, type SeedImageRow } from "@/components/listing/ImageUploader";
+import {
+  ImageUploader,
+  type ImageUploaderHandle,
+  type SeedImageRow
+} from "@/components/listing/ImageUploader";
 import {
   GENERATION_PROGRESS_EVENT,
   GENERATION_STEP_LABELS,
@@ -271,6 +275,10 @@ export function WorkspaceInputPanel({
   const inventoryRef = useRef<HTMLInputElement>(null);
   const productShotInputRef = useRef<HTMLInputElement>(null);
   const specShotInputRef = useRef<HTMLInputElement>(null);
+  /** UX-I T47: full-page file drop → ImageUploader main pipeline */
+  const imageUploaderRef = useRef<ImageUploaderHandle>(null);
+  const [pageDropActive, setPageDropActive] = useState(false);
+  const pageDropDepthRef = useRef(0);
   /** UX-D T20: paste → screenshot recognition (mode from open spec panel). */
   const specShotOpenRef = useRef(false);
   const runScreenshotRecognitionRef = useRef<
@@ -941,6 +949,75 @@ export function WorkspaceInputPanel({
     return () => document.removeEventListener("paste", onPaste);
   }, []);
 
+  // UX-I T47: full-page image drop mask → main upload pipeline (not pure text; no second storage path).
+  useEffect(() => {
+    function dataTransferHasFiles(dt: DataTransfer | null | undefined): boolean {
+      if (!dt) return false;
+      return Array.from(dt.types ?? []).includes("Files");
+    }
+
+    function clearPageDrop() {
+      pageDropDepthRef.current = 0;
+      setPageDropActive(false);
+    }
+
+    function onDragEnter(event: DragEvent) {
+      if (!dataTransferHasFiles(event.dataTransfer)) return;
+      pageDropDepthRef.current += 1;
+      setPageDropActive(true);
+    }
+
+    function onDragLeave(event: DragEvent) {
+      if (pageDropDepthRef.current === 0) return;
+      pageDropDepthRef.current = Math.max(0, pageDropDepthRef.current - 1);
+      if (pageDropDepthRef.current === 0) setPageDropActive(false);
+    }
+
+    function onDragOver(event: DragEvent) {
+      if (!dataTransferHasFiles(event.dataTransfer) && pageDropDepthRef.current === 0) return;
+      // Allow drop anywhere on the workbench (browser would otherwise open the file).
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    }
+
+    function onDrop(event: DragEvent) {
+      const hadFiles = dataTransferHasFiles(event.dataTransfer);
+      clearPageDrop();
+      if (!hadFiles) return;
+
+      const target = event.target as HTMLElement | null;
+      // Zone / thumb reorder own their drops (T22); do not double-upload.
+      if (target?.closest?.(".dropzone, .upload-section, .pthumb-strip, .pthumb")) {
+        return;
+      }
+
+      // Outside zones: stop browser from opening the file.
+      event.preventDefault();
+      const files = Array.from(event.dataTransfer?.files ?? []).filter(
+        (f) => f.type.startsWith("image/") || (!f.type && /\.(jpe?g|png|gif|webp|bmp|heic)$/i.test(f.name))
+      );
+      if (files.length === 0) return;
+      void imageUploaderRef.current?.uploadMainFiles(files);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") clearPageDrop();
+    }
+
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
   function getInventoryFields(): { inventory_quantity: number | null; inventory_policy: InventoryPolicy } | null {
     if (inventoryUnlimited) {
       return { inventory_quantity: null, inventory_policy: "continue" };
@@ -1553,6 +1630,11 @@ export function WorkspaceInputPanel({
 
   return (
     <div className="panel">
+      {pageDropActive ? (
+        <div className="page-drop-mask" aria-hidden="true">
+          <div className="page-drop-mask-inner">放到這裡上傳商品圖（預設進主圖）</div>
+        </div>
+      ) : null}
       <div className="panel-header">
         <h2>✦ 新增商品</h2>
       </div>
@@ -1763,6 +1845,7 @@ export function WorkspaceInputPanel({
               ensureDraftId={ensureDraftId}
               key={formKey}
               onUploadingChange={setImagesUploading}
+              ref={imageUploaderRef}
               seedImages={seedImages}
               trackUpload={(promise) => uploadPromisesRef.current.push(promise)}
               userId={userId}

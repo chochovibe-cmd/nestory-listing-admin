@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type ClipboardEvent } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ClipboardEvent
+} from "react";
 import { createClient } from "@/lib/supabase/client";
 import { intentForSpecToggle } from "@/lib/images/processMarks";
 import { showToast } from "@/components/Toast";
@@ -91,14 +98,14 @@ function imageFilesFromClipboard(data: DataTransfer | null): File[] {
 // `trackUpload` so the parent can await outstanding uploads before it calls
 // analyze-images/generate, and `onUploadingChange` drives the parent's
 // "圖片還在上傳" gate on the generate button.
-export function ImageUploader({
-  draftId,
-  ensureDraftId,
-  userId,
-  trackUpload,
-  onUploadingChange,
-  seedImages
-}: {
+// UX-I T47: parent page-drop mask calls uploadMainFiles → same main pipeline.
+
+export type ImageUploaderHandle = {
+  /** Full-page / external drop → main zone only (same as dropzone upload). */
+  uploadMainFiles: (files: FileList | File[] | null) => Promise<void>;
+};
+
+type ImageUploaderProps = {
   draftId?: string;
   ensureDraftId?: () => Promise<string | null>;
   userId: string;
@@ -106,7 +113,19 @@ export function ImageUploader({
   onUploadingChange?: (uploading: boolean) => void;
   /** P1-2 / 回饋 16: load existing product_images into previews (restore draft). */
   seedImages?: SeedImageRow[] | null;
-}) {
+};
+
+export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>(function ImageUploader(
+  {
+    draftId,
+    ensureDraftId,
+    userId,
+    trackUpload,
+    onUploadingChange,
+    seedImages
+  },
+  ref
+) {
   const supabase = createClient();
   const [previews, setPreviews] = useState<Record<string, PreviewItem[]>>({});
   const [dragging, setDragging] = useState<string | null>(null);
@@ -348,6 +367,13 @@ export function ImageUploader({
       endUpload();
     }
   }
+
+  const uploadFilesRef = useRef(uploadFiles);
+  uploadFilesRef.current = uploadFiles;
+
+  useImperativeHandle(ref, () => ({
+    uploadMainFiles: (files) => uploadFilesRef.current("main", files)
+  }));
 
   function handleZonePaste(type: ImageType, event: ClipboardEvent) {
     const images = imageFilesFromClipboard(event.clipboardData);
@@ -666,4 +692,4 @@ export function ImageUploader({
       {message ? <div className="notice">{message}</div> : null}
     </div>
   );
-}
+});

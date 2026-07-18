@@ -22,11 +22,14 @@ import {
   type ExportPreflightReport,
   type PreflightDraftInput
 } from "@/lib/csv/exportPreflight";
+import { buildMatrixifyRows, type MatrixifyDraft } from "@/lib/csv/matrixify";
+import { buildShowmoreRows, type ShowmoreDraft } from "@/lib/csv/showmore";
 import {
   formatStation3ResultMessage,
   shouldLeaveQueue,
   type Station3PublishSelection
 } from "@/lib/drafts/station3Publish";
+import type { ExportPreviewRow } from "@/components/listing/ExportPreflightModal";
 import {
   RESULT_SORT_OPTIONS,
   type ResultSortMode,
@@ -161,6 +164,8 @@ export function DraftResultsPanel({
     draftIds: string[];
     markupPercent?: number;
     markLeaveQueue: boolean;
+    /** UX-O T68: full CSV rows for table mode */
+    fullTableRows: ExportPreviewRow[];
   }>(null);
   const [exportBusy, setExportBusy] = useState(false);
   const [pendingApiResult, setPendingApiResult] = useState<{
@@ -619,6 +624,50 @@ export function DraftResultsPanel({
     });
   }
 
+  /** UX-O T68: local drafts → full CSV-shaped rows for table preview (no API). */
+  function buildFullTableRows(kind: ExportKind, draftIds: string[], markup: number): ExportPreviewRow[] {
+    const packed = draftIds.map((id) => {
+      const draft = drafts.find((row) => row.id === id);
+      const imgs = imagesByDraft.get(id) ?? [];
+      const vars = variantsByDraft.get(id) ?? [];
+      if (!draft) {
+        // Missing id (race / deleted): stub only — builders tolerate sparse rows.
+        return {
+          id,
+          product_images: [],
+          product_variants: []
+        } as unknown as MatrixifyDraft;
+      }
+      const product_variants = vars.map((v) => ({
+        option1_name: v.option1_name ?? null,
+        option1_value: v.option1_value ?? null,
+        option2_name: v.option2_name ?? null,
+        option2_value: v.option2_value ?? null,
+        option3_name: v.option3_name ?? null,
+        option3_value: v.option3_value ?? null,
+        sku: v.sku ?? null,
+        twd_price: v.twd_price,
+        compare_at_price: v.compare_at_price,
+        cny_price: v.cny_price,
+        inventory_quantity: v.inventory_quantity,
+        inventory_policy: v.inventory_policy,
+        sort_order: v.sort_order
+      }));
+      return {
+        ...draft,
+        product_images: imgs,
+        product_variants
+      } as MatrixifyDraft;
+    });
+
+    if (kind === "showmore") {
+      return buildShowmoreRows(packed as ShowmoreDraft[], {
+        showmoreMarkupPercent: markup
+      }) as ExportPreviewRow[];
+    }
+    return buildMatrixifyRows(packed) as ExportPreviewRow[];
+  }
+
   function openNextExportPreflight(
     kinds: ExportKind[],
     draftIds: string[],
@@ -631,13 +680,15 @@ export function DraftResultsPanel({
       kind,
       showmoreMarkupPercent: markup
     });
+    const fullTableRows = buildFullTableRows(kind, draftIds, markup);
     setExportQueue(rest);
     setExportPreflight({
       kind,
       report,
       draftIds,
       markupPercent: kind === "showmore" ? markup : undefined,
-      markLeaveQueue
+      markLeaveQueue,
+      fullTableRows
     });
   }
 
@@ -1162,6 +1213,7 @@ export function DraftResultsPanel({
 
       <ExportPreflightModal
         busy={exportBusy}
+        fullTableRows={exportPreflight?.fullTableRows ?? null}
         onCancel={() => {
           if (!exportBusy) {
             setExportPreflight(null);

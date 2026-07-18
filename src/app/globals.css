@@ -1957,8 +1957,9 @@ textarea {
 }
 
 /* D9-open export preflight — layout only; reuses modal / schip / st-dot tokens */
+/* UX-O T68: slightly wider for full-column table; overflow still h-scrolls */
 .modal-box.export-preflight-modal {
-  width: min(480px, 94vw);
+  width: min(720px, 94vw);
 }
 .export-pf-overview {
   margin: 0 0 12px;
@@ -2056,12 +2057,19 @@ textarea {
   max-height: 42vh;
   margin: 0 0 12px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 .export-pf-table {
   width: 100%;
   min-width: 520px;
   border-collapse: collapse;
   font-size: 12.5px;
+}
+/* UX-O T68: full Matrixify/Showmore columns — wide table, modal width fixed */
+.export-pf-table.export-pf-table--full {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
 }
 .export-pf-table th,
 .export-pf-table td {
@@ -2076,11 +2084,22 @@ textarea {
   position: sticky;
   top: 0;
   background: var(--panel, var(--bg));
+  z-index: 1;
 }
 .export-pf-table td.export-pf-sku {
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Long CSV cells: ellipsis; blank stays blank (no prior-row fill) */
+.export-pf-table td.export-pf-cell-long {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.export-pf-table-empty {
+  margin: 0 0 12px;
+  font-size: 12.5px;
 }
 .export-pf-table tr.has-error td {
   color: var(--accent2);

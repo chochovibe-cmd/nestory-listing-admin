@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import {
-  EXPORT_TABLE_COLUMNS,
   exportPreflightHeading,
   exportPrimaryLabel,
   formatPriceCell,
@@ -10,12 +9,100 @@ import {
 } from "@/lib/csv/exportPreflight";
 
 /**
- * D9-open + R3 §10: export preflight + dual-mode preview (list / table).
+ * UX-O T68: fixed Matrixify CSV header order (Fable).
+ * Do not derive from Object.keys — order must match download CSV.
+ */
+export const MATRIXIFY_PREVIEW_HEADERS = [
+  "Command",
+  "Handle",
+  "Title",
+  "Body HTML",
+  "Vendor",
+  "Type",
+  "Tags",
+  "Published",
+  "Status",
+  "SEO Title",
+  "SEO Description",
+  "Option1 Name",
+  "Option1 Value",
+  "Option2 Name",
+  "Option2 Value",
+  "Option3 Name",
+  "Option3 Value",
+  "Variant SKU",
+  "Variant Price",
+  "Variant Cost",
+  "Variant Inventory Tracker",
+  "Variant Inventory Qty",
+  "Variant Inventory Policy",
+  "Variant Requires Shipping",
+  "Variant Image",
+  "Image Src",
+  "Image Position",
+  "Image Alt Text"
+] as const;
+
+/** Showmore template column order (matches emptyShowmoreRow / buildShowmoreRows). */
+export const SHOWMORE_PREVIEW_HEADERS = [
+  "商品名稱*",
+  "商品簡述",
+  "商品介紹",
+  "配送限定",
+  "商品編號(sku)",
+  "第一層樣式名稱",
+  "第一層樣式*",
+  "第二層樣式名稱",
+  "第二層樣式",
+  "第三層樣式名稱",
+  "第三層樣式",
+  "原價",
+  "售價*",
+  "成本",
+  "官網庫存*",
+  "重量(kg)*",
+  "VIP價格",
+  "主要圖片*",
+  "廣告圖",
+  "商品圖片",
+  "商品樣式圖片"
+] as const;
+
+/** Long text columns — ellipsis + title tooltip; never auto-fill prior row. */
+const LONG_CELL_HEADERS = new Set([
+  "Body HTML",
+  "SEO Description",
+  "Tags",
+  "商品介紹",
+  "商品簡述",
+  "商品圖片",
+  "Image Src",
+  "Variant Image",
+  "主要圖片*",
+  "廣告圖"
+]);
+
+export type ExportPreviewRow = Record<string, unknown>;
+
+/**
+ * Render cell as CSV does: empty stays empty (no "—" filler, no prior-row fill).
+ */
+function formatFullTableCell(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return String(value);
+}
+
+/**
+ * D9-open + R3 §10 + UX-O T68: export preflight dual-mode.
+ * List = report.items summary; table = full CSV rows (fullTableRows).
  * Shell = B11 ApproveSummaryModal (modal-overlay / modal-box / <960 bottom sheet).
  */
 export function ExportPreflightModal({
   open,
   report,
+  fullTableRows = null,
   busy = false,
   confirmLabel,
   onCancel,
@@ -23,6 +110,11 @@ export function ExportPreflightModal({
 }: {
   open: boolean;
   report: ExportPreflightReport | null;
+  /**
+   * UX-O T68: complete CSV-shaped rows from buildMatrixifyRows / buildShowmoreRows.
+   * Table mode only; blanks are intentional — never fill from previous row.
+   */
+  fullTableRows?: ExportPreviewRow[] | null;
   busy?: boolean;
   /** Override primary button (e.g. multi-export flow). */
   confirmLabel?: string;
@@ -64,6 +156,9 @@ export function ExportPreflightModal({
   const heading = exportPreflightHeading(report.kind);
   const primaryLabel = confirmLabel ?? exportPrimaryLabel(report);
   const canExport = report.canExport && !busy;
+  const tableHeaders: readonly string[] =
+    report.kind === "showmore" ? SHOWMORE_PREVIEW_HEADERS : MATRIXIFY_PREVIEW_HEADERS;
+  const tableRows = fullTableRows ?? [];
 
   return (
     <div
@@ -167,38 +262,41 @@ export function ExportPreflightModal({
             </ul>
           ) : null}
 
-          {viewMode === "table" && report.items.length > 0 ? (
-            <div className="export-pf-table-wrap">
-              <table className="export-pf-table">
-                <thead>
-                  <tr>
-                    {EXPORT_TABLE_COLUMNS.map((col) => (
-                      <th key={col.key}>{col.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.items.map((item) => (
-                    <tr
-                      className={item.hasError ? "has-error" : item.hasWarn ? "has-warn" : ""}
-                      key={item.draftId}
-                    >
-                      <td title={item.titleFull}>{item.titleShort}</td>
-                      <td>{formatPriceCell(item.sellPriceDisplay)}</td>
-                      <td>{formatPriceCell(item.compareAtDisplay)}</td>
-                      <td className="export-pf-sku">{item.skuDisplay || "—"}</td>
-                      <td>{item.variantCount > 0 ? item.variantCount : "1"}</td>
-                      <td>{item.imageCount}</td>
-                      <td>
-                        <span
-                          className={`export-pf-lamp ${item.hasError ? "is-err" : item.hasWarn ? "is-warn" : "is-ok"}`}
-                        />
-                      </td>
+          {viewMode === "table" ? (
+            tableRows.length > 0 ? (
+              <div className="export-pf-table-wrap">
+                <table className="export-pf-table export-pf-table--full">
+                  <thead>
+                    <tr>
+                      {tableHeaders.map((header) => (
+                        <th key={header}>{header}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((row, rowIndex) => (
+                      <tr key={`csv-row-${rowIndex}`}>
+                        {tableHeaders.map((header) => {
+                          const text = formatFullTableCell(row[header]);
+                          const isLong = LONG_CELL_HEADERS.has(header);
+                          return (
+                            <td
+                              className={isLong ? "export-pf-cell-long" : undefined}
+                              key={header}
+                              title={text || undefined}
+                            >
+                              {text}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted export-pf-table-empty">尚無可預覽的完整 CSV 列。</p>
+            )
           ) : null}
 
           {report.errorCount > 0 || report.warnCount > 0 || report.infoCount > 0 ? (

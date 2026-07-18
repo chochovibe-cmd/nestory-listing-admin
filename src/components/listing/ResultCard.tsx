@@ -75,13 +75,18 @@ import {
   isArchiveBusyStatus,
   isPublishedArchiveStatus
 } from "@/lib/drafts/archiveDrafts";
-import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
+import {
+  ExportPreflightModal,
+  type ExportPreviewRow
+} from "@/components/listing/ExportPreflightModal";
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import {
   runExportPreflight,
   type ExportKind,
   type ExportPreflightReport
 } from "@/lib/csv/exportPreflight";
+import { buildMatrixifyRows, type MatrixifyDraft } from "@/lib/csv/matrixify";
+import { buildShowmoreRows, type ShowmoreDraft } from "@/lib/csv/showmore";
 import {
   formatStation3ResultMessage,
   shouldLeaveQueue,
@@ -349,6 +354,10 @@ export function ResultCard({
   const [exportQueue, setExportQueue] = useState<ExportKind[]>([]);
   const [exportPreflightReport, setExportPreflightReport] =
     useState<ExportPreflightReport | null>(null);
+  /** UX-O T68: full CSV rows for table mode */
+  const [exportFullTableRows, setExportFullTableRows] = useState<ExportPreviewRow[] | null>(
+    null
+  );
   const [exportMarkLeave, setExportMarkLeave] = useState(true);
   const [exportBusy, setExportBusy] = useState(false);
   const [cardExportKind, setCardExportKind] = useState<ExportKind>("matrixify");
@@ -1393,32 +1402,106 @@ export function ResultCard({
     if (!kinds.length) return;
     const [kind, ...rest] = kinds;
     const markup = getStoredPricingSettings().showmoreMarkupPercent;
+    const titleForExport = title || draft.title_zh;
+    const sellForExport = sellPrice ? Number(sellPrice) : draft.twd_price;
+    const compareForExport = compareAtPrice
+      ? Number(compareAtPrice)
+      : draft.compare_at_price;
+    const descForExport = description || draft.description_html;
+
+    // Prefer dirty local variant form; else server variantPrices (same as specs tab).
+    const product_variants = variantsDirty
+      ? formRowsToDbInserts(
+          clampDimensions(variantDimensions),
+          variantRows.filter(isVariantRowFilled)
+        ).map((v) => ({
+          option1_name: v.option1_name,
+          option1_value: v.option1_value,
+          option2_name: v.option2_name,
+          option2_value: v.option2_value,
+          option3_name: v.option3_name,
+          option3_value: v.option3_value,
+          sku: v.sku,
+          twd_price: v.twd_price,
+          compare_at_price: v.compare_at_price,
+          cny_price: v.cny_price,
+          inventory_quantity: v.inventory_quantity,
+          inventory_policy: v.inventory_policy,
+          sort_order: v.sort_order
+        }))
+      : variantPrices.map((v) => ({
+          option1_name: v.option1_name ?? null,
+          option1_value: v.option1_value ?? null,
+          option2_name: v.option2_name ?? null,
+          option2_value: v.option2_value ?? null,
+          option3_name: v.option3_name ?? null,
+          option3_value: v.option3_value ?? null,
+          sku: v.sku ?? null,
+          twd_price: v.twd_price,
+          compare_at_price: v.compare_at_price,
+          cny_price: v.cny_price,
+          inventory_quantity: v.inventory_quantity,
+          inventory_policy: v.inventory_policy,
+          sort_order: v.sort_order
+        }));
+
     const report = runExportPreflight(
       [
         {
           id: draft.id,
-          title_zh: title || draft.title_zh,
+          title_zh: titleForExport,
           taobao_title: draft.taobao_title,
           original_title: draft.original_title,
           status: draft.status,
           pipeline_stage: draft.pipeline_stage,
-          sku: draft.sku,
-          twd_price: sellPrice ? Number(sellPrice) : draft.twd_price,
+          sku: sku || draft.sku,
+          twd_price: sellForExport,
           twd_cost: draft.twd_cost,
-          compare_at_price: compareAtPrice ? Number(compareAtPrice) : draft.compare_at_price,
+          compare_at_price: compareForExport,
           price_mode: draft.price_mode,
-          description_html: description || draft.description_html,
+          description_html: descForExport,
           description_plain: draft.description_plain,
           variant_dimensions: draft.variant_dimensions,
-          product_images: images
+          product_images: images,
+          product_variants: product_variants.map((v) => ({
+            option1_value: v.option1_value ?? null,
+            option2_value: v.option2_value ?? null,
+            option3_value: v.option3_value ?? null,
+            twd_price: v.twd_price ?? null,
+            sku: v.sku ?? null,
+            sort_order: v.sort_order ?? 0
+          }))
         }
       ],
       { kind, showmoreMarkupPercent: markup }
     );
+
+    // UX-O T68: full CSV preview rows (same builders as download; blanks intentional).
+    const packed = {
+      ...draft,
+      title_zh: titleForExport,
+      twd_price: sellForExport,
+      compare_at_price: compareForExport,
+      description_html: descForExport,
+      sku: sku || draft.sku,
+      seo_title: seoTitle || draft.seo_title,
+      seo_description: seoDescription || draft.seo_description,
+      product_images: images,
+      product_variants
+    } as MatrixifyDraft;
+
+    const fullRows =
+      kind === "showmore"
+        ? (buildShowmoreRows([packed as ShowmoreDraft], {
+            showmoreMarkupPercent: markup
+          }) as ExportPreviewRow[])
+        : (buildMatrixifyRows([packed]) as ExportPreviewRow[]);
+
     setExportQueue(rest);
     setExportMarkLeave(markLeave);
     setCardExportKind(kind);
     setExportPreflightReport(report);
+    setExportFullTableRows(fullRows);
   }
 
   async function removeImage(image: ProductImage) {
@@ -1578,6 +1661,7 @@ export function ResultCard({
 
       if (exportQueue.length) {
         setExportPreflightReport(null);
+        setExportFullTableRows(null);
         openNextCardExport(exportQueue, exportMarkLeave);
         return;
       }
@@ -1599,6 +1683,7 @@ export function ResultCard({
       setMessage("");
       showToast(summary, "success");
       setExportPreflightReport(null);
+      setExportFullTableRows(null);
       setStation3Selection(null);
       setPendingApiResult(null);
       router.refresh();
@@ -2694,9 +2779,11 @@ export function ResultCard({
 
       <ExportPreflightModal
         busy={exportBusy}
+        fullTableRows={exportFullTableRows}
         onCancel={() => {
           if (!exportBusy) {
             setExportPreflightReport(null);
+            setExportFullTableRows(null);
             setExportQueue([]);
           }
         }}

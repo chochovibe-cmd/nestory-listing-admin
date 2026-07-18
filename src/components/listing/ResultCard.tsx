@@ -301,7 +301,15 @@ export function ResultCard({
   onToggle,
   defaultExpanded = false,
   variantPrices = [],
-  leaving = false
+  leaving = false,
+  /** UX-Q T70: force expanded; skip collapse */
+  sequentialMode = false,
+  /** UX-Q T70: called only after approve API succeeds */
+  onApproveSuccess,
+  /** UX-Q T70: parent increments → same as clicking ✓ 核准 */
+  approveSignal,
+  /** UX-Q T70: parent sets tab (1–5 shortcuts); null = no-op */
+  externalTab = null,
 }: {
   draft: ProductDraft;
   images: ProductImage[];
@@ -312,11 +320,16 @@ export function ResultCard({
   variantPrices?: ResultCardVariantRow[];
   /** UX-H T49: archive leave fade (display only) */
   leaving?: boolean;
+  sequentialMode?: boolean;
+  onApproveSuccess?: () => void;
+  approveSignal?: number;
+  externalTab?: ResultCardTabId | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expanded, setExpanded] = useState(defaultExpanded || sequentialMode);
   const [activeTab, setActiveTab] = useState<ResultCardTabId>("copy");
+  const lastApproveSignalRef = useRef<number | undefined>(approveSignal);
   const [title, setTitle] = useState(draft.title_zh ?? "");
   // fix(B10): tolerate legacy HTML rows — display/edit as plain text contract.
   const [description, setDescription] = useState(
@@ -1200,6 +1213,8 @@ export function ResultCard({
       // UX-A T2 + §2.2 站名：標圖（覆寫「圖片審核」）
       setMessage("");
       showToast("已核准文案 → 進入標圖（文案已鎖定）", "success");
+      // UX-Q T70: sequential mode advances only on success
+      onApproveSuccess?.();
       router.refresh();
     } catch {
       setMessage("");
@@ -1709,7 +1724,47 @@ export function ResultCard({
     }
   }, [isCopyStation, activeTab]);
 
+  // UX-Q T70: force expanded while sequential review is open
+  useEffect(() => {
+    if (sequentialMode) setExpanded(true);
+  }, [sequentialMode, draft.id]);
+
+  // UX-Q T70: keyboard 1–5 → externalTab
+  useEffect(() => {
+    if (!externalTab) return;
+    selectTab(externalTab);
+    // selectTab is stable enough for tab ids; avoid re-firing on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when parent pushes a tab
+  }, [externalTab]);
+
+  // UX-Q T70: keyboard A → same path as ✓ 核准 button (respect busy / block / canQuickApprove)
+  useEffect(() => {
+    if (approveSignal == null) return;
+    if (lastApproveSignalRef.current === undefined) {
+      lastApproveSignalRef.current = approveSignal;
+      return;
+    }
+    if (approveSignal === lastApproveSignalRef.current) return;
+    lastApproveSignalRef.current = approveSignal;
+    if (
+      quickBusy ||
+      regenerating ||
+      regeneratingField != null ||
+      !canQuickApprove ||
+      hasBlockingWarnings(warningSummary)
+    ) {
+      if (hasBlockingWarnings(warningSummary)) {
+        setMessage(`⛔ 必修：${warningSummary.block.map((w) => w.text).join("；")}`);
+      }
+      return;
+    }
+    void approveOnly();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- signal edge only
+  }, [approveSignal]);
+
   function tryToggleExpand() {
+    // UX-Q T70: sequential mode stays expanded
+    if (sequentialMode) return;
     // UX-L T61: collapse with dirty edits → inline double-confirm (no window.confirm)
     // UX-M T64: include specs / pricing dirty
     if (expanded && hasUncommittedEdits()) {

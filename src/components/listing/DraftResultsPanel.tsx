@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
+import {
+  SequentialReviewOverlay,
+  type SequentialReviewQueueItem
+} from "@/components/listing/SequentialReviewOverlay";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { FactoryBridgeStrip } from "@/components/listing/FactoryBridgeStrip";
 import { showToast } from "@/components/Toast";
@@ -172,6 +176,11 @@ export function DraftResultsPanel({
     ok: boolean;
     message: string;
   } | null>(null);
+  /** UX-Q T70: sequential copy review (snapshot queue at open). */
+  const [seqReviewOpen, setSeqReviewOpen] = useState(false);
+  const [seqReviewQueue, setSeqReviewQueue] = useState<SequentialReviewQueueItem[]>(
+    []
+  );
 
   // B1: the input panel (left) drives the 生成 progress card via a window event;
   // this panel (right) renders it at the top of the results list, matching the
@@ -979,6 +988,26 @@ export function DraftResultsPanel({
   const isImageStation = stage === "image_review";
   const isReadyStation = stage === "ready";
 
+  /** UX-Q T70: a) selected ∩ visible; b) all visible. Snapshot at open. */
+  function openSequentialReview() {
+    if (!isCopyStation) return;
+    const source =
+      selectedIds.size > 0
+        ? visibleDrafts.filter((d) => selectedIds.has(d.id))
+        : visibleDrafts;
+    if (source.length === 0) {
+      showToast("沒有可審的文案", "error");
+      return;
+    }
+    const queue: SequentialReviewQueueItem[] = source.map((draft) => ({
+      draft,
+      images: imagesByDraft.get(draft.id) ?? [],
+      variantPrices: variantsByDraft.get(draft.id) ?? EMPTY_VARIANT_PRICES
+    }));
+    setSeqReviewQueue(queue);
+    setSeqReviewOpen(true);
+  }
+
   return (
     <section className="panel results-panel">
       <div className="panel-header rc-panel-header">
@@ -1034,6 +1063,22 @@ export function DraftResultsPanel({
               <span className="batch-selected-count">
                 {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
               </span>
+              {/* UX-Q T70: sequential entry always visible on 站① (not gated by selection) */}
+              {isCopyStation ? (
+                <button
+                  className="btn-mini batch-primary-action seq-review-entry"
+                  disabled={busy || visibleDrafts.length === 0}
+                  onClick={openSequentialReview}
+                  title={
+                    selectedIds.size > 0
+                      ? "逐件審核已勾選文案（核准後自動下一張）"
+                      : "逐件審核目前列表全部（核准後自動下一張）"
+                  }
+                  type="button"
+                >
+                  ▶ 逐件審核
+                </button>
+              ) : null}
               {/* UX-E T27: hide batch actions until selection; primary + 更多 overflow */}
               {selectedIds.size > 0 ? (
                 <div className="batch-actions">
@@ -1200,6 +1245,16 @@ export function DraftResultsPanel({
           </div>
         )}
       </div>
+
+      {/* UX-Q T70: sequential copy review overlay */}
+      <SequentialReviewOverlay
+        onClose={() => {
+          setSeqReviewOpen(false);
+          setSeqReviewQueue([]);
+        }}
+        open={seqReviewOpen}
+        queue={seqReviewQueue}
+      />
 
       <Station3PublishModal
         busy={station3Busy}

@@ -1,0 +1,238 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ResultCard } from "@/components/listing/ResultCard";
+import { showToast } from "@/components/Toast";
+import {
+  RESULT_CARD_TABS,
+  type ResultCardTabId
+} from "@/lib/drafts/resultCardTabs";
+import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
+
+/** UX-Q T70: focus in editable field → do not steal keys (align UX-I). */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+/** 站① tabs for 1–5: 文案｜規格｜定價｜Tags｜SEO（無圖片） */
+const STATION1_TABS: ResultCardTabId[] = RESULT_CARD_TABS.filter(
+  (tab) => tab.id !== "images"
+).map((tab) => tab.id);
+
+/** Align with DraftResultsPanel VariantPriceRow (avoid circular import). */
+type SeqVariantPriceRow = Pick<
+  ProductVariantRow,
+  | "id"
+  | "draft_id"
+  | "twd_price"
+  | "compare_at_price"
+  | "sort_order"
+  | "option1_value"
+  | "option2_value"
+  | "option3_value"
+  | "option1_name"
+  | "option2_name"
+  | "option3_name"
+  | "sku"
+  | "cny_price"
+  | "price_locked"
+  | "inventory_quantity"
+  | "inventory_policy"
+  | "image_id"
+>;
+
+export type SequentialReviewQueueItem = {
+  draft: ProductDraft;
+  images: ProductImage[];
+  variantPrices: SeqVariantPriceRow[];
+};
+
+/**
+ * UX-Q T70 / BX1: full-screen sequential copy review.
+ * One ResultCard at a time; approve success → next; Esc ends.
+ */
+export function SequentialReviewOverlay({
+  open,
+  queue,
+  onClose
+}: {
+  open: boolean;
+  /** Snapshot at open time (order fixed; ids do not re-sort after approve). */
+  queue: SequentialReviewQueueItem[];
+  onClose: () => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const [approveSignal, setApproveSignal] = useState(0);
+  const [externalTab, setExternalTab] = useState<ResultCardTabId | null>(null);
+  const [showHints, setShowHints] = useState(true);
+
+  // Reset when opened with a new queue
+  useEffect(() => {
+    if (!open) return;
+    setIndex(0);
+    setApproveSignal(0);
+    setExternalTab(null);
+    setShowHints(true);
+  }, [open, queue]);
+
+  const total = queue.length;
+  const safeIndex = total === 0 ? 0 : Math.min(index, total - 1);
+  const current = total > 0 ? queue[safeIndex] : null;
+
+  const titleShort = useMemo(() => {
+    if (!current) return "";
+    const raw =
+      current.draft.title_zh || current.draft.taobao_title || "商品草稿";
+    return raw.length > 36 ? `${raw.slice(0, 36)}…` : raw;
+  }, [current]);
+
+  const goNext = useCallback(() => {
+    setIndex((i) => {
+      if (total === 0) return 0;
+      if (i >= total - 1) return i;
+      return i + 1;
+    });
+    setExternalTab(null);
+  }, [total]);
+
+  const goPrev = useCallback(() => {
+    setIndex((i) => Math.max(0, i - 1));
+    setExternalTab(null);
+  }, []);
+
+  const handleApproveSuccess = useCallback(() => {
+    if (safeIndex >= total - 1) {
+      showToast("逐件審核結束", "success");
+      onClose();
+      return;
+    }
+    goNext();
+  }, [safeIndex, total, goNext, onClose]);
+
+  // Body scroll lock while open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  // Desktop shortcuts
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.isComposing) return;
+      if (isTypingTarget(event.target)) return;
+
+      const key = event.key;
+
+      if (key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (key === "ArrowRight" || key === "j" || key === "J") {
+        event.preventDefault();
+        goNext();
+        return;
+      }
+
+      if (key === "ArrowLeft" || key === "k" || key === "K") {
+        event.preventDefault();
+        goPrev();
+        return;
+      }
+
+      if (key === "a" || key === "A") {
+        event.preventDefault();
+        setApproveSignal((n) => n + 1);
+        return;
+      }
+
+      if (key === "?") {
+        event.preventDefault();
+        setShowHints((v) => !v);
+        return;
+      }
+
+      if (key >= "1" && key <= "5") {
+        const tabIndex = Number(key) - 1;
+        const tab = STATION1_TABS[tabIndex];
+        if (tab) {
+          event.preventDefault();
+          setExternalTab(tab);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, goNext, goPrev, onClose]);
+
+  // Clear externalTab after one paint so re-pressing same number still works
+  useEffect(() => {
+    if (!externalTab) return;
+    const t = window.setTimeout(() => setExternalTab(null), 0);
+    return () => window.clearTimeout(t);
+  }, [externalTab]);
+
+  if (!open || !current) return null;
+
+  return (
+    <div
+      aria-modal="true"
+      className="modal-overlay open seq-review-overlay"
+      role="dialog"
+      aria-label="逐件審核"
+    >
+      <div className="modal-box seq-review-box">
+        <div className="modal-hdr seq-review-hdr">
+          <div className="seq-review-hdr-main">
+            <span className="seq-review-progress">
+              第 {safeIndex + 1}／{total}
+            </span>
+            <span className="seq-review-title" title={titleShort}>
+              {titleShort}
+            </span>
+          </div>
+          <button
+            className="btn-mini seq-review-end"
+            onClick={onClose}
+            type="button"
+            title="結束逐件審核（Esc）"
+          >
+            結束逐件
+          </button>
+        </div>
+
+        {showHints ? (
+          <p className="muted seq-review-hints">
+            →／j 下一 · ←／k 上一 · A 核准 · 1–5 分頁 · Esc 結束 · ? 隱藏提示
+          </p>
+        ) : null}
+
+        <div className="seq-review-body">
+          <ResultCard
+            key={current.draft.id}
+            approveSignal={approveSignal}
+            defaultExpanded
+            draft={current.draft}
+            externalTab={externalTab}
+            images={current.images}
+            onApproveSuccess={handleApproveSuccess}
+            sequentialMode
+            variantPrices={current.variantPrices}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

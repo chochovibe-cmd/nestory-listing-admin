@@ -52,6 +52,10 @@ import {
 import { mergeIpToneMap } from "@/lib/providers/ipToneMap";
 import { buildXiaobianMissingEmojiWarning } from "@/lib/providers/emojiPolicy";
 import { normalizeDetectedProductBrand } from "@/lib/providers/productBrand";
+import {
+  stripCustomerSourceMarkers,
+  stripCustomerSourceMarkersList,
+} from "@/lib/providers/stripCustomerSourceMarkers";
 import { resolveCopyTone } from "@/lib/providers/systemPrompt";
 import { resolveCanonicalCharacterName } from "@/lib/characters/resolveCanonicalCharacter";
 import {
@@ -352,7 +356,9 @@ async function handleFieldRegen(params: {
   let historyContent: string;
 
   if (regenField === "product_highlights") {
-    const localized = raw.productHighlights.map(localizeToTaiwanTraditionalText).filter((value) => value.trim());
+    const localized = stripCustomerSourceMarkersList(
+      raw.productHighlights.map(localizeToTaiwanTraditionalText).filter((value) => value.trim()),
+    );
     update.product_highlights = localized;
     responseHighlights = localized;
     historyContent = localized.join("\n");
@@ -381,6 +387,15 @@ async function handleFieldRegen(params: {
         value = normalizeDescriptionToPlainText(
           appendScenarioBulletToDescription(value, scenarioTerms),
         );
+      }
+      // P4: strip residual source markers on customer-facing regen fields
+      if (
+        regenField === "generated_description_html" ||
+        regenField === "generated_faq_html" ||
+        regenField === "meta_description" ||
+        regenField === "why_we_chose_it"
+      ) {
+        value = stripCustomerSourceMarkers(value);
       }
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
       historyContent = value;
@@ -836,6 +851,21 @@ export async function POST(request: NextRequest) {
       : ruleOutput.meta_description,
   });
 
+  // P4: 出處標記退出顧客文案（後製窄剝，冪等；內部 🔍 警告不經此）
+  localizedOutput.generated_description_html = stripCustomerSourceMarkers(
+    localizedOutput.generated_description_html,
+  );
+  localizedOutput.generated_faq_html = stripCustomerSourceMarkers(
+    localizedOutput.generated_faq_html,
+  );
+  localizedOutput.meta_description = stripCustomerSourceMarkers(
+    localizedOutput.meta_description,
+  );
+  const cleanedWhyWeChoseIt = stripCustomerSourceMarkers(providerOutput.whyWeChoseIt);
+  const cleanedProductHighlights = stripCustomerSourceMarkersList(
+    providerOutput.productHighlights,
+  );
+
   // A11: warn (never block) when generated copy leaks a 叫賣/禁忌詞. The rule
   // engine's own validation stays authoritative for blocking; this only adds a
   // yellow flag for the reviewer.
@@ -845,8 +875,8 @@ export async function POST(request: NextRequest) {
     localizedOutput.generated_faq_html,
     localizedOutput.seo_title,
     localizedOutput.meta_description,
-    providerOutput.whyWeChoseIt,
-    ...providerOutput.productHighlights,
+    cleanedWhyWeChoseIt,
+    ...cleanedProductHighlights,
   ]);
   if (forbiddenWarning) extraWarnings.push(forbiddenWarning);
 
@@ -905,7 +935,8 @@ export async function POST(request: NextRequest) {
   const autoSpecIsBlank = !autoSpec || autoSpec === "（無）" || autoSpec === "(無)";
   let finalSpecText: string | null = draft.spec_text ?? null;
   if (!existingSpec && !autoSpecIsBlank) {
-    finalSpecText = autoSpec;
+    // P4: strip residual 「（來源：網路）」 from auto-spec before persist
+    finalSpecText = stripCustomerSourceMarkers(autoSpec);
     extraWarnings.push(
       webSearchSummary
         ? "商品規格為系統自動整理（來自款式／標題／圖片文字／網路搜尋），發布前請審核瞄一眼確認無誤、必要時修正。"
@@ -964,8 +995,8 @@ export async function POST(request: NextRequest) {
     shopify_tags: localizedOutput.shopify_tags,
     generated_faq_html: localizedOutput.generated_faq_html,
     spec_text: finalSpecText,
-    why_we_chose_it: providerOutput.whyWeChoseIt,
-    product_highlights: providerOutput.productHighlights,
+    why_we_chose_it: cleanedWhyWeChoseIt || null,
+    product_highlights: cleanedProductHighlights,
     ip_name: detected.ip || null,
     character_name: detected.character || null,
     product_type: detected.productType || null,
@@ -1091,7 +1122,8 @@ export async function POST(request: NextRequest) {
   }
 
   // B10: all 7 regenerable fields get a history row (was missing product_highlights).
-  const highlightsContent = (providerOutput.productHighlights ?? [])
+  // P4: history stores post-strip customer copy (same as draft columns).
+  const highlightsContent = cleanedProductHighlights
     .map((line) => localizeToTaiwanTraditionalText(line).trim())
     .filter(Boolean)
     .join("\n");
@@ -1105,7 +1137,7 @@ export async function POST(request: NextRequest) {
     { field_name: "generated_faq_html", content: localizedOutput.generated_faq_html },
     { field_name: "seo_title", content: localizedOutput.seo_title },
     { field_name: "meta_description", content: localizedOutput.meta_description },
-    { field_name: "why_we_chose_it", content: providerOutput.whyWeChoseIt },
+    { field_name: "why_we_chose_it", content: cleanedWhyWeChoseIt },
     { field_name: "product_highlights", content: highlightsContent },
   ]
     .filter((row) => row.content)
@@ -1134,8 +1166,8 @@ export async function POST(request: NextRequest) {
       seoTitle: localizedOutput.seo_title,
       metaDescription: localizedOutput.meta_description,
       tags: localizedOutput.shopify_tags,
-      whyWeChoseIt: providerOutput.whyWeChoseIt,
-      productHighlights: providerOutput.productHighlights,
+      whyWeChoseIt: cleanedWhyWeChoseIt,
+      productHighlights: cleanedProductHighlights,
       provider: providerOutput.provider,
       model: providerOutput.model,
     },

@@ -335,6 +335,7 @@ export function SettingsPanel() {
         >
           <p className="settings-section-hint">
             這裡的 Provider 是<strong>全域預設</strong>。工作檯「本次模型」仍只影響單次生成（B8）。
+            頂欄 ⋯ 也可切模型／模式／部署檢查。
           </p>
           <div className="pill-group" aria-label="預設文案 Provider" style={{ marginBottom: 12 }}>
             <button

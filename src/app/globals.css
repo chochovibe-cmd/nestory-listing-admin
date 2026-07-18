@@ -581,6 +581,72 @@ body[data-theme="kitty"] .topbar {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
+/* UX-G T34: secondary tools (Provider / Mode / Deploy) behind one layer */
+.hdr-more {
+  position: relative;
+  display: inline-flex;
+}
+
+.hdr-more-toggle {
+  white-space: nowrap;
+}
+
+.hdr-more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 320;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 24px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 10px;
+  box-shadow: var(--shadow-m);
+}
+
+.hdr-more-menu.open {
+  display: flex;
+}
+
+.hdr-more-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hdr-more-row--deploy {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.hdr-more-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 4.5em;
+}
+
+.hdr-more-row--deploy .header-status-wrap {
+  width: 100%;
+}
+
+.hdr-more-row--deploy .header-status-toggle {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.hdr-more-row--deploy .header-status.status-body {
+  position: static;
+  width: 100%;
+  margin-top: 6px;
+  box-shadow: none;
+}
+
 /* Single button + dropdown theme picker, same widget pattern as
    .header-status-wrap. */
 .theme-picker {
@@ -4523,6 +4589,28 @@ textarea {
   }
   .header-status .status-pill {
     justify-content: center;
+  }
+
+  /* UX-G T34: ⋯ 更多 in mobile ☰ — full-width layer, touch ≥44px */
+  .hdr-more {
+    flex-basis: 100%;
+  }
+  .hdr-more-toggle {
+    min-height: 44px !important;
+    width: 100%;
+    justify-content: center;
+  }
+  .hdr-more-menu {
+    position: static;
+    width: 100%;
+    max-width: none;
+    margin-top: 4px;
+    box-shadow: none;
+  }
+  .hdr-more-menu .pill-btn,
+  .hdr-more-menu .header-status-toggle,
+  .hdr-more-menu .btn-mini {
+    min-height: 44px !important;
   }
 
   .mobile-tabbar {

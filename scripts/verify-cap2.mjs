@@ -1,0 +1,302 @@
+/**
+ * CAP-2 verify: extension DOM parse (linkedom) + contract shape vs captureTypes.
+ * Run: node scripts/verify-cap2.mjs  |  pnpm run verify:cap2
+ * No network. Does not load Next src/ at runtime (static string checks only).
+ */
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.join(__dirname, "..");
+const require = createRequire(import.meta.url);
+// CJS require avoids broken dual-package nested deps under raw npm extract
+const { parseHTML } = require("linkedom");
+const failures = [];
+
+function check(name, fn) {
+  try {
+    fn();
+    console.log(`  ✓ ${name}`);
+  } catch (err) {
+    failures.push({ name, err });
+    console.error(`  ✗ ${name}: ${err.message}`);
+  }
+}
+
+const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const exists = (rel) => fs.existsSync(path.join(root, rel));
+
+// Load extension libs into globalThis.NestoryCap (same order as background inject)
+globalThis.NestoryCap = globalThis.NestoryCap || {};
+const libFiles = [
+  "extension/lib/selectors.js",
+  "extension/lib/domUtil.js",
+  "extension/lib/parsePrice.js",
+  "extension/lib/flattenSku.js",
+  "extension/lib/adapters/generic.js",
+  "extension/lib/adapters/shopee.js",
+  "extension/lib/adapters/taobao.js",
+  "extension/lib/buildPayload.js"
+];
+for (const rel of libFiles) {
+  require(path.join(root, rel));
+}
+
+const Cap = globalThis.NestoryCap;
+
+function loadDoc(relHtml, href) {
+  const html = read(relHtml);
+  const { document } = parseHTML(html);
+  // linkedom document has no default URL; we pass href into buildCapturePayload
+  return { document, href };
+}
+
+console.log("verify-cap2:");
+
+check("files: extension scaffold present", () => {
+  const need = [
+    "extension/manifest.json",
+    "extension/background.js",
+    "extension/README.md",
+    "extension/lib/selectors.js",
+    "extension/lib/domUtil.js",
+    "extension/lib/parsePrice.js",
+    "extension/lib/flattenSku.js",
+    "extension/lib/buildPayload.js",
+    "extension/lib/adapters/taobao.js",
+    "extension/lib/adapters/shopee.js",
+    "extension/lib/adapters/generic.js",
+    "extension/content/capture.js",
+    "extension/popup/popup.html",
+    "extension/popup/popup.js",
+    "extension/popup/popup.css",
+    "extension/icons/icon16.png",
+    "extension/icons/icon32.png",
+    "extension/icons/icon48.png",
+    "extension/icons/icon128.png",
+    "scripts/fixtures/taobao-item-sample.html",
+    "scripts/fixtures/taobao-item-missing-price.html"
+  ];
+  for (const f of need) assert.ok(exists(f), `missing ${f}`);
+});
+
+check("manifest: MV3 + min permissions + optional hosts", () => {
+  const m = JSON.parse(read("extension/manifest.json"));
+  assert.equal(m.manifest_version, 3);
+  assert.ok(m.permissions.includes("activeTab"));
+  assert.ok(m.permissions.includes("scripting"));
+  assert.ok(m.permissions.includes("storage"));
+  assert.ok(Array.isArray(m.host_permissions) && m.host_permissions.length > 0);
+  assert.ok(
+    m.host_permissions.some((p) => /taobao/i.test(p)),
+    "taobao host_permissions"
+  );
+  assert.ok(
+    m.host_permissions.some((p) => /shopee/i.test(p)),
+    "shopee host_permissions"
+  );
+  assert.ok(
+    m.host_permissions.some((p) => /localhost/i.test(p)),
+    "localhost host_permissions"
+  );
+  assert.ok(
+    Array.isArray(m.optional_host_permissions) &&
+      m.optional_host_permissions.some((p) => p.includes("https://")),
+    "optional_host_permissions for generic sites / API"
+  );
+  assert.ok(m.background?.service_worker === "background.js");
+  assert.ok(m.options_ui?.page);
+});
+
+check("background: API permission request + Bearer + no persistent content_scripts", () => {
+  const bg = read("extension/background.js");
+  assert.match(bg, /permissions\.request/);
+  assert.match(bg, /Authorization.*Bearer|Bearer.*captureToken/);
+  assert.match(bg, /\/api\/import\/product-page/);
+  assert.match(bg, /action\.onClicked/);
+  const man = read("extension/manifest.json");
+  assert.ok(!/"content_scripts"\s*:/.test(man), "must not register permanent content_scripts");
+});
+
+check("selectors: single catalog has taobao/tmall/shopee/generic", () => {
+  assert.ok(Cap.SELECTORS.taobao?.title);
+  assert.ok(Cap.SELECTORS.tmall);
+  assert.ok(Cap.SELECTORS.shopee);
+  assert.ok(Cap.SELECTORS.generic?.ogTitle);
+  const merged = Cap.mergeSelectors(Cap.SELECTORS.tmall, Cap.SELECTORS.taobao);
+  assert.ok(merged.price);
+  assert.ok(merged.skuRoot);
+});
+
+check("parsePrice: honest nulls", () => {
+  assert.equal(Cap.parsePrice("¥29.90"), 29.9);
+  assert.equal(Cap.parsePrice("29.9-39.9"), 29.9);
+  assert.equal(Cap.parsePrice(""), null);
+  assert.equal(Cap.parsePrice("abc"), null);
+  assert.equal(Cap.parsePrice(0), null);
+});
+
+check("flattenSku: 2-dim → variants_flat + sku_dimensions", () => {
+  const table = {
+    axes: ["顏色", "尺寸"],
+    rows: [
+      { 顏色: "粉", 尺寸: "S", price: 29.9 },
+      { 顏色: "粉", 尺寸: "M", price: 32.9 },
+      { 顏色: "藍", 尺寸: "S", price: 29.9 }
+    ]
+  };
+  const { variants_flat, sku_dimensions } = Cap.flattenSkuTable(table);
+  assert.equal(sku_dimensions, 2);
+  assert.equal(variants_flat.length, 3);
+  assert.equal(variants_flat[0].option1_name, "顏色");
+  assert.equal(variants_flat[0].option1_value, "粉");
+  assert.equal(variants_flat[0].option2_name, "尺寸");
+  assert.equal(variants_flat[0].option2_value, "S");
+  assert.equal(variants_flat[0].cny_price, 29.9);
+});
+
+check("detectAdapter: taobao / tmall / shopee / generic", () => {
+  assert.deepEqual(Cap.detectAdapter("item.taobao.com", "https://item.taobao.com/item.htm?id=1"), {
+    adapter: "taobao",
+    source_platform: "taobao"
+  });
+  assert.equal(
+    Cap.detectAdapter("detail.tmall.com", "https://detail.tmall.com/item.htm?id=1").source_platform,
+    "tmall"
+  );
+  assert.equal(
+    Cap.detectAdapter("shopee.tw", "https://shopee.tw/product-i.1.2").adapter,
+    "shopee"
+  );
+  assert.deepEqual(Cap.detectAdapter("www.example.com", "https://www.example.com/p/1"), {
+    adapter: "generic",
+    source_platform: null
+  });
+});
+
+check("DOM: taobao fixture → CAP-1-shaped payload", () => {
+  const href = "https://item.taobao.com/item.htm?id=123456789012";
+  const { document } = loadDoc("scripts/fixtures/taobao-item-sample.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
+
+  assert.equal(body.source_url, href);
+  assert.equal(body.source_platform, "taobao");
+  assert.ok(body.title && body.title.includes("三麗鷗"));
+  assert.equal(body.price_cny, 29.9);
+  assert.equal(body.list_price_cny, 59.9);
+  assert.ok(body.sku_table);
+  assert.ok(Array.isArray(body.sku_table.axes));
+  assert.ok(body.sku_table.axes.length >= 2);
+  assert.ok(Array.isArray(body.variants_flat) && body.variants_flat.length >= 2);
+  assert.equal(body.capture_meta.adapter, "taobao");
+  assert.equal(body.capture_meta.page_host, "item.taobao.com");
+  assert.ok(body.capture_meta.sku_dimensions >= 2);
+  assert.ok(Array.isArray(body.main_image_urls) && body.main_image_urls.length >= 1);
+  assert.ok(body.main_image_urls[0].startsWith("https://"));
+  assert.ok(Array.isArray(body.detail_image_urls) && body.detail_image_urls.length >= 1);
+  // protocol-relative upgraded
+  assert.ok(body.detail_image_urls.some((u) => u.startsWith("https://")));
+  assert.ok(Array.isArray(body.video_urls) && body.video_urls.length >= 1);
+  assert.ok(body.params && body.params["品牌"]);
+  assert.ok(Array.isArray(body.capture_meta.warnings_from_client));
+  assert.ok(body.captured_at);
+});
+
+check("DOM: missing price → omit price_cny + client warning", () => {
+  const href = "https://item.taobao.com/item.htm?id=999";
+  const { document } = loadDoc("scripts/fixtures/taobao-item-missing-price.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
+  assert.equal(body.price_cny, undefined);
+  assert.ok(
+    body.capture_meta.warnings_from_client.some((w) => /price_cny/.test(w)),
+    "expected price_cny warning"
+  );
+  assert.ok(body.title);
+});
+
+check("contract: static assert vs captureTypes.ts field names", () => {
+  const types = read("src/lib/import/captureTypes.ts");
+  const requiredMentions = [
+    "source_url",
+    "source_platform",
+    "title",
+    "price_cny",
+    "list_price_cny",
+    "sku_table",
+    "variants_flat",
+    "main_image_urls",
+    "detail_image_urls",
+    "video_urls",
+    "params",
+    "spec_text",
+    "captured_at",
+    "capture_meta",
+    "sku_dimensions",
+    "warnings_from_client",
+    "option1_name",
+    "cny_price"
+  ];
+  for (const key of requiredMentions) {
+    assert.ok(types.includes(key), `captureTypes missing ${key}`);
+  }
+
+  const href = "https://item.taobao.com/item.htm?id=123456789012";
+  const { document } = loadDoc("scripts/fixtures/taobao-item-sample.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
+
+  const allowedTop = new Set([
+    "source_url",
+    "source_platform",
+    "title",
+    "price_cny",
+    "list_price_cny",
+    "sku_table",
+    "variants_flat",
+    "main_image_urls",
+    "detail_image_urls",
+    "video_urls",
+    "params",
+    "spec_text",
+    "captured_at",
+    "capture_meta",
+    "raw"
+  ]);
+  for (const k of Object.keys(body)) {
+    assert.ok(allowedTop.has(k), `unexpected top-level key: ${k}`);
+  }
+  assert.ok(body.capture_meta.adapter);
+  assert.ok("warnings_from_client" in body.capture_meta);
+  if (body.variants_flat?.length) {
+    const v = body.variants_flat[0];
+    for (const k of Object.keys(v)) {
+      assert.ok(
+        /^(option[123]_(name|value)|cny_price|sku)$/.test(k),
+        `unexpected variant key ${k}`
+      );
+    }
+  }
+});
+
+check("README: numbered install steps + permission allow", () => {
+  const md = read("extension/README.md");
+  assert.match(md, /chrome:\/\/extensions/);
+  assert.match(md, /載入未封裝|开发人员|開發人員/);
+  assert.match(md, /允許/);
+  assert.match(md, /ncap_/);
+  assert.match(md, /API 網址/);
+});
+
+check("no third-party script injection in extension", () => {
+  const bg = read("extension/background.js");
+  const cap = read("extension/content/capture.js");
+  assert.ok(!/cdn\.|googleapis|script\.src\s*=/.test(bg + cap));
+});
+
+if (failures.length) {
+  console.error(`\nverify-cap2: ${failures.length} failed`);
+  process.exit(1);
+}
+console.log("\nverify-cap2: ALL passed");

@@ -18,6 +18,7 @@
     "verify:d3-sharp": "node scripts/verify-d3-sharp.mjs",
     "verify:r1-stage": "node scripts/verify-r1-stage.mjs",
     "verify:cap1": "node scripts/verify-cap1.mjs",
+    "verify:cap2": "node scripts/verify-cap2.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },
@@ -36,6 +37,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.14.0",
     "eslint-config-next": "^15.0.3",
+    "linkedom": "^0.18.12",
     "typescript": "^5.6.3"
   }
 }

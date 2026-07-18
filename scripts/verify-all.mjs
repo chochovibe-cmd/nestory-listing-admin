@@ -6,7 +6,10 @@ const scripts = [
   "scripts/verify-contracts.mjs",
   "scripts/verify-sql-schema.mjs",
   "scripts/verify-mock-flow.mjs",
-  "scripts/verify-no-secrets.mjs"
+  "scripts/verify-no-secrets.mjs",
+  // CAP-1 / CAP-2: P0「等 CAP-2 穩定再併」條件已成立（2026-07-18）
+  "scripts/verify-cap1.mjs",
+  "scripts/verify-cap2.mjs"
 ];
 
 for (const script of scripts) {

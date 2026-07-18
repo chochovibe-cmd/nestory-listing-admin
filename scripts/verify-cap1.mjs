@@ -300,11 +300,11 @@ check("source: settings UI double-confirm not window.confirm", () => {
   assert.doesNotMatch(src, /window\.confirm/);
 });
 
-check("package.json: verify:cap1 script present, not in verify:all", () => {
+check("package.json: verify:cap1 script present; verify-all includes cap1", () => {
   const pkg = JSON.parse(read("package.json"));
   assert.equal(pkg.scripts["verify:cap1"], "node scripts/verify-cap1.mjs");
-  const all = pkg.scripts["verify:all"] ?? "";
-  assert.ok(!all.includes("verify-cap1") && !all.includes("verify:cap1"));
+  const allRunner = read("scripts/verify-all.mjs");
+  assert.match(allRunner, /verify-cap1\.mjs/);
 });
 
 // --- pure: url key ---

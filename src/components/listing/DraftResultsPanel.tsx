@@ -1073,7 +1073,7 @@ export function DraftResultsPanel({
           <div className="empty-state">
             <div className="empty-icon">◈</div>
             <p className="muted">目前沒有在工作佇列的商品</p>
-            <Link className="button primary" href="/drafts/new" style={{ marginTop: 12 }}>
+            <Link className="button primary empty-state-cta" href="/drafts/new">
               去新增商品
             </Link>
           </div>
@@ -1082,9 +1082,8 @@ export function DraftResultsPanel({
             <div className="empty-icon">◈</div>
             <p className="muted">這個篩選下沒有商品</p>
             <button
-              className="button"
+              className="button empty-state-cta"
               onClick={clearResultsFilter}
-              style={{ marginTop: 12 }}
               type="button"
             >
               清除篩選

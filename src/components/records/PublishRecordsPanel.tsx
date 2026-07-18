@@ -510,18 +510,12 @@ export function PublishRecordsPanel() {
             }
           />
         ) : visibleBatches.length === 0 ? (
-          <div className="notice rec-empty ir-empty">
-            <p>
-              <strong>尚無發布批次</strong>
-            </p>
-            <p className="muted" style={{ marginTop: 6 }}>
-              在工作檯站③「發布／匯出」後，結果會出現在這裡。
-            </p>
-            <p style={{ marginTop: 12 }}>
-              <Link href="/drafts/new?pane=results" className="mini-btn">
-                去審核佇列
-              </Link>
-            </p>
+          <div className="empty-state">
+            <div className="empty-icon">◈</div>
+            <p className="muted">尚無發布批次</p>
+            <Link className="button primary empty-state-cta" href="/drafts/new?pane=results">
+              去工作檯
+            </Link>
           </div>
         ) : (
           <div className="rec-list ir-list">
@@ -682,13 +676,9 @@ function FailedRetrySection({
   }
   if (items.length === 0) {
     return (
-      <div className="notice rec-empty">
-        <p>
-          <strong>目前沒有失敗件</strong>
-        </p>
-        <p className="muted" style={{ marginTop: 6 }}>
-          發布失敗的商品會出現在這裡，可勾選後一次重送。
-        </p>
+      <div className="empty-state">
+        <div className="empty-icon">◈</div>
+        <p className="muted">目前沒有失敗件</p>
       </div>
     );
   }
@@ -847,17 +837,16 @@ function ProductListSection({
           </button>
         </div>
       ) : rows.length === 0 ? (
-        <div className="notice rec-empty">
-          <p>
-            <strong>
-              {mode === "shopify_drafts" ? "尚無 Shopify 草稿" : "尚無已發布／封存商品"}
-            </strong>
+        <div className="empty-state">
+          <div className="empty-icon">◈</div>
+          <p className="muted">
+            {mode === "shopify_drafts" ? "尚無 Shopify 草稿" : "尚無已發布／封存商品"}
           </p>
-          <p className="muted" style={{ marginTop: 6 }}>
-            {mode === "shopify_drafts"
-              ? "站③選擇「API 建草稿」成功後會出現在這裡，可轉正式上架。"
-              : `最近 ${RECORDS_PUBLISHED_LIMIT} 筆；更早請用上方搜尋。`}
-          </p>
+          {mode === "shopify_drafts" ? (
+            <Link className="button primary empty-state-cta" href="/drafts/new?pane=results">
+              去工作檯
+            </Link>
+          ) : null}
         </div>
       ) : (
         <>

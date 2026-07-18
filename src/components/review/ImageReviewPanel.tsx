@@ -364,9 +364,10 @@ export function ImageReviewPanel() {
           ) : null}
 
           {empty ? (
-            <div className="ir-empty">
-              <p className="notice">目前沒有要審的圖</p>
-              <Link className="button primary library-empty-cta" href="/drafts/new">
+            <div className="empty-state">
+              <div className="empty-icon">◈</div>
+              <p className="muted">目前沒有要審的圖</p>
+              <Link className="button primary empty-state-cta" href="/drafts/new">
                 去工作檯
               </Link>
             </div>

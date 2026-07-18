@@ -1639,7 +1639,19 @@ export function WorkspaceInputPanel({
         <h2>✦ 新增商品</h2>
       </div>
       <div className="panel-body">
-        <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
+        <form
+          onKeyDown={(event) => {
+            // UX-I T57 optional: Ctrl/Cmd+Enter → 生成; never steal textarea line breaks (Enter alone).
+            if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+            const target = event.target as HTMLElement | null;
+            if (target?.tagName === "TEXTAREA") return;
+            if (submitting || imagesUploading) return;
+            event.preventDefault();
+            event.currentTarget.requestSubmit();
+          }}
+          onSubmit={submit}
+          style={{ display: "grid", gap: 14 }}
+        >
           {/* BX4: unsent draft restore bar — only when localStorage has a fresh snapshot */}
           {restorePrompt ? (
             <div className="notice workspace-restore-notice" role="status">

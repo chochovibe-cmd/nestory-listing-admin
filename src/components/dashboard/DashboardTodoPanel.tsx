@@ -392,7 +392,7 @@ export function DashboardTodoPanel() {
         <div className="ir-page-header dash-header">
           <div className="ir-title-row">
             <h1>📈 儀表板</h1>
-            <span className="ir-sub">初版 · 待辦＋漏斗＋額度＋成本＋健康</span>
+            <span className="ir-sub">待辦 · 漏斗 · 成本</span>
           </div>
           {roleReady && admin ? (
             <div className="ir-scope">
@@ -411,6 +411,9 @@ export function DashboardTodoPanel() {
             </div>
           ) : null}
         </div>
+        <p className="muted dash-page-disclaimer" role="note">
+          以下額度／成本為估算，非實際帳單
+        </p>
 
         <section className="panel dash-todo-panel" aria-labelledby="dash-todo-title">
           <div className="panel-header">
@@ -515,7 +518,6 @@ export function DashboardTodoPanel() {
         >
           <div className="panel-header">
             <h2 id="dash-quota-title">Make 額度</h2>
-            <span className="dash-todo-hint">估算 · 非 Make 帳單</span>
           </div>
           <div className="panel-body dash-quota-body">
             {quotaLoading ? (
@@ -579,7 +581,6 @@ export function DashboardTodoPanel() {
                       style={{ width: `${quotaView.barPct}%` }}
                     />
                   </div>
-                  <p className="dash-quota-honesty">{quotaView.honestyLabel}</p>
                   <p className="dash-quota-sub">{quotaView.subHint}</p>
                   <p className="dash-quota-detail">
                     送圖 {quotaView.imageBatchCount} 批（{quotaView.imageItemCount}{" "}
@@ -606,7 +607,6 @@ export function DashboardTodoPanel() {
         >
           <div className="panel-header">
             <h2 id="dash-cost-title">月預算 · AI 成本</h2>
-            <span className="dash-todo-hint">估算 · 非信用卡帳單</span>
           </div>
           <div className="panel-body dash-quota-body">
             {costLoading ? (
@@ -679,7 +679,6 @@ export function DashboardTodoPanel() {
                       style={{ width: `${costView.barPct}%` }}
                     />
                   </div>
-                  <p className="dash-quota-honesty">{costView.honestyLabel}</p>
                   <p className="dash-quota-sub">{costView.subHint}</p>
                   <p className="dash-quota-detail">
                     有成本 {costView.withCostCount} 件

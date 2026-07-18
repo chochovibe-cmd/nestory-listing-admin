@@ -2247,10 +2247,21 @@ textarea {
 .dash-page {
   width: 100%;
   max-width: 920px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 .dash-header {
   display: flex;
-  margin-bottom: 14px;
+  margin-bottom: 0;
+}
+.dash-page-disclaimer {
+  margin: -6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.dash-page > .panel {
+  margin: 0;
 }
 .dash-todo-panel .panel-header {
   gap: 10px;
@@ -2352,8 +2363,9 @@ textarea {
 }
 
 /* E2-open: 流程漏斗 — reuses panel / schip / tokens; list rows under E1 */
+/* UX-G T48: spacing via .dash-page gap (no stacked margin-top) */
 .dash-funnel-panel {
-  margin-top: 14px;
+  margin-top: 0;
 }
 .dash-funnel-panel .panel-header {
   gap: 10px;
@@ -2456,7 +2468,7 @@ textarea {
 
 /* E3-open: Make 額度 — reuses panel / schip / funnel bar tokens */
 .dash-quota-panel {
-  margin-top: 14px;
+  margin-top: 0;
 }
 .dash-quota-panel .panel-header {
   gap: 10px;
@@ -2643,7 +2655,7 @@ textarea {
 
 /* E5-open: health metrics (rework / tag / heatmap) — reuse quota card tokens */
 .dash-health-panel {
-  margin-top: 14px;
+  margin-top: 0;
 }
 .dash-health-rates {
   display: grid;

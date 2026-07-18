@@ -204,6 +204,14 @@ check("82: D-section vs empty spec warning (generate route)", () => {
   assert.match(route, /matchSectionHeader/);
 });
 
+// P4 regression touchpoint (full suite: scripts/verify-p4-source-and-seller.mjs)
+check("P4 touch: generate still strips customer source markers after copy", () => {
+  const route = read("src/app/api/generate/route.ts");
+  assert.match(route, /stripCustomerSourceMarkers/);
+  const prompt = read("src/lib/providers/systemPrompt.ts");
+  assert.ok(!prompt.includes("必須標來源"), "P4: prompt must not teach 必須標來源");
+});
+
 if (failures.length > 0) {
   console.error(`\n${failures.length} check(s) FAILED`);
   process.exit(1);

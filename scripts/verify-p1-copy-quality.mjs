@@ -232,6 +232,12 @@ check("69: 027 original kind was shopify_api only (baseline)", () => {
 });
 
 // UI non-touch guard (lightweight)
+// P4 regression touchpoint (full suite: scripts/verify-p4-source-and-seller.mjs)
+check("P4 touch: WEB_SEARCH internal warning still present", () => {
+  const idx = read("src/lib/providers/webSearch/index.ts");
+  assert.match(idx, /🔍 含網路搜尋資訊/);
+});
+
 check("P1 iron rule: no globals.css / no new component UI in this package files", () => {
   // This package should not have modified globals — we only assert source patterns of our new files.
   const helper = read("src/lib/drafts/recordCsvExportBatch.ts");

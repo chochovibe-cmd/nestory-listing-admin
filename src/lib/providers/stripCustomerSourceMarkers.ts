@@ -11,9 +11,10 @@ const PAREN_SOURCE_NETWORK_RE =
 
 /**
  * Bare suffix (no parens): 「…30cm 來源：網路」／行尾「來源:網路」
- * Word-ish boundary so we do not eat longer phrases incorrectly.
+ * Note: JS `\b` is ASCII-word only and does not work after CJK; use end/punct look-ahead.
  */
-const BARE_SOURCE_NETWORK_RE = /[ \t]*來源\s*[:：]\s*網路\b|[ \t]*来源\s*[:：]\s*网络\b/gi;
+const BARE_SOURCE_NETWORK_RE =
+  /[ \t]*來源\s*[:：]\s*網路(?:搜尋)?(?=$|[\s）)\]】，。、；;,.…])|[ \t]*来源\s*[:：]\s*网络(?=$|[\s）)\]】，。、；;,.…])/gi;
 
 /**
  * Trailing source+URL annotation only (Q2 narrow):

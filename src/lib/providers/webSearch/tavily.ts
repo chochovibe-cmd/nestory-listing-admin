@@ -79,7 +79,7 @@ function formatTavilySummary(
 ): string {
   const lines: string[] = [
     `【網路搜尋結果｜查詢：${query}】`,
-    "以下內容僅供參考、須標來源；不確定的規格數字不要寫進商品規格。",
+    "以下內容僅供內部參考；寫進顧客文案時只寫有把握的事實，不要標「來源：網路」或貼 URL；不確定的規格數字不要寫進商品規格。",
   ];
 
   const answerText = (answer ?? "").trim();

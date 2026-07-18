@@ -30,8 +30,16 @@ const exists = (rel) => fs.existsSync(path.join(root, rel));
 const CAPTURE_TOKEN_PREFIX = "ncap_";
 const PRICE_PLACEHOLDER_CNY = 0.01;
 const WARNING_MISSING_PRICE = "未抓到售價，已用占位值，請在表單填實際成本";
+/** @deprecated PKG2A — runtime uses formatMultiDimStoredInfo */
 const WARNING_MULTIDIM_SKU =
   "多維規格已壓平為單維／列舉款式，展開待包二；完整表見 raw_capture.sku_table";
+const WARNING_MULTIDIM_NO_FLAT =
+  "多維規格表已見但無 variants_flat，未展開款式列；完整表見 raw_capture.sku_table";
+function formatMultiDimStoredInfo(axisCount, rowCount) {
+  const axes = Math.max(0, Math.floor(axisCount));
+  const rows = Math.max(0, Math.floor(rowCount));
+  return `多維已入庫（${axes} 軸 × ${rows} 款）`;
+}
 const RAW_CAPTURE_FIELD_MAX_BYTES = 256 * 1024;
 const MAX_VIDEO_URLS = 3;
 
@@ -279,7 +287,9 @@ check("source: mapCaptureFields honesty + warnings + source_type capture", () =>
   const src = read("src/lib/import/mapCaptureFields.ts");
   assert.match(src, /source_type:\s*"capture"/);
   assert.match(src, /WARNING_MISSING_PRICE|未抓到售價，已用占位值/);
-  assert.match(src, /WARNING_MULTIDIM_SKU|多維規格已壓平/);
+  // PKG2A: multi-dim stored info (axis × actual rows), not 壓平 warning
+  assert.match(src, /formatMultiDimStoredInfo|多維已入庫/);
+  assert.match(src, /WARNING_MULTIDIM_NO_FLAT|lookupSkuTablePrice/);
   assert.match(src, /normalizeDetectedProductBrand/);
   assert.match(src, /stripOversizedCaptureFields/);
   assert.match(src, /pending_input/);
@@ -359,9 +369,16 @@ check("pure: title empty stays empty; params→spec; brand 75a", () => {
   assert.ok(spec.includes("材質：PVC"));
 });
 
-check("pure: multi-dim → warning string required", () => {
+check("pure: multi-dim → stored info (axis × actual rows)", () => {
   const fixture = JSON.parse(read("scripts/fixtures/cap1-sample.json"));
   assert.equal(detectMultiDimSku(fixture), true);
+  const flatCount = fixture.variants_flat.length;
+  const info = formatMultiDimStoredInfo(2, flatCount);
+  assert.equal(info, `多維已入庫（2 軸 × ${flatCount} 款）`);
+  assert.match(info, /多維已入庫（\d+ 軸 × \d+ 款）/);
+  // no-flat path still mentions raw_capture.sku_table
+  assert.ok(WARNING_MULTIDIM_NO_FLAT.includes("raw_capture.sku_table"));
+  // deprecated string kept in captureTypes for history
   assert.ok(WARNING_MULTIDIM_SKU.includes("raw_capture.sku_table"));
   assert.equal(
     detectMultiDimSku({

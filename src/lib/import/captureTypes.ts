@@ -90,8 +90,26 @@ export const PRICE_PLACEHOLDER_CNY = 0.01;
 export const WARNING_MISSING_PRICE =
   "未抓到售價，已用占位值，請在表單填實際成本";
 
+/**
+ * @deprecated PKG2A: multi-dim with variants_flat no longer uses "壓平" wording.
+ * Kept for grep/history; runtime uses formatMultiDimStoredInfo / WARNING_MULTIDIM_NO_FLAT.
+ */
 export const WARNING_MULTIDIM_SKU =
   "多維規格已壓平為單維／列舉款式，展開待包二；完整表見 raw_capture.sku_table";
+
+/** PKG2A: multi-dim detected but no variants_flat rows — honest, no cartesian invent. */
+export const WARNING_MULTIDIM_NO_FLAT =
+  "多維規格表已見但無 variants_flat，未展開款式列；完整表見 raw_capture.sku_table";
+
+/**
+ * PKG2A CAP info: axis count + actual stored row count (not theoretical cartesian).
+ * e.g. 多維已入庫（2 軸 × 16 款）
+ */
+export function formatMultiDimStoredInfo(axisCount: number, rowCount: number): string {
+  const axes = Math.max(0, Math.floor(axisCount));
+  const rows = Math.max(0, Math.floor(rowCount));
+  return `多維已入庫（${axes} 軸 × ${rows} 款）`;
+}
 
 /** Per-field size cap for raw_capture.payload (Fable CAP-1). */
 export const RAW_CAPTURE_FIELD_MAX_BYTES = 256 * 1024;

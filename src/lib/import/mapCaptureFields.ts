@@ -11,10 +11,11 @@ import type {
   CaptureVariantFlat
 } from "@/lib/import/captureTypes";
 import {
+  formatMultiDimStoredInfo,
   PRICE_PLACEHOLDER_CNY,
   RAW_CAPTURE_FIELD_MAX_BYTES,
   WARNING_MISSING_PRICE,
-  WARNING_MULTIDIM_SKU
+  WARNING_MULTIDIM_NO_FLAT
 } from "@/lib/import/captureTypes";
 
 const BRAND_PARAM_KEYS = [
@@ -121,6 +122,77 @@ export function detectMultiDimSku(body: CaptureImportBody): boolean {
   return false;
 }
 
+/** Count option axes present on flat rows (1–3). */
+export function countAxesFromFlats(flats: CaptureVariantFlat[]): number {
+  let max = 0;
+  for (const v of flats) {
+    let n = 0;
+    if (asTrimmedString(v.option1_value) || asTrimmedString(v.option1_name)) n = 1;
+    if (asTrimmedString(v.option2_value) || asTrimmedString(v.option2_name)) n = 2;
+    if (asTrimmedString(v.option3_value) || asTrimmedString(v.option3_name)) n = 3;
+    if (n > max) max = n;
+  }
+  return max;
+}
+
+/**
+ * Look up per-cell price from raw_capture.sku_table for a flat combo.
+ * Missing cell → null (never invent). Matches axis names on table.rows.
+ */
+export function lookupSkuTablePrice(
+  skuTable: unknown,
+  combo: {
+    option1_name?: string | null;
+    option1_value?: string | null;
+    option2_name?: string | null;
+    option2_value?: string | null;
+    option3_name?: string | null;
+    option3_value?: string | null;
+  }
+): number | null {
+  if (!skuTable || typeof skuTable !== "object" || Array.isArray(skuTable)) return null;
+  const rec = skuTable as Record<string, unknown>;
+  const rows = Array.isArray(rec.rows) ? rec.rows : null;
+  if (!rows?.length) return null;
+
+  const axesRaw = rec.axes ?? rec.dimensions ?? rec.dimension_names;
+  const axes = Array.isArray(axesRaw)
+    ? axesRaw.map((a) => String(a || "").trim()).filter(Boolean)
+    : [];
+
+  const wanted: Array<[string, string]> = [];
+  const n1 = asTrimmedString(combo.option1_name);
+  const v1 = asTrimmedString(combo.option1_value);
+  const n2 = asTrimmedString(combo.option2_name);
+  const v2 = asTrimmedString(combo.option2_value);
+  const n3 = asTrimmedString(combo.option3_name);
+  const v3 = asTrimmedString(combo.option3_value);
+  if (n1 && v1) wanted.push([n1, v1]);
+  else if (axes[0] && v1) wanted.push([axes[0], v1]);
+  if (n2 && v2) wanted.push([n2, v2]);
+  else if (axes[1] && v2) wanted.push([axes[1], v2]);
+  if (n3 && v3) wanted.push([n3, v3]);
+  else if (axes[2] && v3) wanted.push([axes[2], v3]);
+  if (!wanted.length) return null;
+
+  for (const raw of rows) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const row = raw as Record<string, unknown>;
+    let match = true;
+    for (const [axis, val] of wanted) {
+      const cell = row[axis];
+      if (cell == null || String(cell).trim() !== val) {
+        match = false;
+        break;
+      }
+    }
+    if (!match) continue;
+    const priceRaw = row.price != null ? row.price : row.cny_price;
+    return asPositiveNumber(priceRaw);
+  }
+  return null;
+}
+
 /**
  * Strip/truncate oversized string fields (>256KB) for raw_capture.payload.
  * Returns cleaned value + server warnings.
@@ -164,7 +236,10 @@ export function stripOversizedCaptureFields(
   return { value: walk(value, path), warnings };
 }
 
-function mapVariantRows(flats: CaptureVariantFlat[]): {
+function mapVariantRows(
+  flats: CaptureVariantFlat[],
+  skuTable?: unknown
+): {
   rows: Array<Record<string, unknown>>;
   dimensions: Array<{ name: string }>;
 } {
@@ -185,7 +260,18 @@ function mapVariantRows(flats: CaptureVariantFlat[]): {
       if (name && !dimNames.includes(name)) dimNames.push(name);
     }
 
-    const cny = asPositiveNumber(v.cny_price);
+    // Prefer flat.cny_price; if missing, map from sku_table cell (never invent).
+    let cny = asPositiveNumber(v.cny_price);
+    if (cny == null && skuTable != null) {
+      cny = lookupSkuTablePrice(skuTable, {
+        option1_name: o1n,
+        option1_value: o1v,
+        option2_name: o2n,
+        option2_value: o2v,
+        option3_name: o3n,
+        option3_value: o3v
+      });
+    }
     rows.push({
       option1_name: o1n,
       option1_value: o1v,
@@ -242,9 +328,6 @@ export function mapCaptureToDraftFields(
   const productBrand = extractBrandFromParams(params ?? undefined);
 
   const multiDim = detectMultiDimSku(body);
-  if (multiDim) {
-    warnings.push(WARNING_MULTIDIM_SKU);
-  }
 
   const clientWarnings = body.capture_meta?.warnings_from_client;
   if (Array.isArray(clientWarnings)) {
@@ -255,7 +338,27 @@ export function mapCaptureToDraftFields(
   }
 
   const flats = Array.isArray(body.variants_flat) ? body.variants_flat : [];
-  const { rows: variantRows, dimensions: variantDimensions } = mapVariantRows(flats);
+  const { rows: variantRows, dimensions: variantDimensions } = mapVariantRows(
+    flats,
+    body.sku_table
+  );
+
+  // PKG2A: multi-dim with flat rows already stored → info (axis count × actual rows).
+  // No flat → honest warning; never invent cartesian.
+  if (multiDim) {
+    if (variantRows.length > 0) {
+      const axisCount = Math.max(
+        countAxesFromFlats(flats),
+        variantDimensions.length,
+        typeof body.capture_meta?.sku_dimensions === "number"
+          ? body.capture_meta.sku_dimensions
+          : 0
+      );
+      warnings.push(formatMultiDimStoredInfo(axisCount, variantRows.length));
+    } else {
+      warnings.push(WARNING_MULTIDIM_NO_FLAT);
+    }
+  }
 
   const videos = normalizeVideoUrls(body.video_urls ?? []);
   const mainImageUrls = stringList(body.main_image_urls);
@@ -288,6 +391,9 @@ export function mapCaptureToDraftFields(
     client_meta: body.capture_meta ?? null,
     server: {
       warnings: stripped.warnings.slice(),
+      /** PKG2A: true when multi-dim was detected (info or no-flat warning). */
+      sku_multi_dim: multiDim,
+      /** @deprecated alias kept for older readers */
       sku_flat_warning: multiDim,
       image_fetch: [] as unknown[]
     }

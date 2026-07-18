@@ -99,6 +99,47 @@ export function formatVariantPriceLine(
 }
 
 /**
+ * UX-S T72 / R87: write product-level cost into blank variant cost cells only.
+ * Already-filled costs are never overwritten. After fill, recalculate unlocked prices.
+ * Returns { rows, filledCount } so UI can toast when nothing changed.
+ */
+export function applyProductCostToBlankRows(
+  rows: VariantFormRow[],
+  options: {
+    productCost: number | null | undefined;
+    currency: CostCurrency;
+    priceMode: PriceMode;
+    settings?: PricingSettings;
+  }
+): { rows: VariantFormRow[]; filledCount: number } {
+  const productCost = options.productCost;
+  if (productCost == null || !Number.isFinite(productCost) || productCost <= 0) {
+    return { rows, filledCount: 0 };
+  }
+  const costStr = String(productCost);
+  let filledCount = 0;
+  const withCost = rows.map((row) => {
+    const n = Number(row.cost);
+    // Only fill blank / non-positive; never overwrite a filled positive cost.
+    if (Number.isFinite(n) && n > 0) return row;
+    filledCount += 1;
+    return { ...row, cost: costStr };
+  });
+  if (filledCount === 0) {
+    return { rows, filledCount: 0 };
+  }
+  return {
+    rows: recalculateUnlockedVariantPrices(withCost, {
+      currency: options.currency,
+      priceMode: options.priceMode,
+      settings: options.settings,
+      productCost
+    }),
+    filledCount
+  };
+}
+
+/**
  * P1-5 / 回饋 49: cost required = product cost OR every filled variant row has its own cost.
  * Returns null when ok, else error message.
  */

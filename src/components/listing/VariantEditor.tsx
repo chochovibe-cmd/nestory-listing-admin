@@ -6,6 +6,7 @@ import {
   MAX_VARIANT_DIMENSIONS,
   MAX_VARIANT_ROWS,
   appendCharacterRows,
+  applyProductCostToBlankRows,
   clampDimensions,
   clampVariantRows,
   countLockedVariants,
@@ -231,6 +232,29 @@ export function VariantEditor({
     setCharOpen(false);
   }
 
+  /** UX-S T72: only fill blank cost cells; never overwrite filled. */
+  const canApplyProductCost =
+    productCost != null && Number.isFinite(productCost) && productCost > 0 && rows.length > 0;
+
+  function applyCostToAllVariants() {
+    if (!canApplyProductCost) {
+      onWarning("請先填商品成本");
+      return;
+    }
+    const result = applyProductCostToBlankRows(rows, {
+      productCost,
+      currency,
+      priceMode,
+      settings: pricingSettings
+    });
+    if (result.filledCount === 0) {
+      onWarning("所有款式成本已填，未覆蓋既有數字");
+      return;
+    }
+    setRowsSafe(result.rows);
+    onWarning(null);
+  }
+
   const dimHeaders = dimensions.length > 0 ? dimensions : [];
   const showGrid = rows.length > 0 || dimensions.length > 0;
 
@@ -239,6 +263,21 @@ export function VariantEditor({
       <div className="variant-head">
         <span>款式規格</span>
         <span className="vh-btns">
+          <button
+            className="btn-mini"
+            disabled={!canApplyProductCost}
+            onClick={applyCostToAllVariants}
+            title={
+              canApplyProductCost
+                ? "只填空白成本列，已填不覆蓋"
+                : rows.length === 0
+                  ? "請先新增款式列"
+                  : "請先填商品成本"
+            }
+            type="button"
+          >
+            套用成本到全部款式
+          </button>
           <button
             className="btn-mini"
             onClick={() => {

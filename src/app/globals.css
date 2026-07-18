@@ -2970,6 +2970,16 @@ textarea {
   margin-left: 4px;
   margin-bottom: 8px;
 }
+/* UX-N T65: kind filter under tab pills (reuses .pill-btn / .sel) */
+.rec-kind-filters {
+  margin: 0 0 12px;
+}
+.rec-kind-pills {
+  margin: 0 0 4px;
+}
+.rec-kind-pills .pill-btn {
+  min-height: 44px;
+}
 .rec-process-tag {
   flex-shrink: 0;
 }

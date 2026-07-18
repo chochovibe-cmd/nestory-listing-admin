@@ -10,6 +10,7 @@ import {
   publishBatchTitle
 } from "@/lib/drafts/publishBatch";
 import {
+  BATCH_KIND_FILTERS,
   PUBLISH_BATCH_ITEM_SELECT,
   PUBLISH_BATCH_SELECT,
   PUBLISH_RECORDS_TABS,
@@ -24,6 +25,7 @@ import {
   batchStatusSchip,
   canRetryFailedBatch,
   failedDraftIdsFromItems,
+  filterBatchesByKind,
   filterBatchesForTab,
   flattenFailedItems,
   itemLineText,
@@ -36,6 +38,7 @@ import {
   snapshotTitleMap,
   type PublishBatchItemListRow,
   type PublishBatchListRow,
+  type PublishRecordsKindFilter,
   type PublishRecordsTab,
   type RecordsProductRow
 } from "@/lib/drafts/publishRecords";
@@ -74,6 +77,8 @@ export function PublishRecordsPanel() {
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
   const [failedSelected, setFailedSelected] = useState<Set<string>>(() => new Set());
   const [failedRetryBusy, setFailedRetryBusy] = useState(false);
+  /** UX-N T65: client filter for batches + failed (shared). */
+  const [kindFilter, setKindFilter] = useState<PublishRecordsKindFilter>("all");
 
   // Product tabs
   const [productRows, setProductRows] = useState<RecordsProductRow[]>([]);
@@ -263,8 +268,17 @@ export function PublishRecordsPanel() {
   }, [batchFromUrl, rows]);
 
   const visibleBatches = useMemo(
-    () => filterBatchesForTab(rows, tab === "failed" ? "failed" : "batches"),
-    [rows, tab]
+    () =>
+      filterBatchesByKind(
+        filterBatchesForTab(rows, tab === "failed" ? "failed" : "batches"),
+        kindFilter
+      ),
+    [rows, tab, kindFilter]
+  );
+
+  const failedBatchesForTab = useMemo(
+    () => filterBatchesByKind(filterBatchesForTab(rows, "failed"), kindFilter),
+    [rows, kindFilter]
   );
 
   async function ensureItems(batchId: string): Promise<PublishBatchItemListRow[]> {
@@ -288,16 +302,15 @@ export function PublishRecordsPanel() {
   // Prefetch failed items when on failed tab
   useEffect(() => {
     if (tab !== "failed") return;
-    const failedBatches = filterBatchesForTab(rows, "failed");
-    for (const b of failedBatches) {
+    for (const b of failedBatchesForTab) {
       if (!itemsByBatch[b.id]) void ensureItems(b.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, rows]);
+  }, [tab, failedBatchesForTab]);
 
   const flatFailed = useMemo(
-    () => flattenFailedItems(filterBatchesForTab(rows, "failed"), itemsByBatch),
-    [rows, itemsByBatch]
+    () => flattenFailedItems(failedBatchesForTab, itemsByBatch),
+    [failedBatchesForTab, itemsByBatch]
   );
 
   async function toggleOpen(batchId: string) {
@@ -472,10 +485,27 @@ export function PublishRecordsPanel() {
         ))}
       </div>
 
-      {tab === "batches" ? (
-        <p className="rec-filter-muted">
-          Showmore／Matrixify 匯出（標記離隊）會入本頁批次帳（kind=showmore／matrixify）；篩選 UI 後續再補
-        </p>
+      {tab === "batches" || tab === "failed" ? (
+        <div className="rec-kind-filters" aria-label="通路篩選">
+          <div
+            className="rec-filters stage-filter-pills rec-kind-pills"
+            role="group"
+            aria-label="依通路篩選"
+          >
+            {BATCH_KIND_FILTERS.map((k) => (
+              <button
+                key={k.key}
+                type="button"
+                className={`pill-btn${kindFilter === k.key ? " sel sel--fill" : ""}`}
+                aria-pressed={kindFilter === k.key}
+                onClick={() => setKindFilter(k.key)}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+          <p className="rec-filter-muted">依通路篩選已載入的批次</p>
+        </div>
       ) : null}
 
       {notice ? (
@@ -516,17 +546,24 @@ export function PublishRecordsPanel() {
             setSelected={setFailedSelected}
             busy={failedRetryBusy}
             onRetry={() => void retrySelectedFailed()}
-            itemsLoading={
-              filterBatchesForTab(rows, "failed").some((b) => !itemsByBatch[b.id])
-            }
+            itemsLoading={failedBatchesForTab.some((b) => !itemsByBatch[b.id])}
+            kindFilter={kindFilter}
           />
         ) : visibleBatches.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
-            <p className="muted">尚無發布批次</p>
-            <Link className="button primary empty-state-cta" href="/drafts/new?pane=results">
-              去工作檯
-            </Link>
+            <p className="muted">
+              {rows.length === 0
+                ? "尚無發布批次"
+                : kindFilter === "all"
+                  ? "尚無發布批次"
+                  : "此通路尚無批次"}
+            </p>
+            {rows.length === 0 ? (
+              <Link className="button primary empty-state-cta" href="/drafts/new?pane=results">
+                去工作檯
+              </Link>
+            ) : null}
           </div>
         ) : (
           <div className="rec-list ir-list">
@@ -673,7 +710,8 @@ function FailedRetrySection({
   setSelected,
   busy,
   onRetry,
-  itemsLoading
+  itemsLoading,
+  kindFilter
 }: {
   items: ReturnType<typeof flattenFailedItems>;
   selected: Set<string>;
@@ -681,6 +719,7 @@ function FailedRetrySection({
   busy: boolean;
   onRetry: () => void;
   itemsLoading: boolean;
+  kindFilter: PublishRecordsKindFilter;
 }) {
   if (itemsLoading && items.length === 0) {
     return <p className="muted">載入失敗件…</p>;
@@ -689,7 +728,9 @@ function FailedRetrySection({
     return (
       <div className="empty-state">
         <div className="empty-icon">◈</div>
-        <p className="muted">目前沒有失敗件</p>
+        <p className="muted">
+          {kindFilter === "all" ? "目前沒有失敗件" : "此通路目前沒有失敗件"}
+        </p>
       </div>
     );
   }

@@ -14,6 +14,7 @@ import type {
   PublishBatch,
   PublishBatchItem,
   PublishBatchItemStatus,
+  PublishBatchKind,
   PublishBatchStatus,
   PublishMode
 } from "@/types/domain";
@@ -113,6 +114,27 @@ export function filterBatchesForTab(
   if (tab === "failed") return filterPublishBatches(rows, "has_failed");
   if (tab === "batches") return rows;
   return [];
+}
+
+/** UX-N T65: client-side kind filter for 發布紀錄 batches／failed tabs. */
+export type PublishRecordsKindFilter = "all" | PublishBatchKind;
+
+export const BATCH_KIND_FILTERS: {
+  key: PublishRecordsKindFilter;
+  label: string;
+}[] = [
+  { key: "all", label: "全部" },
+  { key: "shopify_api", label: "Shopify API" },
+  { key: "showmore", label: "Showmore" },
+  { key: "matrixify", label: "Matrixify" }
+];
+
+export function filterBatchesByKind(
+  rows: PublishBatchListRow[],
+  kindFilter: PublishRecordsKindFilter
+): PublishBatchListRow[] {
+  if (kindFilter === "all") return rows;
+  return rows.filter((r) => r.kind === kindFilter);
 }
 
 export function parseRecordsTab(

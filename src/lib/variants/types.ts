@@ -4,7 +4,12 @@ export const MAX_VARIANT_DIMENSIONS = 3;
 /** Soft cap: yellow warning + block adding more rows. */
 export const MAX_VARIANT_ROWS = 50;
 
-export type VariantDimension = { name: string };
+/**
+ * One product option axis.
+ * `values` = axis order / UI assist only (jsonb on draft.variant_dimensions; no migration).
+ * Actual combos = product_variants rows (source of truth). On conflict, rebuild values from rows.
+ */
+export type VariantDimension = { name: string; values?: string[] };
 
 export type VariantFormRow = {
   /** Values aligned to dimensions[0..2]; unused slots "". */

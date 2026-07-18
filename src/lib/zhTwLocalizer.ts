@@ -199,16 +199,31 @@ export function localizeGeneratedListingContent(
  * PKG2A / 回饋 84：variant_dimensions 軸名簡轉繁（冪等，不標記）。
  * 只在全文 generate 成功路徑呼叫；表單手填當下不動。
  */
-export function localizeVariantDimensions<T extends { name?: string | null }>(
-  dims: T[] | null | undefined,
-): T[] | null | undefined {
+export function localizeVariantDimensions<
+  T extends { name?: string | null; values?: string[] | null },
+>(dims: T[] | null | undefined): T[] | null | undefined {
   if (!dims) return dims;
   if (!Array.isArray(dims)) return dims;
   return dims.map((d) => {
     const name = d.name;
-    if (name == null || name === "") return d;
-    const localized = localizeToTaiwanTraditionalText(name);
-    return localized === name ? d : { ...d, name: localized };
+    const localizedName =
+      name == null || name === "" ? name : localizeToTaiwanTraditionalText(name);
+    const values = Array.isArray(d.values)
+      ? d.values.map((v) =>
+          v == null || v === "" ? v : localizeToTaiwanTraditionalText(String(v)),
+        )
+      : d.values;
+    const nameChanged = localizedName !== name;
+    const valuesChanged =
+      Array.isArray(values) &&
+      Array.isArray(d.values) &&
+      values.some((v, i) => v !== d.values![i]);
+    if (!nameChanged && !valuesChanged) return d;
+    return {
+      ...d,
+      ...(nameChanged ? { name: localizedName } : {}),
+      ...(valuesChanged ? { values } : {}),
+    };
   });
 }
 

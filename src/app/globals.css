@@ -3570,11 +3570,59 @@ textarea {
 .v-char-ip { color: var(--text-muted); font-size: 10px; }
 .v-custom-dim input { width: 100%; min-height: 36px; font-size: 11px; }
 .v-dim-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+/* UX-S pkg2b: multi-axis value editor (tokens only) */
+.v-dim-axes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  max-width: 100%;
+  min-width: 0;
+}
+.v-dim-axis {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.v-dim-axis-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.v-dim-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 .v-dim-chip {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; font-weight: 700; padding: 4px 8px;
   border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--text); border: 1px solid var(--border);
+}
+.v-axis-val {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 11px; font-weight: 600; padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--text);
+  border: 1px solid var(--line-soft, var(--border));
+}
+.v-axis-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 140px;
+  max-width: 100%;
+}
+.v-axis-add input {
+  flex: 1 1 100px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 5px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-s);
+  box-sizing: border-box;
 }
 .v-dim-x { background: none; border: 0; cursor: pointer; color: var(--text-muted); font-size: 14px; min-height: 28px; min-width: 28px; padding: 0; }
 .vgrid-hdr, .vgrid-row {

@@ -286,9 +286,13 @@ export interface ImageBatchItem {
   completed_at: string | null;
 }
 
-/** B7: one product option axis (Shopify productOptions name). */
+/**
+ * B7 / pkg2b: one product option axis (Shopify productOptions name).
+ * `values` optional UI assist; combos truth = product_variants rows.
+ */
 export interface VariantDimensionDef {
   name: string;
+  values?: string[];
 }
 
 /**

@@ -27,17 +27,12 @@ async function check(name, fn) {
 
 async function loadTs(rel) {
   const abs = path.join(root, rel);
+  // Node 22+ can strip types when run with --experimental-strip-types;
+  // also try plain import (Node 24 often works for type-only syntax).
   try {
-    return await import(pathToFileURL(abs).href);
+    return await import(pathToFileURL(abs).href + `?t=${Date.now()}`);
   } catch (e) {
-    // Node 24 strip types
-    const { register } = await import("node:module");
-    try {
-      // fallback: dynamic with query
-      return await import(pathToFileURL(abs).href + `?t=${Date.now()}`);
-    } catch {
-      throw e;
-    }
+    throw e;
   }
 }
 
@@ -429,6 +424,371 @@ await check("priceLocked rows unchanged by map", () => {
   );
   assert.equal(next[0].sellPrice, "999");
   assert.equal(next[1].sellPrice, "200");
+});
+
+// ── pkg2b: cross-expand + merge (inline mirror of variantCrossExpand.ts) ─
+console.log("\n8) pkg2b cross-expand merge + clamp (Fable)");
+
+const CARTESIAN_CLAMP_WARNING =
+  "款式組合超過 50，已截斷——請減少軸值或分兩件商品上架";
+
+function normalizeIdentity(value) {
+  return String(value || "").normalize("NFKC").trim().replace(/\s+/g, " ");
+}
+
+// Minimal P2-79 fold: 米飛／米菲 → miffy (mirrors alias patch + merge extra)
+function normalizeOptionValueForMerge(raw) {
+  const id = normalizeIdentity(raw);
+  if (!id) return "";
+  const key = id.toLowerCase();
+  const alias = {
+    米飛: "miffy",
+    米菲: "miffy",
+    米菲兔: "miffy",
+    米菲兔子: "miffy",
+    miffy: "miffy"
+  };
+  return alias[key] || key;
+}
+
+function optionValuesMergeKey(ov) {
+  return [0, 1, 2]
+    .map((i) => normalizeOptionValueForMerge(ov[i] || ""))
+    .join("\u0001");
+}
+
+function isHandFilled(row) {
+  if (row.priceLocked) return true;
+  if (row.imageId) return true;
+  if (String(row.sku || "").trim()) return true;
+  if (String(row.qty || "").trim()) return true;
+  if (String(row.sellPrice || "").trim()) return true;
+  if (String(row.compareAt || "").trim()) return true;
+  const costNum = Number(row.cost);
+  if (String(row.cost || "").trim() && Number.isFinite(costNum) && costNum > 0) return true;
+  return false;
+}
+
+function uniqueAxisValues(values) {
+  const ordered = [];
+  const seen = new Set();
+  for (const raw of values || []) {
+    const display = String(raw || "").trim();
+    if (!display) continue;
+    const k = normalizeOptionValueForMerge(display);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    ordered.push(display);
+  }
+  return ordered;
+}
+
+function cartesianOptionValueCombos(dimensions) {
+  const dims = (dimensions || []).slice(0, 3);
+  const active = [];
+  for (let i = 0; i < dims.length; i++) {
+    const values = uniqueAxisValues(dims[i]?.values);
+    if (values.length > 0) active.push({ index: i, values });
+  }
+  if (!active.length) return [];
+  let combos = [["", "", ""]];
+  for (const axis of active) {
+    const next = [];
+    for (const base of combos) {
+      for (const v of axis.values) {
+        const ov = [base[0], base[1], base[2]];
+        ov[axis.index] = v;
+        next.push(ov);
+      }
+    }
+    combos = next;
+  }
+  return combos;
+}
+
+function expandAndMergeVariantRows(dimensions, existing) {
+  const combos = cartesianOptionValueCombos(dimensions);
+  const existingByKey = new Map();
+  const sortedExisting = [...(existing || [])].sort(
+    (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+  );
+  for (const row of sortedExisting) {
+    if (!isFilled(row)) continue;
+    const key = optionValuesMergeKey(row.optionValues);
+    if (!existingByKey.has(key)) existingByKey.set(key, row);
+  }
+  const expandedKeys = new Set(combos.map((ov) => optionValuesMergeKey(ov)));
+  const wouldDiscardHandFilled = [];
+  for (const [key, row] of existingByKey) {
+    if (!expandedKeys.has(key) && isHandFilled(row)) wouldDiscardHandFilled.push(row);
+  }
+  let rows = combos.map((optionValues, i) => {
+    const hit = existingByKey.get(optionValuesMergeKey(optionValues));
+    const base = {
+      optionValues,
+      cost: "",
+      sellPrice: "",
+      compareAt: "",
+      priceLocked: false,
+      qty: "",
+      sku: "",
+      imageId: null,
+      sortOrder: i
+    };
+    if (!hit) return base;
+    return {
+      ...base,
+      cost: hit.cost,
+      sellPrice: hit.sellPrice,
+      compareAt: hit.compareAt,
+      priceLocked: hit.priceLocked,
+      qty: hit.qty,
+      sku: hit.sku,
+      imageId: hit.imageId
+    };
+  });
+  let truncated = false;
+  let warning = null;
+  if (rows.length > MAX_VARIANT_ROWS) {
+    truncated = true;
+    warning = CARTESIAN_CLAMP_WARNING;
+    rows = rows.slice(0, MAX_VARIANT_ROWS).map((r, i) => ({ ...r, sortOrder: i }));
+  }
+  return {
+    rows,
+    truncated,
+    warning,
+    wouldDiscardHandFilled,
+    comboCount: combos.length
+  };
+}
+
+function rebuildDimensionValuesFromRows(dimensions, rows) {
+  const sorted = [...(rows || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  return (dimensions || []).slice(0, 3).map((dim, di) => {
+    const ordered = [];
+    const seen = new Set();
+    for (const row of sorted) {
+      const display = String(row.optionValues?.[di] || "").trim();
+      if (!display) continue;
+      const key = normalizeOptionValueForMerge(display);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      ordered.push(display);
+    }
+    return { name: dim.name, values: ordered };
+  });
+}
+
+function removeDimensionMergingRows(dimensions, rows, dimIndex) {
+  const nextDims = dimensions.filter((_, i) => i !== dimIndex);
+  const shifted = rows.map((row) => {
+    const optionValues = [
+      row.optionValues[0] || "",
+      row.optionValues[1] || "",
+      row.optionValues[2] || ""
+    ];
+    for (let i = dimIndex; i < 2; i++) optionValues[i] = optionValues[i + 1] || "";
+    optionValues[2] = "";
+    return { ...row, optionValues };
+  });
+  const winners = new Map();
+  const wouldDiscardHandFilled = [];
+  const sorted = [...shifted].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  for (const row of sorted) {
+    if (!isFilled(row)) continue;
+    const key = optionValuesMergeKey(row.optionValues);
+    if (!winners.has(key)) winners.set(key, row);
+    else if (isHandFilled(row)) wouldDiscardHandFilled.push(row);
+  }
+  const nextRows = [...winners.values()].map((r, i) => ({ ...r, sortOrder: i }));
+  return {
+    dimensions: rebuildDimensionValuesFromRows(nextDims, nextRows),
+    rows: nextRows,
+    wouldDiscardHandFilled
+  };
+}
+
+function emptyRow(sortOrder, ov = ["", "", ""]) {
+  return {
+    optionValues: ov,
+    cost: "",
+    sellPrice: "",
+    compareAt: "",
+    priceLocked: false,
+    qty: "",
+    sku: "",
+    imageId: null,
+    sortOrder
+  };
+}
+
+await check("米飛／米菲 merge key same (P2-79)", () => {
+  const a = optionValuesMergeKey(["米飛", "12cm", ""]);
+  const b = optionValuesMergeKey(["米菲", "12cm", ""]);
+  assert.equal(a, b);
+});
+
+await check("merge preserves cost/sell/lock/qty/sku/image_id", () => {
+  const dims = [
+    { name: "角色", values: ["小八", "烏薩奇"] },
+    { name: "尺寸", values: ["12cm"] }
+  ];
+  const existing = [
+    {
+      ...emptyRow(0, ["小八", "12cm", ""]),
+      cost: "35.5",
+      sellPrice: "299",
+      compareAt: "349",
+      priceLocked: true,
+      qty: "2",
+      sku: "SKU-A",
+      imageId: "img-uuid-1"
+    },
+    {
+      ...emptyRow(1, ["烏薩奇", "12cm", ""]),
+      cost: "40",
+      sellPrice: "329",
+      priceLocked: false,
+      qty: "",
+      sku: "",
+      imageId: null
+    }
+  ];
+  const result = expandAndMergeVariantRows(dims, existing);
+  assert.equal(result.rows.length, 2);
+  const hit = result.rows.find((r) => r.optionValues[0] === "小八");
+  assert.ok(hit);
+  assert.equal(hit.cost, "35.5");
+  assert.equal(hit.sellPrice, "299");
+  assert.equal(hit.compareAt, "349");
+  assert.equal(hit.priceLocked, true);
+  assert.equal(hit.qty, "2");
+  assert.equal(hit.sku, "SKU-A");
+  assert.equal(hit.imageId, "img-uuid-1");
+  assert.equal(result.wouldDiscardHandFilled.length, 0);
+});
+
+await check("cartesian clamp 50 Fable copy", () => {
+  const dims = [
+    { name: "A", values: Array.from({ length: 10 }, (_, i) => `A${i}`) },
+    { name: "B", values: Array.from({ length: 6 }, (_, i) => `B${i}`) }
+  ];
+  const result = expandAndMergeVariantRows(dims, []);
+  assert.equal(result.comboCount, 60);
+  assert.equal(result.rows.length, 50);
+  assert.equal(result.truncated, true);
+  assert.equal(result.warning, CARTESIAN_CLAMP_WARNING);
+});
+
+await check("empty axis does not participate", () => {
+  const dims = [
+    { name: "角色", values: ["小八", "烏薩奇"] },
+    { name: "尺寸", values: [] },
+    { name: "顏色", values: ["粉"] }
+  ];
+  const combos = cartesianOptionValueCombos(dims);
+  assert.equal(combos.length, 2);
+  assert.deepEqual(combos[0], ["小八", "", "粉"]);
+  assert.deepEqual(combos[1], ["烏薩奇", "", "粉"]);
+});
+
+await check("axis order 0→1→2", () => {
+  const dims = [
+    { name: "角色", values: ["A", "B"] },
+    { name: "尺寸", values: ["1", "2"] }
+  ];
+  const combos = cartesianOptionValueCombos(dims);
+  assert.deepEqual(
+    combos.map((c) => c.join("/")),
+    ["A/1/", "A/2/", "B/1/", "B/2/"]
+  );
+});
+
+await check("remove dim partial hit keeps min sortOrder", () => {
+  const dims = [
+    { name: "角色", values: ["小八"] },
+    { name: "尺寸", values: ["12cm", "15cm"] }
+  ];
+  const rows = [
+    { ...emptyRow(0, ["小八", "12cm", ""]), cost: "10", imageId: "keep-me" },
+    { ...emptyRow(1, ["小八", "15cm", ""]), cost: "99", imageId: "lose-me" }
+  ];
+  const result = removeDimensionMergingRows(dims, rows, 1);
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0].optionValues[0], "小八");
+  assert.equal(result.rows[0].cost, "10");
+  assert.equal(result.rows[0].imageId, "keep-me");
+  assert.equal(result.wouldDiscardHandFilled.length, 1);
+  assert.equal(result.wouldDiscardHandFilled[0].imageId, "lose-me");
+});
+
+await check("rebuild values from rows (not reverse invent)", () => {
+  const dims = [
+    { name: "角色", values: ["幽靈", "幽靈2"] },
+    { name: "尺寸", values: ["99cm"] }
+  ];
+  const rows = [emptyRow(0, ["小八", "12cm", ""]), emptyRow(1, ["烏薩奇", "12cm", ""])];
+  const rebuilt = rebuildDimensionValuesFromRows(dims, rows);
+  assert.deepEqual(rebuilt[0].values, ["小八", "烏薩奇"]);
+  assert.deepEqual(rebuilt[1].values, ["12cm"]);
+});
+
+await check("wouldDiscard hand-filled on shrink expand", () => {
+  const dims = [{ name: "角色", values: ["小八"] }];
+  const existing = [
+    { ...emptyRow(0, ["小八", "", ""]), cost: "10", imageId: "a" },
+    { ...emptyRow(1, ["烏薩奇", "", ""]), cost: "20", imageId: "b" }
+  ];
+  const result = expandAndMergeVariantRows(dims, existing);
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.wouldDiscardHandFilled.length, 1);
+  assert.equal(result.wouldDiscardHandFilled[0].imageId, "b");
+});
+
+// Source contract: real module exports + Fable clamp string present
+await check("src variantCrossExpand has Fable clamp + exports", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(
+    path.join(root, "src/lib/variants/variantCrossExpand.ts"),
+    "utf8"
+  );
+  assert.match(src, /CARTESIAN_CLAMP_WARNING/);
+  assert.match(src, /款式組合超過 50，已截斷/);
+  assert.match(src, /export function expandAndMergeVariantRows/);
+  assert.match(src, /export function removeDimensionMergingRows/);
+  assert.match(src, /normalizeOptionValueForMerge/);
+  const ve = fs.readFileSync(
+    path.join(root, "src/components/listing/VariantEditor.tsx"),
+    "utf8"
+  );
+  assert.match(ve, /依軸值展開列/);
+  assert.match(ve, /expandAndMergeVariantRows/);
+  assert.doesNotMatch(ve, /VariantEditor2|fork/i);
+});
+
+// Single-dim regression still uses formRowsToDbInserts path above (section 2).
+console.log("\n9) single-dim zero regression (form mapping still 1-axis)");
+await check("single-dim option1 only still maps", () => {
+  const inserts = formRowsToDbInserts([{ name: "款式" }], [
+    {
+      optionValues: ["粉色", "", ""],
+      cost: "12",
+      sellPrice: "199",
+      compareAt: "",
+      priceLocked: false,
+      qty: "",
+      sku: "",
+      imageId: "img-1",
+      sortOrder: 0
+    }
+  ]);
+  assert.equal(inserts.length, 1);
+  assert.equal(inserts[0].option1_name, "款式");
+  assert.equal(inserts[0].option1_value, "粉色");
+  assert.equal(inserts[0].option2_name, null);
+  assert.equal(inserts[0].option2_value, null);
+  assert.equal(inserts[0].image_id, "img-1");
 });
 
 console.log("");

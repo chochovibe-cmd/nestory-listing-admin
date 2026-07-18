@@ -44,7 +44,7 @@ export type WorkspaceAutosaveSnapshot = {
   manualSellPrice: string;
   profitDriven: boolean;
   targetProfitInput: string;
-  variantDimensions: Array<{ name: string }>;
+  variantDimensions: Array<{ name: string; values?: string[] }>;
   variants: Array<{
     optionValues: [string, string, string];
     cost: string;
@@ -182,7 +182,7 @@ export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot):
   manualSellPrice: string;
   profitDriven: boolean;
   targetProfitInput: string;
-  variantDimensions: Array<{ name: string }>;
+  variantDimensions: Array<{ name: string; values?: string[] }>;
   variants: WorkspaceAutosaveSnapshot["variants"];
 } {
   return {
@@ -215,7 +215,15 @@ export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot):
     profitDriven: Boolean(snap.profitDriven),
     targetProfitInput: typeof snap.targetProfitInput === "string" ? snap.targetProfitInput : "",
     variantDimensions: Array.isArray(snap.variantDimensions)
-      ? snap.variantDimensions.map((d) => ({ name: String(d?.name ?? "") }))
+      ? snap.variantDimensions.map((d) => {
+          const name = String(d?.name ?? "");
+          const values = Array.isArray((d as { values?: unknown }).values)
+            ? ((d as { values: unknown[] }).values)
+                .map((v) => String(v ?? "").trim())
+                .filter(Boolean)
+            : undefined;
+          return values && values.length > 0 ? { name, values } : { name };
+        })
       : [],
     variants: Array.isArray(snap.variants)
       ? snap.variants.map((row, i) => ({

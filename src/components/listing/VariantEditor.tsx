@@ -6,15 +6,20 @@ import {
   MAX_VARIANT_DIMENSIONS,
   MAX_VARIANT_ROWS,
   appendCharacterRows,
+  appendDimensionValue,
   applyProductCostToBlankRows,
+  canExpandFromDimensions,
   clampDimensions,
   clampVariantRows,
   countLockedVariants,
   emptyVariantRow,
+  expandAndMergeVariantRows,
   formatVariantPriceLine,
   isVariantRowFilled,
   lockVariantPrice,
   recalculateUnlockedVariantPrices,
+  removeDimensionMergingRows,
+  removeDimensionValue,
   type VariantDimension,
   type VariantFormRow
 } from "@/lib/variants";
@@ -69,6 +74,8 @@ export function VariantEditor({
   const [charList, setCharList] = useState<{ id: string; name: string; ip: string }[]>([]);
   const [charSelected, setCharSelected] = useState<Record<string, boolean>>({});
   const [charLoading, setCharLoading] = useState(false);
+  /** Per-dimension draft for adding an axis value (pkg2b). */
+  const [axisValueDraft, setAxisValueDraft] = useState<Record<number, string>>({});
   const rootRef = useRef<HTMLDivElement>(null);
 
   const lockedCount = countLockedVariants(rows);
@@ -196,24 +203,61 @@ export function VariantEditor({
       setDimOpen(false);
       return;
     }
-    onDimensionsChange(clampDimensions([...dimensions, { name: trimmed }]));
+    // New axis starts with empty values — does not auto-cartesian (Fable).
+    onDimensionsChange(
+      clampDimensions([...dimensions, { name: trimmed, values: [] }])
+    );
     setCustomDim("");
     setDimOpen(false);
   }
 
   function removeDimension(dimIndex: number) {
-    const nextDims = dimensions.filter((_, i) => i !== dimIndex);
-    onDimensionsChange(nextDims);
-    const nextRows = rows.map((row) => {
-      const optionValues = [...row.optionValues] as [string, string, string];
-      // shift values after removed dim
-      for (let i = dimIndex; i < 2; i++) {
-        optionValues[i] = optionValues[i + 1] ?? "";
-      }
-      optionValues[2] = "";
-      return { ...row, optionValues };
-    });
-    setRowsSafe(nextRows);
+    const result = removeDimensionMergingRows(dimensions, rows, dimIndex);
+    if (result.wouldDiscardHandFilled.length > 0) {
+      const ok = window.confirm(
+        `移除這個維度後，有 ${result.wouldDiscardHandFilled.length} 筆已手填的款式會因合併而丟掉（成本／售價／庫存／圖等）。確定移除？`
+      );
+      if (!ok) return;
+    }
+    onDimensionsChange(result.dimensions);
+    setRowsSafe(result.rows);
+    onWarning(null);
+  }
+
+  function addAxisValue(dimIndex: number) {
+    const draft = (axisValueDraft[dimIndex] ?? "").trim();
+    if (!draft) return;
+    onDimensionsChange(appendDimensionValue(dimensions, dimIndex, draft));
+    setAxisValueDraft((cur) => ({ ...cur, [dimIndex]: "" }));
+  }
+
+  function dropAxisValue(dimIndex: number, value: string) {
+    onDimensionsChange(removeDimensionValue(dimensions, dimIndex, value));
+  }
+
+  /**
+   * Fable: expand is a separate button — never auto full cartesian.
+   * Merge preserves hand-fill on key hit; discard needs double-confirm.
+   */
+  function expandFromAxisValues() {
+    if (!canExpandFromDimensions(dimensions)) {
+      onWarning("請先在各維度加上軸值，再按展開。");
+      return;
+    }
+    const result = expandAndMergeVariantRows(dimensions, rows);
+    if (result.comboCount === 0) {
+      onWarning("沒有可展開的軸值組合。");
+      return;
+    }
+    if (result.wouldDiscardHandFilled.length > 0) {
+      const ok = window.confirm(
+        `重新展開後，有 ${result.wouldDiscardHandFilled.length} 筆已手填但不再出現在新組合裡的款式會被丟掉（成本／售價／鎖定／庫存／SKU／圖）。確定展開？`
+      );
+      if (!ok) return;
+    }
+    onRowsChange(result.rows);
+    if (result.warning) onWarning(result.warning);
+    else onWarning(null);
   }
 
   function applyCharacters() {
@@ -299,6 +343,19 @@ export function VariantEditor({
             type="button"
           >
             ＋新增維度（最多{MAX_VARIANT_DIMENSIONS}）
+          </button>
+          <button
+            className="btn-mini"
+            disabled={!canExpandFromDimensions(dimensions)}
+            onClick={expandFromAxisValues}
+            title={
+              canExpandFromDimensions(dimensions)
+                ? "依各軸值交叉展開款式列（不會自動展開，需按此鈕）"
+                : "請先在維度上加入軸值"
+            }
+            type="button"
+          >
+            依軸值展開列
           </button>
           {charOpen ? (
             <div className="pop-menu open v-pop-char">
@@ -387,25 +444,69 @@ export function VariantEditor({
       </div>
 
       {dimensions.length > 0 ? (
-        <div className="v-dim-chips">
+        <div className="v-dim-axes">
           {dimensions.map((d, i) => (
-            <span className="v-dim-chip" key={`${d.name}-${i}`}>
-              {d.name}
-              <button
-                aria-label={`移除維度 ${d.name}`}
-                className="v-dim-x"
-                onClick={() => removeDimension(i)}
-                type="button"
-              >
-                ×
-              </button>
-            </span>
+            <div className="v-dim-axis" key={`${d.name}-${i}`}>
+              <div className="v-dim-axis-head">
+                <span className="v-dim-chip">
+                  {d.name}
+                  <button
+                    aria-label={`移除維度 ${d.name}`}
+                    className="v-dim-x"
+                    onClick={() => removeDimension(i)}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+              <div className="v-dim-values">
+                {(d.values ?? []).map((val) => (
+                  <span className="v-axis-val" key={`${d.name}-${val}`}>
+                    {val}
+                    <button
+                      aria-label={`移除軸值 ${val}`}
+                      className="v-dim-x"
+                      onClick={() => dropAxisValue(i, val)}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <span className="v-axis-add">
+                  <input
+                    aria-label={`${d.name} 軸值`}
+                    onChange={(e) =>
+                      setAxisValueDraft((cur) => ({ ...cur, [i]: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addAxisValue(i);
+                      }
+                    }}
+                    placeholder="加軸值…"
+                    value={axisValueDraft[i] ?? ""}
+                  />
+                  <button
+                    className="btn-mini"
+                    onClick={() => addAxisValue(i)}
+                    type="button"
+                  >
+                    加入
+                  </button>
+                </span>
+              </div>
+            </div>
           ))}
         </div>
       ) : null}
 
       {!showGrid || rows.length === 0 ? (
-        <div className="variant-empty">單一款式可留空；多款式再新增維度或依角色建立。</div>
+        <div className="variant-empty">
+          單一款式可留空；多款式可新增維度、填軸值後按「依軸值展開列」，或依角色建立（只加列不自動交叉）。
+        </div>
       ) : (
         <>
           <div

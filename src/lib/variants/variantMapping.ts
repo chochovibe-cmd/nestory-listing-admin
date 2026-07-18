@@ -9,13 +9,20 @@ import {
   type VariantDimension,
   type VariantFormRow
 } from "./types";
+import { rebuildDimensionValuesFromRows, uniqueAxisValues } from "./variantCrossExpand";
 
 export { MAX_VARIANT_DIMENSIONS, MAX_VARIANT_ROWS, emptyVariantRow, isVariantRowFilled };
 
-/** Keep at most 3 non-empty dimension names. */
+/** Keep at most 3 non-empty dimension names; preserve optional values (pkg2b). */
 export function clampDimensions(dims: VariantDimension[]): VariantDimension[] {
   const cleaned = dims
-    .map((d) => ({ name: d.name.trim() }))
+    .map((d) => {
+      const name = d.name.trim();
+      const values = Array.isArray(d.values)
+        ? d.values.map((v) => String(v ?? "").trim()).filter((v) => v.length > 0)
+        : undefined;
+      return values && values.length > 0 ? { name, values } : { name };
+    })
     .filter((d) => d.name.length > 0)
     .slice(0, MAX_VARIANT_DIMENSIONS);
   return cleaned;
@@ -213,11 +220,23 @@ export function dbRowsToForm(
     sortOrder: r.sort_order ?? i
   }));
 
-  return { dimensions: dims, rows };
+  // pkg2b Fable: product_variants rows = combo truth.
+  // When rows exist, rebuild dimensions.values from rows (never invent from values alone).
+  // When no rows, keep stored values as UI assist seed.
+  const dimsOut = rows.some(isVariantRowFilled)
+    ? rebuildDimensionValuesFromRows(dims, rows)
+    : dims.map((d) => {
+        const values = uniqueAxisValues(d.values);
+        return values.length > 0 ? { name: d.name, values } : { name: d.name };
+      });
+
+  return { dimensions: dimsOut, rows };
 }
 
 /**
  * Create rows from selected character names into dimension 0.
+ * Fable pkg2b: **only append** — never auto-cartesian with other axes.
+ * Also appends display names onto dimensions[0].values (UI assist).
  * Caps at MAX_VARIANT_ROWS.
  */
 export function appendCharacterRows(
@@ -231,20 +250,40 @@ export function appendCharacterRows(
 } {
   let dims = clampDimensions(dimensions);
   if (dims.length === 0) {
-    dims = [{ name: "角色" }];
+    dims = [{ name: "角色", values: [] }];
   } else if (!dims[0].name) {
-    dims = [{ name: "角色" }, ...dims.slice(1)];
+    dims = [{ name: "角色", values: dims[0]?.values ?? [] }, ...dims.slice(1)];
   }
 
+  const existingKeys = new Set(
+    existing
+      .filter(isVariantRowFilled)
+      .map((r) =>
+        [r.optionValues[0], r.optionValues[1], r.optionValues[2]]
+          .map((v) => (v ?? "").trim().toLowerCase())
+          .join("\u0001")
+      )
+  );
+
   const next = [...existing];
+  const axis0Values = [...(dims[0].values ?? [])];
   for (const name of characterNames) {
     const trimmed = name.trim();
     if (!trimmed) continue;
+    // Always record on axis values (UI assist) even if row already exists.
+    if (!axis0Values.some((v) => v.trim() === trimmed)) {
+      axis0Values.push(trimmed);
+    }
+    const dedupeKey = `${trimmed.toLowerCase()}\u0001\u0001`;
+    if (existingKeys.has(dedupeKey)) continue;
     if (next.length >= MAX_VARIANT_ROWS) break;
     const row = emptyVariantRow(next.length);
     row.optionValues[0] = trimmed;
     next.push(row);
+    existingKeys.add(dedupeKey);
   }
+
+  dims = [{ ...dims[0], values: axis0Values }, ...dims.slice(1)];
 
   const clamped = clampVariantRows(next);
   return {

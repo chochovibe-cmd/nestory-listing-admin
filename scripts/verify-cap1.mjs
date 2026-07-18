@@ -248,6 +248,14 @@ check("fixture: contract fields present", () => {
   assert.ok(fixture.capture_meta?.sku_dimensions === 2);
 });
 
+check("open_path: CAP-2.5 workbench form deep link", () => {
+  const src = read("src/lib/import/createCaptureDraft.ts");
+  assert.match(src, /captureOpenPath|\/drafts\/new\?draft=/);
+  const map = read("src/lib/drafts/mapDraftToWorkspaceForm.ts");
+  assert.match(map, /export function captureOpenPath/);
+  assert.match(map, /\/drafts\/new\?draft=/);
+});
+
 check("route: product-page only HTTP method exports", () => {
   const src = read("src/app/api/import/product-page/route.ts");
   const { all, bad } = routeExportsOnlyHttpMethods(src);

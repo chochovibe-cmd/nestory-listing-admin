@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Noto_Sans_TC, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
 import { Suspense } from "react";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -6,6 +7,21 @@ import { HeaderControls } from "@/components/HeaderControls";
 import { MobileTabbar } from "@/components/MobileTabbar";
 import { ToastHost } from "@/components/Toast";
 import "./globals.css";
+
+/* UX-K T50: self-host via next/font (replaces Google Fonts @import in globals.css). */
+const notoSansTC = Noto_Sans_TC({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "700"],
+  variable: "--font-noto-sans-tc",
+  display: "swap"
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-space-grotesk",
+  display: "swap"
+});
 
 export const metadata: Metadata = {
   title: "Nestory Listing Admin",
@@ -47,7 +63,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       {/* suppressHydrationWarning: themeInitScript below mutates
           body[data-theme] from localStorage before React hydrates, so the
           server's "dark" attribute intentionally differs from the client's. */}
-      <body data-theme="dark" suppressHydrationWarning>
+      <body
+        className={`${notoSansTC.variable} ${spaceGrotesk.variable}`}
+        data-theme="dark"
+        suppressHydrationWarning
+      >
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <div className="app-root">
           <header className="topbar">

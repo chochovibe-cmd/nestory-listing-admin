@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+/* UX-K T50: fonts loaded via next/font in layout.tsx (--font-noto-sans-tc / --font-space-grotesk).
+   Do not re-add Google Fonts @import (FOUT / CSP / privacy). */
 
 /* Design tokens ported from 分支/index.html (three themes, dark is default). */
 :root,
@@ -165,7 +166,7 @@ body {
   min-height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: 'Noto Sans TC', sans-serif;
+  font-family: var(--font-noto-sans-tc), 'Noto Sans TC', sans-serif;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -324,7 +325,7 @@ select {
 }
 
 .settings-page-title {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
   font-size: 18px;
   font-weight: 700;
   margin: 0 0 6px;
@@ -374,7 +375,7 @@ select {
 }
 
 .settings-row .rate-val {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
 }
 
 .settings-conn-list {
@@ -422,7 +423,7 @@ select {
 }
 
 .coming-soon-title {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
   font-size: 18px;
   font-weight: 700;
   margin: 0 0 8px;
@@ -457,7 +458,7 @@ body[data-theme="kitty"] .topbar {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   font-weight: 700;
   font-size: 15px;
 }
@@ -515,7 +516,7 @@ body[data-theme="kitty"] .topbar {
 /* Mobile-only hamburger for the header tool cluster (not page nav). */
 .nav-toggle {
   display: none;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   font-size: 12px;
   font-weight: 700;
 }
@@ -538,7 +539,7 @@ body[data-theme="kitty"] .topbar {
   border-radius: 999px;
   padding: 5px 11px;
   font-size: 11px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   cursor: pointer;
   line-height: 1;
   transition: all .2s;
@@ -715,7 +716,7 @@ button {
   align-items: center;
   justify-content: center;
   padding: 8px 12px;
-  font-family: 'Noto Sans TC', sans-serif;
+  font-family: var(--font-noto-sans-tc), 'Noto Sans TC', sans-serif;
   transition: all .2s;
 }
 
@@ -868,7 +869,7 @@ button.success:hover:not(:disabled) {
   gap: 8px;
   justify-content: space-between;
   padding: 11px 16px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
 }
 
 .panel-header h2,
@@ -2495,7 +2496,7 @@ textarea {
   font-size: 32px;
   font-weight: 700;
   line-height: 1.1;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
   letter-spacing: -0.02em;
 }
 .dash-todo-unit {
@@ -2618,7 +2619,7 @@ textarea {
   font-size: 22px;
   font-weight: 700;
   line-height: 1.1;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
   letter-spacing: -0.02em;
 }
 .dash-funnel-dwell {
@@ -2662,7 +2663,7 @@ textarea {
   font-size: 28px;
   font-weight: 700;
   line-height: 1.1;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
   letter-spacing: -0.02em;
   color: var(--text);
 }
@@ -2797,7 +2798,7 @@ textarea {
 .dash-cost-row-amt {
   font-size: 13px;
   font-weight: 700;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
   color: var(--text);
 }
 .dash-cost-row-ntd {
@@ -3894,7 +3895,7 @@ textarea {
   border-radius: var(--radius-s, 8px);
   padding: 11px 14px;
   min-height: 40px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -4370,7 +4371,7 @@ textarea {
 }
 
 .rc-price {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   font-size: 13px;
   font-weight: 700;
   color: var(--accent);
@@ -4890,7 +4891,7 @@ textarea {
     padding: 8px 2px;
     font-size: 11px;
     font-weight: 700;
-    font-family: "Noto Sans TC", sans-serif;
+    font-family: var(--font-noto-sans-tc), "Noto Sans TC", sans-serif;
     min-height: 52px;
     transition: all 0.2s;
     cursor: pointer;
@@ -5233,7 +5234,7 @@ textarea {
 .spec-shot-drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .currency-toggle { display: flex; align-items: center; min-height: 38px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface2); padding: 2px; white-space: nowrap; box-sizing: border-box; }
-.currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: 'Space Grotesk', sans-serif; cursor: pointer; min-height: 0; line-height: 1; }
+.currency-toggle button { border: 0; background: transparent; color: var(--text-muted); border-radius: 5px; padding: 6px 8px; font-size: 11px; font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif; cursor: pointer; min-height: 0; line-height: 1; }
 .currency-toggle button.active { background: var(--accent); color: var(--accent-fg); font-weight: 700; }
 
 /* B6: 定價模式二選一＋即時價格列＋可改利潤（只用現有 tokens） */
@@ -5274,7 +5275,7 @@ textarea {
 }
 .price-live b {
   color: var(--accent);
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   font-weight: 700;
 }
 .price-live s { color: var(--text-muted); }
@@ -5289,7 +5290,7 @@ textarea {
   min-height: 44px;
   padding: 4px 9px;
   font-size: 12px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   display: inline-block;
 }
 .profit-input:disabled,
@@ -5328,7 +5329,7 @@ textarea {
 .settings-body { padding: 13px 16px; border-top: 1px solid var(--border); background: var(--surface2); display: none; }
 .settings-body.open { display: block; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.formula-preview { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; font-family: 'Space Grotesk', sans-serif; font-size: 11px; color: var(--accent); margin-top: 10px; }
+.formula-preview { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif; font-size: 11px; color: var(--accent); margin-top: 10px; }
 .settings-note { font-size: 10px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 8px; }
 
 /* ── Result card dual price (售價 + 利潤 stacked) — soft text labels ── */
@@ -5352,7 +5353,7 @@ textarea {
   font-size: 13px;
 }
 .rc-profit {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   font-size: 11px;
   color: var(--success);
   white-space: nowrap;

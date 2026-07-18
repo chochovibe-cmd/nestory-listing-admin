@@ -17,6 +17,7 @@
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
     "verify:d3-sharp": "node scripts/verify-d3-sharp.mjs",
     "verify:r1-stage": "node scripts/verify-r1-stage.mjs",
+    "verify:cap1": "node scripts/verify-cap1.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

@@ -71,6 +71,8 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   const archiveUndoTimerRef = useRef<number | null>(null);
   // B12 fix: hide rows immediately; refresh only corrects server props.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
+  /** UX-H T49: brief leave fade before optimistic hide (archive only). */
+  const [leavingIds, setLeavingIds] = useState<Set<string>>(() => new Set());
 
   function clearArchiveUndoTimer() {
     if (archiveUndoTimerRef.current != null) {
@@ -114,6 +116,23 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
   useEffect(() => {
     setOptimisticHide((prev) => reconcileOptimisticHide(prev, drafts));
   }, [drafts]);
+
+  function scheduleArchiveLeave(ids: string[]) {
+    if (!ids.length) return;
+    setLeavingIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+    window.setTimeout(() => {
+      setOptimisticHide((prev) => applyOptimisticHide(prev, ids, "archived"));
+      setLeavingIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+    }, 280);
+  }
 
   const workQueue = useMemo(() => filterWorkQueueDrafts(drafts), [drafts]);
   const stageCounts = useMemo(() => countStations(workQueue), [workQueue]);
@@ -265,7 +284,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
               })
         );
         if (archivedIds.length) {
-          setOptimisticHide((prev) => applyOptimisticHide(prev, archivedIds, "archived"));
+          scheduleArchiveLeave(archivedIds);
         }
       } else {
         const restoredIds =
@@ -279,6 +298,11 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
             : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? 0 })
         );
         if (restoredIds.length) {
+          setLeavingIds((prev) => {
+            const next = new Set(prev);
+            for (const id of restoredIds) next.delete(id);
+            return next;
+          });
           setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
         }
       }
@@ -315,6 +339,11 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
           ? payload.message
           : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length })
       );
+      setLeavingIds((prev) => {
+        const next = new Set(prev);
+        for (const id of restoredIds) next.delete(id);
+        return next;
+      });
       setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
       scheduleRouterRefresh(() => router.refresh());
     } catch {
@@ -573,7 +602,10 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
               </thead>
               <tbody>
                 {filtered.map((draft) => (
-                  <tr key={draft.id}>
+                  <tr
+                    className={leavingIds.has(draft.id) ? "is-leaving" : undefined}
+                    key={draft.id}
+                  >
                     <td>
                       <input
                         checked={selectedIds.has(draft.id)}
@@ -657,11 +689,9 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                                   return;
                                 }
                                 const ids = (payload.archivedIds as string[] | undefined) ?? [draft.id];
-                                setLastArchiveIds(ids.length ? ids : null);
+                                armArchiveUndo(ids);
                                 setMessage(payload.message ?? "已封存");
-                                setOptimisticHide((prev) =>
-                                  applyOptimisticHide(prev, ids, "archived")
-                                );
+                                scheduleArchiveLeave(ids);
                                 scheduleRouterRefresh(() => router.refresh());
                               } catch {
                                 setMessage("封存連線失敗");
@@ -684,7 +714,10 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
 
           <div className="queue-cards">
             {filtered.map((draft) => (
-              <div className="result-card queue-card" key={draft.id}>
+              <div
+                className={`result-card queue-card${leavingIds.has(draft.id) ? " is-leaving" : ""}`}
+                key={draft.id}
+              >
                 <Link aria-label={displayTitle(draft)} className="queue-card-link" href={`/drafts/${draft.id}`} />
                 <div className="rc-header">
                   <input

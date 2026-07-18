@@ -129,6 +129,8 @@ export function DraftResultsPanel({
   useEffect(() => () => clearArchiveUndoTimer(), []);
   // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
+  /** UX-H T49: brief leave fade before optimistic hide (archive only). */
+  const [leavingIds, setLeavingIds] = useState<Set<string>>(() => new Set());
   const [sortMode, setSortMode] = useState<ResultSortMode>("newest");
   const [stage, setStage] = useState<ResultsFilterKey>("copy_review");
   // R3: station③ multi-select publish/export
@@ -206,6 +208,23 @@ export function DraftResultsPanel({
   useEffect(() => {
     setOptimisticHide((prev) => reconcileOptimisticHide(prev, drafts));
   }, [drafts]);
+
+  function scheduleArchiveLeave(ids: string[]) {
+    if (!ids.length) return;
+    setLeavingIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+    window.setTimeout(() => {
+      setOptimisticHide((prev) => applyOptimisticHide(prev, ids, "archived"));
+      setLeavingIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+    }, 280);
+  }
 
   const progressHeadStatus = progress
     ? progress.steps.some((step) => step.status === "error")
@@ -808,7 +827,7 @@ export function DraftResultsPanel({
         setMessage(okMsg);
         showToast(okMsg, "success");
         if (archivedIds.length) {
-          setOptimisticHide((prev) => applyOptimisticHide(prev, archivedIds, "archived"));
+          scheduleArchiveLeave(archivedIds);
         }
       } else {
         const restoredIds =
@@ -823,6 +842,11 @@ export function DraftResultsPanel({
         setMessage(okMsg);
         showToast(okMsg, "success");
         if (restoredIds.length) {
+          setLeavingIds((prev) => {
+            const next = new Set(prev);
+            for (const id of restoredIds) next.delete(id);
+            return next;
+          });
           setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
         }
       }
@@ -863,6 +887,11 @@ export function DraftResultsPanel({
           : formatUnarchiveResultMessage({ restoredCount: payload.restoredCount ?? lastArchiveIds.length });
       setMessage(okMsg);
       showToast(okMsg, "success");
+      setLeavingIds((prev) => {
+        const next = new Set(prev);
+        for (const id of restoredIds) next.delete(id);
+        return next;
+      });
       setOptimisticHide((prev) => applyOptimisticHide(prev, restoredIds, "unarchived"));
       scheduleRouterRefresh(() => router.refresh());
     } catch {
@@ -1097,6 +1126,7 @@ export function DraftResultsPanel({
                 draft={draft}
                 images={imagesByDraft.get(draft.id) ?? []}
                 key={draft.id}
+                leaving={leavingIds.has(draft.id)}
                 onToggle={() => toggleOne(draft.id)}
                 variantPrices={variantsByDraft.get(draft.id) ?? []}
               />

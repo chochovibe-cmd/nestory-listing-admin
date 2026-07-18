@@ -56,6 +56,8 @@ export function Station2ImagePanel({
   const [localMsg, setLocalMsg] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  /** UX-H T49: soft-remove fade */
+  const [fadingIds, setFadingIds] = useState<Set<string>>(() => new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const list = useMemo(
@@ -116,6 +118,8 @@ export function Station2ImagePanel({
 
   async function removeImage(image: ProductImage) {
     setBusyId(image.id);
+    setFadingIds((prev) => new Set(prev).add(image.id));
+    await new Promise((r) => window.setTimeout(r, 250));
     const url = image.processed_file_url ?? image.original_file_url;
     const path = url ? storagePathFromUrl(url) : null;
     if (path) {
@@ -124,11 +128,21 @@ export function Station2ImagePanel({
     const { error } = await supabase.from("product_images").delete().eq("id", image.id);
     setBusyId(null);
     if (error) {
+      setFadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(image.id);
+        return next;
+      });
       setLocalMsg(`刪除圖片失敗：${error.message}`);
       showToast(`刪除圖片失敗：${error.message}`, "error");
       return;
     }
     onImagesChange(images.filter((row) => row.id !== image.id));
+    setFadingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(image.id);
+      return next;
+    });
     showToast("已刪除圖片", "success");
   }
 
@@ -311,7 +325,7 @@ export function Station2ImagePanel({
               const isOver = overId === image.id && dragId !== image.id;
               return (
                 <div
-                  className={`imgmark-row s2-img-row${isDragging ? " is-dragging" : ""}${isOver ? " is-drag-over" : ""}`}
+                  className={`imgmark-row s2-img-row${isDragging ? " is-dragging" : ""}${isOver ? " is-drag-over" : ""}${fadingIds.has(image.id) ? " is-fading" : ""}`}
                   draggable
                   key={image.id}
                   onDragEnd={() => {

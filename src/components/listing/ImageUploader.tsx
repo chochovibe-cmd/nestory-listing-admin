@@ -117,6 +117,8 @@ export function ImageUploader({
   /** UX-D T22: HTML5 DnD source thumb */
   const [reorderDrag, setReorderDrag] = useState<{ type: ImageType; clientKey: string } | null>(null);
   const [reorderOverKey, setReorderOverKey] = useState<string | null>(null);
+  /** UX-H T49: soft-remove fade before drop from strip */
+  const [fadingKeys, setFadingKeys] = useState<Set<string>>(() => new Set());
 
   // Latest previews for in-flight upload to pick current sort_order after local reorder (T22).
   const previewsRef = useRef(previews);
@@ -390,8 +392,17 @@ export function ImageUploader({
 
   async function deleteImage(item: PreviewItem) {
     setMarkError("");
+    // UX-H T49: brief fade before remove (display only)
+    setFadingKeys((prev) => new Set(prev).add(item.clientKey));
+    await new Promise((r) => window.setTimeout(r, 250));
+
     if (!item.id) {
       removePreviewLocal(item.clientKey, item.imageType);
+      setFadingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(item.clientKey);
+        return next;
+      });
       return;
     }
 
@@ -407,9 +418,19 @@ export function ImageUploader({
       setMarkError(msg);
       // UX-D T21: strengthen delete-fail feedback
       showToast(msg, "error");
+      setFadingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(item.clientKey);
+        return next;
+      });
       return;
     }
     removePreviewLocal(item.clientKey, item.imageType);
+    setFadingKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(item.clientKey);
+      return next;
+    });
     setMessage("已刪除圖片");
   }
 
@@ -532,7 +553,7 @@ export function ImageUploader({
                   const isOver = reorderOverKey === item.clientKey && reorderDrag?.clientKey !== item.clientKey;
                   return (
                     <div
-                      className={`pthumb${isFirstMain ? " is-main" : ""}${item.status === "failed" ? " pthumb-failed" : ""}${isDragging ? " pthumb-dragging" : ""}${isOver ? " pthumb-drag-over" : ""}`}
+                      className={`pthumb${isFirstMain ? " is-main" : ""}${item.status === "failed" ? " pthumb-failed" : ""}${isDragging ? " pthumb-dragging" : ""}${isOver ? " pthumb-drag-over" : ""}${fadingKeys.has(item.clientKey) ? " is-fading" : ""}`}
                       draggable
                       key={item.clientKey}
                       onDragEnd={() => {

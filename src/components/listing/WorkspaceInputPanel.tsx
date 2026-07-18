@@ -53,9 +53,11 @@ import {
   formFieldsFromAutosaveSnapshot,
   formatAutosaveAgeLabel,
   loadWorkspaceAutosave,
+  shouldPersistWorkspaceAutosave,
   writeWorkspaceAutosave,
   type WorkspaceAutosaveSnapshot
 } from "@/lib/drafts/workspaceAutosave";
+import type { WorkspaceFormSeed } from "@/lib/drafts/mapDraftToWorkspaceForm";
 
 /** UX-J T52: UI short labels; DB/validation uses 「SS級」…「D級」. */
 const SECONDHAND_GRADE_OPTIONS = ["SS", "S", "A", "B", "C", "D"] as const;
@@ -179,11 +181,17 @@ function storagePathFromPublicUrl(url: string | null | undefined): string | null
 
 export function WorkspaceInputPanel({
   userId,
-  onDraftIdChange
+  onDraftIdChange,
+  initialFromServer = null,
+  loadNotice = null
 }: {
   userId: string;
   /** UX-B T10: notify parent so QuickPreview can exclude the editing draft */
   onDraftIdChange?: (draftId: string | null) => void;
+  /** CAP-2.5: server-loaded pending_input seed from ?draft= */
+  initialFromServer?: WorkspaceFormSeed | null;
+  /** CAP-2.5: one-line notice (gate message / loaded banner) */
+  loadNotice?: string | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -192,8 +200,10 @@ export function WorkspaceInputPanel({
   // image (background upload needs a draft_id) or, if they never add an image,
   // when they press 生成. draftIdRef mirrors the state so ensureDraftId can read
   // it without stale-closure issues across concurrent image drops.
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const draftIdRef = useRef<string | null>(null);
+  // CAP-2.5: when initialFromServer is set, seed draftId immediately (no new insert on generate).
+  const [draftId, setDraftId] = useState<string | null>(initialFromServer?.draftId ?? null);
+  const draftIdRef = useRef<string | null>(initialFromServer?.draftId ?? null);
+  const serverSeedAppliedRef = useRef(false);
   const ensureDraftPromiseRef = useRef<Promise<string | null> | null>(null);
   const uploadPromisesRef = useRef<Promise<unknown>[]>([]);
   const [imagesUploading, setImagesUploading] = useState(false);
@@ -396,8 +406,62 @@ export function WorkspaceInputPanel({
     setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
   }, []);
 
-  // B13 / BX4: detect unsent local snapshot on mount (7d+ expired → cleared, no bar).
+  // CAP-2.5: apply server seed once (URL ?draft= wins over localStorage restore).
+  // Does not clear autosave key (Fable E); only skips auto-showing restore bar.
   useEffect(() => {
+    if (!initialFromServer || serverSeedAppliedRef.current) return;
+    serverSeedAppliedRef.current = true;
+
+    const storage = typeof window !== "undefined" ? window.localStorage : null;
+    const local = loadWorkspaceAutosave(storage);
+    const hasLocalKeep =
+      local.kind === "ready" &&
+      shouldPersistWorkspaceAutosave({
+        draftId: local.snapshot.draftId,
+        title: local.snapshot.title,
+        price: local.snapshot.price,
+        taobaoUrl: local.snapshot.taobaoUrl,
+        note: local.snapshot.note,
+        specText: local.snapshot.specText,
+        videoUrlsText: local.snapshot.videoUrlsText ?? "",
+        variants: local.snapshot.variants ?? [],
+        manualSellPrice: local.snapshot.manualSellPrice ?? "",
+        manualCompareAtPrice: local.snapshot.manualCompareAtPrice ?? "",
+        targetProfitInput: local.snapshot.targetProfitInput ?? ""
+      });
+
+    suppressAutosaveRef.current = true;
+    flushSync(() => {
+      applyServerFormSeed(initialFromServer);
+      // Never auto-open B13 restore bar when URL draft is active
+      setRestorePrompt(null);
+      const base = (loadNotice && loadNotice.trim()) || "已載入擷取草稿";
+      setMessage(
+        hasLocalKeep
+          ? `${base}；上次未完成的填寫仍在暫存`
+          : base
+      );
+    });
+
+    window.setTimeout(() => {
+      suppressAutosaveRef.current = false;
+      setAutosaveEnabled(true);
+    }, 100);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once seed
+  }, [initialFromServer]);
+
+  // CAP-2.5: gate redirect notice without seed (e.g. non-pending_input → 工作檯)
+  useEffect(() => {
+    if (initialFromServer) return;
+    if (loadNotice && loadNotice.trim()) {
+      setMessage(loadNotice.trim());
+    }
+  }, [initialFromServer, loadNotice]);
+
+  // B13 / BX4: detect unsent local snapshot on mount (7d+ expired → cleared, no bar).
+  // CAP-2.5: skip when loading a server draft via ?draft= (URL priority).
+  useEffect(() => {
+    if (initialFromServer) return;
     const storage = typeof window !== "undefined" ? window.localStorage : null;
     const result = loadWorkspaceAutosave(storage);
     if (result.kind === "ready") {
@@ -406,7 +470,7 @@ export function WorkspaceInputPanel({
     } else {
       setAutosaveEnabled(true);
     }
-  }, []);
+  }, [initialFromServer]);
 
   // B13: debounce form → localStorage (~500ms).
   // Known limit documented in workspaceAutosave.ts: multi-tab last-write-wins.
@@ -1308,6 +1372,58 @@ export function WorkspaceInputPanel({
     autoAdv12Ref.current = false;
     autoAdv34Ref.current = false;
     // priceMode 連續上架保留（跟來源／銷售狀態一樣是操作偏好）
+    setFieldErrors({});
+  }
+
+  /**
+   * CAP-2.5: apply server-loaded pending_input seed (props only — no DOM structure change).
+   * Sets draftId so ensureDraftId / generate UPDATE the same row (no new insert).
+   */
+  function applyServerFormSeed(seed: WorkspaceFormSeed) {
+    setTitle(seed.title);
+    if (SOURCE_OPTIONS.includes(seed.source as (typeof SOURCE_OPTIONS)[number])) {
+      setSource(seed.source as (typeof SOURCE_OPTIONS)[number]);
+    }
+    setPrice(seed.price);
+    setCostCurrency("CNY");
+    setTaobaoUrl(seed.taobaoUrl);
+    setNote(seed.note);
+    setSpecText(seed.specText);
+    setVideoUrlsText(seed.videoUrlsText);
+    if (SALE_STATUS_OPTIONS.includes(seed.saleStatus as SaleStatus)) {
+      setSaleStatus(seed.saleStatus as SaleStatus);
+    }
+    setIsSecondhand(Boolean(seed.isSecondhand));
+    setSecondhandGrade(shortFromSecondhandGrade(seed.secondhandGrade));
+    setSecondhandCondition(seed.secondhandCondition ?? "");
+    setSecondhandNotes(seed.secondhandNotes ?? "");
+    setInventoryUnlimited(seed.inventoryUnlimited);
+    setInventoryQuantity(seed.inventoryQuantity);
+    setInventoryOpen(seed.inventoryOpen);
+    setPriceMode(seed.priceMode === "single" ? "single" : "sale");
+    setVariantDimensions(seed.variantDimensions);
+    setVariants(seed.variants as VariantFormRow[]);
+
+    const restoredVariants =
+      (seed.variants?.length ?? 0) > 0 || (seed.variantDimensions?.length ?? 0) > 0;
+    const restoredSpec = Boolean(seed.specText?.trim());
+    const restoredNote = Boolean(seed.note?.trim());
+    const restoredVideo = Boolean(seed.videoUrlsText?.trim());
+    if (restoredVariants) setVariantSectionOpen(true);
+    if (restoredSpec) setSpecSectionOpen(true);
+    if (restoredNote) setNoteSectionOpen(true);
+    if (restoredVideo) setVideoSectionOpen(true);
+    prevVariantContentRef.current = restoredVariants;
+    prevSpecContentRef.current = restoredSpec;
+    prevNoteContentRef.current = restoredNote;
+    prevVideoContentRef.current = restoredVideo;
+
+    draftIdRef.current = seed.draftId;
+    setDraftId(seed.draftId);
+
+    const seeds = (seed.seedImages ?? []) as SeedImageRow[];
+    setSeedImages(seeds.length > 0 ? seeds : null);
+    setFormKey((k) => k + 1);
     setFieldErrors({});
   }
 

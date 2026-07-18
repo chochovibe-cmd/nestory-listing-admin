@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { buildMatrixifyCsv } from "@/lib/csv/matrixify";
+import { buildMatrixifyCsv, type MatrixifyDraft } from "@/lib/csv/matrixify";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import {
   csvExportDraftTitle,
@@ -7,6 +7,7 @@ import {
 } from "@/lib/drafts/recordCsvExportBatch";
 import { notifyMake } from "@/lib/notifications/make";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
+import type { ProductVariantRow } from "@/types/domain";
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
@@ -43,8 +44,32 @@ export async function POST(request: NextRequest) {
   const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
-  const rows = data ?? [];
-  const csv = buildMatrixifyCsv(rows);
+  const drafts = (data ?? []) as MatrixifyDraft[];
+  const draftIds = drafts.map((d) => d.id);
+
+  // PKG2A / 回饋 55: multi-variant Matrixify rows need product_variants (same as Showmore).
+  let variantsByDraft = new Map<string, ProductVariantRow[]>();
+  if (draftIds.length) {
+    const { data: variantRows } = await serviceSupabase
+      .from("product_variants")
+      .select("*")
+      .in("draft_id", draftIds)
+      .order("sort_order", { ascending: true });
+    variantsByDraft = new Map();
+    for (const row of (variantRows ?? []) as ProductVariantRow[]) {
+      const list = variantsByDraft.get(row.draft_id) ?? [];
+      list.push(row);
+      variantsByDraft.set(row.draft_id, list);
+    }
+  }
+
+  const withVariants = drafts.map((d) => ({
+    ...d,
+    product_variants: variantsByDraft.get(d.id) ?? []
+  }));
+
+  const csv = buildMatrixifyCsv(withVariants);
+  const rows = withVariants;
   const exportedIds = rows.map((draft) => draft.id);
 
   let exportBatchId: string | null = null;

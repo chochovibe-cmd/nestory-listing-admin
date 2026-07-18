@@ -2465,7 +2465,7 @@ export function WorkspaceInputPanel({
                   <span className="wsearch-label-row">
                     🔍 Web Search 補充資訊
                     <FieldHelp label="Web Search 說明">
-                      預設開啟（冷門 IP／規格更準）；趕時間可關。查來的內容會標來源提醒核實。
+                      預設開啟（冷門 IP／規格更準）；趕時間可關。搜尋結果只當內部核實，不會寫進上架文案。
                     </FieldHelp>
                   </span>
                 </div>

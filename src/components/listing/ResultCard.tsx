@@ -2131,7 +2131,7 @@ export function ResultCard({
                               onClick={() => setDescriptionView("source")}
                               type="button"
                             >
-                              原始碼
+                              純文字
                             </button>
                           </span>
                         </div>
@@ -2182,7 +2182,7 @@ export function ResultCard({
                               onClick={() => setFaqView("html")}
                               type="button"
                             >
-                              HTML 原始碼
+                              純文字
                             </button>
                           </span>
                         </div>

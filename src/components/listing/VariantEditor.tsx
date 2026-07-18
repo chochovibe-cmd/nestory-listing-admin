@@ -452,32 +452,38 @@ export function VariantEditor({
                     </div>
                   ) : null}
                 </span>
-                {(dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }]).map((_, di) => (
+                {(dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }]).map((_, di) => {
+                  const dimLabel = dimHeaders[di]?.name ?? "選項";
+                  return (
+                    <span className="v-cell" data-label={dimLabel} key={di}>
+                      <input
+                        aria-label={dimLabel}
+                        onChange={(e) => {
+                          // ensure dim exists when typing into default
+                          if (dimensions.length === 0 && di === 0) {
+                            onDimensionsChange([{ name: "款式" }]);
+                          }
+                          updateOption(index, di, e.target.value);
+                        }}
+                        placeholder={dimHeaders[di]?.name ?? "選項值"}
+                        value={row.optionValues[di] ?? ""}
+                      />
+                    </span>
+                  );
+                })}
+                <span className="v-cell" data-label={costLabel}>
                   <input
-                    aria-label={dimHeaders[di]?.name ?? "選項"}
-                    key={di}
-                    onChange={(e) => {
-                      // ensure dim exists when typing into default
-                      if (dimensions.length === 0 && di === 0) {
-                        onDimensionsChange([{ name: "款式" }]);
-                      }
-                      updateOption(index, di, e.target.value);
-                    }}
-                    placeholder={dimHeaders[di]?.name ?? "選項值"}
-                    value={row.optionValues[di] ?? ""}
+                    aria-label={costLabel}
+                    onChange={(e) => onCostChange(index, e.target.value)}
+                    placeholder={
+                      productCost != null && productCost > 0
+                        ? `同商品成本 ${currency === "CNY" ? "¥" : "NT$"}${productCost}`
+                        : "成本"
+                    }
+                    type="number"
+                    value={row.cost}
                   />
-                ))}
-                <input
-                  aria-label={costLabel}
-                  onChange={(e) => onCostChange(index, e.target.value)}
-                  placeholder={
-                    productCost != null && productCost > 0
-                      ? `同商品成本 ${currency === "CNY" ? "¥" : "NT$"}${productCost}`
-                      : "成本"
-                  }
-                  type="number"
-                  value={row.cost}
-                />
+                </span>
                 <span className="v-row-actions">
                   <button
                     aria-label="刪除此列"
@@ -529,14 +535,16 @@ export function VariantEditor({
                         </>
                       ) : null}
                       {" · "}
-                      <input
-                        aria-label="庫存"
-                        className="v-qty"
-                        onChange={(e) => updateRow(index, { qty: e.target.value })}
-                        placeholder="庫存空白=無上限"
-                        type="number"
-                        value={row.qty}
-                      />
+                      <span className="v-cell v-cell--qty" data-label="庫存">
+                        <input
+                          aria-label="庫存"
+                          className="v-qty"
+                          onChange={(e) => updateRow(index, { qty: e.target.value })}
+                          placeholder="庫存空白=無上限"
+                          type="number"
+                          value={row.qty}
+                        />
+                      </span>
                     </>
                   ) : null}
                 </span>

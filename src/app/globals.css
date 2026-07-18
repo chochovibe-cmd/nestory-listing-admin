@@ -908,6 +908,14 @@ button.success:hover:not(:disabled) {
   margin-top: 4px;
 }
 
+/* UX-P T69b: one short muted hint (not engineer notes wall) */
+.secondhand-fields .sh-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 .grade-row {
   display: flex;
   flex-wrap: wrap;
@@ -915,13 +923,14 @@ button.success:hover:not(:disabled) {
 }
 
 .grade-btn {
-  flex: 1 1 0;
-  min-width: 40px;
+  /* UX-P T69b: wrap-friendly on 375; never squeeze below 44 touch */
+  flex: 1 1 auto;
+  min-width: 44px;
   min-height: 44px;
   text-align: center;
   font-size: 13px;
   font-weight: 800;
-  padding: 8px 6px;
+  padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -942,6 +951,29 @@ button.success:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   color: var(--accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* UX-P T69b: narrow header — mode pills stay tappable, wrap instead of crush */
+@media (max-width: 959px) {
+  .panel-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .panel-header .sh-mode-pills {
+    margin-left: 0;
+  }
+  .panel-header .sh-mode-pills .pill-btn {
+    min-height: 44px;
+    min-width: 56px;
+    padding: 10px 16px;
+  }
+  .secondhand-fields {
+    padding: 12px;
+  }
+  .secondhand-fields .grade-btn {
+    flex: 1 1 calc(33.33% - 6px);
+    min-width: 44px;
+  }
 }
 
 .panel-body {
@@ -3389,7 +3421,18 @@ textarea {
 }
 
 /* Variant (款式) editor — B7 multi-dimension (tokens only; layout from mockup IA) */
-.variant-box { border: 1px solid var(--border); border-radius: var(--radius-m); background: var(--surface2); padding: 10px; margin: 4px 0; position: relative; }
+.variant-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface2);
+  padding: 10px;
+  margin: 4px 0;
+  position: relative;
+  /* UX-P T69a: never blow the page horizontally (input + ResultCard specs tab) */
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
 /* UX-H T43: Chinese variant section head — no uppercase */
 .variant-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; font-size: 10px; color: var(--text-muted); letter-spacing: .02em; font-weight: 700; }
 .variant-head .vh-btns { display: flex; gap: 5px; flex-wrap: wrap; position: relative; }
@@ -3428,9 +3471,34 @@ textarea {
 }
 /* UX-H T43: Chinese grid headers — no uppercase */
 .vgrid-hdr { font-size: 9px; font-weight: 800; color: var(--text-muted); }
-.vgrid-row input { min-height: 36px; padding: 5px 8px; font-size: 12px; border-radius: var(--radius-s); }
-.vgrid-block { border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 4px; }
-.vgrid-sub { padding: 0 2px 4px 48px; }
+/* UX-P T69a: desktop — .v-cell is a transparent grid cell; labels hidden (hdr shows names) */
+.v-cell {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+.v-cell input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.v-cell--qty {
+  display: inline-flex;
+  max-width: 120px;
+  vertical-align: middle;
+}
+.v-cell--qty input.v-qty {
+  width: 100%;
+  max-width: 110px;
+}
+.vgrid-row input,
+.v-cell input {
+  min-height: 36px;
+  padding: 5px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-s);
+}
+.vgrid-block { border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 4px; max-width: 100%; min-width: 0; }
+.vgrid-sub { padding: 0 2px 4px 48px; max-width: 100%; min-width: 0; }
 .vgrid-sub .twd { font-size: 10.5px; color: var(--text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .vthumb-wrap { position: relative; }
 .vthumb {
@@ -3468,16 +3536,104 @@ textarea {
 }
 .v-foot-note { font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
 
+/* UX-P T69a: <960 card stack — same shell for Workspace + .rc-specs-wrap (shared VE).
+   多軸交叉留給包二 B；本包僅 layout。 */
 @media (max-width: 959px) {
   .vgrid-hdr { display: none; }
-  .vgrid-row {
-    grid-template-columns: 42px 1fr !important;
-    row-gap: 7px;
-    padding: 10px 2px;
+  .vgrid-block {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    padding: 10px 10px 8px;
+    margin-bottom: 8px;
   }
-  .vgrid-row input,
-  .vgrid-row .v-row-actions { grid-column: 2; }
-  .vgrid-sub { padding-left: 48px; }
+  .vgrid-row {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+    row-gap: 8px;
+    column-gap: 8px;
+    padding: 0;
+    align-items: start;
+  }
+  .vgrid-row .vthumb-wrap {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .vgrid-row .v-cell,
+  .vgrid-row .v-row-actions {
+    grid-column: 2;
+    min-width: 0;
+  }
+  .vgrid-row .v-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .vgrid-row .v-cell[data-label]::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: .02em;
+    line-height: 1.2;
+  }
+  .vgrid-row .v-cell input {
+    min-height: 44px;
+    width: 100%;
+    font-size: 16px; /* iOS: avoid focus zoom */
+  }
+  .vgrid-row .v-row-actions {
+    justify-content: flex-end;
+    min-height: 44px;
+  }
+  .vgrid-sub {
+    padding-left: 0;
+    padding-top: 8px;
+    margin-top: 4px;
+    border-top: 1px dashed var(--border);
+  }
+  .vgrid-sub .twd {
+    gap: 6px 8px;
+    font-size: 12px;
+  }
+  .v-cell--qty {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: none;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .v-cell--qty[data-label]::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: .02em;
+  }
+  .v-cell--qty input.v-qty,
+  .v-qty {
+    max-width: none;
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+    padding: 8px 10px;
+  }
+  .v-inline-edit {
+    min-height: 44px;
+    padding: 8px 6px;
+  }
+  .vt-addrow {
+    min-height: 44px;
+  }
+  .variant-head .btn-mini {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+  .vthumb {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
   .pop-menu {
     position: fixed; left: 0; right: 0; top: auto; bottom: 0; width: 100%;
     max-height: 55vh; border-radius: var(--radius-m) var(--radius-m) 0 0;

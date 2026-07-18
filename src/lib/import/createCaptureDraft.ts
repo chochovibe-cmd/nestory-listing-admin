@@ -1,5 +1,6 @@
 /**
- * CAP-1: orchestrate dedupe → insert draft → variants → image fetch.
+ * CAP-1: orchestrate dedupe → insert draft → image fetch → variants.
+ * CAP-2.6: fetch images (incl. variant thumbs) before persistVariants so image_id can bind.
  * Token-auth only; uses service role client.
  */
 import { extractUrlMatchKey, queryDuplicateMatches } from "@/lib/drafts/checkDuplicate";
@@ -10,7 +11,10 @@ import type {
   CaptureImportExists
 } from "@/lib/import/captureTypes";
 import { mapCaptureToDraftFields } from "@/lib/import/mapCaptureFields";
-import { fetchAndStoreCaptureImages } from "@/lib/import/fetchRemoteImages";
+import {
+  applyVariantImageIds,
+  fetchAndStoreCaptureImages
+} from "@/lib/import/fetchRemoteImages";
 import { captureOpenPath } from "@/lib/drafts/mapDraftToWorkspaceForm";
 
 export type CreateCaptureDraftResult =
@@ -136,18 +140,12 @@ export async function createCaptureDraft(input: {
   const draftId = inserted.id as string;
   const warnings = [...mapped.warnings];
 
-  // Variants (best-effort; draft already created)
-  if (mapped.variantRows.length > 0) {
-    const withDraft = mapped.variantRows.map((r) => ({ ...r, draft_id: draftId }));
-    const vr = await persistVariantsSafe(input.serviceSupabase, draftId, withDraft);
-    if (!vr.ok) {
-      warnings.push(`款式寫入失敗（草稿已建）：${vr.error}`);
-    }
-  }
-
-  // Images (best-effort)
+  // CAP-2.6: images first (main/detail/variant) → url→image_id map → then variants
   let imagesOk = 0;
   let imagesFailed = 0;
+  let urlToImageId: Record<string, string> = {};
+  let imageFetchLog: unknown[] = [];
+
   try {
     const imgResult = await fetchAndStoreCaptureImages({
       serviceSupabase: input.serviceSupabase,
@@ -155,21 +153,43 @@ export async function createCaptureDraft(input: {
       draftId,
       sourceUrl,
       mainImageUrls: mapped.mainImageUrls,
-      detailImageUrls: mapped.detailImageUrls
+      detailImageUrls: mapped.detailImageUrls,
+      variantImageUrls: mapped.variantImageUrls
     });
     imagesOk = imgResult.okCount;
     imagesFailed = imgResult.failedCount;
+    urlToImageId = imgResult.urlToImageId ?? {};
+    imageFetchLog = imgResult.imageFetchLog;
     warnings.push(...imgResult.warnings);
+  } catch (err) {
+    // Fetch pipeline must never block variant write (Fable CAP-2.6 risk #2)
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`圖片代抓流程異常（草稿已建，款式仍會寫入）：${msg}`);
+    urlToImageId = {};
+  }
 
-    // Patch raw_capture.server.image_fetch + warnings on draft
+  // Variants after images so image_id can bind; all image failures → image_id omitted/null
+  if (mapped.variantRows.length > 0) {
+    const withImages = applyVariantImageIds(mapped.variantRows, urlToImageId);
+    const withDraft = withImages.map((r) => ({ ...r, draft_id: draftId }));
+    const vr = await persistVariantsSafe(input.serviceSupabase, draftId, withDraft);
+    if (!vr.ok) {
+      warnings.push(`款式寫入失敗（草稿已建）：${vr.error}`);
+    }
+  }
+
+  // Patch raw_capture.server.image_fetch + warnings on draft
+  try {
     const nextRaw = {
       ...rawCapture,
       server: {
         ...(rawCapture.server as Record<string, unknown>),
-        image_fetch: imgResult.imageFetchLog,
+        image_fetch: imageFetchLog,
         warnings: [
           ...(((rawCapture.server as Record<string, unknown>)?.warnings as string[]) ?? []),
-          ...imgResult.warnings
+          ...warnings.filter((w) =>
+            /圖片|代抓|Storage|image/i.test(w)
+          )
         ]
       }
     };
@@ -183,12 +203,11 @@ export async function createCaptureDraft(input: {
       .eq("id", draftId);
 
     if (patchError) {
-      // Non-fatal: draft exists with original warnings
       warnings.push(`更新 raw_capture／warnings 失敗：${patchError.message}`);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    warnings.push(`圖片代抓流程異常（草稿已建）：${msg}`);
+    warnings.push(`更新 raw_capture 異常：${msg}`);
     await input.serviceSupabase
       .from("product_drafts")
       .update({ warnings })

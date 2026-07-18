@@ -31,6 +31,10 @@ const BRAND_PARAM_KEYS = [
 
 export type MappedCaptureDraft = {
   draftRow: Record<string, unknown>;
+  /**
+   * Variant rows ready for product_variants insert.
+   * May include temporary `image_url` (stripped before DB insert after map→image_id).
+   */
   variantRows: Array<Record<string, unknown>>;
   variantDimensions: Array<{ name: string }>;
   rawCapture: Record<string, unknown>;
@@ -38,6 +42,8 @@ export type MappedCaptureDraft = {
   filled: CaptureFilledSummary;
   mainImageUrls: string[];
   detailImageUrls: string[];
+  /** CAP-2.6 / 88: unique SKU thumb URLs from variants_flat.image_url */
+  variantImageUrls: string[];
   /** True when cny_price used placeholder. */
   usedPricePlaceholder: boolean;
 };
@@ -236,15 +242,28 @@ export function stripOversizedCaptureFields(
   return { value: walk(value, path), warnings };
 }
 
+/**
+ * CAP-2.6 / 87: do not re-fill row cost from sku_table when it equals product price
+ * (would undo client omit of uniform prices). Only apply table price when it
+ * differs from product-level cost.
+ */
 function mapVariantRows(
   flats: CaptureVariantFlat[],
-  skuTable?: unknown
+  skuTable?: unknown,
+  productPriceCny?: number | null
 ): {
   rows: Array<Record<string, unknown>>;
   dimensions: Array<{ name: string }>;
+  variantImageUrls: string[];
 } {
   const rows: Array<Record<string, unknown>> = [];
   const dimNames: string[] = [];
+  const imageUrls: string[] = [];
+  const seenImg = new Set<string>();
+  const product =
+    productPriceCny != null && Number.isFinite(productPriceCny) && productPriceCny > 0
+      ? productPriceCny
+      : null;
 
   flats.forEach((v, index) => {
     const o1n = asTrimmedString(v.option1_name) ?? "款式";
@@ -260,10 +279,11 @@ function mapVariantRows(
       if (name && !dimNames.includes(name)) dimNames.push(name);
     }
 
-    // Prefer flat.cny_price; if missing, map from sku_table cell (never invent).
+    // Prefer flat.cny_price; if missing, map from sku_table cell only when
+    // cell price differs from product cost (CAP-2.6 / 87 D1+C1).
     let cny = asPositiveNumber(v.cny_price);
     if (cny == null && skuTable != null) {
-      cny = lookupSkuTablePrice(skuTable, {
+      const fromTable = lookupSkuTablePrice(skuTable, {
         option1_name: o1n,
         option1_value: o1v,
         option2_name: o2n,
@@ -271,7 +291,24 @@ function mapVariantRows(
         option3_name: o3n,
         option3_value: o3v
       });
+      if (
+        fromTable != null &&
+        (product == null || Math.abs(fromTable - product) >= 0.001)
+      ) {
+        cny = fromTable;
+      }
     }
+    // C1: equal to product → leave null (follow form product cost)
+    if (cny != null && product != null && Math.abs(cny - product) < 0.001) {
+      cny = null;
+    }
+
+    const imageUrl = asTrimmedString(v.image_url);
+    if (imageUrl && !seenImg.has(imageUrl)) {
+      seenImg.add(imageUrl);
+      imageUrls.push(imageUrl);
+    }
+
     rows.push({
       option1_name: o1n,
       option1_value: o1v,
@@ -283,7 +320,9 @@ function mapVariantRows(
       cny_price: cny,
       sort_order: index,
       inventory_quantity: 0,
-      inventory_policy: "continue"
+      inventory_policy: "continue",
+      // temporary; createCaptureDraft maps → image_id then strips
+      ...(imageUrl ? { image_url: imageUrl } : {})
     });
   });
 
@@ -294,7 +333,7 @@ function mapVariantRows(
         ? [{ name: "款式" }]
         : [];
 
-  return { rows, dimensions };
+  return { rows, dimensions, variantImageUrls: imageUrls };
 }
 
 /**
@@ -316,7 +355,16 @@ export function mapCaptureToDraftFields(
   }
 
   const noteParts: string[] = [];
-  if (listPrice != null) {
+  // CAP-2.6 / 86: promo in meta → note; list_price only if distinct from cost + promo
+  const promoPrice = asPositiveNumber(body.capture_meta?.promo_price_cny);
+  if (promoPrice != null) {
+    noteParts.push(`來源促銷價（券後／店優惠後）：CNY ${promoPrice}`);
+  }
+  if (
+    listPrice != null &&
+    (price == null || Math.abs(listPrice - price) >= 0.001) &&
+    (promoPrice == null || Math.abs(listPrice - promoPrice) >= 0.001)
+  ) {
     noteParts.push(`來源劃線原價：CNY ${listPrice}`);
   }
 
@@ -338,10 +386,11 @@ export function mapCaptureToDraftFields(
   }
 
   const flats = Array.isArray(body.variants_flat) ? body.variants_flat : [];
-  const { rows: variantRows, dimensions: variantDimensions } = mapVariantRows(
-    flats,
-    body.sku_table
-  );
+  const {
+    rows: variantRows,
+    dimensions: variantDimensions,
+    variantImageUrls
+  } = mapVariantRows(flats, body.sku_table, price);
 
   // PKG2A: multi-dim with flat rows already stored → info (axis count × actual rows).
   // No flat → honest warning; never invent cartesian.
@@ -444,6 +493,7 @@ export function mapCaptureToDraftFields(
     filled,
     mainImageUrls,
     detailImageUrls,
+    variantImageUrls,
     usedPricePlaceholder
   };
 }

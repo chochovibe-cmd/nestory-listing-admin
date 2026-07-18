@@ -6,6 +6,7 @@
   </head>
   <body>
     <!-- Minimal static DOM for verify-cap2 (not a live crawl). Matches extension/lib/selectors.js taobao keys. -->
+    <!-- CAP-2.6: 劃線原價 59.9 → price_cny；現售 29.9 → promo_price_cny；SKU 色塊縮圖 → image_url -->
     <h1 class="tb-main-title" data-title="【CAP-2 樣本】三麗鷗聯名吊飾 TOYUKI 粉紅款">
       【CAP-2 樣本】三麗鷗聯名吊飾 TOYUKI 粉紅款
     </h1>
@@ -20,8 +21,24 @@
         <dt class="tb-property-type">颜色</dt>
         <dd>
           <ul>
-            <li><a href="#" data-value="粉">粉</a></li>
-            <li><a href="#" data-value="蓝">蓝</a></li>
+            <li>
+              <a href="#" data-value="粉" title="粉">
+                <img
+                  src="https://img.alicdn.com/imgextra/i1/example/sku-pink.jpg"
+                  alt="粉"
+                />
+                粉
+              </a>
+            </li>
+            <li>
+              <a href="#" data-value="蓝" title="蓝">
+                <img
+                  src="https://img.alicdn.com/imgextra/i1/example/sku-blue.jpg"
+                  alt="蓝"
+                />
+                蓝
+              </a>
+            </li>
           </ul>
         </dd>
       </dl>

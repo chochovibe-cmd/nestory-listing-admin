@@ -98,12 +98,28 @@ export function videoUrlsToTextarea(videoUrls: unknown): string {
     .join("\n");
 }
 
+/**
+ * CAP-2.5 seed images for ImageUploader + CAP-2.6 variant thumbs for VariantEditor.
+ * F1: variant images are included so imageId binding can resolve thumbs;
+ * they are not forced into the main/detail uploader UX beyond type label.
+ */
 export function imagesToSeedRows(images: ProductImage[] | null | undefined): WorkspaceSeedImage[] {
   if (!images?.length) return [];
   return images
-    .filter((img) => img.image_type === "main" || img.image_type === "detail")
+    .filter(
+      (img) =>
+        img.image_type === "main" ||
+        img.image_type === "detail" ||
+        img.image_type === "variant"
+    )
     .slice()
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .sort((a, b) => {
+      const rank = (t: string) =>
+        t === "main" ? 0 : t === "detail" ? 1 : t === "variant" ? 2 : 3;
+      const dr = rank(a.image_type) - rank(b.image_type);
+      if (dr !== 0) return dr;
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    })
     .map((img) => ({
       id: img.id,
       image_type: img.image_type,

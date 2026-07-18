@@ -7,12 +7,15 @@ import {
   IMAGE_FETCH_TIMEOUT_MS,
   MAX_DETAIL_IMAGES,
   MAX_IMAGE_BYTES,
-  MAX_MAIN_IMAGES
+  MAX_MAIN_IMAGES,
+  MAX_VARIANT_IMAGES
 } from "@/lib/import/captureTypes";
+
+export type CaptureImageType = "main" | "detail" | "variant";
 
 export type ImageFetchItemResult = {
   url: string;
-  image_type: "main" | "detail";
+  image_type: CaptureImageType;
   ok: boolean;
   image_id?: string;
   error?: string;
@@ -25,6 +28,8 @@ export type FetchRemoteImagesResult = {
   warnings: string[];
   /** Updated raw_capture.server.image_fetch entries */
   imageFetchLog: ImageFetchItemResult[];
+  /** CAP-2.6: source URL → product_images.id for successful fetches (incl. variant). */
+  urlToImageId: Record<string, string>;
 };
 
 function refererFromSourceUrl(sourceUrl: string): string | undefined {
@@ -147,7 +152,9 @@ type ServiceStorageClient = {
 };
 
 /**
- * Fetch main + detail image URLs into Storage and product_images rows.
+ * Fetch main + detail + variant image URLs into Storage and product_images rows.
+ * CAP-2.6: variant thumbs use image_type='variant'; url→id map for product_variants.image_id.
+ * Failures never throw — caller still persists variants with null image_id.
  */
 export async function fetchAndStoreCaptureImages(input: {
   serviceSupabase: ServiceStorageClient;
@@ -156,12 +163,17 @@ export async function fetchAndStoreCaptureImages(input: {
   sourceUrl: string;
   mainImageUrls: string[];
   detailImageUrls: string[];
+  /** CAP-2.6 / 88: unique SKU option thumb URLs */
+  variantImageUrls?: string[];
 }): Promise<FetchRemoteImagesResult> {
   const warnings: string[] = [];
   const results: ImageFetchItemResult[] = [];
+  const urlToImageId: Record<string, string> = {};
 
   const main = input.mainImageUrls.slice(0, MAX_MAIN_IMAGES);
   const detail = input.detailImageUrls.slice(0, MAX_DETAIL_IMAGES);
+  const variantSrc = Array.isArray(input.variantImageUrls) ? input.variantImageUrls : [];
+  const variant = variantSrc.slice(0, MAX_VARIANT_IMAGES);
 
   if (input.mainImageUrls.length > MAX_MAIN_IMAGES) {
     warnings.push(
@@ -173,11 +185,24 @@ export async function fetchAndStoreCaptureImages(input: {
       `詳情圖超過上限 ${MAX_DETAIL_IMAGES} 張，已截斷（來源 ${input.detailImageUrls.length} 張）`
     );
   }
+  if (variantSrc.length > MAX_VARIANT_IMAGES) {
+    warnings.push(
+      `款式縮圖超過上限 ${MAX_VARIANT_IMAGES} 張，已截斷（來源 ${variantSrc.length} 張）`
+    );
+  }
 
-  const jobs: Array<{ url: string; image_type: "main" | "detail"; sort_order: number }> = [
-    ...main.map((url, i) => ({ url, image_type: "main" as const, sort_order: i })),
-    ...detail.map((url, i) => ({ url, image_type: "detail" as const, sort_order: i }))
-  ];
+  // Deduplicate jobs by URL (G1: one fetch → shared image_id across variants)
+  const jobs: Array<{ url: string; image_type: CaptureImageType; sort_order: number }> = [];
+  const scheduled = new Set<string>();
+  function schedule(url: string, image_type: CaptureImageType, sort_order: number) {
+    const u = url.trim();
+    if (!u || scheduled.has(u)) return;
+    scheduled.add(u);
+    jobs.push({ url: u, image_type, sort_order });
+  }
+  main.forEach((url, i) => schedule(url, "main", i));
+  detail.forEach((url, i) => schedule(url, "detail", i));
+  variant.forEach((url, i) => schedule(url, "variant", i));
 
   for (const job of jobs) {
     const fetched = await fetchOneImageBuffer(job.url, input.sourceUrl);
@@ -251,6 +276,7 @@ export async function fetchAndStoreCaptureImages(input: {
       continue;
     }
 
+    urlToImageId[job.url] = row.id;
     results.push({
       url: job.url,
       image_type: job.image_type,
@@ -267,8 +293,35 @@ export async function fetchAndStoreCaptureImages(input: {
     okCount,
     failedCount,
     warnings,
-    imageFetchLog: results
+    imageFetchLog: results,
+    urlToImageId
   };
+}
+
+/**
+ * Pure helper: apply url→image_id map onto variant rows; strip temporary image_url.
+ * Used by createCaptureDraft + verify-cap1 (fetch-all-fail → all image_id null).
+ */
+export function applyVariantImageIds(
+  variantRows: Array<Record<string, unknown>>,
+  urlToImageId: Record<string, string>
+): Array<Record<string, unknown>> {
+  return variantRows.map((row) => {
+    const next = { ...row };
+    const rawUrl = next.image_url;
+    delete next.image_url;
+    const url = rawUrl != null ? String(rawUrl).trim() : "";
+    if (url && urlToImageId[url]) {
+      next.image_id = urlToImageId[url];
+    } else {
+      // explicit null when no map (honest; do not invent)
+      if (next.image_id == null) {
+        // leave undefined so DB default null; avoid sending unknown keys issues
+        delete next.image_id;
+      }
+    }
+    return next;
+  });
 }
 
 function truncateUrl(url: string): string {

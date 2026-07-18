@@ -78,7 +78,9 @@ check("files: extension scaffold present", () => {
     "extension/icons/icon48.png",
     "extension/icons/icon128.png",
     "scripts/fixtures/taobao-item-sample.html",
-    "scripts/fixtures/taobao-item-missing-price.html"
+    "scripts/fixtures/taobao-item-missing-price.html",
+    "scripts/fixtures/taobao-item-promo.html",
+    "scripts/fixtures/taobao-item-promo-only.html"
   ];
   for (const f of need) assert.ok(exists(f), `missing ${f}`);
 });
@@ -176,6 +178,32 @@ check("flattenSku: 2-dim → variants_flat + sku_dimensions", () => {
   assert.equal(variants_flat[0].cny_price, 29.9);
 });
 
+check("CAP-2.6/87: omitUniformVariantPrices clears equal product price", () => {
+  const rows = [
+    { option1_value: "粉", cny_price: 59.9 },
+    { option1_value: "藍", cny_price: 59.9 },
+    { option1_value: "綠", cny_price: 72 }
+  ];
+  const out = Cap.omitUniformVariantPrices(rows, 59.9);
+  assert.equal(out[0].cny_price, undefined);
+  assert.equal(out[1].cny_price, undefined);
+  assert.equal(out[2].cny_price, 72);
+  assert.equal(out[0].option1_value, "粉");
+});
+
+check("CAP-2.6/88: attachVariantImages by option value", () => {
+  const rows = [
+    { option1_value: "粉", option2_value: "S" },
+    { option1_value: "藍", option2_value: "M" }
+  ];
+  const out = Cap.attachVariantImages(rows, {
+    粉: "https://img.alicdn.com/imgextra/i1/example/sku-pink.jpg",
+    藍: "https://img.alicdn.com/imgextra/i1/example/sku-blue.jpg"
+  });
+  assert.equal(out[0].image_url, "https://img.alicdn.com/imgextra/i1/example/sku-pink.jpg");
+  assert.equal(out[1].image_url, "https://img.alicdn.com/imgextra/i1/example/sku-blue.jpg");
+});
+
 check("detectAdapter: taobao / tmall / shopee / generic", () => {
   assert.deepEqual(Cap.detectAdapter("item.taobao.com", "https://item.taobao.com/item.htm?id=1"), {
     adapter: "taobao",
@@ -195,7 +223,7 @@ check("detectAdapter: taobao / tmall / shopee / generic", () => {
   });
 });
 
-check("DOM: taobao fixture → CAP-1-shaped payload", () => {
+check("DOM: taobao fixture → CAP-1-shaped payload (CAP-2.6 原價/促銷/款式圖)", () => {
   const href = "https://item.taobao.com/item.htm?id=123456789012";
   const { document } = loadDoc("scripts/fixtures/taobao-item-sample.html", href);
   const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
@@ -203,12 +231,25 @@ check("DOM: taobao fixture → CAP-1-shaped payload", () => {
   assert.equal(body.source_url, href);
   assert.equal(body.source_platform, "taobao");
   assert.ok(body.title && body.title.includes("三麗鷗"));
-  assert.equal(body.price_cny, 29.9);
-  assert.equal(body.list_price_cny, 59.9);
+  // 86: 劃線原價 → price_cny；現售促銷 → promo_price_cny
+  assert.equal(body.price_cny, 59.9);
+  assert.equal(body.capture_meta.promo_price_cny, 29.9);
   assert.ok(body.sku_table);
   assert.ok(Array.isArray(body.sku_table.axes));
   assert.ok(body.sku_table.axes.length >= 2);
   assert.ok(Array.isArray(body.variants_flat) && body.variants_flat.length >= 2);
+  // 87: cartesian 同價 → 列 cny_price 省略
+  assert.ok(
+    body.variants_flat.every((v) => v.cny_price == null || v.cny_price === undefined),
+    "equal product price must omit variant cny_price"
+  );
+  // 88: 顏色縮圖 → image_url
+  const pink = body.variants_flat.find((v) => v.option1_value === "粉");
+  assert.ok(pink, "expect 粉 variants");
+  assert.match(String(pink.image_url || ""), /sku-pink\.jpg/);
+  const blue = body.variants_flat.find((v) => v.option1_value === "蓝" || v.option1_value === "藍");
+  assert.ok(blue, "expect 蓝 variants");
+  assert.match(String(blue.image_url || ""), /sku-blue\.jpg/);
   assert.equal(body.capture_meta.adapter, "taobao");
   assert.equal(body.capture_meta.page_host, "item.taobao.com");
   assert.ok(body.capture_meta.sku_dimensions >= 2);
@@ -221,6 +262,36 @@ check("DOM: taobao fixture → CAP-1-shaped payload", () => {
   assert.ok(body.params && body.params["品牌"]);
   assert.ok(Array.isArray(body.capture_meta.warnings_from_client));
   assert.ok(body.captured_at);
+});
+
+check("DOM: promo fixture → 原價 price_cny + promo meta", () => {
+  const href = "https://item.taobao.com/item.htm?id=888777666555";
+  const { document } = loadDoc("scripts/fixtures/taobao-item-promo.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
+  assert.equal(body.price_cny, 88);
+  assert.ok(
+    body.capture_meta.promo_price_cny === 66 || body.capture_meta.promo_price_cny === 59.9,
+    `promo_price_cny expected 66 or 59.9, got ${body.capture_meta.promo_price_cny}`
+  );
+  assert.ok(Array.isArray(body.variants_flat) && body.variants_flat.length >= 1);
+  const red = body.variants_flat.find((v) => v.option1_value === "红" || v.option1_value === "紅");
+  assert.ok(red && /sku-red\.jpg/.test(String(red.image_url || "")), "red SKU thumb");
+  const green = body.variants_flat.find((v) => v.option1_value === "绿" || v.option1_value === "綠");
+  assert.ok(green, "green variant");
+  assert.ok(!green.image_url, "no thumb → no image_url guess");
+});
+
+check("DOM: promo-only → price_cny + 白話 warning", () => {
+  const href = "https://item.taobao.com/item.htm?id=111";
+  const { document } = loadDoc("scripts/fixtures/taobao-item-promo-only.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
+  assert.equal(body.price_cny, 19.9);
+  assert.ok(
+    body.capture_meta.warnings_from_client.some(
+      (w) => /只看到促銷價/.test(w) && /成本請自行確認/.test(w)
+    ),
+    "expected B1 plain-language promo-only warning"
+  );
 });
 
 check("DOM: missing price → omit price_cny + client warning", () => {
@@ -255,7 +326,10 @@ check("contract: static assert vs captureTypes.ts field names", () => {
     "sku_dimensions",
     "warnings_from_client",
     "option1_name",
-    "cny_price"
+    "cny_price",
+    "image_url",
+    "promo_price_cny",
+    "MAX_VARIANT_IMAGES"
   ];
   for (const key of requiredMentions) {
     assert.ok(types.includes(key), `captureTypes missing ${key}`);
@@ -291,7 +365,7 @@ check("contract: static assert vs captureTypes.ts field names", () => {
     const v = body.variants_flat[0];
     for (const k of Object.keys(v)) {
       assert.ok(
-        /^(option[123]_(name|value)|cny_price|sku)$/.test(k),
+        /^(option[123]_(name|value)|cny_price|sku|image_url)$/.test(k),
         `unexpected variant key ${k}`
       );
     }

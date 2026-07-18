@@ -301,14 +301,38 @@ check("source: createCaptureDraft dedupe excludes archived + no overwrite", () =
   assert.match(src, /status:\s*["']exists["']/);
   assert.match(src, /queryDuplicateMatches|extractUrlMatchKey/);
   assert.match(src, /fetchAndStoreCaptureImages/);
+  // CAP-2.6: images before variants; applyVariantImageIds
+  assert.match(src, /applyVariantImageIds/);
+  // Order of *calls* (ignore import lines): await fetch… then applyVariant… then persistVariants
+  const callFetch = src.search(/await\s+fetchAndStoreCaptureImages\s*\(/);
+  const callApply = src.search(/applyVariantImageIds\s*\(/);
+  const callPersist = src.search(/await\s+persistVariantsSafe\s*\(|persistVariantsSafe\s*\(/);
+  assert.ok(callFetch > 0, "must call fetchAndStoreCaptureImages");
+  assert.ok(callApply > callFetch, "applyVariantImageIds after image fetch");
+  assert.ok(callPersist > callApply, "persistVariants after image map");
 });
 
-check("source: image fetch 10s timeout + referer + limits", () => {
+check("source: image fetch 10s timeout + referer + limits + variant", () => {
   const src = read("src/lib/import/fetchRemoteImages.ts");
   assert.match(src, /IMAGE_FETCH_TIMEOUT_MS|10_000|10000/);
   assert.match(src, /Referer/);
-  assert.match(src, /MAX_MAIN_IMAGES|MAX_DETAIL_IMAGES/);
+  assert.match(src, /MAX_MAIN_IMAGES|MAX_DETAIL_IMAGES|MAX_VARIANT_IMAGES/);
   assert.match(src, /gateSourceUrl/);
+  assert.match(src, /image_type:\s*["']variant["']|["']variant["']/);
+  assert.match(src, /applyVariantImageIds/);
+  assert.match(src, /urlToImageId/);
+});
+
+check("source: CAP-2.6 contract fields (promo_price_cny + image_url)", () => {
+  const types = read("src/lib/import/captureTypes.ts");
+  assert.match(types, /promo_price_cny/);
+  assert.match(types, /image_url/);
+  assert.match(types, /MAX_VARIANT_IMAGES\s*=\s*24/);
+  const map = read("src/lib/import/mapCaptureFields.ts");
+  assert.match(map, /來源促銷價|promo_price_cny/);
+  assert.match(map, /variantImageUrls|image_url/);
+  const seed = read("src/lib/drafts/mapDraftToWorkspaceForm.ts");
+  assert.match(seed, /image_type === ["']variant["']|["']variant["']/);
 });
 
 check("source: settings UI double-confirm not window.confirm", () => {
@@ -401,6 +425,103 @@ check("pure: strip oversized fields >256KB", () => {
   assert.ok(warnings.length >= 1);
   assert.ok(String(value.blob).includes("[truncated]"));
   assert.ok(Buffer.byteLength(String(value.blob), "utf8") < Buffer.byteLength(big, "utf8"));
+});
+
+// --- CAP-2.6 pure mirrors ---
+function applyVariantImageIds(variantRows, urlToImageId) {
+  return variantRows.map((row) => {
+    const next = { ...row };
+    const rawUrl = next.image_url;
+    delete next.image_url;
+    const url = rawUrl != null ? String(rawUrl).trim() : "";
+    if (url && urlToImageId[url]) {
+      next.image_id = urlToImageId[url];
+    } else if (next.image_id == null) {
+      delete next.image_id;
+    }
+    return next;
+  });
+}
+
+function mirrorMapVariantOmitEqual(flats, productPrice) {
+  const product =
+    productPrice != null && Number.isFinite(productPrice) && productPrice > 0
+      ? productPrice
+      : null;
+  return flats.map((v) => {
+    let cny =
+      v.cny_price != null && Number.isFinite(Number(v.cny_price)) ? Number(v.cny_price) : null;
+    if (cny != null && product != null && Math.abs(cny - product) < 0.001) cny = null;
+    return {
+      option1_value: v.option1_value,
+      cny_price: cny,
+      image_url: v.image_url ?? null
+    };
+  });
+}
+
+check("pure: CAP-2.6/87 omit equal variant price vs product", () => {
+  const out = mirrorMapVariantOmitEqual(
+    [
+      { option1_value: "粉", cny_price: 59.9 },
+      { option1_value: "M", cny_price: 72.9 }
+    ],
+    59.9
+  );
+  assert.equal(out[0].cny_price, null);
+  assert.equal(out[1].cny_price, 72.9);
+});
+
+check("pure: CAP-2.6/86 promo note field present on fixture", () => {
+  const fixture = JSON.parse(read("scripts/fixtures/cap1-sample.json"));
+  assert.equal(fixture.price_cny, 59.9);
+  assert.equal(fixture.capture_meta.promo_price_cny, 29.9);
+  assert.ok(fixture.variants_flat.some((v) => v.image_url));
+  // S row omits cny_price (equal product); M keeps 72.9
+  const s = fixture.variants_flat.find((v) => v.option2_value === "S" && v.option1_value === "粉");
+  const m = fixture.variants_flat.find((v) => v.option2_value === "M");
+  assert.ok(s && (s.cny_price == null || s.cny_price === undefined));
+  assert.equal(m.cny_price, 72.9);
+});
+
+check("pure: CAP-2.6/88 image fetch all-fail → variants keep rows, no image_id", () => {
+  // Risk #2: 圖代抓全失敗時 variant 照常落稿、image_id 全 null、warning 齊全
+  const fixture = JSON.parse(read("scripts/fixtures/cap1-sample.json"));
+  const rows = fixture.variants_flat.map((v, i) => ({
+    option1_name: v.option1_name,
+    option1_value: v.option1_value,
+    option2_name: v.option2_name,
+    option2_value: v.option2_value,
+    cny_price: v.cny_price ?? null,
+    sort_order: i,
+    image_url: v.image_url,
+    inventory_quantity: 0,
+    inventory_policy: "continue"
+  }));
+  assert.ok(rows.length >= 2, "fixture must have variant rows");
+  const emptyMap = {};
+  const applied = applyVariantImageIds(rows, emptyMap);
+  assert.equal(applied.length, rows.length, "variant count must survive empty map");
+  for (const r of applied) {
+    assert.equal(r.image_id, undefined, "image_id must be absent when all fetches fail");
+    assert.equal(r.image_url, undefined, "temp image_url must be stripped before insert");
+    assert.ok(r.option1_value, "option values preserved");
+  }
+  // Partial success: one URL maps
+  const pink = "https://img.alicdn.com/imgextra/i1/example/sku-pink.jpg";
+  const partial = applyVariantImageIds(rows, { [pink]: "img-uuid-pink" });
+  const pinkRows = partial.filter((r) => r.option1_value === "粉");
+  const blueRows = partial.filter((r) => r.option1_value === "藍");
+  assert.ok(pinkRows.every((r) => r.image_id === "img-uuid-pink"));
+  assert.ok(blueRows.every((r) => r.image_id === undefined));
+  // Simulated warnings list when all fail
+  const failWarnings = rows
+    .map((r) => r.image_url)
+    .filter(Boolean)
+    .filter((u, i, a) => a.indexOf(u) === i)
+    .map((u) => `圖片代抓失敗（variant）：HTTP 403 · ${u.slice(0, 40)}`);
+  assert.ok(failWarnings.length >= 1);
+  assert.ok(failWarnings.every((w) => /圖片代抓失敗/.test(w)));
 });
 
 // --- summary ---

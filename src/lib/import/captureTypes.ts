@@ -12,6 +12,8 @@ export type CaptureVariantFlat = {
   option3_value?: string | null;
   cny_price?: number | null;
   sku?: string | null;
+  /** CAP-2.6 / 88: SKU option thumb URL (server fetches → product_images variant + image_id). */
+  image_url?: string | null;
 };
 
 export type CaptureMeta = {
@@ -20,6 +22,11 @@ export type CaptureMeta = {
   /** ≥2 triggers multi-dim flatten warning (spec §9). */
   sku_dimensions?: number;
   warnings_from_client?: string[];
+  /**
+   * CAP-2.6 / 86: 促銷後價（券后／店優惠后）；不得當草稿成本。
+   * 備註用；price_cny 應為原價。
+   */
+  promo_price_cny?: number | null;
 };
 
 /** Incoming body from extension / curl. Missing fields = not captured (do not invent). */
@@ -116,5 +123,7 @@ export const RAW_CAPTURE_FIELD_MAX_BYTES = 256 * 1024;
 
 export const MAX_MAIN_IMAGES = 12;
 export const MAX_DETAIL_IMAGES = 20;
+/** CAP-2.6 / 88 H=24: unique SKU thumb URLs per capture. */
+export const MAX_VARIANT_IMAGES = 24;
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export const IMAGE_FETCH_TIMEOUT_MS = 10_000;

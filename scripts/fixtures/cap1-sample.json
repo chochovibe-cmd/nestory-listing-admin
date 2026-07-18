@@ -2,14 +2,14 @@
   "source_url": "https://item.taobao.com/item.htm?id=123456789012",
   "source_platform": "taobao",
   "title": "【CAP-1 樣本】三麗鷗聯名吊飾 TOYUKI 粉紅款",
-  "price_cny": 29.9,
-  "list_price_cny": 59.9,
+  "price_cny": 59.9,
+  "list_price_cny": null,
   "sku_table": {
     "axes": ["顏色", "尺寸"],
     "rows": [
-      { "顏色": "粉", "尺寸": "S", "price": 29.9 },
-      { "顏色": "粉", "尺寸": "M", "price": 32.9 },
-      { "顏色": "藍", "尺寸": "S", "price": 29.9 }
+      { "顏色": "粉", "尺寸": "S", "price": 59.9 },
+      { "顏色": "粉", "尺寸": "M", "price": 72.9 },
+      { "顏色": "藍", "尺寸": "S", "price": 59.9 }
     ]
   },
   "variants_flat": [
@@ -18,7 +18,7 @@
       "option1_value": "粉",
       "option2_name": "尺寸",
       "option2_value": "S",
-      "cny_price": 29.9,
+      "image_url": "https://img.alicdn.com/imgextra/i1/example/sku-pink.jpg",
       "sku": null
     },
     {
@@ -26,7 +26,8 @@
       "option1_value": "粉",
       "option2_name": "尺寸",
       "option2_value": "M",
-      "cny_price": 32.9,
+      "cny_price": 72.9,
+      "image_url": "https://img.alicdn.com/imgextra/i1/example/sku-pink.jpg",
       "sku": null
     },
     {
@@ -34,7 +35,7 @@
       "option1_value": "藍",
       "option2_name": "尺寸",
       "option2_value": "S",
-      "cny_price": 29.9,
+      "image_url": "https://img.alicdn.com/imgextra/i1/example/sku-blue.jpg",
       "sku": null
     }
   ],
@@ -59,6 +60,7 @@
     "adapter": "taobao",
     "page_host": "item.taobao.com",
     "sku_dimensions": 2,
+    "promo_price_cny": 29.9,
     "warnings_from_client": []
   }
 }

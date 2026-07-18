@@ -1,6 +1,7 @@
 /**
  * CAP-2: MV3 service worker — toolbar click → inject → POST CAP-1.
- * CORS: need host permission on apiBaseUrl origin (requested on save + before fetch).
+ * CORS: API origin host permission is requested in popup (user gesture).
+ * Background only chrome.permissions.contains — never request() from SW.
  */
 
 var CAPTURE_FILES = [
@@ -33,36 +34,23 @@ function originPatternFromBase(apiBaseUrl) {
   }
 }
 
-function originFromTabUrl(tabUrl) {
-  try {
-    var u = new URL(tabUrl);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    var port = u.port ? ":" + u.port : "";
-    return u.protocol + "//" + u.hostname + port + "/*";
-  } catch (_e) {
-    return null;
-  }
-}
-
-async function ensureHostPermission(matchPattern) {
+/** Check only — host grant must run in popup user gesture, not here. */
+async function hasHostPermission(matchPattern) {
   if (!matchPattern) {
     return { ok: false, message: "網址格式不正確" };
   }
   try {
     var has = await chrome.permissions.contains({ origins: [matchPattern] });
     if (has) return { ok: true };
-    var granted = await chrome.permissions.request({ origins: [matchPattern] });
-    if (!granted) {
-      return {
-        ok: false,
-        message: "未允許連線權限。請在跳出的視窗按「允許」，否則無法送到 Nestory。"
-      };
-    }
-    return { ok: true };
+    return {
+      ok: false,
+      message:
+        "尚未允許連到 Nestory。請打開擴充設定，再按一次「儲存設定」，並在權限視窗按「允許」。"
+    };
   } catch (err) {
     return {
       ok: false,
-      message: "權限請求失敗：" + ((err && err.message) || String(err))
+      message: "權限檢查失敗：" + ((err && err.message) || String(err))
     };
   }
 }
@@ -164,7 +152,7 @@ async function captureActiveTab() {
   } catch (_e3) {}
 
   var apiPattern = originPatternFromBase(settings.apiBaseUrl);
-  var perm = await ensureHostPermission(apiPattern);
+  var perm = await hasHostPermission(apiPattern);
   if (!perm.ok) {
     await setLastResult({
       ok: false,
@@ -200,20 +188,8 @@ async function captureActiveTab() {
     return;
   }
 
-  var pagePattern = originFromTabUrl(tab.url);
-  if (pagePattern) {
-    var pagePerm = await ensureHostPermission(pagePattern);
-    if (!pagePerm.ok) {
-      await setLastResult({
-        ok: false,
-        line: "失敗：" + pagePerm.message,
-        at: new Date().toISOString()
-      });
-      await setBadge("err", "!");
-      return;
-    }
-  }
-
+  // Page inject relies on activeTab (toolbar click gesture) + pre-granted e‑commerce hosts.
+  // Do not request host grants here (no optional-host gesture in SW).
   var injected;
   try {
     injected = await chrome.scripting.executeScript({
@@ -226,7 +202,7 @@ async function captureActiveTab() {
       line:
         "失敗：無法讀取此頁（" +
         ((err && err.message) || "權限不足") +
-        "）。若是一般官網，請在跳出的授權視窗按允許。",
+        "）。請確認是商品頁；一般官網請用工具列圖示點一次擷取（靠 activeTab）。",
       at: new Date().toISOString()
     });
     await setBadge("err", "!");
@@ -322,59 +298,9 @@ chrome.action.onClicked.addListener(function () {
   captureActiveTab();
 });
 
-// Messages from popup
+// Optional messages (settings + host grant are done in popup click handler)
 chrome.runtime.onMessage.addListener(function (msg, _sender, sendResponse) {
   if (!msg || !msg.type) return;
-
-  if (msg.type === "SAVE_SETTINGS") {
-    (async function () {
-      var apiBaseUrl = normalizeApiBase(msg.apiBaseUrl || "");
-      var captureToken = String(msg.captureToken || "").trim();
-      if (!apiBaseUrl) {
-        sendResponse({
-          ok: false,
-          message: "請填 API 網址（例如 https://你的站.vercel.app）"
-        });
-        return;
-      }
-      if (!/^https?:\/\//i.test(apiBaseUrl)) {
-        sendResponse({
-          ok: false,
-          message: "API 網址要以 http:// 或 https:// 開頭"
-        });
-        return;
-      }
-      if (!captureToken) {
-        sendResponse({ ok: false, message: "請貼上擷取 Token（ncap_ 開頭）" });
-        return;
-      }
-      if (!/^ncap_/i.test(captureToken)) {
-        sendResponse({
-          ok: false,
-          message: "Token 格式不像 Nestory 擷取 token（應以 ncap_ 開頭）"
-        });
-        return;
-      }
-
-      var pattern = originPatternFromBase(apiBaseUrl);
-      var perm = await ensureHostPermission(pattern);
-      if (!perm.ok) {
-        sendResponse({ ok: false, message: perm.message });
-        return;
-      }
-
-      await chrome.storage.local.set({
-        apiBaseUrl: apiBaseUrl,
-        captureToken: captureToken
-      });
-      // Prefer toolbar click → capture
-      try {
-        await chrome.action.setPopup({ popup: "" });
-      } catch (_e) {}
-      sendResponse({ ok: true, message: "已儲存。現在開商品頁，再按工具列圖示即可擷取。" });
-    })();
-    return true; // async
-  }
 
   if (msg.type === "GET_STATE") {
     (async function () {
@@ -387,13 +313,6 @@ chrome.runtime.onMessage.addListener(function (msg, _sender, sendResponse) {
         lastResult: s.lastResult
       });
     })();
-    return true;
-  }
-
-  if (msg.type === "OPEN_SETTINGS_POPUP") {
-    chrome.action.setPopup({ popup: "popup/popup.html" }, function () {
-      sendResponse({ ok: true });
-    });
     return true;
   }
 

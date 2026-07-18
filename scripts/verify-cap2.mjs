@@ -111,14 +111,32 @@ check("manifest: MV3 + min permissions + optional hosts", () => {
   assert.ok(m.options_ui?.page);
 });
 
-check("background: API permission request + Bearer + no persistent content_scripts", () => {
+check("background: Bearer + contains only; no permissions.request", () => {
   const bg = read("extension/background.js");
-  assert.match(bg, /permissions\.request/);
+  assert.match(bg, /permissions\.contains/);
+  assert.doesNotMatch(
+    bg,
+    /permissions\.request\s*\(/,
+    "background must not call permissions.request (user-gesture rule)"
+  );
   assert.match(bg, /Authorization.*Bearer|Bearer.*captureToken/);
   assert.match(bg, /\/api\/import\/product-page/);
   assert.match(bg, /action\.onClicked/);
   const man = read("extension/manifest.json");
   assert.ok(!/"content_scripts"\s*:/.test(man), "must not register permanent content_scripts");
+});
+
+check("popup: permissions.request in save click path (user gesture)", () => {
+  const popup = read("extension/popup/popup.js");
+  assert.match(popup, /permissions\.request/);
+  assert.match(popup, /permissions\.contains/);
+  assert.match(popup, /storage\.local\.set/);
+  assert.match(popup, /saveBtn|儲存/);
+  assert.doesNotMatch(
+    popup,
+    /SAVE_SETTINGS/,
+    "save must not delegate permission request via SAVE_SETTINGS message"
+  );
 });
 
 check("selectors: single catalog has taobao/tmall/shopee/generic", () => {

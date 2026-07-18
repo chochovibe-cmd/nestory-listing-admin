@@ -65,11 +65,12 @@
 
 1. **API 網址**：貼你的 Nestory 網址（見上方「事前準備」）。
 2. **擷取 Token**：貼 `ncap_` 那一串。
-3. 按 **「儲存設定」**。
+3. 按 **「儲存設定」**。  
+   → **權限視窗會在按下「儲存設定」時跳出**（不是之後才跳）。
 
 ### 步驟 7：授權視窗按「允許」（重要）
 
-1. Chrome 可能跳出「**要允許 Nestory 商品擷取 讀取與變更以下網站的資料嗎？**」之類的視窗。
+1. 按完「儲存設定」後，Chrome 可能立刻跳出「**要允許 Nestory 商品擷取 讀取與變更以下網站的資料嗎？**」之類的視窗。
 2. 請按 **允許**。  
    → 這是為了讓擴充能把資料**送到你的 Nestory**（不是亂連別的站）。
 3. 小視窗應顯示類似：「已儲存。現在開商品頁…」
@@ -94,8 +95,8 @@
 
 ### 一般官網（非淘寶／蝦皮）
 
-第一次在該網站擷取時，Chrome 可能再跳一次**權限／允許**視窗 → 按 **允許**。  
-這是設計如此（最小權限），不是中毒。
+用工具列圖示按一下擷取即可（靠「按了才動」的暫存權限）。  
+**連到 Nestory 的授權**只在「儲存設定」時處理一次；若紅字提示尚未允許連線，回到設定再存一次並按允許。
 
 ### 想改 API 網址或 Token
 
@@ -130,4 +131,6 @@
 - 契約：`POST /api/import/product-page`，`Authorization: Bearer ncap_…`，body 對齊 `src/lib/import/captureTypes.ts`。
 - 選擇器唯一真相：`lib/selectors.js`。
 - 驗證：`pnpm run verify:cap2`（linkedom + 樣本 HTML，不連真站）。
-- MV3 對 API 的 `fetch` 需目標 origin 的 host permission；popup 儲存時 `permissions.request`。
+- MV3 對 API 的 `fetch` 需目標 origin 的 host permission；
+  **`permissions.request` 只能在 popup 的「儲存設定」click 手勢裡呼叫**（不可經 background message）。
+  background 僅 `permissions.contains` 檢查。

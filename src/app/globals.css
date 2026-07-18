@@ -436,6 +436,8 @@ select {
 }
 
 /* ── Header ── */
+/* UX-K T59: optional light glass topbar (blur + surface mix). If theme contrast
+   looks worse on real devices, revert to opaque var(--bg) / var(--header-bg). */
 .topbar {
   align-items: center;
   border-bottom: var(--header-border-w) solid var(--border);
@@ -447,11 +449,13 @@ select {
   padding: 13px 24px;
   position: sticky;
   top: 0;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   z-index: 100;
 }
 body[data-theme="kitty"] .topbar {
-  background: var(--header-bg);
+  background: color-mix(in srgb, var(--header-bg) 90%, transparent);
 }
 
 .brand {
@@ -1288,9 +1292,10 @@ textarea {
   flex-shrink: 0;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
+/* UX-K T59: same soft hover token as result/ir cards (no new shadow color) */
 .factory-mini-card:hover {
   border-color: var(--accent);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: var(--shadow-s);
 }
 .factory-mini-thumb {
   width: 40px;
@@ -2190,6 +2195,11 @@ textarea {
   flex-shrink: 0;
   border: 1px solid var(--border);
   background: var(--surface2);
+  transition: box-shadow .15s ease;
+}
+/* UX-K T59: thumb lift on row hover (row already uses --shadow-s from H T49) */
+.lib-row:hover .lib-thumb {
+  box-shadow: var(--shadow-s);
 }
 .lib-thumb--empty {
   display: inline-flex;

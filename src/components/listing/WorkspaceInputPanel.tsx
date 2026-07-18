@@ -2148,7 +2148,7 @@ export function WorkspaceInputPanel({
           </CollapsibleSection>
 
           <button
-            className="btn-add btn-gen"
+            className="button primary btn-add btn-gen"
             disabled={submitting || imagesUploading}
             type="submit"
             title="✦ 生成（規則引擎 → Vision → 文案串流 → 定價）"

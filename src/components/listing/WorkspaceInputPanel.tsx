@@ -13,7 +13,12 @@ import {
 import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import { SALE_STATUS_OPTIONS } from "@/lib/saleStatus";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
-import { readStoredRunMode } from "@/components/ModeSwitcher";
+import {
+  readStoredRunMode,
+  RUN_MODE_CHANGE_EVENT,
+  RUN_MODE_STORAGE_KEY,
+  type RunMode
+} from "@/components/ModeSwitcher";
 import {
   ImageUploader,
   type ImageUploaderHandle,
@@ -274,6 +279,8 @@ export function WorkspaceInputPanel({
   // B8 D3-A: form model override is single-shot; after generate, fall back to header default.
   const [sessionProvider, setSessionProvider] = useState<"openai" | "claude" | null>(null);
   const [defaultProviderLabel, setDefaultProviderLabel] = useState<ModelLabel>("GPT");
+  // UX-R T71: visible test/live mode next to generate (header ModeSwitcher store).
+  const [runMode, setRunMode] = useState<RunMode>("llm");
   // B3: 網址抓取入口（誠實停用）＋截圖辨識＋網址查重
   const [fetchBoxOpen, setFetchBoxOpen] = useState(false);
   const [specShotOpen, setSpecShotOpen] = useState(false);
@@ -404,6 +411,27 @@ export function WorkspaceInputPanel({
   // B8: label for「預設 X」next to the one-shot model button (D3-A).
   useEffect(() => {
     setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
+  }, []);
+
+  // UX-R T71: live run-mode chip next to generate (same store as ModeSwitcher).
+  useEffect(() => {
+    setRunMode(readStoredRunMode());
+
+    function onCustom(event: Event) {
+      const detail = (event as CustomEvent<RunMode>).detail;
+      if (detail === "test" || detail === "llm") setRunMode(detail);
+    }
+    function onStorage(event: StorageEvent) {
+      if (event.key !== RUN_MODE_STORAGE_KEY) return;
+      setRunMode(event.newValue === "test" ? "test" : "llm");
+    }
+
+    window.addEventListener(RUN_MODE_CHANGE_EVENT, onCustom);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(RUN_MODE_CHANGE_EVENT, onCustom);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   // CAP-2.5: apply server seed once (URL ?draft= wins over localStorage restore).
@@ -1704,6 +1732,11 @@ export function WorkspaceInputPanel({
       showToast("請選二手等級", "warn");
     }
 
+    // UX-R T71: test mode still runs the flow — only surface that AI is not called.
+    if (readStoredRunMode() === "test") {
+      showToast("目前是測試模式：不呼叫 AI", "warn");
+    }
+
     setFieldErrors({});
     setSubmitting(true);
     const cardTitle = title.trim().slice(0, 18);
@@ -2492,6 +2525,19 @@ export function WorkspaceInputPanel({
             </div>
           </CollapsibleSection>
 
+          {/* UX-R T71: mode chip above CTA — visible before press; updates live via RUN_MODE_CHANGE_EVENT */}
+          <div className="gen-mode-row" aria-live="polite">
+            <span
+              className={`schip${runMode === "test" ? " schip--warn" : " schip--ok"}`}
+              title={
+                runMode === "test"
+                  ? "測試模式：不呼叫 AI，可零成本跑流程"
+                  : "正式生成：會呼叫 AI 產生文案"
+              }
+            >
+              {runMode === "test" ? "測試模式" : "正式生成"}
+            </span>
+          </div>
           <button
             className="button primary btn-add btn-gen"
             disabled={submitting || imagesUploading}

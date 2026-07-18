@@ -590,10 +590,23 @@ body[data-theme="kitty"] .topbar {
 .hdr-more {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .hdr-more-toggle {
   white-space: nowrap;
+}
+
+/* UX-R T71: tiny test badge beside ⋯ — not a second tool row */
+.hdr-run-mode-badge {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.hdr-more-toggle--test {
+  border-color: color-mix(in srgb, var(--warn-text) 45%, var(--border));
 }
 
 .hdr-more-menu {
@@ -624,6 +637,14 @@ body[data-theme="kitty"] .topbar {
   gap: 8px;
 }
 
+/* UX-R T71: warn frame when test mode is active (row only, ModeSwitcher intact) */
+.hdr-more-row--test {
+  border: 1px solid color-mix(in srgb, var(--warn-text) 45%, var(--border));
+  border-radius: var(--radius-s, 8px);
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--warn-text) 6%, var(--surface));
+}
+
 .hdr-more-row--deploy {
   flex-direction: column;
   align-items: stretch;
@@ -634,6 +655,15 @@ body[data-theme="kitty"] .topbar {
   font-weight: 700;
   color: var(--text-muted);
   min-width: 4.5em;
+}
+
+/* UX-R T71: mode chip above generate CTA */
+.gen-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
 }
 
 .hdr-more-row--deploy .header-status-wrap {

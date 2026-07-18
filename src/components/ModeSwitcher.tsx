@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 
 export const RUN_MODE_STORAGE_KEY = "nestory_run_mode";
 
+/** Same-tab bridge so generate chip / header badge update without reload. */
+export const RUN_MODE_CHANGE_EVENT = "nestory:run-mode";
+
 export type RunMode = "test" | "llm";
 
 export function readStoredRunMode(): RunMode {
@@ -11,16 +14,37 @@ export function readStoredRunMode(): RunMode {
   return window.localStorage.getItem(RUN_MODE_STORAGE_KEY) === "test" ? "test" : "llm";
 }
 
+function emitRunModeChange(mode: RunMode) {
+  window.dispatchEvent(new CustomEvent<RunMode>(RUN_MODE_CHANGE_EVENT, { detail: mode }));
+}
+
 export function ModeSwitcher() {
   const [mode, setMode] = useState<RunMode>("llm");
 
   useEffect(() => {
     setMode(readStoredRunMode());
+
+    function onCustom(event: Event) {
+      const detail = (event as CustomEvent<RunMode>).detail;
+      if (detail === "test" || detail === "llm") setMode(detail);
+    }
+    function onStorage(event: StorageEvent) {
+      if (event.key !== RUN_MODE_STORAGE_KEY) return;
+      setMode(event.newValue === "test" ? "test" : "llm");
+    }
+
+    window.addEventListener(RUN_MODE_CHANGE_EVENT, onCustom);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(RUN_MODE_CHANGE_EVENT, onCustom);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   function choose(next: RunMode) {
     setMode(next);
     window.localStorage.setItem(RUN_MODE_STORAGE_KEY, next);
+    emitRunModeChange(next);
   }
 
   return (

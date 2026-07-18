@@ -11,6 +11,7 @@ import type {
 } from "@/lib/import/captureTypes";
 import { mapCaptureToDraftFields } from "@/lib/import/mapCaptureFields";
 import { fetchAndStoreCaptureImages } from "@/lib/import/fetchRemoteImages";
+import { captureOpenPath } from "@/lib/drafts/mapDraftToWorkspaceForm";
 
 export type CreateCaptureDraftResult =
   | CaptureImportCreated
@@ -18,7 +19,8 @@ export type CreateCaptureDraftResult =
   | { ok: false; error: string; message: string; status: number };
 
 function openPathForDraft(draftId: string): string {
-  return `/drafts/${draftId}`;
+  // CAP-2.5: workbench form with server seed (not legacy /drafts/[id] detail)
+  return captureOpenPath(draftId);
 }
 
 function isMissingColumnError(message: string): boolean {

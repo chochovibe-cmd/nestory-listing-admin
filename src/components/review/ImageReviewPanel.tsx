@@ -14,6 +14,7 @@ import {
   classifyReviewQueueItem,
   countBanner,
   formatReviewFailReasons,
+  formatReviewFailReasonsShort,
   formatUnviewedBlockMessage,
   pipelineImagesForReview,
   reviewDisplayTitle,
@@ -409,7 +410,17 @@ export function ImageReviewPanel() {
                         <span className="rc-thumb-placeholder">🖼</span>
                       )}
                     </span>
-                    <span className="ir-head-title">{title}</span>
+                    <span className="ir-head-main">
+                      <span className="ir-head-title">{title}</span>
+                      {kind === "failed" ? (
+                        <span className="ir-head-fail" title={formatReviewFailReasons({ images, warnings: draft.warnings })}>
+                          {formatReviewFailReasonsShort({
+                            images,
+                            warnings: draft.warnings
+                          })}
+                        </span>
+                      ) : null}
+                    </span>
                     <span className={schip.className}>{schip.label}</span>
                     <span className="ir-head-chev">{open ? "▴ 收合" : "▾ 點開審核"}</span>
                   </button>

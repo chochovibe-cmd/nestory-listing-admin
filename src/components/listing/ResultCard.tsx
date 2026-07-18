@@ -27,6 +27,7 @@ import {
 } from "@/lib/drafts/stationRoute";
 import { Station2ImagePanel } from "@/components/listing/Station2ImagePanel";
 import { resolveDraftStation } from "@/lib/drafts/stationFilter";
+import { formatDraftFailSummary } from "@/lib/drafts/failReasons";
 import {
   gradeDraftWarnings,
   hasBlockingWarnings,
@@ -423,6 +424,8 @@ export function ResultCard({
 
   // B9: collapsed-visible notice — never silent-fail on quick actions.
   const collapsedNotice = markMessage || message;
+  // UX-I T53: surface generation_error / warnings on failed cards (display only).
+  const failReasonSummary = formatDraftFailSummary(draft);
 
   // fix(B12): commit notice first; defer refresh so UI isn't racing RSC.
   async function archiveOne() {
@@ -1641,6 +1644,11 @@ export function ResultCard({
           </span>
         ) : null}
       </div>
+      {failReasonSummary ? (
+        <p className="rc-fail-reason" role="status" title={failReasonSummary}>
+          {failReasonSummary}
+        </p>
+      ) : null}
 
       {/* B9 req2: collapsed-visible notice for quick-action block/fail; B12 low-cost undo */}
       {collapsedNotice ? (

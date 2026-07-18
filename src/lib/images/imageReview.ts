@@ -130,13 +130,17 @@ export function classifyReviewQueueItem(input: {
 }
 
 /**
- * P1-4 / 回饋 50: human-readable fail reasons for /review failed cards.
+ * P1-4 / 回饋 50 / UX-I T53: human-readable fail reasons for /review failed cards.
  * Prefer per-image processing_error; also surface draft warnings (pipeline/圖審).
+ * Display-only — does not change worker / API write paths.
  */
-export function formatReviewFailReasons(input: {
+export type ReviewFailInput = {
   images: Array<{ processing_error?: string | null }>;
   warnings?: string[] | null;
-}): string {
+};
+
+/** Unique fail lines (processing_error first, then image-related warnings). */
+export function collectReviewFailLines(input: ReviewFailInput): string[] {
   const lines: string[] = [];
   for (const img of input.images) {
     const err = img.processing_error?.trim();
@@ -161,10 +165,31 @@ export function formatReviewFailReasons(input: {
       t.includes("失敗");
     if (looksImage && !lines.includes(t)) lines.push(t);
   }
+  return lines;
+}
+
+export function formatReviewFailReasons(input: ReviewFailInput): string {
+  const lines = collectReviewFailLines(input);
   if (lines.length === 0) {
     return "處理失敗（尚無詳細原因）。可填寫拒絕理由留下指令。";
   }
   return lines.slice(0, 8).join("；");
+}
+
+/** Collapsed row: one short line; multi-error →「首則＋另 N 則」. */
+export function formatReviewFailReasonsShort(
+  input: ReviewFailInput,
+  maxChars = 42
+): string {
+  const lines = collectReviewFailLines(input);
+  if (lines.length === 0) {
+    return "原因未記錄，請重試或看紀錄";
+  }
+  const first = lines[0]!;
+  const truncated =
+    first.length > maxChars ? `${first.slice(0, Math.max(1, maxChars - 1))}…` : first;
+  if (lines.length === 1) return truncated;
+  return `${truncated}＋另 ${lines.length - 1} 則`;
 }
 
 export function canConfirmReviewKind(kind: ImageReviewQueueKind | null): boolean {

@@ -195,6 +195,11 @@ export interface ProductDraft {
    * Retry-failed (Q3 A-lite) updates pointer only; history stays in publish_batch_items.
    */
   current_publish_batch_id?: string | null;
+  /**
+   * CAP-1: full capture payload snapshot (migration 036).
+   * Undefined until SQL applied; generation must not overwrite this column.
+   */
+  raw_capture?: unknown;
 }
 
 /** D7: publish_batches.status — always terminal after runPublishBatch (Q2-A). */

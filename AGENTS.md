@@ -45,6 +45,9 @@ UI 驗收標準是 `docs/mockups/nestory-v7-mockup.html`（v7.4，用瀏覽器�
 ## 工作規則
 
 - SQL 只產 `.sql` 檔到 `supabase/migrations/`（編號接續），不跑 Supabase CLI
+- `src/app/api/**/route.ts` 只能 export HTTP method（GET/POST…）——export 其他 helper
+  本機 typecheck 會過但 **Vercel build 會炸**（教訓：P0-63，ad66017 修復）。
+  共用邏輯抽到 `src/lib/` 再 import
 - 敏感 key 只放伺服器端環境變數；部署平台是 Vercel（不是 Cloudflare）
 - Tags/Collections 永遠由規則引擎產出；文案生成走同步呼叫，只有圖片與發布走 worker
 - 不要 push/deploy，除非使用者明確同意

@@ -16,6 +16,7 @@ import {
   type LibraryDraftRow
 } from "@/lib/library/productLibrary";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
+import { showToast } from "@/components/Toast";
 
 /**
  * C4: product library as top-bar modal (not a full page).
@@ -59,12 +60,15 @@ export function ProductLibraryModal({
       } = await supabase.auth.getUser();
 
       if (userError) {
+        // UX-I T55: auth glitch → toast; keep notice for retryable empty state
+        showToast(userError.message, "error");
         setError(userError.message);
         setRows([]);
         setLoadedOnce(true);
         return;
       }
       if (!user) {
+        // Blocking: stay on page notice (not toast-only)
         setError("請先登入後再開商品庫");
         setRows([]);
         setLoadedOnce(true);
@@ -80,6 +84,7 @@ export function ProductLibraryModal({
         .limit(LIBRARY_FETCH_LIMIT);
 
       if (draftError) {
+        showToast(`商品庫載入失敗：${draftError.message}`, "error");
         setError(draftError.message);
         setRows([]);
         setLoadedOnce(true);
@@ -146,7 +151,9 @@ export function ProductLibraryModal({
         setThumbById(new Map());
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "商品庫載入失敗");
+      const msg = e instanceof Error ? e.message : "商品庫載入失敗";
+      showToast(msg, "error");
+      setError(msg);
       setRows([]);
     } finally {
       setLoading(false);

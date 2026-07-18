@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { showToast } from "@/components/Toast";
 import { isAdmin } from "@/lib/auth/roles";
 import {
   MIGRATION_027_HINT,
@@ -118,12 +119,15 @@ export function PublishRecordsPanel() {
       } = await supabase.auth.getUser();
 
       if (userError) {
+        // UX-I T55: transient → toast + panel
+        showToast(userError.message, "error");
         setError(userError.message);
         setRows([]);
         setRoleReady(true);
         return;
       }
       if (!user) {
+        // Blocking notice
         setError("請先登入");
         setRows([]);
         setRole(null);
@@ -159,7 +163,10 @@ export function PublishRecordsPanel() {
       if (batchError) {
         const hint = recordsMigrationHintFromError(batchError.message);
         setMigrationHint(hint);
-        setError(hint ? "發布批次表尚未建立" : batchError.message);
+        // Table missing = blocking config notice; other query fails → toast
+        const msg = hint ? "發布批次表尚未建立" : batchError.message;
+        if (!hint) showToast(`發布紀錄載入失敗：${msg}`, "error");
+        setError(msg);
         setRows([]);
         return;
       }
@@ -167,6 +174,7 @@ export function PublishRecordsPanel() {
       setRows((data ?? []) as PublishBatchListRow[]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      showToast(msg, "error");
       setError(msg);
       setMigrationHint(recordsMigrationHintFromError(msg));
       setRows([]);
@@ -311,7 +319,7 @@ export function PublishRecordsPanel() {
       const items = await ensureItems(row.id);
       const failedIds = failedDraftIdsFromItems(items);
       if (failedIds.length === 0) {
-        setNotice("此批沒有可重送的失敗件");
+        showToast("此批沒有可重送的失敗件", "warn");
         return;
       }
       await runRetryPublish(failedIds, row.publish_mode === "active" ? "active" : "draft");
@@ -334,19 +342,22 @@ export function PublishRecordsPanel() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setNotice(
-          [payload.error ?? "重送失敗", payload.hint].filter(Boolean).join(" — ")
-        );
+        // UX-I T55: operation feedback → toast
+        const line = [payload.error ?? "重送失敗", payload.hint].filter(Boolean).join(" — ");
+        showToast(line, "error");
+        setNotice(null);
         return;
       }
-      setNotice(
+      const okMsg =
         payload.message ??
-          `已新建批次重送：成功 ${payload.succeeded ?? 0}／失敗 ${payload.failed ?? 0}`
-      );
+        `已新建批次重送：成功 ${payload.succeeded ?? 0}／失敗 ${payload.failed ?? 0}`;
+      showToast(okMsg, "success");
+      setNotice(null);
       setFailedSelected(new Set());
       await loadBatches();
     } catch {
-      setNotice("重送連線失敗");
+      showToast("重送連線失敗", "error");
+      setNotice(null);
     }
   }
 

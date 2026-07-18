@@ -24,6 +24,7 @@ import {
   type ReviewDraftRow,
   type ReviewImageRow
 } from "@/lib/images/imageReview";
+import { showToast } from "@/components/Toast";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 import type { UserRole } from "@/types/domain";
 
@@ -237,10 +238,15 @@ export function ImageReviewPanel() {
       confirmed?: string[];
     };
     if (!res.ok) {
-      setNotice(data.error || "確認失敗");
+      // UX-I T55: op fail → toast (optional Review touch)
+      const err = data.error || "確認失敗";
+      showToast(err, "error");
+      setNotice(err);
       return;
     }
-    setNotice(data.message || "已確認");
+    const ok = data.message || "已確認";
+    showToast(ok, "success");
+    setNotice(ok);
     const confirmed = new Set(data.confirmed ?? ids);
     setCards((prev) => prev.filter((c) => !confirmed.has(c.draft.id)));
   }
@@ -283,10 +289,14 @@ export function ImageReviewPanel() {
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
       if (!res.ok) {
-        setNotice(data.error || "拒絕失敗");
+        const err = data.error || "拒絕失敗";
+        showToast(err, "error");
+        setNotice(err);
         return;
       }
-      setNotice(data.message || "已拒絕");
+      const ok = data.message || "已拒絕";
+      showToast(ok, "success");
+      setNotice(ok);
       setRejectOpen((p) => ({ ...p, [id]: false }));
       // Refresh so card moves to failed / shows new state
       await load();

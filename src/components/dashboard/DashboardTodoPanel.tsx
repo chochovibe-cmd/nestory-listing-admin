@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { showToast } from "@/components/Toast";
 import { isAdmin } from "@/lib/auth/roles";
 import {
   buildFunnelRows,
@@ -132,6 +133,8 @@ export function DashboardTodoPanel() {
       } = await supabase.auth.getUser();
 
       if (userError) {
+        // UX-I T55: transient auth error → toast + panel notice
+        showToast(userError.message, "error");
         setError(userError.message);
         setRows([]);
         setRoleReady(true);
@@ -141,6 +144,7 @@ export function DashboardTodoPanel() {
         return;
       }
       if (!user) {
+        // Blocking: page notice only
         setError("請先登入");
         setRows([]);
         setRole(null);
@@ -177,6 +181,7 @@ export function DashboardTodoPanel() {
 
       const { data, error: draftError } = await query;
       if (draftError) {
+        showToast(`儀表板載入失敗：${draftError.message}`, "error");
         setError(draftError.message);
         setRows([]);
       } else {
@@ -297,7 +302,9 @@ export function DashboardTodoPanel() {
         setHealthHistory((healthHistRes.data ?? []) as HealthHistoryRow[]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      showToast(msg, "error");
+      setError(msg);
       setRows([]);
     } finally {
       setLoading(false);

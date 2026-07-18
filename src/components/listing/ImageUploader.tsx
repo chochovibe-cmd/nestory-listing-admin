@@ -243,7 +243,10 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
         errorMessage: storageError.message,
         file
       });
-      setMessage(`上傳失敗：${storageError.message}`);
+      // UX-I T55: op fail → toast (thumb already shows 失敗)
+      const msg = `上傳失敗：${storageError.message}`;
+      setMessage(msg);
+      showToast(msg, "error");
       return;
     }
 
@@ -267,12 +270,14 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
 
     if (insertError || !row) {
       const msg = insertError?.message ?? "未知錯誤";
+      const full = `圖片檔案已上傳，但寫入資料庫失敗：${msg}`;
       patchPreview(clientKey, type, {
         status: "failed",
         errorMessage: `寫入資料庫失敗：${msg}`,
         file
       });
-      setMessage(`圖片檔案已上傳，但寫入資料庫失敗：${msg}`);
+      setMessage(full);
+      showToast(full, "error");
       return;
     }
 
@@ -337,7 +342,9 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
             errorMessage: "無法建立商品草稿"
           });
         }
-        setMessage("無法建立商品草稿，圖片尚未上傳，請稍後再試。");
+        const msg = "無法建立商品草稿，圖片尚未上傳，請稍後再試。";
+        setMessage(msg);
+        showToast(msg, "error");
         return;
       }
 
@@ -476,7 +483,9 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
       .eq("id", item.id);
 
     if (error) {
-      setMarkError(`標記失敗：${error.message}`);
+      const msg = `標記失敗：${error.message}`;
+      setMarkError(msg);
+      showToast(msg, "error");
       return;
     }
 

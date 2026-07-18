@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 /** D5 + R4: 生圖工廠（deep link ?section=pending）. */
 export default async function ReviewPage() {
   if (!hasSupabaseServerEnv()) {
-    return <SetupNotice title="圖片審核需要 Supabase 測試環境" />;
+    return <SetupNotice title="生圖工廠需要 Supabase 測試環境" />;
   }
 
   const supabase = await createServerSupabaseClient();

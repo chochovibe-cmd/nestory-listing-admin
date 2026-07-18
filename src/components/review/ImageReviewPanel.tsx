@@ -62,7 +62,7 @@ export function ImageReviewPanel() {
 
   const load = useCallback(async () => {
     if (!hasSupabaseBrowserEnv()) {
-      setError("需要設定 Supabase 才能使用圖片審核");
+      setError("需要設定 Supabase 才能使用生圖工廠");
       setCards([]);
       setLoading(false);
       setRoleReady(true);

@@ -980,7 +980,7 @@ export function DraftResultsPanel({
                         title={
                           batchArm?.action === "approve"
                             ? batchArm.hint
-                            : "核准文案 → 進入圖片審核；未標記圖寫入保留原圖"
+                            : "核准文案 → 進入標圖；未標記圖寫入保留原圖"
                         }
                         type="button"
                       >

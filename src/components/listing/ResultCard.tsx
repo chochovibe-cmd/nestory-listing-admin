@@ -8,6 +8,10 @@ import { readStoredRunMode } from "@/components/ModeSwitcher";
 import { showToast } from "@/components/Toast";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import {
+  secondaryStatusForResultCard,
+  stationFlowPrimaryLabel
+} from "@/lib/drafts/stationCardStatusDisplay";
+import {
   formatUnmarkedBlockMessage,
   imageSlotLabel,
   listPipelineImages,
@@ -1634,9 +1638,26 @@ export function ResultCard({
         <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
       </div>
 
-      {/* Status chips row (always visible when collapsed or expanded). T7: 站① 不顯示圖標記狀態 */}
+      {/* UX-J T56: primary = station/flow Chinese; StatusBadge only when incremental */}
       <div className="rc-status-chips">
-        <StatusBadge status={draft.status} />
+        {(() => {
+          const primary = stationFlowPrimaryLabel(draft);
+          const secondary = secondaryStatusForResultCard(draft);
+          return (
+            <>
+              <span
+                className={
+                  primary.kind === "fail"
+                    ? "schip schip--error"
+                    : "schip schip--run"
+                }
+              >
+                {primary.label}
+              </span>
+              {secondary ? <StatusBadge status={secondary} /> : null}
+            </>
+          );
+        })()}
         {!isCopyStation && pipelineImages.length > 0 && unmarkedImages.length > 0 ? (
           <span className="img-mark-status" title={unmarkedBlockMessage ?? undefined}>
             <span className="st-dot" />

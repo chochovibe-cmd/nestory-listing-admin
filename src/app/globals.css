@@ -2059,6 +2059,11 @@ textarea {
     border-radius: var(--radius-l) var(--radius-l) 0 0;
     border-bottom: none;
   }
+  /* UX-I T54: close hit target ≥44px on phone */
+  .modal-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
   .modal-hdr {
     padding-top: 18px;
   }

@@ -18,15 +18,36 @@ const STATUS_LABELS: Record<string, string> = {
   archived: "已封存"
 };
 
-export function StatusBadge({ status }: { status: DraftStatus | PublishStatus | string }) {
-  const className =
-    status.includes("ready") || status.includes("published") || status.includes("created") || status === "completed"
-      ? "ready"
-      : status.includes("failed") || status === "needs_revision"
-        ? "failed"
-        : status.includes("pending") || status.includes("processing") || status.includes("publishing")
-          ? "processing"
-          : "";
+/** Explicit tone map — no string includes (UX-H T41). */
+type StatusTone = "ready" | "failed" | "processing" | "archived" | "neutral";
 
-  return <span className={`status ${className}`}>{STATUS_LABELS[status] ?? status}</span>;
+const STATUS_TONE: Record<string, StatusTone> = {
+  // ready 系：已完成／已上架／已建草稿
+  completed: "ready",
+  approved: "ready",
+  active_published: "ready",
+  draft_created: "ready",
+  // processing 系：進行中佇列（含待審核，不得誤成 ready 綠）
+  pending_input: "processing",
+  pending_copy: "processing",
+  pending: "processing",
+  processing: "processing",
+  publishing: "processing",
+  ready_for_review: "processing",
+  // failed 系
+  failed: "failed",
+  api_failed: "failed",
+  needs_revision: "failed",
+  // 特殊
+  csv_ready: "neutral",
+  archived: "archived"
+};
+
+function resolveTone(status: string): StatusTone {
+  return STATUS_TONE[status] ?? "neutral";
+}
+
+export function StatusBadge({ status }: { status: DraftStatus | PublishStatus | string }) {
+  const tone = resolveTone(status);
+  return <span className={`status ${tone}`}>{STATUS_LABELS[status] ?? status}</span>;
 }

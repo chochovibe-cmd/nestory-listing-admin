@@ -2047,8 +2047,10 @@ export function WorkspaceInputPanel({
             {fieldErrors.inventory ? <div className="field-msg">請填 0 或正整數；若可持續接單，請勾選無上限。</div> : null}
 
             {/* UX-J T52: secondhand fields — open only when 二手; values kept when collapsed */}
+            {/* UX-P T69b: layout polish only; is_secondhand / sale linkage unchanged */}
             {isSecondhand ? (
               <div className="secondhand-fields open" id="shFields">
+                <p className="sh-hint">二手會帶等級進文案／Tags</p>
                 <div className="field" style={{ marginBottom: 10 }}>
                   <label>品項等級</label>
                   <div className="grade-row" role="group" aria-label="二手等級">

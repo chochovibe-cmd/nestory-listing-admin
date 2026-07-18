@@ -4174,6 +4174,13 @@ textarea {
   padding-bottom: 4px;
 }
 
+/* UX-M T64: specs tab embeds shared VariantEditor; keep card from horizontal page blowout */
+.rc-specs-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* fix(B9): desktop balanced two-column field layout inside card tabs.
    Reuses the same two-col idea as .row (AI偵測類型/SKU); no new color tokens.
    Long fields use .rc-span-2; <960px stacks to single column (see media query). */

@@ -126,7 +126,7 @@ export default async function NewDraftPage({
       supabase
         .from("product_variants")
         .select(
-          "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, sku"
+          "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id"
         )
         .in("draft_id", draftIds)
         .order("sort_order", { ascending: true })

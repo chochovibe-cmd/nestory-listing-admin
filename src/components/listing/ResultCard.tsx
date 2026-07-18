@@ -88,6 +88,17 @@ import {
   type Station3PublishSelection
 } from "@/lib/drafts/station3Publish";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
+import { VariantEditor } from "@/components/listing/VariantEditor";
+import {
+  clampDimensions,
+  dbRowsToForm,
+  formRowsToDbInserts,
+  isVariantRowFilled,
+  persistVariantsSafe,
+  type SupabaseLike,
+  type VariantDimension,
+  type VariantFormRow
+} from "@/lib/variants";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -97,6 +108,25 @@ import {
   descriptionPreviewHtml,
   normalizeDescriptionToPlainText,
 } from "@/lib/contentGenerator/htmlFormat";
+
+/** UX-M T64: full-enough row for dbRowsToForm (price range still uses twd_price). */
+type ResultCardVariantRow = {
+  twd_price?: number | null;
+  option1_value?: string | null;
+  option2_value?: string | null;
+  option3_value?: string | null;
+  option1_name?: string | null;
+  option2_name?: string | null;
+  option3_name?: string | null;
+  cny_price?: number | null;
+  compare_at_price?: number | null;
+  price_locked?: boolean | null;
+  sort_order?: number | null;
+  inventory_quantity?: number | null;
+  inventory_policy?: string | null;
+  sku?: string | null;
+  image_id?: string | null;
+};
 
 // This icon only reports whether AI text-generation itself finished, failed,
 // or is still running -- it must never fall back to a green "done" check for
@@ -273,8 +303,8 @@ export function ResultCard({
   checked?: boolean;
   onToggle?: () => void;
   defaultExpanded?: boolean;
-  /** P1-5: multi-variant sell prices for header range (e.g. 269~279) */
-  variantPrices?: Array<{ twd_price?: number | null }>;
+  /** P1-5 price range + UX-M T64 specs hydrate */
+  variantPrices?: ResultCardVariantRow[];
   /** UX-H T49: archive leave fade (display only) */
   leaving?: boolean;
 }) {
@@ -298,6 +328,11 @@ export function ResultCard({
   const [detectedCategory, setDetectedCategory] = useState(draft.detected_category ?? "");
   const [sku, setSku] = useState(draft.sku ?? "");
   const [publishMode, setPublishMode] = useState(draft.publish_mode);
+  // UX-M T64: specs tab local state (hydrate from draft.variant_dimensions + variants)
+  const [variantDimensions, setVariantDimensions] = useState<VariantDimension[]>([]);
+  const [variantRows, setVariantRows] = useState<VariantFormRow[]>([]);
+  const [variantWarning, setVariantWarning] = useState<string | null>(null);
+  const [variantsDirty, setVariantsDirty] = useState(false);
   const [message, setMessage] = useState("");
   const [markMessage, setMarkMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
@@ -367,18 +402,79 @@ export function ResultCard({
   const [versionIndex, setVersionIndex] = useState<Record<CopyVersionField, number>>(emptyVersionIndexMap);
   const [copyDirty, setCopyDirty] = useState<Partial<Record<CopyVersionField, boolean>>>(emptyDirtyMap);
 
+  // UX-M T64: re-hydrate specs when server data identity changes (not on every parent render)
+  const variantsHydrateKey = useMemo(
+    () =>
+      JSON.stringify({
+        id: draft.id,
+        dims: draft.variant_dimensions ?? null,
+        rows: variantPrices.map((v) => ({
+          o1: v.option1_value,
+          o2: v.option2_value,
+          o3: v.option3_value,
+          n1: v.option1_name,
+          n2: v.option2_name,
+          n3: v.option3_name,
+          cost: v.cny_price,
+          sell: v.twd_price,
+          cmp: v.compare_at_price,
+          lock: v.price_locked,
+          qty: v.inventory_quantity,
+          pol: v.inventory_policy,
+          sku: v.sku,
+          img: v.image_id,
+          sort: v.sort_order
+        }))
+      }),
+    [draft.id, draft.variant_dimensions, variantPrices]
+  );
+
+  useEffect(() => {
+    const dimsRaw = Array.isArray(draft.variant_dimensions)
+      ? (draft.variant_dimensions as VariantDimension[])
+      : [];
+    const { dimensions, rows } = dbRowsToForm(dimsRaw, variantPrices);
+    setVariantDimensions(dimensions);
+    setVariantRows(rows);
+    setVariantsDirty(false);
+    setVariantWarning(null);
+    // Key captures dims + rows content; draft/variantPrices used inside intentionally.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate only when variantsHydrateKey changes
+  }, [variantsHydrateKey]);
+
   const { icon, className } = statusIcon(draft);
   // B6: 卡片只跟讀 price_mode（不做完整切換 UI）；migration 020 前 fallback 特價。
   const priceMode: PriceMode = draft.price_mode === "single" ? "single" : "sale";
   const profit = draft.twd_price != null && draft.twd_cost != null ? draft.twd_price - draft.twd_cost : null;
   // P1-5 / 回饋 49: multi-variant → price range on collapsed card
   const priceRangeLabel = useMemo(() => {
+    const fromLocal = variantsDirty
+      ? variantRows
+          .filter(isVariantRowFilled)
+          .map((r) => {
+            const n = Number(r.sellPrice);
+            return Number.isFinite(n) && n > 0 ? n : null;
+          })
+      : variantPrices.map((v) => v.twd_price);
     const prices = collectSellPricesForCard({
       draftPrice: draft.twd_price,
-      variantPrices: variantPrices.map((v) => v.twd_price)
+      variantPrices: fromLocal
     });
     return formatPriceRangeLabel(prices);
-  }, [draft.twd_price, variantPrices]);
+  }, [draft.twd_price, variantPrices, variantsDirty, variantRows]);
+
+  const variantImageOptions = useMemo(
+    () =>
+      imageMarks
+        .filter((img) => img.image_type === "main" || img.image_type === "variant")
+        .map((img, i) => ({
+          id: img.id,
+          url: String(img.processed_file_url || img.original_file_url || img.generated_file_url || ""),
+          label: `主圖 ${i + 1}`
+        }))
+        .filter((img) => img.url),
+    [imageMarks]
+  );
   const profitPct =
     profit != null && draft.twd_price && draft.twd_price > 0
       ? Math.round((profit / draft.twd_price) * 100)
@@ -763,6 +859,7 @@ export function ResultCard({
 
   async function save() {
     // D2: any save button should persist on-screen copy too (informative, not blocking).
+    // UX-M T64: also writes variant_dimensions + product_variants (persistVariantsSafe).
     setDiscardArm(null);
     const copyWasDirty =
       anyCopyDirty(copyDirty) || copyDisplayDiffersFromDb(displayByField, dbSnapshot);
@@ -777,6 +874,7 @@ export function ResultCard({
       if (combo.didCommitCopy) comboNote = "已一併定案文案組合";
     }
 
+    const dimsForSave = clampDimensions(variantDimensions);
     const { error } = await supabase
       .from("product_drafts")
       .update({
@@ -800,7 +898,9 @@ export function ResultCard({
           priceMode === "single" ? null : compareAtPrice ? Number(compareAtPrice) : null,
         detected_category: detectedCategory || null,
         sku: sku || null,
-        publish_mode: publishMode
+        publish_mode: publishMode,
+        // UX-M T64: axis defs on draft (same column as WorkspaceInputPanel)
+        variant_dimensions: dimsForSave
       })
       .eq("id", draft.id);
 
@@ -809,6 +909,22 @@ export function ResultCard({
       setMessage("");
       return;
     }
+
+    // UX-M T64: insert-first overwrite via shared lib (no new API)
+    // Cast: browser client matches SupabaseLike; avoid TS2589 on full generic client.
+    const inserts = formRowsToDbInserts(dimsForSave, variantRows.filter(isVariantRowFilled));
+    const persistResult = await persistVariantsSafe(
+      supabase as unknown as SupabaseLike,
+      draft.id,
+      inserts.map((row) => ({ ...row, draft_id: draft.id }))
+    );
+    if (!persistResult.ok) {
+      showToast(persistResult.error || "款式儲存失敗", "error");
+      setMessage("");
+      return;
+    }
+
+    setVariantsDirty(false);
     // UX-A T2 / UX-L T62: transient success → toast only
     const okMsg = comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改";
     setMessage("");
@@ -1157,6 +1273,24 @@ export function ResultCard({
     return anyCopyDirty(copyDirty) || copyDisplayDiffersFromDb(displayByField, dbSnapshot);
   }
 
+  function hasUncommittedPricing(): boolean {
+    const draftSell = draft.twd_price != null ? String(draft.twd_price) : "";
+    const draftCmp =
+      priceMode === "single"
+        ? ""
+        : draft.compare_at_price != null
+          ? String(draft.compare_at_price)
+          : "";
+    const curSell = sellPrice.trim();
+    const curCmp = priceMode === "single" ? "" : compareAtPrice.trim();
+    return curSell !== draftSell || curCmp !== draftCmp;
+  }
+
+  /** Copy / pricing / specs — any card edit that needs footer save. */
+  function hasUncommittedEdits(): boolean {
+    return hasUncommittedCopy() || hasUncommittedPricing() || variantsDirty;
+  }
+
   function buildFieldVersionInputs(): FieldVersionInput[] {
     return COPY_VERSION_FIELDS.map((field) => {
       const versions = versionsByField[field];
@@ -1492,7 +1626,8 @@ export function ResultCard({
 
   function tryToggleExpand() {
     // UX-L T61: collapse with dirty edits → inline double-confirm (no window.confirm)
-    if (expanded && hasUncommittedCopy()) {
+    // UX-M T64: include specs / pricing dirty
+    if (expanded && hasUncommittedEdits()) {
       if (discardArm?.kind !== "collapse") {
         setDiscardArm({ kind: "collapse" });
         setMessage("再點一次確認收合（不會自動儲存）");
@@ -2048,6 +2183,45 @@ export function ResultCard({
             </div>
           ) : null}
 
+          {/* UX-M T64: 規格 = 款式／變體（非站②規格圖）；站①③可編，站②不出現此 tab */}
+          {!isImageStation && activeTab === "specs" ? (
+            <div className="rc-tabpanel" role="tabpanel">
+              <div className="rc-field rc-span-2">
+                <div className="rc-label">規格（款式）</div>
+                {variantDimensions.length === 0 && variantRows.filter(isVariantRowFilled).length === 0 ? (
+                  <p className="muted" style={{ margin: "0 0 8px", fontSize: 12 }}>
+                    尚未建立款式 — 可新增維度或一列
+                  </p>
+                ) : null}
+                <div className="rc-specs-wrap">
+                  <VariantEditor
+                    currency="CNY"
+                    dimensions={variantDimensions}
+                    images={variantImageOptions}
+                    onDimensionsChange={(dims) => {
+                      setVariantDimensions(dims);
+                      setVariantsDirty(true);
+                    }}
+                    onRowsChange={(rows) => {
+                      setVariantRows(rows);
+                      setVariantsDirty(true);
+                    }}
+                    onWarning={setVariantWarning}
+                    priceMode={priceMode}
+                    pricingSettings={getStoredPricingSettings()}
+                    productCost={
+                      draft.cny_price != null && Number.isFinite(Number(draft.cny_price))
+                        ? Number(draft.cny_price)
+                        : null
+                    }
+                    rows={variantRows}
+                    warning={variantWarning}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {!isImageStation && activeTab === "pricing" ? (
             <div className="rc-tabpanel" role="tabpanel">
               <div className="rc-tabpanel-grid">
@@ -2374,7 +2548,7 @@ export function ResultCard({
             {isCopyStation ? (
               <>
                 <span className="rc-actions-group">
-                  {hasUncommittedCopy() ? (
+                  {hasUncommittedEdits() ? (
                     <button disabled={comboSaving || regeneratingField != null} onClick={() => void save()} type="button">
                       儲存此版本
                     </button>
@@ -2437,6 +2611,16 @@ export function ResultCard({
                   </button>
                 ) : (
                   <>
+                    {/* UX-M T64: 站③ 規格／商品級價可編，需有儲存入口 */}
+                    {hasUncommittedEdits() ? (
+                      <button
+                        disabled={comboSaving || station3Busy}
+                        onClick={() => void save()}
+                        type="button"
+                      >
+                        儲存修改
+                      </button>
+                    ) : null}
                     <button
                       disabled={approveSummaryBusy || comboSaving || station3Busy}
                       onClick={() => setStation3Open(true)}

@@ -66,6 +66,10 @@ import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
 
+/**
+ * Workbench variant row for ResultCard price range + UX-M T64 specs hydrate.
+ * Only-add: keeps price-range fields; extra columns feed dbRowsToForm.
+ */
 export type VariantPriceRow = Pick<
   ProductVariantRow,
   | "id"
@@ -76,8 +80,19 @@ export type VariantPriceRow = Pick<
   | "option1_value"
   | "option2_value"
   | "option3_value"
+  | "option1_name"
+  | "option2_name"
+  | "option3_name"
   | "sku"
+  | "cny_price"
+  | "price_locked"
+  | "inventory_quantity"
+  | "inventory_policy"
+  | "image_id"
 >;
+
+/** Stable empty ref so ResultCard hydrate effect does not thrash on every render. */
+const EMPTY_VARIANT_PRICES: VariantPriceRow[] = [];
 
 export function DraftResultsPanel({
   drafts,
@@ -1128,7 +1143,7 @@ export function DraftResultsPanel({
                 key={draft.id}
                 leaving={leavingIds.has(draft.id)}
                 onToggle={() => toggleOne(draft.id)}
-                variantPrices={variantsByDraft.get(draft.id) ?? []}
+                variantPrices={variantsByDraft.get(draft.id) ?? EMPTY_VARIANT_PRICES}
               />
             ))}
           </div>

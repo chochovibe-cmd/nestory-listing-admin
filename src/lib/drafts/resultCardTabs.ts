@@ -1,14 +1,21 @@
 /**
- * B9: internal underline tabs on ResultCard.
- * Mockup: 5 tabs — 文案／定價／圖片／Tags／SEO.
- * (Was temporarily 4 with SEO folded into 文案; boss reconfirmed 5 after use.)
+ * B9 / UX-M T64: internal underline tabs on ResultCard.
+ * Order: 文案｜規格｜定價｜圖片｜Tags｜SEO
+ * (Was 5 tabs without 規格; R85 adds specs = 款式／變體, not 規格圖.)
  * Stage pills filters are deferred to B12 (not here).
  */
 
-export type ResultCardTabId = "copy" | "pricing" | "images" | "tags" | "seo";
+export type ResultCardTabId =
+  | "copy"
+  | "specs"
+  | "pricing"
+  | "images"
+  | "tags"
+  | "seo";
 
 export const RESULT_CARD_TABS: { id: ResultCardTabId; label: string }[] = [
   { id: "copy", label: "文案" },
+  { id: "specs", label: "規格" },
   { id: "pricing", label: "定價" },
   { id: "images", label: "圖片" },
   { id: "tags", label: "Tags" },
@@ -27,6 +34,13 @@ export const RESULT_CARD_TAB_FIELDS: Record<ResultCardTabId, readonly string[]> 
     "description",
     "faq",
     "ai_detect"
+  ],
+  specs: [
+    "variant_dimensions",
+    "variant_rows",
+    "variant_cost",
+    "variant_sell_price",
+    "variant_qty"
   ],
   pricing: ["cost_profit", "sell_price", "compare_at_price"],
   images: ["process_marks", "detail_thumbs", "unmarked_warn"],
@@ -53,6 +67,7 @@ export function tabLabelWithWarn(id: ResultCardTabId, warnCount: number): string
 export function isResultCardTabId(value: unknown): value is ResultCardTabId {
   return (
     value === "copy" ||
+    value === "specs" ||
     value === "pricing" ||
     value === "images" ||
     value === "tags" ||

@@ -135,6 +135,13 @@ const RESULT_CARD_TAB_FIELDS = {
     "faq",
     "ai_detect"
   ],
+  specs: [
+    "variant_dimensions",
+    "variant_rows",
+    "variant_cost",
+    "variant_sell_price",
+    "variant_qty"
+  ],
   pricing: ["cost_profit", "sell_price", "compare_at_price"],
   images: ["process_marks", "detail_thumbs", "unmarked_warn"],
   tags: ["tags_chips", "tags_input", "warnings_list", "quick_add_character"],
@@ -308,13 +315,14 @@ await check("invalid stored value falls back", () => {
   assert.equal(readStoredResultSort(mem), "newest");
 });
 
-console.log("\n3) tab field classification (5 tabs, SEO independent)");
-await check("exactly 5 tabs", () => {
+console.log("\n3) tab field classification (6 tabs, SEO independent + specs)");
+await check("exactly 6 tabs", () => {
   assert.deepEqual(Object.keys(RESULT_CARD_TAB_FIELDS).sort(), [
     "copy",
     "images",
     "pricing",
     "seo",
+    "specs",
     "tags"
   ]);
 });
@@ -398,10 +406,12 @@ try {
     );
   });
 
-  await check("TS RESULT_CARD_TAB_FIELDS has independent seo tab", () => {
+  await check("TS RESULT_CARD_TAB_FIELDS has independent seo + specs tabs", () => {
     assert.equal(tabsMod.RESULT_CARD_TAB_FIELDS.copy.includes("seo_title"), false);
     assert.ok(tabsMod.RESULT_CARD_TAB_FIELDS.seo.includes("seo_title"));
-    assert.equal(tabsMod.RESULT_CARD_TABS.length, 5);
+    assert.ok(tabsMod.RESULT_CARD_TAB_FIELDS.specs.includes("variant_dimensions"));
+    assert.equal(tabsMod.RESULT_CARD_TABS.length, 6);
+    assert.equal(tabsMod.RESULT_CARD_TABS[1]?.id, "specs");
   });
 
   await check("TS evaluateBatchSendImages blocks unmarked", () => {
@@ -477,15 +487,20 @@ await check("globals.css: <960px results-batch-toolbar is position static", asyn
   assert.match(css, /\.rc-collapsed-notice\b/);
 });
 
-await check("ResultCard source has 5 tabs + collapsed notice", async () => {
+await check("ResultCard source has 6 tabs + specs + collapsed notice", async () => {
   const fs = await import("node:fs/promises");
   const src = await fs.readFile(path.join(root, "src/components/listing/ResultCard.tsx"), "utf8");
   assert.match(src, /rc-collapsed-notice/);
   assert.match(src, /activeTab === "seo"/);
+  assert.match(src, /activeTab === "specs"/);
+  assert.match(src, /VariantEditor/);
+  assert.match(src, /persistVariantsSafe/);
   assert.match(src, /descriptionView/);
   const tabsSrc = await fs.readFile(path.join(root, "src/lib/drafts/resultCardTabs.ts"), "utf8");
   assert.match(tabsSrc, /id: "seo"/);
   assert.match(tabsSrc, /label: "SEO"/);
+  assert.match(tabsSrc, /id: "specs"/);
+  assert.match(tabsSrc, /label: "規格"/);
 });
 
 console.log("");

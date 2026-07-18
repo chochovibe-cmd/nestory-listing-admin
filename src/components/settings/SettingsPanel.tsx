@@ -810,7 +810,26 @@ export function SettingsPanel() {
                     : "未設定"
               }
             />
-            <ConnRow label="Vision / Image Provider" ok={null} text="Phase D 圖管線" />
+            {/*
+              UX-J T58: no separate image/vision field on /api/status yet.
+              Vision currently shares OPENAI_API_KEY with aiProvider.openai —
+              show real green/red; never fake Phase D readiness. (No new API route.)
+              Fable note: optional future status.vision / status.imageProvider columns.
+            */}
+            <ConnRow
+              label="Vision / Image Provider"
+              ok={!status ? null : status.aiProvider.openai}
+              text={
+                !status
+                  ? "未檢查"
+                  : status.aiProvider.openai
+                    ? "已設定（與 OpenAI 共用 key）"
+                    : "未設定 OPENAI_API_KEY"
+              }
+            />
+            <p className="settings-muted">
+              獨立 Image Provider 連線檢查尚未接（需後端補 status 欄）
+            </p>
           </div>
           <div className="settings-actions">
             <button

@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "Nestory 商品擷取",
+  "version": "0.1.0",
+  "description": "在淘寶／天貓／蝦皮／一般官網商品頁按一下，把標題、價格、規格、圖片送進 Nestory 上架草稿。",
+  "action": {
+    "default_title": "擷取此商品到 Nestory",
+    "default_popup": "",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "popup/popup.html",
+    "open_in_tab": false
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "*://item.taobao.com/*",
+    "*://world.taobao.com/*",
+    "*://*.taobao.com/*",
+    "*://detail.tmall.com/*",
+    "*://chaoshi.detail.tmall.com/*",
+    "*://*.tmall.com/*",
+    "*://*.tmall.hk/*",
+    "*://shopee.tw/*",
+    "*://*.shopee.tw/*",
+    "*://shopee.com/*",
+    "*://*.shopee.com/*",
+    "*://shopee.sg/*",
+    "*://*.shopee.sg/*",
+    "*://shopee.co.th/*",
+    "*://*.shopee.co.th/*",
+    "*://shopee.vn/*",
+    "*://*.shopee.vn/*",
+    "*://shopee.ph/*",
+    "*://*.shopee.ph/*",
+    "*://shopee.my/*",
+    "*://*.shopee.my/*",
+    "*://shopee.co.id/*",
+    "*://*.shopee.co.id/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

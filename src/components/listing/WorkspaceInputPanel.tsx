@@ -56,6 +56,24 @@ import {
   writeWorkspaceAutosave,
   type WorkspaceAutosaveSnapshot
 } from "@/lib/drafts/workspaceAutosave";
+
+/** UX-J T52: UI short labels; DB/validation uses 「SS級」…「D級」. */
+const SECONDHAND_GRADE_OPTIONS = ["SS", "S", "A", "B", "C", "D"] as const;
+type SecondhandGradeShort = (typeof SECONDHAND_GRADE_OPTIONS)[number];
+
+function toSecondhandGradeValue(short: SecondhandGradeShort): string {
+  return `${short}級`;
+}
+
+function shortFromSecondhandGrade(value: string | null | undefined): SecondhandGradeShort | "" {
+  if (!value) return "";
+  const m = value.replace(/\s/g, "").match(/^(SS|S|A|B|C|D)級?$/i);
+  if (!m) return "";
+  const raw = m[1].toUpperCase();
+  return (SECONDHAND_GRADE_OPTIONS as readonly string[]).includes(raw)
+    ? (raw as SecondhandGradeShort)
+    : "";
+}
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 
 /** B7: insert-first overwrite so a failed insert never leaves variants empty. */
@@ -204,6 +222,11 @@ export function WorkspaceInputPanel({
   const [variantWarning, setVariantWarning] = useState<string | null>(null);
   const [variantImages, setVariantImages] = useState<VariantImageOption[]>([]);
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
+  /** UX-J T52: independent 一般｜二手 shell (writes is_secondhand + grade/condition/notes). */
+  const [isSecondhand, setIsSecondhand] = useState(false);
+  const [secondhandGrade, setSecondhandGrade] = useState<SecondhandGradeShort | "">("");
+  const [secondhandCondition, setSecondhandCondition] = useState("");
+  const [secondhandNotes, setSecondhandNotes] = useState("");
   const [inventoryUnlimited, setInventoryUnlimited] = useState(true);
   const [inventoryQuantity, setInventoryQuantity] = useState("");
   const [inventoryOpen, setInventoryOpen] = useState(false);
@@ -406,6 +429,10 @@ export function WorkspaceInputPanel({
           specText,
           videoUrlsText,
           saleStatus,
+          isSecondhand,
+          secondhandGrade: secondhandGrade ? toSecondhandGradeValue(secondhandGrade) : "",
+          secondhandCondition,
+          secondhandNotes,
           inventoryUnlimited,
           inventoryQuantity,
           inventoryOpen,
@@ -437,6 +464,10 @@ export function WorkspaceInputPanel({
     videoUrlsText,
     specText,
     saleStatus,
+    isSecondhand,
+    secondhandGrade,
+    secondhandCondition,
+    secondhandNotes,
     inventoryUnlimited,
     inventoryQuantity,
     inventoryOpen,
@@ -611,8 +642,29 @@ export function WorkspaceInputPanel({
   }, [draftId, formKey, imagesUploading]);
 
   function handleSaleStatusChange(nextStatus: SaleStatus) {
+    // Manual sale_status never toggles 二手 mode (UX-J T52).
     setSaleStatus(nextStatus);
     if (nextStatus === "台灣現貨" || nextStatus === "二手現貨") {
+      setInventoryOpen(true);
+      setInventoryNotice("已切換為現貨類型，請確認庫存；預設仍是無上限。");
+    }
+  }
+
+  /** UX-J T52: 一般｜二手 shell + sale_status linkage (command-approved). */
+  function setSecondhandMode(next: boolean) {
+    if (next === isSecondhand) return;
+    setIsSecondhand(next);
+    if (next) {
+      if (saleStatus !== "二手現貨") {
+        setSaleStatus("二手現貨");
+        setInventoryOpen(true);
+        setInventoryNotice("已切換為現貨類型，請確認庫存；預設仍是無上限。");
+      }
+      return;
+    }
+    // Off: keep grade/condition/notes in state (hidden); clear only is_secondhand on send.
+    if (saleStatus === "二手現貨") {
+      setSaleStatus("台灣現貨");
       setInventoryOpen(true);
       setInventoryNotice("已切換為現貨類型，請確認庫存；預設仍是無上限。");
     }
@@ -1116,6 +1168,12 @@ export function WorkspaceInputPanel({
       source_platform: source,
       inventory_quantity: inventoryFields.inventory_quantity,
       inventory_policy: inventoryFields.inventory_policy,
+      // UX-J T52: secondhand shell → existing draft columns (no new API).
+      // Off mode keeps grade/condition/notes values when present (hidden in UI).
+      is_secondhand: isSecondhand,
+      secondhand_grade: secondhandGrade ? toSecondhandGradeValue(secondhandGrade) : null,
+      secondhand_condition: secondhandCondition.trim() || null,
+      secondhand_notes: secondhandNotes.trim() || null,
       // B7: dimension defs (empty when single SKU)
       variant_dimensions: variantDimensions,
       status: "pending_copy",
@@ -1196,7 +1254,7 @@ export function WorkspaceInputPanel({
   }
 
   function resetForNextItem() {
-    // 連續上架 (light): keep 來源/銷售狀態/語氣/長度/Web Search/priceMode, clear the rest.
+    // 連續上架 (light): keep 來源/銷售狀態/二手模式/語氣/長度/Web Search/priceMode, clear the rest.
     // B13: clear localStorage with the same light-reset rules so refresh won't re-prompt.
     clearWorkspaceAutosave(typeof window !== "undefined" ? window.localStorage : null);
     setRestorePrompt(null);
@@ -1218,6 +1276,10 @@ export function WorkspaceInputPanel({
     setVariants([]);
     setVariantDimensions([]);
     setVariantWarning(null);
+    // Item-specific secondhand facts clear; mode preference (isSecondhand) kept with sale_status.
+    setSecondhandGrade("");
+    setSecondhandCondition("");
+    setSecondhandNotes("");
     setInventoryUnlimited(true);
     setInventoryQuantity("");
     setInventoryOpen(false);
@@ -1267,6 +1329,10 @@ export function WorkspaceInputPanel({
     if (SALE_STATUS_OPTIONS.includes(fields.saleStatus as SaleStatus)) {
       setSaleStatus(fields.saleStatus as SaleStatus);
     }
+    setIsSecondhand(Boolean(fields.isSecondhand));
+    setSecondhandGrade(shortFromSecondhandGrade(fields.secondhandGrade));
+    setSecondhandCondition(fields.secondhandCondition ?? "");
+    setSecondhandNotes(fields.secondhandNotes ?? "");
     setInventoryUnlimited(fields.inventoryUnlimited);
     setInventoryQuantity(fields.inventoryQuantity);
     setInventoryOpen(fields.inventoryOpen);
@@ -1364,6 +1430,10 @@ export function WorkspaceInputPanel({
         specText: fields.specText,
         videoUrlsText: fields.videoUrlsText,
         saleStatus: fields.saleStatus || saleStatus,
+        isSecondhand: fields.isSecondhand,
+        secondhandGrade: fields.secondhandGrade,
+        secondhandCondition: fields.secondhandCondition,
+        secondhandNotes: fields.secondhandNotes,
         inventoryUnlimited: fields.inventoryUnlimited,
         inventoryQuantity: fields.inventoryQuantity,
         inventoryOpen: fields.inventoryOpen,
@@ -1513,6 +1583,11 @@ export function WorkspaceInputPanel({
       return;
     }
 
+    // UX-J T52: empty grade soft warn only (backend validation still enforces when is_secondhand).
+    if (isSecondhand && !secondhandGrade) {
+      showToast("請選二手等級", "warn");
+    }
+
     setFieldErrors({});
     setSubmitting(true);
     const cardTitle = title.trim().slice(0, 18);
@@ -1637,6 +1712,24 @@ export function WorkspaceInputPanel({
       ) : null}
       <div className="panel-header">
         <h2>✦ 新增商品</h2>
+        <div className="pill-group sh-mode-pills" role="group" aria-label="一般或二手">
+          <button
+            aria-pressed={!isSecondhand}
+            className={`pill-btn${!isSecondhand ? " active sel--fill" : ""}`}
+            onClick={() => setSecondhandMode(false)}
+            type="button"
+          >
+            一般
+          </button>
+          <button
+            aria-pressed={isSecondhand}
+            className={`pill-btn${isSecondhand ? " active sel--fill" : ""}`}
+            onClick={() => setSecondhandMode(true)}
+            type="button"
+          >
+            二手
+          </button>
+        </div>
       </div>
       <div className="panel-body">
         <form
@@ -1836,6 +1929,45 @@ export function WorkspaceInputPanel({
             </div>
             {inventoryNotice ? <div className="field-msg">{inventoryNotice}</div> : null}
             {fieldErrors.inventory ? <div className="field-msg">請填 0 或正整數；若可持續接單，請勾選無上限。</div> : null}
+
+            {/* UX-J T52: secondhand fields — open only when 二手; values kept when collapsed */}
+            {isSecondhand ? (
+              <div className="secondhand-fields open" id="shFields">
+                <div className="field" style={{ marginBottom: 10 }}>
+                  <label>品項等級</label>
+                  <div className="grade-row" role="group" aria-label="二手等級">
+                    {SECONDHAND_GRADE_OPTIONS.map((grade) => (
+                      <button
+                        className={`grade-btn sel${secondhandGrade === grade ? " active sel--fill" : ""}`}
+                        key={grade}
+                        onClick={() => setSecondhandGrade(grade)}
+                        type="button"
+                      >
+                        {grade}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="field" style={{ marginBottom: 10 }}>
+                  <label>狀況描述</label>
+                  <textarea
+                    onChange={(e) => setSecondhandCondition(e.target.value)}
+                    placeholder="外觀 9 成新，無明顯髒污…"
+                    rows={2}
+                    value={secondhandCondition}
+                  />
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>二手備註</label>
+                  <textarea
+                    onChange={(e) => setSecondhandNotes(e.target.value)}
+                    placeholder="附原廠吊牌…"
+                    rows={2}
+                    value={secondhandNotes}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
             </div>
           </div>

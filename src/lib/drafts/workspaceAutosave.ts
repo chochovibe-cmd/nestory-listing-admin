@@ -27,6 +27,11 @@ export type WorkspaceAutosaveSnapshot = {
   /** D10: multi-line YouTube URLs (one per line); optional. */
   videoUrlsText: string;
   saleStatus: string;
+  /** UX-J T52: optional for older snapshots */
+  isSecondhand?: boolean;
+  secondhandGrade?: string;
+  secondhandCondition?: string;
+  secondhandNotes?: string;
   inventoryUnlimited: boolean;
   inventoryQuantity: string;
   inventoryOpen: boolean;
@@ -161,6 +166,10 @@ export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot):
   specText: string;
   videoUrlsText: string;
   saleStatus: string;
+  isSecondhand: boolean;
+  secondhandGrade: string;
+  secondhandCondition: string;
+  secondhandNotes: string;
   inventoryUnlimited: boolean;
   inventoryQuantity: string;
   inventoryOpen: boolean;
@@ -187,6 +196,11 @@ export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot):
     specText: typeof snap.specText === "string" ? snap.specText : "",
     videoUrlsText: typeof snap.videoUrlsText === "string" ? snap.videoUrlsText : "",
     saleStatus: typeof snap.saleStatus === "string" ? snap.saleStatus : "",
+    isSecondhand: Boolean(snap.isSecondhand),
+    secondhandGrade: typeof snap.secondhandGrade === "string" ? snap.secondhandGrade : "",
+    secondhandCondition:
+      typeof snap.secondhandCondition === "string" ? snap.secondhandCondition : "",
+    secondhandNotes: typeof snap.secondhandNotes === "string" ? snap.secondhandNotes : "",
     inventoryUnlimited: snap.inventoryUnlimited !== false,
     inventoryQuantity: typeof snap.inventoryQuantity === "string" ? snap.inventoryQuantity : "",
     inventoryOpen: Boolean(snap.inventoryOpen),

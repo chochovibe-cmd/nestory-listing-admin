@@ -881,6 +881,64 @@ button.success:hover:not(:disabled) {
   font-weight: 600;
 }
 
+/* UX-J T52: 一般｜二手 mode pills in panel header (reuse .pill-group / .pill-btn) */
+.panel-header .sh-mode-pills {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.panel-header .sh-mode-pills .pill-btn {
+  min-height: 44px;
+  min-width: 52px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
+/* UX-J T52: secondhand field block (IA from Mockup; tokens from site) */
+.secondhand-fields {
+  background: color-mix(in srgb, var(--surface2) 55%, var(--surface));
+  border: 1px solid var(--line-soft, var(--border));
+  border-radius: var(--radius-s, 12px);
+  padding: 13px;
+  margin-top: 4px;
+}
+
+.grade-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.grade-btn {
+  flex: 1 1 0;
+  min-width: 40px;
+  min-height: 44px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s, color .15s, background .15s;
+}
+
+.grade-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.grade-btn.active,
+.grade-btn.sel--fill {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 .panel-body {
   display: grid;
   gap: 14px;

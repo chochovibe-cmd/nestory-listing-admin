@@ -1,0 +1,63 @@
+{
+  "_comment": "PKG2A synthetic multi-dim fixture — Razer-shaped 4×4=16 styles (not real product data)",
+  "title": "【PKG2A 樣本】電競滑鼠 多款式交叉 16",
+  "shopify_handle": "pkg2a-razer-shape-mouse-ab12cd",
+  "twd_price": 1290,
+  "twd_cost": 520,
+  "sku": "NST-PKG2A-MOUSE",
+  "inventory_policy": "continue",
+  "inventory_quantity": null,
+  "variant_dimensions": [
+    { "name": "顏色" },
+    { "name": "尺寸" }
+  ],
+  "product_variants": [
+    { "option1_name": "顏色", "option1_value": "粉", "option2_name": "尺寸", "option2_value": "S", "sku": "PKG2A-PNK-S", "twd_price": 1290, "cny_price": 89, "inventory_policy": "deny", "inventory_quantity": 3, "sort_order": 0 },
+    { "option1_name": "顏色", "option1_value": "粉", "option2_name": "尺寸", "option2_value": "M", "sku": "PKG2A-PNK-M", "twd_price": 1290, "cny_price": 89, "inventory_policy": "deny", "inventory_quantity": 2, "sort_order": 1 },
+    { "option1_name": "顏色", "option1_value": "粉", "option2_name": "尺寸", "option2_value": "L", "sku": "PKG2A-PNK-L", "twd_price": 1390, "cny_price": 95, "inventory_policy": "continue", "inventory_quantity": 0, "sort_order": 2 },
+    { "option1_name": "顏色", "option1_value": "粉", "option2_name": "尺寸", "option2_value": "XL", "sku": "PKG2A-PNK-XL", "twd_price": 1390, "cny_price": 95, "inventory_policy": "continue", "inventory_quantity": 0, "sort_order": 3 },
+    { "option1_name": "顏色", "option1_value": "藍", "option2_name": "尺寸", "option2_value": "S", "sku": "PKG2A-BLU-S", "twd_price": 1290, "cny_price": 89, "inventory_policy": "deny", "inventory_quantity": 1, "sort_order": 4 },
+    { "option1_name": "顏色", "option1_value": "藍", "option2_name": "尺寸", "option2_value": "M", "sku": "PKG2A-BLU-M", "twd_price": 1290, "cny_price": 89, "inventory_policy": "deny", "inventory_quantity": 5, "sort_order": 5 },
+    { "option1_name": "顏色", "option1_value": "藍", "option2_name": "尺寸", "option2_value": "L", "sku": "PKG2A-BLU-L", "twd_price": 1390, "cny_price": 95, "inventory_policy": "continue", "inventory_quantity": 0, "sort_order": 6 },
+    { "option1_name": "顏色", "option1_value": "藍", "option2_name": "尺寸", "option2_value": "XL", "sku": "PKG2A-BLU-XL", "twd_price": 1390, "cny_price": 95, "inventory_policy": "continue", "inventory_quantity": 0, "sort_order": 7 },
+    { "option1_name": "顏色", "option1_value": "黑", "option2_name": "尺寸", "option2_value": "S", "sku": "PKG2A-BLK-S", "twd_price": 1290, "cny_price": 89, "inventory_policy": "deny", "inventory_quantity": 4, "sort_order": 8 },
+    { "option1_name": "顏色", "option1_value": "黑", "option2_name": "尺寸", "option2_value": "M", "sku": "PKG2A-BLK-M", "twd_price": 1290, "cny_price": 89, "inventory_policy": "deny", "inventory_quantity": 4, "sort_order": 9 },
+    { "option1_name": "顏色", "option1_value": "黑", "option2_name": "尺寸", "option2_value": "L", "sku": "PKG2A-BLK-L", "twd_price": 1390, "cny_price": 95, "inventory_policy": "continue", "inventory_quantity": 0, "sort_order": 10 },
+    { "option1_name": "顏色", "option1_value": "黑", "option2_name": "尺寸", "option2_value": "XL", "sku": "PKG2A-BLK-XL", "twd_price": 1390, "cny_price": 95, "inventory_policy": "continue", "inventory_quantity": 0, "sort_order": 11 },
+    { "option1_name": "顏色", "option1_value": "白", "option2_name": "尺寸", "option2_value": "S", "sku": "PKG2A-WHT-S", "twd_price": 1290, "cny_price": 89, "inventory_policy": "deny", "inventory_quantity": 2, "sort_order": 12 },
+    { "option1_name": "顏色", "option1_value": "白", "option2_name": "尺寸", "option2_value": "M", "sku": "PKG2A-WHT-M", "twd_price": 1290, "cny_price": 89, "inventory_policy": "deny", "inventory_quantity": 2, "sort_order": 13 },
+    { "option1_name": "顏色", "option1_value": "白", "option2_name": "尺寸", "option2_value": "L", "sku": "PKG2A-WHT-L", "twd_price": 1390, "cny_price": 95, "inventory_policy": "continue", "inventory_quantity": 0, "sort_order": 14 },
+    { "option1_name": "顏色", "option1_value": "白", "option2_name": "尺寸", "option2_value": "XL", "sku": "PKG2A-WHT-XL", "twd_price": 1490, "cny_price": 99, "inventory_policy": "deny", "inventory_quantity": 1, "sort_order": 15 }
+  ],
+  "simplified_option_sample": {
+    "option1_name": "颜色",
+    "option1_value": "皮卡丘鼠标SE",
+    "option2_name": "尺寸",
+    "option2_value": "无线版"
+  },
+  "sku_table": {
+    "axes": ["顏色", "尺寸"],
+    "rows": [
+      { "顏色": "粉", "尺寸": "S", "price": 89 },
+      { "顏色": "粉", "尺寸": "M", "price": 89 },
+      { "顏色": "藍", "尺寸": "S", "price": 89 },
+      { "顏色": "缺格測試", "尺寸": "S" }
+    ]
+  },
+  "variants_flat_missing_price": [
+    {
+      "option1_name": "顏色",
+      "option1_value": "粉",
+      "option2_name": "尺寸",
+      "option2_value": "S",
+      "cny_price": null
+    },
+    {
+      "option1_name": "顏色",
+      "option1_value": "缺格測試",
+      "option2_name": "尺寸",
+      "option2_value": "S",
+      "cny_price": null
+    }
+  ]
+}

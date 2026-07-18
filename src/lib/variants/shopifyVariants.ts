@@ -33,20 +33,45 @@ export type SingleVariantPublishPlan = {
 
 export type VariantPublishPlan = MultiVariantPublishPlan | SingleVariantPublishPlan;
 
-function optionNamesFromRow(row: ProductVariantRow): string[] {
+/**
+ * PKG2A: merge axis names across all rows so first-row missing names still work.
+ * If a value exists on any row but no name was stored, fall back to 款式/選項2/選項3.
+ */
+export function resolveDimNames(rows: ProductVariantRow[]): string[] {
+  const found: [string | null, string | null, string | null] = [null, null, null];
+  let maxAxis = 0;
+  for (const row of rows) {
+    const n1 = row.option1_name?.trim();
+    const n2 = row.option2_name?.trim();
+    const n3 = row.option3_name?.trim();
+    if (n1 && !found[0]) found[0] = n1;
+    if (n2 && !found[1]) found[1] = n2;
+    if (n3 && !found[2]) found[2] = n3;
+    if (row.option1_value?.trim() || n1) maxAxis = Math.max(maxAxis, 1);
+    if (row.option2_value?.trim() || n2) maxAxis = Math.max(maxAxis, 2);
+    if (row.option3_value?.trim() || n3) maxAxis = Math.max(maxAxis, 3);
+  }
+  const defaults = ["款式", "選項2", "選項3"] as const;
+  if (maxAxis === 0) return ["款式"];
   const names: string[] = [];
-  if (row.option1_name) names.push(row.option1_name);
-  if (row.option2_name) names.push(row.option2_name);
-  if (row.option3_name) names.push(row.option3_name);
+  for (let i = 0; i < maxAxis; i++) {
+    names.push(found[i] || defaults[i]);
+  }
   return names;
 }
 
-function optionValuesFromRow(row: ProductVariantRow): string[] {
-  const values: string[] = [];
-  if (row.option1_name) values.push(row.option1_value?.trim() || "Default");
-  if (row.option2_name) values.push(row.option2_value?.trim() || "Default");
-  if (row.option3_name) values.push(row.option3_value?.trim() || "Default");
-  return values;
+/** Values aligned to resolved dim count — value present even when that row's name is empty. */
+function optionValuesFromRow(row: ProductVariantRow, dimCount: number): string[] {
+  const raw = [
+    row.option1_value?.trim() || "",
+    row.option2_value?.trim() || "",
+    row.option3_value?.trim() || ""
+  ];
+  const out: string[] = [];
+  for (let i = 0; i < dimCount; i++) {
+    out.push(raw[i] || "Default");
+  }
+  return out;
 }
 
 function isValidVariantRow(row: ProductVariantRow): boolean {
@@ -90,17 +115,15 @@ export function buildVariantPublishPlan(
     return { mode: "single" };
   }
 
-  const dimNames = optionNamesFromRow(sorted[0]);
-  if (dimNames.length === 0) {
-    dimNames.push("款式");
-  }
+  // PKG2A: merge names across rows; first-row missing name + value present still counts.
+  const dimNames = resolveDimNames(sorted);
 
   // productOptions: unique values per dim, first-row values first (aligns with productCreate initial).
   const productOptions: ShopifyProductOptionInput[] = dimNames.map((name, dimIndex) => {
     const ordered: string[] = [];
     const seen = new Set<string>();
     for (const row of sorted) {
-      const vals = optionValuesFromRow(row);
+      const vals = optionValuesFromRow(row, dimNames.length);
       const val = vals[dimIndex] ?? "Default";
       if (seen.has(val)) continue;
       seen.add(val);
@@ -111,9 +134,8 @@ export function buildVariantPublishPlan(
   });
 
   const seeds: ShopifyVariantSeed[] = sorted.map((row) => {
-    const names = optionNamesFromRow(row).length ? optionNamesFromRow(row) : dimNames;
-    const values = optionValuesFromRow(row);
-    const optionValues = names.map((optionName, i) => ({
+    const values = optionValuesFromRow(row, dimNames.length);
+    const optionValues = dimNames.map((optionName, i) => ({
       optionName,
       name: values[i] ?? "Default"
     }));

@@ -148,6 +148,7 @@ function CopyButton({ getValue }: { getValue: () => string }) {
 }
 
 /** B10: ← 版本 N/M → 重生 — version switch is local-only; 重生 spends LLM. */
+/** UX-L T61: optional arm labels for discard double-confirm (no window.confirm). */
 function VersionNav({
   label,
   canPrev,
@@ -157,6 +158,8 @@ function VersionNav({
   onRegen,
   regenBusy,
   regenDisabled,
+  switchArmDir = null,
+  regenArmed = false,
 }: {
   label: string;
   canPrev: boolean;
@@ -166,41 +169,58 @@ function VersionNav({
   onRegen: () => void;
   regenBusy: boolean;
   regenDisabled: boolean;
+  /** UX-L T61: which version arrow is armed for discard confirm */
+  switchArmDir?: "prev" | "next" | null;
+  /** UX-L T61: regen button armed for discard confirm */
+  regenArmed?: boolean;
 }) {
   return (
     <span className="version-nav" onClick={(event) => event.stopPropagation()}>
       <button
-        aria-label="上一版"
-        className="version-nav-btn"
+        aria-label={switchArmDir === "prev" ? "再點確認切到上一版" : "上一版"}
+        className={`version-nav-btn${switchArmDir === "prev" ? " danger" : ""}`}
         disabled={!canPrev || regenBusy}
         onClick={onPrev}
+        title={switchArmDir === "prev" ? "再點一次確認切換（會捨棄未存修改）" : undefined}
         type="button"
       >
-        ←
+        {switchArmDir === "prev" ? "⚠" : "←"}
       </button>
       <span className="version-nav-label">{label}</span>
       <button
-        aria-label="下一版"
-        className="version-nav-btn"
+        aria-label={switchArmDir === "next" ? "再點確認切到下一版" : "下一版"}
+        className={`version-nav-btn${switchArmDir === "next" ? " danger" : ""}`}
         disabled={!canNext || regenBusy}
         onClick={onNext}
+        title={switchArmDir === "next" ? "再點一次確認切換（會捨棄未存修改）" : undefined}
         type="button"
       >
-        →
+        {switchArmDir === "next" ? "⚠" : "→"}
       </button>
       <button
         aria-label="只重生此欄"
-        className="version-nav-btn version-nav-regen"
+        className={`version-nav-btn version-nav-regen${regenArmed ? " danger" : ""}`}
         disabled={regenDisabled || regenBusy}
         onClick={onRegen}
-        title="只重生此欄（會呼叫 AI，需花費）"
+        title={
+          regenArmed
+            ? "再點一次確認：以畫面文字重生，未定案會捨棄"
+            : "只重生此欄（會呼叫 AI，需花費）"
+        }
         type="button"
       >
-        {regenBusy ? "重生中" : "重生"}
+        {regenBusy ? "重生中" : regenArmed ? "⚠ 確認重生" : "重生"}
       </button>
     </span>
   );
 }
+
+/** UX-L T61: discard-edit arm (independent from actionArm review/revision/return). */
+type DiscardArm =
+  | null
+  | { kind: "switch"; field: CopyVersionField; nextIndex: number }
+  | { kind: "regen"; field: CopyVersionField }
+  | { kind: "collapse" };
 
 /** T26: 描述／FAQ 預覽預設限高，可展開全文；local state 不寫 localStorage */
 function CopyPreviewBlock({ html }: { html: string }) {
@@ -310,6 +330,8 @@ export function ResultCard({
   const [actionArm, setActionArm] = useState<
     null | "review" | "revision" | "return-copy" | "return-image"
   >(null);
+  /** UX-L T61: discard uncommitted edit — separate from actionArm. */
+  const [discardArm, setDiscardArm] = useState<DiscardArm>(null);
 
   function clearCardArchiveUndoTimer() {
     if (archiveUndoTimerRef.current != null) {
@@ -569,7 +591,8 @@ export function ResultCard({
       .order("created_at", { ascending: true });
 
     if (error) {
-      setMessage(`讀取版本歷史失敗：${error.message}`);
+      // UX-L T62: transient error → toast
+      showToast(`讀取版本歷史失敗：${error.message}`, "error");
       setHistoryLoaded(true);
       return;
     }
@@ -631,9 +654,25 @@ export function ResultCard({
   function switchVersion(field: CopyVersionField, nextIndex: number) {
     const versions = versionsByField[field];
     if (nextIndex < 0 || nextIndex >= versions.length) return;
+    // UX-L T61: dirty → inline double-confirm (no window.confirm)
     if (copyDirty[field]) {
-      const ok = window.confirm("切換將捨棄此欄未儲存修改，確定？");
-      if (!ok) return;
+      const armed =
+        discardArm?.kind === "switch" &&
+        discardArm.field === field &&
+        discardArm.nextIndex === nextIndex;
+      if (!armed) {
+        setDiscardArm({ kind: "switch", field, nextIndex });
+        setMessage("再點一次確認切換（會捨棄未存修改）");
+        return;
+      }
+    }
+    setDiscardArm(null);
+    if (
+      message.startsWith("再點一次確認切換") ||
+      message.startsWith("再點一次確認：") ||
+      message.startsWith("再點一次確認收合")
+    ) {
+      setMessage("");
     }
     const content = versions[nextIndex].content;
     setFieldDisplay(field, content, false);
@@ -703,14 +742,16 @@ export function ResultCard({
 
   async function saveComboOnly() {
     setComboSaving(true);
-    setMessage("儲存文案組合中…");
+    setDiscardArm(null);
+    // UX-L T62: in-progress via button「儲存中…」only
     try {
       const result = await commitCopyCombination();
       if (!result.ok) {
-        setMessage(result.error ?? "儲存失敗");
+        showToast(result.error ?? "儲存失敗", "error");
+        setMessage("");
         return;
       }
-      // UX-A T2: transient success → toast (easy to miss setMessage alone)
+      // UX-A T2 / UX-L T62: transient success → toast only
       const okMsg = result.didCommitCopy ? "已定案此文案組合" : "文案組合無變更";
       setMessage("");
       showToast(okMsg, result.didCommitCopy ? "success" : "info");
@@ -722,13 +763,15 @@ export function ResultCard({
 
   async function save() {
     // D2: any save button should persist on-screen copy too (informative, not blocking).
+    setDiscardArm(null);
     const copyWasDirty =
       anyCopyDirty(copyDirty) || copyDisplayDiffersFromDb(displayByField, dbSnapshot);
     let comboNote = "";
     if (copyWasDirty) {
       const combo = await commitCopyCombination();
       if (!combo.ok) {
-        setMessage(combo.error ?? "文案組合儲存失敗");
+        showToast(combo.error ?? "文案組合儲存失敗", "error");
+        setMessage("");
         return;
       }
       if (combo.didCommitCopy) comboNote = "已一併定案文案組合";
@@ -762,10 +805,11 @@ export function ResultCard({
       .eq("id", draft.id);
 
     if (error) {
-      setMessage(error.message);
+      showToast(error.message || "儲存失敗", "error");
+      setMessage("");
       return;
     }
-    // UX-A T2: transient success → toast
+    // UX-A T2 / UX-L T62: transient success → toast only
     const okMsg = comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改";
     setMessage("");
     showToast(okMsg, "success");
@@ -774,12 +818,18 @@ export function ResultCard({
 
   async function regenerateField(field: CopyVersionField) {
     if (regenerating || regeneratingField) return;
+    // UX-L T61: dirty → inline double-confirm (no window.confirm)
     if (copyDirty[field]) {
-      const ok = window.confirm("此欄有未儲存修改，重生將以目前畫面文字為基礎並捨棄未定案狀態，確定？");
-      if (!ok) return;
+      const armed = discardArm?.kind === "regen" && discardArm.field === field;
+      if (!armed) {
+        setDiscardArm({ kind: "regen", field });
+        setMessage("再點一次確認：以畫面文字重生，未定案會捨棄");
+        return;
+      }
     }
+    setDiscardArm(null);
     setRegeneratingField(field);
-    setMessage(`正在重生「${COPY_VERSION_FIELD_LABELS[field]}」…`);
+    // UX-L T62: in-progress via button label only
 
     try {
       // D6: materialise virtual baseline before the new regen row lands.
@@ -800,7 +850,8 @@ export function ResultCard({
           },
         ]);
         if (baseErr) {
-          setMessage(`寫入原版歷史失敗：${baseErr}`);
+          showToast(`寫入原版歷史失敗：${baseErr}`, "error");
+          setMessage("");
           return;
         }
       }
@@ -819,7 +870,8 @@ export function ResultCard({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(payload.error ?? "單欄重生失敗");
+        showToast(payload.error ?? "單欄重生失敗", "error");
+        setMessage("");
         return;
       }
 
@@ -837,11 +889,13 @@ export function ResultCard({
         delete next[field];
         return next;
       });
-      setMessage(`「${COPY_VERSION_FIELD_LABELS[field]}」已重生`);
+      setMessage("");
+      showToast(`「${COPY_VERSION_FIELD_LABELS[field]}」已重生`, "success");
       await loadHistory({ [field]: nextText });
       router.refresh();
     } catch {
-      setMessage("單欄重生連線失敗");
+      showToast("單欄重生連線失敗", "error");
+      setMessage("");
     } finally {
       setRegeneratingField(null);
     }
@@ -849,7 +903,8 @@ export function ResultCard({
 
   async function regenerate() {
     setRegenerating(true);
-    setMessage("重新生成中...");
+    setDiscardArm(null);
+    // UX-L T62: in-progress via modal busy; result → toast
     try {
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -863,16 +918,21 @@ export function ResultCard({
         })
       });
       const payload = await response.json();
-      setMessage(response.ok ? "重新生成完成" : payload.error ?? "重新生成失敗");
-      setCopyDirty(emptyDirtyMap());
       if (response.ok) {
+        setMessage("");
+        showToast("重新生成完成", "success");
+        setCopyDirty(emptyDirtyMap());
         setRegenOpen(false);
         setRegenNotes("");
+      } else {
+        setMessage("");
+        showToast(payload.error ?? "重新生成失敗", "error");
       }
       if (expanded) await loadHistory();
       router.refresh();
     } catch {
-      setMessage("重新生成連線失敗");
+      setMessage("");
+      showToast("重新生成連線失敗", "error");
     } finally {
       setRegenerating(false);
     }
@@ -957,6 +1017,7 @@ export function ResultCard({
     const armKey = target === "copy_review" ? "return-copy" : "return-image";
     if (actionArm !== armKey) {
       setActionArm(armKey);
+      // arm 文案留卡內（不作 toast）
       setMessage(`再點一次確認退回${label}`);
       return;
     }
@@ -971,7 +1032,8 @@ export function ResultCard({
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const err = typeof payload.error === "string" ? payload.error : "退回失敗";
-        setMessage(err);
+        // UX-L T62: toast only, no dual setMessage
+        setMessage("");
         showToast(err, "error");
         return;
       }
@@ -981,7 +1043,7 @@ export function ResultCard({
       showToast(okMsg, "success");
       router.refresh();
     } catch {
-      setMessage("退回連線失敗");
+      setMessage("");
       showToast("退回連線失敗", "error");
     } finally {
       setQuickBusy(false);
@@ -990,12 +1052,14 @@ export function ResultCard({
 
   async function approveOnly() {
     if (hasBlockingWarnings(warningSummary)) {
+      // 阻斷必修留卡內
       setMessage(`⛔ 必修：${warningSummary.block.map((w) => w.text).join("；")}`);
       return;
     }
     setMarkMessage("");
     setQuickBusy(true);
-    setMessage("核准中...");
+    // UX-L T62: in-progress via button busy; result → toast
+    setMessage("");
     try {
       const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
         method: "POST",
@@ -1004,7 +1068,8 @@ export function ResultCard({
       });
       const payload = await approveResponse.json().catch(() => ({}));
       if (!approveResponse.ok) {
-        setMessage(payload.error ?? "核准失敗");
+        setMessage("");
+        showToast(payload.error ?? "核准失敗", "error");
         return;
       }
       // UX-A T2 + §2.2 站名：標圖（覆寫「圖片審核」）
@@ -1012,7 +1077,8 @@ export function ResultCard({
       showToast("已核准文案 → 進入標圖（文案已鎖定）", "success");
       router.refresh();
     } catch {
-      setMessage("核准連線失敗");
+      setMessage("");
+      showToast("核准連線失敗", "error");
     } finally {
       setQuickBusy(false);
     }
@@ -1035,16 +1101,16 @@ export function ResultCard({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(payload.error ?? "一鍵新增角色失敗");
+        showToast(payload.error ?? "一鍵新增角色失敗", "error");
         return;
       }
-      setMessage(
+      const okMsg =
         typeof payload.message === "string"
           ? payload.message
-          : `已處理角色「${characterName}」，請按重新生成以產出角色 tag`,
-      );
+          : `已處理角色「${characterName}」，請按重新生成以產出角色 tag`;
+      showToast(okMsg, "success");
     } catch {
-      setMessage("一鍵新增角色連線失敗");
+      showToast("一鍵新增角色連線失敗", "error");
     } finally {
       setQuickAddingCharacter(null);
     }
@@ -1054,6 +1120,7 @@ export function ResultCard({
   async function requestRevision() {
     if (actionArm !== "revision") {
       setActionArm("revision");
+      // arm 文案留卡內（不作 toast）
       setMessage("再點一次確認退回文案（文案將解鎖）");
       return;
     }
@@ -1070,7 +1137,7 @@ export function ResultCard({
       if (!response.ok) {
         const err =
           typeof payload.error === "string" ? payload.error : "退回失敗";
-        setMessage(err);
+        setMessage("");
         showToast(err, "error");
         return;
       }
@@ -1078,7 +1145,7 @@ export function ResultCard({
       showToast("已退回文案（已解鎖）", "success");
       router.refresh();
     } catch {
-      setMessage("退回連線失敗");
+      setMessage("");
       showToast("退回連線失敗", "error");
     } finally {
       setQuickBusy(false);
@@ -1108,22 +1175,21 @@ export function ResultCard({
     setStation3Selection(selection);
     setStation3Busy(true);
     setApproveSummaryBusy(true);
+    setDiscardArm(null);
     let apiSucceeded: boolean | null = null;
     let apiMessage = "";
     try {
       if (hasUncommittedCopy()) {
-        setMessage("定案文案組合中…");
+        // UX-L T62: busy flag covers progress; result toast
         const combo = await commitCopyCombination();
         if (!combo.ok) {
-          setMessage(combo.error ?? "文案組合定案失敗，已取消");
+          setMessage("");
+          showToast(combo.error ?? "文案組合定案失敗，已取消", "error");
           return;
         }
       }
 
       if (selection.shopify !== "none") {
-        setMessage(
-          selection.shopify === "active" ? "正式上架中（含轉檔／圖床）…" : "建立草稿中（含轉檔／圖床）…"
-        );
         const publishResponse = await fetch(`/api/drafts/${draft.id}/publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1138,6 +1204,9 @@ export function ResultCard({
           ? payload.message ?? "Shopify 完成"
           : payload.error ?? "發布失敗";
         setPendingApiResult({ ok: Boolean(apiSucceeded), message: apiMessage });
+        if (!apiSucceeded) {
+          showToast(apiMessage, "error");
+        }
       }
 
       const csvKinds: ExportKind[] = [];
@@ -1150,14 +1219,17 @@ export function ResultCard({
           apiSucceeded,
           csvSucceeded: null
         });
-        setMessage(
-          formatStation3ResultMessage({
-            selection,
-            apiSucceeded,
-            apiMessage,
-            csvSucceeded: null,
-            leftQueue: left
-          })
+        const summary = formatStation3ResultMessage({
+          selection,
+          apiSucceeded,
+          apiMessage,
+          csvSucceeded: null,
+          leftQueue: left
+        });
+        setMessage("");
+        showToast(
+          summary,
+          apiSucceeded === false ? "error" : apiSucceeded ? "success" : "info"
         );
         setStation3Selection(null);
         setPendingApiResult(null);
@@ -1173,7 +1245,8 @@ export function ResultCard({
       setExportMarkLeave(markLeave);
       openNextCardExport(csvKinds, markLeave);
     } catch {
-      setMessage("發布／匯出連線失敗");
+      setMessage("");
+      showToast("發布／匯出連線失敗", "error");
       setStation3Selection(null);
       setPendingApiResult(null);
     } finally {
@@ -1223,7 +1296,12 @@ export function ResultCard({
       await supabase.storage.from("product-images").remove([path]);
     }
     const { error } = await supabase.from("product_images").delete().eq("id", image.id);
-    setMessage(error ? `刪除圖片失敗：${error.message}` : "已刪除圖片");
+    // UX-L T62: delete image result → toast
+    if (error) {
+      showToast(`刪除圖片失敗：${error.message}`, "error");
+    } else {
+      showToast("已刪除圖片", "success");
+    }
     if (error) {
       setFadingImageIds((prev) => {
         const next = new Set(prev);
@@ -1332,7 +1410,7 @@ export function ResultCard({
     if (!exportPreflightReport?.canExport) return;
     const kind = cardExportKind;
     setExportBusy(true);
-    setMessage("產生 CSV 中...");
+    // UX-L T62: progress via exportBusy; result → toast
     try {
       const endpoint =
         kind === "showmore" ? "/api/exports/showmore" : "/api/exports/matrixify";
@@ -1351,7 +1429,8 @@ export function ResultCard({
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        setMessage(payload.error ?? "CSV 產生失敗");
+        setMessage("");
+        showToast(payload.error ?? "CSV 產生失敗", "error");
         return;
       }
 
@@ -1375,22 +1454,23 @@ export function ResultCard({
         showmore: kind === "showmore"
       };
       const api = pendingApiResult;
-      setMessage(
-        formatStation3ResultMessage({
-          selection: sel,
-          apiSucceeded: sel.shopify === "none" ? null : api?.ok ?? null,
-          apiMessage: api?.message,
-          csvSucceeded: true,
-          csvNote: "CSV 已下載",
-          leftQueue: exportMarkLeave
-        })
-      );
+      const summary = formatStation3ResultMessage({
+        selection: sel,
+        apiSucceeded: sel.shopify === "none" ? null : api?.ok ?? null,
+        apiMessage: api?.message,
+        csvSucceeded: true,
+        csvNote: "CSV 已下載",
+        leftQueue: exportMarkLeave
+      });
+      setMessage("");
+      showToast(summary, "success");
       setExportPreflightReport(null);
       setStation3Selection(null);
       setPendingApiResult(null);
       router.refresh();
     } catch {
-      setMessage("CSV 下載連線失敗");
+      setMessage("");
+      showToast("CSV 下載連線失敗", "error");
     } finally {
       setExportBusy(false);
     }
@@ -1411,9 +1491,17 @@ export function ResultCard({
   }, [isCopyStation, activeTab]);
 
   function tryToggleExpand() {
+    // UX-L T61: collapse with dirty edits → inline double-confirm (no window.confirm)
     if (expanded && hasUncommittedCopy()) {
-      const ok = window.confirm("有未儲存的編輯，確定要收合嗎？（不會自動儲存）");
-      if (!ok) return;
+      if (discardArm?.kind !== "collapse") {
+        setDiscardArm({ kind: "collapse" });
+        setMessage("再點一次確認收合（不會自動儲存）");
+        return;
+      }
+    }
+    setDiscardArm(null);
+    if (message.startsWith("再點一次確認收合")) {
+      setMessage("");
     }
     setExpanded((current) => !current);
   }
@@ -1816,6 +1904,16 @@ export function ResultCard({
                   const renderVersionHdr = (field: CopyVersionField) => {
                     const versions = versionsByField[field];
                     const idx = Math.min(versionIndex[field] ?? 0, Math.max(versions.length - 1, 0));
+                    const switchArmDir: "prev" | "next" | null =
+                      discardArm?.kind === "switch" && discardArm.field === field
+                        ? discardArm.nextIndex < idx
+                          ? "prev"
+                          : discardArm.nextIndex > idx
+                            ? "next"
+                            : null
+                        : null;
+                    const regenArmed =
+                      discardArm?.kind === "regen" && discardArm.field === field;
                     return (
                       <div className="rc-field-hdr">
                         <span className="rc-field-hdr-label">
@@ -1830,8 +1928,10 @@ export function ResultCard({
                           onNext={() => switchVersion(field, idx + 1)}
                           onPrev={() => switchVersion(field, idx - 1)}
                           onRegen={() => void regenerateField(field)}
+                          regenArmed={regenArmed}
                           regenBusy={regeneratingField === field}
                           regenDisabled={fieldBusy && regeneratingField !== field}
+                          switchArmDir={switchArmDir}
                         />
                       </div>
                     );
@@ -2177,6 +2277,16 @@ export function ResultCard({
                   const renderVersionHdr = (field: CopyVersionField) => {
                     const versions = versionsByField[field];
                     const idx = Math.min(versionIndex[field] ?? 0, Math.max(versions.length - 1, 0));
+                    const switchArmDir: "prev" | "next" | null =
+                      discardArm?.kind === "switch" && discardArm.field === field
+                        ? discardArm.nextIndex < idx
+                          ? "prev"
+                          : discardArm.nextIndex > idx
+                            ? "next"
+                            : null
+                        : null;
+                    const regenArmed =
+                      discardArm?.kind === "regen" && discardArm.field === field;
                     return (
                       <div className="rc-field-hdr">
                         <span className="rc-field-hdr-label">
@@ -2191,8 +2301,10 @@ export function ResultCard({
                           onNext={() => switchVersion(field, idx + 1)}
                           onPrev={() => switchVersion(field, idx - 1)}
                           onRegen={() => void regenerateField(field)}
+                          regenArmed={regenArmed}
                           regenBusy={regeneratingField === field}
                           regenDisabled={fieldBusy && regeneratingField !== field}
+                          switchArmDir={switchArmDir}
                         />
                       </div>
                     );
@@ -2244,10 +2356,11 @@ export function ResultCard({
               </p>
             </div>
           ) : null}
+          {/* UX-L T62: message 只留 arm／⛔ 阻斷；瞬時成敗改 toast */}
           {message ? (
             <div
               className={
-                message.includes("一併定案") || message.includes("已定案")
+                message.startsWith("⛔") || message.startsWith("再點一次確認")
                   ? "price-soft-warn"
                   : "muted"
               }

@@ -8,6 +8,7 @@ import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal"
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import {
   SequentialReviewOverlay,
+  type SequentialReviewMode,
   type SequentialReviewQueueItem
 } from "@/components/listing/SequentialReviewOverlay";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
@@ -26,6 +27,7 @@ import {
   type ExportPreflightReport,
   type PreflightDraftInput
 } from "@/lib/csv/exportPreflight";
+import { resolveShopifyStoreDomain } from "@/lib/shopify/clientStoreDomain";
 import { buildMatrixifyRows, type MatrixifyDraft } from "@/lib/csv/matrixify";
 import { buildShowmoreRows, type ShowmoreDraft } from "@/lib/csv/showmore";
 import {
@@ -186,8 +188,9 @@ export function DraftResultsPanel({
     ok: boolean;
     message: string;
   } | null>(null);
-  /** UX-Q T70: sequential copy review (snapshot queue at open). */
+  /** UX-Q T70 / BX1 延伸: sequential copy or image review (snapshot at open). */
   const [seqReviewOpen, setSeqReviewOpen] = useState(false);
+  const [seqReviewMode, setSeqReviewMode] = useState<SequentialReviewMode>("copy");
   const [seqReviewQueue, setSeqReviewQueue] = useState<SequentialReviewQueueItem[]>(
     []
   );
@@ -661,6 +664,9 @@ export function DraftResultsPanel({
         description_html: draft.description_html,
         description_plain: draft.description_plain,
         variant_dimensions: draft.variant_dimensions,
+        shopify_handle: draft.shopify_handle,
+        shopify_product_id: draft.shopify_product_id,
+        shopify_admin_url: draft.shopify_admin_url,
         product_images: imgs,
         product_variants: vars.map((v) => ({
           option1_value: v.option1_value ?? null,
@@ -718,7 +724,7 @@ export function DraftResultsPanel({
     return buildMatrixifyRows(packed) as ExportPreviewRow[];
   }
 
-  function openNextExportPreflight(
+  async function openNextExportPreflight(
     kinds: ExportKind[],
     draftIds: string[],
     markLeaveQueue: boolean
@@ -726,9 +732,11 @@ export function DraftResultsPanel({
     if (!kinds.length) return;
     const [kind, ...rest] = kinds;
     const markup = getStoredPricingSettings().showmoreMarkupPercent;
+    const shopifyStoreDomain = await resolveShopifyStoreDomain();
     const report = runExportPreflight(buildPreflightInputs(draftIds), {
       kind,
-      showmoreMarkupPercent: markup
+      showmoreMarkupPercent: markup,
+      shopifyStoreDomain
     });
     const fullTableRows = buildFullTableRows(kind, draftIds, markup);
     setExportQueue(rest);
@@ -814,7 +822,7 @@ export function DraftResultsPanel({
         apiSucceeded: selection.shopify === "none" ? null : apiSucceeded,
         csvSucceeded: true
       });
-      openNextExportPreflight(csvKinds, draftIds, markLeaveQueue);
+      void openNextExportPreflight(csvKinds, draftIds, markLeaveQueue);
     } catch {
       setMessage("發布／匯出連線失敗");
       setStation3Selection(null);
@@ -845,7 +853,7 @@ export function DraftResultsPanel({
       setExportPreflight(null);
       setExportBusy(false);
       setBusy(false);
-      openNextExportPreflight(rest, draftIds, markLeaveQueue);
+      void openNextExportPreflight(rest, draftIds, markLeaveQueue);
       return;
     }
 
@@ -1100,15 +1108,19 @@ export function DraftResultsPanel({
   const isImageStation = stage === "image_review";
   const isReadyStation = stage === "ready";
 
-  /** UX-Q T70: a) selected ∩ visible; b) all visible. Snapshot at open. */
+  /**
+   * UX-Q T70 / BX1 延伸：
+   * 站① 逐件審核 · 站② 逐件標圖
+   * a) selected ∩ visible; b) all visible. Snapshot at open.
+   */
   function openSequentialReview() {
-    if (!isCopyStation) return;
+    if (!isCopyStation && !isImageStation) return;
     const source =
       selectedIds.size > 0
         ? visibleDrafts.filter((d) => selectedIds.has(d.id))
         : visibleDrafts;
     if (source.length === 0) {
-      showToast("沒有可審的文案", "error");
+      showToast(isImageStation ? "沒有可標圖的商品" : "沒有可審的文案", "error");
       return;
     }
     const queue: SequentialReviewQueueItem[] = source.map((draft) => ({
@@ -1116,6 +1128,7 @@ export function DraftResultsPanel({
       images: imagesByDraft.get(draft.id) ?? [],
       variantPrices: variantsByDraft.get(draft.id) ?? EMPTY_VARIANT_PRICES
     }));
+    setSeqReviewMode(isImageStation ? "image" : "copy");
     setSeqReviewQueue(queue);
     setSeqReviewOpen(true);
   }
@@ -1175,20 +1188,24 @@ export function DraftResultsPanel({
               <span className="batch-selected-count">
                 {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
               </span>
-              {/* UX-Q T70: sequential entry always visible on 站① (not gated by selection) */}
-              {isCopyStation ? (
+              {/* UX-Q T70 / BX1：站① 逐件審核 · 站② 逐件標圖（不需先勾選） */}
+              {isCopyStation || isImageStation ? (
                 <button
                   className="btn-mini batch-primary-action seq-review-entry"
                   disabled={busy || visibleDrafts.length === 0}
                   onClick={openSequentialReview}
                   title={
-                    selectedIds.size > 0
-                      ? "逐件審核已勾選文案（核准後自動下一張）"
-                      : "逐件審核目前列表全部（核准後自動下一張）"
+                    isImageStation
+                      ? selectedIds.size > 0
+                        ? "逐件標圖已勾選商品（通過後自動下一張）"
+                        : "逐件標圖目前列表全部（通過後自動下一張）"
+                      : selectedIds.size > 0
+                        ? "逐件審核已勾選文案（核准後自動下一張）"
+                        : "逐件審核目前列表全部（核准後自動下一張）"
                   }
                   type="button"
                 >
-                  ▶ 逐件審核
+                  {isImageStation ? "▶ 逐件標圖" : "▶ 逐件審核"}
                 </button>
               ) : null}
               {/* UX-E T27: hide batch actions until selection; primary + 更多 overflow */}
@@ -1394,11 +1411,13 @@ export function DraftResultsPanel({
         )}
       </div>
 
-      {/* UX-Q T70: sequential copy review overlay */}
+      {/* UX-Q T70 / BX1：sequential copy or image review overlay */}
       <SequentialReviewOverlay
+        mode={seqReviewMode}
         onClose={() => {
           setSeqReviewOpen(false);
           setSeqReviewQueue([]);
+          setSeqReviewMode("copy");
         }}
         open={seqReviewOpen}
         queue={seqReviewQueue}

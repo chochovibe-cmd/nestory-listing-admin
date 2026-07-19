@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await serviceSupabase
     .from("product_drafts")
     .select(
-      "id, title_zh, taobao_title, original_title, status, pipeline_stage, sku, twd_price, twd_cost, compare_at_price, price_mode, description_html, description_plain, variant_dimensions, product_images(image_type, processed_file_url, original_file_url, sort_order)"
+      "id, title_zh, taobao_title, original_title, status, pipeline_stage, sku, twd_price, twd_cost, compare_at_price, price_mode, description_html, description_plain, variant_dimensions, shopify_handle, shopify_product_id, shopify_admin_url, product_images(image_type, processed_file_url, original_file_url, sort_order)"
     )
     .in("id", ids);
 
@@ -93,6 +93,9 @@ export async function POST(request: NextRequest) {
       description_html: r.description_html,
       description_plain: r.description_plain,
       variant_dimensions: r.variant_dimensions,
+      shopify_handle: r.shopify_handle,
+      shopify_product_id: r.shopify_product_id,
+      shopify_admin_url: r.shopify_admin_url,
       product_images: r.product_images ?? [],
       product_variants: variantsByDraft.get(r.id) ?? []
     });
@@ -126,6 +129,16 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const report = runExportPreflight(ordered, { kind, showmoreMarkupPercent });
+  const shopifyStoreDomain = process.env.SHOPIFY_STORE_DOMAIN
+    ? process.env.SHOPIFY_STORE_DOMAIN.replace(/^https?:\/\//i, "")
+        .split("/")[0]
+        ?.toLowerCase() || null
+    : null;
+
+  const report = runExportPreflight(ordered, {
+    kind,
+    showmoreMarkupPercent,
+    shopifyStoreDomain
+  });
   return Response.json(report);
 }

@@ -330,6 +330,16 @@ export interface ProductImage {
   original_file_url: string | null;
   processed_file_url: string | null;
   generated_file_url: string | null;
+  /**
+   * A19: browser ~320px list thumb (optional until migration 039 applied).
+   * Prefer for cards / queue UI when present.
+   */
+  list_thumb_url?: string | null;
+  /**
+   * A19: browser ~1280px mid for Vision (optional until migration 039 applied).
+   * Prefer over original_file_url in analyze-images when present.
+   */
+  vision_mid_url?: string | null;
   alt_text: string | null;
   sort_order: number;
   ocr_text: string | null;

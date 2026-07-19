@@ -523,7 +523,7 @@
   （設定入口已由 **差異 17／C2** 補上：側欄底＋更多抽屜。）
   **導覽順序已由差異 26 覆寫**（2026-07-14）：佇列不再主線第二位／不再佔手機主 tab。
 
-### 差異 29：D9-open 匯出前健檢＋CSV 預覽（非完整 D9 商品頁 iframe）
+### 差異 29：D9-open 匯出前健檢＋CSV 預覽（＋商品頁示意／Shopify iframe）
 
 - **差在哪**：
   1. **流程**：⬇ Showmore／⬇ Matrixify／卡片「產生 CSV」→ **先**健檢預覽 Modal →
@@ -535,14 +535,17 @@
        **Matrixify 無圖**。
      - **info**：Showmore 庫存 999／重量 0.1kg 預設（不單獨改成「仍要下載」文案）。
   3. **預覽 UI**：件數、Showmore 加價%、每件售價／原價（售價＝`showmorePricing` 同 D8）、
-     錯誤／警告列表；有 error 主鈕 **disabled**；有 warn 主鈕「仍要下載（含警告）」。
+     錯誤／警告列表；有 error 主鈕 **disabled**；有 warn 主鈕「仍要下載（含警告）」；
+     另 **商品頁預覽** tab＝示意版型 ＋ **Shopify 官網 iframe**
+     （`/products/{handle}`；admin 不嵌；擋嵌入則新分頁）。
   4. **資料**：工作檯用本機 drafts+images；佇列列欄不足 → `POST /api/exports/preflight`
-     （不標 csv_ready、不建 job）。
-  5. **樣式**：B11 modal 殼（桌機置中／&lt;960 底部抽屜）、`.schip`／`st-dot`／tokens；BX-P 禁。
-  6. **完整 D9 未做**：商品頁 iframe 預覽不在本包；清單 D9 不勾滿。
-- **為什麼**：接 D8-open 後先防髒 CSV 出去；ROI 高於 D8b／事件 #2。
-- **誰拍板**：總指揮放行 D9-open，2026-07-14（Q1–Q5 全 A）。
-- **現況**：✅ **D9-open 已實作（2026-07-14）**。腳本 `scripts/verify-d9-export-preflight.mjs`。
+     （不標 csv_ready、不建 job）。官網網域來自 `SHOPIFY_STORE_DOMAIN`（status 暴露 host）。
+  5. **樣式**：B11 modal 殼（桌機置中／&lt;960 底部抽屜）、`.schip`／`st-dot`／tokens。
+  6. **清單 D9**：健檢＋CSV 表＋商品頁示意／iframe 已補；完整「主題完全一致的商店預覽」仍可不勾滿。
+- **為什麼**：接 D8-open 後先防髒 CSV 出去；ROI 高於 D8b／事件 #2；2026-07-19 補 iframe。
+- **誰拍板**：總指揮放行 D9-open，2026-07-14（Q1–Q5 全 A）；iframe 延伸 2026-07-19 老闆要求。
+- **現況**：✅ **D9-open（2026-07-14）** ＋ ✅ **示意／Shopify iframe（2026-07-19）**。
+  腳本 `scripts/verify-d9-export-preflight.mjs`、`scripts/verify-storefront-url.mjs`。
 
 ### 差異 28：D8-open Showmore 匯出可用化（非完整 D8／非 D8b 改寫）
 

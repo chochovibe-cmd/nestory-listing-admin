@@ -2570,6 +2570,148 @@ textarea {
 .export-pf-table tr.has-error td {
   color: var(--accent2);
 }
+
+/* D9: export storefront mock (customer product page — not real iframe) */
+.export-pf-storefront {
+  margin: 0 0 12px;
+}
+.export-pf-storefront-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.export-pf-storefront-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.export-pf-storefront-note {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.export-pf-storefront-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m, 10px);
+  background: var(--surface);
+  overflow: hidden;
+}
+.export-pf-storefront-media {
+  background: var(--surface2);
+}
+.export-pf-storefront-hero {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  background: var(--surface2);
+}
+.export-pf-storefront-hero-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.export-pf-storefront-thumbs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+.export-pf-storefront-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-s, 6px);
+  border: 1px solid var(--border-soft);
+  flex: 0 0 auto;
+}
+.export-pf-storefront-info {
+  padding: 12px 14px 16px;
+}
+.export-pf-storefront-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text);
+}
+.export-pf-storefront-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.export-pf-storefront-price {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.export-pf-storefront-compare {
+  font-size: 13px;
+  text-decoration: line-through;
+  font-variant-numeric: tabular-nums;
+}
+.export-pf-storefront-sku {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.export-pf-storefront-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  max-height: 220px;
+  overflow: auto;
+}
+.export-pf-storefront-body p {
+  margin: 0 0 0.6em;
+}
+.export-pf-storefront-body ul {
+  margin: 0 0 0.6em;
+  padding-left: 1.2em;
+}
+.export-pf-storefront-panes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.export-pf-storefront-live-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.export-pf-storefront-iframe-wrap {
+  position: relative;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-m, 10px);
+  overflow: hidden;
+  background: var(--surface2);
+  min-height: 360px;
+}
+.export-pf-storefront-iframe {
+  display: block;
+  width: 100%;
+  height: min(62vh, 520px);
+  min-height: 360px;
+  border: 0;
+  background: var(--surface);
+}
+.export-pf-storefront-iframe-busy {
+  position: absolute;
+  z-index: 1;
+  left: 12px;
+  top: 10px;
+  margin: 0;
+  font-size: 12px;
+  pointer-events: none;
+}
+
 .station3-fieldset {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-m, 8px);
@@ -2928,19 +3070,35 @@ textarea {
   max-width: 920px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 .dash-header {
   display: flex;
   margin-bottom: 0;
 }
 .dash-page-disclaimer {
-  margin: -6px 0 0;
+  margin: -4px 0 2px;
   font-size: 12px;
   line-height: 1.4;
 }
 .dash-page > .panel {
   margin: 0;
+}
+/* BX-P：額度 + 成本桌機並排，手機仍直向 */
+.dash-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+.dash-metrics-grid > .panel {
+  margin: 0;
+  min-width: 0;
+}
+@media (min-width: 720px) {
+  .dash-metrics-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
 }
 .dash-todo-panel .panel-header {
   gap: 10px;

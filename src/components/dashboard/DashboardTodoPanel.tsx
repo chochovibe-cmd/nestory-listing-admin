@@ -428,7 +428,7 @@ export function DashboardTodoPanel() {
           ) : null}
         </div>
         <p className="muted dash-page-disclaimer" role="note">
-          以下額度／成本為估算，非實際帳單
+          額度與 AI 成本為系統估算，非 Make／信用卡帳單；健康指標亦非 SEO 分數
         </p>
 
         <section className="panel dash-todo-panel" aria-labelledby="dash-todo-title">
@@ -548,6 +548,8 @@ export function DashboardTodoPanel() {
           </div>
         </section>
 
+        {/* E3+E4: BX-P 桌機並排，減少「估算」標語重複（頁頂 disclaimer 已說明） */}
+        <div className="dash-metrics-grid">
         {/* E3-open: Make 額度 — below E2; team-wide (Q2-A), not scope */}
         <section
           className="panel dash-quota-panel"
@@ -580,16 +582,10 @@ export function DashboardTodoPanel() {
                 ) : null}
                 <div className="dash-quota-card">
                   <div className="dash-quota-card-top">
-                    <span className="dash-quota-label">本月操作（估算）</span>
-                    <span
-                      className={
-                        quotaView.warn
-                          ? "schip schip--warn"
-                          : "schip schip--idle"
-                      }
-                    >
-                      {quotaView.warn ? "接近上限" : "估算"}
-                    </span>
+                    <span className="dash-quota-label">本月操作</span>
+                    {quotaView.warn ? (
+                      <span className="schip schip--warn">接近上限</span>
+                    ) : null}
                   </div>
                   <div
                     className="dash-quota-value"
@@ -641,7 +637,7 @@ export function DashboardTodoPanel() {
           </div>
         </section>
 
-        {/* E4-open: 月預算＋AI 成本 — below E3; team-wide intent (Q2-A), not scope */}
+        {/* E4-open: 月預算＋AI 成本 — team-wide intent (Q2-A), not scope */}
         <section
           className="panel dash-quota-panel dash-cost-panel"
           aria-labelledby="dash-cost-title"
@@ -678,16 +674,10 @@ export function DashboardTodoPanel() {
                 ) : null}
                 <div className="dash-quota-card">
                   <div className="dash-quota-card-top">
-                    <span className="dash-quota-label">本月合計（估算）</span>
-                    <span
-                      className={
-                        costView.warn
-                          ? "schip schip--warn"
-                          : "schip schip--idle"
-                      }
-                    >
-                      {costView.warn ? "接近預算" : "估算"}
-                    </span>
+                    <span className="dash-quota-label">本月合計</span>
+                    {costView.warn ? (
+                      <span className="schip schip--warn">接近預算</span>
+                    ) : null}
                   </div>
                   <div
                     className="dash-quota-value"
@@ -795,6 +785,7 @@ export function DashboardTodoPanel() {
             )}
           </div>
         </section>
+        </div>{/* /.dash-metrics-grid */}
 
         {/* E5-open: 健康指標 — below E4; team-wide (Q6-A) */}
         <section

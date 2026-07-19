@@ -5,8 +5,211 @@ import {
   exportPreflightHeading,
   exportPrimaryLabel,
   formatPriceCell,
-  type ExportPreflightReport
+  type ExportPreflightReport,
+  type PreflightItem
 } from "@/lib/csv/exportPreflight";
+import {
+  formatPlainTextAsHtml,
+  isLikelyHtml
+} from "@/lib/contentGenerator/htmlFormat";
+
+/**
+ * D9: customer product preview — mock layout + optional real Shopify Online Store iframe.
+ * Admin URLs are never iframe'd (X-Frame blocked). Blank iframe → new-tab fallback.
+ */
+function StorefrontPreview({
+  items,
+  index,
+  onIndexChange
+}: {
+  items: PreflightItem[];
+  index: number;
+  onIndexChange: (next: number) => void;
+}) {
+  const safeIndex = Math.min(Math.max(0, index), Math.max(0, items.length - 1));
+  const item = items[safeIndex];
+  const [pane, setPane] = useState<"mock" | "live">("mock");
+  const [iframeBusy, setIframeBusy] = useState(true);
+
+  useEffect(() => {
+    setPane("mock");
+    setIframeBusy(true);
+  }, [safeIndex, item?.draftId]);
+
+  if (!item) return null;
+
+  const liveUrl = item.storefrontUrl;
+  const canLive = Boolean(liveUrl);
+  const activePane = canLive && pane === "live" ? "live" : "mock";
+
+  const descRaw = item.descriptionText || "";
+  const descHtml = descRaw
+    ? isLikelyHtml(descRaw)
+      ? descRaw
+      : formatPlainTextAsHtml(descRaw)
+    : "";
+  const hero = item.imageUrls[0] ?? null;
+  const thumbs = item.imageUrls.slice(0, 5);
+
+  return (
+    <div className="export-pf-storefront">
+      <div className="export-pf-storefront-nav">
+        <button
+          className="btn-mini"
+          disabled={safeIndex <= 0}
+          onClick={() => onIndexChange(safeIndex - 1)}
+          type="button"
+        >
+          ← 上一件
+        </button>
+        <span className="muted export-pf-storefront-count" aria-live="polite">
+          {safeIndex + 1} / {items.length}
+        </span>
+        <button
+          className="btn-mini"
+          disabled={safeIndex >= items.length - 1}
+          onClick={() => onIndexChange(safeIndex + 1)}
+          type="button"
+        >
+          下一件 →
+        </button>
+      </div>
+
+      <div className="export-pf-storefront-panes" role="tablist" aria-label="預覽來源">
+        <button
+          aria-selected={activePane === "mock"}
+          className={`btn-mini${activePane === "mock" ? " sel" : ""}`}
+          onClick={() => setPane("mock")}
+          role="tab"
+          type="button"
+        >
+          示意預覽
+        </button>
+        <button
+          aria-selected={activePane === "live"}
+          className={`btn-mini${activePane === "live" ? " sel" : ""}`}
+          disabled={!canLive}
+          onClick={() => {
+            if (!canLive) return;
+            setIframeBusy(true);
+            setPane("live");
+          }}
+          role="tab"
+          title={
+            canLive
+              ? "嵌入 Shopify 官網商品頁（若商店禁止嵌入會空白）"
+              : "需有 shopify handle 與商店網域（發布後或已產生 handle）"
+          }
+          type="button"
+        >
+          Shopify 官網
+        </button>
+      </div>
+
+      {activePane === "live" && liveUrl ? (
+        <>
+          <p className="muted export-pf-storefront-note">
+            真實 Online Store 商品頁。若下方空白，代表商店禁止嵌入——請用新分頁開啟。
+            草稿／未上架商品可能 404。
+          </p>
+          <div className="export-pf-storefront-live-actions">
+            <a
+              className="btn-mini"
+              href={liveUrl}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              新分頁開啟官網
+            </a>
+            {item.shopifyAdminUrl ? (
+              <a
+                className="btn-mini"
+                href={item.shopifyAdminUrl}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                開 Shopify 後台
+              </a>
+            ) : null}
+          </div>
+          <div className="export-pf-storefront-iframe-wrap">
+            {iframeBusy ? (
+              <p className="muted export-pf-storefront-iframe-busy" role="status">
+                載入 Shopify 頁面中…
+              </p>
+            ) : null}
+            <iframe
+              className="export-pf-storefront-iframe"
+              key={liveUrl}
+              onLoad={() => setIframeBusy(false)}
+              referrerPolicy="no-referrer-when-downgrade"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+              src={liveUrl}
+              title={`Shopify 商品頁：${item.titleFull || item.shopifyHandle || "preview"}`}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="muted export-pf-storefront-note">
+            {canLive
+              ? "示意預覽（系統內版型）。可切到「Shopify 官網」看真實頁面。"
+              : "示意預覽。尚無官網連結（需 handle + 已設定 SHOPIFY_STORE_DOMAIN）。"}
+          </p>
+          <article className="export-pf-storefront-card">
+            <div className="export-pf-storefront-media">
+              {hero ? (
+                // eslint-disable-next-line @next/next/no-img-element -- remote Storage / CDN URLs
+                <img alt="" className="export-pf-storefront-hero" src={hero} />
+              ) : (
+                <div className="export-pf-storefront-hero-empty">尚無圖片</div>
+              )}
+              {thumbs.length > 1 ? (
+                <div className="export-pf-storefront-thumbs">
+                  {thumbs.map((url, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt=""
+                      className="export-pf-storefront-thumb"
+                      key={`${url}-${i}`}
+                      src={url}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="export-pf-storefront-info">
+              <h3 className="export-pf-storefront-title">
+                {item.titleFull || "（無標題）"}
+              </h3>
+              <div className="export-pf-storefront-price-row">
+                <span className="export-pf-storefront-price">
+                  {formatPriceCell(item.sellPriceDisplay)}
+                </span>
+                {item.compareAtDisplay != null ? (
+                  <span className="muted export-pf-storefront-compare">
+                    {formatPriceCell(item.compareAtDisplay)}
+                  </span>
+                ) : null}
+              </div>
+              {item.skuDisplay && item.skuDisplay !== "—" ? (
+                <p className="muted export-pf-storefront-sku">SKU {item.skuDisplay}</p>
+              ) : null}
+              {descHtml ? (
+                <div
+                  className="export-pf-storefront-body rc-html-preview"
+                  dangerouslySetInnerHTML={{ __html: descHtml }}
+                />
+              ) : (
+                <p className="muted">尚無商品介紹</p>
+              )}
+            </div>
+          </article>
+        </>
+      )}
+    </div>
+  );
+}
 
 /**
  * UX-O T68: fixed Matrixify CSV header order (Fable).
@@ -124,11 +327,14 @@ export function ExportPreflightModal({
   const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
-  const [viewMode, setViewMode] = useState<"list" | "table">("list");
+  /** D9: list / full CSV table / customer-page mock (not real Shopify iframe) */
+  const [viewMode, setViewMode] = useState<"list" | "table" | "storefront">("list");
+  const [storefrontIndex, setStorefrontIndex] = useState(0);
 
   useEffect(() => {
     if (!open) return;
     setViewMode("list");
+    setStorefrontIndex(0);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     // UX-E T32: export leave-queue is high-risk → focus 返回 first
@@ -216,6 +422,16 @@ export function ExportPreflightModal({
             >
               表格模式
             </button>
+            <button
+              aria-selected={viewMode === "storefront"}
+              className={`btn-mini${viewMode === "storefront" ? " sel" : ""}`}
+              onClick={() => setViewMode("storefront")}
+              role="tab"
+              type="button"
+              title="顧客商品頁示意（非 Shopify 即時 iframe）"
+            >
+              商品頁預覽
+            </button>
           </div>
 
           {viewMode === "list" && report.items.length > 0 ? (
@@ -296,6 +512,18 @@ export function ExportPreflightModal({
               </div>
             ) : (
               <p className="muted export-pf-table-empty">尚無可預覽的完整 CSV 列。</p>
+            )
+          ) : null}
+
+          {viewMode === "storefront" ? (
+            report.items.length > 0 ? (
+              <StorefrontPreview
+                index={storefrontIndex}
+                items={report.items}
+                onIndexChange={setStorefrontIndex}
+              />
+            ) : (
+              <p className="muted export-pf-table-empty">尚無商品可預覽。</p>
             )
           ) : null}
 

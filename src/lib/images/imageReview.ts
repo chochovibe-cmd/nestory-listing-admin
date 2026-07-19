@@ -320,6 +320,7 @@ export function reviewImageFieldLabel(
 export function pickReviewThumbUrl(
   images: Array<
     Pick<ProductImage, "image_type" | "original_file_url" | "processed_file_url"> & {
+      list_thumb_url?: string | null;
       sort_order?: number | null;
       created_at?: string | null;
     }
@@ -327,7 +328,8 @@ export function pickReviewThumbUrl(
 ): string | null {
   const pipeline = pipelineImagesForReview(images);
   for (const img of pipeline) {
-    const url = img.processed_file_url || img.original_file_url;
+    // A19: prefer 320px list thumb when present
+    const url = img.list_thumb_url || img.processed_file_url || img.original_file_url;
     if (url) return url;
   }
   return null;

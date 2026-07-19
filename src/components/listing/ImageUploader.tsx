@@ -9,6 +9,10 @@ import {
   type ClipboardEvent
 } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  buildDualSizeBlobs,
+  dualSizeExt
+} from "@/lib/images/clientImageResize";
 import { intentForSpecToggle } from "@/lib/images/processMarks";
 import { showToast } from "@/components/Toast";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
@@ -59,6 +63,8 @@ export type SeedImageRow = {
   image_type: string;
   original_file_url: string | null;
   processed_file_url: string | null;
+  list_thumb_url?: string | null;
+  vision_mid_url?: string | null;
   sort_order: number | null;
   process_intent?: ImageProcessIntent | null;
   is_spec_process?: boolean | null;
@@ -168,7 +174,12 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
     for (const row of seedImages) {
       const type = row.image_type === "detail" ? "detail" : "main";
       if (row.image_type !== "main" && row.image_type !== "detail") continue;
-      const url = (row.processed_file_url || row.original_file_url || "").trim();
+      const url = (
+        row.list_thumb_url ||
+        row.processed_file_url ||
+        row.original_file_url ||
+        ""
+      ).trim();
       if (!url) continue;
       const item: PreviewItem = {
         clientKey: row.id,
@@ -240,15 +251,63 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
     blobUrl: string;
   }) {
     const { type, file, clientKey, sortOrder, resolvedDraftId, blobUrl } = params;
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${userId}/${resolvedDraftId}/${type}/${crypto.randomUUID()}.${ext}`;
+    const baseId = crypto.randomUUID();
+    const origExt = file.name.split(".").pop() || "jpg";
+    const origPath = `${userId}/${resolvedDraftId}/${type}/${baseId}-orig.${origExt}`;
 
-    const { error: storageError } = await supabase.storage.from("product-images").upload(path, file, {
-      contentType: file.type,
-      upsert: false
-    });
+    // A19: resize mid/thumb in browser while original path is ready
+    const dual = await buildDualSizeBlobs(file);
+    const midExt = dualSizeExt(dual.mid, file);
+    const thumbExt = dualSizeExt(dual.thumb, file);
+    const midPath = dual.mid
+      ? `${userId}/${resolvedDraftId}/${type}/${baseId}-1280.${midExt}`
+      : null;
+    const thumbPath = dual.thumb
+      ? `${userId}/${resolvedDraftId}/${type}/${baseId}-320.${thumbExt}`
+      : null;
+
+    // Upload mid first (Vision can use it sooner), then thumb + original in parallel.
+    let midUrl: string | null = null;
+    let thumbUrl: string | null = null;
+
+    if (midPath && dual.mid) {
+      const { error: midErr } = await supabase.storage
+        .from("product-images")
+        .upload(midPath, dual.mid, {
+          contentType: dual.mid.type || "image/jpeg",
+          upsert: false
+        });
+      if (!midErr) {
+        midUrl = supabase.storage.from("product-images").getPublicUrl(midPath).data.publicUrl;
+      }
+    }
+
+    if (thumbPath && dual.thumb) {
+      const { error: thumbErr } = await supabase.storage
+        .from("product-images")
+        .upload(thumbPath, dual.thumb, {
+          contentType: dual.thumb.type || "image/jpeg",
+          upsert: false
+        });
+      if (!thumbErr) {
+        thumbUrl = supabase.storage.from("product-images").getPublicUrl(thumbPath).data
+          .publicUrl;
+      }
+    }
+
+    const { error: storageError } = await supabase.storage
+      .from("product-images")
+      .upload(origPath, file, {
+        contentType: file.type || "image/jpeg",
+        upsert: false
+      });
 
     if (storageError) {
+      // Best-effort cleanup of derivatives already uploaded
+      const toRemove = [midPath, thumbPath].filter(Boolean) as string[];
+      if (toRemove.length) {
+        await supabase.storage.from("product-images").remove(toRemove).catch(() => null);
+      }
       patchPreview(clientKey, type, {
         status: "failed",
         errorMessage: storageError.message,
@@ -261,23 +320,65 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
       return;
     }
 
-    const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+    const { data } = supabase.storage.from("product-images").getPublicUrl(origPath);
+    const originalUrl = data.publicUrl;
 
     // T22: if user reordered while uploading, write the live local sort_order.
     const liveSort = currentSortOrder(clientKey, type, sortOrder);
 
-    const { data: row, error: insertError } = await supabase
+    // Prefer writing dual-size columns; if migration 039 not applied, fall back without them.
+    const baseInsert = {
+      draft_id: resolvedDraftId,
+      image_type: type,
+      original_file_url: originalUrl,
+      processed_file_url: originalUrl,
+      sort_order: liveSort,
+      processing_status: "uploaded" as const
+    };
+
+    let row: Record<string, unknown> | null = null;
+    let insertError: { message: string } | null = null;
+
+    const withDual = {
+      ...baseInsert,
+      list_thumb_url: thumbUrl,
+      vision_mid_url: midUrl
+    };
+
+    const first = await supabase
       .from("product_images")
-      .insert({
-        draft_id: resolvedDraftId,
-        image_type: type,
-        original_file_url: data.publicUrl,
-        processed_file_url: data.publicUrl,
-        sort_order: liveSort,
-        processing_status: "uploaded"
-      })
-      .select("id, original_file_url, processed_file_url, sort_order, process_intent, is_spec_process")
+      .insert(withDual)
+      .select(
+        "id, original_file_url, processed_file_url, list_thumb_url, vision_mid_url, sort_order, process_intent, is_spec_process"
+      )
       .single();
+
+    if (first.error) {
+      const msg = first.error.message ?? "";
+      const missingCols =
+        /list_thumb_url|vision_mid_url|column/i.test(msg) ||
+        /schema cache/i.test(msg);
+      if (missingCols) {
+        const second = await supabase
+          .from("product_images")
+          .insert(baseInsert)
+          .select(
+            "id, original_file_url, processed_file_url, sort_order, process_intent, is_spec_process"
+          )
+          .single();
+        row = (second.data as Record<string, unknown> | null) ?? null;
+        insertError = second.error;
+        if (!second.error) {
+          // Keep derivative files even if DB can't store URLs yet — still serve via original.
+          midUrl = null;
+          thumbUrl = null;
+        }
+      } else {
+        insertError = first.error;
+      }
+    } else {
+      row = (first.data as Record<string, unknown> | null) ?? null;
+    }
 
     if (insertError || !row) {
       const msg = insertError?.message ?? "未知錯誤";
@@ -292,10 +393,16 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
       return;
     }
 
-    const publicUrl = (row.processed_file_url ?? row.original_file_url ?? data.publicUrl) as string;
+    const listUrl =
+      (typeof row.list_thumb_url === "string" && row.list_thumb_url) ||
+      thumbUrl ||
+      (row.processed_file_url as string | null) ||
+      (row.original_file_url as string | null) ||
+      originalUrl;
+
     patchPreview(clientKey, type, {
       id: row.id as string,
-      url: publicUrl,
+      url: listUrl as string,
       sort_order: (row.sort_order as number) ?? liveSort,
       is_spec_process: Boolean(row.is_spec_process),
       process_intent: (row.process_intent as ImageProcessIntent | null) ?? null,

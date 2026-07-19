@@ -6,6 +6,7 @@
  */
 
 import { truncateTitle } from "@/lib/drafts/approveSummary";
+import { buildShopifyStorefrontProductUrl } from "@/lib/shopify/storefrontUrl";
 import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
 import {
   applyShowmoreCompareAt,
@@ -69,11 +70,15 @@ export type PreflightDraftInput = {
   description_html?: string | null;
   description_plain?: string | null;
   variant_dimensions?: ProductDraft["variant_dimensions"];
+  /** D9 iframe: Online Store handle when already generated / published */
+  shopify_handle?: string | null;
+  shopify_product_id?: string | null;
+  shopify_admin_url?: string | null;
   product_images?: Array<
     Pick<
       ProductImage,
       "image_type" | "processed_file_url" | "original_file_url" | "sort_order"
-    >
+    > & { list_thumb_url?: string | null; vision_mid_url?: string | null }
   >;
   product_variants?: PreflightVariantInput[];
 };
@@ -94,6 +99,16 @@ export interface PreflightItem {
   issues: PreflightIssue[];
   hasError: boolean;
   hasWarn: boolean;
+  /**
+   * D9: storefront mock fields + optional live Shopify Online Store URL.
+   * Plain or HTML description + image URLs for customer-page preview.
+   */
+  descriptionText: string;
+  imageUrls: string[];
+  /** https://{shop}/products/{handle} when domain+handle known; else null */
+  storefrontUrl: string | null;
+  shopifyAdminUrl: string | null;
+  shopifyHandle: string | null;
 }
 
 /** Table-mode column keys for dual preview (6–8). */
@@ -133,6 +148,11 @@ export interface RunExportPreflightOptions {
   kind: ExportKind;
   /** Client/settings value; server default 5 when showmore. */
   showmoreMarkupPercent?: number;
+  /**
+   * D9: Shopify Online Store host (from /api/status shopifyStoreDomain).
+   * Used only to build public /products/{handle} preview URLs.
+   */
+  shopifyStoreDomain?: string | null;
 }
 
 function draftTitle(draft: PreflightDraftInput): string {
@@ -154,10 +174,39 @@ export function pickExportableImages(
 }
 
 function imageUrl(
-  image: Pick<ProductImage, "processed_file_url" | "original_file_url"> | undefined
+  image:
+    | (Pick<ProductImage, "processed_file_url" | "original_file_url"> & {
+        list_thumb_url?: string | null;
+      })
+    | undefined
 ): string {
   if (!image) return "";
-  return image.processed_file_url || image.original_file_url || "";
+  // A19: prefer list thumb for lightweight preview when present
+  return (
+    (typeof image.list_thumb_url === "string" && image.list_thumb_url) ||
+    image.processed_file_url ||
+    image.original_file_url ||
+    ""
+  );
+}
+
+/** Prefer full-size (or mid) for storefront hero; fall back to list thumb. */
+function storefrontImageUrl(
+  image:
+    | (Pick<ProductImage, "processed_file_url" | "original_file_url"> & {
+        list_thumb_url?: string | null;
+        vision_mid_url?: string | null;
+      })
+    | undefined
+): string {
+  if (!image) return "";
+  return (
+    (typeof image.vision_mid_url === "string" && image.vision_mid_url) ||
+    image.processed_file_url ||
+    image.original_file_url ||
+    (typeof image.list_thumb_url === "string" && image.list_thumb_url) ||
+    ""
+  );
 }
 
 export function hasProductImageUrl(
@@ -196,7 +245,8 @@ function filledVariants(draft: PreflightDraftInput): PreflightVariantInput[] {
 function checkItem(
   draft: PreflightDraftInput,
   kind: ExportKind,
-  markupPercent: number
+  markupPercent: number,
+  shopifyStoreDomain?: string | null
 ): PreflightItem {
   const titleFull = draftTitle(draft) || "未命名草稿";
   const titleShort = truncateTitle(titleFull);
@@ -347,6 +397,31 @@ function checkItem(
   const skuDisplay =
     (variants[0]?.sku ?? draft.sku ?? "").trim() || "—";
 
+  const exportImages = pickExportableImages(draft.product_images);
+  const imageUrls = exportImages
+    .map((img) => storefrontImageUrl(img))
+    .filter(Boolean)
+    .slice(0, 6);
+  const descriptionText = (
+    draft.description_html ??
+    draft.description_plain ??
+    ""
+  ).trim();
+
+  const handle =
+    typeof draft.shopify_handle === "string" && draft.shopify_handle.trim()
+      ? draft.shopify_handle.trim()
+      : null;
+  const storefrontUrl = buildShopifyStorefrontProductUrl({
+    storeDomain: shopifyStoreDomain,
+    handle
+  });
+  const shopifyAdminUrl =
+    typeof draft.shopify_admin_url === "string" &&
+    draft.shopify_admin_url.trim().startsWith("http")
+      ? draft.shopify_admin_url.trim()
+      : null;
+
   return {
     draftId: draft.id,
     titleFull,
@@ -360,7 +435,12 @@ function checkItem(
     imageCount,
     issues,
     hasError,
-    hasWarn
+    hasWarn,
+    descriptionText,
+    imageUrls,
+    storefrontUrl,
+    shopifyAdminUrl,
+    shopifyHandle: handle
   };
 }
 
@@ -389,7 +469,12 @@ export function runExportPreflight(
   }
 
   const items = drafts.map((draft) =>
-    checkItem(draft, kind, markupPercent ?? DEFAULT_SHOWMORE_MARKUP_PERCENT)
+    checkItem(
+      draft,
+      kind,
+      markupPercent ?? DEFAULT_SHOWMORE_MARKUP_PERCENT,
+      options.shopifyStoreDomain
+    )
   );
 
   if (kind === "showmore" && drafts.length > 0) {

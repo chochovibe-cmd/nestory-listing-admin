@@ -16,7 +16,13 @@ import type { ImageType } from "@/types/domain";
 // P1-3 / 回饋 52: Vision MUST NOT write product_drafts.image_status (shared with D3/D5
 // image pipeline). Status lives under image_flags.vision_status only.
 
-type ImageRow = { image_type: ImageType; original_file_url: string | null; sort_order: number };
+type ImageRow = {
+  image_type: ImageType;
+  original_file_url: string | null;
+  /** A19: prefer ~1280 mid for Vision when present */
+  vision_mid_url?: string | null;
+  sort_order: number;
+};
 
 type VisionStatus = "processing" | "done" | "failed" | "skipped";
 
@@ -76,21 +82,45 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: draftError?.message ?? "Draft not found" }, { status: 404 });
   }
 
+  // A19: prefer vision_mid_url (~1280) over original for faster Vision; fall back if 039 not applied.
   const { data: imageRows, error: imagesError } = await authSupabase
     .from("product_images")
-    .select("image_type,original_file_url,sort_order")
+    .select("image_type,original_file_url,vision_mid_url,sort_order")
     .eq("draft_id", draftId)
     .in("image_type", ["main", "detail"])
     .order("sort_order", { ascending: true });
 
+  // Column may be missing before migration 039 — retry without it.
+  let rows: ImageRow[] = [];
   if (imagesError) {
-    return Response.json({ error: imagesError.message }, { status: 500 });
+    const missingMid =
+      /vision_mid_url|column/i.test(imagesError.message) ||
+      /schema cache/i.test(imagesError.message);
+    if (!missingMid) {
+      return Response.json({ error: imagesError.message }, { status: 500 });
+    }
+    const fallback = await authSupabase
+      .from("product_images")
+      .select("image_type,original_file_url,sort_order")
+      .eq("draft_id", draftId)
+      .in("image_type", ["main", "detail"])
+      .order("sort_order", { ascending: true });
+    if (fallback.error) {
+      return Response.json({ error: fallback.error.message }, { status: 500 });
+    }
+    rows = (fallback.data ?? []) as ImageRow[];
+  } else {
+    rows = (imageRows ?? []) as ImageRow[];
   }
 
-  const rows = (imageRows ?? []) as ImageRow[];
   const describeUrls = rows
-    .filter((row) => (row.image_type === "main" || row.image_type === "detail") && row.original_file_url)
-    .map((row) => row.original_file_url as string);
+    .map((row) => {
+      if (row.image_type !== "main" && row.image_type !== "detail") return null;
+      const mid = typeof row.vision_mid_url === "string" ? row.vision_mid_url.trim() : "";
+      const orig = typeof row.original_file_url === "string" ? row.original_file_url.trim() : "";
+      return mid || orig || null;
+    })
+    .filter((url): url is string => Boolean(url));
 
   const serviceSupabase = createServiceSupabaseClient();
 

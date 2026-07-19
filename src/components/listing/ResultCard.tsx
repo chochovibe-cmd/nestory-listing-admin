@@ -96,6 +96,7 @@ import {
 } from "@/lib/csv/exportPreflight";
 import { buildMatrixifyRows, type MatrixifyDraft } from "@/lib/csv/matrixify";
 import { buildShowmoreRows, type ShowmoreDraft } from "@/lib/csv/showmore";
+import { resolveShopifyStoreDomain } from "@/lib/shopify/clientStoreDomain";
 import {
   formatStation3ResultMessage,
   shouldLeaveQueue,
@@ -300,7 +301,14 @@ function mainThumbUrl(images: ProductImage[]): string | null {
     .sort((a, b) => a.sort_order - b.sort_order);
   const first = mains[0] ?? images.find((image) => image.image_type !== "detail") ?? images[0];
   if (!first) return null;
-  return first.processed_file_url ?? first.original_file_url ?? first.generated_file_url ?? null;
+  // A19: list prefers 320px thumb when present
+  return (
+    first.list_thumb_url ??
+    first.processed_file_url ??
+    first.original_file_url ??
+    first.generated_file_url ??
+    null
+  );
 }
 
 export function ResultCard({
@@ -313,9 +321,11 @@ export function ResultCard({
   leaving = false,
   /** UX-Q T70: force expanded; skip collapse */
   sequentialMode = false,
-  /** UX-Q T70: called only after approve API succeeds */
+  /** BX1 延伸：站② 逐件標圖（copy＝審文案／image＝標圖） */
+  sequentialStation = "copy",
+  /** UX-Q T70: called only after approve / 標圖分流 API succeeds */
   onApproveSuccess,
-  /** UX-Q T70: parent increments → same as clicking ✓ 核准 */
+  /** UX-Q T70: parent increments → 站① 核准 ／ 站② 標圖通過 */
   approveSignal,
   /** UX-Q T70: parent sets tab (1–5 shortcuts); null = no-op */
   externalTab = null,
@@ -330,6 +340,7 @@ export function ResultCard({
   /** UX-H T49: archive leave fade (display only) */
   leaving?: boolean;
   sequentialMode?: boolean;
+  sequentialStation?: "copy" | "image";
   onApproveSuccess?: () => void;
   approveSignal?: number;
   externalTab?: ResultCardTabId | null;
@@ -337,7 +348,9 @@ export function ResultCard({
   const router = useRouter();
   const supabase = createClient();
   const [expanded, setExpanded] = useState(defaultExpanded || sequentialMode);
-  const [activeTab, setActiveTab] = useState<ResultCardTabId>("copy");
+  const [activeTab, setActiveTab] = useState<ResultCardTabId>(
+    sequentialMode && sequentialStation === "image" ? "images" : "copy"
+  );
   const lastApproveSignalRef = useRef<number | undefined>(approveSignal);
   const [title, setTitle] = useState(draft.title_zh ?? "");
   // fix(B10): tolerate legacy HTML rows — display/edit as plain text contract.
@@ -1162,6 +1175,8 @@ export function ResultCard({
             router.refresh();
           }
         });
+        // BX1 延伸：逐件標圖成功才前進
+        onApproveSuccess?.();
         router.refresh();
         return;
       }
@@ -1191,6 +1206,8 @@ export function ResultCard({
           router.refresh();
         }
       });
+      // BX1 延伸：逐件標圖成功才前進
+      onApproveSuccess?.();
       router.refresh();
     } catch {
       setMarkMessage("分流連線失敗");
@@ -1460,7 +1477,7 @@ export function ResultCard({
         csvSucceeded: true
       });
       setExportMarkLeave(markLeave);
-      openNextCardExport(csvKinds, markLeave);
+      void openNextCardExport(csvKinds, markLeave);
     } catch {
       setMessage("");
       showToast("發布／匯出連線失敗", "error");
@@ -1472,10 +1489,11 @@ export function ResultCard({
     }
   }
 
-  function openNextCardExport(kinds: ExportKind[], markLeave: boolean) {
+  async function openNextCardExport(kinds: ExportKind[], markLeave: boolean) {
     if (!kinds.length) return;
     const [kind, ...rest] = kinds;
     const markup = getStoredPricingSettings().showmoreMarkupPercent;
+    const shopifyStoreDomain = await resolveShopifyStoreDomain();
     const titleForExport = title || draft.title_zh;
     const sellForExport = sellPrice ? Number(sellPrice) : draft.twd_price;
     const compareForExport = compareAtPrice
@@ -1536,6 +1554,9 @@ export function ResultCard({
           description_html: descForExport,
           description_plain: draft.description_plain,
           variant_dimensions: draft.variant_dimensions,
+          shopify_handle: draft.shopify_handle,
+          shopify_product_id: draft.shopify_product_id,
+          shopify_admin_url: draft.shopify_admin_url,
           product_images: images,
           product_variants: product_variants.map((v) => ({
             option1_value: v.option1_value ?? null,
@@ -1547,7 +1568,7 @@ export function ResultCard({
           }))
         }
       ],
-      { kind, showmoreMarkupPercent: markup }
+      { kind, showmoreMarkupPercent: markup, shopifyStoreDomain }
     );
 
     // UX-O T68: full CSV preview rows (same builders as download; blanks intentional).
@@ -1736,7 +1757,7 @@ export function ResultCard({
       if (exportQueue.length) {
         setExportPreflightReport(null);
         setExportFullTableRows(null);
-        openNextCardExport(exportQueue, exportMarkLeave);
+        void openNextCardExport(exportQueue, exportMarkLeave);
         return;
       }
 
@@ -1788,6 +1809,13 @@ export function ResultCard({
     if (sequentialMode) setExpanded(true);
   }, [sequentialMode, draft.id]);
 
+  // 站② 逐件：預設打開圖片分頁
+  useEffect(() => {
+    if (sequentialMode && sequentialStation === "image") {
+      setActiveTab("images");
+    }
+  }, [sequentialMode, sequentialStation, draft.id]);
+
   // UX-Q T70: keyboard 1–5 → externalTab
   useEffect(() => {
     if (!externalTab) return;
@@ -1796,7 +1824,7 @@ export function ResultCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when parent pushes a tab
   }, [externalTab]);
 
-  // UX-Q T70: keyboard A → same path as ✓ 核准 button (respect busy / block / canQuickApprove)
+  // UX-Q T70 / BX1：keyboard A → 站① 核准 ／ 站② 標圖通過
   useEffect(() => {
     if (approveSignal == null) return;
     if (lastApproveSignalRef.current === undefined) {
@@ -1805,13 +1833,19 @@ export function ResultCard({
     }
     if (approveSignal === lastApproveSignalRef.current) return;
     lastApproveSignalRef.current = approveSignal;
-    if (
-      quickBusy ||
-      regenerating ||
-      regeneratingField != null ||
-      !canQuickApprove ||
-      hasBlockingWarnings(warningSummary)
-    ) {
+    if (quickBusy || regenerating || regeneratingField != null) return;
+
+    // 站② 逐件：A＝標圖分流（兩次確認）
+    if (sequentialMode && sequentialStation === "image" && isImageStation) {
+      if (hasBlockingWarnings(warningSummary)) {
+        setMarkMessage(`⛔ 必修：${warningSummary.block.map((w) => w.text).join("；")}`);
+        return;
+      }
+      void stationReview();
+      return;
+    }
+
+    if (!canQuickApprove || hasBlockingWarnings(warningSummary)) {
       if (hasBlockingWarnings(warningSummary)) {
         setMessage(`⛔ 必修：${warningSummary.block.map((w) => w.text).join("；")}`);
       }

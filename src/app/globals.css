@@ -2968,7 +2968,8 @@ textarea {
     width: 100%;
     justify-content: flex-end;
   }
-  .lib-actions .mini-btn {
+  .lib-actions .mini-btn,
+  .lib-actions .nb-btn {
     min-height: 44px;
   }
   .library-search {
@@ -4133,6 +4134,27 @@ textarea {
 .pop-menu label { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text); padding: 5px 2px; cursor: pointer; font-weight: 400; letter-spacing: 0; text-transform: none; }
 .pop-menu label input { width: auto; min-height: auto; }
 .v-pop-full { width: 100%; margin-top: 8px; min-height: 40px; }
+/* UX-BTN6: library + variant editor unified Button compact */
+.lib-actions .nb-btn,
+.variant-box .nb-btn,
+.vh-btns .nb-btn {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.variant-box .nb-btn.v-pop-full {
+  width: 100%;
+  justify-content: center;
+  min-height: 40px;
+}
+@media (max-width: 960px) {
+  .lib-actions .nb-btn,
+  .variant-box .nb-btn,
+  .vh-btns .nb-btn {
+    min-height: 44px;
+  }
+}
 .v-char-search { width: 100%; margin-bottom: 6px; min-height: 36px; font-size: 12px; }
 .v-char-list { max-height: 180px; overflow: auto; }
 .v-char-ip { color: var(--text-muted); font-size: 10px; }
@@ -4203,6 +4225,7 @@ textarea {
   80% { transform: translateX(2px); }
 }
 .variant-box .btn-mini.v-arm-confirm,
+.variant-box .nb-btn.v-arm-confirm,
 .variant-box .v-dim-x.v-arm-confirm {
   color: var(--danger);
   border-color: var(--danger);
@@ -4221,6 +4244,7 @@ textarea {
 }
 @media (prefers-reduced-motion: reduce) {
   .variant-box .btn-mini.v-arm-confirm,
+  .variant-box .nb-btn.v-arm-confirm,
   .variant-box .v-dim-x.v-arm-confirm {
     animation: none;
   }

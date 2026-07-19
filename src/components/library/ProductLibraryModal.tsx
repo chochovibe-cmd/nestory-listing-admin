@@ -17,6 +17,7 @@ import {
 } from "@/lib/library/productLibrary";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 import { showToast } from "@/components/Toast";
+import { Button } from "@/components/ui/Button";
 
 /**
  * C4: product library as top-bar modal (not a full page).
@@ -294,12 +295,12 @@ export function ProductLibraryModal({
                       </div>
                     </div>
                     <div className="lib-actions">
-                      <button className="mini-btn" onClick={() => goImages(row.id)} type="button">
+                      <Button size="sm" onClick={() => goImages(row.id)} type="button">
                         編輯圖片
-                      </button>
-                      <button className="mini-btn" onClick={() => goCopy(row.id)} type="button">
+                      </Button>
+                      <Button size="sm" onClick={() => goCopy(row.id)} type="button">
                         編輯文案
-                      </button>
+                      </Button>
                     </div>
                   </li>
                 );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/Button";
 import type { CostCurrency, PriceMode, PricingSettings } from "@/lib/pricing";
 import {
   MAX_VARIANT_DIMENSIONS,
@@ -352,8 +353,8 @@ export function VariantEditor({
       <div className="variant-head">
         <span>款式規格</span>
         <span className="vh-btns">
-          <button
-            className="btn-mini"
+          <Button
+            size="sm"
             disabled={!canApplyProductCost}
             onClick={applyCostToAllVariants}
             title={
@@ -366,9 +367,9 @@ export function VariantEditor({
             type="button"
           >
             套用成本到全部款式
-          </button>
-          <button
-            className="btn-mini"
+          </Button>
+          <Button
+            size="sm"
             onClick={() => {
               setCharOpen((o) => !o);
               setDimOpen(false);
@@ -377,9 +378,9 @@ export function VariantEditor({
             type="button"
           >
             依角色建立 ▾
-          </button>
-          <button
-            className="btn-mini"
+          </Button>
+          <Button
+            size="sm"
             onClick={() => {
               setDimOpen((o) => !o);
               setCharOpen(false);
@@ -388,9 +389,11 @@ export function VariantEditor({
             type="button"
           >
             ＋新增維度（最多{MAX_VARIANT_DIMENSIONS}）
-          </button>
-          <button
-            className={`btn-mini${expandArmed ? " v-arm-confirm" : ""}`}
+          </Button>
+          <Button
+            size="sm"
+            variant={expandArmed ? "danger" : "secondary"}
+            className={expandArmed ? "v-arm-confirm" : undefined}
             disabled={!canExpandFromDimensions(dimensions)}
             onClick={expandFromAxisValues}
             title={
@@ -405,7 +408,7 @@ export function VariantEditor({
             {expandArmed
               ? `確定展開？${expandArmCount}筆會丟失`
               : "依軸值展開列"}
-          </button>
+          </Button>
           {charOpen ? (
             <div className="pop-menu open v-pop-char">
               <div className="pm-title">勾選這款有出的角色（可多選）</div>
@@ -443,9 +446,14 @@ export function VariantEditor({
                   ))}
                 </div>
               )}
-              <button className="btn-mini v-pop-full" onClick={applyCharacters} type="button">
+              <Button
+                size="sm"
+                className="v-pop-full"
+                onClick={applyCharacters}
+                type="button"
+              >
                 建立所選角色列
-              </button>
+              </Button>
             </div>
           ) : null}
           {dimOpen ? (
@@ -480,13 +488,14 @@ export function VariantEditor({
                   value={customDim}
                 />
               </label>
-              <button
-                className="btn-mini v-pop-full"
+              <Button
+                size="sm"
+                className="v-pop-full"
                 onClick={() => addDimension(customDim)}
                 type="button"
               >
                 加入
-              </button>
+              </Button>
             </div>
           ) : null}
         </span>
@@ -555,13 +564,9 @@ export function VariantEditor({
                     placeholder="加軸值…"
                     value={axisValueDraft[i] ?? ""}
                   />
-                  <button
-                    className="btn-mini"
-                    onClick={() => addAxisValue(i)}
-                    type="button"
-                  >
+                  <Button size="sm" onClick={() => addAxisValue(i)} type="button">
                     加入
-                  </button>
+                  </Button>
                 </span>
               </div>
             </div>
@@ -645,8 +650,9 @@ export function VariantEditor({
                           ))}
                         </div>
                       )}
-                      <button
-                        className="btn-mini v-pop-full"
+                      <Button
+                        size="sm"
+                        className="v-pop-full"
                         onClick={() => {
                           updateRow(index, { imageId: null });
                           setPickIndex(null);
@@ -654,7 +660,7 @@ export function VariantEditor({
                         type="button"
                       >
                         移除目前圖片
-                      </button>
+                      </Button>
                     </div>
                   ) : null}
                 </span>

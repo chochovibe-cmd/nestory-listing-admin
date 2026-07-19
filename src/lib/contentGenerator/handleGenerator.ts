@@ -7,9 +7,10 @@
 import { DisplayLabelContext } from './displayLabels';
 import type { IpCatalogEntry, IpCharacter } from './sourceTypes';
 
-// Canonical product-type label -> English slug word. Same 8-key space as
-// scenarioKeywords.ts / titleGenerator.ts's PRODUCT_TYPE_ALIASES (both are
-// keyed off normalizeProductTypeForDisplay()'s output) -- no new taxonomy.
+// Canonical product-type label -> English slug word. Keyed off
+// normalizeProductTypeForDisplay()'s output (same space as scenarioKeywords /
+// titleGenerator PRODUCT_TYPE_ALIASES). P6: +滑鼠／鍵盤／手把控制器／保溫杯瓶／大型娃娃.
+// Remaining catalog types without slugs → empty type segment (stable hash still OK).
 const PRODUCT_TYPE_SLUGS: Record<string, string> = {
   絨毛娃娃: 'plush',
   吊飾掛件: 'keychain',
@@ -19,6 +20,12 @@ const PRODUCT_TYPE_SLUGS: Record<string, string> = {
   壓克力立牌: 'acrylic-stand',
   手機支架: 'phone-stand',
   公仔模型: 'figure',
+  // P6｜P3 五類
+  滑鼠: 'mouse',
+  鍵盤: 'keyboard',
+  手把控制器: 'gamepad',
+  保溫杯瓶: 'tumbler',
+  大型娃娃: 'jumbo-plush',
 };
 
 function normalize(value: string | null | undefined): string {

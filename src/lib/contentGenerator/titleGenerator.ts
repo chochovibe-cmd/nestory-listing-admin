@@ -48,7 +48,10 @@ const NOISE_TERMS = [
   '最佳選擇',
 ];
 
+// Order matters: first match wins. Longer / more specific patterns before broad ones.
+// P6: 大型娃娃 before bare 娃娃; 滑鼠(?!墊) so 滑鼠墊 is not eaten; 鍵盤(?!帽) same for 鍵帽.
 const PRODUCT_TYPE_ALIASES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/大型娃娃|巨型娃娃|超大娃娃|大型玩偶|大娃娃/, '大型娃娃'],
   [/棉花娃娃|棉娃|plush|ぬいぐるみ|絨毛娃娃|毛絨娃娃|絨毛公仔|毛絨公仔|絨毛玩偶|毛絨玩偶|小娃娃|小玩偶|布偶|玩偶|娃娃/, '絨毛娃娃'],
   [/包包掛件|包包吊飾|包包掛飾|手機掛飾|娃娃吊飾|掛件|吊飾|鑰匙圈|鑰匙扣|徽章|別針|keychain|charm|badge|pin/i, '吊飾掛件'],
   [/盲盒|盲袋/, '盲盒'],
@@ -57,6 +60,11 @@ const PRODUCT_TYPE_ALIASES: ReadonlyArray<readonly [RegExp, string]> = [
   [/亞克力立牌|壓克力立牌/, '壓克力立牌'],
   [/手機支架/, '手機支架'],
   [/公仔模型|公仔|手辦|模型/, '公仔模型'],
+  // P6｜P3 五類（標題去重）；滑鼠／鍵盤負向預查對齊 nestoryTagsV2 Q10
+  [/電競滑鼠|無線滑鼠|有線滑鼠|滑鼠(?!墊)|鼠标(?!垫)|mouse(?!\s*pad)/i, '滑鼠'],
+  [/機械鍵盤|無線鍵盤|電競鍵盤|鍵盤(?!帽)|键盘(?!帽)|keyboard/i, '鍵盤'],
+  [/手把控制器|遊戲手把|游戏手柄|手把|手柄|搖桿|摇杆|gamepad|controller|joystick/i, '手把控制器'],
+  [/保溫杯瓶|保溫杯|保温杯|隨行杯|随行杯|水壺|水壶|水瓶|tumbler/i, '保溫杯瓶'],
 ];
 
 function normalizeText(value: string | null | undefined): string {

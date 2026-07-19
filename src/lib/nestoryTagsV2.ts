@@ -897,13 +897,21 @@ export function buildNestoryTagsV2Result(
     addTag(tags, '角色_', '隨機款');
   }
 
+  // P6 B：目錄外原文 → 黃字建議＋ready（不進 missing）；真空仍 missing/blocked。
+  // 正式 類型_ tag 只從固定目錄／文字推斷輸出；目錄外不產 tag、不用自由字當 tag 值。
+  const offCatalogTypeLabels: string[] = [];
+
   for (const rawType of draft.product_types ?? []) {
     const canonicalType = canonicalizeProductType(rawType);
 
     if (canonicalType) {
       addUnique(productTypes, canonicalType, 3);
     } else if (compact(rawType)) {
-      warnings.push('商品類型「' + rawType + '」不在 Tags V2 固定類型中，未輸出 類型_ tag。');
+      const label = stripTagPrefix(normalizeText(rawType), '類型_');
+      if (label && !offCatalogTypeLabels.includes(label)) {
+        offCatalogTypeLabels.push(label);
+        warnings.push('待收編類型：' + label + '（未輸出類型 tag，不影響上架）');
+      }
     }
   }
 
@@ -916,7 +924,10 @@ export function buildNestoryTagsV2Result(
   }
 
   if (productTypes.length === 0) {
-    missing.push('缺少 類型_ tag，請選擇商品類型。');
+    // Q1-B：僅「有目錄外原文」降級為 warning；真空（無偵測、無推斷）仍 blocked。
+    if (offCatalogTypeLabels.length === 0) {
+      missing.push('缺少 類型_ tag，請選擇商品類型。');
+    }
   }
 
   for (const rawUseCase of draft.use_cases ?? []) {

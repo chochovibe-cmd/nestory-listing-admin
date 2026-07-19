@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 
 type StatusPayload = {
   supabase: boolean;
@@ -50,9 +51,9 @@ export function DeploymentStatus() {
           <strong>Shopify</strong>
           {!status ? "未檢查" : status.shopify ? (status.shopifyMock ? "已設定（mock-safe）" : "已設定") : "未設定"}
         </div>
-        <button className="btn-mini" disabled={checking} onClick={checkStatus} type="button">
+        <Button size="sm" disabled={checking} onClick={checkStatus} type="button">
           {checking ? "檢查中..." : "檢查連線"}
-        </button>
+        </Button>
       </div>
     </div>
   );

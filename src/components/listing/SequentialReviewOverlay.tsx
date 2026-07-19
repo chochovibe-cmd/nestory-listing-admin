@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { showToast } from "@/components/Toast";
 import {
@@ -222,14 +223,15 @@ export function SequentialReviewOverlay({
               {titleShort}
             </span>
           </div>
-          <button
-            className="btn-mini seq-review-end"
+          <Button
+            size="sm"
+            className="seq-review-end"
             onClick={onClose}
             type="button"
             title={isImageMode ? "結束逐件標圖（Esc）" : "結束逐件審核（Esc）"}
           >
             結束逐件
-          </button>
+          </Button>
         </div>
 
         {/* UX-W T89: progress bar under header */}

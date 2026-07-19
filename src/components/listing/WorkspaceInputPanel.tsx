@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -2015,22 +2016,22 @@ export function WorkspaceInputPanel({
                 ）。要繼續編輯還是丟掉？
               </span>
               <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                <button
-                  className="btn-mini"
+                <Button
+                  size="sm"
                   disabled={discardBusy}
                   onClick={() => void continueRestore()}
                   type="button"
                 >
                   繼續編輯
-                </button>
-                <button
-                  className="btn-mini"
+                </Button>
+                <Button
+                  size="sm"
                   disabled={discardBusy}
                   onClick={() => void discardRestore()}
                   type="button"
                 >
                   {discardBusy ? "處理中…" : "丟棄"}
-                </button>
+                </Button>
               </span>
             </div>
           ) : null}
@@ -2126,14 +2127,14 @@ export function WorkspaceInputPanel({
                 type="url"
                 value={taobaoUrl}
               />
-              <button
-                className="btn-mini"
+              <Button
+                size="sm"
                 disabled={b3Busy}
                 onClick={() => void handleFetchClick()}
                 type="button"
               >
                 {sourceFetching ? "抓取中…" : "自動抓取"}
-              </button>
+              </Button>
             </div>
             {b3Status ? <div className={`b3-status ${b3Status.kind}`}>{b3Status.text}</div> : null}
             {dedupeHits.length > 0 && !dedupeDismissed ? (
@@ -2151,9 +2152,9 @@ export function WorkspaceInputPanel({
                     ))}
                   </div>
                   <div className="dedupe-actions">
-                    <button className="btn-mini" onClick={() => setDedupeDismissed(true)} type="button">
+                    <Button size="sm" onClick={() => setDedupeDismissed(true)} type="button">
                       知道了，繼續
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>

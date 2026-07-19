@@ -6,6 +6,8 @@
 export type ImageProviderTask =
   | "de_text"
   | "regenerate"
+  /** SYN-1: simplified → traditional on-image text via images/edits */
+  | "to_trad"
   /** @deprecated prefer de_text / regenerate; kept for older stubs */
   | "generate"
   | "translate_text"
@@ -42,6 +44,8 @@ export interface ImageProvider {
 }
 
 /** Tasks that D4 ai-process actually runs. */
-export function isD4ImageTask(task: string): task is "de_text" | "regenerate" {
-  return task === "de_text" || task === "regenerate";
+export function isD4ImageTask(
+  task: string
+): task is "de_text" | "regenerate" | "to_trad" {
+  return task === "de_text" || task === "regenerate" || task === "to_trad";
 }

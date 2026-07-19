@@ -10,7 +10,10 @@ const scripts = [
   // CAP-1 / CAP-2 / CAP-2.5
   "scripts/verify-cap1.mjs",
   "scripts/verify-cap2.mjs",
-  "scripts/verify-cap25.mjs"
+  "scripts/verify-cap25.mjs",
+  // SYN-1 detail compose + to_trad + P4 regression
+  "scripts/verify-syn1.mjs",
+  "scripts/verify-p4-source-and-seller.mjs"
 ];
 
 for (const script of scripts) {

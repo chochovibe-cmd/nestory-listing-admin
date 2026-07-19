@@ -57,6 +57,19 @@ export function buildDeTextPrompt(extra?: string | null): string {
 }
 
 /**
+ * SYN-1: convert on-image Simplified Chinese → Traditional (Taiwan), leave rest unchanged.
+ */
+export function buildToTradPrompt(extra?: string | null): string {
+  const base =
+    "Convert ALL Simplified Chinese characters on this product image to Traditional Chinese " +
+    "(Taiwan 繁體中文). Keep every other visual element unchanged: product shape, colors, " +
+    "layout, logos, photos, and composition. Do not remove text — only convert 简体→繁體. " +
+    "Do not add new badges, watermarks, or decorative text. Photorealistic product photo.";
+  const extraTrim = extra?.trim();
+  return extraTrim ? `${base} Additional note: ${extraTrim.slice(0, 200)}` : base;
+}
+
+/**
  * Q5-A: regenerate uses title + image_description; empty description → still try with warning.
  */
 export function buildRegeneratePrompt(input: {
@@ -245,19 +258,22 @@ export class OpenAiImageProvider implements ImageProvider {
     const quality = getOpenAiImageQuality();
     const task = input.task === "generate" ? "regenerate" : input.task;
 
-    if (task === "de_text") {
+    if (task === "de_text" || task === "to_trad") {
       if (!modelSupportsImageEdit(model)) {
         throw new Error(
-          `de_text requires an edit-capable model (images/edits). Current OPENAI_IMAGE_MODEL=${model} cannot edit. ` +
+          `${task} requires an edit-capable model (images/edits). Current OPENAI_IMAGE_MODEL=${model} cannot edit. ` +
             `Use gpt-image-1 (or set OPENAI_IMAGE_EDIT_SUPPORTED=true only if the model truly supports edits).`
         );
       }
       const sourceUrl = input.sourceImages[0]?.trim();
       if (!sourceUrl) {
-        throw new Error("de_text requires sourceImages[0] (original_file_url)");
+        throw new Error(`${task} requires sourceImages[0] (original_file_url)`);
       }
       const source = await fetchSourceImage(sourceUrl);
-      const prompt = buildDeTextPrompt(input.prompt);
+      const prompt =
+        task === "to_trad"
+          ? buildToTradPrompt(input.prompt)
+          : buildDeTextPrompt(input.prompt);
       const out = await callImagesEdits({
         apiKey,
         model,

@@ -5,7 +5,7 @@
  * Auth: WORKER_API_TOKEN Bearer OR session + canOperate (same as sharp-batch / finalize).
  * Body: { draftId, imageIds?, autoSharp?, autoFinalize? }
  * Defaults: autoSharp=true, autoFinalize=true (Q3-A).
- * Only processes pipeline images with process_intent de_text | regenerate.
+ * Only processes pipeline images with process_intent de_text | regenerate | to_trad.
  */
 
 import { NextRequest } from "next/server";

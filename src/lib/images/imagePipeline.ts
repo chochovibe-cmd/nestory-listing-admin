@@ -36,9 +36,10 @@
  *     → storage label: supabase_temp
  *     ✅ D3
  *
- *  7. de_text / regenerate → D4 Image API ✅
+ *  7. de_text / regenerate / to_trad → D4 Image API ✅ (+ SYN-1 to_trad)
  *     runAiProcessForDraft / POST /api/images/ai-process
- *     → OpenAI images/edits (de_text) or images/generations (regenerate)
+ *     → OpenAI images/edits (de_text, to_trad) or images/generations (regenerate)
+ *     → cost accumulates into generation_cost_estimate (E4)
  *     → generated_file_url (Supabase temp) on success only
  *     → post-AI sharp (afterAi) → processed temp → default finalize CDN
  *     → Auth: worker Bearer or session+canOperate

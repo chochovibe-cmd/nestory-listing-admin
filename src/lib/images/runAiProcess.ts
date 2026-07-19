@@ -19,6 +19,7 @@ import {
 import { runFinalizeForDraft, type FinalizeServiceClient } from "@/lib/images/runFinalize";
 import { runSharpBatchForDraft } from "@/lib/images/runSharpBatch";
 import { SHARP_BATCH_MAX_IMAGES } from "@/lib/images/sharpProcess";
+import { appendGenerationCostUsd } from "@/lib/images/detailCompose/cost";
 import {
   createOpenAiImageProvider,
   modelSupportsImageEdit
@@ -53,7 +54,7 @@ export type AiProcessImageRow = {
 
 export type AiProcessPerImageResult = {
   imageId: string;
-  intent: "de_text" | "regenerate";
+  intent: "de_text" | "regenerate" | "to_trad";
   status: "done" | "skipped" | "failed" | "time_budget";
   reason?: string;
   generatedFileUrl?: string | null;
@@ -115,44 +116,49 @@ export type RunAiProcessForDraftResult =
 
 export function isD4ProcessIntent(
   intent: ImageProcessIntent | string | null | undefined
-): intent is "de_text" | "regenerate" {
-  return intent === "de_text" || intent === "regenerate";
+): intent is "de_text" | "regenerate" | "to_trad" {
+  return intent === "de_text" || intent === "regenerate" || intent === "to_trad";
 }
 
-/** R2: to_trad is a mark option; D4 image edit not implemented yet → honest skip. */
+/**
+ * @deprecated SYN-1 wired to_trad — always false. Kept so old verify static strings can migrate.
+ */
 export function isUnsupportedAiIntent(
-  intent: ImageProcessIntent | string | null | undefined
-): intent is "to_trad" {
-  return intent === "to_trad";
+  _intent: ImageProcessIntent | string | null | undefined
+): boolean {
+  return false;
 }
 
 export function decideAiProcessAction(input: {
   imageType: ImageType | string;
   processIntent: ImageProcessIntent | null | undefined;
   originalFileUrl: string | null | undefined;
-}): { action: "process_ai" | "skip"; reason: string; intent?: "de_text" | "regenerate"; warning?: string } {
+}): {
+  action: "process_ai" | "skip";
+  reason: string;
+  intent?: "de_text" | "regenerate" | "to_trad";
+  warning?: string;
+} {
   if (!isPipelineImageType(input.imageType)) {
     return {
       action: "skip",
       reason: `image_type=${input.imageType} is not a pipeline image`
     };
   }
-  // R2: 簡轉繁 mark is accepted in DB (030) but Image API path not wired yet.
-  if (isUnsupportedAiIntent(input.processIntent)) {
-    return {
-      action: "skip",
-      reason: "process_intent=to_trad; D4 image edit not implemented yet",
-      warning: "簡轉繁標記已記錄，但 AI 圖編尚未支援此選項（本包誠實跳過，不扣假成功）"
-    };
-  }
   if (!isD4ProcessIntent(input.processIntent)) {
     return {
       action: "skip",
-      reason: `process_intent=${input.processIntent ?? "null"} is not de_text/regenerate`
+      reason: `process_intent=${input.processIntent ?? "null"} is not de_text/regenerate/to_trad`
     };
   }
-  if (input.processIntent === "de_text" && !input.originalFileUrl?.trim()) {
-    return { action: "skip", reason: "de_text missing original_file_url" };
+  if (
+    (input.processIntent === "de_text" || input.processIntent === "to_trad") &&
+    !input.originalFileUrl?.trim()
+  ) {
+    return {
+      action: "skip",
+      reason: `${input.processIntent} missing original_file_url`
+    };
   }
   // regenerate can run without original (generate from text)
   return {
@@ -651,6 +657,22 @@ export async function runAiProcessForDraft(
           .eq("id", img.id);
         processedUrl = null;
         storage = "none";
+      }
+
+      // SYN-1 E: D4 AI cost into generation_cost_estimate (null ≠ $0)
+      if (typeof out.cost === "number" && Number.isFinite(out.cost) && out.cost > 0) {
+        const costRes = await appendGenerationCostUsd(
+          serviceSupabase,
+          draftId,
+          out.cost
+        );
+        if (!costRes.ok) {
+          await appendDraftWarning(
+            serviceSupabase,
+            draftId,
+            `AI 成本入帳失敗（${intent}）：${(costRes.reason || "unknown").slice(0, 60)}`
+          );
+        }
       }
 
       processed += 1;

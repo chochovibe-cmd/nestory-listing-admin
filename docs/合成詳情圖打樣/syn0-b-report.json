@@ -1,0 +1,188 @@
+{
+  "route": "B",
+  "model": "gpt-image-1",
+  "size": "1024x1536",
+  "quality": "medium",
+  "unitEstimateUsd": 0.07,
+  "budgetUsd": 0.4,
+  "startedAt": "2026-07-19T00:44:05.642Z",
+  "items": [
+    {
+      "productKey": "miffy_lamp",
+      "mode": "generations",
+      "file": "米菲臺燈-B1-generations.png",
+      "ok": true,
+      "durationMs": 25635,
+      "costUsd": 0.07,
+      "spentEstimateUsd": 0.07,
+      "draftId": "8b3a35b9-2a9b-4b14-84d3-5c7e84f9b8f8",
+      "title": "馬克圖布 × Miffy|米菲臺燈|舒適居家擺件",
+      "specNumbers": [
+        {
+          "raw": "15",
+          "num": "15",
+          "unit": ""
+        },
+        {
+          "raw": "30 cm",
+          "num": "30",
+          "unit": "cm"
+        }
+      ],
+      "highlights": [
+        "高品質矽膠材質，柔軟不易破損",
+        "具 USB 充電口，使用方便",
+        "內建計時功能，節省電力",
+        "米菲造型設計，可愛且增添趣味"
+      ],
+      "specText": "材質：高品質矽膠\n尺寸：15 x 15 x 30 cm\n產地：中國\n聯名品牌：馬克圖布",
+      "promptChars": 1247
+    },
+    {
+      "productKey": "miffy_lamp",
+      "mode": "edits",
+      "file": "米菲臺燈-B2-edits.png",
+      "ok": true,
+      "durationMs": 25028,
+      "costUsd": 0.07,
+      "spentEstimateUsd": 0.14,
+      "draftId": "8b3a35b9-2a9b-4b14-84d3-5c7e84f9b8f8",
+      "title": "馬克圖布 × Miffy|米菲臺燈|舒適居家擺件",
+      "specNumbers": [
+        {
+          "raw": "15",
+          "num": "15",
+          "unit": ""
+        },
+        {
+          "raw": "30 cm",
+          "num": "30",
+          "unit": "cm"
+        }
+      ],
+      "highlights": [
+        "高品質矽膠材質，柔軟不易破損",
+        "具 USB 充電口，使用方便",
+        "內建計時功能，節省電力",
+        "米菲造型設計，可愛且增添趣味"
+      ],
+      "specText": "材質：高品質矽膠\n尺寸：15 x 15 x 30 cm\n產地：中國\n聯名品牌：馬克圖布",
+      "promptChars": 1210
+    },
+    {
+      "productKey": "razer_mouse",
+      "mode": "generations",
+      "file": "Razer皮卡丘滑鼠-B1-generations.png",
+      "ok": true,
+      "durationMs": 26653,
+      "costUsd": 0.07,
+      "spentEstimateUsd": 0.28,
+      "draftId": "29b827a7-f2e3-47dc-8ade-7a03e0fd473c",
+      "title": "Razer × 寶可夢|皮卡丘聯名|毒蝰V3專業版SE無線遊戲滑鼠",
+      "specNumbers": [
+        {
+          "raw": "2年",
+          "num": "2",
+          "unit": "年"
+        },
+        {
+          "raw": "3",
+          "num": "3",
+          "unit": ""
+        },
+        {
+          "raw": "2.4g",
+          "num": "2.4",
+          "unit": "g"
+        },
+        {
+          "raw": "10m",
+          "num": "10",
+          "unit": "m"
+        },
+        {
+          "raw": "54克",
+          "num": "54",
+          "unit": "克"
+        },
+        {
+          "raw": "35K",
+          "num": "35",
+          "unit": "K"
+        }
+      ],
+      "highlights": [
+        "黃黑撞色外觀，皮卡丘設計，萌力十足",
+        "54克超輕設計，提供靈活操控",
+        "Focus Pro 35K光學傳感器，精確的DPI控制"
+      ],
+      "specText": "品牌：Razer/雷蛇\n售后服务：2年\n型号：雷蛇|宝可梦 皮卡丘联名款毒蝰V3专业版SE\n工作方式：2.4ghz\n成色：全新\n支持：无线技术\n无线：连接方式\n无线距离：10m\n是：是否支持人体工程学\n是否盒装正品：是\n生产企业：雷蛇\n电池型号：自带充电\n适用场景：办公 通用 游戏电竞",
+      "promptChars": 1000,
+      "retry": true,
+      "retryNote": "first attempt safety-blocked; safer product-only prompt"
+    },
+    {
+      "productKey": "razer_mouse",
+      "mode": "edits",
+      "file": "Razer皮卡丘滑鼠-B2-edits.png",
+      "ok": true,
+      "durationMs": 26158,
+      "costUsd": 0.07,
+      "spentEstimateUsd": 0.21000000000000002,
+      "draftId": "29b827a7-f2e3-47dc-8ade-7a03e0fd473c",
+      "title": "Razer × 寶可夢|皮卡丘聯名|毒蝰V3專業版SE無線遊戲滑鼠",
+      "specNumbers": [
+        {
+          "raw": "2年",
+          "num": "2",
+          "unit": "年"
+        },
+        {
+          "raw": "3",
+          "num": "3",
+          "unit": ""
+        },
+        {
+          "raw": "2.4g",
+          "num": "2.4",
+          "unit": "g"
+        },
+        {
+          "raw": "10m",
+          "num": "10",
+          "unit": "m"
+        },
+        {
+          "raw": "54克",
+          "num": "54",
+          "unit": "克"
+        },
+        {
+          "raw": "35K",
+          "num": "35",
+          "unit": "K"
+        }
+      ],
+      "highlights": [
+        "黃黑撞色外觀，皮卡丘設計，萌力十足",
+        "54克超輕設計，提供靈活操控",
+        "Focus Pro 35K光學傳感器，精確的DPI控制"
+      ],
+      "specText": "品牌：Razer/雷蛇\n售后服务：2年\n型号：雷蛇|宝可梦 皮卡丘联名款毒蝰V3专业版SE\n工作方式：2.4ghz\n成色：全新\n支持：无线技术\n无线：连接方式\n无线距离：10m\n是：是否支持人体工程学\n是否盒装正品：是\n生产企业：雷蛇\n电池型号：自带充电\n适用场景：办公 通用 游戏电竞",
+      "promptChars": 1319
+    }
+  ],
+  "note": "costUsd is estimateImageCostUsd only — not OpenAI billing invoice; totalEstimateUsd counts successful medium images only (.07 each).",
+  "finishedAt": "2026-07-19T00:46:31.708Z",
+  "totalEstimateUsd": 0.28,
+  "attempts": [
+    {
+      "productKey": "razer_mouse",
+      "mode": "generations",
+      "ok": false,
+      "httpStatus": 400,
+      "note": "first call rejected by OpenAI safety system (image_generation_user_error); retried with product-only safer prompt",
+      "costUsdUnknown": true
+    }
+  ]
+}

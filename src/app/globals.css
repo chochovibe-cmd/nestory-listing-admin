@@ -4864,7 +4864,8 @@ textarea {
   font-size: 12px;
   font-weight: 700;
   gap: 5px;
-  border-radius: var(--radius-s, 8px);
+  /* UX-BTN2: must match .act-btn / mini-btn capsule (this rule used to force radius-s) */
+  border-radius: 999px;
 }
 .rc-actions button.danger,
 .rc-actions .act-btn.danger {
@@ -4893,7 +4894,8 @@ textarea {
   font-weight: 700;
   padding: 7px 13px;
   min-height: 38px;
-  border-radius: var(--radius-s, 8px);
+  /* UX-BTN2: same capsule shape language as mini-btn / btn-mini */
+  border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text);
@@ -5110,6 +5112,8 @@ textarea {
   gap: 6px;
   flex-shrink: 0;
   align-items: center;
+  /* UX-BTN2: breathe away from price zone so actions don't fight the title row */
+  margin-left: 10px;
 }
 
 .rc-quick-btn {
@@ -5435,9 +5439,9 @@ textarea {
 }
 
 .rc-title {
-  /* UX-H T42: high-frequency titles ≥14px */
-  font-size: 14px;
-  font-weight: 600;
+  /* UX-H T42: high-frequency titles ≥14px; UX-BTN2: visual hero of the row */
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -5456,11 +5460,12 @@ textarea {
   display: inline-flex;
   align-items: center;
   font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
+  /* UX-BTN2: slightly stronger weight + accent3 wash (IP/role/tone must scan) */
+  font-weight: 700;
+  padding: 3px 9px;
   border-radius: 999px;
-  background: var(--surface2);
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--accent3) 14%, var(--surface2));
+  color: color-mix(in srgb, var(--accent3) 70%, var(--text));
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;

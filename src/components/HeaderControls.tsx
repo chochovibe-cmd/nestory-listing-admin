@@ -56,7 +56,7 @@ export function HeaderControls() {
         {signedIn ? (
           <>
             <button
-              className="hdr-btn"
+              className="hdr-btn hdr-btn-library"
               onClick={() => {
                 setLibraryOpen(true);
                 setOpen(false);

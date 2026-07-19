@@ -77,6 +77,12 @@ export function ToastHost() {
           className={`toast toast--${t.variant}`}
           key={t.id}
           onClick={() => remove(t.id)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              remove(t.id);
+            }
+          }}
           type="button"
         >
           <span aria-hidden className="toast-ic">

@@ -1161,7 +1161,11 @@ export function DraftResultsPanel({
                   ) : null}
                 </div>
               ) : null}
+              {/* UX-W T87: sort control — icon + heavier shell vs filter pills */}
               <label className="results-sort-label">
+                <span aria-hidden="true" className="results-sort-icon">
+                  ⇅
+                </span>
                 <span className="sr-only">排序</span>
                 <select
                   aria-label="排序"
@@ -1205,22 +1209,32 @@ export function DraftResultsPanel({
         ) : null}
 
         {drafts.length === 0 && !progress ? (
+          /* UX-AB T85: full-empty copy */
           <div className="empty-state">
-            <div className="empty-icon">◈</div>
-            <p className="muted">在左側輸入商品資料並送出，生成結果會出現在這裡</p>
+            <div className="empty-icon" aria-hidden>
+              📦
+            </div>
+            <p className="empty-state-title">還沒有任何草稿</p>
+            <p className="empty-state-desc">使用左側表單新增第一筆商品</p>
           </div>
         ) : workQueueDrafts.length === 0 && !progress ? (
           <div className="empty-state">
-            <div className="empty-icon">◈</div>
-            <p className="muted">目前沒有在工作佇列的商品</p>
+            <div className="empty-icon" aria-hidden>
+              📦
+            </div>
+            <p className="empty-state-title">目前沒有在工作佇列的商品</p>
+            <p className="empty-state-desc">新增商品後會出現在這裡</p>
             <Link className="button primary empty-state-cta" href="/drafts/new">
               去新增商品
             </Link>
           </div>
         ) : visibleDrafts.length === 0 && !progress ? (
           <div className="empty-state">
-            <div className="empty-icon">◈</div>
-            <p className="muted">這個篩選下沒有商品</p>
+            <div className="empty-icon" aria-hidden>
+              🔎
+            </div>
+            <p className="empty-state-title">這個篩選下沒有商品</p>
+            <p className="empty-state-desc">試試清除篩選或換另一站</p>
             <button
               className="button empty-state-cta"
               onClick={clearResultsFilter}

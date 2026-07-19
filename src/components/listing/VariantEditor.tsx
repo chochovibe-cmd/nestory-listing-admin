@@ -52,6 +52,13 @@ type Props = {
 
 const QUICK_DIMS = ["尺寸", "顏色"] as const;
 
+/** UX-AB T104: inline double-confirm arm (3s auto-reset; no window.confirm). */
+const ARM_MS = 3000;
+type ConfirmArm =
+  | null
+  | { kind: "remove-dim"; dimIndex: number; count: number }
+  | { kind: "expand"; count: number };
+
 export function VariantEditor({
   dimensions,
   rows,
@@ -76,7 +83,33 @@ export function VariantEditor({
   const [charLoading, setCharLoading] = useState(false);
   /** Per-dimension draft for adding an axis value (pkg2b). */
   const [axisValueDraft, setAxisValueDraft] = useState<Record<number, string>>({});
+  /** UX-AB T104: first click arms destructive remove/expand; second executes. */
+  const [confirmArm, setConfirmArm] = useState<ConfirmArm>(null);
+  const armTimerRef = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  function clearArmTimer() {
+    if (armTimerRef.current != null) {
+      window.clearTimeout(armTimerRef.current);
+      armTimerRef.current = null;
+    }
+  }
+
+  function armConfirm(next: Exclude<ConfirmArm, null>) {
+    clearArmTimer();
+    setConfirmArm(next);
+    armTimerRef.current = window.setTimeout(() => {
+      setConfirmArm(null);
+      armTimerRef.current = null;
+    }, ARM_MS);
+  }
+
+  function clearConfirmArm() {
+    clearArmTimer();
+    setConfirmArm(null);
+  }
+
+  useEffect(() => () => clearArmTimer(), []);
 
   const lockedCount = countLockedVariants(rows);
   const costLabel = currency === "CNY" ? "成本 ¥" : "成本 NT$";
@@ -214,11 +247,16 @@ export function VariantEditor({
   function removeDimension(dimIndex: number) {
     const result = removeDimensionMergingRows(dimensions, rows, dimIndex);
     if (result.wouldDiscardHandFilled.length > 0) {
-      const ok = window.confirm(
-        `移除這個維度後，有 ${result.wouldDiscardHandFilled.length} 筆已手填的款式會因合併而丟掉（成本／售價／庫存／圖等）。確定移除？`
-      );
-      if (!ok) return;
+      // UX-AB T104: inline double-confirm (ResultCard / UX-L T61 pattern)
+      const count = result.wouldDiscardHandFilled.length;
+      const armed =
+        confirmArm?.kind === "remove-dim" && confirmArm.dimIndex === dimIndex;
+      if (!armed) {
+        armConfirm({ kind: "remove-dim", dimIndex, count });
+        return;
+      }
     }
+    clearConfirmArm();
     onDimensionsChange(result.dimensions);
     setRowsSafe(result.rows);
     onWarning(null);
@@ -250,15 +288,22 @@ export function VariantEditor({
       return;
     }
     if (result.wouldDiscardHandFilled.length > 0) {
-      const ok = window.confirm(
-        `重新展開後，有 ${result.wouldDiscardHandFilled.length} 筆已手填但不再出現在新組合裡的款式會被丟掉（成本／售價／鎖定／庫存／SKU／圖）。確定展開？`
-      );
-      if (!ok) return;
+      // UX-AB T104: inline double-confirm (ResultCard / UX-L T61 pattern)
+      const count = result.wouldDiscardHandFilled.length;
+      const armed = confirmArm?.kind === "expand";
+      if (!armed) {
+        armConfirm({ kind: "expand", count });
+        return;
+      }
     }
+    clearConfirmArm();
     onRowsChange(result.rows);
     if (result.warning) onWarning(result.warning);
     else onWarning(null);
   }
+
+  const expandArmed = confirmArm?.kind === "expand";
+  const expandArmCount = expandArmed ? confirmArm.count : 0;
 
   function applyCharacters() {
     const names = Object.entries(charSelected)
@@ -345,17 +390,21 @@ export function VariantEditor({
             ＋新增維度（最多{MAX_VARIANT_DIMENSIONS}）
           </button>
           <button
-            className="btn-mini"
+            className={`btn-mini${expandArmed ? " v-arm-confirm" : ""}`}
             disabled={!canExpandFromDimensions(dimensions)}
             onClick={expandFromAxisValues}
             title={
-              canExpandFromDimensions(dimensions)
-                ? "依各軸值交叉展開款式列（不會自動展開，需按此鈕）"
-                : "請先在維度上加入軸值"
+              expandArmed
+                ? `再點一次確認展開（${expandArmCount} 筆手填會丟失）`
+                : canExpandFromDimensions(dimensions)
+                  ? "依各軸值交叉展開款式列（不會自動展開，需按此鈕）"
+                  : "請先在維度上加入軸值"
             }
             type="button"
           >
-            依軸值展開列
+            {expandArmed
+              ? `確定展開？${expandArmCount}筆會丟失`
+              : "依軸值展開列"}
           </button>
           {charOpen ? (
             <div className="pop-menu open v-pop-char">
@@ -450,14 +499,31 @@ export function VariantEditor({
               <div className="v-dim-axis-head">
                 <span className="v-dim-chip">
                   {d.name}
-                  <button
-                    aria-label={`移除維度 ${d.name}`}
-                    className="v-dim-x"
-                    onClick={() => removeDimension(i)}
-                    type="button"
-                  >
-                    ×
-                  </button>
+                  {(() => {
+                    const dimArmed =
+                      confirmArm?.kind === "remove-dim" &&
+                      confirmArm.dimIndex === i;
+                    const armCount = dimArmed ? confirmArm.count : 0;
+                    return (
+                      <button
+                        aria-label={
+                          dimArmed
+                            ? `再點確認移除維度 ${d.name}（${armCount} 筆會丟失）`
+                            : `移除維度 ${d.name}`
+                        }
+                        className={`v-dim-x${dimArmed ? " v-arm-confirm" : ""}`}
+                        onClick={() => removeDimension(i)}
+                        title={
+                          dimArmed
+                            ? `再點一次確認移除（${armCount} 筆手填會丟失）`
+                            : undefined
+                        }
+                        type="button"
+                      >
+                        {dimArmed ? `確定移除？${armCount}筆會丟失` : "×"}
+                      </button>
+                    );
+                  })()}
                 </span>
               </div>
               <div className="v-dim-values">

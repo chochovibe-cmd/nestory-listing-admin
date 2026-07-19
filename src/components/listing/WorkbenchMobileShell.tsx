@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   GENERATION_PROGRESS_EVENT,
   type GenerationProgress
@@ -13,6 +13,12 @@ import { workbenchPaneFromSearch } from "@/lib/nav";
 export type WorkbenchPane = "input" | "results";
 /** Mobile-only sub-tab when pane=input (新增 tab). */
 export type InputSubTab = "form" | "preview";
+
+/** UX-X T93: tab index order — form → preview → results (left→right). */
+function tabIndex(pane: WorkbenchPane, inputSub: InputSubTab): number {
+  if (pane === "results") return 2;
+  return inputSub === "form" ? 0 : 1;
+}
 
 /**
  * B16 + UX-B T4/T5:
@@ -39,6 +45,10 @@ export function WorkbenchMobileShell({
   const [pane, setPane] = useState<WorkbenchPane>(urlPane);
   const [inputSub, setInputSub] = useState<InputSubTab>("form");
   const [genActive, setGenActive] = useState(false);
+  /** UX-X T93: slide direction class on the entering pane/slot (mobile only CSS). */
+  const [tabAnimClass, setTabAnimClass] = useState("");
+  const prevTabRef = useRef(tabIndex(urlPane, "form"));
+  const animTimerRef = useRef<number | null>(null);
 
   const setPaneAndUrl = useCallback(
     (next: WorkbenchPane, replace = true) => {
@@ -65,6 +75,30 @@ export function WorkbenchMobileShell({
     if (urlPane === "input") setInputSub("form");
   }, [urlPane]);
 
+  // UX-X T93: left→right tab = slide-in-right; right→left = slide-in-left
+  useEffect(() => {
+    const next = tabIndex(pane, inputSub);
+    const prev = prevTabRef.current;
+    if (next === prev) return;
+    prevTabRef.current = next;
+    const cls =
+      next > prev
+        ? "workbench-mobile-tab-enter"
+        : "workbench-mobile-tab-enter-reverse";
+    setTabAnimClass(cls);
+    if (animTimerRef.current != null) window.clearTimeout(animTimerRef.current);
+    animTimerRef.current = window.setTimeout(() => {
+      setTabAnimClass("");
+      animTimerRef.current = null;
+    }, 220);
+    return () => {
+      if (animTimerRef.current != null) {
+        window.clearTimeout(animTimerRef.current);
+        animTimerRef.current = null;
+      }
+    };
+  }, [pane, inputSub]);
+
   useEffect(() => {
     function onProgress(event: Event) {
       const model = (event as CustomEvent<GenerationProgress>).detail;
@@ -90,6 +124,10 @@ export function WorkbenchMobileShell({
     window.addEventListener(JUMP_TO_DRAFT_EVENT, onJump);
     return () => window.removeEventListener(JUMP_TO_DRAFT_EVENT, onJump);
   }, [setPaneAndUrl]);
+
+  const formActive = pane === "input" && inputSub === "form";
+  const previewActive = pane === "input" && inputSub === "preview";
+  const resultsActive = pane === "results";
 
   return (
     <div className="workbench">
@@ -133,24 +171,30 @@ export function WorkbenchMobileShell({
         </div>
       ) : null}
 
-      <div className="workbench-panes">
+      <div className="workbench-panes workbench-mobile-body">
         <div
           className={`workbench-pane workbench-pane-input${pane === "input" ? " mob-active" : ""}`}
           id="paneForm"
         >
           <div
-            className={`wb-form-slot${inputSub === "form" ? " mob-sub-active" : ""}`}
+            className={`wb-form-slot${formActive ? " mob-sub-active" : ""}${
+              formActive && tabAnimClass ? ` ${tabAnimClass}` : ""
+            }`}
           >
             {input}
           </div>
           <div
-            className={`wb-preview-slot${inputSub === "preview" ? " mob-sub-active" : ""}`}
+            className={`wb-preview-slot${previewActive ? " mob-sub-active" : ""}${
+              previewActive && tabAnimClass ? ` ${tabAnimClass}` : ""
+            }`}
           >
             {quickPreview}
           </div>
         </div>
         <div
-          className={`workbench-pane workbench-pane-results${pane === "results" ? " mob-active" : ""}`}
+          className={`workbench-pane workbench-pane-results${resultsActive ? " mob-active" : ""}${
+            resultsActive && tabAnimClass ? ` ${tabAnimClass}` : ""
+          }`}
           id="paneResults"
         >
           {results}

@@ -52,9 +52,13 @@ export default function LoginPage() {
 
   return (
     <main className="container">
-      <form className="panel" onSubmit={signIn}>
-        <div className="panel-header">
-          <h1>團隊登入</h1>
+      <form className="panel login-panel" onSubmit={signIn}>
+        <div className="panel-header login-panel-header">
+          <div className="login-brand">
+            <span className="brand-dot" aria-hidden="true" />
+            <h1 className="login-brand-title">潮巢 商品上架助手</h1>
+            <p className="login-brand-sub">團隊登入</p>
+          </div>
         </div>
         <div className="panel-body">
           {!supabaseReady ? (
@@ -64,17 +68,36 @@ export default function LoginPage() {
             </div>
           ) : null}
           <div className="field">
-            <label>Email</label>
-            <input onChange={(event) => setEmail(event.target.value)} type="email" value={email} />
+            <label htmlFor="login-email">Email</label>
+            <input
+              id="login-email"
+              onChange={(event) => setEmail(event.target.value)}
+              type="email"
+              value={email}
+              autoComplete="username"
+            />
           </div>
           <div className="field">
-            <label>Password</label>
-            <input onChange={(event) => setPassword(event.target.value)} type="password" value={password} />
+            <label htmlFor="login-password">Password</label>
+            <input
+              id="login-password"
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              value={password}
+              autoComplete="current-password"
+            />
           </div>
           <button className="primary" disabled={submitting} type="submit">
-            {submitting ? "登入中..." : "登入"}
+            {submitting ? (
+              <>
+                登入中
+                <span aria-hidden className="spinner" />
+              </>
+            ) : (
+              "登入"
+            )}
           </button>
-          {message ? <div className="notice">{message}</div> : null}
+          {message ? <div className="notice login-error">{message}</div> : null}
         </div>
       </form>
     </main>

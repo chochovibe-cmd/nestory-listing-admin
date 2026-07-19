@@ -294,8 +294,16 @@ export function WorkspaceInputPanel({
   const [dedupeDismissed, setDedupeDismissed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pricingSettings, setPricingSettings] = useState<PricingSettings>(defaultPricingSettings);
-  const [message, setMessage] = useState("");
+  /** T109: generation steps drive the CTA label (no inline notice under the button). */
+  const [submitPhase, setSubmitPhase] = useState<
+    null | "saving" | "uploading" | "analyzing" | "generating"
+  >(null);
   const [submitting, setSubmitting] = useState(false);
+  /**
+   * UX-X T92: high-level add-product flow (not the 4-step gen card).
+   * fill → generate (pressed 生成) → review (AI done) → done (publish; optional).
+   */
+  const [flowPhase, setFlowPhase] = useState<"fill" | "generate" | "review" | "done">("fill");
   const [fieldErrors, setFieldErrors] = useState<{ title?: boolean; price?: boolean; inventory?: boolean }>({});
   // B13 / BX4: restore bar when localStorage has an unsent form snapshot.
   const [restorePrompt, setRestorePrompt] = useState<WorkspaceAutosaveSnapshot | null>(null);
@@ -463,13 +471,12 @@ export function WorkspaceInputPanel({
       applyServerFormSeed(initialFromServer);
       // Never auto-open B13 restore bar when URL draft is active
       setRestorePrompt(null);
-      const base = (loadNotice && loadNotice.trim()) || "已載入擷取草稿";
-      setMessage(
-        hasLocalKeep
-          ? `${base}；上次未完成的填寫仍在暫存`
-          : base
-      );
     });
+    const base = (loadNotice && loadNotice.trim()) || "已載入擷取草稿";
+    showToast(
+      hasLocalKeep ? `${base}；上次未完成的填寫仍在暫存` : base,
+      "info"
+    );
 
     window.setTimeout(() => {
       suppressAutosaveRef.current = false;
@@ -479,10 +486,11 @@ export function WorkspaceInputPanel({
   }, [initialFromServer]);
 
   // CAP-2.5: gate redirect notice without seed (e.g. non-pending_input → 工作檯)
+  // T109: one-shot info toast (not the persistent .workspace-restore-notice bar)
   useEffect(() => {
     if (initialFromServer) return;
     if (loadNotice && loadNotice.trim()) {
-      setMessage(loadNotice.trim());
+      showToast(loadNotice.trim(), "info");
     }
   }, [initialFromServer, loadNotice]);
 
@@ -1207,7 +1215,7 @@ export function WorkspaceInputPanel({
 
       if (error || !data) {
         ensureDraftPromiseRef.current = null;
-        setMessage(error?.message ?? "建立草稿失敗");
+        showToast(error?.message ?? "建立草稿失敗", "error");
         return null;
       }
 
@@ -1232,7 +1240,7 @@ export function WorkspaceInputPanel({
 
     if (!inventoryFields) {
       setFieldErrors((current) => ({ ...current, inventory: true }));
-      setMessage("庫存數量請填 0 或正整數，或勾選無上限");
+      // T109: keep .field-msg only — no duplicate toast/notice
       inventoryRef.current?.focus();
       return null;
     }
@@ -1282,7 +1290,7 @@ export function WorkspaceInputPanel({
     if (draftIdRef.current) {
       const { error } = await supabase.from("product_drafts").update(fields).eq("id", draftIdRef.current);
       if (error) {
-        setMessage(error.message);
+        showToast(error.message, "error");
         return null;
       }
       id = draftIdRef.current;
@@ -1293,7 +1301,7 @@ export function WorkspaceInputPanel({
         .select("id")
         .single();
       if (error || !data) {
-        setMessage(error?.message ?? "建立失敗");
+        showToast(error?.message ?? "建立失敗", "error");
         return null;
       }
       id = data.id;
@@ -1310,7 +1318,7 @@ export function WorkspaceInputPanel({
       inserts.map((row) => ({ ...row, draft_id: id }))
     );
     if (!persistResult.ok) {
-      setMessage(persistResult.error);
+      showToast(persistResult.error, "error");
       return null;
     }
 
@@ -1556,8 +1564,8 @@ export function WorkspaceInputPanel({
     flushSync(() => {
       applyWorkspaceSnapshot(snap);
       setRestorePrompt(null);
-      setMessage("已還原上次未完成的填寫，可繼續編輯或按生成。");
     });
+    showToast("已還原上次未完成的填寫，可繼續編輯或按生成。", "info");
 
     // Keep the snapshot alive (refresh savedAt) so a mid-restore refresh still works.
     const fields = formFieldsFromAutosaveSnapshot(snap);
@@ -1618,7 +1626,7 @@ export function WorkspaceInputPanel({
             setDraftId(null);
           }
           setSeedImages(null);
-          setMessage("原草稿已不在（可能已封存），欄位已回填；再生成會建立新草稿。");
+          showToast("原草稿已不在（可能已封存），欄位已回填；再生成會建立新草稿。", "info");
           return;
         }
         const { data: imageRows, error: imageError } = await supabase
@@ -1656,7 +1664,7 @@ export function WorkspaceInputPanel({
 
     if (!draftToDrop) {
       setDiscardBusy(false);
-      setMessage("已丟棄本機暫存。");
+      showToast("已丟棄本機暫存。", "info");
       return;
     }
 
@@ -1693,10 +1701,13 @@ export function WorkspaceInputPanel({
         setDraftId(null);
         setFormKey((k) => k + 1);
       }
-      setMessage("已丟棄本機暫存，並將伺服器上的空草稿封存。");
+      showToast("已丟棄本機暫存，並將伺服器上的空草稿封存。", "info");
       scheduleRouterRefresh(() => router.refresh());
     } catch {
-      setMessage("已清本機暫存；伺服器草稿清理失敗，可稍後在「已封存」或待輸入列表處理。");
+      showToast(
+        "已清本機暫存；伺服器草稿清理失敗，可稍後在「已封存」或待輸入列表處理。",
+        "warn"
+      );
     } finally {
       setDiscardBusy(false);
     }
@@ -1716,13 +1727,7 @@ export function WorkspaceInputPanel({
 
     if (errors.title || errors.price) {
       setFieldErrors(errors);
-      setMessage(
-        errors.title && costError
-          ? `請輸入商品標題；${costError}`
-          : errors.title
-            ? "請輸入商品標題"
-            : costError ?? "請輸入有效成本價格"
-      );
+      // T109: field-level .field-msg only — no bottom notice toast for validation
       (errors.title ? titleRef.current : priceRef.current)?.focus();
       return;
     }
@@ -1739,12 +1744,16 @@ export function WorkspaceInputPanel({
 
     setFieldErrors({});
     setSubmitting(true);
+    setSubmitPhase("saving");
+    // T92: step 1 done → step 2 active
+    setFlowPhase("generate");
     const cardTitle = title.trim().slice(0, 18);
 
-    setMessage("儲存商品草稿中...");
     const id = await persistDraft();
     if (!id) {
       setSubmitting(false);
+      setSubmitPhase(null);
+      setFlowPhase("fill");
       emitProgress({ visible: false, title: "", steps: [] });
       return;
     }
@@ -1756,14 +1765,14 @@ export function WorkspaceInputPanel({
 
     // Wait for any background image uploads to finish before analysis reads them.
     if (hasImages) {
-      setMessage("等待圖片上傳完成...");
+      setSubmitPhase("uploading");
       await Promise.allSettled(uploadPromisesRef.current);
     }
 
     let step2: StepStatus = "done";
     const imageWarnings: string[] = [];
     if (hasImages) {
-      setMessage("辨識圖片中（Vision／OCR）...");
+      setSubmitPhase("analyzing");
       const warnings = await analyzeImages(id);
       if (warnings.length > 0) {
         step2 = "warn";
@@ -1772,7 +1781,7 @@ export function WorkspaceInputPanel({
     }
 
     // Step 3 (copy generation) active.
-    setMessage("生成文案中...");
+    setSubmitPhase("generating");
     emitProgress(stepModel(cardTitle, ["done", step2, "active", "pending"]));
 
     // B8 D3-A: one-shot provider override; after this request falls back to header default.
@@ -1804,8 +1813,10 @@ export function WorkspaceInputPanel({
       });
     } catch {
       setSubmitting(false);
+      setSubmitPhase(null);
+      setFlowPhase("fill");
       setSessionProvider(null);
-      setMessage("生成連線失敗，可以到右側卡片按「重新生成」再試一次");
+      showToast("生成連線失敗，可以到右側卡片按「重新生成」再試一次", "error");
       emitProgress(stepModel(cardTitle, ["done", step2, "error", "pending"], "生成連線失敗"));
       router.refresh();
       return;
@@ -1813,6 +1824,7 @@ export function WorkspaceInputPanel({
 
     const payload = await response.json().catch(() => ({}));
     setSubmitting(false);
+    setSubmitPhase(null);
     // Always clear one-shot override after the attempt (success or fail) so the
     // next generate uses the global default unless the operator clicks again.
     setSessionProvider(null);
@@ -1820,7 +1832,8 @@ export function WorkspaceInputPanel({
 
     if (!response.ok) {
       const errorText = payload.error ?? "生成失敗";
-      setMessage(errorText + "，可以到右側卡片按「重新生成」再試一次");
+      setFlowPhase("fill");
+      showToast(errorText + "，可以到右側卡片按「重新生成」再試一次", "error");
       emitProgress(stepModel(cardTitle, ["done", step2, "error", "pending"], errorText));
       router.refresh();
       return;
@@ -1829,15 +1842,18 @@ export function WorkspaceInputPanel({
     // Requirement 5: success -> all steps done. Card auto-clears once the real
     // ResultCard lands via router.refresh (handled in DraftResultsPanel).
     emitProgress(stepModel(cardTitle, ["done", step2, "done", "done"]));
+    // T92: step 2 done → step 3 active（確認發布）
+    setFlowPhase("review");
 
     if (payload.draftState === "blocked") {
-      setMessage(
+      showToast(
         "AI 判斷資料不足（多半是 IP 未對到建檔清單）：" +
           (payload.validationErrors ?? []).join("；") +
-          "。可在右側卡片修正「AI 偵測類型」等欄位後按「重新生成」。"
+          "。可在右側卡片修正「AI 偵測類型」等欄位後按「重新生成」。",
+        "warn"
       );
     } else {
-      setMessage("生成完成，右側卡片可繼續編輯文案；表單已清空，可直接填下一筆。");
+      showToast("生成完成，右側卡片可繼續編輯文案；表單已清空，可直接填下一筆。", "success");
       resetForNextItem();
     }
 
@@ -1881,6 +1897,49 @@ export function WorkspaceInputPanel({
         </div>
       </div>
       <div className="panel-body">
+        {/* UX-X T92: flow steps — 填入資料 → AI 生成 → 確認發布 */}
+        <nav className="step-indicator" aria-label="新增商品步驟">
+          {(
+            [
+              { n: 1, label: "填入資料" },
+              { n: 2, label: "AI 生成" },
+              { n: 3, label: "確認發布" }
+            ] as const
+          ).flatMap((step, idx, arr) => {
+            const activeN =
+              flowPhase === "fill"
+                ? 1
+                : flowPhase === "generate"
+                  ? 2
+                  : 3; // review | done
+            const allDone = flowPhase === "done";
+            const isDone = allDone || step.n < activeN;
+            const isActive = !allDone && step.n === activeN;
+            const nodes = [
+              <div
+                key={`s${step.n}`}
+                className={`step-indicator-item${isActive ? " is-active" : ""}${isDone ? " is-done" : ""}`}
+                aria-current={isActive ? "step" : undefined}
+              >
+                <span className="step-indicator-dot" aria-hidden="true">
+                  {isDone || allDone ? "✓" : step.n}
+                </span>
+                <span className="step-indicator-label">{step.label}</span>
+              </div>
+            ];
+            if (idx < arr.length - 1) {
+              const lineDone = allDone || step.n < activeN;
+              nodes.push(
+                <div
+                  key={`l${step.n}`}
+                  className={`step-indicator-line${lineDone ? " is-done" : ""}`}
+                  aria-hidden="true"
+                />
+              );
+            }
+            return nodes;
+          })}
+        </nav>
         <form
           onKeyDown={(event) => {
             // UX-I T57 optional: Ctrl/Cmd+Enter → 生成; never steal textarea line breaks (Enter alone).
@@ -1963,7 +2022,12 @@ export function WorkspaceInputPanel({
               </div>
             </div>
             <textarea
-              onChange={(e) => { setTitle(e.target.value); setFieldErrors((current) => ({ ...current, title: false })); }}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setFieldErrors((current) => ({ ...current, title: false }));
+                // T92: starting next item after gen/review → back to step 1
+                if (flowPhase === "review" || flowPhase === "done") setFlowPhase("fill");
+              }}
               placeholder="貼上來源商品標題（也可用下方網址／截圖自動填入）..."
               ref={titleRef}
               rows={2}
@@ -2544,20 +2608,33 @@ export function WorkspaceInputPanel({
             type="submit"
             title="✦ 生成（規則引擎 → Vision → 文案串流 → 定價）"
           >
-            {submitting
-              ? "處理中..."
-              : imagesUploading
-                ? "圖片上傳中，請稍候…"
-                : (
-                  <>
-                    <span className="btn-gen-full">
-                      ✦ 生成（規則引擎 → Vision → 文案串流 → 定價）
-                    </span>
-                    <span className="btn-gen-short">✦ 生成</span>
-                  </>
-                )}
+            {submitting ? (
+              <>
+                <span aria-hidden className="spinner" />
+                {submitPhase === "saving"
+                  ? "儲存草稿中…"
+                  : submitPhase === "uploading"
+                    ? "等待圖片上傳…"
+                    : submitPhase === "analyzing"
+                      ? "辨識圖片中…"
+                      : submitPhase === "generating"
+                        ? "生成文案中…"
+                        : "處理中…"}
+              </>
+            ) : imagesUploading ? (
+              <>
+                <span aria-hidden className="spinner" />
+                圖片上傳中，請稍候…
+              </>
+            ) : (
+              <>
+                <span className="btn-gen-full">
+                  ✦ 生成（規則引擎 → Vision → 文案串流 → 定價）
+                </span>
+                <span className="btn-gen-short">✦ 生成</span>
+              </>
+            )}
           </button>
-          {message ? <div className="notice">{message}</div> : null}
             </div>
           </div>
         </form>

@@ -38,7 +38,14 @@ export function QuickPreviewPanel({
         <div className="queue-strip-head">
           <span className="qtitle">{title}</span>
         </div>
-        <p className="muted quick-preview-empty">尚無可預覽的稿件</p>
+        {/* UX-AB T85: unified empty-state */}
+        <div className="empty-state">
+          <div className="empty-icon" aria-hidden>
+            📋
+          </div>
+          <p className="empty-state-title">尚無可預覽的稿件</p>
+          <p className="empty-state-desc">從「新增」開始建立第一筆</p>
+        </div>
       </div>
     );
   }

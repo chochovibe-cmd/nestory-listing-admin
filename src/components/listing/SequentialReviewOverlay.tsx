@@ -82,6 +82,8 @@ export function SequentialReviewOverlay({
   const total = queue.length;
   const safeIndex = total === 0 ? 0 : Math.min(index, total - 1);
   const current = total > 0 ? queue[safeIndex] : null;
+  /** UX-W T89: 1-based progress; last item = 100% */
+  const progressPct = total === 0 ? 0 : Math.round(((safeIndex + 1) / total) * 100);
 
   const titleShort = useMemo(() => {
     if (!current) return "";
@@ -196,8 +198,8 @@ export function SequentialReviewOverlay({
       <div className="modal-box seq-review-box">
         <div className="modal-hdr seq-review-hdr">
           <div className="seq-review-hdr-main">
-            <span className="seq-review-progress">
-              第 {safeIndex + 1}／{total}
+            <span className="seq-review-progress" aria-live="polite">
+              {safeIndex + 1} / {total}
             </span>
             <span className="seq-review-title" title={titleShort}>
               {titleShort}
@@ -211,6 +213,21 @@ export function SequentialReviewOverlay({
           >
             結束逐件
           </button>
+        </div>
+
+        {/* UX-W T89: progress bar under header */}
+        <div
+          aria-label={`審核進度 ${safeIndex + 1} / ${total}`}
+          aria-valuemax={total}
+          aria-valuemin={1}
+          aria-valuenow={safeIndex + 1}
+          className="seq-review-progress-track"
+          role="progressbar"
+        >
+          <div
+            className="seq-review-progress-fill"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
 
         {showHints ? (

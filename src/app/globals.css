@@ -44,7 +44,8 @@ body[data-theme="dark"] {
   --header-border-w: 1px;
   --header-shadow: none;
   --hover-transform: translateY(-1px);
-  --hover-shadow: 0 4px 12px rgba(0, 0, 0, .22);
+  /* UX-AA T108: dark hover soft dual-layer (nordic/kitty keep hard offset) */
+  --hover-shadow: 0 2px 4px rgba(0, 0, 0, .18), 0 8px 24px rgba(0, 0, 0, .22);
   --inset-surface: var(--surface2);
   --pill-active-shadow: 2px 2px 0 rgba(26, 26, 26, .30);
   --card-active-shadow: 6px 6px 0 color-mix(in srgb, var(--accent3) 72%, var(--border));
@@ -55,6 +56,10 @@ body[data-theme="dark"] {
   --chip-ok-border: color-mix(in srgb, var(--success) 45%, var(--border));
   --chip-warn-border: color-mix(in srgb, var(--accent2) 45%, var(--border));
   --chip-run-border: color-mix(in srgb, var(--warn) 45%, var(--border));
+}
+/* UX-AB T83: layout token only on :root (not theme blocks — body theme would pin 0 on mobile) */
+:root {
+  --tabbar-h: 0px;
 }
 /* 狀態色詞彙表：--idle 灰=未開始 / --warn 黃=進行中 / --success 綠=完成 / --danger 紅=失敗。
    nordic/kitty：--border-soft 刻意與 --border 同值（B15 ③-2 維持現狀）；dark 的 soft 已較淡。 */
@@ -171,6 +176,13 @@ body {
   line-height: 1.6;
 }
 
+/* UX-T T78: Firefox 主滾動條與 WebKit 細條對齊（Chrome 仍走 ::-webkit-scrollbar） */
+body,
+.shell-main {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -199,6 +211,18 @@ select {
 
 .shell-main {
   min-width: 0;
+}
+
+/* UX-AA T103: light page enter on mount (App Router; first paint / remount) */
+.shell-main > * {
+  animation: page-enter 180ms ease-out;
+}
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell-main > * { animation: none; }
 }
 
 /* Desktop collapsible sidebar (default icon column; .shell.nav-open expands) */
@@ -315,6 +339,42 @@ select {
 }
 
 .shell.nav-open .sidebar-foot {
+  opacity: 1;
+}
+
+/* UX-T T77: 收合態 icon tooltip（CSS-only；展開態 label 已可見故不顯示）
+   收合時 sidebar overflow:visible 讓 tooltip 能畫出右側；label 鎖寬＋禁點以免擋主區 */
+.shell:not(.nav-open) .sidebar {
+  overflow: visible;
+}
+.shell:not(.nav-open) .sidebar-label {
+  max-width: 0;
+  padding: 0;
+  margin: 0;
+  pointer-events: none;
+}
+.shell:not(.nav-open) .sidebar-item[title]::after {
+  content: attr(title);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1100;
+  padding: 6px 10px;
+  border: var(--frame-w) solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  box-shadow: var(--shadow-m);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease-out;
+}
+.shell:not(.nav-open) .sidebar-item[title]:hover::after,
+.shell:not(.nav-open) .sidebar-item[title]:focus-visible::after {
   opacity: 1;
 }
 
@@ -436,8 +496,7 @@ select {
 }
 
 /* ── Header ── */
-/* UX-K T59: optional light glass topbar (blur + surface mix). If theme contrast
-   looks worse on real devices, revert to opaque var(--bg) / var(--header-bg). */
+/* UX-AA T98 / UX-K T59: glass topbar (semi-transparent + blur). border-bottom kept. */
 .topbar {
   align-items: center;
   border-bottom: var(--header-border-w) solid var(--border);
@@ -454,8 +513,9 @@ select {
   -webkit-backdrop-filter: blur(8px);
   z-index: 100;
 }
+/* Kitty blue header: slight translucency (token --header-bg = #2f56bf) */
 body[data-theme="kitty"] .topbar {
-  background: color-mix(in srgb, var(--header-bg) 90%, transparent);
+  background: color-mix(in srgb, var(--header-bg, #2f56bf) 90%, transparent);
 }
 
 .brand {
@@ -472,10 +532,20 @@ body[data-theme="kitty"] .topbar {
   height: 8px;
   background: var(--accent);
   border-radius: 50%;
-  animation: pulse 2s infinite;
+  /* UX-AA T99: soft brand breath (pulse keyframes still used by gen-dot) */
+  animation: brand-pulse 2.4s ease-in-out infinite;
   flex-shrink: 0;
 }
 
+@keyframes brand-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-dot { animation: none; }
+}
+
+/* Shared opacity pulse for generators / steps (not brand-dot) */
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: .3; }
@@ -764,14 +834,29 @@ button:hover {
    opacity/cursor change), so a disabled batch action looked like a dead
    click instead of "select rows first" -- this was reported as the button
    simply "not working." */
+/* UX-Y T97: unify disabled — gray out + kill hover motion/shadow across CTAs */
 .button:disabled,
-button:disabled {
-  opacity: .45;
+button:disabled,
+.primary:disabled,
+button.primary:disabled,
+.btn-add:disabled,
+.btn-gen:disabled,
+.btn-mini:disabled,
+.mini-btn:disabled,
+.act-btn:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
+  filter: none;
 }
 .button:disabled:hover,
 button:disabled:hover {
   border-color: var(--border);
+  transform: none;
+  box-shadow: none;
+  filter: none;
 }
 
 .button.primary,
@@ -903,30 +988,34 @@ button.success:hover:not(:disabled) {
   gap: 8px;
   justify-content: space-between;
   padding: 11px 16px;
+  /* UX-AA T107: Space Grotesk + tracking for header chrome */
   font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+  letter-spacing: 0.08em;
 }
 
 .panel-header h2,
 .panel-header h1 {
   font-size: 13px;
   margin: 0;
-  /* UX-H T43: Chinese section titles — no uppercase */
-  letter-spacing: .04em;
+  /* UX-H T43: Chinese section titles — no uppercase; T107 tracking only */
+  letter-spacing: 0.08em;
   color: var(--text-muted);
   font-weight: 600;
 }
 
-/* UX-J T52: 一般｜二手 mode pills in panel header (reuse .pill-group / .pill-btn) */
+/* UX-J T52: 一般｜二手 mode pills in panel header (reuse .pill-group / .pill-btn)
+   UX-AC T112-r3: desktop compact (not 44px fat chips); mobile keeps ≥44 touch */
 .panel-header .sh-mode-pills {
   margin-left: auto;
   flex-shrink: 0;
 }
 
 .panel-header .sh-mode-pills .pill-btn {
-  min-height: 44px;
-  min-width: 52px;
-  padding: 8px 14px;
+  min-height: 28px;
+  min-width: 44px;
+  padding: 4px 12px;
   font-size: 12px;
+  line-height: 1.2;
 }
 
 /* UX-J T52: secondhand field block (IA from Mockup; tokens from site) */
@@ -993,9 +1082,9 @@ button.success:hover:not(:disabled) {
     margin-left: 0;
   }
   .panel-header .sh-mode-pills .pill-btn {
-    min-height: 44px;
-    min-width: 56px;
-    padding: 10px 16px;
+    min-height: 40px;
+    min-width: 48px;
+    padding: 8px 14px;
   }
   .secondhand-fields {
     padding: 12px;
@@ -1034,11 +1123,23 @@ select {
   color: var(--text);
   /* UX-H T42: form primary inputs readable */
   font-size: 14px;
-  min-height: 38px;
-  padding: 8px 11px;
+  /* UX-AB T101: primary form controls ≥42px (variant grid keeps own overrides) */
+  min-height: 42px;
+  padding: 10px 13px;
   width: 100%;
   outline: none;
   transition: border-color .2s;
+}
+
+/* UX-AB T101: type-scoped floor (checkboxes/radios/file keep min-height:auto via local overrides) */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="url"],
+input[type="email"],
+select {
+  min-height: 42px;
+  padding: 10px 13px;
 }
 
 input:focus,
@@ -1049,21 +1150,15 @@ select:focus {
   outline: none;
 }
 
-/* Scoped to exclude text-entry fields (2026-07-06, user prefers the
-   original border-color + box-shadow focus ring on inputs -- see theme polish
-   input:focus further down -- over this outline). Buttons/links had no focus
-   indicator at all before this, so the outline still adds real value there.
-   !important: .edit-input/.edit-textarea (declared later, same 0,1,0
-   specificity) set outline:none, which would otherwise silently win. */
+/* UX-AA T100: site-wide focus ring = theme --accent.
+   Text fields keep border-color + box-shadow: var(--focus-ring) (outline off).
+   Checkbox/radio/file still get the outline (no soft box-shadow ring on them).
+   !important: later .edit-input/.edit-textarea outline:none would otherwise win. */
 :focus-visible {
-  outline: 2px solid var(--accent3) !important;
+  outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
-/* Checkbox/radio/file inputs are excluded from this exclusion -- they don't
-   get the box-shadow ring below (that rule's visual effect only reads as a
-   "ring" on wide text-style fields), so they still need the outline. */
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus-visible,
 textarea:focus-visible,
 select:focus-visible {
@@ -1078,10 +1173,13 @@ select:focus-visible {
   border-color: var(--accent2);
 }
 
+/* UX-AC T119: long field errors must wrap inside the form column */
 .field-msg {
   font-size: 11px;
   margin-top: 2px;
   color: var(--text-muted);
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .skel {
@@ -1094,6 +1192,144 @@ select:focus-visible {
 @keyframes skel-shine {
   0% { background-position: 100% 50%; }
   100% { background-position: 0 50%; }
+}
+
+/* UX-X T90: Dashboard skeleton (shimmer left→right; tokens only) */
+.skeleton {
+  background: var(--surface2);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+  position: relative;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--text) 5%, transparent) 50%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.5s ease infinite;
+}
+@keyframes skeleton-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+.dash-skel-todo {
+  display: grid;
+  gap: 10px;
+}
+.dash-skel-card {
+  height: 80px;
+  width: 100%;
+}
+.dash-skel-funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dash-skel-funnel-bar {
+  height: 36px;
+  max-width: 100%;
+}
+.dash-skel-block {
+  width: 100%;
+}
+.dash-skel-quota {
+  height: 120px;
+}
+.dash-skel-cost {
+  height: 100px;
+}
+.dash-skel-health {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dash-skel-health-cell {
+  height: 60px;
+  width: 100%;
+}
+
+/* UX-X T92: add-product flow step indicator */
+.step-indicator {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0 0 14px;
+  padding: 4px 0 2px;
+}
+.step-indicator-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.step-indicator-line {
+  height: 2px;
+  flex-grow: 1;
+  background: var(--border);
+  margin: 11px 8px 0; /* vertically center with 24px dots */
+  min-width: 12px;
+}
+.step-indicator-line.is-done {
+  background: var(--success);
+}
+.step-indicator-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: var(--frame-w) solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  background: transparent;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.step-indicator-item.is-active .step-indicator-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.step-indicator-item.is-done .step-indicator-dot {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--on-solid);
+}
+.step-indicator-label {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+@media (max-width: 959px) {
+  .step-indicator-label {
+    /* Mobile: circles only */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .step-indicator-item {
+    /* Touch target 44px around 24px circle */
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
 }
 
 .field.error .field-msg {
@@ -1128,8 +1364,10 @@ select:focus-visible {
   line-height: 1.6;
 }
 
+/* UX-AB T101: textarea floor 62px (edit-textarea keeps its taller override) */
 textarea {
-  min-height: 80px;
+  min-height: 62px;
+  padding: 10px 13px;
   resize: vertical;
 }
 
@@ -1264,22 +1502,59 @@ textarea {
   flex-shrink: 0;
 }
 
+/* UX-W T87: sort control — visual weight separate from filter pills */
 .results-sort-label {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   flex-shrink: 0;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface2);
+  box-shadow: var(--shadow-s);
+  min-height: 32px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.results-sort-label:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.results-sort-icon {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+.results-sort-label:hover .results-sort-icon {
+  color: var(--accent);
+}
+.results-sort-label:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+.results-sort-label:focus-within .results-sort-icon {
+  color: var(--accent);
 }
 
 .sort-sel {
   width: auto;
-  min-height: 32px;
-  padding: 4px 28px 4px 10px;
-  font-size: 11px;
+  min-height: 28px;
+  padding: 2px 26px 2px 4px;
+  font-size: 12px;
+  font-weight: 600;
   border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.results-sort-label:hover .sort-sel,
+.sort-sel:focus {
   color: var(--text);
+  outline: none;
 }
 
 /* B12: stage filter pills under batch toolbar (reuse .pill-group/.pill-btn tokens). */
@@ -1953,9 +2228,10 @@ textarea {
   flex: 1;
 }
 .seq-review-progress {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 .seq-review-title {
   font-size: 14px;
@@ -1969,6 +2245,25 @@ textarea {
   flex-shrink: 0;
   min-height: 40px;
   font-weight: 600;
+}
+/* UX-W T89: sequential review progress bar under header */
+.seq-review-progress-track {
+  flex-shrink: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--surface2);
+  overflow: hidden;
+}
+.seq-review-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+  transition: width 200ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .seq-review-progress-fill {
+    transition: none;
+  }
 }
 .seq-review-hints {
   flex-shrink: 0;
@@ -2559,18 +2854,22 @@ textarea {
   color: var(--text-muted);
   flex-shrink: 0;
 }
-/* UX-I T53: workbench fail reason under status chips */
+/* UX-I T53 + UX-AC T115: workbench fail reason under status chips (contain overflow) */
 .rc-fail-reason {
-  margin: 6px 0 0;
-  font-size: 12.5px;
+  margin: 4px 14px 0;
+  padding: 6px 10px;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.5;
   color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+  border-radius: var(--radius-s);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+  overflow-wrap: break-word;
 }
 .ir-body {
   border-top: 1px solid var(--border-soft);
@@ -3625,6 +3924,38 @@ textarea {
   box-sizing: border-box;
 }
 .v-dim-x { background: none; border: 0; cursor: pointer; color: var(--text-muted); font-size: 14px; min-height: 28px; min-width: 28px; padding: 0; }
+
+/* UX-AB T104: VariantEditor inline double-confirm (red + shake; 3s auto-reset in JS) */
+@keyframes arm-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+.variant-box .btn-mini.v-arm-confirm,
+.variant-box .v-dim-x.v-arm-confirm {
+  color: var(--danger);
+  border-color: var(--danger);
+  font-weight: 700;
+  animation: arm-shake 0.4s ease;
+}
+.variant-box .v-dim-x.v-arm-confirm {
+  min-width: auto;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .variant-box .btn-mini.v-arm-confirm,
+  .variant-box .v-dim-x.v-arm-confirm {
+    animation: none;
+  }
+}
 .vgrid-hdr, .vgrid-row {
   display: grid; gap: 6px; align-items: center; padding: 6px 2px;
 }
@@ -3843,6 +4174,7 @@ textarea {
   white-space: pre-wrap;
 }
 
+/* UX-AC T119: notices can carry long error strings — keep inside container */
 .notice {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -3851,6 +4183,8 @@ textarea {
   padding: 12px;
   font-size: 12px;
   line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ── Tone cards (copy style picker) ── */
@@ -4172,7 +4506,8 @@ textarea {
     left: 12px;
     right: 12px;
     top: auto;
-    bottom: calc(72px + env(safe-area-inset-bottom));
+    /* UX-AB T83: clear mobile tabbar via --tabbar-h */
+    bottom: calc(var(--tabbar-h) + 8px + env(safe-area-inset-bottom));
     max-width: none;
     min-width: 0;
   }
@@ -4237,12 +4572,12 @@ textarea {
 }
 
 /* ── Add / primary action buttons ── */
-/* UX-H T40: converge with .button.primary (accent fill CTA family) */
+/* UX-H T40: converge with .button.primary (accent fill CTA family)
+   UX-Z T111: .btn-gen 44px/13px (was mockup 50/14); .act-btn 38px medium */
 .btn-add,
-.btn-gen,
-.button.primary.btn-add,
-.button.primary.btn-gen {
-  width: 100%;
+.button.primary.btn-add {
+  width: auto;
+  min-width: 120px;
   background: var(--accent);
   color: var(--accent-fg);
   border: 1px solid var(--accent);
@@ -4261,6 +4596,110 @@ textarea {
   gap: 8px;
 }
 
+/* Generate CTA — UX-AC T112: auto width (not full panel); height ≥44 touch */
+.btn-gen,
+.button.primary.btn-gen {
+  width: auto;
+  min-width: 180px;
+  max-width: 100%;
+  margin: 0 auto;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-s, 8px);
+  padding: 12px 20px;
+  min-height: 44px;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: .04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* UX-AC T112: restore bar — compact inline actions */
+.workspace-restore-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.workspace-restore-notice .btn-mini {
+  min-height: 28px;
+  padding: 3px 12px;
+  font-size: 11px;
+}
+
+/* UX-AC T112-r3: card footer actions compact.
+   Target plain `button` too — ResultCard footer historically lacked .act-btn,
+   so global `button { min-height:38px }` made 重新生成/核准 look fat. */
+.rc-actions button,
+.rc-actions .act-btn {
+  padding: 5px 11px;
+  min-height: 30px;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+  border-radius: var(--radius-s, 8px);
+}
+.rc-actions button.danger,
+.rc-actions .act-btn.danger {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  color: var(--danger);
+}
+@media (max-width: 960px) {
+  .rc-actions button,
+  .rc-actions .act-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+}
+
+/* Spinner on solid accent CTA must use --accent-fg (not --accent) */
+.btn-gen .spinner,
+.button.primary.btn-gen .spinner {
+  border-color: color-mix(in srgb, var(--accent-fg) 35%, transparent);
+  border-top-color: var(--accent-fg);
+  margin-right: 0;
+}
+
+/* Mockup act-btn family (batch / card medium actions) */
+.act-btn {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 13px;
+  min-height: 38px;
+  border-radius: var(--radius-s, 8px);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all .2s;
+}
+.act-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+.act-btn.fill {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+.act-btn.good {
+  background: var(--success);
+  color: var(--on-solid);
+  border-color: var(--success);
+}
+
 .btn-add:hover,
 .btn-gen:hover {
   filter: brightness(1.05);
@@ -4268,11 +4707,7 @@ textarea {
   box-shadow: var(--shadow-s);
 }
 
-.btn-add:disabled,
-.btn-gen:disabled {
-  opacity: .5;
-  cursor: not-allowed;
-}
+/* T97: opacity/cursor handled by unified button:disabled block above */
 
 /* ── Result cards ── */
 /* B1: 生成四步驟進度卡 (driven by nestory:generation-progress, rendered atop the
@@ -4402,12 +4837,25 @@ textarea {
   flex-wrap: wrap;
 }
 
+/* UX-T T74: 16px 視覺不變；::before 擴充透明觸控區（約 40×40） */
 .rc-checkbox {
+  position: relative;
   cursor: pointer;
   flex-shrink: 0;
   width: 16px;
   height: 16px;
   margin: 0;
+}
+.rc-checkbox::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+@media (max-width: 960px) {
+  .rc-checkbox {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 /* B9 D4-A: collapsed main thumb */
@@ -4448,15 +4896,104 @@ textarea {
   min-height: 36px;
 }
 
+/* UX-AC T114: chips sit with header chrome (compact; not a heavy row) */
 .rc-status-chips {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
-  padding: 0 14px 10px;
+  padding: 0;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-/* B9 req2: notice visible while collapsed (never silent fail) */
+/* UX-AC T114: archive → icon-only × on card corner */
+.result-card {
+  position: relative;
+}
+.rc-dismiss-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, color .15s, opacity .15s;
+  opacity: 0;
+}
+.result-card:hover .rc-dismiss-btn,
+.rc-dismiss-btn:focus-visible {
+  opacity: 1;
+}
+.rc-dismiss-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  color: var(--danger);
+}
+.rc-dismiss-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* UX-AC T116: product library — accent-tint vs generic hdr-btn */
+.hdr-btn-library {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  color: var(--accent);
+  font-weight: 700;
+}
+.hdr-btn-library:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-color: var(--accent);
+}
+
+/* UX-AC T118: mobile card touch + always-visible dismiss */
+@media (max-width: 960px) {
+  .rc-header {
+    padding: 14px;
+    gap: 10px;
+  }
+  .rc-quick {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .rc-quick-btn {
+    min-height: 44px;
+    flex: 0 1 auto;
+  }
+  .rc-dismiss-btn {
+    opacity: 1;
+    width: 32px;
+    height: 32px;
+    top: 10px;
+    right: 10px;
+  }
+  /* room for × so title doesn't collide */
+  .result-card .rc-header {
+    padding-right: 40px;
+  }
+}
+
+/* UX-AC T105-lite: primary-role aliases share core CTA look (no TSX rename sweep) */
+.ir-btn-confirm,
+.ir-batch-confirm {
+  min-height: 40px;
+  font-weight: 700;
+  border-radius: var(--radius-s, 8px);
+}
+
+/* B9 req2 + UX-AC T115: notice visible while collapsed (never silent fail; contain long text) */
 .rc-collapsed-notice {
   margin: 0 14px 10px;
   padding: 8px 12px;
@@ -4464,6 +5001,8 @@ textarea {
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
   background: color-mix(in srgb, var(--accent) 10%, var(--surface2));
   border: 1px solid var(--border);
   color: var(--text-dim);
@@ -4476,7 +5015,7 @@ textarea {
   font-weight: 600;
 }
 
-/* B9 underline tabs */
+/* B9 underline tabs + UX-W T86 fade / accent bar */
 .rc-tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
@@ -4489,6 +5028,7 @@ textarea {
 }
 
 .rc-tab {
+  position: relative;
   padding: 10px 14px;
   font-size: 12px;
   font-weight: 600;
@@ -4504,18 +5044,92 @@ textarea {
 }
 
 .rc-tab:hover {
-  color: var(--text);
+  color: var(--accent);
+}
+
+/* inactive hover: semi-transparent accent bar */
+.rc-tab:hover:not(.active)::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
 }
 
 .rc-tab.active {
   color: var(--accent);
-  border-bottom-color: var(--accent);
+  border-bottom-color: transparent;
   font-weight: 700;
+}
+
+/* active: solid accent underline (token-driven per theme) */
+.rc-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.rc-tab:disabled,
+.rc-tab[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
 }
 
 .rc-tabpanel {
   display: block;
   padding-bottom: 4px;
+  animation: rc-tab-fade 120ms ease-out;
+}
+
+@keyframes rc-tab-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-tabpanel {
+    animation: none;
+  }
+}
+
+/* UX-W T88: long copy tab — cap height + scroll + bottom fade hint */
+.rc-tabpanel--copy {
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  position: relative;
+}
+.rc-tabpanel--copy::after {
+  content: "";
+  position: sticky;
+  bottom: 0;
+  display: block;
+  height: 32px;
+  margin-top: -32px;
+  background: linear-gradient(transparent, var(--surface));
+  pointer-events: none;
+}
+@media (max-width: 959px) {
+  .rc-tabpanel--copy {
+    max-height: 240px;
+  }
 }
 
 /* UX-M T64: specs tab embeds shared VariantEditor; keep card from horizontal page blowout */
@@ -4718,11 +5332,7 @@ textarea {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-.mini-btn:disabled,
-.btn-mini:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
+/* T97: mini disabled opacity/cursor → unified button:disabled */
 
 .mini-btn.danger:hover:not(:disabled),
 .btn-mini.danger:hover:not(:disabled) {
@@ -4751,16 +5361,20 @@ textarea {
   padding: 0 14px 14px;
 }
 
+/* UX-AC T117: field spacing (no CN uppercase — T43 / AGENTS) */
 .rc-field {
-  margin-bottom: 10px;
+  margin-bottom: 16px;
+}
+.rc-field:last-child {
+  margin-bottom: 4px;
 }
 
 .rc-label {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--text-muted);
   /* UX-H T43: Chinese field labels — no uppercase */
-  letter-spacing: .02em;
+  letter-spacing: .04em;
   margin-bottom: 4px;
 }
 
@@ -4856,32 +5470,35 @@ textarea {
   line-height: 1;
   font-weight: 700;
 }
-/* UX-H T40: save-version keeps success tone; size aligned with primary CTA */
+/* UX-H T40 + UX-AC T117: save-version = solid success CTA (mockup-like) */
 .btn-save-version {
   display: flex;
-  width: 100%;
+  width: calc(100% - 30px);
   align-items: center;
   justify-content: center;
   gap: 6px;
   min-height: 40px;
-  margin: 12px 0 4px;
-  padding: 10px 14px;
+  margin: 10px 15px;
+  padding: 11px 14px;
   border-radius: var(--radius-s, 10px);
-  border: 1px solid color-mix(in srgb, var(--success) 45%, var(--border));
-  background: color-mix(in srgb, var(--success) 12%, var(--surface2));
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
+  border: none;
+  background: var(--success);
+  color: var(--on-solid);
+  font-size: 12.5px;
+  font-weight: 800;
+  box-shadow: var(--shadow-s);
   cursor: pointer;
   transition: all .2s;
 }
 .btn-save-version:hover:not(:disabled) {
-  border-color: var(--success);
-  background: color-mix(in srgb, var(--success) 18%, var(--surface2));
+  filter: brightness(1.06);
+  background: var(--success);
+  border: none;
 }
 .btn-save-version:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  filter: none;
 }
 
 .rc-tags {
@@ -4900,10 +5517,14 @@ textarea {
   color: var(--text-dim);
 }
 
+/* UX-AA T107: copy preview reading size (was ~12–12.5px) */
 .rc-text {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-dim);
-  line-height: 1.7;
+  line-height: 1.8;
+}
+.rc-text.long {
+  line-height: 1.95;
 }
 
 .audit-badge {
@@ -5014,11 +5635,13 @@ textarea {
   align-self: flex-start;
 }
 
+/* UX-AC T117: tighter actions row */
 .rc-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   margin-top: 10px;
+  padding: 0 15px 15px;
 }
 
 .rc-actions-group {
@@ -5049,43 +5672,55 @@ textarea {
   to { transform: rotate(360deg); }
 }
 
-/* ── Empty state (UX-G T45: results / factory / records share this) ── */
+/* ── Empty state (UX-G T45 + UX-AB T85: icon + title + desc) ── */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 48px 24px;
+  gap: 0;
+  padding: 32px 16px;
   text-align: center;
   color: var(--text-muted);
 }
 
-.empty-state > .muted {
-  margin: 0;
-  max-width: 28em;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .empty-icon {
   font-size: 32px;
-  margin-bottom: 4px;
-  opacity: .3;
+  opacity: 0.6;
   line-height: 1;
+}
+
+.empty-state-title {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.empty-state-desc,
+.empty-state > .muted {
+  margin: 4px 0 0;
+  max-width: 28em;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
 }
 
 .empty-state-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-top: 8px;
+  margin-top: 12px;
   min-height: 44px;
 }
 
-@media (max-width: 959px) {
+@media (max-width: 960px) {
   .empty-state {
-    padding: 36px 16px;
+    padding: 24px 12px;
+  }
+  .empty-icon {
+    font-size: 28px;
   }
   .empty-state-cta {
     min-height: 44px;
@@ -5249,11 +5884,17 @@ textarea {
     min-height: 44px !important;
   }
 
+  /* UX-AB T83: tabbar height token for toast / help pop offsets */
+  :root {
+    --tabbar-h: 64px;
+  }
+
   .mobile-tabbar {
     position: fixed;
     left: 10px;
     right: 10px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
+    /* UX-AB T83: sit on safe-area (horizontal inset kept) */
+    bottom: calc(env(safe-area-inset-bottom));
     z-index: 900;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -5301,6 +5942,30 @@ textarea {
   /* B16 + UX-B T4/T5 workbench */
   .workbench-panes {
     grid-template-columns: 1fr;
+  }
+  /* UX-X T93: mobile tab body clips slide animation (desktop unaffected) */
+  .workbench-mobile-body {
+    overflow: hidden;
+  }
+  .workbench-mobile-tab-enter {
+    animation: slide-in-right 200ms ease-out;
+  }
+  .workbench-mobile-tab-enter-reverse {
+    animation: slide-in-left 200ms ease-out;
+  }
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(24px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slide-in-left {
+    from { opacity: 0; transform: translateX(-24px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .workbench-mobile-tab-enter,
+    .workbench-mobile-tab-enter-reverse {
+      animation: none;
+    }
   }
   .sub-tabs {
     display: grid;
@@ -5410,6 +6075,9 @@ textarea {
   .btn-add {
     min-height: 44px;
   }
+  .act-btn {
+    min-height: 44px;
+  }
   .rc-header {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -5433,6 +6101,8 @@ textarea {
   }
   .sort-sel {
     width: 100%;
+    flex: 1;
+    min-width: 0;
   }
   /* 16px stops iOS Safari auto-zoom on focus (also for tablet-width phones) */
   input[type="text"],
@@ -5488,8 +6158,8 @@ textarea {
   .results-batch-toolbar { gap: 8px; }
   .batch-primary-action { min-height: 44px; }
   .batch-more > summary.btn-mini { min-height: 44px; }
-  .results-sort-label { margin-left: 0; width: 100%; }
-  .sort-sel { width: 100%; min-height: 44px; }
+  .results-sort-label { margin-left: 0; width: 100%; min-height: 44px; }
+  .sort-sel { width: 100%; flex: 1; min-width: 0; min-height: 44px; }
 
   /* 16px keeps iOS Safari from auto-zooming when a field gains focus. */
   input[type="text"],
@@ -5508,6 +6178,7 @@ textarea {
 
   /* 44px minimum touch target for the primary action. */
   .btn-add { min-height: 44px; }
+  .act-btn { min-height: 44px; }
 }
 
 @media (max-width: 420px) {
@@ -6033,21 +6704,15 @@ body[data-theme="kitty"] .formula-preview {
 body[data-theme="kitty"] .rate-val {
   color: var(--warn);
 }
-/* ── Toast / snackbar system ───────────────────────────────────────────────
-   Design note: unlike the v7 mockup's solid-fill accent pill, this uses the
-   app's existing "soft outline chip" language (surface bg + text + coloured
-   left bar) instead of filling the whole toast with --warn/--success as a
-   background. Reason: --warn is a light yellow in the nordic and kitty
-   themes (#f6ce45 / #ffd966) — filling the toast with that colour and
-   putting white/dark text on top produces poor contrast in at least one
-   theme. Text is always var(--text-dim) on var(--surface), the same pairing
-   used everywhere else in the app, so contrast is guaranteed regardless of
-   theme. The colour only shows up as the left accent bar + icon chip, which
-   is enough to read the status at a glance without risking unreadable text. */
+/* ── Toast / snackbar system (UX-Z T110: mockup-style solid pill) ───────────
+   Solid fill + 999px pill. Success/error: --on-solid on status colour.
+   Warn: --accent-fg on --warn (dark text in dark theme). Kitty warn yellow
+   (#ffd966) is too bright for light text → force --text. */
 .toast-host {
   position: fixed;
   left: 50%;
-  bottom: calc(84px + env(safe-area-inset-bottom));
+  /* UX-AB T83: desktop --tabbar-h=0 → 12px; mobile 64+12 above tabbar */
+  bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom));
   z-index: 1400;
   display: flex;
   flex-direction: column-reverse;
@@ -6060,70 +6725,67 @@ body[data-theme="kitty"] .rate-val {
 .toast {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-width: 220px;
+  gap: 8px;
+  min-width: 200px;
   max-width: 88vw;
-  padding: 10px 14px 10px 12px;
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--idle);
-  border-radius: var(--radius-m);
-  background: var(--surface);
-  color: var(--text-dim);
+  padding: 10px 20px;
+  border: none;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
-  text-align: left;
+  font-weight: 700;
+  text-align: center;
   cursor: pointer;
   box-shadow: var(--shadow-m);
+  /* UX-T T76: host 是 pointer-events:none；子項必須 auto 才能點／聚焦 */
   pointer-events: auto;
   animation: toast-in 0.18s ease;
 }
 .toast:hover {
   transform: var(--hover-transform);
 }
+/* UX-T T76: 全站 :focus-visible 已蓋 outline；此處再釘一次避免被 outline:none 蓋掉 */
+.toast:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* T110: drop left bar + icon circle; keep glyph as plain label on solid fill */
 .toast-ic {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 800;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--idle) 16%, var(--surface));
-  color: var(--idle);
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 800;
+  background: transparent;
+  color: inherit;
 }
 .toast-msg {
   line-height: 1.4;
   white-space: pre-line;
 }
 .toast--success {
-  border-left-color: var(--success);
-}
-.toast--success .toast-ic {
-  background: color-mix(in srgb, var(--success) 16%, var(--surface));
-  color: var(--success);
+  background: var(--success);
+  color: var(--on-solid);
 }
 .toast--error {
-  border-left-color: var(--danger);
-}
-.toast--error .toast-ic {
-  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
-  color: var(--danger);
+  background: var(--danger);
+  color: var(--on-solid);
 }
 .toast--warn {
-  border-left-color: var(--warn);
-}
-.toast--warn .toast-ic {
-  background: color-mix(in srgb, var(--warn) 20%, var(--surface));
-  color: color-mix(in srgb, var(--warn) 65%, var(--text));
+  background: var(--warn);
+  color: var(--accent-fg);
 }
 .toast--info {
-  border-left-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
 }
-.toast--info .toast-ic {
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
-  color: var(--accent);
+/* Nordic/kitty warn yellows need dark text (accent-fg is white there) */
+body[data-theme="nordic"] .toast--warn,
+body[data-theme="kitty"] .toast--warn {
+  color: var(--text);
 }
 @keyframes toast-in {
   from {
@@ -6136,9 +6798,6 @@ body[data-theme="kitty"] .rate-val {
   }
 }
 @media (max-width: 960px) {
-  .toast-host {
-    bottom: calc(76px + env(safe-area-inset-bottom));
-  }
   .toast {
     min-width: 0;
   }
@@ -6146,4 +6805,154 @@ body[data-theme="kitty"] .rate-val {
 /* Note: uses the existing .sr-only utility already defined in globals.css
    (~line 1039) for the "畫面朗讀／輔助科技" prefix — no need to add
    another one. */
+
+/* ── Login page polish (UX-U T79–T82) ───────────────────────────────────────
+   Reuses: .panel / .panel-header / .brand-dot / .spinner / .notice / --danger.
+   Scoped under .login-panel so other .panel pages are untouched. */
+.login-panel {
+  max-width: 400px;
+  margin: 12vh auto 0;
+}
+.login-panel-header {
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  text-align: center;
+}
+/* brand-dot reuses topbar .brand-dot (kitty → --warn via existing rule) */
+.login-brand .brand-dot {
+  margin-bottom: 12px;
+}
+.login-panel .panel-header h1.login-brand-title,
+.login-brand-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: normal;
+  font-family: var(--font-noto-sans-tc), "Noto Sans TC", sans-serif;
+}
+.login-brand-sub {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: normal;
+  font-family: var(--font-noto-sans-tc), "Noto Sans TC", sans-serif;
+}
+/* T81: spinner on solid primary — same accent-fg treatment as .btn-gen .spinner */
+.login-panel button.primary {
+  width: 100%;
+  gap: 6px;
+}
+.login-panel button.primary .spinner {
+  width: 14px;
+  height: 14px;
+  margin-right: 0;
+  border-color: color-mix(in srgb, var(--accent-fg) 30%, transparent);
+  border-top-color: var(--accent-fg);
+}
+/* T82 + UX-AC T119: auth error vs info notice; long messages wrap */
+.login-error {
+  border-left: 4px solid var(--danger);
+  color: var(--danger);
+  font-weight: 600;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+@media (max-width: 960px) {
+  .login-panel {
+    margin-top: 8vh;
+  }
+}
+
+/* ── UX-AC T113: Nordic / Kitty light-theme button visibility ──────────────
+   Dark keeps surface2 contrast; light themes lift default mini actions onto
+   --surface with a semi-transparent border + soft shadow so they don't blend
+   into panels. fill/good solid CTAs are excluded. Hover reasserts accent so
+   this block (later in the cascade) doesn't pin the idle surface bg. ── */
+body[data-theme="nordic"] .mini-btn,
+body[data-theme="nordic"] .btn-mini,
+body[data-theme="nordic"] .act-btn:not(.fill):not(.good),
+body[data-theme="nordic"] .rc-quick-btn {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--border) 55%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--border) 6%, transparent);
+}
+
+body[data-theme="kitty"] .mini-btn,
+body[data-theme="kitty"] .btn-mini,
+body[data-theme="kitty"] .act-btn:not(.fill):not(.good),
+body[data-theme="kitty"] .rc-quick-btn {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--border) 5%, transparent);
+}
+
+/* Hover: keep accent frame + wash (base rules alone lose to theme bg above) */
+body[data-theme="nordic"] .mini-btn:hover:not(:disabled),
+body[data-theme="nordic"] .btn-mini:hover:not(:disabled),
+body[data-theme="kitty"] .mini-btn:hover:not(:disabled),
+body[data-theme="kitty"] .btn-mini:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+body[data-theme="nordic"] .mini-btn.danger:hover:not(:disabled),
+body[data-theme="nordic"] .btn-mini.danger:hover:not(:disabled),
+body[data-theme="kitty"] .mini-btn.danger:hover:not(:disabled),
+body[data-theme="kitty"] .btn-mini.danger:hover:not(:disabled) {
+  border-color: var(--accent2);
+  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent2) 8%, transparent);
+}
+
+body[data-theme="nordic"] .act-btn:hover:not(:disabled):not(.fill):not(.good),
+body[data-theme="kitty"] .act-btn:hover:not(:disabled):not(.fill):not(.good) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* sel pills on light themes — ensure a visible edge on pale panels */
+body[data-theme="nordic"] .sel,
+body[data-theme="kitty"] .sel {
+  border-color: color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+/* Ring / active selection still needs accent frame (overrides soft .sel edge) */
+body[data-theme="nordic"] .sel--ring,
+body[data-theme="nordic"] .theme-btn.active,
+body[data-theme="nordic"] .grade-btn.active,
+body[data-theme="nordic"] .grade-btn.sel--fill,
+body[data-theme="nordic"] .tone-card.sel,
+body[data-theme="nordic"] .tone-card.sel--ring,
+body[data-theme="nordic"] .mini-btn.sel,
+body[data-theme="nordic"] .btn-mini.sel,
+body[data-theme="nordic"] .pick-grid .pk.sel,
+body[data-theme="kitty"] .sel--ring,
+body[data-theme="kitty"] .theme-btn.active,
+body[data-theme="kitty"] .grade-btn.active,
+body[data-theme="kitty"] .grade-btn.sel--fill,
+body[data-theme="kitty"] .tone-card.sel,
+body[data-theme="kitty"] .tone-card.sel--ring,
+body[data-theme="kitty"] .mini-btn.sel,
+body[data-theme="kitty"] .btn-mini.sel,
+body[data-theme="kitty"] .pick-grid .pk.sel {
+  border-color: var(--accent);
+}
+
+/* Filled selection keeps intentional solid border token (not soft mix) */
+body[data-theme="nordic"] .sel--fill,
+body[data-theme="nordic"] .pill-btn.active,
+body[data-theme="kitty"] .sel--fill,
+body[data-theme="kitty"] .pill-btn.active {
+  border-color: var(--border);
+}
 

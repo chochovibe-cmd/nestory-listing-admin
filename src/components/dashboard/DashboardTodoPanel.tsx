@@ -320,6 +320,15 @@ export function DashboardTodoPanel() {
 
   const counts = useMemo(() => countTodoBuckets(rows, TODO_FETCH_LIMIT), [rows]);
   const cards = useMemo(() => buildTodoCards(counts), [counts]);
+  /** UX-AB T85: all todo buckets zero → empty-state instead of four zero cards */
+  const todoAllEmpty = useMemo(
+    () =>
+      counts.copy_review === 0 &&
+      counts.image_review === 0 &&
+      counts.failed === 0 &&
+      counts.ready_to_publish === 0,
+    [counts]
+  );
   const truncNote = useMemo(() => todoTruncationNotice(counts), [counts]);
 
   const funnelStats = useMemo(
@@ -429,11 +438,24 @@ export function DashboardTodoPanel() {
           </div>
           <div className="panel-body dash-todo-body">
             {loading ? (
-              <p className="dash-todo-status">載入中…</p>
+              <div className="dash-skel-todo" role="status" aria-label="載入中">
+                <div className="skeleton dash-skel-card" />
+                <div className="skeleton dash-skel-card" />
+                <div className="skeleton dash-skel-card" />
+              </div>
             ) : error ? (
               <p className="dash-todo-status dash-todo-error" role="alert">
                 {error}
               </p>
+            ) : todoAllEmpty ? (
+              /* UX-AB T85: unified empty-state when no backlog */
+              <div className="empty-state">
+                <div className="empty-icon" aria-hidden>
+                  ✅
+                </div>
+                <p className="empty-state-title">今日待辦已清空</p>
+                <p className="empty-state-desc">太棒了，沒有待處理項目</p>
+              </div>
             ) : (
               <>
                 {truncNote ? (
@@ -479,7 +501,15 @@ export function DashboardTodoPanel() {
           </div>
           <div className="panel-body dash-funnel-body">
             {loading ? (
-              <p className="dash-todo-status">載入中…</p>
+              <div className="dash-skel-funnel" role="status" aria-label="載入中">
+                {[100, 85, 70, 55, 40].map((w) => (
+                  <div
+                    key={w}
+                    className="skeleton dash-skel-funnel-bar"
+                    style={{ width: `${w}%` }}
+                  />
+                ))}
+              </div>
             ) : error ? (
               <p className="dash-todo-status dash-todo-error" role="alert">
                 {error}
@@ -528,7 +558,11 @@ export function DashboardTodoPanel() {
           </div>
           <div className="panel-body dash-quota-body">
             {quotaLoading ? (
-              <p className="dash-todo-status">載入中…</p>
+              <div
+                className="skeleton dash-skel-block dash-skel-quota"
+                role="status"
+                aria-label="載入中"
+              />
             ) : quotaTableHint ? (
               <p className="dash-todo-status dash-todo-error" role="alert">
                 {quotaTableHint}
@@ -617,7 +651,11 @@ export function DashboardTodoPanel() {
           </div>
           <div className="panel-body dash-quota-body">
             {costLoading ? (
-              <p className="dash-todo-status">載入中…</p>
+              <div
+                className="skeleton dash-skel-block dash-skel-cost"
+                role="status"
+                aria-label="載入中"
+              />
             ) : costTableHint ? (
               <p className="dash-todo-status dash-todo-error" role="alert">
                 {costTableHint}
@@ -769,7 +807,12 @@ export function DashboardTodoPanel() {
           </div>
           <div className="panel-body dash-quota-body">
             {healthLoading ? (
-              <p className="dash-todo-status">載入中…</p>
+              <div className="dash-skel-health" role="status" aria-label="載入中">
+                <div className="skeleton dash-skel-health-cell" />
+                <div className="skeleton dash-skel-health-cell" />
+                <div className="skeleton dash-skel-health-cell" />
+                <div className="skeleton dash-skel-health-cell" />
+              </div>
             ) : healthDraftHint && healthHistoryHint ? (
               <p className="dash-todo-status dash-todo-error" role="alert">
                 {healthDraftHint}

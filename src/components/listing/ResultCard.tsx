@@ -1786,6 +1786,22 @@ export function ResultCard({
       className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}${leaving ? " is-leaving" : ""}`}
       id={`draft-card-${draft.id}`}
     >
+      {/* UX-AC T114: archive as corner × (not text 移出) */}
+      {!isArchived && !sequentialMode ? (
+        <button
+          aria-label="移出工作佇列"
+          className="rc-dismiss-btn"
+          disabled={archiveBusy || quickBusy || regenerating || regeneratingField != null}
+          onClick={(event) => {
+            event.stopPropagation();
+            void archiveOne();
+          }}
+          title="移出工作佇列（可救回）"
+          type="button"
+        >
+          {archiveBusy ? "…" : "×"}
+        </button>
+      ) : null}
       <div className="rc-header" onClick={() => tryToggleExpand()}>
         {onToggle ? (
           <input
@@ -1915,15 +1931,6 @@ export function ResultCard({
               >
                 ↻ 重生
               </button>
-              <button
-                className="mini-btn rc-quick-btn"
-                disabled={archiveBusy || quickBusy || regenerating || regeneratingField != null}
-                onClick={() => void archiveOne()}
-                title="移出工作佇列（可救回）"
-                type="button"
-              >
-                {archiveBusy ? "…" : "🗄 移出"}
-              </button>
             </>
           ) : isImageStation ? (
             <>
@@ -1998,36 +2005,39 @@ export function ResultCard({
             </>
           ) : null}
         </span>
+        {/* UX-AC T114: station chips beside header actions (not a heavy solo row) */}
+        <div
+          className="rc-status-chips"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {(() => {
+            const primary = stationFlowPrimaryLabel(draft);
+            const secondary = secondaryStatusForResultCard(draft);
+            return (
+              <>
+                <span
+                  className={
+                    primary.kind === "fail"
+                      ? "schip schip--error"
+                      : "schip schip--run"
+                  }
+                >
+                  {primary.label}
+                </span>
+                {secondary ? <StatusBadge status={secondary} /> : null}
+              </>
+            );
+          })()}
+          {!isCopyStation && pipelineImages.length > 0 && unmarkedImages.length > 0 ? (
+            <span className="img-mark-status" title={unmarkedBlockMessage ?? undefined}>
+              <span className="st-dot" />
+              圖片未標記（{unmarkedImages.length}）
+            </span>
+          ) : null}
+        </div>
         <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
       </div>
 
-      {/* UX-J T56: primary = station/flow Chinese; StatusBadge only when incremental */}
-      <div className="rc-status-chips">
-        {(() => {
-          const primary = stationFlowPrimaryLabel(draft);
-          const secondary = secondaryStatusForResultCard(draft);
-          return (
-            <>
-              <span
-                className={
-                  primary.kind === "fail"
-                    ? "schip schip--error"
-                    : "schip schip--run"
-                }
-              >
-                {primary.label}
-              </span>
-              {secondary ? <StatusBadge status={secondary} /> : null}
-            </>
-          );
-        })()}
-        {!isCopyStation && pipelineImages.length > 0 && unmarkedImages.length > 0 ? (
-          <span className="img-mark-status" title={unmarkedBlockMessage ?? undefined}>
-            <span className="st-dot" />
-            圖片未標記（{unmarkedImages.length}）
-          </span>
-        ) : null}
-      </div>
       {failReasonSummary ? (
         <p className="rc-fail-reason" role="status" title={failReasonSummary}>
           {failReasonSummary}
@@ -2095,8 +2105,9 @@ export function ResultCard({
           )}
 
           {!isImageStation && activeTab === "copy" ? (
-            <div className="rc-tabpanel" role="tabpanel">
+            <div className="rc-tabpanel rc-tabpanel--copy" role="tabpanel">
               {/* Desktop two-col balanced grid (same idea as .row AI類型/SKU); mobile stacks. */}
+              {/* UX-W T88: max-height + scroll on .rc-tabpanel--copy */}
               <div className="rc-tabpanel-grid">
                 <div className="rc-field rc-span-2">
                   <div className="rc-label">快速狀態</div>
@@ -2719,11 +2730,17 @@ export function ResultCard({
               <>
                 <span className="rc-actions-group">
                   {hasUncommittedEdits() ? (
-                    <button disabled={comboSaving || regeneratingField != null} onClick={() => void save()} type="button">
+                    <button
+                      className="act-btn"
+                      disabled={comboSaving || regeneratingField != null}
+                      onClick={() => void save()}
+                      type="button"
+                    >
                       儲存此版本
                     </button>
                   ) : null}
                   <button
+                    className="act-btn"
                     disabled={regenerating || regeneratingField != null || comboSaving}
                     onClick={() => setRegenOpen(true)}
                     type="button"
@@ -2732,15 +2749,14 @@ export function ResultCard({
                   </button>
                 </span>
                 <span className="rc-actions-group rc-actions-group-review">
+                  {/* T114: archive is corner × only — no footer「移出佇列」duplicate */}
                   <button
+                    className="act-btn fill"
                     disabled={quickBusy || hasBlockingWarnings(warningSummary)}
                     onClick={() => void approveOnly()}
                     type="button"
                   >
                     ✓ 核准
-                  </button>
-                  <button disabled={archiveBusy} onClick={() => void archiveOne()} type="button">
-                    🗄 移出佇列
                   </button>
                 </span>
               </>
@@ -2748,7 +2764,7 @@ export function ResultCard({
             {isImageStation ? (
               <span className="rc-actions-group rc-actions-group-review">
                 <button
-                  className={actionArm === "review" ? "danger" : undefined}
+                  className={actionArm === "review" ? "act-btn danger" : "act-btn fill"}
                   disabled={quickBusy || hasBlockingWarnings(warningSummary)}
                   onClick={() => void stationReview()}
                   title={station2Btn.title}
@@ -2760,11 +2776,11 @@ export function ResultCard({
                       ? station2Btn.arm
                       : station2Btn.primary}
                 </button>
-                <button onClick={() => setLockedPreviewOpen(true)} type="button">
+                <button className="act-btn" onClick={() => setLockedPreviewOpen(true)} type="button">
                   📄 定稿預覽
                 </button>
                 <button
-                  className={actionArm === "revision" ? "danger" : undefined}
+                  className={actionArm === "revision" ? "act-btn danger" : "act-btn"}
                   disabled={quickBusy}
                   onClick={() => void requestRevision()}
                   type="button"
@@ -2776,7 +2792,12 @@ export function ResultCard({
             {isReadyStation ? (
               <span className="rc-actions-group rc-actions-group-review">
                 {isArchived ? (
-                  <button disabled={archiveBusy} onClick={() => void unarchiveOne()} type="button">
+                  <button
+                    className="act-btn"
+                    disabled={archiveBusy}
+                    onClick={() => void unarchiveOne()}
+                    type="button"
+                  >
                     {archiveBusy ? "處理中…" : "解除封存"}
                   </button>
                 ) : (
@@ -2784,6 +2805,7 @@ export function ResultCard({
                     {/* UX-M T64: 站③ 規格／商品級價可編，需有儲存入口 */}
                     {hasUncommittedEdits() ? (
                       <button
+                        className="act-btn"
                         disabled={comboSaving || station3Busy}
                         onClick={() => void save()}
                         type="button"
@@ -2792,6 +2814,7 @@ export function ResultCard({
                       </button>
                     ) : null}
                     <button
+                      className="act-btn fill"
                       disabled={approveSummaryBusy || comboSaving || station3Busy}
                       onClick={() => setStation3Open(true)}
                       type="button"
@@ -2799,7 +2822,7 @@ export function ResultCard({
                       發布／匯出
                     </button>
                     <button
-                      className={actionArm === "return-copy" ? "danger" : undefined}
+                      className={actionArm === "return-copy" ? "act-btn danger" : "act-btn"}
                       disabled={quickBusy}
                       onClick={() => void returnFromReady("copy_review")}
                       type="button"
@@ -2807,7 +2830,7 @@ export function ResultCard({
                       {actionArm === "return-copy" ? "⚠ 確認退回文案" : "↩ 退回改文案"}
                     </button>
                     <button
-                      className={actionArm === "return-image" ? "danger" : undefined}
+                      className={actionArm === "return-image" ? "act-btn danger" : "act-btn"}
                       disabled={quickBusy}
                       onClick={() => void returnFromReady("image_review")}
                       type="button"

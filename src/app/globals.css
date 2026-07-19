@@ -7306,3 +7306,109 @@ body[data-theme="kitty"] .pill-btn.active {
   border-color: var(--border);
 }
 
+
+/* ============================================================
+   UX-BTN: 統一按鈕元件樣式（新增區塊，不影響既有 btn-* class）
+   ============================================================ */
+.nb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-s);
+  border: 1.5px solid var(--border);
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.nb-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.nb-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* 尺寸：桌機用 sm/md，手機一律強制 44px 觸控高度 */
+.nb-btn--sm {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.nb-btn--md {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+@media (max-width: 720px) {
+  .nb-btn--sm,
+  .nb-btn--md {
+    min-height: 44px;
+  }
+}
+
+.nb-btn--full {
+  width: 100%;
+}
+
+/* 變體配色，全部沿用既有 design token，不新增顏色 */
+.nb-btn--primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+.nb-btn--primary:hover:not(:disabled) {
+  /* Keep accent frame — global `button:hover` would otherwise force --accent3 */
+  border-color: var(--accent);
+  box-shadow: var(--drop-hover-shadow);
+}
+
+.nb-btn--secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border-soft);
+}
+.nb-btn--secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.nb-btn--ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: transparent;
+}
+.nb-btn--ghost:hover:not(:disabled) {
+  color: var(--text);
+  background: color-mix(in srgb, var(--border) 30%, transparent);
+  border-color: transparent;
+}
+
+.nb-btn--danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+}
+.nb-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+}
+
+/* loading 態小圓圈轉場，沿用既有 spinner 概念即可，無則用簡單 CSS spin */
+.nb-btn__spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: nb-btn-spin 0.6s linear infinite;
+}
+@keyframes nb-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

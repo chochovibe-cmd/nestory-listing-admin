@@ -7,6 +7,7 @@ import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
 import { showToast } from "@/components/Toast";
 import { StatusBadge } from "@/components/listing/StatusBadge";
+import { Button } from "@/components/ui/Button";
 import {
   secondaryStatusForResultCard,
   stationFlowPrimaryLabel
@@ -2835,18 +2836,20 @@ export function ResultCard({
               <>
                 <span className="rc-actions-group">
                   {hasUncommittedEdits() ? (
-                    <button
-                      className="act-btn"
+                    <Button
+                      size="sm"
                       disabled={comboSaving || regeneratingField != null}
+                      loading={comboSaving}
                       onClick={() => void save()}
                       type="button"
                     >
                       儲存此版本
-                    </button>
+                    </Button>
                   ) : null}
-                  <button
-                    className="act-btn"
-                    disabled={regenerating || regeneratingField != null || comboSaving}
+                  <Button
+                    size="sm"
+                    disabled={regeneratingField != null || comboSaving}
+                    loading={regenerating}
                     onClick={() => {
                       const remembered = recalledToneForIp(
                         typeof window !== "undefined" ? window.localStorage : null,
@@ -2859,98 +2862,102 @@ export function ResultCard({
                     }}
                     type="button"
                   >
-                    {regenerating ? "生成中..." : "↻ 重新生成"}
-                  </button>
+                    ↻ 重新生成
+                  </Button>
                 </span>
                 <span className="rc-actions-group rc-actions-group-review">
                   {/* T114: archive is corner × only — no footer「移出佇列」duplicate */}
-                  <button
-                    className="act-btn fill"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     disabled={quickBusy || hasBlockingWarnings(warningSummary)}
                     onClick={() => void approveOnly()}
                     type="button"
                   >
                     ✓ 核准
-                  </button>
+                  </Button>
                 </span>
               </>
             ) : null}
             {isImageStation ? (
               <span className="rc-actions-group rc-actions-group-review">
-                <button
-                  className={actionArm === "review" ? "act-btn danger" : "act-btn fill"}
-                  disabled={quickBusy || hasBlockingWarnings(warningSummary)}
+                <Button
+                  variant={actionArm === "review" ? "danger" : "primary"}
+                  size="sm"
+                  disabled={hasBlockingWarnings(warningSummary)}
+                  loading={quickBusy}
                   onClick={() => void stationReview()}
                   title={station2Btn.title}
                   type="button"
                 >
-                  {quickBusy
-                    ? "處理中…"
-                    : actionArm === "review"
-                      ? station2Btn.arm
-                      : station2Btn.primary}
-                </button>
-                <button className="act-btn" onClick={() => setLockedPreviewOpen(true)} type="button">
+                  {actionArm === "review" ? station2Btn.arm : station2Btn.primary}
+                </Button>
+                <Button size="sm" onClick={() => setLockedPreviewOpen(true)} type="button">
                   📄 定稿預覽
-                </button>
-                <button
-                  className={actionArm === "revision" ? "act-btn danger" : "act-btn"}
+                </Button>
+                <Button
+                  variant={actionArm === "revision" ? "danger" : "secondary"}
+                  size="sm"
                   disabled={quickBusy}
                   onClick={() => void requestRevision()}
                   type="button"
                 >
                   {actionArm === "revision" ? "⚠ 確認退回文案" : "↩ 退回修改文案"}
-                </button>
+                </Button>
               </span>
             ) : null}
             {isReadyStation ? (
               <span className="rc-actions-group rc-actions-group-review">
                 {isArchived ? (
-                  <button
-                    className="act-btn"
-                    disabled={archiveBusy}
+                  <Button
+                    size="sm"
+                    loading={archiveBusy}
                     onClick={() => void unarchiveOne()}
                     type="button"
                   >
-                    {archiveBusy ? "處理中…" : "解除封存"}
-                  </button>
+                    解除封存
+                  </Button>
                 ) : (
                   <>
                     {/* UX-M T64: 站③ 規格／商品級價可編，需有儲存入口 */}
                     {hasUncommittedEdits() ? (
-                      <button
-                        className="act-btn"
-                        disabled={comboSaving || station3Busy}
+                      <Button
+                        size="sm"
+                        disabled={station3Busy}
+                        loading={comboSaving}
                         onClick={() => void save()}
                         type="button"
                       >
                         儲存修改
-                      </button>
+                      </Button>
                     ) : null}
-                    <button
-                      className="act-btn fill"
+                    <Button
+                      variant="primary"
+                      size="sm"
                       disabled={approveSummaryBusy || comboSaving || station3Busy}
                       onClick={() => setStation3Open(true)}
                       type="button"
                     >
                       發布／匯出
-                    </button>
-                    <button
-                      className={actionArm === "return-copy" ? "act-btn danger" : "act-btn"}
+                    </Button>
+                    <Button
+                      variant={actionArm === "return-copy" ? "danger" : "secondary"}
+                      size="sm"
                       disabled={quickBusy}
                       onClick={() => void returnFromReady("copy_review")}
                       type="button"
                     >
                       {actionArm === "return-copy" ? "⚠ 確認退回文案" : "↩ 退回改文案"}
-                    </button>
-                    <button
-                      className={actionArm === "return-image" ? "act-btn danger" : "act-btn"}
+                    </Button>
+                    <Button
+                      variant={actionArm === "return-image" ? "danger" : "secondary"}
+                      size="sm"
                       disabled={quickBusy}
                       onClick={() => void returnFromReady("image_review")}
                       type="button"
                     >
                       {actionArm === "return-image" ? "⚠ 確認退回改圖" : "↩ 退回改圖"}
-                    </button>
+                    </Button>
                   </>
                 )}
               </span>

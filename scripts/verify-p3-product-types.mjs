@@ -193,7 +193,7 @@ check("回歸：絨毛／吊飾／公仔既有類型", () => {
   assert.equal(canonicalizeProductType("盲盒", map, fixed), "盲盒");
 });
 
-check("回歸：未知類型仍 null（本包仍 hard-block；B 方案另包）", () => {
+check("回歸：未知類型 canonicalize 仍 null（B 降級見 verify-p6）", () => {
   assert.equal(canonicalizeProductType("量子衛星", map, fixed), null);
   assert.equal(canonicalizeProductType("完全不存在的品類xyz", map, fixed), null);
 });
@@ -239,10 +239,16 @@ check("033 still owns 大型娃娃 seed", () => {
   );
 });
 
-// --- buildNestoryTagsV2Result missing message still present (A-path) ---
-check("blocked 路徑仍靠 missing 類型_（B 方案未實作）", () => {
+// --- P6 B：目錄外 warning-only；真空仍 missing（詳見 verify-p6）---
+check("P6 B：目錄外統一文案 + 真空 missing 仍保留", () => {
+  assert.match(src, /待收編類型：/);
+  assert.match(src, /未輸出類型 tag，不影響上架/);
   assert.match(src, /缺少 類型_ tag，請選擇商品類型/);
-  assert.match(src, /不在 Tags V2 固定類型中，未輸出 類型_ tag/);
+  assert.match(src, /offCatalogTypeLabels/);
+  // 不得把自由字／待確認當 類型_ tag 值
+  assert.doesNotMatch(src, /addTag\(\s*tags,\s*'類型_',\s*'待確認'/);
+  assert.doesNotMatch(src, /addTag\(\s*tags,\s*'類型_',\s*rawType/);
+  assert.doesNotMatch(src, /addTag\(\s*tags,\s*'類型_',\s*label/);
 });
 
 if (failures.length) {

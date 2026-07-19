@@ -6930,12 +6930,10 @@ body[data-theme="nordic"] {
   white-space: nowrap;
   margin-left: 2px;
 }
-/* !important on padding/font-size: as an <a> tag (the 登入 link), .hdr-btn
-   loses to ".nav a" on pure specificity (that selector has an extra element
-   qualifier, 0,1,1 vs .hdr-btn's 0,1,0) regardless of source order, so the
-   generic 8px/12px padding silently wins over this rule's 4px/10px. */
-.hdr-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px !important; border-radius: 999px; cursor: pointer; font-size: 11px !important; transition: all .2s; }
-.hdr-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+/* T84-7: .nav .hdr-btn (0,2,0) beats .nav a (0,1,1) by specificity — no !important needed.
+   All hdr-btn elements live inside <nav class="nav"> (HeaderControls). */
+.nav .hdr-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 11px; transition: all .2s; }
+.nav .hdr-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 /* UX-H T40: .btn-mini core rules live with .mini-btn above; header-specific overrides remain below */
 
 .header-status-wrap { position: relative; display: inline-flex; }

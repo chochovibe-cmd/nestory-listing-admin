@@ -33,6 +33,15 @@ const PRODUCT_IMAGES_BUCKET = "product-images";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ComposeDetailServiceClient = CostServiceClient & { storage: any };
 
+type ComposeImageRow = {
+  id: string;
+  image_type: string;
+  sort_order: number | null;
+  original_file_url: string | null;
+  processed_file_url: string | null;
+  generated_file_url: string | null;
+};
+
 export type RunComposeDetailInput = {
   serviceSupabase: ComposeDetailServiceClient;
   draftId: string;
@@ -192,12 +201,12 @@ export async function runComposeDetailForDraft(
     return { ok: false, draftId, error: imgErr.message, httpStatus: 500 };
   }
 
-  const rows = images ?? [];
-  const mains = rows.filter((r) => r.image_type === "main");
+  const rows = (images ?? []) as ComposeImageRow[];
+  const mains = rows.filter((r: ComposeImageRow) => r.image_type === "main");
   const main =
-    mains.find((r) => r.processed_file_url) ||
-    mains.find((r) => r.original_file_url) ||
-    rows.find((r) => r.processed_file_url || r.original_file_url);
+    mains.find((r: ComposeImageRow) => r.processed_file_url) ||
+    mains.find((r: ComposeImageRow) => r.original_file_url) ||
+    rows.find((r: ComposeImageRow) => r.processed_file_url || r.original_file_url);
 
   const mainUrl =
     (main?.processed_file_url as string | null) ||
@@ -345,7 +354,7 @@ export async function runComposeDetailForDraft(
 
   // Replace any prior generated_detail rows? Keep history: insert new, high sort_order
   const maxSort = rows.reduce(
-    (m, r) => Math.max(m, Number(r.sort_order) || 0),
+    (m: number, r: ComposeImageRow) => Math.max(m, Number(r.sort_order) || 0),
     0
   );
 

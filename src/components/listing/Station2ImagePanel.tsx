@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import { showToast } from "@/components/Toast";
 import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
@@ -504,14 +505,14 @@ export function Station2ImagePanel({
               ref={fileInputRef}
               type="file"
             />
-            <button
-              className="mini-btn"
+            <Button
+              size="sm"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
               type="button"
             >
               {uploading ? "上傳中…" : subtab === "main" ? "＋ 補主圖" : "＋ 補詳情圖"}
-            </button>
+            </Button>
           </div>
         ) : (
           <p className="muted s2-img-spec-hint">規格圖請在主圖分頁標記，不另開上傳。</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 import {
   COPY_VERSION_FIELD_LABELS,
   type CopyVersionField,
@@ -122,13 +123,14 @@ export function CopyPreviewBlock({ html }: { html: string }) {
         className="rc-html-preview rc-copy-preview-body"
         dangerouslySetInnerHTML={{ __html: html }}
       />
-      <button
-        className="mini-btn rc-copy-preview-toggle"
+      <Button
+        size="sm"
+        className="rc-copy-preview-toggle"
         onClick={() => setExpanded((v) => !v)}
         type="button"
       >
         {expanded ? "收合" : "展開全文"}
-      </button>
+      </Button>
     </div>
   );
 }

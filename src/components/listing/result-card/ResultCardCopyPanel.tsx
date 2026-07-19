@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import {
   APPROVED_STATUSES,
   CopyPreviewBlock,
@@ -129,8 +130,8 @@ export function ResultCardCopyPanel({
                     ⚠ 角色「{name}」尚未建檔
                     {!draft.ip_name ? "（請先確認 IP 已建檔）" : ""}
                   </span>
-                  <button
-                    className="mini-btn"
+                  <Button
+                    size="sm"
                     disabled={
                       !draft.ip_name ||
                       quickAddingCharacter === name ||
@@ -141,7 +142,7 @@ export function ResultCardCopyPanel({
                     type="button"
                   >
                     {quickAddingCharacter === name ? "新增中…" : "一鍵新增角色"}
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>

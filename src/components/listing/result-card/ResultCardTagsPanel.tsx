@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/listing/result-card/resultCardUi";
 import { extractMissingCharacterNames } from "@/lib/characters/missingCharacterWarnings";
 import type { GradedWarning } from "@/lib/drafts/warningTiers";
@@ -81,15 +82,15 @@ export function ResultCardTagsPanel({
                           {w.text}
                         </div>
                         {missingFromLine.map((name) => (
-                          <button
-                            className="mini-btn"
+                          <Button
+                            size="sm"
                             disabled={!ipName || quickAddingCharacter === name || regenerating}
                             key={`${w.text}-${name}`}
                             onClick={() => onQuickAddCharacter(name)}
                             type="button"
                           >
                             {quickAddingCharacter === name ? "新增中…" : `一鍵新增「${name}」`}
-                          </button>
+                          </Button>
                         ))}
                       </div>
                     );

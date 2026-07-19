@@ -1,0 +1,56 @@
+{
+  "package": "SYN-0b-Horizon",
+  "styleSource": "docs/合成詳情圖打樣/品牌風格-來自Horizon主題.md",
+  "tokens": {
+    "bg": "#faf8f3",
+    "surface": "#faf8f3",
+    "surface2": "#f5f3f0",
+    "title": "#2a2a2a",
+    "body": "#4a4a4a",
+    "ink": "#2a2a2a",
+    "inkSolid": "#000000",
+    "lineSoft": "rgba(0,0,0,0.06)",
+    "lineInput": "#dfdfdf",
+    "onInk": "#ffffff"
+  },
+  "fonts": {
+    "title": "Noto Serif TC (installed)",
+    "body": "Noto Sans TC (installed)",
+    "fallback": "Microsoft JhengHei available as CSS fallback"
+  },
+  "regenBase": false,
+  "budgetUsd": 0.25,
+  "unitEstimateUsd": 0.07,
+  "startedAt": "2026-07-19T01:17:35.743Z",
+  "items": [
+    {
+      "productKey": "miffy_lamp",
+      "ok": true,
+      "file": "米菲臺燈-混合-B2底A字.png",
+      "baseFile": "米菲臺燈-混合-底圖.png",
+      "baseReused": true,
+      "baseNote": "reused prior SYN-0b no-text base (cream minimal; no API)",
+      "costUsd": 0,
+      "draftId": "8b3a35b9-2a9b-4b14-84d3-5c7e84f9b8f8",
+      "title": "馬克圖布 × Miffy|米菲臺燈|舒適居家擺件",
+      "textSource": "draft fields 100% via Horizon HTML template (no LLM rewrite)",
+      "style": "Horizon scheme-1 cream minimal"
+    },
+    {
+      "productKey": "razer_mouse",
+      "ok": true,
+      "file": "Razer皮卡丘滑鼠-混合-B2底A字.png",
+      "baseFile": "Razer皮卡丘滑鼠-混合-底圖.png",
+      "baseReused": true,
+      "baseNote": "reused prior SYN-0b no-text base (cream minimal; no API)",
+      "costUsd": 0,
+      "draftId": "29b827a7-f2e3-47dc-8ade-7a03e0fd473c",
+      "title": "Razer × 寶可夢|皮卡丘聯名|毒蝰V3專業版SE無線遊戲滑鼠",
+      "textSource": "draft fields 100% via Horizon HTML template (no LLM rewrite)",
+      "style": "Horizon scheme-1 cream minimal"
+    }
+  ],
+  "finishedAt": "2026-07-19T01:17:48.940Z",
+  "totalEstimateUsd": 0,
+  "retriesUsed": 0
+}

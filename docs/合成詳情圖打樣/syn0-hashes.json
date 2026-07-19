@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-07-19T01:15:15.487Z",
+  "generatedAt": "2026-07-19T01:18:47.960Z",
   "files": [
     {
       "file": "HASHES.md",
-      "bytes": 1845,
-      "sha256": "2df72af898213710492e03c61eec766e8f80ae568ce311e0b4c539db3101f680"
+      "bytes": 2893,
+      "sha256": "c856e72c001f3fa924dcd8abc1f70a28416a7209f8c056bdf0efd6bf303f0661"
     },
     {
       "file": "Razer皮卡丘滑鼠-A-模板合成-nordic.png",
@@ -23,8 +23,8 @@
     },
     {
       "file": "Razer皮卡丘滑鼠-混合-B2底A字.png",
-      "bytes": 946127,
-      "sha256": "9a73090ba5efbbaee21c7aa80a04e02e77e06dc8f8899718e991d4792954cbe4"
+      "bytes": 1211364,
+      "sha256": "34956120e48e230b6dddf1ba27a1698d43c6df4bb6dec6ee9c08419f6f9ffd80"
     },
     {
       "file": "Razer皮卡丘滑鼠-混合-底圖.png",
@@ -43,8 +43,13 @@
     },
     {
       "file": "syn0-hashes.json",
-      "bytes": 2544,
-      "sha256": "8daddeba0e785f4ef768d5c78aef361b7808a1399554d4d45fb171a3e71e9a71"
+      "bytes": 4060,
+      "sha256": "3b22679506cbcabb592e0cfa15f2d25487555aab709c05ee4baa468b138acde4"
+    },
+    {
+      "file": "syn0b-horizon-report.json",
+      "bytes": 1916,
+      "sha256": "23b61091e17c60bd0df3b4670ce7e0b344deed933b91ce9d0771399ea29c655c"
     },
     {
       "file": "syn0b-report.json",
@@ -63,8 +68,8 @@
     },
     {
       "file": "混合說明-SYN0b.md",
-      "bytes": 2312,
-      "sha256": "9951da55346a638062aa8cac58bf9366882ab8772f7060b6eb798f2fcdbcb91c"
+      "bytes": 2220,
+      "sha256": "a04bf014352fd95089922bb3eaa2d2cf7aea15c87210bd41eba24b28670e01db"
     },
     {
       "file": "米菲臺燈-A-模板合成-dark.png",
@@ -88,8 +93,8 @@
     },
     {
       "file": "米菲臺燈-混合-B2底A字.png",
-      "bytes": 882227,
-      "sha256": "737be1cd64991904a232cf53dbd4113766bdce0d92648ee185befaa71d64ad19"
+      "bytes": 1097362,
+      "sha256": "d8e79dacec27bf8a79082e3bb0c20d43bae7653c55818980473b93538b3911f5"
     },
     {
       "file": "米菲臺燈-混合-底圖.png",
@@ -100,6 +105,11 @@
       "file": "templates/Razer皮卡丘滑鼠-A-nordic.html",
       "bytes": 7643,
       "sha256": "91a48b4b589c902721733309a7681a494653dc9eb3e7149113402eeb779e2a75"
+    },
+    {
+      "file": "templates/Razer皮卡丘滑鼠-hybrid-horizon.html",
+      "bytes": 8382,
+      "sha256": "5f48626be65d2de7229757507e230fa84824c2a5d114f80bf93007b900fa5102"
     },
     {
       "file": "templates/Razer皮卡丘滑鼠-hybrid.html",
@@ -115,6 +125,11 @@
       "file": "templates/米菲臺燈-A-nordic.html",
       "bytes": 7186,
       "sha256": "568aafa97dbe84c50517c00b6df9a125a6bc64bfcb747d547f76dbd204b701d8"
+    },
+    {
+      "file": "templates/米菲臺燈-hybrid-horizon.html",
+      "bytes": 7957,
+      "sha256": "a8762a3560227c4826eda3e8c09112999d1a0092564d77cb3b49c0b1345e19d7"
     },
     {
       "file": "templates/米菲臺燈-hybrid.html",

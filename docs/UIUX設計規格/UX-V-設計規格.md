@@ -58,15 +58,15 @@ tabbar 高度（含 padding）實際約 64px，那 toast 應該在 `64px + 10px 
 globals.css 是單一 CSS 檔（6102 行），同檔內出現多處 `!important` 來解決 specificity 衝突。
 這不是 bug，但會讓後續維護者難以覆寫樣式，每次修改都可能連鎖 !important。
 
-### 現況記錄（非修改項，列為技術債提醒）
+### 進度（2026-07-19 UX-BTN S3）
 
-此項不產出具體修改規格，但建議：
-1. 新增 CSS 規則時**禁止新增 !important**
-2. 遇到 specificity 問題優先提高 selector 精確度或調整 source order
-3. 長期可考慮拆分 globals.css 為模組（component-level CSS modules），但這是架構變更，超出 UIUX 規格範圍
+| 子項 | 狀態 |
+|---|---|
+| 1. 新增 CSS **禁止** `!important` | ✅ 已寫入 `globals.css` 檔頭＋`AGENTS.md` 鐵則 |
+| 2. 衝突優先提高 selector／source order | ✅ 政策文字已定 |
+| 3. 長期拆 CSS modules | ⏸ 仍轉 Fable（架構債） |
 
-#### ⚠ 轉交 Fable 總指揮
-此項屬於 CSS 架構技術債，建議由 Fable 總指揮排進 refactor backlog。
+既有約 13 處屬性 `!important` **本輪不刪**（歷史補丁）。
 
 ---
 

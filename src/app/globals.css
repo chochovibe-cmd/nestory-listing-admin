@@ -1,6 +1,22 @@
 /* UX-K T50: fonts loaded via next/font in layout.tsx (--font-noto-sans-tc / --font-space-grotesk).
    Do not re-add Google Fonts @import (FOUT / CSP / privacy). */
 
+/* ============================================================
+   UX-BTN S3 / UX-V T84：!important 止血規則（2026-07-19）
+   ------------------------------------------------------------
+   ✅ 允許：本檔既有的 !important（約 13 處屬性，見下表）——歷史 specificity
+      補丁，本輪不拆。
+   ❌ 禁止：再新增任何 !important。
+      衝突時優先：① 提高 selector 精確度 ② 調整 source order ③ 抽共用 class
+      真的繞不開 → 先寫進施工清單／進度筆記等確認，不要默默加。
+   長期：拆 CSS modules 屬 T84／Fable 工程債，不在本規則範圍。
+
+   既有 !important 清單（改動既有規則時可對照；數字會隨重構變動）：
+   - .nav button/a min-height:0（壓過全域 button 38px）
+   - focus-visible outline 與 .edit-input outline:none 對打
+   - 少數 RWD 觸控高度／display 切換／.hdr-btn 尺寸
+   ============================================================ */
+
 /* Design tokens ported from 分支/index.html (three themes, dark is default). */
 :root,
 body[data-theme="dark"] {

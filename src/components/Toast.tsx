@@ -23,6 +23,7 @@ export type ShowToastOptions = {
  *   showToast("上傳失敗，請重試", "error");
  *   showToast("有 2 件缺重量欄位，已略過", "warn");
  *   showToast("已核准 3 筆", "success", 10000, { actionLabel: "復原", onAction: ... });
+ *   // 復原窗秒數請用 quickUndo.UNDO_TOAST_MS（S1 嚴重度分級）
  * Falls back to a no-op on the server (safe to call from shared helpers).
  */
 export function showToast(

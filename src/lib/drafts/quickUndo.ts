@@ -1,9 +1,34 @@
 /**
- * BX2: 10s undo helpers for 核准／標圖分流／封存.
+ * BX2 + UX-BTN S1: undo helpers for 核准／標圖分流／封存.
  * Uses existing return-stage + batch archive APIs (no new routes).
+ *
+ * Toast 顯示秒數依動作嚴重度分級（見 UNDO_TOAST_MS）——
+ * 可乾淨復原的維持 10s；送工廠為 best-effort，多給一點時間按「復原」。
+ * 真正發布到 Shopify 不提供 toast 復原（走站③二次確認／modal）。
  */
 
 export type UndoKind = "approve" | "station2" | "archive";
+
+/**
+ * Undo toast 自動消失毫秒數（嚴重度分級）。
+ * 卡內「封存復原」倒數也必須用同一組數字，避免 toast 還在但卡內已過期。
+ */
+export const UNDO_TOAST_MS = {
+  /** 核准文案 → 可乾淨 return-stage */
+  approve: 10_000,
+  /** 軟封存 → 可乾淨 unarchive */
+  archive: 10_000,
+  /** 標圖 → 待發布（全 keep） */
+  station2Ready: 10_000,
+  /** 送生圖工廠 — best-effort；多 5 秒給人按復原 */
+  station2Factory: 15_000
+} as const;
+
+export type UndoToastKind = keyof typeof UNDO_TOAST_MS;
+
+export function undoToastDuration(kind: UndoToastKind): number {
+  return UNDO_TOAST_MS[kind];
+}
 
 /** Undo copy approve → back to 站① (needs_revision / copy_review). */
 export async function undoApproveDrafts(draftIds: string[]): Promise<{
@@ -21,7 +46,7 @@ export async function undoApproveDrafts(draftIds: string[]): Promise<{
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           target: "copy_review",
-          comment: "10秒內復原核准"
+          comment: "Toast 復原核准"
         })
       });
       if (res.ok) ok += 1;
@@ -59,7 +84,7 @@ export async function undoStation2Drafts(draftIds: string[]): Promise<{
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           target: "image_review",
-          comment: "10秒內復原標圖分流"
+          comment: "Toast 復原標圖分流"
         })
       });
       if (res.ok) ok += 1;

@@ -75,13 +75,12 @@ import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import {
   undoApproveDrafts,
   undoArchiveDrafts,
-  undoStation2Drafts
+  undoStation2Drafts,
+  UNDO_TOAST_MS
 } from "@/lib/drafts/quickUndo";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import { createClient } from "@/lib/supabase/client";
 import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
-
-const UNDO_TOAST_MS = 10_000;
 
 /**
  * Workbench variant row for ResultCard price range + UX-M T64 specs hydrate.
@@ -157,7 +156,7 @@ export function DraftResultsPanel({
     archiveUndoTimerRef.current = window.setTimeout(() => {
       setLastArchiveIds(null);
       archiveUndoTimerRef.current = null;
-    }, 10_000);
+    }, UNDO_TOAST_MS.archive);
   }
 
   useEffect(() => () => clearArchiveUndoTimer(), []);
@@ -429,7 +428,7 @@ export function DraftResultsPanel({
       const okMsg = `已核准 ${payload.approvedCount ?? n} 筆文案（尚未發布）`;
       setMessage(okMsg);
       // BX2: 10s toast 復原 → return-stage copy_review
-      showToast(okMsg, "success", UNDO_TOAST_MS, {
+      showToast(okMsg, "success", UNDO_TOAST_MS.approve, {
         actionLabel: "復原",
         onAction: async () => {
           const result = await undoApproveDrafts(approvedIds);
@@ -579,8 +578,11 @@ export function DraftResultsPanel({
         }) || okMsg.replace(/\n/g, " · ");
       setMessage(okMsg);
       const undoIds = [...advanceIds, ...sendIds];
-      // BX2: 10s 復原 → return-stage image_review（送工廠為 best-effort）
-      showToast(toastLine, "success", UNDO_TOAST_MS, {
+      // BX2 + S1: 送工廠 best-effort → 較長 toast；純待發布用 10s
+      const station2UndoMs = sendIds.length
+        ? UNDO_TOAST_MS.station2Factory
+        : UNDO_TOAST_MS.station2Ready;
+      showToast(toastLine, "success", station2UndoMs, {
         actionLabel: "復原",
         onAction: async () => {
           const result = await undoStation2Drafts(undoIds);
@@ -997,8 +999,8 @@ export function DraftResultsPanel({
                 includesPublished: Boolean(payload.includesPublished)
               });
         setMessage(okMsg);
-        // BX2: toast 復原（與 notice 復原鈕並存）
-        showToast(okMsg, "success", UNDO_TOAST_MS, {
+        // BX2: toast 復原（與 notice 復原鈕並存；秒數與 armArchiveUndo 一致）
+        showToast(okMsg, "success", UNDO_TOAST_MS.archive, {
           actionLabel: archivedIds.length ? "復原" : undefined,
           onAction: archivedIds.length
             ? async () => {

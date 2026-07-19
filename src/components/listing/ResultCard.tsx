@@ -34,7 +34,8 @@ import { Station2ImagePanel } from "@/components/listing/Station2ImagePanel";
 import {
   undoApproveDrafts,
   undoArchiveDrafts,
-  undoStation2Drafts
+  undoStation2Drafts,
+  UNDO_TOAST_MS
 } from "@/lib/drafts/quickUndo";
 import {
   recalledToneForIp,
@@ -430,7 +431,7 @@ export function ResultCard({
     archiveUndoTimerRef.current = window.setTimeout(() => {
       setLastArchiveIds(null);
       archiveUndoTimerRef.current = null;
-    }, 10_000);
+    }, UNDO_TOAST_MS.archive);
   }
 
   useEffect(() => () => clearCardArchiveUndoTimer(), []);
@@ -627,9 +628,9 @@ export function ResultCard({
               includesPublished: isPublishedArchiveStatus(draft.status)
             });
       setMarkMessage(msg);
-      // BX2: toast 復原（卡內復原鈕仍保留）
+      // BX2: toast 復原（卡內復原鈕仍保留；秒數與 armCardArchiveUndo 一致）
       if (archivedIds.length) {
-        showToast(msg, "success", 10_000, {
+        showToast(msg, "success", UNDO_TOAST_MS.archive, {
           actionLabel: "復原",
           onAction: async () => {
             const result = await undoArchiveDrafts(archivedIds);
@@ -1168,7 +1169,7 @@ export function ResultCard({
         const okMsg =
           typeof payload.message === "string" ? payload.message : formatStation2SuccessToast({ advanced: true, sentToFactory: false });
         setMarkMessage(okMsg);
-        showToast(okMsg, "success", 10_000, {
+        showToast(okMsg, "success", UNDO_TOAST_MS.station2Ready, {
           actionLabel: "復原",
           onAction: async () => {
             const result = await undoStation2Drafts([draft.id]);
@@ -1199,7 +1200,8 @@ export function ResultCard({
           ? payload.message
           : formatStation2SuccessToast({ advanced: false, sentToFactory: true });
       setMarkMessage(okMsg.includes("工廠") ? okMsg : `${okMsg} · 可到生圖工廠查看`);
-      showToast(okMsg, "success", 10_000, {
+      // S1: 送工廠 best-effort → 15s 復原窗
+      showToast(okMsg, "success", UNDO_TOAST_MS.station2Factory, {
         actionLabel: "復原",
         onAction: async () => {
           const result = await undoStation2Drafts([draft.id]);
@@ -1282,7 +1284,7 @@ export function ResultCard({
       // UX-A T2 + §2.2 站名：標圖（覆寫「圖片審核」）
       setMessage("");
       // BX2: 10s 復原核准
-      showToast("已核准文案 → 進入標圖（文案已鎖定）", "success", 10_000, {
+      showToast("已核准文案 → 進入標圖（文案已鎖定）", "success", UNDO_TOAST_MS.approve, {
         actionLabel: "復原",
         onAction: async () => {
           const result = await undoApproveDrafts([draft.id]);

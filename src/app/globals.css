@@ -117,8 +117,8 @@ body[data-theme="nordic"] {
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
-  --shadow-s: 0 2px 0 rgba(28, 28, 28, .055);
-  --shadow-m: 0 3px 0 rgba(28, 28, 28, .065);
+  --shadow-s: 0 2px 0 rgba(28, 28, 28, .09);
+  --shadow-m: 0 3px 0 rgba(28, 28, 28, .11);
   --frame-w: 1.5px;
   --frame-w-panel: 1.5px;
   --frame-radius-panel: var(--radius-l);
@@ -166,8 +166,8 @@ body[data-theme="kitty"] {
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
-  --shadow-s: 0 2px 0 rgba(23, 23, 23, .045);
-  --shadow-m: 0 3px 0 rgba(23, 23, 23, .055);
+  --shadow-s: 0 2px 0 rgba(23, 23, 23, .08);
+  --shadow-m: 0 3px 0 rgba(23, 23, 23, .10);
   --frame-w: 1.5px;
   --frame-w-panel: 1.5px;
   --frame-radius-panel: var(--radius-l);
@@ -602,18 +602,6 @@ body[data-theme="kitty"] .topbar {
   gap: 8px;
 }
 
-/* Header controls (pills, 匯率, theme dots) are meant to stay compact like
-   分支's header — the generic `button { min-height: 38px }` form-field sizing
-   was stretching Claude/GPT and 測試/LLM into tall capsules next to the small
-   round theme buttons. Let each control's own padding decide its height.
-   !important: the later ".nav a, .button, button { min-height: 38px }"
-   rule has identical ".nav a" specificity and wins on source order alone,
-   so plain min-height:0 here silently loses for <a> tags (the 登入 link)
-   even though it correctly wins for actual <button> elements. */
-.nav button,
-.nav a {
-  min-height: 0 !important;
-}
 
 /* Mobile-only hamburger for the header tool cluster (not page nav). */
 .nav-toggle {
@@ -856,6 +844,23 @@ button {
 .button:hover,
 button:hover {
   border-color: var(--accent3);
+}
+
+/* T84-1: header controls stay compact — specificity (0,1,1) beats .nav a (0,1,1)
+   via source order (placed after the min-height:38px block above). */
+.nav button,
+.nav a {
+  min-height: 0;
+}
+
+/* UX-AD T122: press micro-shrink */
+button:active:not(:disabled),
+.act-btn:active:not(:disabled),
+.mini-btn:active:not(:disabled),
+.btn-mini:active:not(:disabled),
+.hdr-btn:active:not(:disabled),
+.nb-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 /* Disabled buttons previously looked pixel-identical to enabled ones (no
@@ -5140,12 +5145,14 @@ textarea {
   border-radius: var(--frame-radius-panel);
   overflow: hidden;
   box-shadow: var(--frame-shadow);
-  transition: box-shadow .2s, border-color .2s, opacity .25s ease;
+  transition: box-shadow .2s, border-color .2s, opacity .25s ease, transform .2s;
 }
 
 /* UX-H T49: soft hover shadow only when not selected — keep hard-edge active */
+/* UX-AD T123: micro-lift on hover */
 .result-card:hover:not(.active) {
   box-shadow: var(--shadow-s), var(--shadow-m);
+  transform: var(--hover-transform);
 }
 
 .result-card.active {
@@ -5155,11 +5162,19 @@ textarea {
   box-shadow: var(--card-active-shadow);
 }
 
-/* UX-H T49: soft-remove / archive leave fade (does not change business timing) */
-.is-fading,
-.is-leaving {
+/* UX-H T49: soft-remove fade (images / non-card) */
+.is-fading {
   opacity: 0.35;
   transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+/* UX-AD T128: card leave — fade + shrink before list remove */
+.result-card.is-leaving,
+.is-leaving {
+  opacity: 0;
+  transform: scale(0.97) translateY(-4px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
   pointer-events: none;
 }
 
@@ -5511,6 +5526,11 @@ textarea {
   }
 }
 
+/* T120: 文案 tab 強制單欄（其他 tab 不受影響） */
+.rc-tabpanel--copy .rc-tabpanel-grid {
+  grid-template-columns: 1fr;
+}
+
 /* Soft status chips (final site look — transparent/light + tinted border/text).
    Prefer .schip / .schip--* for new markup; .rc-status* stay as aliases. */
 .rc-status,
@@ -5714,6 +5734,57 @@ textarea {
 
 .rc-body {
   padding: 0 14px 14px;
+  /* UX-AD T127: expand enter only (React unmount has no exit animation) */
+  animation: rcBodyIn 0.2s ease;
+}
+
+@keyframes rcBodyIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* UX-AD T130: pricing mini dashboard (Mockup .price-card) */
+.rc-price-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+  margin-bottom: 16px;
+}
+.rc-price-item {
+  background: color-mix(in srgb, var(--surface2) 60%, var(--surface));
+  border-radius: var(--radius-s);
+  padding: 11px;
+  text-align: center;
+}
+.rc-price-item-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.rc-price-item-value {
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+}
+.rc-price-item-value.danger {
+  color: var(--danger);
+}
+.rc-price-item-value.success {
+  color: var(--success);
+}
+
+@media (max-width: 960px) {
+  .rc-price-summary {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 /* UX-AC T117: field spacing (no CN uppercase — T43 / AGENTS) */
@@ -6093,6 +6164,28 @@ textarea {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
+}
+
+/* UX-AD T125: Kitty accent button hover brightness */
+body[data-theme="kitty"] .act-btn.fill:hover,
+body[data-theme="kitty"] .act-btn.good:hover,
+body[data-theme="kitty"] .btn-gen:hover,
+body[data-theme="kitty"] .btn-save-version:hover {
+  filter: brightness(1.12);
+}
+
+/* UX-AD T126: Kitty/Nordic scrollbar visibility */
+body[data-theme="kitty"] ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 20%, transparent);
+}
+body[data-theme="kitty"] {
+  scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent;
+}
+body[data-theme="nordic"] ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+}
+body[data-theme="nordic"] {
+  scrollbar-color: color-mix(in srgb, var(--text) 18%, transparent) transparent;
 }
 
 /* ── Mobile floating tab bar (C1: 4 cells, shown <960px; Q3-A) ── */
@@ -7489,6 +7582,22 @@ body[data-theme="nordic"] .pill-btn.active,
 body[data-theme="kitty"] .sel--fill,
 body[data-theme="kitty"] .pill-btn.active {
   border-color: var(--border);
+}
+
+/* T121: 「更多」下拉面板內的 pill 文字色（淺色主題）
+   header topbar 的 pill 已由全域 kitty/nordic .pill-btn 規則設成白色；
+   .hdr-more-menu 多一層 selector，cascade 較晚且 specificity 較高，覆蓋頂部欄不受影響 */
+body[data-theme="kitty"] .hdr-more-menu .pill-btn {
+  color: var(--text);
+}
+body[data-theme="kitty"] .hdr-more-menu .pill-btn.active {
+  color: var(--accent-fg);
+}
+body[data-theme="nordic"] .hdr-more-menu .pill-btn {
+  color: var(--text);
+}
+body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
+  color: var(--accent-fg);
 }
 
 

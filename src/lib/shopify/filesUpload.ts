@@ -124,9 +124,24 @@ export function pickFinalizeSource(input: {
   return { kind: "none", reason: "missing processed_file_url and original_file_url" };
 }
 
-/** Q5-A: only main + variant go to Shopify Files (spec/detail stay off Files). */
-export function isFinalizeUploadImageType(imageType: string | null | undefined): boolean {
-  return imageType === "main" || imageType === "variant";
+/**
+ * Q5-A + SYN-1 F:
+ * - main + variant → Shopify Files
+ * - detail / generated_detail → only when retain-for-listing flags are true
+ * - otherwise stay Supabase temp (default not listed)
+ */
+export function isFinalizeUploadImageType(
+  imageType: string | null | undefined,
+  opts?: { retainForListing?: boolean }
+): boolean {
+  if (imageType === "main" || imageType === "variant") return true;
+  if (
+    (imageType === "detail" || imageType === "generated_detail") &&
+    opts?.retainForListing === true
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**

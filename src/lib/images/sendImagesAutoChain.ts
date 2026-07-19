@@ -1,15 +1,22 @@
 /**
- * D2-open + D4 hybrid: server-side auto chain after B14 送圖 batch create.
+ * D2-open + D4 hybrid + SYN-1 compose detail:
+ * server-side auto chain after B14 送圖 batch create.
  *
  * - All-keep → sharp → finalize (unchanged)
- * - Mixed de_text/regen (Q1-C): keep sharp+finalize; limited AI if time allows;
+ * - Mixed de_text/regen/to_trad (Q1-C): keep sharp+finalize; limited AI if time allows;
  *   else awaiting_d4 for POST /api/images/ai-process
+ * - SYN-1: after pipeline terminal, optional composeDetail (snapshot flag)
+ *   → awaiting_compose + POST /api/images/compose-detail when time budget short
  * - Q4-A: serial drafts; maxDuration budget 60s; stop when remaining < 8s
  * - Q5a: pure awaiting_d4 batch stays queued
  * - Never HTTP self-fetch
  */
 
 import type { ImageBatchSnapshotDraft } from "@/lib/drafts/createImageBatch";
+import {
+  runComposeDetailForDraft,
+  type ComposeDetailServiceClient
+} from "@/lib/images/detailCompose/runComposeDetail";
 import {
   AUTO_CHAIN_MAX_AI_IMAGES_PER_DRAFT,
   runAiProcessForDraft
@@ -34,6 +41,7 @@ export type DraftChainOutcome =
   | "done"
   | "failed"
   | "awaiting_d4"
+  | "awaiting_compose"
   | "time_budget"
   | "skipped_empty";
 
@@ -45,6 +53,7 @@ export type DraftChainSummary = {
   sharp: "done" | "failed" | "skipped" | "not_run";
   finalize: "done" | "failed" | "skipped" | "not_run" | "not_configured";
   d4?: "done" | "failed" | "partial" | "skipped" | "not_run" | "time_budget";
+  compose?: "done" | "failed" | "skipped" | "not_run" | "time_budget";
   sharpProcessed?: number;
   sharpFailed?: number;
   finalizeUploaded?: number;
@@ -138,7 +147,7 @@ export function mergeAutoChainWarning(
 }
 
 export function buildAutoChainWarning(
-  kind: "sharp" | "finalize" | "d4",
+  kind: "sharp" | "finalize" | "d4" | "compose",
   detail?: string
 ): string {
   const base =
@@ -146,12 +155,14 @@ export function buildAutoChainWarning(
       ? "送圖自動處理失敗：圖片轉檔"
       : kind === "finalize"
         ? "送圖自動處理失敗：上傳圖床"
-        : "送圖自動處理失敗：AI 去字／重生";
+        : kind === "compose"
+          ? "送圖自動處理失敗：詳情圖合成"
+          : "送圖自動處理失敗：AI 去字／重生／簡轉繁";
   const extra = detail?.trim() ? `（${detail.trim().slice(0, 80)}）` : "";
   return `${base}${extra}`.slice(0, 200);
 }
 
-/** Aggregate batch header status after per-draft outcomes (Q5a-A / Q6-A). */
+/** Aggregate batch header status after per-draft outcomes (Q5a-A / Q6-A / SYN-1). */
 export function aggregateBatchStatusAfterChain(
   summaries: DraftChainSummary[]
 ): { batchStatus: ImageBatchStatus; doneCount: number; failedCount: number } {
@@ -167,7 +178,7 @@ export function aggregateBatchStatusAfterChain(
       if (s.outcome === "skipped_empty") emptySkip += 1;
     } else if (s.outcome === "failed") {
       failedCount += 1;
-    } else if (s.outcome === "awaiting_d4") {
+    } else if (s.outcome === "awaiting_d4" || s.outcome === "awaiting_compose") {
       awaitingOnly += 1;
     } else if (s.outcome === "time_budget") {
       timeBudget += 1;
@@ -208,6 +219,73 @@ export function aggregateBatchStatusAfterChain(
     doneCount,
     failedCount
   };
+}
+
+/**
+ * SYN-1: after pipeline, try compose generated_detail when snapshot says so.
+ * Time budget → awaiting_compose (item stays queued). Failure → warning, still done.
+ */
+export async function tryComposeDetailInChain(input: {
+  serviceSupabase: SharpBatchServiceClient;
+  draftId: string;
+  composeDetail: boolean | undefined;
+  startedAt: number;
+  now: () => number;
+  deadlineMs: number;
+  minRemainingMs: number;
+}): Promise<{
+  compose: NonNullable<DraftChainSummary["compose"]>;
+  awaiting: boolean;
+  reason?: string;
+}> {
+  if (!input.composeDetail) {
+    return { compose: "skipped", awaiting: false, reason: "composeDetail off" };
+  }
+  if (
+    shouldStopForTimeBudget(input.startedAt, input.now(), {
+      deadlineMs: input.deadlineMs,
+      minRemainingMs: input.minRemainingMs
+    })
+  ) {
+    await appendDraftWarning(
+      input.serviceSupabase,
+      input.draftId,
+      "詳情圖合成待後補（時間預算不足）；可呼叫 POST /api/images/compose-detail"
+    );
+    return {
+      compose: "time_budget",
+      awaiting: true,
+      reason: "awaiting_compose time budget"
+    };
+  }
+
+  try {
+    const res = await runComposeDetailForDraft({
+      serviceSupabase: input.serviceSupabase as ComposeDetailServiceClient,
+      draftId: input.draftId
+    });
+    if (!res.ok) {
+      await appendDraftWarning(
+        input.serviceSupabase,
+        input.draftId,
+        buildAutoChainWarning("compose", res.error)
+      );
+      // Pipeline still usable — do not block item
+      return { compose: "failed", awaiting: false, reason: res.error };
+    }
+    if (res.status === "skipped") {
+      return { compose: "skipped", awaiting: false, reason: res.reason };
+    }
+    return { compose: "done", awaiting: false };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await appendDraftWarning(
+      input.serviceSupabase,
+      input.draftId,
+      buildAutoChainWarning("compose", msg)
+    );
+    return { compose: "failed", awaiting: false, reason: msg };
+  }
 }
 
 async function appendDraftWarning(
@@ -578,11 +656,33 @@ export async function runSendImagesAutoChain(
         continue;
       }
 
-      const itemStatus: ImageBatchItemStatus =
+      let itemStatus: ImageBatchItemStatus =
         keepRun.sharpFailed > 0 ||
         (keepRun.sharpProcessed === 0 && keepRun.sharpStatus === "failed")
           ? "failed"
           : "done";
+
+      let outcome: DraftChainOutcome =
+        itemStatus === "failed" ? "failed" : "done";
+      let composeStatus: DraftChainSummary["compose"] = "not_run";
+
+      if (itemStatus === "done") {
+        const c = await tryComposeDetailInChain({
+          serviceSupabase,
+          draftId: plan.draftId,
+          composeDetail: plan.snap?.composeDetail,
+          startedAt,
+          now,
+          deadlineMs,
+          minRemainingMs
+        });
+        composeStatus = c.compose;
+        if (c.awaiting) {
+          outcome = "awaiting_compose";
+          itemStatus = "queued";
+          stoppedEarly = true;
+        }
+      }
 
       await serviceSupabase
         .from("image_batch_items")
@@ -591,7 +691,8 @@ export async function runSendImagesAutoChain(
         .eq("draft_id", plan.draftId);
 
       // R2 Q3-B path complete → station③ (all-keep does not need 生圖工廠 review)
-      if (itemStatus === "done") {
+      // SYN-1: only advance when not awaiting compose
+      if (itemStatus === "done" && outcome === "done") {
         await advanceDraftToReadyStation(serviceSupabase, plan.draftId);
       }
 
@@ -599,15 +700,19 @@ export async function runSendImagesAutoChain(
         draftId: plan.draftId,
         title: baseTitle,
         decision: "run_all_keep",
-        outcome: itemStatus === "failed" ? "failed" : "done",
+        outcome,
         sharp: keepRun.sharpStatus,
         finalize: keepRun.finalizeStatus,
         d4: "skipped",
+        compose: composeStatus,
         sharpProcessed: keepRun.sharpProcessed,
         sharpFailed: keepRun.sharpFailed,
         finalizeUploaded: keepRun.finalizeUploaded,
         finalizeFailed: keepRun.finalizeFailed,
-        reason: plan.decision.reason,
+        reason:
+          outcome === "awaiting_compose"
+            ? "pipeline done; compose detail needs POST /api/images/compose-detail"
+            : plan.decision.reason,
         itemStatus
       });
       continue;
@@ -717,6 +822,25 @@ export async function runSendImagesAutoChain(
       }
     }
 
+    let composeStatus: DraftChainSummary["compose"] = "not_run";
+    if (outcome === "done" && itemStatus === "done") {
+      const c = await tryComposeDetailInChain({
+        serviceSupabase,
+        draftId: plan.draftId,
+        composeDetail: plan.snap?.composeDetail,
+        startedAt,
+        now,
+        deadlineMs,
+        minRemainingMs
+      });
+      composeStatus = c.compose;
+      if (c.awaiting) {
+        outcome = "awaiting_compose";
+        itemStatus = "queued";
+        stoppedEarly = true;
+      }
+    }
+
     await serviceSupabase
       .from("image_batch_items")
       .update({ item_status: itemStatus })
@@ -731,6 +855,7 @@ export async function runSendImagesAutoChain(
       sharp: keepRun.sharpStatus,
       finalize: keepRun.finalizeStatus,
       d4: d4Status,
+      compose: composeStatus,
       sharpProcessed: keepRun.sharpProcessed,
       sharpFailed: keepRun.sharpFailed,
       finalizeUploaded: keepRun.finalizeUploaded,
@@ -740,8 +865,10 @@ export async function runSendImagesAutoChain(
       d4TimeBudget,
       reason:
         outcome === "awaiting_d4"
-          ? "hybrid partial; remaining de_text/regenerate need POST /api/images/ai-process"
-          : plan.decision.reason,
+          ? "hybrid partial; remaining de_text/regenerate/to_trad need POST /api/images/ai-process"
+          : outcome === "awaiting_compose"
+            ? "pipeline done; compose detail needs POST /api/images/compose-detail"
+            : plan.decision.reason,
       itemStatus
     });
   }
@@ -788,14 +915,17 @@ export function formatAutoChainOperatorMessage(input: {
     const done = chain.drafts.filter((d) => d.outcome === "done" || d.outcome === "skipped_empty").length;
     const failed = chain.drafts.filter((d) => d.outcome === "failed").length;
     const awaiting = chain.drafts.filter((d) => d.outcome === "awaiting_d4").length;
+    const awaitingCompose = chain.drafts.filter((d) => d.outcome === "awaiting_compose").length;
     const timed = chain.drafts.filter((d) => d.outcome === "time_budget").length;
     const d4Done = chain.drafts.filter((d) => d.d4 === "done" || d.d4 === "partial").length;
+    const composeDone = chain.drafts.filter((d) => d.compose === "done").length;
 
     parts.push(`已建立送圖批次（${readyCount} 件）。`);
     parts.push(
-      `自動處理：成功 ${done}／待 AI 去字重生 ${awaiting}／失敗 ${failed}` +
+      `自動處理：成功 ${done}／待 AI 去字重生 ${awaiting}／待詳情圖合成 ${awaitingCompose}／失敗 ${failed}` +
         (timed > 0 ? `／逾時未跑 ${timed}` : "") +
         (d4Done > 0 ? `／已試 AI ${d4Done}` : "") +
+        (composeDone > 0 ? `／詳情圖 ${composeDone}` : "") +
         `。`
     );
 

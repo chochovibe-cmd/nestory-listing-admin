@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   const { data: drafts, error: draftError } = await serviceSupabase
     .from("product_drafts")
-    .select("id, title_zh, taobao_title, original_title")
+    .select("id, title_zh, taobao_title, original_title, image_flags")
     .in("id", uniqueIds);
 
   if (draftError) {
@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
     return {
       draftId: id,
       title,
+      imageFlags: draft?.image_flags ?? null,
       images: (imagesByDraft.get(id) ?? []).map((img) => ({
         id: img.id,
         image_type: img.image_type,

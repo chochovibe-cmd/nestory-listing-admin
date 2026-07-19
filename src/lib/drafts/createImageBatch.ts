@@ -3,6 +3,7 @@
  * Used by POST /api/drafts/batch/send-images and verify-b14.
  */
 
+import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
 import {
   formatUnmarkedBlockMessage,
   isPipelineImage,
@@ -19,6 +20,8 @@ export type ImageBatchItemInput = {
       "id" | "image_type" | "process_intent" | "is_spec_process" | "sort_order" | "created_at"
     >
   >;
+  /** Draft image_flags — used for SYN-1 generate_detail default-on. */
+  imageFlags?: unknown;
 };
 
 export type ImageBatchSnapshotDraft = {
@@ -31,6 +34,8 @@ export type ImageBatchSnapshotDraft = {
     isSpecProcess: boolean;
     sortOrder: number;
   }>;
+  /** SYN-1: compose generated_detail after pipeline (default on). */
+  composeDetail?: boolean;
 };
 
 export type EvaluateCreateImageBatchResult = {
@@ -88,7 +93,9 @@ export function buildDraftSnapshot(
       processIntent: img.process_intent as ImageProcessIntent,
       isSpecProcess: Boolean(img.is_spec_process),
       sortOrder: img.sort_order ?? 0
-    }))
+    })),
+    // SYN-1 A: default on when flag missing
+    composeDetail: isGenerateDetailEnabled(item.imageFlags)
   };
 }
 

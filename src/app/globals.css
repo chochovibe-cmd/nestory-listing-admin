@@ -15,6 +15,11 @@
    - .nav button/a min-height:0（壓過全域 button 38px）
    - focus-visible outline 與 .edit-input outline:none 對打
    - 少數 RWD 觸控高度／display 切換／.hdr-btn 尺寸
+
+   UX-SYS 間距使用規則：
+   新增 padding/margin/gap 一律用 var(--sp-1) ~ var(--sp-6)，
+   不要再手打 10px 13px / 12px 15px 這種隨機值。
+   舊規則不用回頭改，讓它自然淘汰。
    ============================================================ */
 
 /* Design tokens ported from 分支/index.html (three themes, dark is default). */
@@ -49,6 +54,13 @@ body[data-theme="dark"] {
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
+  /* UX-SYS: 統一間距刻度，之後新樣式一律從這裡選，不要再手打隨機 px 值 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
   --shadow-s: 0 1px 2px rgba(0, 0, 0, .16);
   --shadow-m: 0 3px 10px rgba(0, 0, 0, .18);
   /* B15⁵a structure tokens = final computed look after old L2→L3→L4 cascade */
@@ -1396,7 +1408,8 @@ textarea {
   border-radius: 999px;
   color: var(--text-muted);
   display: inline-flex;
-  font-size: 11px;
+  /* UX-SYS: 狀態字決定「這張該做什麼」，略大於次要 chip */
+  font-size: 12px;
   padding: 4px 10px;
 }
 
@@ -1417,6 +1430,13 @@ textarea {
 .status.pending {
   border-color: var(--accent3);
   color: var(--accent3);
+}
+
+/* UX-SYS: 需要人來動作（待審核／需修改），跟「系統還在跑」「系統失敗」都不同 */
+.status.action {
+  border-color: var(--warn);
+  color: var(--warn-text, var(--warn));
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
 }
 
 /* UX-H T41: csv_ready / archived / unknown — visible muted, not ready-green */
@@ -5656,7 +5676,8 @@ textarea {
 
 .rc-price {
   font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
-  font-size: 13px;
+  /* UX-SYS: 價格是核准關鍵判斷，略抬一級（13→14） */
+  font-size: 14px;
   font-weight: 700;
   color: var(--accent);
   white-space: nowrap;
@@ -6768,6 +6789,12 @@ textarea {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
+}
+/* UX-SYS: keep price at 14px even after B15 strip-fill reset (rate stays 13) */
+.rc-price {
+  font-size: 14px;
+}
+.rate-val {
   font-size: 13px;
 }
 .rc-profit {

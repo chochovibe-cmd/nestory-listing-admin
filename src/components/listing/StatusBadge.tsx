@@ -19,7 +19,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 /** Explicit tone map — no string includes (UX-H T41). */
-type StatusTone = "ready" | "failed" | "processing" | "archived" | "neutral";
+type StatusTone = "ready" | "failed" | "processing" | "archived" | "neutral" | "action";
 
 const STATUS_TONE: Record<string, StatusTone> = {
   // ready 系：已完成／已上架／已建草稿
@@ -27,17 +27,18 @@ const STATUS_TONE: Record<string, StatusTone> = {
   approved: "ready",
   active_published: "ready",
   draft_created: "ready",
-  // processing 系：進行中佇列（含待審核，不得誤成 ready 綠）
+  // processing 系：系統仍在跑，不需要人立即動作
   pending_input: "processing",
   pending_copy: "processing",
   pending: "processing",
   processing: "processing",
   publishing: "processing",
-  ready_for_review: "processing",
-  // failed 系
+  // action 系：需要「人」來動作（審核／修改），不是系統錯誤，也不是還在跑
+  ready_for_review: "action",
+  needs_revision: "action",
+  // failed 系：真正的系統/流程失敗
   failed: "failed",
   api_failed: "failed",
-  needs_revision: "failed",
   // 特殊
   csv_ready: "neutral",
   archived: "archived"

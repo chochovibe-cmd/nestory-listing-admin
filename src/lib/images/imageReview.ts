@@ -287,6 +287,16 @@ export function canBatchConfirmAll(
   };
 }
 
+/**
+ * SYN-1: images shown on /review card = pipeline marks + composed detail.
+ * Does NOT change isPipelineImage (送圖標記仍只要 main/spec/variant).
+ */
+export function isReviewGalleryImage(
+  image: Pick<ProductImage, "image_type">
+): boolean {
+  return isPipelineImage(image) || image.image_type === "generated_detail";
+}
+
 export function pipelineImagesForReview<
   T extends Pick<ProductImage, "image_type"> & {
     sort_order?: number | null;
@@ -294,7 +304,7 @@ export function pipelineImagesForReview<
   }
 >(images: T[]): T[] {
   return images
-    .filter((img) => isPipelineImage(img))
+    .filter((img) => isReviewGalleryImage(img))
     .slice()
     .sort((a, b) => {
       const orderA = a.sort_order ?? 0;
@@ -308,6 +318,9 @@ export function reviewImageFieldLabel(
   image: Pick<ProductImage, "image_type" | "is_spec_process" | "process_intent">,
   position1Based: number
 ): string {
+  if (image.image_type === "generated_detail") {
+    return `合成詳情圖`;
+  }
   const base = imageSlotLabel(image, position1Based);
   const intent = image.process_intent as ImageProcessIntent | null;
   if (intent === "de_text") return `${base} · 去字`;

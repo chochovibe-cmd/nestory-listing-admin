@@ -144,7 +144,8 @@ export function ImageReviewPanel() {
             "id, draft_id, image_type, original_file_url, processed_file_url, process_intent, is_spec_process, processing_error, sort_order, created_at"
           )
           .in("draft_id", ids)
-          .in("image_type", ["main", "spec", "variant"])
+          // SYN-1: include generated_detail so composed detail appears on the card
+          .in("image_type", ["main", "spec", "variant", "generated_detail"])
           .order("sort_order", { ascending: true });
 
         if (imageError) {

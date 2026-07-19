@@ -6386,8 +6386,8 @@ body[data-theme="nordic"] {
   /* BX6: center raised ＋新增 */
   .mobile-tabbar .mtb-fab {
     position: relative;
-    background: transparent !important;
-    border-color: transparent !important;
+    background: transparent;
+    border-color: transparent;
     color: var(--text-muted);
     min-height: 52px;
     padding-top: 0;

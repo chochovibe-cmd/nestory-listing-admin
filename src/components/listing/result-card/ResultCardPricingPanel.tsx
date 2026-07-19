@@ -2,7 +2,7 @@
 
 import type { PriceMode } from "@/types/domain";
 
-/** S2: 定價分頁 — 從 ResultCard 展開區拆出。 */
+/** S2: 定價分頁 — 從 ResultCard 展開區拆出。UX-AD T130: 頂部價格摘要卡片. */
 export function ResultCardPricingPanel({
   twdCost,
   profit,
@@ -22,8 +22,52 @@ export function ResultCardPricingPanel({
   onSellPriceChange: (value: string) => void;
   onCompareAtPriceChange: (value: string) => void;
 }) {
+  const sellNum = Number(sellPrice);
+  const sellDisplay =
+    sellPrice !== "" && Number.isFinite(sellNum)
+      ? Math.round(sellNum).toLocaleString()
+      : null;
+  const profitTone =
+    profit == null ? "" : profit > 0 ? " success" : profit < 0 ? " danger" : "";
+  const marginTone =
+    profitPct == null
+      ? ""
+      : profitPct > 0
+        ? " success"
+        : profitPct < 0
+          ? " danger"
+          : "";
+
   return (
     <div className="rc-tabpanel" role="tabpanel">
+      {/* UX-AD T130: mini dashboard — 成本／售價／利潤／利潤率 */}
+      <div className="rc-price-summary">
+        <div className="rc-price-item">
+          <div className="rc-price-item-label">成本</div>
+          <div className="rc-price-item-value">
+            {twdCost != null ? `NT$${twdCost.toLocaleString()}` : "—"}
+          </div>
+        </div>
+        <div className="rc-price-item">
+          <div className="rc-price-item-label">售價</div>
+          <div className="rc-price-item-value">
+            {sellDisplay != null ? `NT$${sellDisplay}` : "—"}
+          </div>
+        </div>
+        <div className="rc-price-item">
+          <div className="rc-price-item-label">利潤</div>
+          <div className={`rc-price-item-value${profitTone}`}>
+            {profit != null ? `NT$${profit.toLocaleString()}` : "—"}
+          </div>
+        </div>
+        <div className="rc-price-item">
+          <div className="rc-price-item-label">利潤率</div>
+          <div className={`rc-price-item-value${marginTone}`}>
+            {profitPct != null ? `${profitPct}%` : "—"}
+          </div>
+        </div>
+      </div>
+
       <div className="rc-tabpanel-grid">
         <div className="rc-field rc-span-2">
           <div className="rc-label">定價</div>

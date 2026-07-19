@@ -68,8 +68,12 @@ export function QuickPreviewPanel({
               <button
                 type="button"
                 key={item.draftId}
-                className="queue-chip"
-                title={`${item.title} · ${item.shortDate}`}
+                className={`queue-chip${item.isInterrupted ? " is-interrupted" : ""}`}
+                title={
+                  item.isInterrupted
+                    ? `${item.title} · ${item.shortDate} · 可能中斷`
+                    : `${item.title} · ${item.shortDate}`
+                }
                 onClick={() => {
                   if (item.group === "input") {
                     // CAP-2.5: full page nav so server reloads seed

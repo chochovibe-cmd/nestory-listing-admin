@@ -18,10 +18,35 @@ export type JumpStripDraft = {
   original_title?: string | null;
   status?: string | null;
   pipeline_stage?: string | null;
+  /** Real generation flag; design wording "pipeline_stage=generating" maps here. */
+  generation_status?: string | null;
   shopify_product_id?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+/** UX-AE T134: stuck mid-generation when last update > 2 minutes ago. */
+export const JUMP_STRIP_INTERRUPT_MS = 120_000;
+
+/**
+ * T134: interrupted = generating-like + updated_at older than 2 min.
+ * Design says pipeline_stage === 'generating' (not a real pipeline key);
+ * also treat generation_status/status processing as generating.
+ */
+export function isJumpStripInterrupted(
+  draft: JumpStripDraft,
+  nowMs: number = Date.now()
+): boolean {
+  const generating =
+    draft.pipeline_stage === "generating" ||
+    draft.generation_status === "processing" ||
+    draft.status === "processing";
+  if (!generating) return false;
+  if (!draft.updated_at) return false;
+  const t = new Date(draft.updated_at).getTime();
+  if (Number.isNaN(t)) return false;
+  return nowMs - t > JUMP_STRIP_INTERRUPT_MS;
+}
 
 /** Stations shown in the jump strip (work queue + input remnants). */
 export type JumpStripGroupKey = "input" | StationFilterKey;
@@ -47,6 +72,8 @@ export type JumpStripItem = {
   group: JumpStripGroupKey;
   shortDate: string;
   sortAt: string;
+  /** UX-AE T134: show ⚠ on quick-preview chip */
+  isInterrupted: boolean;
 };
 
 export type JumpStripGroup = {
@@ -122,7 +149,8 @@ export function buildJumpStripGroups(
       title: jumpStripTitle(draft),
       group,
       shortDate: shortJumpDate(sortAt),
-      sortAt
+      sortAt,
+      isInterrupted: isJumpStripInterrupted(draft)
     });
   }
 

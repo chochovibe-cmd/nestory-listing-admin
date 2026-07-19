@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
@@ -18,7 +17,10 @@ import { Button } from "@/components/ui/Button";
 import { buildFactoryBridgeSummary } from "@/lib/images/factoryBridge";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
 import {
+  JUMP_DRAFT_ID_FIRST,
   JUMP_TO_DRAFT_EVENT,
+  clearJumpDraftId,
+  readJumpDraftId,
   scrollToDraftCard,
   type JumpToDraftDetail
 } from "@/lib/drafts/jumpToDraft";
@@ -163,8 +165,14 @@ export function DraftResultsPanel({
   useEffect(() => () => clearArchiveUndoTimer(), []);
   // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
-  /** UX-H T49: brief leave fade before optimistic hide (archive only). */
+  /** UX-H T49 / UX-AD T128: brief leave fade before hide or refresh. */
   const [leavingIds, setLeavingIds] = useState<Set<string>>(() => new Set());
+  /** UX-AE T133: Dashboard / deep-link arrival pulse target (clears after ~3s). */
+  const [jumpTargetId, setJumpTargetId] = useState<string | null>(null);
+  const jumpHighlightTimerRef = useRef<number | null>(null);
+  const jumpArrivalHandledRef = useRef(false);
+  /** Gate T133 until sessionStorage stage/sort restore finishes (avoid wrong first card). */
+  const [prefsReady, setPrefsReady] = useState(false);
   const [sortMode, setSortMode] = useState<ResultSortMode>("newest");
   const [stage, setStage] = useState<ResultsFilterKey>("copy_review");
   // R3: station③ multi-select publish/export
@@ -218,7 +226,28 @@ export function DraftResultsPanel({
     return () => window.removeEventListener(GENERATION_PROGRESS_EVENT, onProgress);
   }, []);
 
+  function clearJumpHighlightTimer() {
+    if (jumpHighlightTimerRef.current != null) {
+      window.clearTimeout(jumpHighlightTimerRef.current);
+      jumpHighlightTimerRef.current = null;
+    }
+  }
+
+  /** UX-AE T133: pulse + scroll for a result card; class clears after 3s. */
+  function armJumpHighlight(draftId: string) {
+    clearJumpHighlightTimer();
+    setJumpTargetId(draftId);
+    window.setTimeout(() => {
+      scrollToDraftCard(draftId, { block: "center" });
+    }, 80);
+    jumpHighlightTimerRef.current = window.setTimeout(() => {
+      setJumpTargetId(null);
+      jumpHighlightTimerRef.current = null;
+    }, 3000);
+  }
+
   // R4 §7: jump strip → switch station + scroll to card
+  // T133: also pulse-highlight the target card
   useEffect(() => {
     function onJump(event: Event) {
       const detail = (event as CustomEvent<JumpToDraftDetail>).detail;
@@ -231,19 +260,23 @@ export function DraftResultsPanel({
           STATION_FILTER_STORAGE_KEY_RESULTS
         );
       }
-      // Wait a tick for filter re-render then scroll
-      window.setTimeout(() => scrollToDraftCard(detail.draftId), 80);
+      armJumpHighlight(detail.draftId);
     }
     window.addEventListener(JUMP_TO_DRAFT_EVENT, onJump);
-    return () => window.removeEventListener(JUMP_TO_DRAFT_EVENT, onJump);
+    return () => {
+      window.removeEventListener(JUMP_TO_DRAFT_EVENT, onJump);
+      clearJumpHighlightTimer();
+    };
   }, []);
 
   // B9: remember sort preference for this browser tab session.
   // R2 / UX-B T6: remember three-station + fail filter for this tab session.
+  // T133: prefsReady gates arrival highlight so first card uses restored station.
   useEffect(() => {
     const storage = typeof window !== "undefined" ? window.sessionStorage : null;
     setSortMode(readStoredResultSort(storage));
     setStage(readStoredResultsFilter(storage, STATION_FILTER_STORAGE_KEY_RESULTS));
+    setPrefsReady(true);
   }, []);
 
   // Drop optimistic hides once server props already reflect archive/unarchive.
@@ -266,6 +299,27 @@ export function DraftResultsPanel({
         return next;
       });
     }, 280);
+  }
+
+  /** UX-AD T128: fade cards out, then refresh (approve / station2 / leave-queue). */
+  function scheduleLeaveThenRefresh(ids: string[]) {
+    if (!ids.length) {
+      scheduleRouterRefresh(() => router.refresh());
+      return;
+    }
+    setLeavingIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+    window.setTimeout(() => {
+      setLeavingIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+      scheduleRouterRefresh(() => router.refresh());
+    }, 250);
   }
 
   const progressHeadStatus = progress
@@ -343,6 +397,37 @@ export function DraftResultsPanel({
     () => filterByOptimisticHide(sortedDrafts, optimisticHide),
     [sortedDrafts, optimisticHide]
   );
+
+  // UX-AE T133: after prefs + stage filter, consume nestory:jump-draft-id once.
+  // prepareTodoNavigation writes "*" (first visible card) or a specific draft id.
+  useEffect(() => {
+    if (!prefsReady) return;
+    if (jumpArrivalHandledRef.current) return;
+    if (typeof window === "undefined") return;
+    const storage = window.sessionStorage;
+    const raw = readJumpDraftId(storage);
+    if (!raw) {
+      // No pending jump — mark handled so we don't re-check every list change
+      jumpArrivalHandledRef.current = true;
+      return;
+    }
+
+    jumpArrivalHandledRef.current = true;
+    clearJumpDraftId(storage);
+
+    // Empty filter after prefs = nothing to highlight (drafts are server props)
+    if (visibleDrafts.length === 0) return;
+
+    const targetId =
+      raw === JUMP_DRAFT_ID_FIRST
+        ? visibleDrafts[0]?.id ?? null
+        : visibleDrafts.some((d) => d.id === raw)
+          ? raw
+          : null;
+
+    if (!targetId) return;
+    armJumpHighlight(targetId);
+  }, [prefsReady, visibleDrafts]);
 
   const allSelected =
     visibleDrafts.length > 0 && visibleDrafts.every((draft) => selectedIds.has(draft.id));
@@ -438,7 +523,8 @@ export function DraftResultsPanel({
         }
       });
       setSelectedIds(new Set());
-      router.refresh();
+      // T128: leave fade before list refresh (leaves 審文案 filter)
+      scheduleLeaveThenRefresh(approvedIds);
     } catch {
       setMessage("批次核准連線失敗");
       showToast("批次核准連線失敗", "error");
@@ -592,7 +678,8 @@ export function DraftResultsPanel({
         }
       });
       setSelectedIds(new Set());
-      scheduleRouterRefresh(() => router.refresh());
+      // T128: leave fade before refresh (leaves 標圖 filter)
+      scheduleLeaveThenRefresh(undoIds);
     } catch {
       setMessage("批次分流連線失敗");
       showToast("批次分流連線失敗", "error");
@@ -815,7 +902,9 @@ export function DraftResultsPanel({
         setSelectedIds(new Set());
         setStation3Selection(null);
         setPendingApiResult(null);
-        scheduleRouterRefresh(() => router.refresh());
+        // T128: leave-queue → fade out before refresh
+        if (left) scheduleLeaveThenRefresh(draftIds);
+        else scheduleRouterRefresh(() => router.refresh());
         return;
       }
 
@@ -901,7 +990,9 @@ export function DraftResultsPanel({
     setSelectedIds(new Set());
     setExportBusy(false);
     setBusy(false);
-    scheduleRouterRefresh(() => router.refresh());
+    // T128: leave-queue → fade out before refresh
+    if (leftFinal) scheduleLeaveThenRefresh(draftIds);
+    else scheduleRouterRefresh(() => router.refresh());
   }
 
   /**
@@ -1104,6 +1195,33 @@ export function DraftResultsPanel({
   function clearResultsFilter() {
     const next = pickDefaultResultsFilter(stageCounts, DEFAULT_RESULTS_FILTER);
     onStageChange(next === "fail" ? DEFAULT_RESULTS_FILTER : next);
+  }
+
+  /**
+   * UX-AD T129: empty-state CTA —
+   * mobile → 輸入 tab（/drafts/new 去掉 pane=results）；
+   * desktop → focus 輸入面板第一個欄位.
+   */
+  function goToAddFirstProduct() {
+    const isMobile =
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 960px)").matches;
+    if (isMobile) {
+      router.push("/drafts/new");
+      return;
+    }
+    const root =
+      document.querySelector(".workbench-pane-input") ??
+      document.querySelector("#paneForm");
+    const field = root?.querySelector<HTMLElement>(
+      "input:not([type='hidden']):not([disabled]), textarea:not([disabled]), select:not([disabled])"
+    );
+    if (field) {
+      field.focus();
+      field.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    router.push("/drafts/new");
   }
 
   const showToolbar = workQueueDrafts.length > 0 || drafts.length > 0;
@@ -1376,13 +1494,20 @@ export function DraftResultsPanel({
         ) : null}
 
         {drafts.length === 0 && !progress ? (
-          /* UX-AB T85: full-empty copy */
+          /* UX-AB T85 + UX-AD T129: full-empty + CTA */
           <div className="empty-state">
             <div className="empty-icon" aria-hidden>
               📦
             </div>
             <p className="empty-state-title">還沒有任何草稿</p>
             <p className="empty-state-desc">使用左側表單新增第一筆商品</p>
+            <button
+              className="act-btn fill empty-state-cta"
+              onClick={goToAddFirstProduct}
+              type="button"
+            >
+              去新增第一筆商品
+            </button>
           </div>
         ) : workQueueDrafts.length === 0 && !progress ? (
           <div className="empty-state">
@@ -1391,9 +1516,13 @@ export function DraftResultsPanel({
             </div>
             <p className="empty-state-title">目前沒有在工作佇列的商品</p>
             <p className="empty-state-desc">新增商品後會出現在這裡</p>
-            <Link className="button primary empty-state-cta" href="/drafts/new">
-              去新增商品
-            </Link>
+            <button
+              className="act-btn fill empty-state-cta"
+              onClick={goToAddFirstProduct}
+              type="button"
+            >
+              去新增第一筆商品
+            </button>
           </div>
         ) : visibleDrafts.length === 0 && !progress ? (
           <div className="empty-state">
@@ -1403,7 +1532,7 @@ export function DraftResultsPanel({
             <p className="empty-state-title">這個篩選下沒有商品</p>
             <p className="empty-state-desc">試試清除篩選或換另一站</p>
             <button
-              className="button empty-state-cta"
+              className="act-btn empty-state-cta"
               onClick={clearResultsFilter}
               type="button"
             >
@@ -1417,6 +1546,7 @@ export function DraftResultsPanel({
                 checked={selectedIds.has(draft.id)}
                 draft={draft}
                 images={imagesByDraft.get(draft.id) ?? []}
+                isJumpTarget={jumpTargetId === draft.id}
                 key={draft.id}
                 leaving={leavingIds.has(draft.id)}
                 onToggle={() => toggleOne(draft.id)}

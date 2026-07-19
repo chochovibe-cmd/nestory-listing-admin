@@ -6,11 +6,20 @@
  */
 
 import {
+  JUMP_DRAFT_ID_FIRST,
+  writeJumpDraftId
+} from "@/lib/drafts/jumpToDraft";
+import {
   STAGE_FILTER_STORAGE_KEY_QUEUE,
   STAGE_FILTER_STORAGE_KEY_RESULTS,
   writeStoredStage,
   type StageKey
 } from "@/lib/drafts/stageFilter";
+import {
+  STATION_FILTER_STORAGE_KEY_RESULTS,
+  writeStoredResultsFilter,
+  type ResultsFilterKey
+} from "@/lib/drafts/stationFilter";
 import {
   classifyReviewQueueItem,
   isImageReviewApproved
@@ -206,13 +215,40 @@ export function buildTodoCards(counts: TodoBucketCounts): TodoCardDef[] {
   ];
 }
 
-/** Write stage into sessionStorage then return href (Q4-A). */
+/**
+ * Map legacy B12 StageKey (todo cards) → R2 results filter key.
+ * DraftResultsPanel reads nestory:results-station, not nestory:results-stage.
+ */
+export function mapTodoStageToResultsFilter(
+  stage: StageKey | undefined
+): ResultsFilterKey | null {
+  if (stage === "copy_review") return "copy_review";
+  if (stage === "failed") return "fail";
+  if (stage === "approved") return "ready";
+  return null;
+}
+
+/**
+ * Write stage into sessionStorage then return href (Q4-A).
+ * T133: also writes nestory:results-station (panel source of truth) +
+ * nestory:jump-draft-id = * (first visible card pulse highlight).
+ */
 export function prepareTodoNavigation(
   card: Pick<TodoCardDef, "href" | "stage" | "stageStorageKey">,
   storage: Pick<Storage, "setItem"> | null | undefined
 ): string {
   if (card.stage && card.stageStorageKey) {
     writeStoredStage(card.stage, storage, card.stageStorageKey);
+    const resultsFilter = mapTodoStageToResultsFilter(card.stage);
+    if (resultsFilter) {
+      writeStoredResultsFilter(
+        resultsFilter,
+        storage,
+        STATION_FILTER_STORAGE_KEY_RESULTS
+      );
+    }
+    // Dashboard todo cards are bucket-level (no single draft id) → first card
+    writeJumpDraftId(JUMP_DRAFT_ID_FIRST, storage);
   }
   return card.href;
 }

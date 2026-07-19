@@ -198,6 +198,8 @@ export function ResultCard({
   defaultExpanded = false,
   variantPrices = [],
   leaving = false,
+  /** UX-AE T133: Dashboard / deep-link arrival pulse */
+  isJumpTarget = false,
   /** UX-Q T70: force expanded; skip collapse */
   sequentialMode = false,
   /** BX1 延伸：站② 逐件標圖（copy＝審文案／image＝標圖） */
@@ -218,6 +220,8 @@ export function ResultCard({
   variantPrices?: ResultCardVariantRow[];
   /** UX-H T49: archive leave fade (display only) */
   leaving?: boolean;
+  /** UX-AE T133: arrival pulse highlight (display only) */
+  isJumpTarget?: boolean;
   sequentialMode?: boolean;
   sequentialStation?: "copy" | "image";
   onApproveSuccess?: () => void;
@@ -1756,7 +1760,7 @@ export function ResultCard({
 
   return (
     <div
-      className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}${leaving ? " is-leaving" : ""}`}
+      className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}${leaving ? " is-leaving" : ""}${isJumpTarget ? " is-jump-target" : ""}`}
       id={`draft-card-${draft.id}`}
     >
       {/* UX-AC T114: archive as corner × (not text 移出) */}

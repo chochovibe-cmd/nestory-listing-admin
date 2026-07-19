@@ -553,18 +553,21 @@ export function PublishRecordsPanel() {
         ) : visibleBatches.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
-            <p className="muted">
+            <p className="empty-state-title">
               {rows.length === 0
                 ? "尚無發布批次"
                 : kindFilter === "all"
                   ? "尚無發布批次"
                   : "此通路尚無批次"}
             </p>
-            {rows.length === 0 ? (
-              <Link className="button primary empty-state-cta" href="/drafts/new?pane=results">
-                去工作檯
-              </Link>
-            ) : null}
+            {/* UX-AD T129: no CTA — desc only when truly empty */}
+            <p className="empty-state-desc">
+              {rows.length === 0
+                ? "核准商品並發布後，紀錄會出現在這裡"
+                : kindFilter === "all"
+                  ? "核准商品並發布後，紀錄會出現在這裡"
+                  : "試試切換其他通路篩選"}
+            </p>
           </div>
         ) : (
           <div className="rec-list ir-list">

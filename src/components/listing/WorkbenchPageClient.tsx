@@ -46,6 +46,7 @@ export function WorkbenchPageClient({
         original_title: d.original_title,
         status: d.status,
         pipeline_stage: d.pipeline_stage,
+        generation_status: d.generation_status,
         shopify_product_id: d.shopify_product_id,
         created_at: d.created_at,
         updated_at: d.updated_at

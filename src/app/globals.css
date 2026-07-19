@@ -3857,6 +3857,14 @@ textarea {
 .queue-chip:hover {
   border-color: var(--accent);
 }
+/* UX-AE T134: interrupted generation badge on quick-preview chip */
+.queue-chip.is-interrupted::before {
+  content: '⚠';
+  font-size: 9px;
+  color: var(--warn);
+  margin-right: 2px;
+  flex-shrink: 0;
+}
 .queue-chip-title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5199,6 +5207,15 @@ textarea {
   pointer-events: none;
 }
 
+/* UX-AE T133: Dashboard / deep-link arrival pulse (2 × 1.5s ≈ 3s) */
+.result-card.is-jump-target {
+  animation: jumpPulse 1.5s ease 2;
+}
+@keyframes jumpPulse {
+  0%, 100% { box-shadow: var(--frame-shadow); }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+}
+
 .rc-header {
   display: flex;
   align-items: center;
@@ -6405,15 +6422,30 @@ body[data-theme="nordic"] {
     color: var(--accent-fg);
   }
   /* BX6: center raised ＋新增 */
-  .mobile-tabbar .mtb-fab {
+  /* T135: wrap holds relative positioning for long-press menu (valid HTML, no nested buttons) */
+  .mobile-tabbar .mtb-fab-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    min-height: 52px;
+    margin-top: -22px;
+    z-index: 2;
+  }
+  .mobile-tabbar .mtb-fab,
+  .mobile-tabbar button.mtb-fab,
+  .mobile-tabbar button.mtb-fab.active {
     position: relative;
     background: transparent;
     border-color: transparent;
     color: var(--text-muted);
     min-height: 52px;
     padding-top: 0;
-    margin-top: -22px;
+    margin-top: 0;
     z-index: 2;
+    /* keep FAB look; do not inherit tab-item active solid fill */
   }
   .mobile-tabbar .mtb-fab-circle {
     display: flex;
@@ -6442,6 +6474,61 @@ body[data-theme="nordic"] {
   }
   .mobile-tabbar .mtb-fab.active .mtb-fab-label {
     color: var(--accent);
+  }
+  /* T135: FAB long-press expand menu (mobile only) */
+  .mtb-fab-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 3;
+  }
+  .mtb-fab-menu.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+  }
+  .mobile-tabbar .mtb-fab-menu-item,
+  .mobile-tabbar button.mtb-fab-menu-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--font-noto-sans-tc), "Noto Sans TC", sans-serif;
+    color: var(--text);
+    white-space: nowrap;
+    box-shadow: var(--shadow-m);
+    min-height: 44px;
+    width: auto;
+    cursor: pointer;
+  }
+  .mobile-tabbar .mtb-fab-menu-item:disabled,
+  .mobile-tabbar button.mtb-fab-menu-item:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .mtb-fab-menu-item .soon-tag {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 6px;
+    line-height: 1.2;
   }
   body[data-theme="dark"] .mobile-tabbar {
     border: 1px solid var(--border);
@@ -7726,5 +7813,152 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
 @keyframes nb-btn-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* ── UX-AE T136: scouting page layout skeleton ── */
+.scout-page {
+  max-width: 720px;
+  padding-bottom: 48px;
+}
+
+.scout-page-title {
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+}
+
+.merchant-strip {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.merchant-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 11.5px;
+  color: var(--text);
+  box-shadow: var(--shadow-s);
+}
+
+.merchant-chip--placeholder {
+  opacity: 0.55;
+}
+
+.pocket-add {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 11px;
+  align-items: stretch;
+}
+
+.pocket-add input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-noto-sans-tc), "Noto Sans TC", sans-serif;
+  box-shadow: var(--shadow-s);
+}
+
+.pocket-add input::placeholder {
+  color: var(--text-muted);
+}
+
+.pocket-add input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.pocket-add button {
+  flex-shrink: 0;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: var(--radius-s);
+  padding: 0 17px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-noto-sans-tc), "Noto Sans TC", sans-serif;
+  cursor: pointer;
+  box-shadow: var(--shadow-s);
+  min-height: 42px;
+}
+
+.pocket-add button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.scout-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 13px 15px;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-s);
+}
+
+.scout-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.scout-body {
+  flex: 1;
+  min-width: 170px;
+}
+
+.scout-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.scout-meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+@media (max-width: 960px) {
+  .pocket-add {
+    flex-direction: column;
+  }
+  .pocket-add button {
+    min-height: 44px;
+    width: 100%;
+  }
+  .pocket-add input {
+    min-height: 44px;
   }
 }

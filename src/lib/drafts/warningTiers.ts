@@ -36,6 +36,11 @@ const SUGGEST_PATTERNS: RegExp[] = [
   /相似度/,
   /情境詞/,
   /內部連結/,
+  // P6 B：目錄外類型 — 新統一文案 + 舊草稿相容
+  /待收編類型/,
+  /不在 Tags V2 固定類型中/,
+  /未輸出\s*類型_?\s*tag/,
+  /未輸出類型 tag/,
 ];
 
 /** ⛔ 必修 — blocks approve / station route. */

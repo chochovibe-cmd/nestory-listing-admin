@@ -19,14 +19,14 @@
 | 主線 A～S | ✅ |
 | T74–T119（AA～AC 等） | **程式已寫，待 Claude 核畫面** |
 | BX1–BX10 | ✅（含站② **▶ 逐件標圖**） |
-| A19 雙尺寸上傳 | ✅ 程式；migration **039** 待老闆跑 |
+| A19 雙尺寸上傳 | ✅ 程式＋DB；migration **039 老闆已跑** |
 | D9 商品頁預覽 | ✅ 示意 tab + Shopify 官網 iframe（擋則新分頁） |
 | BX-P 第一刀 | ✅ 儀表板並排／去重複估算 chip；**第二刀等截圖** |
 | SYN-1 站②生成詳情圖 UI | ✅ |
 | T112-r3 胖鈕 | ✅ |
 | git | 功能曾收口 `34ab4d3`；**後續 A19／iframe／BX-P1／站②逐件可能未 commit**；分支超前 origin、**未 push** |
 | Fable 債 | **T105** 按鈕 class 全收斂；**T84** CSS modules |
-| 老闆 | **T106** 審核 tab 改名？；**039 SQL**；**BX-P2** 截圖 |
+| 老闆 | **T106** 審核 tab 改名？；**BX-P2** 截圖 |
 
 ## 本輪 commits（已入庫功能）
 
@@ -56,12 +56,12 @@
 
 ## 一句話
 
-**BX 加分＋站②逐件＋A19＋D9 iframe＋BX-P1 已清；T74–T119 待 Claude 核；039 待 SQL。詳見同步檔。未 push。**
+**BX 加分＋站②逐件＋A19（039 已跑）＋D9 iframe＋BX-P1 已清；T74–T119 待 Claude 核。詳見同步檔。已 push。**
 
 ## 下一刀（勿重做已完成項）
 
 1. Claude 核 AA～AC（T74–T119）畫面  
-2. 老闆跑 **039**、拍 **T106**  
+2. 老闆拍 **T106**  
 3. Fable：T105／T84  
 4. BX-P2 **等截圖再開**（勿無圖零碎美化）  
 5. **不要重做**：BX2/6/7/9/10、SYN-1 toggle、站②逐件、A19、Shopify iframe、BX-P1  

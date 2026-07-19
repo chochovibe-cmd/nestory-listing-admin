@@ -317,6 +317,8 @@ select {
   text-decoration: none;
   min-height: 44px;
   box-sizing: border-box;
+  /* T131: sidebar active 平滑過渡 */
+  transition: background .2s ease, color .2s ease, box-shadow .2s ease;
 }
 
 .sidebar-ic {
@@ -1186,12 +1188,16 @@ select:focus {
 /* UX-AA T100: site-wide focus ring = theme --accent.
    Text fields keep border-color + box-shadow: var(--focus-ring) (outline off).
    Checkbox/radio/file still get the outline (no soft box-shadow ring on them).
-   !important: later .edit-input/.edit-textarea outline:none would otherwise win. */
+   T84 暫留-A: :focus-visible (0,1,0) loses to more-specific later rules without !important.
+   T84 暫留-B (paired): text inputs need outline:none to suppress the A rule above.
+   Long-term fix: restructure to :focus-visible:not(input):not(textarea):not(select) —
+   safe only with a full CSS-modules refactor (T84 Fable engineering debt). */
 :focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
 }
 
+/* T84 暫留-B: paired with A above — text fields use border+focus-ring instead of outline. */
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus-visible,
 textarea:focus-visible,
 select:focus-visible {
@@ -2058,25 +2064,40 @@ textarea {
   border-radius: 999px;
   line-height: 1.2;
 }
-/* P1-2: optimistic upload status on thumbs (tokens only) */
+/* P1-2 / T132: optimistic upload status — indeterminate ring (tokens only) */
 .pthumb-status-overlay {
   position: absolute;
   inset: 0;
+  border-radius: var(--radius-s);
+  background: conic-gradient(
+    var(--accent) 0deg,
+    var(--accent) 90deg,
+    color-mix(in srgb, var(--surface) 72%, transparent) 90deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
+  animation: uploadSpin .8s linear infinite;
+  color: transparent;
+  font-size: 0;
+  pointer-events: none;
+}
+@keyframes uploadSpin {
+  to { transform: rotate(360deg); }
+}
+/* T132: fail keeps text + solid fill; strip ring mask/animation from base overlay */
+.pthumb-status-fail {
+  background: color-mix(in srgb, var(--accent2) 18%, var(--surface));
+  -webkit-mask: none;
+  mask: none;
+  animation: none;
+  color: var(--accent2);
+  font-size: 10px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
-  color: var(--text);
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: var(--radius-s);
   text-align: center;
   padding: 2px;
-  pointer-events: none;
-}
-.pthumb-status-fail {
-  color: var(--accent2);
-  background: color-mix(in srgb, var(--accent2) 18%, var(--surface));
 }
 .pthumb-failed .pthumb-img {
   border-color: color-mix(in srgb, var(--accent2) 55%, var(--border-soft));
@@ -6611,18 +6632,21 @@ body[data-theme="nordic"] {
   }
 }
 
+/* T84 暫留-C/D/E: JS sets display:none inline on workbench panes for mobile tab switching.
+   CSS !important is the only way to override JS inline styles — removing these breaks
+   desktop layout. Long-term fix: move show/hide logic to a CSS class toggle (T84 Fable debt). */
 @media (min-width: 960px) {
   .workbench-pane {
-    display: block !important;
+    display: block !important; /* T84 暫留-C */
   }
   .workbench-pane-input {
-    display: flex !important;
+    display: flex !important; /* T84 暫留-D */
     flex-direction: column;
     gap: 16px;
   }
   .workbench-pane-input .wb-form-slot,
   .workbench-pane-input .wb-preview-slot {
-    display: block !important;
+    display: block !important; /* T84 暫留-E */
   }
 }
 

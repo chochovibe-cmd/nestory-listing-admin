@@ -1,0 +1,48 @@
+{
+  "package": "SYN-0b",
+  "model": "gpt-image-1",
+  "size": "1024x1536",
+  "quality": "medium",
+  "unitEstimateUsd": 0.07,
+  "budgetUsd": 0.25,
+  "startedAt": "2026-07-19T01:09:57.556Z",
+  "items": [
+    {
+      "productKey": "miffy_lamp",
+      "ok": true,
+      "file": "米菲臺燈-混合-B2底A字.png",
+      "baseFile": "米菲臺燈-混合-底圖.png",
+      "draftId": "8b3a35b9-2a9b-4b14-84d3-5c7e84f9b8f8",
+      "title": "馬克圖布 × Miffy|米菲臺燈|舒適居家擺件",
+      "attempts": 1,
+      "costUsd": 0.07,
+      "spentEstimateUsd": 0.07,
+      "baseHeuristic": {
+        "suspectText": false,
+        "edgeRatio": 0.032,
+        "note": "lower-band relatively smooth"
+      },
+      "baseNote": "heuristic clean lower band",
+      "textSource": "draft fields via A-style HTML (100% copy, no LLM rewrite)",
+      "assemble": "Chrome headless screenshot of A panels over AI base hero + sharp trim"
+    },
+    {
+      "productKey": "razer_mouse",
+      "ok": true,
+      "file": "Razer皮卡丘滑鼠-混合-B2底A字.png",
+      "baseFile": "Razer皮卡丘滑鼠-混合-底圖.png",
+      "draftId": "29b827a7-f2e3-47dc-8ade-7a03e0fd473c",
+      "title": "Razer × 寶可夢|皮卡丘聯名|毒蝰V3專業版SE無線遊戲滑鼠",
+      "attempts": 1,
+      "costUsd": 0.07,
+      "spentEstimateUsd": 0.14,
+      "baseNote": "first call safety-blocked; safer product-only prompt succeeded (counts as the one allowed retry)",
+      "safetyRetry": true,
+      "textSource": "draft fields via A-style HTML (100% copy)",
+      "assemble": "Chrome headless + sharp trim"
+    }
+  ],
+  "finishedAt": "2026-07-19T01:13:40.390Z",
+  "totalEstimateUsd": 0.14,
+  "retriesRemaining": 1
+}

@@ -43,7 +43,16 @@ export {
 } from "@/lib/images/detailCompose/cost";
 
 export { resolveDetailComposeFonts } from "@/lib/images/detailCompose/fonts";
-export { buildDetailComposeSvg, estimateDetailSvgHeight } from "@/lib/images/detailCompose/buildSvg";
+export {
+  buildDetailComposeSvg,
+  buildDetailComposeSvgWithLayout,
+  estimateDetailSvgHeight,
+  measureDetailSvgLayout,
+  assertDetailLayoutSound,
+  wrapText,
+  type DetailSvgLayout,
+  type BuildDetailSvgResult
+} from "@/lib/images/detailCompose/buildSvg";
 export {
   rasterizeDetailComposeSvg,
   probeCjkTextInk,

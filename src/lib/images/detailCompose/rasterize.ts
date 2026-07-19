@@ -8,7 +8,10 @@ import {
   DETAIL_COMPOSE_WIDTH
 } from "@/lib/images/detailCompose/horizonTokens";
 import { resolveDetailComposeFonts } from "@/lib/images/detailCompose/fonts";
-import { buildDetailComposeSvg } from "@/lib/images/detailCompose/buildSvg";
+import {
+  buildDetailComposeSvgWithLayout,
+  type DetailSvgLayout
+} from "@/lib/images/detailCompose/buildSvg";
 import type { DetailComposeCopy } from "@/lib/images/detailCompose/prepareCopy";
 
 export type RasterizeResult = {
@@ -20,6 +23,7 @@ export type RasterizeResult = {
   /** True when known probe string produced non-cream pixels. */
   textInkOk: boolean;
   textInkWarning?: string;
+  layout?: DetailSvgLayout;
 };
 
 /** Cream bg from Horizon — used for non-blank ink detection. */
@@ -98,7 +102,7 @@ export async function rasterizeDetailComposeSvg(input: {
   reviewBadge?: string | null;
 }): Promise<RasterizeResult> {
   const fonts = resolveDetailComposeFonts();
-  const svg = buildDetailComposeSvg({
+  const built = buildDetailComposeSvgWithLayout({
     copy: input.copy,
     heroHref: input.heroHref,
     titleFamily: fonts.titleFamily,
@@ -106,7 +110,7 @@ export async function rasterizeDetailComposeSvg(input: {
     reviewBadge: input.reviewBadge
   });
 
-  const png = await sharp(Buffer.from(svg), { density: 96 })
+  const png = await sharp(Buffer.from(built.svg), { density: 96 })
     .png()
     .toBuffer();
 
@@ -130,7 +134,8 @@ export async function rasterizeDetailComposeSvg(input: {
     fontWarnings: [...fonts.warnings, ...(textInkWarning ? [textInkWarning] : [])],
     usedFontFallback: fonts.usedFallback,
     textInkOk,
-    textInkWarning
+    textInkWarning,
+    layout: built.layout
   };
 }
 

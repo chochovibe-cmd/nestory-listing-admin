@@ -26,14 +26,12 @@ import {
   modelSupportsImageEdit
 } from "@/lib/providers/openai-image-provider";
 import type { ImageProvider } from "@/lib/providers/image";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 const PRODUCT_IMAGES_BUCKET = "product-images";
 
-export type ComposeDetailServiceClient = ReturnType<
-  typeof createServiceSupabaseClient
-> &
-  CostServiceClient;
+/** Service-role (or any) Supabase client used by compose; avoid importing next/headers. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ComposeDetailServiceClient = CostServiceClient & { storage: any };
 
 export type RunComposeDetailInput = {
   serviceSupabase: ComposeDetailServiceClient;

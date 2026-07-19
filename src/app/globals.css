@@ -7216,6 +7216,32 @@ body[data-theme="kitty"] .toast--warn {
   word-break: break-word;
   overflow-wrap: break-word;
 }
+/* UX-BTN S4: 主句 + 怎麼辦提示；停用／未驗證用 warn 邊，帳密錯維持 danger */
+.login-error-main {
+  font-weight: 600;
+}
+.login-error-hint {
+  margin-top: 6px;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.login-error--disabled,
+.login-error--unconfirmed,
+.login-error--rate_limit {
+  border-left-color: var(--warn, #e6b84d);
+  color: var(--text);
+}
+.login-error--disabled .login-error-main,
+.login-error--unconfirmed .login-error-main,
+.login-error--rate_limit .login-error-main {
+  color: var(--warn, #e6b84d);
+}
+.login-error--config {
+  border-left-color: var(--text-muted);
+  color: var(--text);
+}
 @media (max-width: 960px) {
   .login-panel {
     margin-top: 8vh;

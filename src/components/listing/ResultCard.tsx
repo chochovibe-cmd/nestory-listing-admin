@@ -14,12 +14,9 @@ import {
 } from "@/lib/drafts/stationCardStatusDisplay";
 import {
   formatUnmarkedBlockMessage,
-  imageSlotLabel,
   listPipelineImages,
   listUnmarkedPipelineImages,
-  patchForProcessIntentPick,
-  PROCESS_INTENT_LABELS,
-  PROCESS_INTENT_OPTIONS
+  patchForProcessIntentPick
 } from "@/lib/images/processMarks";
 import {
   countImageMarkSummary,
@@ -75,8 +72,7 @@ import {
   highlightsToContent,
   initialVersionIndex,
   planComboSaveHistoryInserts,
-  type CopyVersionField,
-  versionLabel,
+  type CopyVersionField
 } from "@/lib/drafts/copyVersionHistory";
 import type { FieldVersionInput } from "@/lib/drafts/approveSummary";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
@@ -105,7 +101,6 @@ import {
   type Station3PublishSelection
 } from "@/lib/drafts/station3Publish";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
-import { VariantEditor } from "@/components/listing/VariantEditor";
 import {
   clampDimensions,
   dbRowsToForm,
@@ -121,10 +116,14 @@ import {
   extractMissingCharacterNames,
   isCharacterMissingInWarnings,
 } from "@/lib/characters/missingCharacterWarnings";
-import {
-  descriptionPreviewHtml,
-  normalizeDescriptionToPlainText,
-} from "@/lib/contentGenerator/htmlFormat";
+import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
+import { type DiscardArm } from "@/components/listing/result-card/resultCardUi";
+import { ResultCardCopyPanel } from "@/components/listing/result-card/ResultCardCopyPanel";
+import { ResultCardSpecsPanel } from "@/components/listing/result-card/ResultCardSpecsPanel";
+import { ResultCardPricingPanel } from "@/components/listing/result-card/ResultCardPricingPanel";
+import { ResultCardTagsPanel } from "@/components/listing/result-card/ResultCardTagsPanel";
+import { ResultCardSeoPanel } from "@/components/listing/result-card/ResultCardSeoPanel";
+import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCardImagesPanel";
 
 /** UX-M T64: full-enough row for dbRowsToForm (price range still uses twd_price). */
 type ResultCardVariantRow = {
@@ -158,15 +157,6 @@ function statusIcon(draft: ProductDraft): { icon: string; className: string } {
   return { icon: "✓", className: "done" };
 }
 
-const APPROVED_STATUSES = new Set(["approved", "publishing", "draft_created", "active_published"]);
-
-const PROVIDER_LABELS: Record<string, string> = {
-  anthropic: "Claude",
-  openai: "GPT",
-  codex: "Codex",
-  other: "其他"
-};
-
 // product_images only stores the public URL, not the storage path -- derive
 // the path Supabase Storage needs for .remove() from it instead of tracking
 // a separate column just for this.
@@ -174,119 +164,6 @@ function storagePathFromUrl(url: string): string | null {
   const marker = "/product-images/";
   const index = url.indexOf(marker);
   return index === -1 ? null : url.slice(index + marker.length);
-}
-
-function CopyButton({ getValue }: { getValue: () => string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    const value = getValue();
-    if (!value) return;
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <button className={`copy-btn${copied ? " copied" : ""}`} onClick={handleCopy} type="button">
-      {copied ? "✓" : "複製"}
-    </button>
-  );
-}
-
-/** B10: ← 版本 N/M → 重生 — version switch is local-only; 重生 spends LLM. */
-/** UX-L T61: optional arm labels for discard double-confirm (no window.confirm). */
-function VersionNav({
-  label,
-  canPrev,
-  canNext,
-  onPrev,
-  onNext,
-  onRegen,
-  regenBusy,
-  regenDisabled,
-  switchArmDir = null,
-  regenArmed = false,
-}: {
-  label: string;
-  canPrev: boolean;
-  canNext: boolean;
-  onPrev: () => void;
-  onNext: () => void;
-  onRegen: () => void;
-  regenBusy: boolean;
-  regenDisabled: boolean;
-  /** UX-L T61: which version arrow is armed for discard confirm */
-  switchArmDir?: "prev" | "next" | null;
-  /** UX-L T61: regen button armed for discard confirm */
-  regenArmed?: boolean;
-}) {
-  return (
-    <span className="version-nav" onClick={(event) => event.stopPropagation()}>
-      <button
-        aria-label={switchArmDir === "prev" ? "再點確認切到上一版" : "上一版"}
-        className={`version-nav-btn${switchArmDir === "prev" ? " danger" : ""}`}
-        disabled={!canPrev || regenBusy}
-        onClick={onPrev}
-        title={switchArmDir === "prev" ? "再點一次確認切換（會捨棄未存修改）" : undefined}
-        type="button"
-      >
-        {switchArmDir === "prev" ? "⚠" : "←"}
-      </button>
-      <span className="version-nav-label">{label}</span>
-      <button
-        aria-label={switchArmDir === "next" ? "再點確認切到下一版" : "下一版"}
-        className={`version-nav-btn${switchArmDir === "next" ? " danger" : ""}`}
-        disabled={!canNext || regenBusy}
-        onClick={onNext}
-        title={switchArmDir === "next" ? "再點一次確認切換（會捨棄未存修改）" : undefined}
-        type="button"
-      >
-        {switchArmDir === "next" ? "⚠" : "→"}
-      </button>
-      <button
-        aria-label="只重生此欄"
-        className={`version-nav-btn version-nav-regen${regenArmed ? " danger" : ""}`}
-        disabled={regenDisabled || regenBusy}
-        onClick={onRegen}
-        title={
-          regenArmed
-            ? "再點一次確認：以畫面文字重生，未定案會捨棄"
-            : "只重生此欄（會呼叫 AI，需花費）"
-        }
-        type="button"
-      >
-        {regenBusy ? "重生中" : regenArmed ? "⚠ 確認重生" : "重生"}
-      </button>
-    </span>
-  );
-}
-
-/** UX-L T61: discard-edit arm (independent from actionArm review/revision/return). */
-type DiscardArm =
-  | null
-  | { kind: "switch"; field: CopyVersionField; nextIndex: number }
-  | { kind: "regen"; field: CopyVersionField }
-  | { kind: "collapse" };
-
-/** T26: 描述／FAQ 預覽預設限高，可展開全文；local state 不寫 localStorage */
-function CopyPreviewBlock({ html }: { html: string }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className={`rc-copy-preview${expanded ? " is-expanded" : ""}`}>
-      <div
-        className="rc-html-preview rc-copy-preview-body"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-      <button
-        className="mini-btn rc-copy-preview-toggle"
-        onClick={() => setExpanded((v) => !v)}
-        type="button"
-      >
-        {expanded ? "收合" : "展開全文"}
-      </button>
-    </div>
-  );
 }
 
 function emptyVersionIndexMap(): Record<CopyVersionField, number> {
@@ -2210,336 +2087,83 @@ export function ResultCard({
             </div>
           )}
 
+          {/* S2: 展開分頁拆子元件（行為不變，只降 ResultCard 體積） */}
           {!isImageStation && activeTab === "copy" ? (
-            <div className="rc-tabpanel rc-tabpanel--copy" role="tabpanel">
-              {/* Desktop two-col balanced grid (same idea as .row AI類型/SKU); mobile stacks. */}
-              {/* UX-W T88: max-height + scroll on .rc-tabpanel--copy */}
-              <div className="rc-tabpanel-grid">
-                <div className="rc-field rc-span-2">
-                  <div className="rc-label">快速狀態</div>
-                  <div className="rc-text">
-                    {APPROVED_STATUSES.has(draft.status) ? (
-                      <span className="audit-badge ok">已審核</span>
-                    ) : (
-                      <span className="audit-badge">待審核</span>
-                    )}
-                    　來源：{draft.source_platform ?? "-"}
-                    　成本：{draft.cny_price.toLocaleString()}
-                    　模式：{priceMode === "single" ? "單一售價" : "特價"}
-                    　定價：
-                    {priceMode === "single"
-                      ? "不適用"
-                      : draft.compare_at_price
-                        ? `NT$${draft.compare_at_price.toLocaleString()}`
-                        : "未填"}
-                    　AI：{PROVIDER_LABELS[draft.generation_provider] ?? draft.generation_provider}
-                  </div>
-                </div>
-                <div className="rc-field">
-                  <div className="rc-label">原始標題</div>
-                  <div className="muted">{draft.taobao_title ?? draft.original_title ?? "-"}</div>
-                </div>
-
-                <div className="rc-field">
-                  <div className="rc-label">AI 偵測</div>
-                  <div className="rc-text">
-                    IP：{draft.ip_name || "—"}
-                    ｜角色：{draft.character_name || "—"}
-                    {characterChipWarned ? " ⚠" : ""}
-                    ｜型態：{detectTypeLabel || "—"}
-                    ｜SKU：{sku || "—"}
-                  </div>
-                  {missingCharacters.length > 0 ? (
-                    <div className="rc-quick-add-list">
-                      {missingCharacters.map((name) => (
-                        <div className="rc-quick-add-row" key={name}>
-                          <span className="price-soft-warn">
-                            ⚠ 角色「{name}」尚未建檔
-                            {!draft.ip_name ? "（請先確認 IP 已建檔）" : ""}
-                          </span>
-                          <button
-                            className="mini-btn"
-                            disabled={
-                              !draft.ip_name ||
-                              quickAddingCharacter === name ||
-                              regenerating ||
-                              regeneratingField != null
-                            }
-                            onClick={() => void quickAddCharacter(name)}
-                            type="button"
-                          >
-                            {quickAddingCharacter === name ? "新增中…" : "一鍵新增角色"}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="row rc-span-2">
-                  <div className="field">
-                    <label>AI 偵測類型</label>
-                    <input className="edit-input" onChange={(event) => setDetectedCategory(event.target.value)} value={detectedCategory} />
-                  </div>
-                  <div className="field">
-                    <label>SKU</label>
-                    <input className="edit-input" onChange={(event) => setSku(event.target.value)} value={sku} />
-                  </div>
-                </div>
-
-                {/* B10: versioned copy fields (A7); SEO lives on its own tab */}
-                {!historyLoaded ? (
-                  <div className="muted rc-span-2">載入版本歷史…</div>
-                ) : null}
-
-                {(() => {
-                  const fieldBusy = regeneratingField != null || regenerating || comboSaving;
-                  const renderVersionHdr = (field: CopyVersionField) => {
-                    const versions = versionsByField[field];
-                    const idx = Math.min(versionIndex[field] ?? 0, Math.max(versions.length - 1, 0));
-                    const switchArmDir: "prev" | "next" | null =
-                      discardArm?.kind === "switch" && discardArm.field === field
-                        ? discardArm.nextIndex < idx
-                          ? "prev"
-                          : discardArm.nextIndex > idx
-                            ? "next"
-                            : null
-                        : null;
-                    const regenArmed =
-                      discardArm?.kind === "regen" && discardArm.field === field;
-                    return (
-                      <div className="rc-field-hdr">
-                        <span className="rc-field-hdr-label">
-                          {COPY_VERSION_FIELD_LABELS[field]}
-                          <CopyButton getValue={() => displayByField[field]} />
-                          {copyDirty[field] ? <span className="version-dirty-dot" title="未定案修改">·</span> : null}
-                        </span>
-                        <VersionNav
-                          canNext={idx < versions.length - 1}
-                          canPrev={idx > 0}
-                          label={versionLabel(idx, versions)}
-                          onNext={() => switchVersion(field, idx + 1)}
-                          onPrev={() => switchVersion(field, idx - 1)}
-                          onRegen={() => void regenerateField(field)}
-                          regenArmed={regenArmed}
-                          regenBusy={regeneratingField === field}
-                          regenDisabled={fieldBusy && regeneratingField !== field}
-                          switchArmDir={switchArmDir}
-                        />
-                      </div>
-                    );
-                  };
-
-                  const specTextDisplay = (draft.spec_text ?? "").trim();
-
-                  return (
-                    <>
-                      {/* UX-N T66: destination group labels (R26 UI) */}
-                      <div className="rc-copy-group rc-span-2">
-                        <div className="rc-copy-group-title">標題與賣點</div>
-                        <p className="rc-copy-group-dest muted">→ 標題／賣點 metafield</p>
-                      </div>
-                      <div className="field">
-                        {renderVersionHdr("enriched_title")}
-                        <input
-                          className="edit-input"
-                          onChange={(event) => setFieldDisplay("enriched_title", event.target.value, true)}
-                          value={title}
-                        />
-                      </div>
-                      <div className="field">
-                        {renderVersionHdr("why_we_chose_it")}
-                        <textarea
-                          className="edit-textarea"
-                          onChange={(event) => setFieldDisplay("why_we_chose_it", event.target.value, true)}
-                          rows={3}
-                          value={whyWeChoseIt}
-                        />
-                      </div>
-                      <div className="field rc-span-2">
-                        {renderVersionHdr("product_highlights")}
-                        <textarea
-                          className="edit-textarea"
-                          onChange={(event) => setFieldDisplay("product_highlights", event.target.value, true)}
-                          placeholder="每點一行（可加・）"
-                          rows={4}
-                          value={productHighlights}
-                        />
-                      </div>
-
-                      <div className="rc-copy-group rc-span-2">
-                        <div className="rc-copy-group-title">上架描述</div>
-                        <p className="rc-copy-group-dest muted">→ 商品介紹內文</p>
-                      </div>
-                      <div className="field rc-span-2">
-                        <div className="rc-view-tabs">
-                          {renderVersionHdr("generated_description_html")}
-                        </div>
-                        <div className="rc-view-tabs" style={{ marginBottom: 6 }}>
-                          <span className="rc-view-tabs-buttons">
-                            <button
-                              className={descriptionView === "preview" ? "active" : ""}
-                              onClick={() => setDescriptionView("preview")}
-                              type="button"
-                            >
-                              預覽
-                            </button>
-                            <button
-                              className={descriptionView === "source" ? "active" : ""}
-                              onClick={() => setDescriptionView("source")}
-                              type="button"
-                            >
-                              純文字
-                            </button>
-                          </span>
-                        </div>
-                        {descriptionView === "preview" ? (
-                          <CopyPreviewBlock html={descriptionPreviewHtml(description)} />
-                        ) : (
-                          <textarea
-                            className="edit-textarea"
-                            onChange={(event) => setFieldDisplay("generated_description_html", event.target.value, true)}
-                            rows={10}
-                            value={description}
-                          />
-                        )}
-                      </div>
-
-                      <div className="rc-copy-group rc-span-2">
-                        <div className="rc-copy-group-title">規格中繼</div>
-                        <p className="rc-copy-group-dest muted">→ Shopify 規格／給 D 段</p>
-                      </div>
-                      <div className="rc-field rc-span-2">
-                        <div className="rc-label">商品規格（唯讀）</div>
-                        {specTextDisplay ? (
-                          <div className="rc-text rc-spec-readonly">{specTextDisplay}</div>
-                        ) : (
-                          <div className="muted">（空）</div>
-                        )}
-                      </div>
-
-                      <div className="rc-copy-group rc-span-2">
-                        <div className="rc-copy-group-title">FAQ</div>
-                        <p className="rc-copy-group-dest muted">→ FAQ metafield</p>
-                      </div>
-                      <div className="field rc-span-2">
-                        <div className="rc-view-tabs">
-                          {renderVersionHdr("generated_faq_html")}
-                        </div>
-                        <div className="rc-view-tabs" style={{ marginBottom: 6 }}>
-                          <span className="rc-view-tabs-buttons">
-                            <button
-                              className={faqView === "preview" ? "active" : ""}
-                              onClick={() => setFaqView("preview")}
-                              type="button"
-                            >
-                              預覽
-                            </button>
-                            <button
-                              className={faqView === "html" ? "active" : ""}
-                              onClick={() => setFaqView("html")}
-                              type="button"
-                            >
-                              純文字
-                            </button>
-                          </span>
-                        </div>
-                        {faqView === "preview" ? (
-                          <CopyPreviewBlock html={faq || "<p>尚無內容</p>"} />
-                        ) : (
-                          <textarea
-                            className="edit-textarea"
-                            onChange={(event) => setFieldDisplay("generated_faq_html", event.target.value, true)}
-                            rows={6}
-                            value={faq}
-                          />
-                        )}
-                      </div>
-
-                      <button
-                        className="btn-save-version rc-span-2"
-                        disabled={comboSaving || regenerating || regeneratingField != null}
-                        onClick={() => void saveComboOnly()}
-                        type="button"
-                      >
-                        {comboSaving ? "儲存中…" : "✅ 確認儲存此版本組合"}
-                      </button>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
+            <ResultCardCopyPanel
+              characterChipWarned={characterChipWarned}
+              comboSaving={comboSaving}
+              copyDirty={copyDirty}
+              description={description}
+              descriptionView={descriptionView}
+              detectTypeLabel={detectTypeLabel}
+              detectedCategory={detectedCategory}
+              discardArm={discardArm}
+              displayByField={displayByField}
+              draft={draft}
+              faq={faq}
+              faqView={faqView}
+              historyLoaded={historyLoaded}
+              missingCharacters={missingCharacters}
+              onDescriptionViewChange={setDescriptionView}
+              onDetectedCategoryChange={setDetectedCategory}
+              onFaqViewChange={setFaqView}
+              onQuickAddCharacter={(name) => void quickAddCharacter(name)}
+              onRegenField={(field) => void regenerateField(field)}
+              onSaveCombo={() => void saveComboOnly()}
+              onSetFieldDisplay={setFieldDisplay}
+              onSkuChange={setSku}
+              onSwitchVersion={switchVersion}
+              priceMode={priceMode}
+              productHighlights={productHighlights}
+              quickAddingCharacter={quickAddingCharacter}
+              regenerating={regenerating}
+              regeneratingField={regeneratingField}
+              sku={sku}
+              title={title}
+              versionIndex={versionIndex}
+              versionsByField={versionsByField}
+              whyWeChoseIt={whyWeChoseIt}
+            />
           ) : null}
 
-          {/* UX-M T64: 規格 = 款式／變體（非站②規格圖）；站①③可編，站②不出現此 tab */}
           {!isImageStation && activeTab === "specs" ? (
-            <div className="rc-tabpanel" role="tabpanel">
-              <div className="rc-field rc-span-2">
-                <div className="rc-label">規格（款式）</div>
-                {variantDimensions.length === 0 && variantRows.filter(isVariantRowFilled).length === 0 ? (
-                  <p className="muted" style={{ margin: "0 0 8px", fontSize: 12 }}>
-                    尚未建立款式 — 可新增維度或一列
-                  </p>
-                ) : null}
-                <div className="rc-specs-wrap">
-                  <VariantEditor
-                    currency="CNY"
-                    dimensions={variantDimensions}
-                    images={variantImageOptions}
-                    onDimensionsChange={(dims) => {
-                      setVariantDimensions(dims);
-                      setVariantsDirty(true);
-                    }}
-                    onRowsChange={(rows) => {
-                      setVariantRows(rows);
-                      setVariantsDirty(true);
-                    }}
-                    onWarning={setVariantWarning}
-                    priceMode={priceMode}
-                    pricingSettings={getStoredPricingSettings()}
-                    productCost={
-                      draft.cny_price != null && Number.isFinite(Number(draft.cny_price))
-                        ? Number(draft.cny_price)
-                        : null
-                    }
-                    rows={variantRows}
-                    warning={variantWarning}
-                  />
-                </div>
-              </div>
-            </div>
+            <ResultCardSpecsPanel
+              onDimensionsChange={(dims) => {
+                setVariantDimensions(dims);
+                setVariantsDirty(true);
+              }}
+              onRowsChange={(rows) => {
+                setVariantRows(rows);
+                setVariantsDirty(true);
+              }}
+              onWarning={setVariantWarning}
+              priceMode={priceMode}
+              productCost={
+                draft.cny_price != null && Number.isFinite(Number(draft.cny_price))
+                  ? Number(draft.cny_price)
+                  : null
+              }
+              variantDimensions={variantDimensions}
+              variantImageOptions={variantImageOptions}
+              variantRows={variantRows}
+              variantWarning={variantWarning}
+            />
           ) : null}
 
           {!isImageStation && activeTab === "pricing" ? (
-            <div className="rc-tabpanel" role="tabpanel">
-              <div className="rc-tabpanel-grid">
-                <div className="rc-field rc-span-2">
-                  <div className="rc-label">定價</div>
-                  {draft.twd_cost != null ? (
-                    <div className="muted">
-                      成本 NT${draft.twd_cost.toLocaleString()}
-                      {profit != null ? ` ／ 利潤 NT$${profit.toLocaleString()}` : null}
-                      {profitPct != null ? `（約 ${profitPct}%）` : null}
-                      {priceMode === "single" ? " ／ 單一售價（無劃線定價）" : " ／ 特價模式"}
-                    </div>
-                  ) : null}
-                  <div className="row">
-                    <div className="field">
-                      <label>售價 TWD</label>
-                      <input className="edit-input" min="0" onChange={(event) => setSellPrice(event.target.value)} type="number" value={sellPrice} />
-                    </div>
-                    {priceMode === "sale" ? (
-                      <div className="field">
-                        <label>定價 TWD</label>
-                        <input className="edit-input" min="0" onChange={(event) => setCompareAtPrice(event.target.value)} type="number" value={compareAtPrice} />
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ResultCardPricingPanel
+              compareAtPrice={compareAtPrice}
+              onCompareAtPriceChange={setCompareAtPrice}
+              onSellPriceChange={setSellPrice}
+              priceMode={priceMode}
+              profit={profit}
+              profitPct={profitPct}
+              sellPrice={sellPrice}
+              twdCost={draft.twd_cost}
+            />
           ) : null}
 
-          {/* T7: 站① 永不渲染圖片 tab；站② UX-F T30 三分頁；站③ 可經「圖片」tab 唯讀標記 */}
+          {/* T7: 站① 永不渲染圖片 tab；站② UX-F T30；站③ 圖片 tab */}
           {isImageStation ? (
             <div className="rc-tabpanel" role="tabpanel">
               <Station2ImagePanel
@@ -2554,256 +2178,51 @@ export function ResultCard({
               />
             </div>
           ) : !isCopyStation && activeTab === "images" ? (
-            <div className="rc-tabpanel" role="tabpanel">
-              {imageMarks.length > 0 ? (
-                <div className="rc-field">
-                  <div className="rc-label">圖片（站③ 可檢視；改標記請回標圖站）</div>
-                  {pipelineImages.length > 0 ? (
-                    <div className="imgmark-list">
-                      {pipelineImages.map((image, index) => {
-                        const src =
-                          image.processed_file_url ?? image.original_file_url ?? image.generated_file_url ?? "";
-                        const slot = imageSlotLabel(image, index + 1);
-                        const intents = PROCESS_INTENT_OPTIONS;
-                        return (
-                          <div
-                            className={`imgmark-row${fadingImageIds.has(image.id) ? " is-fading" : ""}`}
-                            key={image.id}
-                          >
-                            <div className="thumb-wrap">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
-                              <button
-                                className="thumb-remove"
-                                onClick={() => void removeImage(image)}
-                                title="移除這張圖片"
-                                type="button"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                            <span className="imgmark-slot-label">{slot}</span>
-                            <span className="imgmark-btns">
-                              {intents.map((intent) => (
-                                <button
-                                  aria-pressed={image.process_intent === intent}
-                                  className={`img-mark-btn${image.process_intent === intent ? " active" : ""}`}
-                                  key={intent}
-                                  onClick={() => void setProcessIntent(image, intent)}
-                                  title={
-                                    intent === "to_trad"
-                                      ? "需先在 Supabase 執行 migration 030；D4 尚未真的做圖編會誠實跳過"
-                                      : PROCESS_INTENT_LABELS[intent]
-                                  }
-                                  type="button"
-                                >
-                                  {image.process_intent === intent
-                                    ? `✓ ${PROCESS_INTENT_LABELS[intent]}`
-                                    : PROCESS_INTENT_LABELS[intent]}
-                                </button>
-                              ))}
-                              {!image.is_spec_process ? (
-                                <button
-                                  aria-pressed={false}
-                                  className="img-mark-btn"
-                                  onClick={() => void toggleSpecOnCard(image)}
-                                  type="button"
-                                >
-                                  規格圖
-                                </button>
-                              ) : (
-                                <button
-                                  aria-pressed
-                                  className="img-mark-btn active"
-                                  onClick={() => void toggleSpecOnCard(image)}
-                                  type="button"
-                                >
-                                  ✓ 規格圖
-                                </button>
-                              )}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                  {imageMarks.some((image) => image.image_type === "detail") ? (
-                    <div className="thumbs" style={{ marginTop: 10 }}>
-                      {imageMarks
-                        .filter((image) => image.image_type === "detail")
-                        .map((image) => (
-                          <div
-                            className={`thumb-wrap${fadingImageIds.has(image.id) ? " is-fading" : ""}`}
-                            key={image.id}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              alt={image.alt_text ?? "詳情圖"}
-                              src={image.processed_file_url ?? image.original_file_url ?? image.generated_file_url ?? ""}
-                            />
-                            <button
-                              className="thumb-remove"
-                              onClick={() => void removeImage(image)}
-                              title="移除這張圖片"
-                              type="button"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                    </div>
-                  ) : null}
-                  {unmarkedImages.length > 0 && unmarkedBlockMessage ? (
-                    <div className="img-mark-warn" role="status">{unmarkedBlockMessage}</div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="muted">尚無商品圖。</div>
-              )}
-            </div>
+            <ResultCardImagesPanel
+              fadingImageIds={fadingImageIds}
+              imageMarks={imageMarks}
+              onRemoveImage={(image) => void removeImage(image)}
+              onSetProcessIntent={(image, intent) => void setProcessIntent(image, intent)}
+              onToggleSpec={(image) => void toggleSpecOnCard(image)}
+              pipelineImages={pipelineImages}
+              unmarkedBlockMessage={unmarkedBlockMessage}
+              unmarkedImages={unmarkedImages}
+            />
           ) : null}
 
           {!isImageStation && activeTab === "tags" ? (
-            <div className="rc-tabpanel" role="tabpanel">
-              <div className="rc-tabpanel-grid">
-                <div className="field">
-                  <label>Tags <CopyButton getValue={() => tags} /></label>
-                  <div className="rc-tags">
-                    {tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tag) => (
-                      <span className="rc-tag" key={tag}>{tag}</span>
-                    ))}
-                  </div>
-                  <input className="edit-input" onChange={(event) => setTags(event.target.value)} value={tags} />
-                </div>
-                {blockWarnCount + confirmWarnCount + suggestWarnCount > 0 ? (
-                  <div className="rc-field">
-                    <div className="rc-label">提醒</div>
-                    {/* T31 可選：三級分組標題（必修／待確認／建議） */}
-                    {(
-                      [
-                        { key: "block", title: "⛔ 必修", items: warningSummary.block },
-                        { key: "confirm", title: "⚠ 待確認", items: warningSummary.confirm },
-                        { key: "suggest", title: "🔍 建議", items: warningSummary.suggest },
-                      ] as const
-                    ).map((group) =>
-                      group.items.length > 0 ? (
-                        <div className="rc-warn-group" key={group.key}>
-                          <div className="rc-warn-group-title muted">{group.title}</div>
-                          {group.items.map((w) => {
-                            const missingFromLine = extractMissingCharacterNames([w.text]);
-                            return (
-                              <div className="rc-warning-line" key={`${group.key}-${w.text}`}>
-                                <div
-                                  className={
-                                    group.key === "block"
-                                      ? "price-soft-warn rc-warn-line-block"
-                                      : group.key === "confirm"
-                                        ? "price-soft-warn"
-                                        : "muted"
-                                  }
-                                >
-                                  {w.text}
-                                </div>
-                                {missingFromLine.map((name) => (
-                                  <button
-                                    className="mini-btn"
-                                    disabled={!draft.ip_name || quickAddingCharacter === name || regenerating}
-                                    key={`${w.text}-${name}`}
-                                    onClick={() => void quickAddCharacter(name)}
-                                    type="button"
-                                  >
-                                    {quickAddingCharacter === name ? "新增中…" : `一鍵新增「${name}」`}
-                                  </button>
-                                ))}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null
-                    )}
-                  </div>
-                ) : (
-                  <div className="muted">目前沒有待確認提醒。</div>
-                )}
-              </div>
-            </div>
+            <ResultCardTagsPanel
+              blockWarnCount={blockWarnCount}
+              confirmWarnCount={confirmWarnCount}
+              ipName={draft.ip_name}
+              onQuickAddCharacter={(name) => void quickAddCharacter(name)}
+              onTagsChange={setTags}
+              quickAddingCharacter={quickAddingCharacter}
+              regenerating={regenerating}
+              suggestWarnCount={suggestWarnCount}
+              tags={tags}
+              warningSummary={warningSummary}
+            />
           ) : null}
 
           {!isImageStation && activeTab === "seo" ? (
-            <div className="rc-tabpanel" role="tabpanel">
-              <div className="rc-tabpanel-grid">
-                {!historyLoaded ? (
-                  <div className="muted rc-span-2">載入版本歷史…</div>
-                ) : null}
-                {(() => {
-                  const fieldBusy = regeneratingField != null || regenerating || comboSaving;
-                  const renderVersionHdr = (field: CopyVersionField) => {
-                    const versions = versionsByField[field];
-                    const idx = Math.min(versionIndex[field] ?? 0, Math.max(versions.length - 1, 0));
-                    const switchArmDir: "prev" | "next" | null =
-                      discardArm?.kind === "switch" && discardArm.field === field
-                        ? discardArm.nextIndex < idx
-                          ? "prev"
-                          : discardArm.nextIndex > idx
-                            ? "next"
-                            : null
-                        : null;
-                    const regenArmed =
-                      discardArm?.kind === "regen" && discardArm.field === field;
-                    return (
-                      <div className="rc-field-hdr">
-                        <span className="rc-field-hdr-label">
-                          {COPY_VERSION_FIELD_LABELS[field]}
-                          <CopyButton getValue={() => displayByField[field]} />
-                          {copyDirty[field] ? <span className="version-dirty-dot" title="未定案修改">·</span> : null}
-                        </span>
-                        <VersionNav
-                          canNext={idx < versions.length - 1}
-                          canPrev={idx > 0}
-                          label={versionLabel(idx, versions)}
-                          onNext={() => switchVersion(field, idx + 1)}
-                          onPrev={() => switchVersion(field, idx - 1)}
-                          onRegen={() => void regenerateField(field)}
-                          regenArmed={regenArmed}
-                          regenBusy={regeneratingField === field}
-                          regenDisabled={fieldBusy && regeneratingField !== field}
-                          switchArmDir={switchArmDir}
-                        />
-                      </div>
-                    );
-                  };
-                  return (
-                    <>
-                      <div className="field">
-                        {renderVersionHdr("seo_title")}
-                        <input
-                          className="edit-input"
-                          onChange={(event) => setFieldDisplay("seo_title", event.target.value, true)}
-                          value={seoTitle}
-                        />
-                      </div>
-                      <div className="field">
-                        {renderVersionHdr("meta_description")}
-                        <textarea
-                          className="edit-textarea"
-                          onChange={(event) => setFieldDisplay("meta_description", event.target.value, true)}
-                          rows={4}
-                          value={seoDescription}
-                        />
-                      </div>
-                      <button
-                        className="btn-save-version rc-span-2"
-                        disabled={comboSaving || regenerating || regeneratingField != null}
-                        onClick={() => void saveComboOnly()}
-                        type="button"
-                      >
-                        {comboSaving ? "儲存中…" : "✅ 確認儲存此版本組合"}
-                      </button>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
+            <ResultCardSeoPanel
+              comboSaving={comboSaving}
+              copyDirty={copyDirty}
+              discardArm={discardArm}
+              displayByField={displayByField}
+              historyLoaded={historyLoaded}
+              onRegenField={(field) => void regenerateField(field)}
+              onSaveCombo={() => void saveComboOnly()}
+              onSetFieldDisplay={setFieldDisplay}
+              onSwitchVersion={switchVersion}
+              regenerating={regenerating}
+              regeneratingField={regeneratingField}
+              seoDescription={seoDescription}
+              seoTitle={seoTitle}
+              versionIndex={versionIndex}
+              versionsByField={versionsByField}
+            />
           ) : null}
 
           {/* R2 footer: station-scoped actions only */}

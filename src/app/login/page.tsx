@@ -3,20 +3,10 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
-
-// Supabase auth errors come back in English -- translate the ones an
-// operator will actually hit so they're not left guessing what a phrase
-// like "Invalid login credentials" means.
-const AUTH_ERROR_LABELS: Record<string, string> = {
-  "Invalid login credentials": "帳號或密碼錯誤，請再確認一次",
-  "Email not confirmed": "此信箱尚未完成驗證，請至信箱收件匣確認",
-  "Email rate limit exceeded": "嘗試次數過多，請稍後再試",
-  "User not found": "找不到此帳號"
-};
-
-function translateAuthError(message: string): string {
-  return AUTH_ERROR_LABELS[message] ?? message;
-}
+import {
+  translateLoginError,
+  type LoginErrorKind
+} from "@/lib/auth/loginErrors";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,25 +14,34 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [hint, setHint] = useState("");
+  const [errorKind, setErrorKind] = useState<LoginErrorKind | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!supabaseReady) {
-      setMessage("尚未設定 Supabase public env，請先設定測試環境。");
+      setErrorKind("config");
+      setMessage("尚未設定登入環境");
+      setHint("請管理員先設定 Supabase 測試環境變數。");
       return;
     }
 
     setSubmitting(true);
     setMessage("");
+    setHint("");
+    setErrorKind(null);
 
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setSubmitting(false);
-      setMessage(translateAuthError(error.message));
+      const view = translateLoginError(error);
+      setErrorKind(view.kind);
+      setMessage(view.message);
+      setHint(view.hint ?? "");
       return;
     }
 
@@ -97,7 +96,15 @@ export default function LoginPage() {
               "登入"
             )}
           </button>
-          {message ? <div className="notice login-error">{message}</div> : null}
+          {message ? (
+            <div
+              className={`notice login-error${errorKind ? ` login-error--${errorKind}` : ""}`}
+              role="alert"
+            >
+              <div className="login-error-main">{message}</div>
+              {hint ? <div className="login-error-hint muted">{hint}</div> : null}
+            </div>
+          ) : null}
         </div>
       </form>
     </main>

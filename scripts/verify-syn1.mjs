@@ -311,7 +311,175 @@ await check("prepareCopy uses localize + post-generate fields only", () => {
   assert.doesNotMatch(src, /raw_capture|taobao_params/);
 });
 
-// Also exercise real TS module via tsx? skip — static + sharp probe enough
+await check("prepareCopy strips P4 residual （來源：網路） before render", () => {
+  const src = read("src/lib/images/detailCompose/prepareCopy.ts");
+  assert.match(src, /stripCustomerSourceMarkers/);
+  assert.match(src, /stripCustomerSourceMarkersList/);
+
+  // Inline mirror of stripCustomerSourceMarkers (keep in sync)
+  const PAREN =
+    /[（(]\s*來\s*源\s*[:：]\s*網\s*路\s*[）)]|[（(]\s*来\s*源\s*[:：]\s*网\s*络\s*[）)]/gi;
+  const BARE =
+    /[ \t]*來源\s*[:：]\s*網路(?:搜尋)?(?=$|[\s）)\]】，。、；;,.…])|[ \t]*来源\s*[:：]\s*网络(?=$|[\s）)\]】，。、；;,.…])/gi;
+  function strip(value) {
+    let s = String(value ?? "");
+    for (let i = 0; i < 3; i++) {
+      const before = s;
+      s = s.replace(PAREN, "");
+      s = s.replace(BARE, "");
+      s = s.replace(/[^\S\n]{2,}/g, " ").trim();
+      if (s === before) break;
+    }
+    return s;
+  }
+
+  // Old-draft residual samples that used to paint onto the image
+  const dirtySpec = "尺寸：15 x 15 x 30 cm（來源：網路）\n材質：絨毛 來源：網路";
+  const cleaned = dirtySpec
+    .split("\n")
+    .map((line) => strip(line))
+    .join("\n");
+  assert.ok(!cleaned.includes("來源"), `still has marker: ${cleaned}`);
+  assert.ok(!cleaned.includes("網路") || cleaned.includes("15"), "no bare 來源：網路");
+  assert.ok(cleaned.includes("15 x 15"), "kept real spec");
+  assert.ok(cleaned.includes("絨毛"), "kept material");
+
+  const dirtyHl = "柔軟親膚（來源：網路）";
+  assert.equal(strip(dirtyHl), "柔軟親膚");
+});
+
+await check("SVG layout: canvas covers content, sections non-overlapping", () => {
+  const src = read("src/lib/images/detailCompose/buildSvg.ts");
+  assert.match(src, /measureDetailSvgLayout/);
+  assert.match(src, /assertDetailLayoutSound/);
+  assert.match(src, /contentBottom/);
+  assert.match(src, /BOTTOM_PAD|bottomPad|bottom_pad|contentBottom \+ /i);
+
+  // Mirror measure + assert (same rules as buildSvg.ts)
+  function wrapText(text, maxChars) {
+    const t = String(text || "").trim();
+    if (!t) return [""];
+    const lines = [];
+    let rest = t;
+    while (rest.length > maxChars) {
+      let breakAt = maxChars;
+      const slice = rest.slice(0, maxChars + 1);
+      const m = slice.match(/^[\s\S]{8,}?[\s，、。；：,.…]/);
+      if (m && m[0].length >= 8) breakAt = m[0].length;
+      lines.push(rest.slice(0, breakAt).trim());
+      rest = rest.slice(breakAt).trim();
+    }
+    if (rest) lines.push(rest);
+    return lines.length ? lines : [""];
+  }
+
+  function measure(copy) {
+    const sections = [];
+    const BOTTOM_PAD = 48;
+    const HERO_TOP = 56;
+    const HERO_H = 720;
+    let y = 56;
+    sections.push({ name: "topbar", top: 0, bottom: y });
+    sections.push({ name: "hero", top: HERO_TOP, bottom: HERO_TOP + HERO_H });
+    y = HERO_TOP + HERO_H + 48;
+    const titleTop = y;
+    y += 28;
+    if ([copy.brand, copy.ip, copy.productType].filter(Boolean).length) y += 32;
+    y += wrapText(copy.title || "未命名", 22).length * 48;
+    y += 24 + 1 + 40;
+    sections.push({ name: "title", top: titleTop, bottom: y });
+    const highlights = copy.highlights.length ? copy.highlights : ["（草稿尚無賣點）"];
+    const hlTop = y;
+    let hlInner = 36 + 36;
+    for (const h of highlights) {
+      hlInner += Math.max(48, wrapText(h, 28).length * 24 + 8);
+    }
+    hlInner += 20;
+    y = hlTop + hlInner + 28;
+    sections.push({ name: "highlights", top: hlTop, bottom: y });
+    y += 1 + 40;
+    const specsTop = y;
+    y += 28;
+    const specs = copy.specs.length ? copy.specs : [{ key: "", value: "x" }];
+    for (const row of specs) {
+      y += 36;
+      if (row.key) {
+        y += Math.max(0, (wrapText(row.value, 36).length - 1) * 22);
+      }
+      y += 16;
+    }
+    sections.push({ name: "specs", top: specsTop, bottom: y });
+    y += 40;
+    const brandTop = y;
+    y += 32 + 32 + 40;
+    sections.push({ name: "brand", top: brandTop, bottom: y });
+    y += 1 + 40;
+    const noticeTop = y;
+    y += 32 + wrapText(copy.buyNotice, 34).length * 26;
+    sections.push({ name: "buy_notice", top: noticeTop, bottom: y });
+    y += 40;
+    const footTop = y;
+    y += 16;
+    sections.push({ name: "footer", top: footTop, bottom: y });
+    const contentBottom = y;
+    return {
+      canvasHeight: contentBottom + BOTTOM_PAD,
+      contentBottom,
+      sections
+    };
+  }
+
+  const longNotice =
+    "本商品為正版授權選品，實際規格以包裝標示為準。潮巢代購商品到貨後經檢視再寄出；如有瑕疵請於收貨後三天內聯繫客服。";
+  const layout = measure({
+    title: "米菲臺燈長標題測試用第二行也要量得到高度",
+    brand: "Miffy",
+    ip: "米菲",
+    productType: "燈具小物",
+    highlights: ["賣點一很長會換行要量高度避免卡片裁切與底部黑帶問題", "賣點二", "賣點三"],
+    specs: [
+      { key: "尺寸", value: "15 x 15 x 30 cm" },
+      { key: "重量", value: "54克" },
+      { key: "材質", value: "絨毛" }
+    ],
+    buyNotice: longNotice
+  });
+
+  assert.equal(
+    layout.canvasHeight,
+    layout.contentBottom + 48,
+    "canvasHeight must equal contentBottom + pad"
+  );
+  assert.ok(layout.canvasHeight >= layout.contentBottom, "canvas covers content");
+  for (let i = 1; i < layout.sections.length; i++) {
+    const prev = layout.sections[i - 1];
+    const cur = layout.sections[i];
+    assert.ok(
+      cur.top + 0.01 >= prev.bottom,
+      `overlap ${prev.name}/${cur.name}: ${cur.top} < ${prev.bottom}`
+    );
+    assert.ok(cur.bottom >= cur.top, `${cur.name} inverted`);
+  }
+  const buy = layout.sections.find((s) => s.name === "buy_notice");
+  assert.ok(buy, "buy_notice section present");
+  assert.ok(buy.bottom <= layout.contentBottom, "buy_notice not past contentBottom");
+  assert.ok(buy.bottom < layout.canvasHeight, "buy_notice not past canvas");
+});
+
+await check("review gallery includes generated_detail (query + filter)", () => {
+  const panel = read("src/components/review/ImageReviewPanel.tsx");
+  assert.match(panel, /generated_detail/);
+  assert.match(panel, /\["main", "spec", "variant", "generated_detail"\]/);
+  const rev = read("src/lib/images/imageReview.ts");
+  assert.match(rev, /isReviewGalleryImage/);
+  assert.match(rev, /generated_detail/);
+  // still must not force generated_detail into 送圖 pipeline marks
+  const marks = read("src/lib/images/processMarks.ts");
+  assert.doesNotMatch(
+    marks,
+    /isPipelineImage[\s\S]{0,200}generated_detail/
+  );
+});
 
 if (failures.length) {
   console.error(`\n${failures.length} failure(s)`);

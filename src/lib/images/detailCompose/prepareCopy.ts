@@ -2,6 +2,7 @@
  * SYN-1 R1: prepare Traditional Chinese copy for detail-image render.
  * Source = post-generate intermediate (title_zh / product_highlights / spec_text).
  * Never use raw Simplified capture. Localize again as insurance before render.
+ * P4: stripCustomerSourceMarkers so old drafts with residual「（來源：網路）」never hit the image.
  */
 
 import {
@@ -10,6 +11,10 @@ import {
   type SpecRow
 } from "@/lib/images/detailCompose/filterSpecs";
 import { DEFAULT_BUY_NOTICE } from "@/lib/images/detailCompose/horizonTokens";
+import {
+  stripCustomerSourceMarkers,
+  stripCustomerSourceMarkersList
+} from "@/lib/providers/stripCustomerSourceMarkers";
 import { localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
 
 export type DetailComposeCopyInput = {
@@ -37,9 +42,11 @@ export type DetailComposeCopy = {
   localized: true;
 };
 
+/** Localize then strip P4 source markers (idempotent). */
 function loc(s: string | null | undefined): string {
   if (s == null || !String(s).trim()) return "";
-  return localizeToTaiwanTraditionalText(String(s).trim());
+  const localized = localizeToTaiwanTraditionalText(String(s).trim());
+  return stripCustomerSourceMarkers(localized).trim();
 }
 
 /**
@@ -93,14 +100,19 @@ export function prepareDetailComposeCopy(
   const highlightsRaw = Array.isArray(input.productHighlights)
     ? input.productHighlights
     : [];
-  const highlights = highlightsRaw
-    .map((h) => loc(h))
-    .filter(Boolean)
-    .slice(0, 4);
+  // loc each line, then list strip as belt-and-suspenders (P4 helper)
+  const highlights = stripCustomerSourceMarkersList(
+    highlightsRaw.map((h) => loc(h)).filter(Boolean)
+  ).slice(0, 4);
 
-  // R1: localize full spec_text first, then parse, then R2 filter
+  // R1: localize + P4 strip full spec_text, then parse, then R2 filter
   const localizedSpec = loc(input.specText);
-  const specs = filterSpecsForDetailImage(parseSpecRows(localizedSpec));
+  const specs = filterSpecsForDetailImage(parseSpecRows(localizedSpec)).map(
+    (row) => ({
+      key: stripCustomerSourceMarkers(row.key).trim(),
+      value: stripCustomerSourceMarkers(row.value).trim()
+    })
+  ).filter((row) => row.value || row.key);
 
   const buyNotice = extractBuyNotice(
     input.descriptionHtml,

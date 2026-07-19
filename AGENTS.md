@@ -11,6 +11,9 @@ UI 驗收標準是 `docs/mockups/nestory-v7-mockup.html`（v7.4，用瀏覽器�
 | 用途 | 文件 |
 |---|---|
 | 進度唯一真相（每 session 頭尾必讀寫） | `docs/施工清單.md` |
+| **UIUX 跨對話同步（2026-07-19 本輪）** | **`docs/UIUX本輪改動同步-2026-07-19.md`** |
+| UIUX 短交接 | `docs/UIUX指揮交接-下一任接續.md` |
+| UIUX 計劃包／§9 | `docs/UIUX總指揮計劃包-2026-07-18.md` |
 | 定案差異（與 Mockup/舊文件衝突時以此為準） | `docs/Mockup差異備忘.md` |
 | UI 驗收標準 | `docs/mockups/nestory-v7-mockup.html` |
 | 施工順序／鐵則／地雷 | `docs/交接指南-給接手的AI模型.md` |

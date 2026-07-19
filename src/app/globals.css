@@ -5120,6 +5120,21 @@ textarea {
   min-height: 36px;
 }
 
+/* UX-BTN3: card-header quick actions on unified Button stay compact (not md 44px) */
+.rc-quick .nb-btn,
+.rc-collapsed-notice .nb-btn {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 960px) {
+  .rc-quick .nb-btn,
+  .rc-collapsed-notice .nb-btn {
+    min-height: 44px;
+  }
+}
+
 /* UX-AC T114: chips sit with header chrome (compact; not a heavy row) */
 .rc-status-chips {
   display: inline-flex;

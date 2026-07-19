@@ -1862,29 +1862,32 @@ export function ResultCard({
             <span className="rc-price">{priceRangeLabel}</span>
           </div>
         ) : null}
-        {/* R2: station-scoped quick actions */}
+        {/* R2: station-scoped quick actions — UX-BTN3: unified Button + rc-quick compact */}
         <span className="rc-quick" onClick={(event) => event.stopPropagation()}>
           {isArchived ? (
-            <button
-              className="mini-btn rc-quick-btn"
-              disabled={archiveBusy}
+            <Button
+              size="sm"
+              className="rc-quick-btn"
+              loading={archiveBusy}
               onClick={() => void unarchiveOne()}
               title="解除封存"
               type="button"
             >
-              {archiveBusy ? "…" : "解除封存"}
-            </button>
+              解除封存
+            </Button>
           ) : isCopyStation ? (
             <>
-              <button
-                className="mini-btn rc-quick-btn"
+              <Button
+                variant="primary"
+                size="sm"
+                className="rc-quick-btn"
                 disabled={
-                  quickBusy ||
                   regenerating ||
                   regeneratingField != null ||
                   !canQuickApprove ||
                   hasBlockingWarnings(warningSummary)
                 }
+                loading={quickBusy}
                 onClick={() => void approveOnly()}
                 title={
                   hasBlockingWarnings(warningSummary)
@@ -1893,11 +1896,13 @@ export function ResultCard({
                 }
                 type="button"
               >
-                {quickBusy ? "…" : "✓ 核准"}
-              </button>
-              <button
-                className="mini-btn rc-quick-btn"
-                disabled={quickBusy || regenerating || regeneratingField != null}
+                ✓ 核准
+              </Button>
+              <Button
+                size="sm"
+                className="rc-quick-btn"
+                disabled={quickBusy || regeneratingField != null}
+                loading={regenerating}
                 onClick={() => {
                   // BX10: open with last tone for this IP when remembered
                   const remembered = recalledToneForIp(
@@ -1913,13 +1918,16 @@ export function ResultCard({
                 type="button"
               >
                 ↻ 重生
-              </button>
+              </Button>
             </>
           ) : isImageStation ? (
             <>
-              <button
-                className={`mini-btn rc-quick-btn${actionArm === "review" ? " danger" : ""}`}
-                disabled={quickBusy || hasBlockingWarnings(warningSummary)}
+              <Button
+                variant={actionArm === "review" ? "danger" : "primary"}
+                size="sm"
+                className="rc-quick-btn"
+                disabled={hasBlockingWarnings(warningSummary)}
+                loading={quickBusy}
                 onClick={() => void stationReview()}
                 title={
                   actionArm === "review"
@@ -1931,60 +1939,65 @@ export function ResultCard({
                 }
                 type="button"
               >
-                {quickBusy
-                  ? "…"
-                  : actionArm === "review"
-                    ? station2Btn.arm
-                    : station2Btn.primary}
-              </button>
-              <button
-                className="mini-btn rc-quick-btn"
+                {actionArm === "review" ? station2Btn.arm : station2Btn.primary}
+              </Button>
+              <Button
+                size="sm"
+                className="rc-quick-btn"
                 disabled={quickBusy}
                 onClick={() => setLockedPreviewOpen(true)}
                 title="定稿預覽（唯讀）"
                 type="button"
               >
                 📄
-              </button>
-              <button
-                className={`mini-btn rc-quick-btn${actionArm === "revision" ? " danger" : ""}`}
+              </Button>
+              <Button
+                variant={actionArm === "revision" ? "danger" : "secondary"}
+                size="sm"
+                className="rc-quick-btn"
                 disabled={quickBusy}
                 onClick={() => void requestRevision()}
                 title={actionArm === "revision" ? "再點確認退回文案" : "退回修改文案（解鎖）"}
                 type="button"
               >
                 {actionArm === "revision" ? "⚠ 確認退回" : "↩ 退回"}
-              </button>
+              </Button>
             </>
           ) : isReadyStation ? (
             <>
-              <button
-                className="mini-btn rc-quick-btn"
+              <Button
+                variant="primary"
+                size="sm"
+                className="rc-quick-btn"
                 disabled={approveSummaryBusy || comboSaving || station3Busy}
                 onClick={() => setStation3Open(true)}
                 title="發布／匯出（API 與 CSV 可多選）"
                 type="button"
               >
                 發布／匯出
-              </button>
-              <button
-                className={`mini-btn rc-quick-btn${actionArm === "return-copy" ? " danger" : ""}`}
+              </Button>
+              <Button
+                variant={actionArm === "return-copy" ? "danger" : "secondary"}
+                size="sm"
+                className="rc-quick-btn"
                 disabled={quickBusy}
                 onClick={() => void returnFromReady("copy_review")}
                 title={actionArm === "return-copy" ? "再點確認退回改文案" : "退回改文案"}
                 type="button"
               >
                 {actionArm === "return-copy" ? "⚠ 確認" : "↩ 改文案"}
-              </button>
-              <button
-                className={`mini-btn rc-quick-btn${actionArm === "return-image" ? " danger" : ""}`}
+              </Button>
+              <Button
+                variant={actionArm === "return-image" ? "danger" : "secondary"}
+                size="sm"
+                className="rc-quick-btn"
                 disabled={quickBusy}
                 onClick={() => void returnFromReady("image_review")}
                 title={actionArm === "return-image" ? "再點確認退回改圖" : "退回改圖"}
                 type="button"
               >
                 {actionArm === "return-image" ? "⚠ 確認" : "↩ 改圖"}
-              </button>
+              </Button>
             </>
           ) : null}
         </span>
@@ -2041,8 +2054,9 @@ export function ResultCard({
         >
           <span>{collapsedNotice}</span>
           {lastArchiveIds && lastArchiveIds.length > 0 ? (
-            <button
-              className="mini-btn"
+            <Button
+              size="sm"
+              className="rc-quick-btn"
               disabled={archiveBusy}
               onClick={() => void unarchiveOne(lastArchiveIds)}
               style={{ marginLeft: 8 }}
@@ -2050,7 +2064,7 @@ export function ResultCard({
               type="button"
             >
               復原
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}

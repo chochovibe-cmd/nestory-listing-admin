@@ -10,7 +10,7 @@
 | UIUX 指揮（Grok） | 排程、T 帳本、骨架、本輪代理實作 |
 | Claude UIUX 審查 | 設計規格段＋收工核畫面 |
 | Fable | 系統／prompt／資料／發布 |
-| 老闆 | 定案、T106、BX-P2 截圖 |
+| 老闆 | 定案、BX-P2 截圖（**T106 已定不改**） |
 
 ## 進度快照
 
@@ -26,7 +26,7 @@
 | T112-r3 胖鈕 | ✅ |
 | git | 功能曾收口 `34ab4d3`；**後續 A19／iframe／BX-P1／站②逐件可能未 commit**；分支超前 origin、**未 push** |
 | Fable 債 | **T105** 按鈕 class 全收斂；**T84** CSS modules |
-| 老闆 | **T106** 審核 tab 改名？；**BX-P2** 截圖 |
+| 老闆 | **BX-P2** 截圖（T106 不改名已結） |
 
 ## 本輪 commits（已入庫功能）
 
@@ -61,7 +61,8 @@
 ## 下一刀（勿重做已完成項）
 
 1. Claude 核 AA～AC（T74–T119）畫面  
-2. 老闆拍 **T106**  
+2. ~~老闆拍 T106~~ → **已定不改**（維持「審核」）  
 3. Fable：T105／T84  
 4. BX-P2 **等截圖再開**（勿無圖零碎美化）  
-5. **不要重做**：BX2/6/7/9/10、SYN-1 toggle、站②逐件、A19、Shopify iframe、BX-P1  
+5. **不要重做**：BX2/6/7/9/10、SYN-1 toggle、站②逐件、A19、Shopify iframe、BX-P1、UX-BTN/S1–S5/BTN2–3  
+

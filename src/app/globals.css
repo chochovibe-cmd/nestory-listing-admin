@@ -1472,6 +1472,29 @@ textarea {
   font-size: 12px;
   font-weight: 700;
 }
+/* UX-BTN5: settings + export preflight mini actions */
+.settings-actions .nb-btn,
+.export-pf-mode-toggle .nb-btn,
+.export-pf-storefront-nav .nb-btn,
+.export-pf-storefront-panes .nb-btn,
+.export-pf-storefront-live-actions .nb-btn,
+.export-pf-storefront-live-actions a.nb-btn {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+@media (max-width: 960px) {
+  .settings-actions .nb-btn,
+  .export-pf-mode-toggle .nb-btn,
+  .export-pf-storefront-nav .nb-btn,
+  .export-pf-storefront-panes .nb-btn,
+  .export-pf-storefront-live-actions .nb-btn,
+  .export-pf-storefront-live-actions a.nb-btn {
+    min-height: 44px;
+  }
+}
 .batch-more > summary.nb-btn {
   min-height: 36px;
   padding: 0 12px;
@@ -7373,6 +7396,7 @@ body[data-theme="nordic"] .tone-card.sel,
 body[data-theme="nordic"] .tone-card.sel--ring,
 body[data-theme="nordic"] .mini-btn.sel,
 body[data-theme="nordic"] .btn-mini.sel,
+body[data-theme="nordic"] .nb-btn.sel,
 body[data-theme="nordic"] .pick-grid .pk.sel,
 body[data-theme="kitty"] .sel--ring,
 body[data-theme="kitty"] .theme-btn.active,
@@ -7382,6 +7406,7 @@ body[data-theme="kitty"] .tone-card.sel,
 body[data-theme="kitty"] .tone-card.sel--ring,
 body[data-theme="kitty"] .mini-btn.sel,
 body[data-theme="kitty"] .btn-mini.sel,
+body[data-theme="kitty"] .nb-btn.sel,
 body[data-theme="kitty"] .pick-grid .pk.sel {
   border-color: var(--accent);
 }

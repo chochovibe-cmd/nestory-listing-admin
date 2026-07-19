@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
+import { Button } from "@/components/ui/Button";
 import {
   AI_PROVIDER_STORAGE_KEY,
   readStoredAiProvider
@@ -480,12 +481,12 @@ export function SettingsPanel() {
               </p>
               <div className="settings-actions">
                 <span className="settings-muted">目前：程式內建版 · 未接版本庫</span>
-                <button className="btn-mini" disabled type="button">
+                <Button size="sm" disabled type="button">
                   歷史版本
-                </button>
-                <button className="btn-mini" disabled type="button">
+                </Button>
+                <Button size="sm" disabled type="button">
                   儲存新版
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -513,22 +514,17 @@ export function SettingsPanel() {
                 <span>—</span>
               )}
             </span>
-            <button
-              className="btn-mini"
-              disabled={liveRateLoading}
+            <Button
+              size="sm"
+              loading={liveRateLoading}
               onClick={() => void fetchLiveRate()}
               type="button"
             >
-              {liveRateLoading ? "抓取中…" : "抓取今日匯率"}
-            </button>
-            <button
-              className="btn-mini"
-              disabled={liveRate == null}
-              onClick={applyLiveRate}
-              type="button"
-            >
+              抓取今日匯率
+            </Button>
+            <Button size="sm" disabled={liveRate == null} onClick={applyLiveRate} type="button">
               套用今日匯率
-            </button>
+            </Button>
           </div>
           {liveRateError ? <div className="notice">{liveRateError}</div> : null}
           {applyNotice ? <div className="notice">{applyNotice}</div> : null}
@@ -707,38 +703,38 @@ export function SettingsPanel() {
                   <label>新 token（只顯示一次）</label>
                   <input readOnly type="text" value={capturePlainOnce} />
                   <div className="settings-actions" style={{ marginTop: 6 }}>
-                    <button className="btn-mini" onClick={() => void copyCaptureToken()} type="button">
+                    <Button size="sm" onClick={() => void copyCaptureToken()} type="button">
                       複製
-                    </button>
+                    </Button>
                     <span className="settings-muted">離開或重整後無法再顯示完整內容</span>
                   </div>
                 </div>
               ) : null}
             </div>
             <div className="settings-actions" style={{ flexShrink: 0 }}>
-              <button
-                className="btn-mini"
-                disabled={captureBusy}
+              <Button
+                size="sm"
+                variant={captureResetArm ? "danger" : "secondary"}
+                loading={captureBusy}
                 onClick={onCaptureTokenPrimaryClick}
                 type="button"
               >
-                {captureBusy
-                  ? "處理中…"
-                  : !captureHasToken
-                    ? "產生"
-                    : captureResetArm
-                      ? "確定重設？"
-                      : "重設"}
-              </button>
+                {!captureHasToken
+                  ? "產生"
+                  : captureResetArm
+                    ? "確定重設？"
+                    : "重設"}
+              </Button>
               {captureResetArm ? (
-                <button
-                  className="btn-mini"
+                <Button
+                  size="sm"
+                  variant="ghost"
                   disabled={captureBusy}
                   onClick={() => setCaptureResetArm(false)}
                   type="button"
                 >
                   取消
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>
@@ -832,14 +828,14 @@ export function SettingsPanel() {
             </p>
           </div>
           <div className="settings-actions">
-            <button
-              className="btn-mini"
-              disabled={statusChecking}
+            <Button
+              size="sm"
+              loading={statusChecking}
               onClick={() => void checkStatus()}
               type="button"
             >
-              {statusChecking ? "檢查中…" : "重新檢查連線"}
-            </button>
+              重新檢查連線
+            </Button>
           </div>
         </CollapsibleSection>
       </div>

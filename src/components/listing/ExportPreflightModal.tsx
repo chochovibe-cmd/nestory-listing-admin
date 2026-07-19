@@ -12,6 +12,7 @@ import {
   formatPlainTextAsHtml,
   isLikelyHtml
 } from "@/lib/contentGenerator/htmlFormat";
+import { Button } from "@/components/ui/Button";
 
 /**
  * D9: customer product preview — mock layout + optional real Shopify Online Store iframe.
@@ -54,40 +55,42 @@ function StorefrontPreview({
   return (
     <div className="export-pf-storefront">
       <div className="export-pf-storefront-nav">
-        <button
-          className="btn-mini"
+        <Button
+          size="sm"
           disabled={safeIndex <= 0}
           onClick={() => onIndexChange(safeIndex - 1)}
           type="button"
         >
           ← 上一件
-        </button>
+        </Button>
         <span className="muted export-pf-storefront-count" aria-live="polite">
           {safeIndex + 1} / {items.length}
         </span>
-        <button
-          className="btn-mini"
+        <Button
+          size="sm"
           disabled={safeIndex >= items.length - 1}
           onClick={() => onIndexChange(safeIndex + 1)}
           type="button"
         >
           下一件 →
-        </button>
+        </Button>
       </div>
 
       <div className="export-pf-storefront-panes" role="tablist" aria-label="預覽來源">
-        <button
+        <Button
+          size="sm"
           aria-selected={activePane === "mock"}
-          className={`btn-mini${activePane === "mock" ? " sel" : ""}`}
+          className={activePane === "mock" ? "sel" : undefined}
           onClick={() => setPane("mock")}
           role="tab"
           type="button"
         >
           示意預覽
-        </button>
-        <button
+        </Button>
+        <Button
+          size="sm"
           aria-selected={activePane === "live"}
-          className={`btn-mini${activePane === "live" ? " sel" : ""}`}
+          className={activePane === "live" ? "sel" : undefined}
           disabled={!canLive}
           onClick={() => {
             if (!canLive) return;
@@ -103,7 +106,7 @@ function StorefrontPreview({
           type="button"
         >
           Shopify 官網
-        </button>
+        </Button>
       </div>
 
       {activePane === "live" && liveUrl ? (
@@ -114,7 +117,7 @@ function StorefrontPreview({
           </p>
           <div className="export-pf-storefront-live-actions">
             <a
-              className="btn-mini"
+              className="nb-btn nb-btn--secondary nb-btn--sm"
               href={liveUrl}
               rel="noopener noreferrer"
               target="_blank"
@@ -123,7 +126,7 @@ function StorefrontPreview({
             </a>
             {item.shopifyAdminUrl ? (
               <a
-                className="btn-mini"
+                className="nb-btn nb-btn--secondary nb-btn--sm"
                 href={item.shopifyAdminUrl}
                 rel="noopener noreferrer"
                 target="_blank"
@@ -404,34 +407,37 @@ export function ExportPreflightModal({
           </p>
 
           <div className="export-pf-mode-toggle" role="tablist" aria-label="預覽模式">
-            <button
+            <Button
+              size="sm"
               aria-selected={viewMode === "list"}
-              className={`btn-mini${viewMode === "list" ? " sel" : ""}`}
+              className={viewMode === "list" ? "sel" : undefined}
               onClick={() => setViewMode("list")}
               role="tab"
               type="button"
             >
               條列摘要
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
               aria-selected={viewMode === "table"}
-              className={`btn-mini${viewMode === "table" ? " sel" : ""}`}
+              className={viewMode === "table" ? "sel" : undefined}
               onClick={() => setViewMode("table")}
               role="tab"
               type="button"
             >
               表格模式
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
               aria-selected={viewMode === "storefront"}
-              className={`btn-mini${viewMode === "storefront" ? " sel" : ""}`}
+              className={viewMode === "storefront" ? "sel" : undefined}
               onClick={() => setViewMode("storefront")}
               role="tab"
               type="button"
               title="顧客商品頁示意（非 Shopify 即時 iframe）"
             >
               商品頁預覽
-            </button>
+            </Button>
           </div>
 
           {viewMode === "list" && report.items.length > 0 ? (

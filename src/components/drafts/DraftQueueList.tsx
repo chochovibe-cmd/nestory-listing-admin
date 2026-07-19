@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
+import { Button } from "@/components/ui/Button";
 import { categoryLabel } from "@/lib/categories";
 import type {
   ExportKind,
@@ -474,8 +475,10 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
           <div className="batch-actions">
             {isReadyStation ? (
               <>
-                <button
-                  className={`btn-mini batch-primary-action${publishArm === "draft" ? " danger" : ""}`}
+                <Button
+                  variant={publishArm === "draft" ? "danger" : "secondary"}
+                  size="sm"
+                  className="batch-primary-action"
                   disabled={busy || !selectedArray.length}
                   onClick={() => void batchApproveAndPublish("draft")}
                   title={
@@ -488,9 +491,11 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                   {publishArm === "draft"
                     ? `⚠ 再點確認建草稿 ${selectedArray.length} 筆`
                     : "核准並建草稿"}
-                </button>
-                <button
-                  className="btn-mini danger batch-primary-action"
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="batch-primary-action"
                   disabled={busy || !selectedArray.length}
                   onClick={() => void batchApproveAndPublish("active")}
                   title={
@@ -503,50 +508,54 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                   {publishArm === "active"
                     ? `⚠ 再點確認上架 ${selectedArray.length} 筆`
                     : "核准並上架"}
-                </button>
+                </Button>
                 <details className="batch-more">
-                  <summary className="btn-mini">更多 ▾</summary>
+                  <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
                   <div className="batch-more-menu">
-                    <button
-                      className="btn-mini"
+                    <Button
+                      size="sm"
+                      fullWidth
                       disabled={busy || !selectedArray.length}
                       onClick={() => void batchArchiveOrUnarchive("archive")}
                       title="移出工作佇列（軟刪除，可救回）"
                       type="button"
                     >
                       🗄 移出佇列
-                    </button>
-                    <button
-                      className="btn-mini"
+                    </Button>
+                    <Button
+                      size="sm"
+                      fullWidth
                       disabled={busy || !selectedArray.length}
                       onClick={() => void openExportPreflight("matrixify")}
                       title="匯出前健檢＋預覽，確認後下載 Matrixify CSV"
                       type="button"
                     >
                       ⬇ Matrixify
-                    </button>
-                    <button
-                      className="btn-mini"
+                    </Button>
+                    <Button
+                      size="sm"
+                      fullWidth
                       disabled={busy || !selectedArray.length}
                       onClick={() => void openExportPreflight("showmore")}
                       title="匯出前健檢＋預覽（加價%／售價），確認後下載 Showmore CSV"
                       type="button"
                     >
                       ⬇ Showmore
-                    </button>
+                    </Button>
                   </div>
                 </details>
               </>
             ) : (
-              <button
-                className="btn-mini batch-primary-action"
+              <Button
+                size="sm"
+                className="batch-primary-action"
                 disabled={busy || !selectedArray.length}
                 onClick={() => void batchArchiveOrUnarchive("archive")}
                 title="移出工作佇列（軟刪除，可救回）"
                 type="button"
               >
                 🗄 移出佇列
-              </button>
+              </Button>
             )}
           </div>
         ) : null}
@@ -555,8 +564,8 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
         <div className="notice">
           <span style={{ whiteSpace: "pre-wrap" }}>{message}</span>
           {lastArchiveIds && lastArchiveIds.length > 0 ? (
-            <button
-              className="btn-mini"
+            <Button
+              size="sm"
               disabled={busy}
               onClick={() => void undoLastArchive()}
               style={{ marginLeft: 10 }}
@@ -564,7 +573,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
               type="button"
             >
               復原
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -634,8 +643,8 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                     <td>NT${draft.twd_price?.toLocaleString() ?? "-"}</td>
                     <td>
                       {draft.status === "archived" ? (
-                        <button
-                          className="btn-mini"
+                        <Button
+                          size="sm"
                           disabled={busy}
                           onClick={() => {
                             void (async () => {
@@ -668,10 +677,10 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                           type="button"
                         >
                           解除封存
-                        </button>
+                        </Button>
                       ) : (
-                        <button
-                          className="btn-mini"
+                        <Button
+                          size="sm"
                           disabled={busy}
                           onClick={() => {
                             void (async () => {
@@ -703,7 +712,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
                           type="button"
                         >
                           封存
-                        </button>
+                        </Button>
                       )}
                     </td>
                   </tr>

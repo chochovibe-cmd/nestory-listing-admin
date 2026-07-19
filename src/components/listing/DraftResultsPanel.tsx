@@ -14,6 +14,7 @@ import {
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { FactoryBridgeStrip } from "@/components/listing/FactoryBridgeStrip";
 import { showToast } from "@/components/Toast";
+import { Button } from "@/components/ui/Button";
 import { buildFactoryBridgeSummary } from "@/lib/images/factoryBridge";
 import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
 import {
@@ -1192,8 +1193,9 @@ export function DraftResultsPanel({
               </span>
               {/* UX-Q T70 / BX1：站① 逐件審核 · 站② 逐件標圖（不需先勾選） */}
               {isCopyStation || isImageStation ? (
-                <button
-                  className="btn-mini batch-primary-action seq-review-entry"
+                <Button
+                  size="sm"
+                  className="batch-primary-action seq-review-entry"
                   disabled={busy || visibleDrafts.length === 0}
                   onClick={openSequentialReview}
                   title={
@@ -1208,16 +1210,19 @@ export function DraftResultsPanel({
                   type="button"
                 >
                   {isImageStation ? "▶ 逐件標圖" : "▶ 逐件審核"}
-                </button>
+                </Button>
               ) : null}
               {/* UX-E T27: hide batch actions until selection; primary + 更多 overflow */}
               {selectedIds.size > 0 ? (
                 <div className="batch-actions">
                   {isCopyStation ? (
                     <>
-                      <button
-                        className={`btn-mini batch-primary-action${batchArm?.action === "approve" ? " danger" : ""}`}
-                        disabled={busy || !selectedArray.length}
+                      <Button
+                        variant={batchArm?.action === "approve" ? "danger" : "primary"}
+                        size="sm"
+                        className="batch-primary-action"
+                        disabled={!selectedArray.length}
+                        loading={busy}
                         onClick={() => void batchApproveOnly()}
                         title={
                           batchArm?.action === "approve"
@@ -1231,28 +1236,32 @@ export function DraftResultsPanel({
                           : batchArm?.action === "approve"
                             ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
                             : "✓ 批次核准"}
-                      </button>
+                      </Button>
                       <details className="batch-more">
-                        <summary className="btn-mini">更多 ▾</summary>
+                        <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
                         <div className="batch-more-menu">
-                          <button
-                            className="btn-mini"
+                          <Button
+                            size="sm"
+                            fullWidth
                             disabled={busy || !selectedArray.length}
                             onClick={() => void batchArchiveOrUnarchive("archive")}
                             title="移出工作佇列（軟刪除，可救回）"
                             type="button"
                           >
                             🗄 移出佇列
-                          </button>
+                          </Button>
                         </div>
                       </details>
                     </>
                   ) : null}
                   {isImageStation ? (
                     <>
-                      <button
-                        className={`btn-mini batch-primary-action${batchArm?.action === "review" ? " danger" : ""}`}
-                        disabled={busy || !selectedArray.length}
+                      <Button
+                        variant={batchArm?.action === "review" ? "danger" : "primary"}
+                        size="sm"
+                        className="batch-primary-action"
+                        disabled={!selectedArray.length}
+                        loading={busy}
                         onClick={() => void batchStationReview()}
                         title={
                           batchArm?.action === "review"
@@ -1266,51 +1275,56 @@ export function DraftResultsPanel({
                           : batchArm?.action === "review"
                             ? `⚠ 再點確認 ${selectedArray.length} 筆`
                             : "✓ 批次標圖通過"}
-                      </button>
+                      </Button>
                       <details className="batch-more">
-                        <summary className="btn-mini">更多 ▾</summary>
+                        <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
                         <div className="batch-more-menu">
-                          <button
-                            className="btn-mini"
+                          <Button
+                            size="sm"
+                            fullWidth
                             disabled={busy || !selectedArray.length}
                             onClick={() => void batchSetGenerateDetail(true)}
                             title="勾選商品：開啟合成詳情圖（預設）"
                             type="button"
                           >
                             開·生成詳情圖
-                          </button>
-                          <button
-                            className="btn-mini"
+                          </Button>
+                          <Button
+                            size="sm"
+                            fullWidth
                             disabled={busy || !selectedArray.length}
                             onClick={() => void batchSetGenerateDetail(false)}
                             title="勾選商品：關閉合成詳情圖（不進合成佇列）"
                             type="button"
                           >
                             關·生成詳情圖
-                          </button>
-                          <button
-                            className="btn-mini"
+                          </Button>
+                          <Button
+                            size="sm"
+                            fullWidth
                             disabled={busy || !selectedArray.length}
                             onClick={() => void batchArchiveOrUnarchive("archive")}
                             title="移出工作佇列（軟刪除，可救回）"
                             type="button"
                           >
                             🗄 移出佇列
-                          </button>
+                          </Button>
                         </div>
                       </details>
                     </>
                   ) : null}
                   {isReadyStation ? (
-                    <button
-                      className="btn-mini batch-primary-action"
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="batch-primary-action"
                       disabled={busy || station3Busy || !selectedArray.length}
                       onClick={() => openStation3Modal()}
                       title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
                       type="button"
                     >
                       發布／匯出
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ) : null}
@@ -1347,8 +1361,8 @@ export function DraftResultsPanel({
           <div className="notice results-batch-notice" role="status">
             <span style={{ whiteSpace: "pre-wrap" }}>{message}</span>
             {lastArchiveIds && lastArchiveIds.length > 0 ? (
-              <button
-                className="btn-mini"
+              <Button
+                size="sm"
                 disabled={busy}
                 onClick={() => void undoLastArchive()}
                 style={{ marginLeft: 10 }}
@@ -1356,7 +1370,7 @@ export function DraftResultsPanel({
                 type="button"
               >
                 復原
-              </button>
+              </Button>
             ) : null}
           </div>
         ) : null}

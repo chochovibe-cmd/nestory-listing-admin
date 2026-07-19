@@ -4163,6 +4163,27 @@ textarea {
   font-size: 12px;
   font-weight: 700;
 }
+/* UX-BTN7: publish records page mini actions */
+.rec-list .nb-btn,
+.rec-body .nb-btn,
+.rec-library-hits .nb-btn,
+.rec-failed-list .nb-btn,
+.notice .nb-btn {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+@media (max-width: 960px) {
+  .rec-list .nb-btn,
+  .rec-body .nb-btn,
+  .rec-library-hits .nb-btn,
+  .rec-failed-list .nb-btn,
+  .notice .nb-btn {
+    min-height: 44px;
+  }
+}
 .variant-box .nb-btn.v-pop-full {
   width: 100%;
   justify-content: center;

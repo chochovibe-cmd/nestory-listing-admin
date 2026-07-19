@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { showToast } from "@/components/Toast";
+import { Button } from "@/components/ui/Button";
 import { isAdmin } from "@/lib/auth/roles";
 import {
   MIGRATION_027_HINT,
@@ -529,9 +530,9 @@ export function PublishRecordsPanel() {
             ) : null}
             {!migrationHint ? (
               <p style={{ marginTop: 10 }}>
-                <button type="button" className="mini-btn" onClick={() => void loadBatches()}>
+                <Button size="sm" type="button" onClick={() => void loadBatches()}>
                   重試
-                </button>
+                </Button>
               </p>
             ) : (
               <p className="muted" style={{ marginTop: 8 }}>
@@ -613,17 +614,19 @@ export function PublishRecordsPanel() {
                       <span className="ir-head-chev">{open ? "▴" : "▾"}</span>
                     </button>
                     {showRetry ? (
-                      <button
+                      <Button
+                        size="sm"
                         type="button"
-                        className="mini-btn rec-retry"
-                        disabled={retryBusy || !!retryBusyId}
+                        className="rec-retry"
+                        loading={retryBusy}
+                        disabled={!!retryBusyId}
                         onClick={(e) => {
                           e.stopPropagation();
                           void retryFailed(row);
                         }}
                       >
-                        {retryBusy ? "重送中…" : "↻ 重送失敗件"}
-                      </button>
+                        ↻ 重送失敗件
+                      </Button>
                     ) : null}
                   </div>
                   {open ? (
@@ -651,7 +654,7 @@ export function PublishRecordsPanel() {
                                 </span>
                                 {item.shopify_admin_url ? (
                                   <a
-                                    className="mini-btn"
+                                    className="nb-btn nb-btn--secondary nb-btn--sm"
                                     href={item.shopify_admin_url}
                                     target="_blank"
                                     rel="noreferrer"
@@ -659,7 +662,10 @@ export function PublishRecordsPanel() {
                                     後台
                                   </a>
                                 ) : null}
-                                <Link className="mini-btn" href={`/drafts/${item.draft_id}`}>
+                                <Link
+                                  className="nb-btn nb-btn--secondary nb-btn--sm"
+                                  href={`/drafts/${item.draft_id}`}
+                                >
                                   草稿
                                 </Link>
                               </li>
@@ -787,7 +793,7 @@ function FailedRetrySection({
               <br />
               <span className="muted">{item.errorMessage}</span>
             </span>
-            <Link className="mini-btn" href={`/drafts/${item.draftId}`}>
+            <Link className="nb-btn nb-btn--secondary nb-btn--sm" href={`/drafts/${item.draftId}`}>
               草稿
             </Link>
           </li>
@@ -841,14 +847,9 @@ function ProductListSection({
             }}
             aria-label="商品庫搜尋"
           />
-          <button
-            type="button"
-            className="mini-btn"
-            disabled={librarySearching}
-            onClick={onSearch}
-          >
-            {librarySearching ? "搜尋中…" : "搜尋"}
-          </button>
+          <Button size="sm" type="button" loading={librarySearching} onClick={onSearch}>
+            搜尋
+          </Button>
         </div>
       ) : null}
 
@@ -870,7 +871,7 @@ function ProductListSection({
                     {row.ip_name ? ` · ${row.ip_name}` : ""}
                   </span>
                 </span>
-                <Link className="mini-btn" href={`/drafts/${row.id}`}>
+                <Link className="nb-btn nb-btn--secondary nb-btn--sm" href={`/drafts/${row.id}`}>
                   開啟
                 </Link>
               </li>
@@ -884,9 +885,9 @@ function ProductListSection({
       ) : error ? (
         <div className="notice notice-warn">
           <p>{error}</p>
-          <button type="button" className="mini-btn" onClick={onRetry}>
+          <Button size="sm" type="button" onClick={onRetry}>
             重試
-          </button>
+          </Button>
         </div>
       ) : rows.length === 0 ? (
         <div className="empty-state">
@@ -920,18 +921,18 @@ function ProductListSection({
                   </span>
                 </span>
                 {mode === "shopify_drafts" ? (
-                  <button
+                  <Button
+                    size="sm"
                     type="button"
-                    className="mini-btn"
-                    disabled={promoteBusyId === row.id}
+                    loading={promoteBusyId === row.id}
                     onClick={() => onPromote(row.id)}
                   >
-                    {promoteBusyId === row.id ? "上架中…" : "轉正式上架"}
-                  </button>
+                    轉正式上架
+                  </Button>
                 ) : null}
                 {row.shopify_admin_url ? (
                   <a
-                    className="mini-btn"
+                    className="nb-btn nb-btn--secondary nb-btn--sm"
                     href={row.shopify_admin_url}
                     target="_blank"
                     rel="noreferrer"
@@ -939,7 +940,7 @@ function ProductListSection({
                     後台
                   </a>
                 ) : null}
-                <Link className="mini-btn" href={`/drafts/${row.id}`}>
+                <Link className="nb-btn nb-btn--secondary nb-btn--sm" href={`/drafts/${row.id}`}>
                   開啟
                 </Link>
               </li>

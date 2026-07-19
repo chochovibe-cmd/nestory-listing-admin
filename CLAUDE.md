@@ -6,7 +6,8 @@
 再讀 `docs/交接指南-給接手的AI模型.md` 取得施工順序（Phase A–F）、已知地雷與風險清單。
 UI 驗收標準：`docs/mockups/nestory-v7-mockup.html`。
 
-最重要的三條（完整版在 AGENTS.md）：
+最重要的幾條（完整版在 AGENTS.md）：
 1. 動 CSS 前先讀 `src/app/globals.css`，只用現有 tokens，禁止自創顏色/圓角/陰影值
-2. 前台變更一律「先提設計方案等確認，再實作」，完成後兩主題＋手機版自查
-3. SQL 只產檔不跑 CLI；不 push/deploy 除非使用者同意；用白話跟使用者溝通
+2. **禁止新增 `!important`**（S3／T84；既有歷史補丁可留）
+3. 前台變更一律「先提設計方案等確認，再實作」，完成後兩主題＋手機版自查
+4. SQL 只產檔不跑 CLI；不 push/deploy 除非使用者同意；用白話跟使用者溝通

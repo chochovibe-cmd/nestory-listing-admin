@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { showToast } from "@/components/Toast";
+import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
 import {
   imageSlotLabel,
   patchForProcessIntentPick,
@@ -21,6 +22,19 @@ import {
 } from "@/lib/images/station2ImageTabs";
 import type { ImageProcessIntent, ProductImage } from "@/types/domain";
 
+/** Merge-only write for draft image_flags.generate_detail (SYN-1 UI). */
+function mergeGenerateDetailFlag(
+  existing: unknown,
+  enabled: boolean
+): Record<string, unknown> {
+  const base =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  base.generate_detail = enabled ? "true" : "false";
+  return base;
+}
+
 function sortByOrder(a: ProductImage, b: ProductImage): number {
   const orderA = a.sort_order ?? 0;
   const orderB = b.sort_order ?? 0;
@@ -37,28 +51,36 @@ function storagePathFromUrl(url: string): string | null {
 /**
  * UX-F T30: station② 主圖｜規格圖｜詳情圖 + marks + DnD sort + 補圖.
  * Spec tab = mark semantics only (no dedicated upload).
+ * SYN-1 UI: 生成詳情圖 draft-level switch (image_flags.generate_detail, default on).
  */
 export function Station2ImagePanel({
   draftId,
   images,
   onImagesChange,
   unmarkedBlockMessage,
+  imageFlags,
+  onImageFlagsChange,
 }: {
   draftId: string;
   images: ProductImage[];
   onImagesChange: (next: ProductImage[]) => void;
   unmarkedBlockMessage?: string | null;
+  /** Draft-level image_flags (generate_detail lives here). */
+  imageFlags?: unknown;
+  onImageFlagsChange?: (next: Record<string, unknown>) => void;
 }) {
   const supabase = createClient();
   const [subtab, setSubtab] = useState<Station2ImageSubtab>("main");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [flagBusy, setFlagBusy] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   /** UX-H T49: soft-remove fade */
   const [fadingIds, setFadingIds] = useState<Set<string>>(() => new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const generateDetailOn = isGenerateDetailEnabled(imageFlags);
 
   const list = useMemo(
     () => filterStation2SubtabImages(images, subtab),
@@ -210,6 +232,31 @@ export function Station2ImagePanel({
     }
   }
 
+  async function setGenerateDetail(enabled: boolean) {
+    if (flagBusy) return;
+    setFlagBusy(true);
+    setLocalMsg("");
+    const nextFlags = mergeGenerateDetailFlag(imageFlags, enabled);
+    const { error } = await supabase
+      .from("product_drafts")
+      .update({ image_flags: nextFlags })
+      .eq("id", draftId);
+    setFlagBusy(false);
+    if (error) {
+      const msg = `生成詳情圖開關儲存失敗：${error.message}`;
+      setLocalMsg(msg);
+      showToast(msg, "error");
+      return;
+    }
+    onImageFlagsChange?.(nextFlags);
+    showToast(
+      enabled
+        ? "已開啟生成詳情圖（標圖通過後會合成 1 張）"
+        : "已關閉生成詳情圖（此商品不會合成詳情圖）",
+      "success"
+    );
+  }
+
   async function uploadFiles(fileList: FileList | null) {
     const imageType = station2UploadImageType(subtab);
     if (!imageType || !fileList?.length) return;
@@ -283,6 +330,26 @@ export function Station2ImagePanel({
 
   return (
     <div className="s2-img-panel">
+      {/* SYN-1: per-draft 生成詳情圖 — default ON; writes image_flags.generate_detail */}
+      <div className="s2-compose-row">
+        <div className="s2-compose-copy">
+          <span className="s2-compose-title">生成詳情圖</span>
+          <span className="s2-compose-hint">
+            預設開啟：標圖通過後合成 1 張繁中詳情長圖（可關）
+          </span>
+        </div>
+        <label className="toggle" title={generateDetailOn ? "點一下關閉" : "點一下開啟"}>
+          <input
+            aria-label="生成詳情圖"
+            checked={generateDetailOn}
+            disabled={flagBusy}
+            onChange={(event) => void setGenerateDetail(event.target.checked)}
+            type="checkbox"
+          />
+          <span className="toggle-slider" />
+        </label>
+      </div>
+
       <div className="s2-img-subtabs" role="tablist" aria-label="圖片類型">
         {STATION2_IMAGE_SUBTABS.map((tab) => {
           const count = station2SubtabCount(images, tab.id);

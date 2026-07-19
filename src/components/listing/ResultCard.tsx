@@ -416,6 +416,8 @@ export function ResultCard({
   const [descriptionView, setDescriptionView] = useState<"preview" | "source">("preview");
   // Local mirror of pipeline marks so toggles feel instant; re-synced on refresh.
   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
+  /** SYN-1: local image_flags so 生成詳情圖 toggle stays after write without full refresh */
+  const [draftImageFlags, setDraftImageFlags] = useState<unknown>(draft.image_flags);
   /** UX-H T49: soft-remove fade on delete image */
   const [fadingImageIds, setFadingImageIds] = useState<Set<string>>(() => new Set());
   // B10: generation_history (read-only for ←→; inserts on regen/manual commit)
@@ -762,6 +764,11 @@ export function ResultCard({
       }))
     );
   }, [images]);
+
+  // SYN-1: resync generate_detail flag after list refresh / draft identity change
+  useEffect(() => {
+    setDraftImageFlags(draft.image_flags);
+  }, [draft.id, draft.updated_at, draft.image_flags]);
 
   // B10: load history when card expands (not on list mount — avoid N queries).
   useEffect(() => {
@@ -2439,6 +2446,8 @@ export function ResultCard({
               <Station2ImagePanel
                 draftId={draft.id}
                 images={imageMarks}
+                imageFlags={draftImageFlags}
+                onImageFlagsChange={setDraftImageFlags}
                 onImagesChange={setImageMarks}
                 unmarkedBlockMessage={
                   unmarkedImages.length > 0 ? unmarkedBlockMessage : null

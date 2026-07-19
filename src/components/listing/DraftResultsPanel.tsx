@@ -71,6 +71,7 @@ import {
 } from "@/lib/drafts/optimisticArchiveHide";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
+import { createClient } from "@/lib/supabase/client";
 import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
 
 /**
@@ -114,6 +115,8 @@ export function DraftResultsPanel({
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  /** BX5: progress text on the primary batch button itself (not toast-only) */
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [lastArchiveIds, setLastArchiveIds] = useState<string[] | null>(null);
   /** UX-E T28: inline singleWarn arm (first click → second click submits). */
@@ -395,6 +398,7 @@ export function DraftResultsPanel({
     setBatchArm(null);
     const n = selectedArray.length;
     setBusy(true);
+    setBusyLabel(`核准中 ${n} 筆…`);
     setMessage(`核准中（已選 ${n} 筆）…`);
     clearArchiveUndo();
     try {
@@ -420,6 +424,7 @@ export function DraftResultsPanel({
       showToast("批次核准連線失敗", "error");
     } finally {
       setBusy(false);
+      setBusyLabel(null);
     }
   }
 
@@ -479,11 +484,16 @@ export function DraftResultsPanel({
     setBatchArm(null);
     const n = selectedArray.length;
     setBusy(true);
+    setBusyLabel(`分流中 ${n} 筆…`);
     clearArchiveUndo();
     setMessage(`分流中（已選 ${n} 筆）…`);
     const messages: string[] = [];
     try {
       if (advanceIds.length) {
+        const stepLabel = sendIds.length
+          ? `分流中 1/2（直達 ${advanceIds.length}）…`
+          : `分流中 ${n} 筆…`;
+        setBusyLabel(stepLabel);
         setMessage(
           sendIds.length
             ? `分流中 1/2（直達待發布 ${advanceIds.length} 件）…`
@@ -507,6 +517,10 @@ export function DraftResultsPanel({
         }
       }
       if (sendIds.length) {
+        const step2 = advanceIds.length
+          ? `分流中 2/2（工廠 ${sendIds.length}）…`
+          : `分流中 ${n} 筆…`;
+        setBusyLabel(step2);
         setMessage(
           advanceIds.length
             ? `分流中 2/2（送生圖工廠 ${sendIds.length} 件）…`
@@ -552,6 +566,7 @@ export function DraftResultsPanel({
       showToast("批次分流連線失敗", "error");
     } finally {
       setBusy(false);
+      setBusyLabel(null);
     }
   }
 
@@ -852,6 +867,53 @@ export function DraftResultsPanel({
     scheduleRouterRefresh(() => router.refresh());
   }
 
+  /**
+   * SYN-1 UI: batch set image_flags.generate_detail for selected drafts.
+   * Merge-only per draft; default-on semantics stay in isGenerateDetailEnabled.
+   */
+  async function batchSetGenerateDetail(enabled: boolean) {
+    if (!selectedArray.length) {
+      showToast("請先勾選商品", "error");
+      return;
+    }
+    const n = selectedArray.length;
+    setBusy(true);
+    setBusyLabel(enabled ? `開詳情圖 ${n}…` : `關詳情圖 ${n}…`);
+    setBatchArm(null);
+    setMessage(enabled ? `批次開啟生成詳情圖（${n} 筆）…` : `批次關閉生成詳情圖（${n} 筆）…`);
+    const supabase = createClient();
+    let ok = 0;
+    let fail = 0;
+    for (const id of selectedArray) {
+      const draft = drafts.find((row) => row.id === id);
+      const existing =
+        draft?.image_flags && typeof draft.image_flags === "object" && !Array.isArray(draft.image_flags)
+          ? { ...(draft.image_flags as Record<string, unknown>) }
+          : {};
+      existing.generate_detail = enabled ? "true" : "false";
+      const { error } = await supabase
+        .from("product_drafts")
+        .update({ image_flags: existing })
+        .eq("id", id);
+      if (error) fail += 1;
+      else ok += 1;
+      setBusyLabel(
+        enabled ? `開詳情圖 ${ok + fail}/${n}…` : `關詳情圖 ${ok + fail}/${n}…`
+      );
+    }
+    setBusy(false);
+    setBusyLabel(null);
+    const msg =
+      fail > 0
+        ? `生成詳情圖：成功 ${ok}、失敗 ${fail}`
+        : enabled
+          ? `已批次開啟生成詳情圖 ${ok} 筆`
+          : `已批次關閉生成詳情圖 ${ok} 筆`;
+    setMessage(msg);
+    showToast(msg, fail > 0 ? "error" : "success");
+    scheduleRouterRefresh(() => router.refresh());
+  }
+
   // B12: batch archive / unarchive — busy statuses skipped per-item (like 送圖).
   // fix(B12): paint notice + optimistic hide first; defer refresh as background reconcile.
   async function batchArchiveOrUnarchive(action: "archive" | "unarchive") {
@@ -870,6 +932,7 @@ export function DraftResultsPanel({
     }
     const n = selectedArray.length;
     setBusy(true);
+    setBusyLabel(action === "archive" ? `封存中 ${n}…` : `解除封存 ${n}…`);
     setBatchArm(null);
     setMessage(
       action === "archive" ? `封存中（已選 ${n} 筆）…` : `解除封存中（已選 ${n} 筆）…`
@@ -933,6 +996,7 @@ export function DraftResultsPanel({
       showToast(err, "error");
     } finally {
       setBusy(false);
+      setBusyLabel(null);
     }
   }
 
@@ -1095,9 +1159,11 @@ export function DraftResultsPanel({
                         }
                         type="button"
                       >
-                        {batchArm?.action === "approve"
-                          ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
-                          : "✓ 批次核准"}
+                        {busy && busyLabel
+                          ? busyLabel
+                          : batchArm?.action === "approve"
+                            ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
+                            : "✓ 批次核准"}
                       </button>
                       <details className="batch-more">
                         <summary className="btn-mini">更多 ▾</summary>
@@ -1128,13 +1194,33 @@ export function DraftResultsPanel({
                         }
                         type="button"
                       >
-                        {batchArm?.action === "review"
-                          ? `⚠ 再點確認 ${selectedArray.length} 筆`
-                          : "✓ 批次標圖通過"}
+                        {busy && busyLabel
+                          ? busyLabel
+                          : batchArm?.action === "review"
+                            ? `⚠ 再點確認 ${selectedArray.length} 筆`
+                            : "✓ 批次標圖通過"}
                       </button>
                       <details className="batch-more">
                         <summary className="btn-mini">更多 ▾</summary>
                         <div className="batch-more-menu">
+                          <button
+                            className="btn-mini"
+                            disabled={busy || !selectedArray.length}
+                            onClick={() => void batchSetGenerateDetail(true)}
+                            title="勾選商品：開啟合成詳情圖（預設）"
+                            type="button"
+                          >
+                            開·生成詳情圖
+                          </button>
+                          <button
+                            className="btn-mini"
+                            disabled={busy || !selectedArray.length}
+                            onClick={() => void batchSetGenerateDetail(false)}
+                            title="勾選商品：關閉合成詳情圖（不進合成佇列）"
+                            type="button"
+                          >
+                            關·生成詳情圖
+                          </button>
                           <button
                             className="btn-mini"
                             disabled={busy || !selectedArray.length}

@@ -111,6 +111,8 @@ type ImageUploaderProps = {
   userId: string;
   trackUpload?: (promise: Promise<unknown>) => void;
   onUploadingChange?: (uploading: boolean) => void;
+  /** BX7: parent cost hint — count ready+uploading previews by zone. */
+  onCountsChange?: (counts: { main: number; detail: number }) => void;
   /** P1-2 / 回饋 16: load existing product_images into previews (restore draft). */
   seedImages?: SeedImageRow[] | null;
 };
@@ -122,6 +124,7 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
     userId,
     trackUpload,
     onUploadingChange,
+    onCountsChange,
     seedImages
   },
   ref
@@ -149,6 +152,14 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
   useEffect(() => {
     onUploadingChange?.(uploadingCount > 0);
   }, [uploadingCount, onUploadingChange]);
+
+  // BX7: live main/detail counts for generate cost hint
+  useEffect(() => {
+    onCountsChange?.({
+      main: (previews.main ?? []).length,
+      detail: (previews.detail ?? []).length
+    });
+  }, [previews, onCountsChange]);
 
   // P1-2: hydrate from server rows once (restore / detail).
   useEffect(() => {

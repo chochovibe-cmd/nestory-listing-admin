@@ -1,26 +1,24 @@
 # UIUX 指揮交接
 
-> **最後更新**：2026-07-19（A～S ✅；T74–T119 **程式已寫待核**；T112-r3＋SYN-1 UI＋BX5 已補）
+> **最後更新**：2026-07-19（A～S ✅；T74–T119 待核；**BX1–BX10 全做完**）
 
 ## 角色（§0）
 
-指揮＝排程／骨架／代理實作（本輪老闆授權直接做完）；Claude 審查＝規格＋核帳；Fable＝系統。
+指揮＝排程／骨架／代理實作；Claude 審查＝規格＋核帳；Fable＝系統。
 
 ## 進度
 
 | 區 | 狀態 |
 |---|---|
 | A～S | ✅ |
-| T74–T119 | 程式已寫（`docs/UIUX設計規格/`）；**待 Claude 核畫面** |
-| 本輪補 | **T112-r3** 胖鈕截圖修；**SYN-1** 站②生成詳情圖開關＋批次；**BX5** 批次主鈕進度 |
-| git | `0ed471f` feat(UX) AA–AC；後續 commits 含 r3／SYN-1／docs |
-| Fable | **T105** 按鈕 class 收斂；**T84** CSS modules 工程債 |
-| 老闆 | **T106** 審核 tab 改名？（建議「進度」或「管理」） |
-| 未做 BX | BX2 全 undo（封存已有）、BX6 手機＋、BX7 成本小字、BX9 lightbox、BX10 語氣記憶 |
+| T74–T119 | 程式已寫；**待 Claude 核畫面** |
+| BX1–BX10 | ✅（含 BX2 全 undo toast、BX6 FAB、BX7 成本、BX9 lightbox、BX10 語氣） |
+| Fable | **T105** 按鈕 class 收斂；**T84** CSS modules |
+| 老闆 | **T106** 審核 tab 改名？ |
 
-規格：`docs/UIUX設計規格/`（含 UX-AC）  
+規格：`docs/UIUX設計規格/`  
 計劃包：`docs/UIUX總指揮計劃包-2026-07-18.md` §9
 
 ## 一句話
 
-**主線＋擴展程式已堆完待 Claude 核；胖鈕與 SYN-1 開關已補。下一刀：核帳或 BX6／BX9／T106。未 push。**
+**BX 加分項清完。下一刀：Claude 核 AA～AC 畫面，或老闆拍 T106。未 push。**

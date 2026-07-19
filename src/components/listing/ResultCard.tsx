@@ -30,6 +30,15 @@ import {
   formatStation2SuccessToast,
 } from "@/lib/drafts/stationRoute";
 import { Station2ImagePanel } from "@/components/listing/Station2ImagePanel";
+import {
+  undoApproveDrafts,
+  undoArchiveDrafts,
+  undoStation2Drafts
+} from "@/lib/drafts/quickUndo";
+import {
+  recalledToneForIp,
+  rememberToneForIp
+} from "@/lib/drafts/toneMemory";
 import { resolveDraftStation } from "@/lib/drafts/stationFilter";
 import { formatDraftFailSummary } from "@/lib/drafts/failReasons";
 import {
@@ -604,6 +613,21 @@ export function ResultCard({
               includesPublished: isPublishedArchiveStatus(draft.status)
             });
       setMarkMessage(msg);
+      // BX2: toast 復原（卡內復原鈕仍保留）
+      if (archivedIds.length) {
+        showToast(msg, "success", 10_000, {
+          actionLabel: "復原",
+          onAction: async () => {
+            const result = await undoArchiveDrafts(archivedIds);
+            showToast(result.message, result.ok ? "success" : "error");
+            if (result.ok) {
+              clearCardArchiveUndoTimer();
+              setLastArchiveIds(null);
+            }
+            scheduleRouterRefresh(() => router.refresh());
+          }
+        });
+      }
       scheduleRouterRefresh(() => router.refresh());
     } catch {
       setMarkMessage("封存連線失敗");
@@ -1051,6 +1075,12 @@ export function ResultCard({
     setDiscardArm(null);
     // UX-L T62: in-progress via modal busy; result → toast
     try {
+      // BX10: remember tone for this IP
+      rememberToneForIp(
+        typeof window !== "undefined" ? window.localStorage : null,
+        draft.ip_name,
+        regenTone
+      );
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1124,7 +1154,14 @@ export function ResultCard({
         const okMsg =
           typeof payload.message === "string" ? payload.message : formatStation2SuccessToast({ advanced: true, sentToFactory: false });
         setMarkMessage(okMsg);
-        showToast(okMsg, "success");
+        showToast(okMsg, "success", 10_000, {
+          actionLabel: "復原",
+          onAction: async () => {
+            const result = await undoStation2Drafts([draft.id]);
+            showToast(result.message, result.ok ? "success" : "error");
+            router.refresh();
+          }
+        });
         router.refresh();
         return;
       }
@@ -1146,7 +1183,14 @@ export function ResultCard({
           ? payload.message
           : formatStation2SuccessToast({ advanced: false, sentToFactory: true });
       setMarkMessage(okMsg.includes("工廠") ? okMsg : `${okMsg} · 可到生圖工廠查看`);
-      showToast(okMsg, "success");
+      showToast(okMsg, "success", 10_000, {
+        actionLabel: "復原",
+        onAction: async () => {
+          const result = await undoStation2Drafts([draft.id]);
+          showToast(result.message, result.ok ? "success" : "error");
+          router.refresh();
+        }
+      });
       router.refresh();
     } catch {
       setMarkMessage("分流連線失敗");
@@ -1219,7 +1263,15 @@ export function ResultCard({
       }
       // UX-A T2 + §2.2 站名：標圖（覆寫「圖片審核」）
       setMessage("");
-      showToast("已核准文案 → 進入標圖（文案已鎖定）", "success");
+      // BX2: 10s 復原核准
+      showToast("已核准文案 → 進入標圖（文案已鎖定）", "success", 10_000, {
+        actionLabel: "復原",
+        onAction: async () => {
+          const result = await undoApproveDrafts([draft.id]);
+          showToast(result.message, result.ok ? "success" : "error");
+          router.refresh();
+        }
+      });
       // UX-Q T70: sequential mode advances only on success
       onApproveSuccess?.();
       router.refresh();
@@ -1932,7 +1984,17 @@ export function ResultCard({
               <button
                 className="mini-btn rc-quick-btn"
                 disabled={quickBusy || regenerating || regeneratingField != null}
-                onClick={() => setRegenOpen(true)}
+                onClick={() => {
+                  // BX10: open with last tone for this IP when remembered
+                  const remembered = recalledToneForIp(
+                    typeof window !== "undefined" ? window.localStorage : null,
+                    draft.ip_name
+                  );
+                  if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
+                    setRegenTone(remembered as CopyTone);
+                  }
+                  setRegenOpen(true);
+                }}
                 title="重新生成（可換語氣／填方向）"
                 type="button"
               >
@@ -2751,7 +2813,16 @@ export function ResultCard({
                   <button
                     className="act-btn"
                     disabled={regenerating || regeneratingField != null || comboSaving}
-                    onClick={() => setRegenOpen(true)}
+                    onClick={() => {
+                      const remembered = recalledToneForIp(
+                        typeof window !== "undefined" ? window.localStorage : null,
+                        draft.ip_name
+                      );
+                      if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
+                        setRegenTone(remembered as CopyTone);
+                      }
+                      setRegenOpen(true);
+                    }}
                     type="button"
                   >
                     {regenerating ? "生成中..." : "↻ 重新生成"}

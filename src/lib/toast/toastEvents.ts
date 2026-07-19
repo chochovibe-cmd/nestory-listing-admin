@@ -13,4 +13,9 @@ export type ToastDetail = {
   variant: ToastVariant;
   /** ms before auto-dismiss. 0 = stays until the person dismisses it. */
   duration: number;
+  /** BX2: optional action button (e.g. 復原). */
+  actionLabel?: string;
 };
+
+/** Callbacks keyed by toast id — only live on the client (Toast.tsx). */
+export const toastActionCallbacks = new Map<string, () => void | Promise<void>>();

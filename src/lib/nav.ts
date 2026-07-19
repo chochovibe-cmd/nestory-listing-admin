@@ -51,17 +51,11 @@ export const SETTINGS_NAV: NavItem = {
 };
 
 /**
- * R4 §14-4 + UX-B §2.2 mobile primary tabs：新增／審核／工廠／更多.
+ * R4 §14-4 + UX-B §2.2 + BX6 mobile tabs.
+ * Layout: 審核 | 工廠 | 中央凸起＋新增 | 更多
  * 審核 = workbench results (Q1-A: /drafts/new?pane=results).
  */
 export const MOBILE_PRIMARY_TABS: readonly NavItem[] = [
-  {
-    href: "/drafts/new",
-    icon: "✦",
-    label: "新增商品",
-    shortLabel: "新增",
-    workbenchPane: "input"
-  },
   {
     href: "/drafts/new?pane=results",
     icon: "◈",
@@ -69,7 +63,35 @@ export const MOBILE_PRIMARY_TABS: readonly NavItem[] = [
     shortLabel: "審核",
     workbenchPane: "results"
   },
-  { href: "/review", icon: "🏭", label: "生圖工廠", shortLabel: "工廠" }
+  { href: "/review", icon: "🏭", label: "生圖工廠", shortLabel: "工廠" },
+  {
+    href: "/drafts/new",
+    icon: "＋",
+    label: "新增商品",
+    shortLabel: "新增",
+    workbenchPane: "input"
+  }
+] as const;
+
+/** Side tabs only (exclude center FAB 新增) for BX6 layout. */
+export type MobileSideTab = NavItem & { side: "left" | "right" };
+
+export const MOBILE_SIDE_TABS: readonly MobileSideTab[] = [
+  {
+    href: "/drafts/new?pane=results",
+    icon: "◈",
+    label: "審核",
+    shortLabel: "審核",
+    workbenchPane: "results",
+    side: "left"
+  },
+  {
+    href: "/review",
+    icon: "🏭",
+    label: "生圖工廠",
+    shortLabel: "工廠",
+    side: "left"
+  }
 ] as const;
 
 /**

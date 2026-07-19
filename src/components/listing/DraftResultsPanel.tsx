@@ -70,9 +70,16 @@ import {
   type OptimisticHideMap
 } from "@/lib/drafts/optimisticArchiveHide";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
+import {
+  undoApproveDrafts,
+  undoArchiveDrafts,
+  undoStation2Drafts
+} from "@/lib/drafts/quickUndo";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import { createClient } from "@/lib/supabase/client";
 import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
+
+const UNDO_TOAST_MS = 10_000;
 
 /**
  * Workbench variant row for ResultCard price range + UX-M T64 specs hydrate.
@@ -414,9 +421,19 @@ export function DraftResultsPanel({
         showToast(err, "error");
         return;
       }
+      const approvedIds =
+        (payload.approvedIds as string[] | undefined) ?? selectedArray.slice(0, n);
       const okMsg = `已核准 ${payload.approvedCount ?? n} 筆文案（尚未發布）`;
       setMessage(okMsg);
-      showToast(okMsg, "success");
+      // BX2: 10s toast 復原 → return-stage copy_review
+      showToast(okMsg, "success", UNDO_TOAST_MS, {
+        actionLabel: "復原",
+        onAction: async () => {
+          const result = await undoApproveDrafts(approvedIds);
+          showToast(result.message, result.ok ? "success" : "error");
+          scheduleRouterRefresh(() => router.refresh());
+        }
+      });
       setSelectedIds(new Set());
       router.refresh();
     } catch {
@@ -558,7 +575,16 @@ export function DraftResultsPanel({
           totalAi,
         }) || okMsg.replace(/\n/g, " · ");
       setMessage(okMsg);
-      showToast(toastLine, "success");
+      const undoIds = [...advanceIds, ...sendIds];
+      // BX2: 10s 復原 → return-stage image_review（送工廠為 best-effort）
+      showToast(toastLine, "success", UNDO_TOAST_MS, {
+        actionLabel: "復原",
+        onAction: async () => {
+          const result = await undoStation2Drafts(undoIds);
+          showToast(result.message, result.ok ? "success" : "error");
+          scheduleRouterRefresh(() => router.refresh());
+        }
+      });
       setSelectedIds(new Set());
       scheduleRouterRefresh(() => router.refresh());
     } catch {
@@ -963,7 +989,29 @@ export function DraftResultsPanel({
                 includesPublished: Boolean(payload.includesPublished)
               });
         setMessage(okMsg);
-        showToast(okMsg, "success");
+        // BX2: toast 復原（與 notice 復原鈕並存）
+        showToast(okMsg, "success", UNDO_TOAST_MS, {
+          actionLabel: archivedIds.length ? "復原" : undefined,
+          onAction: archivedIds.length
+            ? async () => {
+                const result = await undoArchiveDrafts(archivedIds);
+                showToast(result.message, result.ok ? "success" : "error");
+                if (result.ok) {
+                  clearArchiveUndoTimer();
+                  setLastArchiveIds(null);
+                  setLeavingIds((prev) => {
+                    const next = new Set(prev);
+                    for (const id of archivedIds) next.delete(id);
+                    return next;
+                  });
+                  setOptimisticHide((prev) =>
+                    applyOptimisticHide(prev, archivedIds, "unarchived")
+                  );
+                }
+                scheduleRouterRefresh(() => router.refresh());
+              }
+            : undefined
+        });
         if (archivedIds.length) {
           scheduleArchiveLeave(archivedIds);
         }

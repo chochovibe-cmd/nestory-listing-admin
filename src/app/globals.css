@@ -5930,9 +5930,9 @@ textarea {
     min-height: 44px !important;
   }
 
-  /* UX-AB T83: tabbar height token for toast / help pop offsets */
+  /* UX-AB T83 + BX6 FAB: slightly taller for raised center + */
   :root {
-    --tabbar-h: 64px;
+    --tabbar-h: 72px;
   }
 
   .mobile-tabbar {
@@ -5950,6 +5950,11 @@ textarea {
     border: 1.5px solid var(--line);
     border-radius: var(--radius-l);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  .mobile-tabbar--fab {
+    /* room for raised FAB peeking above the bar */
+    padding-top: 14px;
+    overflow: visible;
   }
   .mobile-tabbar a,
   .mobile-tabbar button {
@@ -5976,6 +5981,45 @@ textarea {
     background: var(--accent);
     color: var(--accent-fg);
   }
+  /* BX6: center raised ＋新增 */
+  .mobile-tabbar .mtb-fab {
+    position: relative;
+    background: transparent !important;
+    border-color: transparent !important;
+    color: var(--text-muted);
+    min-height: 52px;
+    padding-top: 0;
+    margin-top: -22px;
+    z-index: 2;
+  }
+  .mobile-tabbar .mtb-fab-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: var(--shadow-m);
+    border: 2px solid var(--surface);
+  }
+  .mobile-tabbar .mtb-fab-label {
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+  .mobile-tabbar .mtb-fab.active .mtb-fab-circle {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent),
+      var(--shadow-m);
+  }
+  .mobile-tabbar .mtb-fab.active .mtb-fab-label {
+    color: var(--accent);
+  }
   body[data-theme="dark"] .mobile-tabbar {
     border: 1px solid var(--border);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.26);
@@ -5983,6 +6027,9 @@ textarea {
   body[data-theme="dark"] .mobile-tabbar a,
   body[data-theme="dark"] .mobile-tabbar button {
     border-width: 1px;
+  }
+  body[data-theme="dark"] .mobile-tabbar .mtb-fab-circle {
+    border-color: var(--surface);
   }
 
   /* B16 + UX-B T4/T5 workbench */
@@ -6757,7 +6804,7 @@ body[data-theme="kitty"] .rate-val {
 .toast-host {
   position: fixed;
   left: 50%;
-  /* UX-AB T83: desktop --tabbar-h=0 → 12px; mobile 64+12 above tabbar */
+  /* UX-AB T83: desktop --tabbar-h=0 → 12px; mobile 72+12 above tabbar (BX6) */
   bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom));
   z-index: 1400;
   display: flex;
@@ -6771,26 +6818,61 @@ body[data-theme="kitty"] .rate-val {
 .toast {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   min-width: 200px;
   max-width: 88vw;
-  padding: 10px 20px;
+  padding: 0;
   border: none;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
   text-align: center;
-  cursor: pointer;
   box-shadow: var(--shadow-m);
   /* UX-T T76: host 是 pointer-events:none；子項必須 auto 才能點／聚焦 */
   pointer-events: auto;
   animation: toast-in 0.18s ease;
+  overflow: hidden;
+}
+.toast-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+/* BX2: 復原 action on toast */
+.toast-action {
+  flex-shrink: 0;
+  margin: 4px 6px 4px 0;
+  padding: 6px 12px;
+  min-height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--on-solid) 22%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toast-action:hover {
+  background: color-mix(in srgb, var(--on-solid) 34%, transparent);
 }
 .toast:hover {
   transform: var(--hover-transform);
 }
 /* UX-T T76: 全站 :focus-visible 已蓋 outline；此處再釘一次避免被 outline:none 蓋掉 */
-.toast:focus-visible {
+.toast-main:focus-visible,
+.toast-action:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -6811,6 +6893,70 @@ body[data-theme="kitty"] .rate-val {
 .toast-msg {
   line-height: 1.4;
   white-space: pre-line;
+}
+
+/* BX7: cost estimate under generate CTA */
+.gen-cost-hint {
+  margin: 6px 0 0;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* BX9 lightbox */
+.img-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #000 72%, transparent);
+  padding: 16px;
+  touch-action: none;
+}
+.img-lightbox-img {
+  max-width: min(96vw, 1200px);
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-m);
+  transform-origin: center center;
+  transition: transform 40ms linear;
+  user-select: none;
+  cursor: grab;
+}
+.img-lightbox-close {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-s);
+  z-index: 1;
+}
+.img-lightbox-hint {
+  position: absolute;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #000 45%, transparent);
+  color: #fff;
+  font-size: 11px;
+  pointer-events: none;
+}
+.cmp-img--zoomable {
+  cursor: zoom-in;
 }
 .toast--success {
   background: var(--success);

@@ -1262,6 +1262,8 @@ export async function POST(request: NextRequest) {
     draftState: localizedOutput.draft_state,
     validationErrors: localizedOutput.validation_errors,
     validationWarnings: allWarnings,
+    /** BX10: client tone memory per IP (display only; already written to draft). */
+    detectedIpName: detected.ip || draft.ip_name || null,
     result: {
       title: localizedOutput.display_title,
       descriptionHtml: localizedOutput.generated_description_html,

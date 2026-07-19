@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -24,6 +24,11 @@ import {
   type ImageUploaderHandle,
   type SeedImageRow
 } from "@/components/listing/ImageUploader";
+import { buildGenerateCostHint } from "@/lib/drafts/generateCostHint";
+import {
+  recalledToneFromTitle,
+  rememberToneForIp
+} from "@/lib/drafts/toneMemory";
 import {
   GENERATION_PROGRESS_EVENT,
   GENERATION_STEP_LABELS,
@@ -248,6 +253,11 @@ export function WorkspaceInputPanel({
   const [inventoryNotice, setInventoryNotice] = useState("");
   const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(DEFAULT_TONE);
   const [copyLength, setCopyLength] = useState<(typeof LENGTH_OPTIONS)[number]>(DEFAULT_COPY_LENGTH);
+  /** BX7: image counts from ImageUploader for cost hint */
+  const [imageCounts, setImageCounts] = useState({ main: 0, detail: 0 });
+  const onImageCountsChange = useCallback((counts: { main: number; detail: number }) => {
+    setImageCounts(counts);
+  }, []);
   // B17: advanced sections collapsed by default; auto-open when content / non-default (incl. B13 restore)
   const [aiSectionOpen, setAiSectionOpen] = useState(false);
   const [variantSectionOpen, setVariantSectionOpen] = useState(false);
@@ -1845,6 +1855,20 @@ export function WorkspaceInputPanel({
     // T92: step 2 done → step 3 active（確認發布）
     setFlowPhase("review");
 
+    // BX10: remember tone for detected IP (if API returned it)
+    const detectedIp =
+      (typeof payload.detectedIpName === "string" && payload.detectedIpName) ||
+      (typeof payload.ip_name === "string" && payload.ip_name) ||
+      (typeof payload.draft?.ip_name === "string" && payload.draft.ip_name) ||
+      null;
+    if (detectedIp) {
+      rememberToneForIp(
+        typeof window !== "undefined" ? window.localStorage : null,
+        detectedIp,
+        tone
+      );
+    }
+
     if (payload.draftState === "blocked") {
       showToast(
         "AI 判斷資料不足（多半是 IP 未對到建檔清單）：" +
@@ -1867,6 +1891,33 @@ export function WorkspaceInputPanel({
     setSessionProvider(next);
     setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
   }
+
+  // BX7: soft cost range under generate CTA
+  const costHint = useMemo(() => {
+    const provider = sessionProvider ?? readStoredAiProvider();
+    return buildGenerateCostHint({
+      mainImageCount: imageCounts.main,
+      detailImageCount: imageCounts.detail,
+      useWebSearch,
+      provider,
+      runMode
+    });
+  }, [imageCounts.main, imageCounts.detail, useWebSearch, sessionProvider, runMode]);
+
+  // BX10: if title mentions a remembered IP, offer that tone once
+  useEffect(() => {
+    const hit = recalledToneFromTitle(
+      typeof window !== "undefined" ? window.localStorage : null,
+      title
+    );
+    if (!hit) return;
+    if (!TONE_OPTIONS.some((t) => t.value === hit.tone)) return;
+    setTone((current) => {
+      // only auto-switch from default so we don't fight manual picks
+      if (current !== DEFAULT_TONE) return current;
+      return hit.tone as (typeof TONE_OPTIONS)[number]["value"];
+    });
+  }, [title]);
 
   return (
     <div className="panel">
@@ -2203,6 +2254,7 @@ export function WorkspaceInputPanel({
             <ImageUploader
               ensureDraftId={ensureDraftId}
               key={formKey}
+              onCountsChange={onImageCountsChange}
               onUploadingChange={setImagesUploading}
               ref={imageUploaderRef}
               seedImages={seedImages}
@@ -2635,6 +2687,10 @@ export function WorkspaceInputPanel({
               </>
             )}
           </button>
+          {/* BX7: soft estimate — not an invoice */}
+          <p className="gen-cost-hint" title={costHint.title}>
+            {costHint.label}
+          </p>
             </div>
           </div>
         </form>

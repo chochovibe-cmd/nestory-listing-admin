@@ -7280,6 +7280,74 @@ body[data-theme="nordic"] {
   .act-btn { min-height: 44px; }
 }
 
+/* UX-B2-P09: phone result-card header stack — full-width quick actions
+   Place after 768/960 rc-* rules so cascade wins without !important.
+   Scope .result-card > .rc-header so queue-card (also uses .rc-header) is not mis-styled. */
+@media (max-width: 640px) {
+  .result-card > .rc-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  /* 頂列：checkbox / status / thumb 維持 source order（order 0） */
+  .result-card > .rc-header > .rc-thumb {
+    align-self: flex-start;
+  }
+
+  /* 標題＋標籤整塊獨佔一行（detect chips 已在 headmain 內垂直堆） */
+  .result-card > .rc-header > .rc-headmain {
+    flex: 1 1 100%;
+    min-width: 100%;
+    order: 1;
+  }
+
+  .result-card > .rc-header .rc-title {
+    white-space: normal;
+  }
+
+  /* 售價獨立一列（真實 class 是 .rc-price-mini；stack 一併對齊） */
+  .result-card > .rc-header > .rc-price-mini,
+  .result-card > .rc-header > .rc-price-stack {
+    flex: 1 1 100%;
+    min-width: 100%;
+    order: 2;
+    align-items: flex-start;
+  }
+  .result-card > .rc-header .rc-price-mini-sub {
+    justify-content: flex-start;
+  }
+
+  /* 操作列：滿寬；核准/重生／標圖 2–3 鈕等分 */
+  .result-card > .rc-header > .rc-quick {
+    order: 3;
+    width: 100%;
+    flex: 1 1 100%;
+    margin-left: 0;
+    justify-content: stretch;
+    gap: 8px;
+  }
+  .result-card > .rc-header > .rc-quick .nb-btn,
+  .result-card > .rc-header > .rc-quick .rc-quick-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  /* 狀態 chip、×、展開：標題與按鈕之後，勿插到 title 上方 */
+  .result-card > .rc-header > .rc-status-chips {
+    order: 4;
+    width: 100%;
+    margin-left: 0;
+  }
+  .result-card > .rc-header > .rc-dismiss-btn {
+    order: 5;
+  }
+  .result-card > .rc-header > .rc-toggle {
+    order: 5;
+  }
+}
+
 @media (max-width: 420px) {
   .nav { font-size: 11px; }
 }

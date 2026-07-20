@@ -10,8 +10,18 @@ type StatusPayload = {
   shopifyMock: boolean;
 };
 
+type RowValue = {
+  text: string;
+  tone: "ok" | "warn" | "muted";
+};
+
+function valueClass(tone: RowValue["tone"]): string {
+  if (tone === "ok") return "value ok";
+  if (tone === "warn") return "value warn";
+  return "value";
+}
+
 export function DeploymentStatus() {
-  const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<StatusPayload | null>(null);
   const [checking, setChecking] = useState(false);
 
@@ -27,34 +37,58 @@ export function DeploymentStatus() {
     }
   }
 
-  function toggle() {
-    setOpen((current) => !current);
-    if (!open && !status) checkStatus();
-  }
+  const supabase: RowValue = !status
+    ? { text: "未檢查", tone: "muted" }
+    : status.supabase
+      ? { text: "已連線", tone: "ok" }
+      : { text: "連線失敗", tone: "warn" };
+
+  const openai: RowValue = !status
+    ? { text: "未檢查", tone: "muted" }
+    : status.aiProvider.openai
+      ? { text: "已設定", tone: "ok" }
+      : { text: "未設定", tone: "warn" };
+
+  const claude: RowValue = !status
+    ? { text: "未檢查", tone: "muted" }
+    : status.aiProvider.claude
+      ? { text: "已設定", tone: "ok" }
+      : { text: "未設定", tone: "warn" };
+
+  const shopify: RowValue = !status
+    ? { text: "未檢查", tone: "muted" }
+    : status.shopify
+      ? {
+          text: status.shopifyMock ? "已設定（mock-safe）" : "已設定",
+          tone: "ok"
+        }
+      : { text: "未設定", tone: "warn" };
+
+  const rows: { label: string; value: RowValue }[] = [
+    { label: "Supabase", value: supabase },
+    { label: "OpenAI", value: openai },
+    { label: "Claude", value: claude },
+    { label: "Shopify", value: shopify }
+  ];
 
   return (
-    <div className="header-status-wrap">
-      <button className="header-status-toggle" onClick={toggle} type="button">
-        部署 <span>{open ? "▴" : "▾"}</span>
-      </button>
-      <div className={`header-status status-body${open ? " open" : ""}`}>
-        <div className={`status-pill${status ? (status.supabase ? " status-ok" : " status-warn") : ""}`}>
-          <strong>Supabase</strong>{!status ? "未檢查" : status.supabase ? "已連線" : "連線失敗"}
+    <div className="deploy-status-list">
+      {rows.map((row) => (
+        <div className="deploy-status-row" key={row.label}>
+          <span className="label">{row.label}</span>
+          <span className={valueClass(row.value.tone)}>{row.value.text}</span>
         </div>
-        <div className={`status-pill${status ? (status.aiProvider.openai ? " status-ok" : " status-warn") : ""}`}>
-          <strong>OpenAI</strong>{!status ? "未檢查" : status.aiProvider.openai ? "已設定" : "未設定"}
-        </div>
-        <div className={`status-pill${status ? (status.aiProvider.claude ? " status-ok" : " status-warn") : ""}`}>
-          <strong>Claude</strong>{!status ? "未檢查" : status.aiProvider.claude ? "已設定" : "未設定"}
-        </div>
-        <div className={`status-pill${status ? (status.shopify ? " status-ok" : " status-warn") : ""}`}>
-          <strong>Shopify</strong>
-          {!status ? "未檢查" : status.shopify ? (status.shopifyMock ? "已設定（mock-safe）" : "已設定") : "未設定"}
-        </div>
-        <Button size="sm" disabled={checking} onClick={checkStatus} type="button">
-          {checking ? "檢查中..." : "檢查連線"}
-        </Button>
-      </div>
+      ))}
+      <Button
+        className="deploy-status-check"
+        disabled={checking}
+        fullWidth
+        onClick={checkStatus}
+        size="sm"
+        type="button"
+      >
+        {checking ? "檢查中..." : "檢查連線"}
+      </Button>
     </div>
   );
 }

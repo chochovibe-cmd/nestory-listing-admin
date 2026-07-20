@@ -749,9 +749,58 @@ body[data-theme="kitty"] .topbar {
   background: color-mix(in srgb, var(--warn-text) 6%, var(--surface));
 }
 
+/* UX-PKG2: section breath — rows 2/3 get top rule; row 1 stays flush under menu padding */
+.hdr-more-row--section {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
 .hdr-more-row--deploy {
+  display: flex;
   flex-direction: column;
   align-items: stretch;
+  gap: 6px;
+}
+
+/* UX-PKG2: flattened deploy status list (no nested 部署 ▾ panel) */
+.deploy-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.deploy-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  /* --chip-bg is transparent in all themes; mix surface2 so rows read as rows */
+  background: color-mix(in srgb, var(--surface2) 70%, transparent);
+  border: 1px solid var(--border-soft, var(--border));
+  font-size: 12px;
+}
+
+.deploy-status-row .label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.deploy-status-row .value {
+  color: var(--text-muted);
+}
+
+.deploy-status-row .value.ok {
+  color: var(--success);
+}
+
+.deploy-status-row .value.warn {
+  color: var(--warn-text);
+}
+
+.deploy-status-check {
+  margin-top: 2px;
 }
 
 .hdr-more-label {
@@ -770,24 +819,7 @@ body[data-theme="kitty"] .topbar {
   margin: 4px 0 8px;
 }
 
-.hdr-more-row--deploy .header-status-wrap {
-  width: 100%;
-}
-
-.hdr-more-row--deploy .header-status-toggle {
-  width: 100%;
-  justify-content: space-between;
-}
-
-.hdr-more-row--deploy .header-status.status-body {
-  position: static;
-  width: 100%;
-  margin-top: 6px;
-  box-shadow: none;
-}
-
-/* Single button + dropdown theme picker, same widget pattern as
-   .header-status-wrap. */
+/* Single button + dropdown theme picker (toggle + absolute panel pattern). */
 .theme-picker {
   position: relative;
   display: inline-flex;
@@ -6406,24 +6438,7 @@ body[data-theme="nordic"] {
     margin-top: 8px;
   }
 
-  .header-status-wrap {
-    order: 5;
-    flex-basis: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .header-status.status-body {
-    position: static;
-    width: 100%;
-    margin-top: 6px;
-  }
-  .header-status.status-body.open {
-    grid-template-columns: 1fr 1fr;
-  }
-  .header-status .status-pill {
-    justify-content: center;
-  }
+  /* UX-PKG2: nested header-status mobile layout removed with flatten */
 
   /* UX-G T34: ⋯ 更多 in mobile ☰ — full-width layer, touch ≥44px */
   .hdr-more {
@@ -6442,8 +6457,8 @@ body[data-theme="nordic"] {
     box-shadow: none;
   }
   .hdr-more-menu .pill-btn,
-  .hdr-more-menu .header-status-toggle,
-  .hdr-more-menu .btn-mini {
+  .hdr-more-menu .btn-mini,
+  .hdr-more-menu .deploy-status-check {
     min-height: 44px;
   }
 
@@ -7146,14 +7161,8 @@ body[data-theme="nordic"] {
 .nav .hdr-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 /* UX-H T40: .btn-mini core rules live with .mini-btn above; header-specific overrides remain below */
 
-.header-status-wrap { position: relative; display: inline-flex; }
-.header-status-toggle { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); font-size: 11px; font-weight: 700; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
-.header-status.status-body { position: absolute; right: 0; top: calc(100% + 8px); z-index: 300; display: none; width: min(520px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 10px; box-shadow: var(--shadow-m); }
-.header-status.status-body.open { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.header-status-label { font-size: 10px; color: var(--text-muted); font-weight: 700; padding: 0 4px 0 2px; letter-spacing: .05em; }
-.header-status .status-pill { display: flex; align-items: center; gap: 4px; min-height: 25px; padding: 5px 8px; border-radius: 999px; font-size: 10px; white-space: nowrap; }
-.header-status .status-pill strong { display: inline; margin: 0; font-size: 9px; }
-.header-status .btn-mini { grid-column: 1 / -1; padding: 7px 10px; border-radius: 999px; font-size: 10px; white-space: nowrap; }
+/* UX-PKG2: .header-status* nested toggle/panel retired — deploy is flat list in ⋯ 更多.
+   Do not revive without a new design; theme-picker keeps its own toggle pattern. */
 
 .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 14px; }
 .status-body { display: none; }
@@ -7394,8 +7403,7 @@ body[data-theme="kitty"] .brand-dot {
 }
 body[data-theme="kitty"] .theme-btn,
 body[data-theme="kitty"] .hdr-btn,
-body[data-theme="kitty"] .pill-group,
-body[data-theme="kitty"] .header-status-toggle {
+body[data-theme="kitty"] .pill-group {
   background: color-mix(in srgb, var(--on-solid) 14%, transparent);
   color: var(--on-solid);
   border-color: color-mix(in srgb, var(--on-solid) 76%, transparent);

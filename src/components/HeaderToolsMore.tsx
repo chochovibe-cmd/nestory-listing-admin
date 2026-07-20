@@ -97,11 +97,13 @@ export function HeaderToolsMore() {
           <span className="hdr-more-label">AI 模型</span>
           <ProviderSwitcher />
         </div>
-        <div className={`hdr-more-row${isTest ? " hdr-more-row--test" : ""}`}>
+        <div
+          className={`hdr-more-row hdr-more-row--section${isTest ? " hdr-more-row--test" : ""}`}
+        >
           <span className="hdr-more-label">生成模式</span>
           <ModeSwitcher />
         </div>
-        <div className="hdr-more-row hdr-more-row--deploy">
+        <div className="hdr-more-row hdr-more-row--section hdr-more-row--deploy">
           <span className="hdr-more-label">部署／連線</span>
           <DeploymentStatus />
         </div>

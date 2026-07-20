@@ -2420,17 +2420,17 @@ textarea {
 .pthumb-failed .pthumb-img {
   border-color: color-mix(in srgb, var(--accent2) 55%, var(--border-soft));
 }
-/* 使用者選取＝外框強調（與 source-pill / 選取語意一致） */
+/* 使用者選取＝外框強調；方方＋微圓角（不要膠囊胖鈕） */
 .img-mark-btn {
   font-size: 11px;
   font-weight: 700;
-  padding: 7px 12px;
-  border-radius: 999px;
+  padding: 6px 10px;
+  border-radius: 6px;
   border: 1px solid var(--border-soft);
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
-  min-height: 44px;
+  min-height: 32px;
   line-height: 1.2;
 }
 .img-mark-btn:hover {
@@ -2442,6 +2442,11 @@ textarea {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
   font-weight: 700;
+}
+@media (max-width: 959px) {
+  .img-mark-btn {
+    min-height: 44px; /* 手機觸控高度 */
+  }
 }
 .imgmark-list {
   display: flex;
@@ -2534,9 +2539,15 @@ textarea {
 }
 .s2-img-panel .img-mark-btn {
   flex: 1 1 calc(50% - 4px);
-  min-height: 44px;
+  min-height: 32px;
   font-size: 11px;
   padding: 6px 8px;
+  border-radius: 6px;
+}
+@media (max-width: 959px) {
+  .s2-img-panel .img-mark-btn {
+    min-height: 44px;
+  }
 }
 .s2-img-panel .s2-detail-hint {
   font-size: 12px;
@@ -2618,9 +2629,9 @@ textarea {
   margin-bottom: 2px;
 }
 .s2-img-subtab {
-  min-height: 36px;
+  min-height: 32px;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 6px; /* 方方＋微圓，對齊 img-mark-btn */
   border: 1px solid var(--border-soft, var(--border));
   background: var(--surface);
   color: var(--text-muted);
@@ -3594,11 +3605,20 @@ textarea {
   min-width: 120px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
+  align-items: flex-start;
 }
 .ir-head-title {
   word-break: break-word;
+}
+/* 標題下方一排：狀態 chip + 點開審核 */
+.ir-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
 /* UX-I T53: one-line fail reason on collapsed factory row */
 .ir-head-fail {
@@ -3611,7 +3631,7 @@ textarea {
   max-width: 100%;
 }
 .ir-head-chev {
-  margin-left: auto;
+  margin-left: 0;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
@@ -4329,17 +4349,34 @@ textarea {
   margin-left: 4px;
   margin-bottom: 8px;
 }
-/* UX-B2-P12: 通路次篩選 — 既有 .pill-group + .pill-btn.active */
+/* UX-B2-P12: 通路次篩選 — 方方微圓角（不要膠囊胖 pill） */
 .rec-kind-filters {
   margin: 0 0 12px;
 }
 .rec-kind-pills {
-  /* 已是 .pill-group；避免再套 stage-filter 的大間距搶主排 */
   margin: 0 0 4px;
   flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
 }
 .rec-kind-pills .pill-btn {
-  min-height: 36px; /* 桌機可略小於主 tab；手機可在 959 升 44 */
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-weight: 600;
+  box-shadow: none;
+}
+.rec-kind-pills .pill-btn.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  box-shadow: none;
 }
 @media (max-width: 959px) {
   .rec-kind-pills .pill-btn {
@@ -5956,7 +5993,7 @@ textarea {
   }
 }
 
-/* B9 D4-A: collapsed main thumb */
+/* B9 D4-A: collapsed main thumb — 與標題／售價／按鈕垂直置中 */
 .rc-thumb {
   width: 72px;
   height: 72px;
@@ -5968,7 +6005,7 @@ textarea {
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
-  align-self: flex-start;
+  align-self: center;
 }
 
 .rc-thumb-img {
@@ -6186,6 +6223,10 @@ textarea {
   border-radius: 0;
   flex-shrink: 0;
 }
+.rc-tab-count {
+  font-weight: 700;
+  opacity: 0.85;
+}
 
 .rc-tab:hover {
   color: var(--accent);
@@ -6398,9 +6439,9 @@ textarea {
 .rc-time-ago {
   font-size: 11px;
 }
-/* 桌機：站別角標已併入 head-meta，隱藏 absolute 空殼規則用不到 */
+/* 桌機：整列垂直置中（縮圖／標題堆疊／售價／快捷鈕對齊中線） */
 .result-card > .rc-header {
-  align-items: flex-start;
+  align-items: center;
 }
 .rc-owner-chip {
   font-size: 10px;
@@ -7753,12 +7794,12 @@ body[data-theme="nordic"] {
   .result-card > .rc-header {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: center;
   }
 
-  /* 頂列：checkbox / status / thumb 維持 source order（order 0） */
+  /* 頂列：checkbox / thumb 與同列元素垂直置中 */
   .result-card > .rc-header > .rc-thumb {
-    align-self: flex-start;
+    align-self: center;
   }
 
   /* 標題＋標籤整塊獨佔一行（detect chips 已在 headmain 內垂直堆） */
@@ -8412,6 +8453,36 @@ select:focus {
   border-radius: 999px;
   font-weight: 700;
 }
+/* 紀錄通路篩選：壓過上方 .pill-group 膠囊殼，改方微圓獨立鈕 */
+.pill-group.rec-kind-pills {
+  padding: 0;
+  gap: 6px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.pill-group.rec-kind-pills .pill-btn {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  min-height: 32px;
+  padding: 6px 12px;
+  font-weight: 600;
+  box-shadow: none;
+}
+.pill-group.rec-kind-pills .pill-btn.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  box-shadow: none;
+}
+@media (max-width: 959px) {
+  .pill-group.rec-kind-pills .pill-btn {
+    min-height: 44px;
+  }
+}
 .currency-toggle button.active,
 .mobile-tabbar a.active,
 .mobile-tabbar button.active,
@@ -8897,6 +8968,13 @@ body[data-theme="nordic"] .pill-btn.active,
 body[data-theme="kitty"] .sel--fill,
 body[data-theme="kitty"] .pill-btn.active {
   border-color: var(--border);
+}
+/* 紀錄通路篩選 active 不要被上則壓回 --border（維持 accent 框） */
+body[data-theme="nordic"] .pill-group.rec-kind-pills .pill-btn.active,
+body[data-theme="kitty"] .pill-group.rec-kind-pills .pill-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }
 
 /* T121 + UX-B2-P01 1-3: 「更多」下拉在淺底，pill 用 --text（非 on-solid）。

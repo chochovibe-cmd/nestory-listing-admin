@@ -29,6 +29,11 @@ import {
 } from "@/lib/drafts/stationRoute";
 import { Station2ImagePanel } from "@/components/listing/Station2ImagePanel";
 import {
+  STATION2_IMAGE_SUBTABS,
+  station2SubtabCount,
+  type Station2ImageSubtab,
+} from "@/lib/images/station2ImageTabs";
+import {
   undoApproveDrafts,
   undoArchiveDrafts,
   undoStation2Drafts,
@@ -238,6 +243,8 @@ export function ResultCard({
   const [activeTab, setActiveTab] = useState<ResultCardTabId>(
     sequentialMode && sequentialStation === "image" ? "images" : "copy"
   );
+  /** 站②：外層分頁＝主圖／規格圖／詳情圖（不再多一層「圖片」） */
+  const [s2ImageSubtab, setS2ImageSubtab] = useState<Station2ImageSubtab>("main");
   const lastApproveSignalRef = useRef<number | undefined>(approveSignal);
   const [title, setTitle] = useState(draft.title_zh ?? "");
   // fix(B10): tolerate legacy HTML rows — display/edit as plain text contract.
@@ -2151,17 +2158,28 @@ export function ResultCard({
 
       {expanded ? (
         <div className="rc-body">
-          {/* R2: station② only image marks; station① keeps full tabs; station③ full + publish */}
+          {/* R2: station② 分頁＝主圖／規格圖／詳情圖；station① 全文案 tabs；station③ full + publish */}
           {isImageStation ? (
-            <div className="rc-tabs" role="tablist" aria-label="卡片分頁">
-              <button
-                aria-selected
-                className="rc-tab active"
-                role="tab"
-                type="button"
-              >
-                圖片
-              </button>
+            <div className="rc-tabs" role="tablist" aria-label="圖片類型">
+              {STATION2_IMAGE_SUBTABS.map((tab) => {
+                const count = station2SubtabCount(imageMarks, tab.id);
+                const active = s2ImageSubtab === tab.id;
+                return (
+                  <button
+                    aria-selected={active}
+                    className={`rc-tab${active ? " active" : ""}`}
+                    key={tab.id}
+                    onClick={() => setS2ImageSubtab(tab.id)}
+                    role="tab"
+                    type="button"
+                  >
+                    {tab.label}
+                    {count > 0 ? (
+                      <span className="rc-tab-count"> {count}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="rc-tabs" role="tablist" aria-label="卡片分頁">
@@ -2262,10 +2280,13 @@ export function ResultCard({
             <div className="rc-tabpanel" role="tabpanel">
               <Station2ImagePanel
                 draftId={draft.id}
+                hideSubtabs
                 images={imageMarks}
                 imageFlags={draftImageFlags}
                 onImageFlagsChange={setDraftImageFlags}
                 onImagesChange={setImageMarks}
+                onSubtabChange={setS2ImageSubtab}
+                subtab={s2ImageSubtab}
                 unmarkedBlockMessage={
                   unmarkedImages.length > 0 ? unmarkedBlockMessage : null
                 }

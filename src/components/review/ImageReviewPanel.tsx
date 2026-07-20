@@ -441,9 +441,14 @@ export function ImageReviewPanel() {
                           })}
                         </span>
                       ) : null}
+                      {/* 狀態 + 點開審核：標題下方一排（不要跟標題同一行靠右） */}
+                      <span className="ir-head-meta">
+                        <span className={schip.className}>{schip.label}</span>
+                        <span className="ir-head-chev">
+                          {open ? "▴ 收合" : "▾ 點開審核"}
+                        </span>
+                      </span>
                     </span>
-                    <span className={schip.className}>{schip.label}</span>
-                    <span className="ir-head-chev">{open ? "▴ 收合" : "▾ 點開審核"}</span>
                   </button>
 
                   {open ? (

@@ -61,6 +61,10 @@ export function Station2ImagePanel({
   unmarkedBlockMessage,
   imageFlags,
   onImageFlagsChange,
+  /** 由 ResultCard 的 rc-tabs 控制時傳入；不傳則面板內自管 */
+  subtab: subtabProp,
+  onSubtabChange,
+  hideSubtabs = false,
 }: {
   draftId: string;
   images: ProductImage[];
@@ -69,9 +73,18 @@ export function Station2ImagePanel({
   /** Draft-level image_flags (generate_detail lives here). */
   imageFlags?: unknown;
   onImageFlagsChange?: (next: Record<string, unknown>) => void;
+  subtab?: Station2ImageSubtab;
+  onSubtabChange?: (tab: Station2ImageSubtab) => void;
+  /** true＝外層已有主圖／規格圖／詳情圖 tabs，隱藏內層分層 */
+  hideSubtabs?: boolean;
 }) {
   const supabase = createClient();
-  const [subtab, setSubtab] = useState<Station2ImageSubtab>("main");
+  const [subtabLocal, setSubtabLocal] = useState<Station2ImageSubtab>("main");
+  const subtab = subtabProp ?? subtabLocal;
+  const setSubtab = (tab: Station2ImageSubtab) => {
+    if (onSubtabChange) onSubtabChange(tab);
+    if (subtabProp == null) setSubtabLocal(tab);
+  };
   const [busyId, setBusyId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [flagBusy, setFlagBusy] = useState(false);
@@ -351,25 +364,27 @@ export function Station2ImagePanel({
         </label>
       </div>
 
-      <div className="s2-img-subtabs" role="tablist" aria-label="圖片類型">
-        {STATION2_IMAGE_SUBTABS.map((tab) => {
-          const count = station2SubtabCount(images, tab.id);
-          const active = subtab === tab.id;
-          return (
-            <button
-              aria-selected={active}
-              className={`s2-img-subtab${active ? " active" : ""}`}
-              key={tab.id}
-              onClick={() => setSubtab(tab.id)}
-              role="tab"
-              type="button"
-            >
-              {tab.label}
-              {count > 0 ? <span className="s2-img-subtab-count">{count}</span> : null}
-            </button>
-          );
-        })}
-      </div>
+      {hideSubtabs ? null : (
+        <div className="s2-img-subtabs" role="tablist" aria-label="圖片類型">
+          {STATION2_IMAGE_SUBTABS.map((tab) => {
+            const count = station2SubtabCount(images, tab.id);
+            const active = subtab === tab.id;
+            return (
+              <button
+                aria-selected={active}
+                className={`s2-img-subtab${active ? " active" : ""}`}
+                key={tab.id}
+                onClick={() => setSubtab(tab.id)}
+                role="tab"
+                type="button"
+              >
+                {tab.label}
+                {count > 0 ? <span className="s2-img-subtab-count">{count}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="rc-field s2-img-body" role="tabpanel">
         <div className="rc-label">

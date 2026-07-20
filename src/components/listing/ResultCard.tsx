@@ -2221,8 +2221,6 @@ export function ResultCard({
               onCompareAtPriceChange={setCompareAtPrice}
               onSellPriceChange={setSellPrice}
               priceMode={priceMode}
-              profit={profit}
-              profitPct={profitPct}
               sellPrice={sellPrice}
               twdCost={draft.twd_cost}
             />

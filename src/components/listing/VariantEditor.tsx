@@ -21,6 +21,7 @@ import {
   recalculateUnlockedVariantPrices,
   removeDimensionMergingRows,
   removeDimensionValue,
+  syncInheritedVariantCosts,
   type VariantDimension,
   type VariantFormRow
 } from "@/lib/variants";
@@ -193,7 +194,10 @@ export function VariantEditor({
   function onCostChange(index: number, cost: string) {
     const row = rows[index];
     if (!row) return;
-    let next = rows.map((r, i) => (i === index ? { ...r, cost } : r));
+    // Manual edit detaches from product-cost inheritance.
+    let next = rows.map((r, i) =>
+      i === index ? { ...r, cost, costIsInherited: false } : r
+    );
     next = recalculateUnlockedVariantPrices(next, {
       currency,
       priceMode,
@@ -201,6 +205,15 @@ export function VariantEditor({
       productCost
     });
     setRowsSafe(next);
+  }
+
+  /** Prefill blank / newly created rows from product cost, then price. */
+  function withInheritedProductCost(nextRows: VariantFormRow[]): VariantFormRow[] {
+    return syncInheritedVariantCosts(nextRows, productCost, {
+      currency,
+      priceMode,
+      settings: pricingSettings
+    });
   }
 
   function onManualPrice(index: number, field: "sellPrice" | "compareAt", value: string) {
@@ -219,7 +232,8 @@ export function VariantEditor({
       dims = [{ name: "款式" }];
       onDimensionsChange(dims);
     }
-    setRowsSafe([...rows, emptyVariantRow(rows.length)]);
+    const next = [...rows, emptyVariantRow(rows.length, productCost)];
+    setRowsSafe(withInheritedProductCost(next));
   }
 
   function removeRow(index: number) {
@@ -298,7 +312,8 @@ export function VariantEditor({
       }
     }
     clearConfirmArm();
-    onRowsChange(result.rows);
+    // New expand base rows start blank; write product cost into value when applicable.
+    setRowsSafe(withInheritedProductCost(result.rows));
     if (result.warning) onWarning(result.warning);
     else onWarning(null);
   }
@@ -316,7 +331,7 @@ export function VariantEditor({
     }
     const result = appendCharacterRows(dimensions, rows, names);
     onDimensionsChange(result.dimensions);
-    onRowsChange(result.rows);
+    setRowsSafe(withInheritedProductCost(result.rows));
     if (result.warning) onWarning(result.warning);
     setCharSelected({});
     setCharOpen(false);
@@ -700,15 +715,15 @@ export function VariantEditor({
                 <span className="v-cell" data-label={costLabel}>
                   <input
                     aria-label={costLabel}
+                    className={row.costIsInherited ? "v-cost-inherited" : undefined}
                     onChange={(e) => onCostChange(index, e.target.value)}
-                    placeholder={
-                      productCost != null && productCost > 0
-                        ? `同商品成本 ${currency === "CNY" ? "¥" : "NT$"}${productCost}`
-                        : "成本"
-                    }
+                    placeholder="成本"
                     type="number"
                     value={row.cost}
                   />
+                  {row.costIsInherited ? (
+                    <span className="v-cost-badge muted">已套用商品成本，可覆蓋</span>
+                  ) : null}
                 </span>
                 <span className="v-row-actions">
                   <button
@@ -799,7 +814,10 @@ export function VariantEditor({
   );
 }
 
-/** Parent can call when currency/settings/priceMode/productCost change. */
+/**
+ * Parent can call when currency/settings/priceMode/productCost change.
+ * UX-B2-P04: also syncs cost into rows still marked costIsInherited (or still blank).
+ */
 export function repriceVariants(
   rows: VariantFormRow[],
   opts: {
@@ -809,5 +827,9 @@ export function repriceVariants(
     productCost?: number | null;
   }
 ): VariantFormRow[] {
-  return recalculateUnlockedVariantPrices(rows, opts);
+  return syncInheritedVariantCosts(rows, opts.productCost, {
+    currency: opts.currency,
+    priceMode: opts.priceMode,
+    settings: opts.settings
+  });
 }

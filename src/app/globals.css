@@ -4548,19 +4548,50 @@ textarea {
   gap: 6px;
   min-width: 0;
 }
+/* UX-B2-P04: dimension name + axis value = small rounded square chips (not pills) */
 .v-dim-chip {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11px; font-weight: 700; padding: 4px 8px;
-  border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--text); border: 1px solid var(--border);
+  font-size: 12px; font-weight: 700; padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 .v-axis-val {
   display: inline-flex; align-items: center; gap: 2px;
-  font-size: 11px; font-weight: 600; padding: 4px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  font-size: 12px; font-weight: 600; padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--surface2);
   color: var(--text);
-  border: 1px solid var(--line-soft, var(--border));
+  border: 1px solid var(--border);
+}
+.v-dim-chip .v-dim-x,
+.v-axis-val .v-dim-x,
+.v-dim-chip .chip-remove,
+.v-axis-val .chip-remove {
+  margin-left: 4px;
+  opacity: 0.6;
+}
+.v-dim-chip .v-dim-x:hover,
+.v-axis-val .v-dim-x:hover,
+.v-dim-chip .chip-remove:hover,
+.v-axis-val .chip-remove:hover {
+  opacity: 1;
+  color: var(--danger, var(--accent2));
+}
+/* Inherited product cost (form state only) */
+.v-cost-inherited {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.v-cost-badge {
+  display: block;
+  font-size: 9px;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+.v-cost-badge.muted {
+  color: var(--text-muted);
 }
 .v-axis-add {
   display: inline-flex;

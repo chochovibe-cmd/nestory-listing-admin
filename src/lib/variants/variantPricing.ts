@@ -99,8 +99,46 @@ export function formatVariantPriceLine(
 }
 
 /**
+ * UX-B2-P04: when product-level cost changes, push into rows still marked inherited
+ * (or still blank / never manually edited). Does not overwrite costIsInherited === false.
+ * Then recalculates unlocked sell prices.
+ */
+export function syncInheritedVariantCosts(
+  rows: VariantFormRow[],
+  productCost: number | null | undefined,
+  priceOpts: {
+    currency: CostCurrency;
+    priceMode: PriceMode;
+    settings?: PricingSettings;
+  }
+): VariantFormRow[] {
+  const has =
+    productCost != null && Number.isFinite(productCost) && productCost > 0;
+  const costStr = has ? String(productCost) : "";
+  const next = rows.map((row) => {
+    if (row.costIsInherited) {
+      return {
+        ...row,
+        cost: costStr,
+        costIsInherited: has ? true : false
+      };
+    }
+    // Empty cost and never manually detached → first-time inherit
+    if (has && !row.cost.trim()) {
+      return { ...row, cost: costStr, costIsInherited: true };
+    }
+    return row;
+  });
+  return recalculateUnlockedVariantPrices(next, {
+    ...priceOpts,
+    productCost
+  });
+}
+
+/**
  * UX-S T72 / R87: write product-level cost into blank variant cost cells only.
  * Already-filled costs are never overwritten. After fill, recalculate unlocked prices.
+ * Marks filled rows as costIsInherited so later product-cost changes can keep syncing.
  * Returns { rows, filledCount } so UI can toast when nothing changed.
  */
 export function applyProductCostToBlankRows(
@@ -123,7 +161,7 @@ export function applyProductCostToBlankRows(
     // Only fill blank / non-positive; never overwrite a filled positive cost.
     if (Number.isFinite(n) && n > 0) return row;
     filledCount += 1;
-    return { ...row, cost: costStr };
+    return { ...row, cost: costStr, costIsInherited: true };
   });
   if (filledCount === 0) {
     return { rows, filledCount: 0 };

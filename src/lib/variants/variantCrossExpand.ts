@@ -80,10 +80,18 @@ export function isVariantRowHandFilled(row: VariantFormRow): boolean {
 
 function preservedHandFields(row: VariantFormRow): Pick<
   VariantFormRow,
-  "cost" | "sellPrice" | "compareAt" | "priceLocked" | "qty" | "sku" | "imageId"
+  | "cost"
+  | "costIsInherited"
+  | "sellPrice"
+  | "compareAt"
+  | "priceLocked"
+  | "qty"
+  | "sku"
+  | "imageId"
 > {
   return {
     cost: row.cost,
+    costIsInherited: row.costIsInherited,
     sellPrice: row.sellPrice,
     compareAt: row.compareAt,
     priceLocked: row.priceLocked,

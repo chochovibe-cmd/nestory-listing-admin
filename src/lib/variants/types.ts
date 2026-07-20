@@ -16,6 +16,12 @@ export type VariantFormRow = {
   optionValues: [string, string, string];
   /** Cost in the same currency as the product-level cost field. */
   cost: string;
+  /**
+   * UI only: true = cost came from product-level cost; product cost changes may update this row.
+   * false / undefined = user-edited or loaded from DB; product cost must not overwrite.
+   * Not persisted — form state only.
+   */
+  costIsInherited?: boolean;
   /** NT$ sell price (formula or manual). */
   sellPrice: string;
   /** NT$ compare-at; empty when single mode. */
@@ -65,10 +71,21 @@ export type ShopifyVariantSeed = {
   imageId: string | null;
 };
 
-export function emptyVariantRow(sortOrder = 0): VariantFormRow {
+/**
+ * Blank row for the form grid.
+ * When `productCost` is a positive number, prefill `cost` and mark `costIsInherited`
+ * so the input shows a real value (not placeholder-only) and stays linked to product cost.
+ */
+export function emptyVariantRow(
+  sortOrder = 0,
+  productCost?: number | null
+): VariantFormRow {
+  const has =
+    productCost != null && Number.isFinite(productCost) && productCost > 0;
   return {
     optionValues: ["", "", ""],
-    cost: "",
+    cost: has ? String(productCost) : "",
+    costIsInherited: has ? true : undefined,
     sellPrice: "",
     compareAt: "",
     priceLocked: false,

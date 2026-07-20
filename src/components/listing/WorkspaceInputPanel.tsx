@@ -47,7 +47,7 @@ import {
 import type { SaleStatus } from "@/types/domain";
 import {
   formRowsToDbInserts,
-  recalculateUnlockedVariantPrices,
+  syncInheritedVariantCosts,
   validateCostRequirement,
   type VariantDimension,
   type VariantFormRow
@@ -990,11 +990,11 @@ export function WorkspaceInputPanel({
           : parsedPrice > 0
             ? parsedPrice
             : null;
-      const priced = recalculateUnlockedVariantPrices(plan.variants, {
+      // UX-B2-P04: write product cost into blank row values + mark inherited.
+      const priced = syncInheritedVariantCosts(plan.variants, productCostForFill, {
         currency: costCurrency,
         priceMode,
-        settings: pricingSettings,
-        productCost: productCostForFill
+        settings: pricingSettings
       });
       setVariants(priced);
     }

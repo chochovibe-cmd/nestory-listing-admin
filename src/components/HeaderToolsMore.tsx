@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { DeploymentStatus } from "@/components/DeploymentStatus";
 import {
@@ -10,13 +11,20 @@ import {
   type RunMode
 } from "@/components/ModeSwitcher";
 import { ProviderSwitcher } from "@/components/ProviderSwitcher";
+import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
 
 /**
  * UX-G T34: secondary topbar tools behind one "⋯ 更多" layer.
  * UX-R T71: test mode gets a small topbar chip + warn outline on the mode row.
- * Same component for desktop row and mobile ☰ — does not remove capabilities.
+ * UX-B2-P15-r2: mobile popover also hosts 設定／登出; pills stay desktop-sized (15r2-6).
  */
-export function HeaderToolsMore() {
+export function HeaderToolsMore({
+  onOpenSettings
+}: {
+  /** Mobile: open settings bottom sheet; closes this popover first. */
+  onOpenSettings?: () => void;
+} = {}) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [runMode, setRunMode] = useState<RunMode>("llm");
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -69,6 +77,23 @@ export function HeaderToolsMore() {
     };
   }, [open]);
 
+  async function signOut() {
+    setOpen(false);
+    if (!hasSupabaseBrowserEnv()) {
+      router.push("/login");
+      return;
+    }
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
+  function handleOpenSettings() {
+    setOpen(false);
+    onOpenSettings?.();
+  }
+
   return (
     <div className="hdr-more" ref={wrapRef}>
       {isTest ? (
@@ -93,6 +118,22 @@ export function HeaderToolsMore() {
         role="group"
         aria-label="次要工具"
       >
+        {/* Mobile-only account row: 設定 sheet + 登出 (desktop uses sidebar + AuthNav) */}
+        <div className="hdr-more-account">
+          <button
+            className="hdr-more-action"
+            onClick={handleOpenSettings}
+            type="button"
+          >
+            <span aria-hidden>⚙</span>
+            <span>設定</span>
+          </button>
+          <button className="hdr-more-action" onClick={() => void signOut()} type="button">
+            <span aria-hidden>↩</span>
+            <span>登出</span>
+          </button>
+        </div>
+
         <div className="hdr-more-row">
           <span className="hdr-more-label">AI 模型</span>
           <ProviderSwitcher />

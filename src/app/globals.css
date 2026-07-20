@@ -2150,12 +2150,16 @@ textarea {
 .thumb-remove:hover { filter: brightness(1.1); }
 
 /* B5: per-thumbnail 規格圖 mark + result-card process intent (tokens only) */
+/* UX-B2-P10: input strip horizontal scroll + larger thumbs */
 .pthumb-strip {
   display: flex;
   gap: 11px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   margin-top: 11px;
   align-items: flex-end;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
 }
 .pthumb {
   display: flex;
@@ -2163,6 +2167,7 @@ textarea {
   align-items: center;
   gap: 5px;
   cursor: grab;
+  flex: 0 0 auto;
 }
 /* UX-H T49: thumb soft hover */
 .pthumb:hover .pthumb-img,
@@ -2189,8 +2194,8 @@ textarea {
   display: inline-block;
 }
 .pthumb-img {
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 96px;
   object-fit: cover;
   border-radius: var(--radius-s);
   border: 1px solid var(--border-soft);
@@ -2204,16 +2209,17 @@ textarea {
   z-index: 10;
   position: relative;
 }
-/* B17: main thumb ~96px (AGENTS 呼吸感) */
+/* B17 / P10: main thumb larger than siblings (AGENTS 呼吸感) */
 .pthumb.is-main .pthumb-img {
-  width: 96px;
-  height: 96px;
+  width: 120px;
+  height: 120px;
   border: 2px solid var(--accent);
 }
 .pthumb-badge {
   position: absolute;
   top: -8px;
   left: -8px;
+  z-index: 2;
   background: var(--accent);
   color: var(--accent-fg);
   font-size: 9px;
@@ -2221,6 +2227,56 @@ textarea {
   padding: 2px 6px;
   border-radius: 999px;
   line-height: 1.2;
+}
+/* UX-B2-P10: 規格圖 corner badge (station② / input / station③) */
+.pthumb-spec-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  line-height: 1.2;
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  min-height: 0; /* 角標可小於 44；主操作鈕仍 ≥44 */
+  max-width: calc(100% - 12px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pthumb-spec-badge.active {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+.pthumb-spec-badge:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pthumb-spec-badge:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pthumb-spec-badge.active:hover:not(:disabled) {
+  color: var(--accent-fg);
+  filter: brightness(1.05);
+}
+/* 觸控：放大 hit 區（padding / pseudo），無 !important */
+@media (max-width: 959px) {
+  .pthumb-spec-badge {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .pthumb-spec-badge::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+  }
 }
 /* P1-2 / T132: optimistic upload status — indeterminate ring (tokens only) */
 .pthumb-status-overlay {
@@ -2316,6 +2372,87 @@ textarea {
   font-weight: 700;
   color: var(--text-muted);
   min-width: 4.5em;
+}
+
+/* UX-B2-P10: station② horizontal strip + large card (scoped; station③ keeps column) */
+.s2-img-panel .imgmark-list,
+.s2-img-panel .imgmark-strip {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 12px;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.s2-img-panel .imgmark-row,
+.s2-img-panel .pthumb-card {
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  width: 132px;
+  margin-bottom: 0;
+  gap: 8px;
+}
+.s2-img-panel .thumb-wrap,
+.s2-img-panel .s2-img-thumb-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.s2-img-panel .imgmark-thumb {
+  width: 132px;
+  height: 132px;
+  display: block;
+}
+/* ✕ left so top-right stays free for .pthumb-spec-badge */
+.s2-img-panel .s2-thumb-remove,
+.s2-img-panel .thumb-remove.s2-thumb-remove {
+  top: 6px;
+  left: 6px;
+  right: auto;
+  width: 22px;
+  height: 22px;
+}
+.s2-img-panel .imgmark-slot-label {
+  min-width: 0;
+  width: 100%;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.s2-img-panel .imgmark-btns,
+.s2-img-panel .pthumb-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  flex: none;
+}
+.s2-img-panel .img-mark-btn {
+  flex: 1 1 calc(50% - 4px);
+  min-height: 44px;
+  font-size: 11px;
+  padding: 6px 8px;
+}
+.s2-img-panel .s2-detail-hint {
+  font-size: 12px;
+  line-height: 1.4;
+}
+@media (min-width: 960px) {
+  .s2-img-panel .imgmark-row,
+  .s2-img-panel .pthumb-card {
+    width: 160px;
+  }
+  .s2-img-panel .imgmark-thumb {
+    width: 160px;
+    height: 160px;
+  }
+}
+/* UX-B2-P10: station③ pipeline thumbs — free top-right for spec badge */
+.rc-tabpanel .rc-img-thumb-wrap .rc-img-thumb-remove {
+  top: -6px;
+  left: -6px;
+  right: auto;
 }
 
 /* UX-F T30: station② image subtabs (inner layer under 圖片) */

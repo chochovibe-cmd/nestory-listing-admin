@@ -381,7 +381,8 @@ export function Station2ImagePanel({
         </div>
 
         {list.length > 0 ? (
-          <div className="imgmark-list">
+          /* UX-B2-P10: horizontal strip + large thumbs; tools under each card; spec = corner badge */
+          <div className="imgmark-list imgmark-strip">
             {list.map((image, index) => {
               const src =
                 image.processed_file_url ??
@@ -393,7 +394,7 @@ export function Station2ImagePanel({
               const isOver = overId === image.id && dragId !== image.id;
               return (
                 <div
-                  className={`imgmark-row s2-img-row${isDragging ? " is-dragging" : ""}${isOver ? " is-drag-over" : ""}${fadingIds.has(image.id) ? " is-fading" : ""}`}
+                  className={`imgmark-row s2-img-row pthumb-card${isDragging ? " is-dragging" : ""}${isOver ? " is-drag-over" : ""}${fadingIds.has(image.id) ? " is-fading" : ""}`}
                   draggable
                   key={image.id}
                   onDragEnd={() => {
@@ -427,26 +428,51 @@ export function Station2ImagePanel({
                   <div className="thumb-wrap s2-img-thumb-wrap" title="拖曳排序">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
+                    {/* ✕ left — avoid clash with top-right spec badge (P10) */}
                     <button
-                      className="thumb-remove"
+                      className="thumb-remove s2-thumb-remove"
                       disabled={busyId === image.id}
-                      onClick={() => void removeImage(image)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void removeImage(image);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
                       title="移除這張圖片"
                       type="button"
                     >
                       ✕
                     </button>
+                    {showMarks ? (
+                      <button
+                        type="button"
+                        className={`pthumb-spec-badge${image.is_spec_process ? " active" : ""}`}
+                        disabled={busyId === image.id}
+                        aria-pressed={!!image.is_spec_process}
+                        title={image.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void toggleSpec(image);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {image.is_spec_process ? "📐 規格圖" : "規格圖"}
+                      </button>
+                    ) : null}
                   </div>
                   <span className="imgmark-slot-label">{slot}</span>
                   {showMarks ? (
-                    <span className="imgmark-btns">
+                    <span className="imgmark-btns pthumb-tools">
                       {PROCESS_INTENT_OPTIONS.map((intent) => (
                         <button
                           aria-pressed={image.process_intent === intent}
                           className={`img-mark-btn${image.process_intent === intent ? " active" : ""}`}
                           disabled={busyId === image.id}
                           key={intent}
-                          onClick={() => void setProcessIntent(image, intent)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void setProcessIntent(image, intent);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
                           type="button"
                         >
                           {image.process_intent === intent
@@ -454,30 +480,9 @@ export function Station2ImagePanel({
                             : PROCESS_INTENT_LABELS[intent]}
                         </button>
                       ))}
-                      {!image.is_spec_process ? (
-                        <button
-                          aria-pressed={false}
-                          className="img-mark-btn"
-                          disabled={busyId === image.id}
-                          onClick={() => void toggleSpec(image)}
-                          type="button"
-                        >
-                          規格圖
-                        </button>
-                      ) : (
-                        <button
-                          aria-pressed
-                          className="img-mark-btn active"
-                          disabled={busyId === image.id}
-                          onClick={() => void toggleSpec(image)}
-                          type="button"
-                        >
-                          ✓ 規格圖
-                        </button>
-                      )}
                     </span>
                   ) : (
-                    <span className="muted" style={{ fontSize: 12 }}>
+                    <span className="muted s2-detail-hint">
                       詳情圖僅供辨識，無需標記
                     </span>
                   )}

@@ -748,6 +748,23 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img alt={zone.label} className="thumb pthumb-img" src={item.url} />
                         {isFirstMain ? <span className="pthumb-badge">主圖</span> : null}
+                        {/* UX-B2-P10: 規格圖 → corner badge (same language as station②) */}
+                        {isMainZone && item.status === "ready" ? (
+                          <button
+                            type="button"
+                            aria-pressed={item.is_spec_process}
+                            className={`pthumb-spec-badge${item.is_spec_process ? " active" : ""}`}
+                            title={item.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void toggleSpecMark(item);
+                            }}
+                            onMouseDown={(event) => event.stopPropagation()}
+                          >
+                            {item.is_spec_process ? "📐 規格圖" : "規格圖"}
+                          </button>
+                        ) : null}
                         {item.status === "uploading" ? (
                           <span className="pthumb-status-overlay">上傳中…</span>
                         ) : null}
@@ -780,20 +797,6 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
                           重試
                         </button>
                       ) : null}
-                      {isMainZone && item.status === "ready" ? (
-                        <button
-                          aria-pressed={item.is_spec_process}
-                          className={`img-mark-btn${item.is_spec_process ? " active" : ""}`}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void toggleSpecMark(item);
-                          }}
-                          type="button"
-                        >
-                          {item.is_spec_process ? "✓ 規格圖" : "規格圖"}
-                        </button>
-                      ) : null}
                     </div>
                   );
                 })}
@@ -805,7 +808,7 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
       {/* UX-D T23: short form-side tip only; process-intent hard gate stays at station ② / B5. */}
       {mainItems.length > 0 ? (
         <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-          主圖可標規格圖
+          主圖右上角可標規格圖
         </div>
       ) : null}
       {markError ? (

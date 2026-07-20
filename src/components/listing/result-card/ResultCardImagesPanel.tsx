@@ -51,11 +51,25 @@ export function ResultCardImagesPanel({
                   className={`imgmark-row${fadingImageIds.has(image.id) ? " is-fading" : ""}`}
                   key={image.id}
                 >
-                  <div className="thumb-wrap">
+                  <div className="thumb-wrap rc-img-thumb-wrap">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
+                    {/* UX-B2-P10: 規格圖 bottom btn → corner badge (align station② language) */}
                     <button
-                      className="thumb-remove"
+                      type="button"
+                      className={`pthumb-spec-badge${image.is_spec_process ? " active" : ""}`}
+                      aria-pressed={!!image.is_spec_process}
+                      title={image.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSpec(image);
+                      }}
+                    >
+                      {image.is_spec_process ? "📐 規格圖" : "規格圖"}
+                    </button>
+                    {/* ✕ left — free top-right for .pthumb-spec-badge */}
+                    <button
+                      className="thumb-remove rc-img-thumb-remove"
                       onClick={() => onRemoveImage(image)}
                       title="移除這張圖片"
                       type="button"
@@ -83,25 +97,6 @@ export function ResultCardImagesPanel({
                           : PROCESS_INTENT_LABELS[intent]}
                       </button>
                     ))}
-                    {!image.is_spec_process ? (
-                      <button
-                        aria-pressed={false}
-                        className="img-mark-btn"
-                        onClick={() => onToggleSpec(image)}
-                        type="button"
-                      >
-                        規格圖
-                      </button>
-                    ) : (
-                      <button
-                        aria-pressed
-                        className="img-mark-btn active"
-                        onClick={() => onToggleSpec(image)}
-                        type="button"
-                      >
-                        ✓ 規格圖
-                      </button>
-                    )}
                   </span>
                 </div>
               );

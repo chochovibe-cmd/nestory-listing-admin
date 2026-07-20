@@ -5,8 +5,8 @@ import { createPortal } from "react-dom";
 
 const THEMES = [
   { value: "dark", icon: "🌙", title: "夜色" },
-  { value: "kitty", icon: "🐱", title: "奶茶" },
-  { value: "nordic", icon: "🐉", title: "龍珠" }
+  { value: "nordic", icon: "🐱", title: "奶茶" },
+  { value: "kitty", icon: "🐉", title: "龍珠" }
 ] as const;
 
 const STORAGE_KEY = "nestory_theme";

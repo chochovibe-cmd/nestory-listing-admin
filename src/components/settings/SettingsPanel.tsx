@@ -45,8 +45,8 @@ type StatusPayload = {
 
 const THEMES: { value: ThemeId; icon: string; title: string }[] = [
   { value: "dark", icon: "🌑", title: "夜色" },
-  { value: "kitty", icon: "🐱", title: "奶茶" },
-  { value: "nordic", icon: "🐉", title: "龍珠" }
+  { value: "nordic", icon: "🐱", title: "奶茶" },
+  { value: "kitty", icon: "🐉", title: "龍珠" }
 ];
 
 const SECTION_IDS = ["model", "pricing", "automation", "appearance", "connection"] as const;

@@ -148,18 +148,6 @@ type ResultCardVariantRow = {
   image_id?: string | null;
 };
 
-// This icon only reports whether AI text-generation itself finished, failed,
-// or is still running -- it must never fall back to a green "done" check for
-// needs_revision, or it visually contradicts the "需修改" status badge right
-// next to it (a scanning eye reads green-checkmark as "all good").
-function statusIcon(draft: ProductDraft): { icon: string; className: string } {
-  if (draft.generation_status === "processing") return { icon: "↻", className: "generating" };
-  if (draft.generation_status === "failed" || draft.status === "api_failed" || draft.status === "failed") {
-    return { icon: "✗", className: "error" };
-  }
-  if (draft.status === "needs_revision") return { icon: "!", className: "revision" };
-  return { icon: "✓", className: "done" };
-}
 
 // product_images only stores the public URL, not the storage path -- derive
 // the path Supabase Storage needs for .remove() from it instead of tracking
@@ -389,7 +377,7 @@ export function ResultCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate only when variantsHydrateKey changes
   }, [variantsHydrateKey]);
 
-  const { icon, className } = statusIcon(draft);
+  /* status icon removed from collapsed header (boss) */
   // B6: 卡片只跟讀 price_mode（不做完整切換 UI）；migration 020 前 fallback 特價。
   const priceMode: PriceMode = draft.price_mode === "single" ? "single" : "sale";
   const profit = draft.twd_price != null && draft.twd_cost != null ? draft.twd_price - draft.twd_cost : null;
@@ -1809,7 +1797,6 @@ export function ResultCard({
             aria-label="勾選以加入批次操作"
           />
         ) : null}
-        <span className={`rc-status ${className}`}>{icon}</span>
         {/* B9 D4-A: main thumb on collapsed row */}
         <span className="rc-thumb" aria-hidden={thumbUrl ? undefined : true}>
           {thumbUrl ? (
@@ -1825,15 +1812,25 @@ export function ResultCard({
         </span>
         <span className="rc-headmain">
           <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
-          {/* UX-B2-P14: relative time always; owner chip only in all-scope */}
+          {/* Row1: 站別狀態 + 日期（+ owner） */}
           {(() => {
             const timeLabel = formatRelativeTime(draft.created_at);
             const timeTitle = formatAbsoluteLocalTime(draft.created_at);
-            const showOwner =
-              showOwnerChip && Boolean(ownerLabel?.trim());
-            if (!timeLabel && !showOwner) return null;
+            const showOwner = showOwnerChip && Boolean(ownerLabel?.trim());
+            const primary = stationFlowPrimaryLabel(draft);
+            const secondary = secondaryStatusForResultCard(draft);
             return (
               <span className="rc-head-meta">
+                <span
+                  className={
+                    primary.kind === "fail"
+                      ? "schip schip--error rc-station-chip"
+                      : "schip schip--run rc-station-chip"
+                  }
+                >
+                  {primary.label}
+                </span>
+                {secondary ? <StatusBadge status={secondary} /> : null}
                 {timeLabel ? (
                   <span
                     className="rc-time-ago muted"
@@ -1853,22 +1850,29 @@ export function ResultCard({
               </span>
             );
           })()}
-          {/* B4: 收合列即可見 IP／角色／類型 chips＋⚠（不用展開才發現未建檔） */}
-          {draft.ip_name || draft.character_name || detectTypeLabel || generationToneLabel || confirmWarnCount > 0 || blockWarnCount > 0 || suggestWarnCount > 0 || copyLocked ? (
-            <span className="rc-detect-chips">
+          {/* Row2: IP／角色／類型／語氣 */}
+          {draft.ip_name ||
+          draft.character_name ||
+          detectTypeLabel ||
+          generationToneLabel ||
+          copyLocked ? (
+            <span className="rc-detect-chips rc-detect-chips--tags">
               {draft.ip_name ? (
                 <span className="rc-detect-chip rc-detect-chip--ip">{draft.ip_name}</span>
               ) : null}
               {draft.character_name ? (
                 <span
-                  className={`rc-detect-chip rc-detect-chip--char${characterChipWarned ? " is-warn" : ""}`}
+                  className={`rc-detect-chip rc-detect-chip--char${
+                    characterChipWarned ? " is-warn" : ""
+                  }`}
                 >
                   {characterChipWarned ? "⚠ " : ""}
                   {draft.character_name}
                 </span>
               ) : null}
-              {detectTypeLabel ? <span className="rc-detect-chip">{detectTypeLabel}</span> : null}
-              {/* T8: 有 generation_tone 才顯示；null/空不唬「預設」 */}
+              {detectTypeLabel ? (
+                <span className="rc-detect-chip">{detectTypeLabel}</span>
+              ) : null}
               {generationToneLabel ? (
                 <span
                   className="rc-detect-chip rc-detect-chip--tone rc-tone-chip"
@@ -1877,13 +1881,29 @@ export function ResultCard({
                   🎙 {generationToneLabel}
                 </span>
               ) : null}
+              {copyLocked ? (
+                <span className="rc-detect-chip" title="文案已鎖定">
+                  🔒 已鎖定
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+          {/* Row3: 警告／待確認／搜尋 */}
+          {blockWarnCount > 0 || confirmWarnCount > 0 || suggestWarnCount > 0 ? (
+            <span className="rc-detect-chips rc-detect-chips--warns">
               {blockWarnCount > 0 ? (
-                <span className="rc-detect-warn is-block" title={warningSummary.block.map((w) => w.text).join("\n")}>
+                <span
+                  className="rc-detect-warn is-block"
+                  title={warningSummary.block.map((w) => w.text).join("\n")}
+                >
                   ⛔ {blockWarnCount}
                 </span>
               ) : null}
               {confirmWarnCount > 0 ? (
-                <span className="rc-detect-warn" title={warningSummary.confirm.map((w) => w.text).join("\n")}>
+                <span
+                  className="rc-detect-warn"
+                  title={warningSummary.confirm.map((w) => w.text).join("\n")}
+                >
                   ⚠ {confirmWarnCount} 項待確認
                 </span>
               ) : null}
@@ -1895,7 +1915,6 @@ export function ResultCard({
                   🔍 {suggestWarnCount}
                 </span>
               ) : null}
-              {copyLocked ? <span className="rc-detect-chip" title="文案已鎖定">🔒 已鎖定</span> : null}
             </span>
           ) : null}
           {isImageStation ? (
@@ -2074,36 +2093,6 @@ export function ResultCard({
             </>
           ) : null}
         </span>
-        {/* UX-AC T114: station chips beside header actions (not a heavy solo row) */}
-        <div
-          className="rc-status-chips"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {(() => {
-            const primary = stationFlowPrimaryLabel(draft);
-            const secondary = secondaryStatusForResultCard(draft);
-            return (
-              <>
-                <span
-                  className={
-                    primary.kind === "fail"
-                      ? "schip schip--error"
-                      : "schip schip--run"
-                  }
-                >
-                  {primary.label}
-                </span>
-                {secondary ? <StatusBadge status={secondary} /> : null}
-              </>
-            );
-          })()}
-          {!isCopyStation && pipelineImages.length > 0 && unmarkedImages.length > 0 ? (
-            <span className="img-mark-status" title={unmarkedBlockMessage ?? undefined}>
-              <span className="st-dot" />
-              圖片未標記（{unmarkedImages.length}）
-            </span>
-          ) : null}
-        </div>
         {/* UX-B2-P07 7-2: × in header chrome (after chips / before toggle) */}
         {!isArchived && !sequentialMode ? (
           <button

@@ -1225,10 +1225,13 @@ button.success:hover:not(:disabled) {
   .panel-header .sh-mode-pills {
     margin-left: 0;
   }
+  /* 老闆：手機一般／二手與桌機同扁，不要胖 */
   .panel-header .sh-mode-pills .pill-btn {
-    min-height: 40px;
-    min-width: 48px;
-    padding: 8px 14px;
+    min-height: 26px;
+    min-width: 40px;
+    padding: 3px 10px;
+    font-size: 12px;
+    line-height: 1.2;
   }
   .secondhand-fields {
     padding: 12px;
@@ -1820,7 +1823,19 @@ textarea {
   align-items: center;
 }
 .stage-filter-row .results-scope-label .ir-scope-select {
-  min-height: 36px;
+  min-height: 32px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.stage-filter-row .stage-filter-end .results-sort-label,
+.stage-filter-row .stage-filter-end .results-scope-label {
+  min-height: 32px;
+}
+.stage-filter-row .stage-filter-end .sort-sel {
+  min-height: 28px;
+  font-size: 12px;
 }
 
 /* B12: stage filter pills under batch toolbar (reuse .pill-group/.pill-btn tokens). */
@@ -5921,8 +5936,8 @@ textarea {
 
 /* B9 D4-A: collapsed main thumb */
 .rc-thumb {
-  width: 48px;
-  height: 48px;
+  width: 72px;
+  height: 72px;
   border-radius: var(--radius-s);
   border: 1px solid var(--border);
   background: var(--surface2);
@@ -5931,6 +5946,7 @@ textarea {
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+  align-self: flex-start;
 }
 
 .rc-thumb-img {
@@ -5998,23 +6014,9 @@ textarea {
 /* UX-B2-P07 7-3: station pills as top-right corner badge (out of flex flow).
    Desktop: absolute so title / price / quick get full mid-row width.
    Mobile: static again — absolute can cover the title (see media below). */
+/* Station chip moved into .rc-head-meta (boss 2026-07-20); keep class inert */
 .rc-status-chips {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  padding: 0;
-  margin: 0;
-  margin-left: 0;
-  flex: none;
-  position: absolute;
-  top: 10px;
-  /* leave room for in-flow × (~28) + toggle (~16) + gaps */
-  right: 48px;
-  z-index: 1;
-  font-size: 10px;
-  max-width: min(52%, 280px);
-  justify-content: flex-end;
+  display: none;
 }
 
 /* UX-AC T114 + UX-B2-P07 7-2: archive × sits in header flex (not absolute corner) */
@@ -6057,12 +6059,8 @@ textarea {
   cursor: not-allowed;
 }
 
-/* Desktop: reserve a thin top strip so corner station chips don't sit on title row */
-@media (min-width: 961px) {
-  .result-card > .rc-header {
-    padding-top: 28px;
-  }
-}
+/* Station chip is in .rc-head-meta now — no extra top strip for absolute corner */
+
 
 /* UX-AC T116: product library — accent-tint vs generic hdr-btn */
 .hdr-btn-library {
@@ -6364,8 +6362,23 @@ textarea {
   gap: 6px 8px;
   margin-top: 2px;
 }
+.rc-station-chip {
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.rc-detect-chips--tags {
+  margin-top: 0;
+}
+.rc-detect-chips--warns {
+  margin-top: 0;
+}
 .rc-time-ago {
   font-size: 11px;
+}
+/* 桌機：站別角標已併入 head-meta，隱藏 absolute 空殼規則用不到 */
+.result-card > .rc-header {
+  align-items: flex-start;
 }
 .rc-owner-chip {
   font-size: 10px;
@@ -8117,6 +8130,7 @@ body[data-theme="nordic"] {
 .rc-price-mini-profit {
   color: var(--success);
   white-space: nowrap;
+  font-weight: 600; /* 略粗於內文，仍低於售價 700 */
 }
 
 /* ── Header: live rate + deployment status dropdown ── */
@@ -9146,4 +9160,54 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
   .toast {
     animation: none;
   }
+}
+
+/* 手機：新增商品「一般｜二手」維持桌機扁 pill，不吃 44px */
+@media (max-width: 959px) {
+  .workspace-input-panel .sh-mode-pills .pill-btn {
+    min-height: 0;
+    min-width: 0;
+    padding: 5px 11px;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+  .stage-filter-row .stage-filter-end {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+  .stage-filter-row .stage-filter-end .results-scope-label .ir-scope-select,
+  .stage-filter-row .stage-filter-end .results-sort-label {
+    min-height: 32px;
+  }
+  .result-card .rc-thumb {
+    width: 64px;
+    height: 64px;
+  }
+}
+/* 測試／正式生成 chip 放 panel-header「新增商品」旁 */
+.workspace-input-panel .panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.workspace-input-panel .panel-header h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.workspace-input-panel .panel-header .gen-mode-chip-slot {
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto;
+}
+.workspace-input-panel .panel-header .sh-mode-pills {
+  margin-left: auto;
+}
+.gen-actions .gen-mode-row {
+  display: none; /* chip moved next to 新增商品 title */
 }

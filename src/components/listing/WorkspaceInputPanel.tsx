@@ -1942,6 +1942,18 @@ export function WorkspaceInputPanel({
       ) : null}
       <div className="panel-header">
         <h2>✦ 新增商品</h2>
+        <span className="gen-mode-chip-slot" aria-live="polite">
+          <span
+            className={`schip${runMode === "test" ? " schip--warn" : " schip--ok"}`}
+            title={
+              runMode === "test"
+                ? "測試模式：不呼叫 AI，可走完表單流程"
+                : "正式生成：會呼叫 AI 產生文案"
+            }
+          >
+            {runMode === "test" ? "測試模式" : "正式生成"}
+          </span>
+        </span>
         <div className="pill-group sh-mode-pills" role="group" aria-label="一般或二手">
           <button
             aria-pressed={!isSecondhand}

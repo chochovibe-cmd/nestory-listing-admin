@@ -231,6 +231,10 @@ export function ResultCard({
   const router = useRouter();
   const supabase = createClient();
   const [expanded, setExpanded] = useState(defaultExpanded || sequentialMode);
+  // UX-B2-P06: jump highlight only lasts ~3s; expand must stay open after it clears
+  useEffect(() => {
+    if (isJumpTarget) setExpanded(true);
+  }, [isJumpTarget]);
   const [activeTab, setActiveTab] = useState<ResultCardTabId>(
     sequentialMode && sequentialStation === "image" ? "images" : "copy"
   );

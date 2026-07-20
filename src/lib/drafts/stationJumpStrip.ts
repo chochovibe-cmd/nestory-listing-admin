@@ -72,6 +72,8 @@ export type JumpStripItem = {
   group: JumpStripGroupKey;
   shortDate: string;
   sortAt: string;
+  /** UX-B2-P06: draft.created_at for 停留天數 display */
+  createdAt: string | null;
   /** UX-AE T134: show ⚠ on quick-preview chip */
   isInterrupted: boolean;
 };
@@ -114,6 +116,14 @@ export function shortJumpDate(iso: string | null | undefined): string {
   }
 }
 
+/** UX-B2-P06: whole days since createdAt (or fallback iso). */
+export function daysSince(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
+}
+
 export function resolveJumpStripGroup(draft: JumpStripDraft): JumpStripGroupKey | null {
   const stage: PipelineStage = isPipelineStage(draft.pipeline_stage)
     ? draft.pipeline_stage
@@ -150,6 +160,7 @@ export function buildJumpStripGroups(
       group,
       shortDate: shortJumpDate(sortAt),
       sortAt,
+      createdAt: draft.created_at ?? null,
       isInterrupted: isJumpStripInterrupted(draft)
     });
   }

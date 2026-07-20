@@ -4100,15 +4100,19 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
 }
+/* UX-B2-P06: card-style quick-preview chips (was pill 999px) */
 .queue-chip {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  min-height: 36px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border-soft);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 140px;
+  max-width: 220px;
+  min-height: 44px;
+  padding: 8px 22px 8px 10px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
   font-size: 11px;
@@ -4119,21 +4123,46 @@ textarea {
 .queue-chip:hover {
   border-color: var(--accent);
 }
-/* UX-AE T134: interrupted generation badge on quick-preview chip */
-.queue-chip.is-interrupted::before {
+.queue-chip-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0.5;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 14px;
+}
+.queue-chip-close:hover {
+  opacity: 1;
+  color: var(--danger, var(--accent2));
+}
+.queue-chip-close:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+/* UX-AE T134: interrupted badge on title (column card layout) */
+.queue-chip.is-interrupted .queue-chip-title::before {
   content: '⚠';
   font-size: 9px;
   color: var(--warn);
   margin-right: 2px;
-  flex-shrink: 0;
 }
 .queue-chip-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 12em;
+  max-width: 100%;
+  padding-right: 4px;
 }
-.queue-chip-date {
+.queue-chip-date,
+.queue-chip-meta {
   font-size: 10px;
   font-weight: 500;
   flex-shrink: 0;

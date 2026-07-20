@@ -819,6 +819,21 @@ body[data-theme="kitty"] .topbar {
   margin: 4px 0 8px;
 }
 
+/* UX-PKG3: generate mode + submit + cost as one block (desktop bottom / mobile sticky) */
+.gen-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+@media (max-width: 959px) {
+  .gen-actions .btn-gen,
+  .gen-actions .button.primary.btn-gen {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
 /* Single button + dropdown theme picker (toggle + absolute panel pattern). */
 .theme-picker {
   position: relative;
@@ -1516,6 +1531,10 @@ textarea {
 
 /* B9: results panel allows sticky toolbar (overflow:hidden on .panel breaks sticky). */
 .panel.results-panel {
+  overflow: visible;
+}
+/* UX-PKG3: sticky generate footer — same overflow caveat as B9 */
+.panel.workspace-input-panel {
   overflow: visible;
 }
 
@@ -3316,6 +3335,79 @@ textarea {
 }
 .dash-todo-panel .panel-header {
   gap: 10px;
+}
+/* UX-PKG3: 今日待辦權重加大（字級階 14–15 + 略大 padding） */
+.dash-todo-panel--priority .panel-header {
+  padding: 14px 18px;
+}
+.dash-todo-panel--priority .panel-header h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.dash-todo-panel--priority .dash-todo-body {
+  padding: 18px;
+  gap: 14px;
+}
+/* UX-PKG3: 選品情報捷徑卡 */
+.dash-scouting-panel {
+  margin: 0;
+}
+.dash-scouting-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: var(--text);
+  min-height: 48px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.dash-scouting-link:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--accent);
+}
+.dash-scouting-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.dash-scouting-arrow {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.dash-scouting-link:hover .dash-scouting-arrow {
+  color: var(--accent);
+}
+/* UX-PKG3: Collapsible inside panel — no double header/border */
+.dash-panel-collapse.adv-section {
+  border: none;
+  margin: 0;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+.dash-panel-collapse .adv-section-toggle {
+  border-radius: 0;
+  padding: 11px 16px;
+  min-height: 44px;
+  border-bottom: 1px solid transparent;
+}
+.dash-panel-collapse.open .adv-section-toggle {
+  border-bottom-color: var(--border);
+}
+.dash-panel-collapse .adv-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+}
+.dash-panel-collapse .adv-section-body {
+  padding: 0;
 }
 .dash-todo-hint {
   font-size: 11px;
@@ -6475,7 +6567,8 @@ body[data-theme="nordic"] {
     bottom: calc(env(safe-area-inset-bottom));
     z-index: 900;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    /* UX-PKG3: 審核｜工廠｜FAB｜儀表板｜更多 = 5 格 */
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
     padding: 8px;
     background: var(--surface);
@@ -7159,6 +7252,19 @@ body[data-theme="nordic"] {
    All hdr-btn elements live inside <nav class="nav"> (HeaderControls). */
 .nav .hdr-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 11px; transition: all .2s; }
 .nav .hdr-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+/* UX-PKG3: ⚙ settings only on mobile top tools; desktop uses sidebar SETTINGS_NAV */
+.nav .hdr-settings-mobile {
+  display: none;
+  text-decoration: none;
+}
+@media (max-width: 959px) {
+  .nav .hdr-settings-mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+  }
+}
 /* UX-H T40: .btn-mini core rules live with .mini-btn above; header-specific overrides remain below */
 
 /* UX-PKG2: .header-status* nested toggle/panel retired — deploy is flat list in ⋯ 更多.
@@ -7530,6 +7636,25 @@ body[data-theme="kitty"] .fx-ref-primary {
   font-size: 11px;
   line-height: 1.4;
   color: var(--text-muted);
+}
+
+/* UX-PKG3: mobile sticky generate — sit above fixed .mobile-tabbar via --tabbar-h */
+@media (max-width: 959px) {
+  .gen-sticky-footer {
+    position: sticky;
+    bottom: var(--tabbar-h);
+    z-index: 20;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    /* pull to panel-body edges for full-bleed bar */
+    margin-left: -16px;
+    margin-right: -16px;
+    box-shadow: 0 -4px 12px color-mix(in srgb, var(--border) 12%, transparent);
+  }
+  .gen-sticky-footer .gen-mode-row {
+    margin-top: 0;
+  }
 }
 
 /* BX9 lightbox */

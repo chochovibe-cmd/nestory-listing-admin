@@ -267,13 +267,21 @@ check("source: runPublishBatch freezes processTag into snapshot", () => {
   assert.match(src, /product_images/);
 });
 
-check("source: nav R4 mobile tabs 新增/審核/圖審", () => {
+check("source: nav R4/UX-PKG3 mobile tabs 審核/工廠/儀表板", () => {
   const src = read("src/lib/nav.ts");
   assert.match(src, /pane=results/);
   assert.match(src, /shortLabel: \"審核\"/);
-  assert.match(src, /shortLabel: \"圖審\"/);
+  assert.match(src, /shortLabel: \"工廠\"/);
+  assert.doesNotMatch(src, /shortLabel: \"圖審\"/);
   assert.doesNotMatch(src, /QUEUE_NAV/);
   assert.match(src, /MOBILE_MORE_LINKS[\s\S]*\/records/);
+  assert.match(src, /MOBILE_MORE_LINKS[\s\S]*\/scouting/);
+  // UX-PKG3: 儀表板在右側 tab；設定不進更多
+  assert.match(src, /side: \"right\"[\s\S]*\/dashboard|\/dashboard[\s\S]*side: \"right\"/);
+  const moreBlock = src.match(/export const MOBILE_MORE_LINKS[\s\S]*?as const;/);
+  assert.ok(moreBlock, "MOBILE_MORE_LINKS block");
+  assert.doesNotMatch(moreBlock[0], /\/dashboard/);
+  assert.doesNotMatch(moreBlock[0], /\/settings|SETTINGS_NAV/);
 });
 
 check("source: /drafts permanentRedirect", () => {

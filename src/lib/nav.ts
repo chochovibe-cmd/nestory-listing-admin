@@ -5,7 +5,8 @@
  * 2026-07-14 nav demotion (老闆): 商品佇列 ≠ 一級主線.
  * R2 §14：/review 頁名「生圖工廠」.
  * UX-B §2.2：站② 使用者可見名「標圖」；手機 tab 工廠 shortLabel「工廠」（勿用「圖審」）.
- * R4 §14-4：手機 tab 新增／審核／工廠／更多；紀錄收進更多；/drafts 列表下線。
+ * R4 §14-4：紀錄收進更多；/drafts 列表下線.
+ * UX-PKG3：手機 tab 審核｜工廠｜(+新增 FAB)｜儀表板｜更多；設定改頂欄 ⚙，不進更多.
  */
 
 export type NavHref =
@@ -41,7 +42,7 @@ export const SIDEBAR_NAV: readonly NavItem[] = [
 ] as const;
 
 /**
- * C2 Q1-C: settings entry only at sidebar bottom + mobile「更多」— not topbar.
+ * Desktop sidebar bottom only. Mobile uses header ⚙ (UX-PKG3) — not MOBILE_MORE_LINKS.
  */
 export const SETTINGS_NAV: NavItem = {
   href: "/settings",
@@ -51,8 +52,8 @@ export const SETTINGS_NAV: NavItem = {
 };
 
 /**
- * R4 §14-4 + UX-B §2.2 + BX6 mobile tabs.
- * Layout: 審核 | 工廠 | 中央凸起＋新增 | 更多
+ * R4 §14-4 + UX-B §2.2 + BX6 + UX-PKG3 mobile tabs.
+ * Layout: 審核 | 工廠 | 中央凸起＋新增 | 儀表板 | 更多
  * 審核 = workbench results (Q1-A: /drafts/new?pane=results).
  */
 export const MOBILE_PRIMARY_TABS: readonly NavItem[] = [
@@ -73,7 +74,7 @@ export const MOBILE_PRIMARY_TABS: readonly NavItem[] = [
   }
 ] as const;
 
-/** Side tabs only (exclude center FAB 新增) for BX6 layout. */
+/** Side tabs only (exclude center FAB 新增) for BX6 + UX-PKG3 layout. */
 export type MobileSideTab = NavItem & { side: "left" | "right" };
 
 export const MOBILE_SIDE_TABS: readonly MobileSideTab[] = [
@@ -91,17 +92,22 @@ export const MOBILE_SIDE_TABS: readonly MobileSideTab[] = [
     label: "生圖工廠",
     shortLabel: "工廠",
     side: "left"
+  },
+  {
+    href: "/dashboard",
+    icon: "📈",
+    label: "儀表板",
+    shortLabel: "儀表板",
+    side: "right"
   }
 ] as const;
 
 /**
- * 「更多」抽屜：發布紀錄／儀表板／選品／設定（R4：紀錄自主 tab 移入；全部草稿下線）。
+ * 「更多」抽屜：發布紀錄／選品（UX-PKG3：儀表板升右側 tab；設定改頂欄 ⚙）.
  */
 export const MOBILE_MORE_LINKS: readonly NavItem[] = [
   { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" },
-  { href: "/dashboard", icon: "📈", label: "儀表板", shortLabel: "儀表板" },
-  { href: "/scouting", icon: "🔭", label: "選品情報", shortLabel: "選品" },
-  SETTINGS_NAV
+  { href: "/scouting", icon: "🔭", label: "選品情報", shortLabel: "選品" }
 ] as const;
 
 export const NAV_STORAGE_KEY = "nestory_nav";

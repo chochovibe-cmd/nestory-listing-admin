@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
 import { showToast } from "@/components/Toast";
 import { isAdmin } from "@/lib/auth/roles";
 import {
@@ -87,6 +88,9 @@ export function DashboardTodoPanel() {
   const [costTableHint, setCostTableHint] = useState<string | null>(null);
   const [costFetchError, setCostFetchError] = useState<string | null>(null);
   const [costDetailOpen, setCostDetailOpen] = useState(true);
+  /** UX-PKG3: cost / health panels default collapsed */
+  const [costSectionOpen, setCostSectionOpen] = useState(false);
+  const [healthSectionOpen, setHealthSectionOpen] = useState(false);
 
   // E5: team-wide health (Q6-A; not E1 scope)
   const [healthLoading, setHealthLoading] = useState(true);
@@ -434,7 +438,20 @@ export function DashboardTodoPanel() {
           額度與 AI 成本為系統估算，非 Make／信用卡帳單；健康指標亦非 SEO 分數
         </p>
 
-        <section className="panel dash-todo-panel" aria-labelledby="dash-todo-title">
+        {/* UX-PKG3: 選品情報捷徑 — disclaimer 下、待辦上；僅連骨架頁 */}
+        <section className="panel dash-scouting-panel">
+          <Link className="dash-scouting-link" href="/scouting">
+            <span className="dash-scouting-title">🔭 選品情報（即將推出）</span>
+            <span aria-hidden className="dash-scouting-arrow">
+              →
+            </span>
+          </Link>
+        </section>
+
+        <section
+          className="panel dash-todo-panel dash-todo-panel--priority"
+          aria-labelledby="dash-todo-title"
+        >
           <div className="panel-header">
             <h2 id="dash-todo-title">今日待辦</h2>
             <span className="dash-todo-hint">積壓待辦 · 不限今天</span>
@@ -554,9 +571,7 @@ export function DashboardTodoPanel() {
           </div>
         </section>
 
-        {/* E3+E4: BX-P 桌機並排，減少「估算」標語重複（頁頂 disclaimer 已說明） */}
-        <div className="dash-metrics-grid">
-        {/* E3-open: Make 額度 — below E2; team-wide (Q2-A), not scope */}
+        {/* E3-open: Make 額度 — UX-PKG3 常顯展開（不與成本並排） */}
         <section
           className="panel dash-quota-panel"
           aria-labelledby="dash-quota-title"
@@ -643,361 +658,381 @@ export function DashboardTodoPanel() {
           </div>
         </section>
 
-        {/* E4-open: 月預算＋AI 成本 — team-wide intent (Q2-A), not scope */}
+        {/* E4-open: 月預算＋AI 成本 — UX-PKG3 Collapsible 預設收合 */}
         <section
           className="panel dash-quota-panel dash-cost-panel"
-          aria-labelledby="dash-cost-title"
+          aria-label="月預算 · AI 成本"
         >
-          <div className="panel-header">
-            <h2 id="dash-cost-title">月預算 · AI 成本</h2>
-          </div>
-          <div className="panel-body dash-quota-body">
-            {costLoading ? (
-              <div
-                className="skeleton dash-skel-block dash-skel-cost"
-                role="status"
-                aria-label="載入中"
-              />
-            ) : costTableHint ? (
-              <p className="dash-todo-status dash-todo-error" role="alert">
-                {costTableHint}
-              </p>
-            ) : costFetchError && !costView ? (
-              <p className="dash-todo-status dash-todo-error" role="alert">
-                {costFetchError}
-              </p>
-            ) : costView ? (
-              <>
-                {costFetchError ? (
-                  <p className="dash-todo-trunc" role="status">
-                    部分資料讀取失敗：{costFetchError}
-                  </p>
-                ) : null}
-                {costView.truncationNote ? (
-                  <p className="dash-todo-trunc" role="status">
-                    {costView.truncationNote}
-                  </p>
-                ) : null}
-                <div className="dash-quota-card">
-                  <div className="dash-quota-card-top">
-                    <span className="dash-quota-label">本月合計</span>
-                    {costView.warn ? (
-                      <span className="schip schip--warn">接近預算</span>
-                    ) : null}
-                  </div>
-                  <div
-                    className="dash-quota-value"
-                    aria-label={`本月約 ${formatNtd(costView.totalNtd)}，預算 ${formatNtd(costView.budgetNtd)}`}
-                  >
-                    {formatNtd(costView.totalNtd)}
-                    <span className="dash-quota-sep">／</span>
-                    {formatNtd(costView.budgetNtd)}
-                  </div>
-                  <p className="dash-quota-remain">
-                    剩餘{" "}
-                    <strong>{formatNtd(costView.remainingNtd)}</strong>
-                    {" · "}
-                    已用約 {Math.round(costView.usedRatio * 100)}%
-                    {" · "}
-                    <span className="dash-cost-usd">
-                      {formatUsd(costView.totalUsd)} USD
-                    </span>
-                  </p>
-                  <div
-                    className="dash-quota-bar-track"
-                    role="progressbar"
-                    aria-valuenow={costView.barPct}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label="月預算使用比例"
-                  >
-                    <i
-                      className={
-                        costView.warn
-                          ? "dash-quota-bar-fill dash-quota-bar-fill--warn"
-                          : "dash-quota-bar-fill"
-                      }
-                      style={{ width: `${costView.barPct}%` }}
-                    />
-                  </div>
-                  <p className="dash-quota-sub">{costView.subHint}</p>
-                  <p className="dash-quota-detail">
-                    有成本 {costView.withCostCount} 件
-                    {costView.missingCostCount > 0
-                      ? ` · 缺成本 ${costView.missingCostCount} 件（未計 $0）`
-                      : null}
-                  </p>
-                  {costView.emptyText ? (
-                    <p className="dash-todo-status" role="status">
-                      {costView.emptyText}
+          <CollapsibleSection
+            className="dash-panel-collapse"
+            onToggle={() => setCostSectionOpen((v) => !v)}
+            open={costSectionOpen}
+            summary={
+              costLoading
+                ? "載入中…"
+                : costView
+                  ? `${formatNtd(costView.totalNtd)}／${formatNtd(costView.budgetNtd)}`
+                  : undefined
+            }
+            title="月預算 · AI 成本"
+          >
+            <div className="panel-body dash-quota-body">
+              {costLoading ? (
+                <div
+                  className="skeleton dash-skel-block dash-skel-cost"
+                  role="status"
+                  aria-label="載入中"
+                />
+              ) : costTableHint ? (
+                <p className="dash-todo-status dash-todo-error" role="alert">
+                  {costTableHint}
+                </p>
+              ) : costFetchError && !costView ? (
+                <p className="dash-todo-status dash-todo-error" role="alert">
+                  {costFetchError}
+                </p>
+              ) : costView ? (
+                <>
+                  {costFetchError ? (
+                    <p className="dash-todo-trunc" role="status">
+                      部分資料讀取失敗：{costFetchError}
                     </p>
                   ) : null}
-                  {costView.warnText ? (
-                    <p className="dash-quota-warn" role="status">
-                      {costView.warnText}
+                  {costView.truncationNote ? (
+                    <p className="dash-todo-trunc" role="status">
+                      {costView.truncationNote}
                     </p>
                   ) : null}
-
-                  {costView.detailTotal > 0 ? (
-                    <div className="dash-cost-detail">
-                      <button
-                        type="button"
-                        className="dash-cost-detail-toggle"
-                        aria-expanded={costDetailOpen}
-                        onClick={() => setCostDetailOpen((o) => !o)}
-                      >
-                        {costDetailOpen ? "收合" : "展開"}明細 · 本月有成本{" "}
-                        {costView.detailTotal} 件
-                        {costView.detailTotal > COST_DETAIL_UI_LIMIT
-                          ? `（顯示前 ${COST_DETAIL_UI_LIMIT}）`
-                          : null}
-                      </button>
-                      {costDetailOpen ? (
-                        <ul className="dash-cost-list" role="list">
-                          {costView.detailItems.map((item) => (
-                            <li key={item.id}>
-                              <Link
-                                href={item.href}
-                                className="dash-cost-row"
-                              >
-                                <span className="dash-cost-row-title">
-                                  {item.title}
-                                </span>
-                                <span className="dash-cost-row-meta">
-                                  <span className="dash-cost-row-amt">
-                                    {formatUsd(item.costUsd)}
-                                    <span className="dash-cost-row-ntd">
-                                      {" "}
-                                      · 約 {formatNtd(item.costNtd)}
-                                    </span>
-                                  </span>
-                                  {item.model ? (
-                                    <span className="dash-cost-row-model">
-                                      {item.model}
-                                    </span>
-                                  ) : null}
-                                </span>
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
+                  <div className="dash-quota-card">
+                    <div className="dash-quota-card-top">
+                      <span className="dash-quota-label">本月合計</span>
+                      {costView.warn ? (
+                        <span className="schip schip--warn">接近預算</span>
                       ) : null}
                     </div>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <p className="dash-todo-status">—</p>
-            )}
-          </div>
-        </section>
-        </div>{/* /.dash-metrics-grid */}
+                    <div
+                      className="dash-quota-value"
+                      aria-label={`本月約 ${formatNtd(costView.totalNtd)}，預算 ${formatNtd(costView.budgetNtd)}`}
+                    >
+                      {formatNtd(costView.totalNtd)}
+                      <span className="dash-quota-sep">／</span>
+                      {formatNtd(costView.budgetNtd)}
+                    </div>
+                    <p className="dash-quota-remain">
+                      剩餘{" "}
+                      <strong>{formatNtd(costView.remainingNtd)}</strong>
+                      {" · "}
+                      已用約 {Math.round(costView.usedRatio * 100)}%
+                      {" · "}
+                      <span className="dash-cost-usd">
+                        {formatUsd(costView.totalUsd)} USD
+                      </span>
+                    </p>
+                    <div
+                      className="dash-quota-bar-track"
+                      role="progressbar"
+                      aria-valuenow={costView.barPct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="月預算使用比例"
+                    >
+                      <i
+                        className={
+                          costView.warn
+                            ? "dash-quota-bar-fill dash-quota-bar-fill--warn"
+                            : "dash-quota-bar-fill"
+                        }
+                        style={{ width: `${costView.barPct}%` }}
+                      />
+                    </div>
+                    <p className="dash-quota-sub">{costView.subHint}</p>
+                    <p className="dash-quota-detail">
+                      有成本 {costView.withCostCount} 件
+                      {costView.missingCostCount > 0
+                        ? ` · 缺成本 ${costView.missingCostCount} 件（未計 $0）`
+                        : null}
+                    </p>
+                    {costView.emptyText ? (
+                      <p className="dash-todo-status" role="status">
+                        {costView.emptyText}
+                      </p>
+                    ) : null}
+                    {costView.warnText ? (
+                      <p className="dash-quota-warn" role="status">
+                        {costView.warnText}
+                      </p>
+                    ) : null}
 
-        {/* E5-open: 健康指標 — below E4; team-wide (Q6-A) */}
+                    {costView.detailTotal > 0 ? (
+                      <div className="dash-cost-detail">
+                        <button
+                          type="button"
+                          className="dash-cost-detail-toggle"
+                          aria-expanded={costDetailOpen}
+                          onClick={() => setCostDetailOpen((o) => !o)}
+                        >
+                          {costDetailOpen ? "收合" : "展開"}明細 · 本月有成本{" "}
+                          {costView.detailTotal} 件
+                          {costView.detailTotal > COST_DETAIL_UI_LIMIT
+                            ? `（顯示前 ${COST_DETAIL_UI_LIMIT}）`
+                            : null}
+                        </button>
+                        {costDetailOpen ? (
+                          <ul className="dash-cost-list" role="list">
+                            {costView.detailItems.map((item) => (
+                              <li key={item.id}>
+                                <Link
+                                  href={item.href}
+                                  className="dash-cost-row"
+                                >
+                                  <span className="dash-cost-row-title">
+                                    {item.title}
+                                  </span>
+                                  <span className="dash-cost-row-meta">
+                                    <span className="dash-cost-row-amt">
+                                      {formatUsd(item.costUsd)}
+                                      <span className="dash-cost-row-ntd">
+                                        {" "}
+                                        · 約 {formatNtd(item.costNtd)}
+                                      </span>
+                                    </span>
+                                    {item.model ? (
+                                      <span className="dash-cost-row-model">
+                                        {item.model}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <p className="dash-todo-status">—</p>
+              )}
+            </div>
+          </CollapsibleSection>
+        </section>
+
+        {/* E5-open: 健康指標 — UX-PKG3 Collapsible 預設收合 */}
         <section
           className="panel dash-quota-panel dash-health-panel"
-          aria-labelledby="dash-health-title"
+          aria-label="健康指標"
         >
-          <div className="panel-header">
-            <h2 id="dash-health-title">健康指標</h2>
-            <span className="dash-todo-hint">生成熱圖 · 重做率 · Tag 提醒</span>
-          </div>
-          <div className="panel-body dash-quota-body">
-            {healthLoading ? (
-              <div className="dash-skel-health" role="status" aria-label="載入中">
-                <div className="skeleton dash-skel-health-cell" />
-                <div className="skeleton dash-skel-health-cell" />
-                <div className="skeleton dash-skel-health-cell" />
-                <div className="skeleton dash-skel-health-cell" />
-              </div>
-            ) : healthDraftHint && healthHistoryHint ? (
-              <p className="dash-todo-status dash-todo-error" role="alert">
-                {healthDraftHint}
-                <br />
-                {healthHistoryHint}
-              </p>
-            ) : healthView ? (
-              <>
-                {healthDraftHint ? (
-                  <p className="dash-todo-trunc" role="status">
-                    {healthDraftHint}
-                  </p>
-                ) : null}
-                {healthHistoryHint ? (
-                  <p className="dash-todo-trunc" role="status">
-                    {healthHistoryHint}
-                  </p>
-                ) : null}
-                {healthDraftError ? (
-                  <p className="dash-todo-trunc" role="status">
-                    草稿資料讀取失敗：{healthDraftError}
-                  </p>
-                ) : null}
-                {healthHistoryError ? (
-                  <p className="dash-todo-trunc" role="status">
-                    版本紀錄讀取失敗：{healthHistoryError}
-                  </p>
-                ) : null}
-
-                {/* Rates row */}
-                <div className="dash-health-rates" role="list">
-                  <div className="dash-quota-card dash-health-rate-card" role="listitem">
-                    <div className="dash-quota-card-top">
-                      <span className="dash-quota-label">文案重做率</span>
-                      <span className="schip schip--idle">近 30 日</span>
-                    </div>
-                    <div
-                      className="dash-quota-value"
-                      aria-label={
-                        healthView.rework.ratePct === null
-                          ? "文案重做率無資料"
-                          : `文案重做率 ${healthView.rework.ratePct}%`
-                      }
-                    >
-                      {healthView.rework.displayLabel}
-                    </div>
-                    {healthView.rework.ratePct !== null ? (
-                      <p className="dash-quota-remain">
-                        {healthView.rework.numerator}／
-                        {healthView.rework.denominator} 件有版本紀錄
-                        {healthView.rework.denominator > 0 ? (
-                          <>
-                            {" · "}
-                            AI 二次 {healthView.rework.aiSecondaryCount}
-                            {" · "}
-                            僅手動 {healthView.rework.manualOnlyCount}
-                          </>
-                        ) : null}
-                      </p>
-                    ) : null}
-                    <p className="dash-quota-honesty">
-                      {healthView.rework.honestyLabel}
-                    </p>
-                    <p className="dash-quota-sub">{healthView.rework.subHint}</p>
-                    {healthView.rework.emptyText ? (
-                      <p className="dash-todo-status" role="status">
-                        {healthView.rework.emptyText}
-                      </p>
-                    ) : null}
-                    {healthView.rework.truncationNote ? (
-                      <p className="dash-todo-trunc" role="status">
-                        {healthView.rework.truncationNote}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="dash-quota-card dash-health-rate-card" role="listitem">
-                    <div className="dash-quota-card-top">
-                      <span className="dash-quota-label">Tag 提醒率</span>
-                      <span className="schip schip--idle">近 30 日</span>
-                    </div>
-                    <div
-                      className="dash-quota-value"
-                      aria-label={
-                        healthView.tagHealth.ratePct === null
-                          ? "Tag 提醒率無資料"
-                          : `Tag 提醒率 ${healthView.tagHealth.ratePct}%`
-                      }
-                    >
-                      {healthView.tagHealth.displayLabel}
-                    </div>
-                    {healthView.tagHealth.ratePct !== null ? (
-                      <p className="dash-quota-remain">
-                        {healthView.tagHealth.numerator}／
-                        {healthView.tagHealth.denominator} 件有生成時間
-                        {" · "}
-                        需修改 {healthView.tagHealth.needsRevisionCount}
-                        {" · "}
-                        Tag 空 {healthView.tagHealth.emptyTagsCount}
-                      </p>
-                    ) : null}
-                    <p className="dash-quota-honesty">
-                      {healthView.tagHealth.honestyLabel}
-                    </p>
-                    <p className="dash-quota-sub">{healthView.tagHealth.subHint}</p>
-                    {healthView.tagHealth.emptyText ? (
-                      <p className="dash-todo-status" role="status">
-                        {healthView.tagHealth.emptyText}
-                      </p>
-                    ) : null}
-                    {healthView.tagHealth.truncationNote ? (
-                      <p className="dash-todo-trunc" role="status">
-                        {healthView.tagHealth.truncationNote}
-                      </p>
-                    ) : null}
-                  </div>
+          <CollapsibleSection
+            className="dash-panel-collapse"
+            onToggle={() => setHealthSectionOpen((v) => !v)}
+            open={healthSectionOpen}
+            summary={
+              healthLoading
+                ? "載入中…"
+                : healthView
+                  ? `近 8 週 ${healthView.heatmap.totalCount} 件`
+                  : undefined
+            }
+            title="健康指標"
+          >
+            <div className="panel-body dash-quota-body">
+              {healthLoading ? (
+                <div className="dash-skel-health" role="status" aria-label="載入中">
+                  <div className="skeleton dash-skel-health-cell" />
+                  <div className="skeleton dash-skel-health-cell" />
+                  <div className="skeleton dash-skel-health-cell" />
+                  <div className="skeleton dash-skel-health-cell" />
                 </div>
-
-                {/* Heatmap */}
-                <div className="dash-quota-card dash-heat-card">
-                  <div className="dash-quota-card-top">
-                    <span className="dash-quota-label">生成日曆</span>
-                    <span className="schip schip--idle">近 8 週</span>
-                  </div>
-                  <p className="dash-quota-honesty">
-                    {healthView.heatmap.honestyLabel}
-                  </p>
-                  <p className="dash-quota-sub">{healthView.heatmap.subHint}</p>
+              ) : healthDraftHint && healthHistoryHint ? (
+                <p className="dash-todo-status dash-todo-error" role="alert">
+                  {healthDraftHint}
+                  <br />
+                  {healthHistoryHint}
+                </p>
+              ) : healthView ? (
+                <>
                   {healthDraftHint ? (
-                    <p className="dash-todo-status" role="status">
-                      —
+                    <p className="dash-todo-trunc" role="status">
+                      {healthDraftHint}
                     </p>
-                  ) : (
-                    <>
+                  ) : null}
+                  {healthHistoryHint ? (
+                    <p className="dash-todo-trunc" role="status">
+                      {healthHistoryHint}
+                    </p>
+                  ) : null}
+                  {healthDraftError ? (
+                    <p className="dash-todo-trunc" role="status">
+                      草稿資料讀取失敗：{healthDraftError}
+                    </p>
+                  ) : null}
+                  {healthHistoryError ? (
+                    <p className="dash-todo-trunc" role="status">
+                      版本紀錄讀取失敗：{healthHistoryError}
+                    </p>
+                  ) : null}
+
+                  {/* Rates row */}
+                  <div className="dash-health-rates" role="list">
+                    <div className="dash-quota-card dash-health-rate-card" role="listitem">
+                      <div className="dash-quota-card-top">
+                        <span className="dash-quota-label">文案重做率</span>
+                        <span className="schip schip--idle">近 30 日</span>
+                      </div>
                       <div
-                        className="dash-heat-grid"
-                        role="img"
-                        aria-label={`近 8 週生成熱圖，合計 ${healthView.heatmap.totalCount} 件`}
+                        className="dash-quota-value"
+                        aria-label={
+                          healthView.rework.ratePct === null
+                            ? "文案重做率無資料"
+                            : `文案重做率 ${healthView.rework.ratePct}%`
+                        }
                       >
-                        <div className="dash-heat-ydays" aria-hidden="true">
-                          <span>一</span>
-                          <span>三</span>
-                          <span>五</span>
-                          <span>日</span>
-                        </div>
-                        <div className="dash-heat-cells">
-                          {healthView.heatmap.cells.map((cell) => (
-                            <i
-                              key={cell.dayKey}
-                              className={`dash-heat-cell dash-heat-cell--l${cell.level}${
-                                cell.isFuture ? " dash-heat-cell--future" : ""
-                              }`}
-                              title={cell.title}
-                              aria-label={cell.title}
-                            />
-                          ))}
-                        </div>
+                        {healthView.rework.displayLabel}
                       </div>
-                      <div className="dash-heat-legend" aria-hidden="true">
-                        <span>少</span>
-                        <i className="dash-heat-cell dash-heat-cell--l0" />
-                        <i className="dash-heat-cell dash-heat-cell--l1" />
-                        <i className="dash-heat-cell dash-heat-cell--l2" />
-                        <i className="dash-heat-cell dash-heat-cell--l3" />
-                        <span>多</span>
-                      </div>
-                      <p className="dash-quota-detail">
-                        合計 {healthView.heatmap.totalCount} 件 · 有生成{" "}
-                        {healthView.heatmap.daysWithActivity} 天
+                      {healthView.rework.ratePct !== null ? (
+                        <p className="dash-quota-remain">
+                          {healthView.rework.numerator}／
+                          {healthView.rework.denominator} 件有版本紀錄
+                          {healthView.rework.denominator > 0 ? (
+                            <>
+                              {" · "}
+                              AI 二次 {healthView.rework.aiSecondaryCount}
+                              {" · "}
+                              僅手動 {healthView.rework.manualOnlyCount}
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      <p className="dash-quota-honesty">
+                        {healthView.rework.honestyLabel}
                       </p>
-                      {healthView.heatmap.emptyText ? (
+                      <p className="dash-quota-sub">{healthView.rework.subHint}</p>
+                      {healthView.rework.emptyText ? (
                         <p className="dash-todo-status" role="status">
-                          {healthView.heatmap.emptyText}
+                          {healthView.rework.emptyText}
                         </p>
                       ) : null}
-                      {healthView.heatmap.truncationNote ? (
+                      {healthView.rework.truncationNote ? (
                         <p className="dash-todo-trunc" role="status">
-                          {healthView.heatmap.truncationNote}
+                          {healthView.rework.truncationNote}
                         </p>
                       ) : null}
-                    </>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="dash-todo-status">—</p>
-            )}
-          </div>
+                    </div>
+
+                    <div className="dash-quota-card dash-health-rate-card" role="listitem">
+                      <div className="dash-quota-card-top">
+                        <span className="dash-quota-label">Tag 提醒率</span>
+                        <span className="schip schip--idle">近 30 日</span>
+                      </div>
+                      <div
+                        className="dash-quota-value"
+                        aria-label={
+                          healthView.tagHealth.ratePct === null
+                            ? "Tag 提醒率無資料"
+                            : `Tag 提醒率 ${healthView.tagHealth.ratePct}%`
+                        }
+                      >
+                        {healthView.tagHealth.displayLabel}
+                      </div>
+                      {healthView.tagHealth.ratePct !== null ? (
+                        <p className="dash-quota-remain">
+                          {healthView.tagHealth.numerator}／
+                          {healthView.tagHealth.denominator} 件有生成時間
+                          {" · "}
+                          需修改 {healthView.tagHealth.needsRevisionCount}
+                          {" · "}
+                          Tag 空 {healthView.tagHealth.emptyTagsCount}
+                        </p>
+                      ) : null}
+                      <p className="dash-quota-honesty">
+                        {healthView.tagHealth.honestyLabel}
+                      </p>
+                      <p className="dash-quota-sub">{healthView.tagHealth.subHint}</p>
+                      {healthView.tagHealth.emptyText ? (
+                        <p className="dash-todo-status" role="status">
+                          {healthView.tagHealth.emptyText}
+                        </p>
+                      ) : null}
+                      {healthView.tagHealth.truncationNote ? (
+                        <p className="dash-todo-trunc" role="status">
+                          {healthView.tagHealth.truncationNote}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* Heatmap */}
+                  <div className="dash-quota-card dash-heat-card">
+                    <div className="dash-quota-card-top">
+                      <span className="dash-quota-label">生成日曆</span>
+                      <span className="schip schip--idle">近 8 週</span>
+                    </div>
+                    <p className="dash-quota-honesty">
+                      {healthView.heatmap.honestyLabel}
+                    </p>
+                    <p className="dash-quota-sub">{healthView.heatmap.subHint}</p>
+                    {healthDraftHint ? (
+                      <p className="dash-todo-status" role="status">
+                        —
+                      </p>
+                    ) : (
+                      <>
+                        <div
+                          className="dash-heat-grid"
+                          role="img"
+                          aria-label={`近 8 週生成熱圖，合計 ${healthView.heatmap.totalCount} 件`}
+                        >
+                          <div className="dash-heat-ydays" aria-hidden="true">
+                            <span>一</span>
+                            <span>三</span>
+                            <span>五</span>
+                            <span>日</span>
+                          </div>
+                          <div className="dash-heat-cells">
+                            {healthView.heatmap.cells.map((cell) => (
+                              <i
+                                key={cell.dayKey}
+                                className={`dash-heat-cell dash-heat-cell--l${cell.level}${
+                                  cell.isFuture ? " dash-heat-cell--future" : ""
+                                }`}
+                                title={cell.title}
+                                aria-label={cell.title}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="dash-heat-legend" aria-hidden="true">
+                          <span>少</span>
+                          <i className="dash-heat-cell dash-heat-cell--l0" />
+                          <i className="dash-heat-cell dash-heat-cell--l1" />
+                          <i className="dash-heat-cell dash-heat-cell--l2" />
+                          <i className="dash-heat-cell dash-heat-cell--l3" />
+                          <span>多</span>
+                        </div>
+                        <p className="dash-quota-detail">
+                          合計 {healthView.heatmap.totalCount} 件 · 有生成{" "}
+                          {healthView.heatmap.daysWithActivity} 天
+                        </p>
+                        {healthView.heatmap.emptyText ? (
+                          <p className="dash-todo-status" role="status">
+                            {healthView.heatmap.emptyText}
+                          </p>
+                        ) : null}
+                        {healthView.heatmap.truncationNote ? (
+                          <p className="dash-todo-trunc" role="status">
+                            {healthView.heatmap.truncationNote}
+                          </p>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="dash-todo-status">—</p>
+              )}
+            </div>
+          </CollapsibleSection>
         </section>
 
         <p className="dash-later-note">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthNav } from "@/components/AuthNav";
@@ -13,6 +14,7 @@ import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
  * C1 Q1-A: page links moved to AppSidebar / MobileTabbar.
  * UX-G T34: high-freq tools stay flat; Provider / Mode / Deploy live in ⋯ 更多.
  * C4: signed-in users also get 🔍 商品庫 modal (Q6-A: same control in mobile ☰ tools).
+ * UX-PKG3: mobile topbar ⚙ → /settings (desktop keeps sidebar SETTINGS_NAV only).
  */
 export function HeaderControls() {
   const pathname = usePathname();
@@ -65,6 +67,15 @@ export function HeaderControls() {
             >
               🔍 商品庫
             </button>
+            {/* UX-PKG3: mobile-only settings entry; desktop sidebar already has 設定 */}
+            <Link
+              aria-label="設定"
+              className="hdr-btn hdr-settings-mobile"
+              href="/settings"
+              onClick={() => setOpen(false)}
+            >
+              ⚙
+            </Link>
             <ExchangeRateWidget />
             <HeaderToolsMore />
           </>

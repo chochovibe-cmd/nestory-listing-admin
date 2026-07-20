@@ -340,10 +340,20 @@ await check("Dashboard wires E5 below E4", () => {
   // later note is E6 only
   assert.ok(ui.includes("E6"));
   assert.ok(!ui.includes("熱圖／AI 顧問 → 後續版本（E5–E6）"));
-  // E4 section still present and health after cost (use panel markers, not comments)
-  const costIdx = ui.indexOf('id="dash-cost-title"');
-  const healthIdx = ui.indexOf('id="dash-health-title"');
+  // E4 section still present and health after cost
+  // UX-PKG3: collapsible panels use class markers (no panel-header h2 ids)
+  const costIdx = Math.max(
+    ui.indexOf('id="dash-cost-title"'),
+    ui.indexOf("dash-cost-panel"),
+    ui.indexOf("月預算 · AI 成本")
+  );
+  const healthIdx = Math.max(
+    ui.indexOf('id="dash-health-title"'),
+    ui.indexOf("dash-health-panel"),
+    ui.indexOf("健康指標")
+  );
   assert.ok(costIdx >= 0 && healthIdx > costIdx, "health panel must be after cost panel");
+  assert.ok(ui.includes("healthSectionOpen"));
 });
 
 await check("CSS heat + rates use tokens", () => {

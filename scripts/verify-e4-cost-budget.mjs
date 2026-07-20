@@ -272,7 +272,12 @@ await check("Dashboard wires E4 below E3", () => {
   const ui = read("src/components/dashboard/DashboardTodoPanel.tsx");
   assert.ok(ui.includes("computeCostBudgetView"));
   assert.ok(ui.includes("dash-cost-panel") || ui.includes("月預算 · AI 成本"));
-  assert.ok(ui.includes("估算 · 非信用卡帳單"));
+  // UX-G T48 / UX-PKG3: honesty lives in page disclaimer (not per-panel chip)
+  assert.ok(
+    ui.includes("估算 · 非信用卡帳單") ||
+      ui.includes("非 Make／信用卡帳單") ||
+      ui.includes("非信用卡")
+  );
   assert.ok(ui.includes("copy_generated_at"));
   assert.ok(ui.includes("COST_DRAFT_SELECT_COLUMNS"));
   assert.ok(ui.includes("E4 Q1-A") || ui.includes("E4-open"));
@@ -284,6 +289,9 @@ await check("Dashboard wires E4 below E3", () => {
   // E3 still present above
   assert.ok(ui.includes("dash-quota-panel"));
   assert.ok(ui.includes("computeMakeQuotaView"));
+  // UX-PKG3: cost panel collapsible default closed
+  assert.ok(ui.includes("CollapsibleSection"));
+  assert.ok(ui.includes("costSectionOpen"));
 });
 
 await check("CSS cost list reuses tokens", () => {

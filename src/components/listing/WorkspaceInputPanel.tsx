@@ -1921,7 +1921,7 @@ export function WorkspaceInputPanel({
   }, [title]);
 
   return (
-    <div className="panel">
+    <div className="panel workspace-input-panel">
       {pageDropActive ? (
         <div className="page-drop-mask" aria-hidden="true">
           <div className="page-drop-mask-inner">放到這裡上傳商品圖（預設進主圖）</div>
@@ -2641,59 +2641,71 @@ export function WorkspaceInputPanel({
               />
             </div>
           </CollapsibleSection>
-
-          {/* UX-R T71: mode chip above CTA — visible before press; updates live via RUN_MODE_CHANGE_EVENT */}
-          <div className="gen-mode-row" aria-live="polite">
-            <span
-              className={`schip${runMode === "test" ? " schip--warn" : " schip--ok"}`}
-              title={
-                runMode === "test"
-                  ? "測試模式：不呼叫 AI，可零成本跑流程"
-                  : "正式生成：會呼叫 AI 產生文案"
-              }
-            >
-              {runMode === "test" ? "測試模式" : "正式生成"}
-            </span>
-          </div>
-          <button
-            className="button primary btn-add btn-gen"
-            disabled={submitting || imagesUploading}
-            type="submit"
-            title="✦ 生成（規則引擎 → Vision → 文案串流 → 定價）"
-          >
-            {submitting ? (
-              <>
-                <span aria-hidden className="spinner" />
-                {submitPhase === "saving"
-                  ? "儲存草稿中…"
-                  : submitPhase === "uploading"
-                    ? "等待圖片上傳…"
-                    : submitPhase === "analyzing"
-                      ? "辨識圖片中…"
-                      : submitPhase === "generating"
-                        ? "生成文案中…"
-                        : "處理中…"}
-              </>
-            ) : imagesUploading ? (
-              <>
-                <span aria-hidden className="spinner" />
-                圖片上傳中，請稍候…
-              </>
-            ) : (
-              <>
-                <span className="btn-gen-full">
-                  ✦ 生成（規則引擎 → Vision → 文案串流 → 定價）
-                </span>
-                <span className="btn-gen-short">✦ 生成</span>
-              </>
-            )}
-          </button>
-          {/* BX7: soft estimate — not an invoice */}
-          <p className="gen-cost-hint" title={costHint.title}>
-            {costHint.label}
-          </p>
             </div>
           </div>
+
+          {/* UX-PKG3: gen 三件套抽離 step 4 — 桌機表單底、手機 sticky；單一 submit 控制點 */}
+          {(() => {
+            const genActions = (
+              <div className="gen-actions">
+                {/* UX-R T71: mode chip above CTA — visible before press; updates live via RUN_MODE_CHANGE_EVENT */}
+                <div className="gen-mode-row" aria-live="polite">
+                  <span
+                    className={`schip${runMode === "test" ? " schip--warn" : " schip--ok"}`}
+                    title={
+                      runMode === "test"
+                        ? "測試模式：不呼叫 AI，可零成本跑流程"
+                        : "正式生成：會呼叫 AI 產生文案"
+                    }
+                  >
+                    {runMode === "test" ? "測試模式" : "正式生成"}
+                  </span>
+                </div>
+                <button
+                  className="button primary btn-add btn-gen"
+                  disabled={submitting || imagesUploading}
+                  type="submit"
+                  title="✦ 生成（規則引擎 → Vision → 文案串流 → 定價）"
+                >
+                  {submitting ? (
+                    <>
+                      <span aria-hidden className="spinner" />
+                      {submitPhase === "saving"
+                        ? "儲存草稿中…"
+                        : submitPhase === "uploading"
+                          ? "等待圖片上傳…"
+                          : submitPhase === "analyzing"
+                            ? "辨識圖片中…"
+                            : submitPhase === "generating"
+                              ? "生成文案中…"
+                              : "處理中…"}
+                    </>
+                  ) : imagesUploading ? (
+                    <>
+                      <span aria-hidden className="spinner" />
+                      圖片上傳中，請稍候…
+                    </>
+                  ) : (
+                    <>
+                      <span className="btn-gen-full">
+                        ✦ 生成（規則引擎 → Vision → 文案串流 → 定價）
+                      </span>
+                      <span className="btn-gen-short">✦ 生成</span>
+                    </>
+                  )}
+                </button>
+                {/* BX7: soft estimate — not an invoice */}
+                <p className="gen-cost-hint" title={costHint.title}>
+                  {costHint.label}
+                </p>
+              </div>
+            );
+            return !isNarrow ? (
+              genActions
+            ) : (
+              <div className="gen-sticky-footer">{genActions}</div>
+            );
+          })()}
         </form>
 
         <button className="settings-toggle" onClick={() => setSettingsOpen((current) => !current)} type="button">

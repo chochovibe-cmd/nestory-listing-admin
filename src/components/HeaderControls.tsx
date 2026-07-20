@@ -59,6 +59,11 @@ export function HeaderControls() {
       <nav className={`nav${open ? " open" : ""}`}>
         {signedIn ? (
           <>
+            {/* 桌機順序：匯率 → 主題 → 商品庫 → 更多 → 登出（手機 order 另見 CSS） */}
+            <div className="hdr-fx">
+              <ExchangeRateWidget />
+            </div>
+            <ThemeSwitcher />
             <button
               className="hdr-btn hdr-btn-library"
               onClick={() => {
@@ -69,11 +74,7 @@ export function HeaderControls() {
             >
               📦 商品庫
             </button>
-            <div className="hdr-fx">
-              <ExchangeRateWidget />
-            </div>
             <HeaderToolsMore />
-            <ThemeSwitcher />
             {/* Desktop keeps 登出 here; mobile moves it into ⋯更多 sheet */}
             <span className="hdr-auth-desktop">
               <AuthNav />

@@ -1850,12 +1850,11 @@ export function ResultCard({
               </span>
             );
           })()}
-          {/* Row2: IP／角色／類型／語氣 */}
+          {/* Row2: IP／角色／類型／語氣（不含鎖定） */}
           {draft.ip_name ||
           draft.character_name ||
           detectTypeLabel ||
-          generationToneLabel ||
-          copyLocked ? (
+          generationToneLabel ? (
             <span className="rc-detect-chips rc-detect-chips--tags">
               {draft.ip_name ? (
                 <span className="rc-detect-chip rc-detect-chip--ip">{draft.ip_name}</span>
@@ -1881,16 +1880,19 @@ export function ResultCard({
                   🎙 {generationToneLabel}
                 </span>
               ) : null}
-              {copyLocked ? (
-                <span className="rc-detect-chip" title="文案已鎖定">
-                  🔒 已鎖定
-                </span>
-              ) : null}
             </span>
           ) : null}
-          {/* Row3: 警告／待確認／搜尋 */}
-          {blockWarnCount > 0 || confirmWarnCount > 0 || suggestWarnCount > 0 ? (
+          {/* Row3: 文案已鎖定／警告／待確認／搜尋 */}
+          {copyLocked ||
+          blockWarnCount > 0 ||
+          confirmWarnCount > 0 ||
+          suggestWarnCount > 0 ? (
             <span className="rc-detect-chips rc-detect-chips--warns">
+              {copyLocked ? (
+                <span className="rc-detect-chip" title="文案已鎖定">
+                  🔒 文案已鎖定
+                </span>
+              ) : null}
               {blockWarnCount > 0 ? (
                 <span
                   className="rc-detect-warn is-block"

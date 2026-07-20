@@ -25,7 +25,7 @@ function tabIndex(pane: WorkbenchPane, inputSub: InputSubTab): number {
  * - Desktop: left stack A 輸入 + B 快速預覽；right C 結果
  * - Mobile 新增 (?pane absent): sub-tabs 輸入｜快速預覽
  * - Mobile 審核 (?pane=results): results only — no 輸入｜結果 sub-tabs
- * Generation / jump → pane=results (審核).
+ * Generation → 快速預覽；jump draft → pane=results (審核).
  */
 export function WorkbenchMobileShell({
   input,
@@ -51,9 +51,11 @@ export function WorkbenchMobileShell({
   const animTimerRef = useRef<number | null>(null);
 
   const setPaneAndUrl = useCallback(
-    (next: WorkbenchPane, replace = true) => {
+    (next: WorkbenchPane, replace = true, inputSubNext?: InputSubTab) => {
       setPane(next);
-      if (next === "input") setInputSub("form");
+      if (next === "input") {
+        setInputSub(inputSubNext ?? "form");
+      }
       if (pathname !== "/drafts/new") return;
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       if (next === "results") {
@@ -107,8 +109,8 @@ export function WorkbenchMobileShell({
         return;
       }
       setGenActive(true);
-      // Q8-A: jump to results as soon as gen starts (D1-A)
-      setPaneAndUrl("results");
+      // 文案生成開始 → 手機跳「快速預覽」（不再直接跳審核結果）
+      setPaneAndUrl("input", true, "preview");
     }
     window.addEventListener(GENERATION_PROGRESS_EVENT, onProgress);
     return () => window.removeEventListener(GENERATION_PROGRESS_EVENT, onProgress);
@@ -156,17 +158,17 @@ export function WorkbenchMobileShell({
         </div>
       ) : null}
 
-      {pane === "results" ? (
+      {pane === "input" && inputSub === "preview" ? (
         <div className="wb-continue-bar">
           <Link
             className="button primary wb-continue-btn"
             href="/drafts/new"
             onClick={(e) => {
               e.preventDefault();
-              setPaneAndUrl("input");
+              setPaneAndUrl("input", true, "form");
             }}
           >
-            ＋ 繼續新增
+            ✦ 繼續新增
           </Link>
         </div>
       ) : null}

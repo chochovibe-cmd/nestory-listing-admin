@@ -1258,6 +1258,27 @@ export function DraftResultsPanel({
     <section className="panel results-panel">
       <div className="panel-header rc-panel-header">
         <h2>◈ 生成結果（三站工作佇列）</h2>
+        {/* UX-B2-P02 2-1: 逐件審核／標圖搬到 header 右側（僅站①／②） */}
+        {isCopyStation || isImageStation ? (
+          <Button
+            size="sm"
+            className="rc-header-seq-btn"
+            disabled={busy || visibleDrafts.length === 0}
+            onClick={openSequentialReview}
+            title={
+              isImageStation
+                ? selectedIds.size > 0
+                  ? "逐件標圖已勾選商品（通過後自動下一張）"
+                  : "逐件標圖目前列表全部（通過後自動下一張）"
+                : selectedIds.size > 0
+                  ? "逐件審核已勾選文案（核准後自動下一張）"
+                  : "逐件審核目前列表全部（核准後自動下一張）"
+            }
+            type="button"
+          >
+            {isImageStation ? "▶ 逐件標圖" : "▶ 逐件審核"}
+          </Button>
+        ) : null}
       </div>
       <div className="panel-body results-panel-body">
         {progress ? (
@@ -1293,184 +1314,167 @@ export function DraftResultsPanel({
         ) : null}
 
         {showToolbar ? (
-          <>
-            <div className="results-batch-toolbar" role="toolbar" aria-label="批次操作與排序">
-              <label className="check-row results-batch-check">
-                <input
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected;
-                  }}
-                  type="checkbox"
-                />
-                全選
-              </label>
-              <span className="batch-selected-count">
-                {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
-              </span>
-              {/* UX-Q T70 / BX1：站① 逐件審核 · 站② 逐件標圖（不需先勾選） */}
-              {isCopyStation || isImageStation ? (
-                <Button
-                  size="sm"
-                  className="batch-primary-action seq-review-entry"
-                  disabled={busy || visibleDrafts.length === 0}
-                  onClick={openSequentialReview}
-                  title={
-                    isImageStation
-                      ? selectedIds.size > 0
-                        ? "逐件標圖已勾選商品（通過後自動下一張）"
-                        : "逐件標圖目前列表全部（通過後自動下一張）"
-                      : selectedIds.size > 0
-                        ? "逐件審核已勾選文案（核准後自動下一張）"
-                        : "逐件審核目前列表全部（核准後自動下一張）"
-                  }
-                  type="button"
-                >
-                  {isImageStation ? "▶ 逐件標圖" : "▶ 逐件審核"}
-                </Button>
-              ) : null}
-              {/* UX-E T27: hide batch actions until selection; primary + 更多 overflow */}
-              {selectedIds.size > 0 ? (
-                <div className="batch-actions">
-                  {isCopyStation ? (
-                    <>
-                      <Button
-                        variant={batchArm?.action === "approve" ? "danger" : "primary"}
-                        size="sm"
-                        className="batch-primary-action"
-                        disabled={!selectedArray.length}
-                        loading={busy}
-                        onClick={() => void batchApproveOnly()}
-                        title={
-                          batchArm?.action === "approve"
-                            ? batchArm.hint
-                            : "核准文案 → 進入標圖；未標記圖寫入保留原圖"
-                        }
-                        type="button"
-                      >
-                        {busy && busyLabel
-                          ? busyLabel
-                          : batchArm?.action === "approve"
-                            ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
-                            : "✓ 批次核准"}
-                      </Button>
-                      <details className="batch-more">
-                        <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
-                        <div className="batch-more-menu">
-                          <Button
-                            size="sm"
-                            fullWidth
-                            disabled={busy || !selectedArray.length}
-                            onClick={() => void batchArchiveOrUnarchive("archive")}
-                            title="移出工作佇列（軟刪除，可救回）"
-                            type="button"
-                          >
-                            🗄 移出佇列
-                          </Button>
-                        </div>
-                      </details>
-                    </>
-                  ) : null}
-                  {isImageStation ? (
-                    <>
-                      <Button
-                        variant={batchArm?.action === "review" ? "danger" : "primary"}
-                        size="sm"
-                        className="batch-primary-action"
-                        disabled={!selectedArray.length}
-                        loading={busy}
-                        onClick={() => void batchStationReview()}
-                        title={
-                          batchArm?.action === "review"
-                            ? batchArm.hint
-                            : "標圖分流：全保留→待發布；有 AI 標記→生圖工廠"
-                        }
-                        type="button"
-                      >
-                        {busy && busyLabel
-                          ? busyLabel
-                          : batchArm?.action === "review"
-                            ? `⚠ 再點確認 ${selectedArray.length} 筆`
-                            : "✓ 批次標圖通過"}
-                      </Button>
-                      <details className="batch-more">
-                        <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
-                        <div className="batch-more-menu">
-                          <Button
-                            size="sm"
-                            fullWidth
-                            disabled={busy || !selectedArray.length}
-                            onClick={() => void batchSetGenerateDetail(true)}
-                            title="勾選商品：開啟合成詳情圖（預設）"
-                            type="button"
-                          >
-                            開·生成詳情圖
-                          </Button>
-                          <Button
-                            size="sm"
-                            fullWidth
-                            disabled={busy || !selectedArray.length}
-                            onClick={() => void batchSetGenerateDetail(false)}
-                            title="勾選商品：關閉合成詳情圖（不進合成佇列）"
-                            type="button"
-                          >
-                            關·生成詳情圖
-                          </Button>
-                          <Button
-                            size="sm"
-                            fullWidth
-                            disabled={busy || !selectedArray.length}
-                            onClick={() => void batchArchiveOrUnarchive("archive")}
-                            title="移出工作佇列（軟刪除，可救回）"
-                            type="button"
-                          >
-                            🗄 移出佇列
-                          </Button>
-                        </div>
-                      </details>
-                    </>
-                  ) : null}
-                  {isReadyStation ? (
+          <div className="results-batch-toolbar" role="toolbar" aria-label="批次操作">
+            <label className="check-row results-batch-check">
+              <input
+                checked={allSelected}
+                onChange={toggleAll}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected;
+                }}
+                type="checkbox"
+              />
+              全選
+            </label>
+            <span className="batch-selected-count">
+              {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
+            </span>
+            {/* UX-E T27: hide batch actions until selection; primary + 更多 overflow */}
+            {selectedIds.size > 0 ? (
+              <div className="batch-actions">
+                {isCopyStation ? (
+                  <>
                     <Button
-                      variant="primary"
+                      variant={batchArm?.action === "approve" ? "danger" : "primary"}
                       size="sm"
                       className="batch-primary-action"
-                      disabled={busy || station3Busy || !selectedArray.length}
-                      onClick={() => openStation3Modal()}
-                      title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
+                      disabled={!selectedArray.length}
+                      loading={busy}
+                      onClick={() => void batchApproveOnly()}
+                      title={
+                        batchArm?.action === "approve"
+                          ? batchArm.hint
+                          : "核准文案 → 進入標圖；未標記圖寫入保留原圖"
+                      }
                       type="button"
                     >
-                      發布／匯出
+                      {busy && busyLabel
+                        ? busyLabel
+                        : batchArm?.action === "approve"
+                          ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
+                          : "✓ 批次核准"}
                     </Button>
-                  ) : null}
-                </div>
-              ) : null}
-              {/* UX-W T87: sort control — icon + heavier shell vs filter pills */}
-              <label className="results-sort-label">
-                <span aria-hidden="true" className="results-sort-icon">
-                  ⇅
-                </span>
-                <span className="sr-only">排序</span>
-                <select
-                  aria-label="排序"
-                  className="sort-sel"
-                  onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
-                  value={sortMode}
-                >
-                  {RESULT_SORT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </>
+                    <details className="batch-more">
+                      <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
+                      <div className="batch-more-menu">
+                        <Button
+                          size="sm"
+                          fullWidth
+                          disabled={busy || !selectedArray.length}
+                          onClick={() => void batchArchiveOrUnarchive("archive")}
+                          title="移出工作佇列（軟刪除，可救回）"
+                          type="button"
+                        >
+                          🗄 移出佇列
+                        </Button>
+                      </div>
+                    </details>
+                  </>
+                ) : null}
+                {isImageStation ? (
+                  <>
+                    <Button
+                      variant={batchArm?.action === "review" ? "danger" : "primary"}
+                      size="sm"
+                      className="batch-primary-action"
+                      disabled={!selectedArray.length}
+                      loading={busy}
+                      onClick={() => void batchStationReview()}
+                      title={
+                        batchArm?.action === "review"
+                          ? batchArm.hint
+                          : "標圖分流：全保留→待發布；有 AI 標記→生圖工廠"
+                      }
+                      type="button"
+                    >
+                      {busy && busyLabel
+                        ? busyLabel
+                        : batchArm?.action === "review"
+                          ? `⚠ 再點確認 ${selectedArray.length} 筆`
+                          : "✓ 批次標圖通過"}
+                    </Button>
+                    <details className="batch-more">
+                      <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
+                      <div className="batch-more-menu">
+                        <Button
+                          size="sm"
+                          fullWidth
+                          disabled={busy || !selectedArray.length}
+                          onClick={() => void batchSetGenerateDetail(true)}
+                          title="勾選商品：開啟合成詳情圖（預設）"
+                          type="button"
+                        >
+                          開·生成詳情圖
+                        </Button>
+                        <Button
+                          size="sm"
+                          fullWidth
+                          disabled={busy || !selectedArray.length}
+                          onClick={() => void batchSetGenerateDetail(false)}
+                          title="勾選商品：關閉合成詳情圖（不進合成佇列）"
+                          type="button"
+                        >
+                          關·生成詳情圖
+                        </Button>
+                        <Button
+                          size="sm"
+                          fullWidth
+                          disabled={busy || !selectedArray.length}
+                          onClick={() => void batchArchiveOrUnarchive("archive")}
+                          title="移出工作佇列（軟刪除，可救回）"
+                          type="button"
+                        >
+                          🗄 移出佇列
+                        </Button>
+                      </div>
+                    </details>
+                  </>
+                ) : null}
+                {isReadyStation ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="batch-primary-action"
+                    disabled={busy || station3Busy || !selectedArray.length}
+                    onClick={() => openStation3Modal()}
+                    title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
+                    type="button"
+                  >
+                    發布／匯出
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
-        {/* UX-B T6: three stations always-on (even 0); fail pill when fail > 0 */}
-        <StageFilterPills counts={stageCounts} onChange={onStageChange} stage={stage} />
+        {/* UX-B2-P02 2-2: 站別 pills + 排序同行；pills 常駐（不綁 showToolbar） */}
+        <div className="stage-filter-row">
+          <StageFilterPills
+            counts={stageCounts}
+            onChange={onStageChange}
+            stage={stage}
+            factoryPendingCount={factoryBridgeSummary.pendingReview}
+          />
+          <label className="results-sort-label">
+            <span aria-hidden="true" className="results-sort-icon">
+              ⇅
+            </span>
+            <span className="sr-only">排序</span>
+            <select
+              aria-label="排序"
+              className="sort-sel"
+              onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
+              value={sortMode}
+            >
+              {RESULT_SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         {/* UX-F T29: 工廠橋接（N=M=K=0 時元件自隱藏） */}
         <FactoryBridgeStrip summary={factoryBridgeSummary} />

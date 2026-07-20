@@ -1538,9 +1538,23 @@ textarea {
   overflow: visible;
 }
 
+/* UX-B2-P02 2-1: results header title + 逐件 btn; keep PKG1 min-height */
 .rc-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   flex-wrap: wrap;
   row-gap: 8px;
+}
+.rc-header-seq-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+@media (max-width: 960px) {
+  .rc-header-seq-btn.nb-btn {
+    min-height: 44px;
+  }
 }
 
 .rc-header-actions {
@@ -1673,9 +1687,10 @@ textarea {
   flex-shrink: 0;
 }
 
-/* UX-W T87: sort control — visual weight separate from filter pills */
+/* UX-W T87: sort control — visual weight separate from filter pills
+   UX-B2-P02 2-2: lives in .stage-filter-row (not batch toolbar); row handles right-align */
 .results-sort-label {
-  margin-left: auto;
+  margin-left: 0;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1728,6 +1743,25 @@ textarea {
   outline: none;
 }
 
+/* UX-B2-P02 2-2: station pills + sort on one row */
+.stage-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+}
+.stage-filter-row .stage-filter-pills {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.stage-filter-row .results-sort-label {
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
 /* B12: stage filter pills under batch toolbar (reuse .pill-group/.pill-btn tokens). */
 .stage-filter-pills {
   margin: 8px 0 12px;
@@ -1740,6 +1774,40 @@ textarea {
   cursor: pointer;
   font-size: 11px;
   white-space: nowrap;
+}
+
+/* UX-B2-P02 2-3: phone — single-row horizontal scroll for long station names */
+@media (max-width: 640px) {
+  .stage-filter-pills {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .stage-filter-pills::-webkit-scrollbar {
+    display: none;
+  }
+  .stage-filter-pills .pill-btn {
+    flex-shrink: 0;
+  }
+  /* 排序貼右／可換行，不強制 100% 擠掉 pills */
+  .stage-filter-row .results-sort-label {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 100%;
+  }
+}
+
+/* UX-B2-P02 2-4: factory pending badge on 圖片待標示 pill */
+.pill-sub-badge {
+  font-size: 9px;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+  font-weight: 700;
+  vertical-align: middle;
 }
 
 /* UX-F T29: factory bridge strip (under station pills, above cards) */
@@ -6937,13 +7005,18 @@ body[data-theme="nordic"] {
     margin-left: 0;
     width: 100%;
   }
+  /* UX-B2-P02 2-2: sort sits in stage-filter-row; avoid full-width wall */
+  .stage-filter-row .results-sort-label {
+    margin-left: 0;
+    width: auto;
+    flex: 0 0 auto;
+  }
   .results-sort-label {
     margin-left: 0;
-    width: 100%;
   }
-  .sort-sel {
-    width: 100%;
-    flex: 1;
+  .stage-filter-row .sort-sel {
+    width: auto;
+    flex: 0 1 auto;
     min-width: 0;
   }
   /* 16px stops iOS Safari auto-zoom on focus (also for tablet-width phones) */
@@ -7005,8 +7078,21 @@ body[data-theme="nordic"] {
   .results-batch-toolbar { gap: 8px; }
   .batch-primary-action { min-height: 44px; }
   .batch-more > summary.btn-mini { min-height: 44px; }
-  .results-sort-label { margin-left: 0; width: 100%; min-height: 44px; }
-  .sort-sel { width: 100%; flex: 1; min-width: 0; min-height: 44px; }
+  /* UX-B2-P02 2-2: sort in stage-filter-row — touch height, not full-width wall */
+  .stage-filter-row .results-sort-label {
+    margin-left: 0;
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 44px;
+  }
+  .results-sort-label { margin-left: 0; min-height: 44px; }
+  .stage-filter-row .sort-sel {
+    width: auto;
+    flex: 0 1 auto;
+    min-width: 0;
+    min-height: 44px;
+  }
+  .sort-sel { min-height: 44px; }
 
   /* 16px keeps iOS Safari from auto-zooming when a field gains focus. */
   input[type="text"],

@@ -292,8 +292,7 @@ export function WorkspaceInputPanel({
   const [defaultProviderLabel, setDefaultProviderLabel] = useState<ModelLabel>("GPT");
   // UX-R T71: visible test/live mode next to generate (header ModeSwitcher store).
   const [runMode, setRunMode] = useState<RunMode>("llm");
-  // B3: 網址抓取入口（誠實停用）＋截圖辨識＋網址查重
-  const [fetchBoxOpen, setFetchBoxOpen] = useState(false);
+  // B3: 來源雙卡（連結抓取＋截圖辨識）＋網址查重
   const [specShotOpen, setSpecShotOpen] = useState(false);
   const [b3Status, setB3Status] = useState<B3Status>(null);
   const [specShotStatus, setSpecShotStatus] = useState<B3Status>(null);
@@ -301,6 +300,8 @@ export function WorkspaceInputPanel({
   /** B3-fetch-open: URL fetch busy (separate from screenshot recognizing). */
   const [sourceFetching, setSourceFetching] = useState(false);
   const b3Busy = recognizing || sourceFetching;
+  /** UX-PKG4: product screenshot card drag highlight (not dropzone class — paste would skip). */
+  const [isDraggingShot, setIsDraggingShot] = useState(false);
   const [dedupeHits, setDedupeHits] = useState<DedupeHit[]>([]);
   const [dedupeDismissed, setDedupeDismissed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1149,8 +1150,8 @@ export function WorkspaceInputPanel({
       if (!hadFiles) return;
 
       const target = event.target as HTMLElement | null;
-      // Zone / thumb reorder own their drops (T22); do not double-upload.
-      if (target?.closest?.(".dropzone, .upload-section, .pthumb-strip, .pthumb")) {
+      // Zone / thumb reorder own their drops (T22); product source-card owns screenshot OCR.
+      if (target?.closest?.(".dropzone, .upload-section, .pthumb-strip, .pthumb, .source-card--shot")) {
         return;
       }
 
@@ -1404,7 +1405,7 @@ export function WorkspaceInputPanel({
     setSpecShotStatus(null);
     setDedupeHits([]);
     setDedupeDismissed(false);
-    setFetchBoxOpen(false);
+    setIsDraggingShot(false);
     setSpecShotOpen(false);
     // B17: collapse advanced after light reset (tone/length/web kept → AI may stay open if non-default)
     setVariantSectionOpen(false);
@@ -2087,54 +2088,97 @@ export function WorkspaceInputPanel({
             />
             {fieldErrors.title ? <div className="field-msg">請輸入商品標題</div> : null}
 
-            {/* B3: Mockup 標題區 helper — 網址輕量抓取（B3-fetch-open）＋截圖辨識 */}
-            <div className="helper-links">
-              <button
-                className="helper-link"
-                disabled={b3Busy}
-                onClick={() => setFetchBoxOpen((open) => !open)}
-                type="button"
-              >
-                🔗 貼商品網址自動抓取（淘寶／蝦皮／官網）{fetchBoxOpen ? " ▴" : ""}
-              </button>
-              <button
-                className="helper-link"
-                disabled={b3Busy}
-                onClick={() => productShotInputRef.current?.click()}
-                type="button"
-              >
-                📷 上傳截圖自動辨識（可多張，最多 {MAX_SCREENSHOT_IMAGES} 張）
-              </button>
-              <input
-                accept="image/*"
-                multiple
-                onChange={(e) => {
-                  if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "product");
+            {/* UX-PKG4: 來源雙卡 — 連結抓取 ｜ 截圖辨識（勿用 dropzone 等 paste 排除 class） */}
+            <div className="source-input-cards">
+              <div className="source-card source-card--link">
+                <div className="source-card-icon">🔗</div>
+                <div className="source-card-title">貼上商品連結</div>
+                <input
+                  type="url"
+                  placeholder="淘寶／蝦皮／官網連結"
+                  value={taobaoUrl}
+                  onChange={(e) => handleSourceUrlChange(e.target.value)}
+                  onBlur={() => void runUrlDedupe(taobaoUrl)}
+                  onClick={(e) => e.stopPropagation()}
+                  disabled={b3Busy}
+                />
+                <Button
+                  size="sm"
+                  disabled={b3Busy}
+                  onClick={() => void handleFetchClick()}
+                  type="button"
+                >
+                  {sourceFetching ? "抓取中…" : "自動抓取"}
+                </Button>
+              </div>
+              <div
+                className={`source-card source-card--shot${isDraggingShot ? " dragover" : ""}`}
+                onClick={() => {
+                  if (!b3Busy) productShotInputRef.current?.click();
                 }}
-                ref={productShotInputRef}
-                style={{ display: "none" }}
-                type="file"
-              />
-            </div>
-            <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-              可 Ctrl+V 貼上截圖辨識
-            </div>
-            <div className={`fetch-box${fetchBoxOpen ? " open" : ""}`}>
-              <input
-                onBlur={() => void runUrlDedupe(taobaoUrl)}
-                onChange={(e) => handleSourceUrlChange(e.target.value)}
-                placeholder="貼上商品網址..."
-                type="url"
-                value={taobaoUrl}
-              />
-              <Button
-                size="sm"
-                disabled={b3Busy}
-                onClick={() => void handleFetchClick()}
-                type="button"
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (b3Busy) return;
+                  setIsDraggingShot(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingShot(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingShot(false);
+                  if (b3Busy) return;
+                  const files = Array.from(e.dataTransfer.files ?? []).filter((f) =>
+                    f.type.startsWith("image/")
+                  );
+                  if (files.length > 0) void runScreenshotRecognition(files, "product");
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (b3Busy) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    productShotInputRef.current?.click();
+                  }
+                }}
               >
-                {sourceFetching ? "抓取中…" : "自動抓取"}
-              </Button>
+                <div className="source-card-icon">📷</div>
+                <div className="source-card-title">上傳截圖辨識</div>
+                {recognizing ? (
+                  <div className="source-card-loading">
+                    <span className="spinner" aria-hidden="true" />
+                    辨識中…
+                  </div>
+                ) : (
+                  <div className="source-card-hint">
+                    點擊選擇／拖曳／Ctrl+V 貼上
+                    <br />
+                    最多 {MAX_SCREENSHOT_IMAGES} 張
+                  </div>
+                )}
+                <input
+                  accept="image/*"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "product");
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  ref={productShotInputRef}
+                  type="file"
+                  disabled={b3Busy}
+                />
+              </div>
             </div>
             {b3Status ? <div className={`b3-status ${b3Status.kind}`}>{b3Status.text}</div> : null}
             {dedupeHits.length > 0 && !dedupeDismissed ? (

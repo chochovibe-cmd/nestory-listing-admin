@@ -4363,7 +4363,35 @@ textarea {
 }
 /* UX-H T43: Chinese variant section head — no uppercase */
 .variant-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; font-size: 10px; color: var(--text-muted); letter-spacing: .02em; font-weight: 700; }
-.variant-head .vh-btns { display: flex; gap: 5px; flex-wrap: wrap; position: relative; }
+/* UX-PKG4: variant button groups — left setup / right action */
+.vh-steps-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 100%;
+}
+.vh-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: relative;
+  margin-bottom: 8px;
+}
+.vh-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.vh-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+@media (max-width: 959px) {
+  .vh-divider { display: none; }
+}
 .variant-empty { font-size: 11px; color: var(--text-muted); padding: 4px 0; }
 .variant-row { display: grid; grid-template-columns: 1.1fr .9fr .8fr .7fr auto; gap: 6px; margin-top: 6px; align-items: center; }
 .variant-row input { padding: 7px 8px; font-size: 12px; min-height: 34px; }
@@ -6988,30 +7016,61 @@ body[data-theme="nordic"] {
 .stock-edit.open { display: flex; }
 .stock-edit input[type="number"] { max-width: 120px; }
 
-/* B3: 標題區網址／截圖入口（沿用 accent／surface tokens，對齊 Mockup helper-links） */
-.helper-links { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.helper-link {
+/* UX-PKG4: 標題區來源雙卡（連結抓取｜截圖辨識）— 勿用 dropzone/upload-section/drop-grid */
+.source-input-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0;
+}
+.source-card {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-m);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  background: var(--surface);
+  min-width: 0;
+}
+.source-card--link {
+  cursor: default;
+}
+.source-card--link input[type="url"] {
+  width: 100%;
+  text-align: left;
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.source-card--shot:hover,
+.source-card--shot.dragover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+.source-card--shot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.source-card-icon { font-size: 22px; line-height: 1; }
+.source-card-title { font-size: 13px; font-weight: 700; }
+.source-card-hint { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
+.source-card-loading {
+  font-size: 12px;
+  color: var(--accent);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 44px;
-  padding: 8px 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  border-radius: var(--radius-s);
 }
-.helper-link:hover { text-decoration: underline; }
-.helper-link:disabled { opacity: 0.55; cursor: not-allowed; text-decoration: none; }
-.fetch-box { display: none; gap: 8px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
-.fetch-box.open { display: flex; }
-.fetch-box input[type="url"],
-.fetch-box input[type="text"] { flex: 1 1 160px; min-width: 0; }
-.fetch-box .btn-mini { flex-shrink: 0; min-height: 44px; padding: 8px 14px; }
+.source-card-loading .spinner { margin-right: 0; }
+@media (max-width: 640px) {
+  .source-input-cards { grid-template-columns: 1fr; }
+}
 /* 辨識結果：成功摘要用 warn 黃字；錯誤用 danger（對齊未標記警告層級） */
 .b3-status {
   margin-top: 8px;

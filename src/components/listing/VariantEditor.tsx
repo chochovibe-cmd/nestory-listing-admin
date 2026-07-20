@@ -352,9 +352,45 @@ export function VariantEditor({
     <div className="variant-box" ref={rootRef}>
       <div className="variant-head">
         <span>款式規格</span>
-        <span className="vh-btns">
+      </div>
+      {/* UX-PKG4: ①設定維度 → ②填軸值 → ③展開；左設定／右執行 */}
+      <div className="vh-steps-hint">
+        <span>① 新增維度</span>
+        <span>→</span>
+        <span>② 填入軸值</span>
+        <span>→</span>
+        <span>③ 依軸值展開列</span>
+      </div>
+      <div className="vh-btns">
+        <div className="vh-group vh-group--setup">
           <Button
             size="sm"
+            onClick={() => {
+              setDimOpen((o) => !o);
+              setCharOpen(false);
+              setPickIndex(null);
+            }}
+            type="button"
+          >
+            ＋新增維度（最多{MAX_VARIANT_DIMENSIONS}）
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setCharOpen((o) => !o);
+              setDimOpen(false);
+              setPickIndex(null);
+            }}
+            type="button"
+          >
+            依角色建立 ▾
+          </Button>
+        </div>
+        <div className="vh-divider" aria-hidden />
+        <div className="vh-group vh-group--action">
+          <Button
+            size="sm"
+            variant="secondary"
             disabled={!canApplyProductCost}
             onClick={applyCostToAllVariants}
             title={
@@ -370,29 +406,7 @@ export function VariantEditor({
           </Button>
           <Button
             size="sm"
-            onClick={() => {
-              setCharOpen((o) => !o);
-              setDimOpen(false);
-              setPickIndex(null);
-            }}
-            type="button"
-          >
-            依角色建立 ▾
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setDimOpen((o) => !o);
-              setCharOpen(false);
-              setPickIndex(null);
-            }}
-            type="button"
-          >
-            ＋新增維度（最多{MAX_VARIANT_DIMENSIONS}）
-          </Button>
-          <Button
-            size="sm"
-            variant={expandArmed ? "danger" : "secondary"}
+            variant={expandArmed ? "danger" : "primary"}
             className={expandArmed ? "v-arm-confirm" : undefined}
             disabled={!canExpandFromDimensions(dimensions)}
             onClick={expandFromAxisValues}
@@ -409,96 +423,96 @@ export function VariantEditor({
               ? `確定展開？${expandArmCount}筆會丟失`
               : "依軸值展開列"}
           </Button>
-          {charOpen ? (
-            <div className="pop-menu open v-pop-char">
-              <div className="pm-title">勾選這款有出的角色（可多選）</div>
-              <input
-                className="v-char-search"
-                onChange={(e) => setCharQuery(e.target.value)}
-                placeholder="搜尋角色／IP…"
-                value={charQuery}
-              />
-              {charLoading ? (
-                <div className="variant-empty">載入角色字典…</div>
-              ) : filteredChars.length === 0 ? (
-                <div className="variant-empty">沒有符合的角色，可手動加入一列後填寫。</div>
-              ) : (
-                <div className="v-char-list">
-                  {filteredChars.map((c) => (
-                    <label key={c.id}>
-                      <input
-                        checked={Boolean(charSelected[c.name])}
-                        onChange={(e) =>
-                          setCharSelected((cur) => ({
-                            ...cur,
-                            [c.name]: e.target.checked
-                          }))
-                        }
-                        type="checkbox"
-                      />
-                      <span>
-                        {c.name}
-                        {c.ip ? (
-                          <span className="v-char-ip"> · {c.ip}</span>
-                        ) : null}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              <Button
-                size="sm"
-                className="v-pop-full"
-                onClick={applyCharacters}
-                type="button"
-              >
-                建立所選角色列
-              </Button>
-            </div>
-          ) : null}
-          {dimOpen ? (
-            <div className="pop-menu open v-pop-dim">
-              <div className="pm-title">新增規格維度</div>
-              {QUICK_DIMS.map((name) => (
-                <label key={name}>
-                  <input
-                    checked={dimensions.some((d) => d.name === name)}
-                    onChange={(e) => {
-                      if (e.target.checked) addDimension(name);
-                      else {
-                        const idx = dimensions.findIndex((d) => d.name === name);
-                        if (idx >= 0) removeDimension(idx);
+        </div>
+        {charOpen ? (
+          <div className="pop-menu open v-pop-char">
+            <div className="pm-title">勾選這款有出的角色（可多選）</div>
+            <input
+              className="v-char-search"
+              onChange={(e) => setCharQuery(e.target.value)}
+              placeholder="搜尋角色／IP…"
+              value={charQuery}
+            />
+            {charLoading ? (
+              <div className="variant-empty">載入角色字典…</div>
+            ) : filteredChars.length === 0 ? (
+              <div className="variant-empty">沒有符合的角色，可手動加入一列後填寫。</div>
+            ) : (
+              <div className="v-char-list">
+                {filteredChars.map((c) => (
+                  <label key={c.id}>
+                    <input
+                      checked={Boolean(charSelected[c.name])}
+                      onChange={(e) =>
+                        setCharSelected((cur) => ({
+                          ...cur,
+                          [c.name]: e.target.checked
+                        }))
                       }
-                    }}
-                    type="checkbox"
-                  />
-                  {name}（常用）
-                </label>
-              ))}
-              <label className="v-custom-dim">
+                      type="checkbox"
+                    />
+                    <span>
+                      {c.name}
+                      {c.ip ? (
+                        <span className="v-char-ip"> · {c.ip}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <Button
+              size="sm"
+              className="v-pop-full"
+              onClick={applyCharacters}
+              type="button"
+            >
+              建立所選角色列
+            </Button>
+          </div>
+        ) : null}
+        {dimOpen ? (
+          <div className="pop-menu open v-pop-dim">
+            <div className="pm-title">新增規格維度</div>
+            {QUICK_DIMS.map((name) => (
+              <label key={name}>
                 <input
-                  onChange={(e) => setCustomDim(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addDimension(customDim);
+                  checked={dimensions.some((d) => d.name === name)}
+                  onChange={(e) => {
+                    if (e.target.checked) addDimension(name);
+                    else {
+                      const idx = dimensions.findIndex((d) => d.name === name);
+                      if (idx >= 0) removeDimension(idx);
                     }
                   }}
-                  placeholder="自訂維度名稱"
-                  value={customDim}
+                  type="checkbox"
                 />
+                {name}（常用）
               </label>
-              <Button
-                size="sm"
-                className="v-pop-full"
-                onClick={() => addDimension(customDim)}
-                type="button"
-              >
-                加入
-              </Button>
-            </div>
-          ) : null}
-        </span>
+            ))}
+            <label className="v-custom-dim">
+              <input
+                onChange={(e) => setCustomDim(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addDimension(customDim);
+                  }
+                }}
+                placeholder="自訂維度名稱"
+                value={customDim}
+              />
+            </label>
+            <Button
+              size="sm"
+              className="v-pop-full"
+              onClick={() => addDimension(customDim)}
+              type="button"
+            >
+              加入
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {dimensions.length > 0 ? (
@@ -576,7 +590,7 @@ export function VariantEditor({
 
       {!showGrid || rows.length === 0 ? (
         <div className="variant-empty">
-          單一款式可留空；多款式可新增維度、填軸值後按「依軸值展開列」，或依角色建立（只加列不自動交叉）。
+          單一款式可留空；細節見上方步驟與維度列。
         </div>
       ) : (
         <>

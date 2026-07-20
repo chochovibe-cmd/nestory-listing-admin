@@ -2193,6 +2193,12 @@ textarea {
   position: relative;
   display: inline-block;
 }
+/* UX-B2-P10 audit: free top-right for .pthumb-spec-badge (input strip) */
+.pthumb-img-wrap > .thumb-remove {
+  top: 6px;
+  left: 6px;
+  right: auto;
+}
 .pthumb-img {
   width: 96px;
   height: 96px;

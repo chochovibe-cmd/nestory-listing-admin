@@ -1805,7 +1805,15 @@ textarea {
   margin-left: 0;
   flex-shrink: 0;
 }
-/* UX-B2-P14: mine/all scope beside station pills (reuses .ir-scope-select) */
+/* UX-B2: 只看我的 + 最新在上 靠右一組 */
+.stage-filter-row .stage-filter-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
 .stage-filter-row .results-scope-label {
   flex-shrink: 0;
   display: inline-flex;
@@ -8392,14 +8400,26 @@ body[data-theme="kitty"] .nav {
 body[data-theme="kitty"] .brand-dot {
   background: var(--warn);
 }
-/* UX-B2-P01 1-3: kitty white-on-dark only in topbar (deep header).
-   Do NOT force --on-solid on workbench/settings pills (light surfaces). */
-body[data-theme="kitty"] .theme-btn,
-body[data-theme="kitty"] .hdr-btn,
+/* UX-B2-P01 1-3: kitty white-on-dark only on topbar chrome (not dropdown menu options).
+   Menu .theme-btn stays --text on --surface so labels stay readable. */
+body[data-theme="kitty"] .topbar .theme-picker-toggle,
+body[data-theme="kitty"] .topbar .hdr-btn,
 body[data-theme="kitty"] .topbar .pill-group {
   background: color-mix(in srgb, var(--on-solid) 14%, transparent);
   color: var(--on-solid);
   border-color: color-mix(in srgb, var(--on-solid) 76%, transparent);
+}
+body[data-theme="kitty"] .theme-picker-menu .theme-btn,
+body[data-theme="nordic"] .theme-picker-menu .theme-btn {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+body[data-theme="kitty"] .theme-picker-menu .theme-btn.active,
+body[data-theme="nordic"] .theme-picker-menu .theme-btn.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 }
 /* was: body[data-theme="kitty"] .pill-btn { color: var(--on-solid); } — too broad */
 body[data-theme="kitty"] .topbar .pill-btn {

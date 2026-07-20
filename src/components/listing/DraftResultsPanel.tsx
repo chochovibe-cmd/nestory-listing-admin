@@ -1551,53 +1551,56 @@ export function DraftResultsPanel({
           </div>
         ) : null}
 
-        {/* UX-B2-P02 2-2: 站別 pills + 排序同行；pills 常駐（不綁 showToolbar） */}
-        {/* UX-B2-P14: admin scope（只看我的／全部）放 pills 列，重用 ir-scope-select */}
+        {/* UX-B2-P02 2-2: 站別 pills 左；只看我的 + 排序靠右 */}
         <div className="stage-filter-row">
-          {roleReady && admin ? (
-            <label className="results-scope-label">
-              <span className="sr-only">範圍</span>
-              <select
-                aria-label="範圍"
-                className="ir-scope-select"
-                onChange={(event) =>
-                  setScope(event.target.value as ResultsScopeMode)
-                }
-                value={scope}
-              >
-                <option value="mine">只看我的</option>
-                <option value="all">全部成員</option>
-              </select>
-            </label>
-          ) : null}
           <StageFilterPills
             counts={stageCounts}
             onChange={onStageChange}
             stage={stage}
             factoryPendingCount={factoryBridgeSummary.pendingReview}
           />
-          <label className="results-sort-label">
-            <span aria-hidden="true" className="results-sort-icon">
-              ⇅
-            </span>
-            <span className="sr-only">排序</span>
-            <select
-              aria-label="排序"
-              className="sort-sel"
-              onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
-              value={sortMode}
-            >
-              {RESULT_SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="stage-filter-end">
+            {roleReady && admin ? (
+              <label className="results-scope-label">
+                <span className="sr-only">範圍</span>
+                <select
+                  aria-label="範圍"
+                  className="ir-scope-select"
+                  onChange={(event) =>
+                    setScope(event.target.value as ResultsScopeMode)
+                  }
+                  value={scope}
+                >
+                  <option value="mine">只看我的</option>
+                  <option value="all">全部成員</option>
+                </select>
+              </label>
+            ) : null}
+            <label className="results-sort-label">
+              <span aria-hidden="true" className="results-sort-icon">
+                ⇅
+              </span>
+              <span className="sr-only">排序</span>
+              <select
+                aria-label="排序"
+                className="sort-sel"
+                onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
+                value={sortMode}
+              >
+                {RESULT_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
-        {/* UX-F T29: 工廠橋接（N=M=K=0 時元件自隱藏） */}
-        <FactoryBridgeStrip summary={factoryBridgeSummary} />
+        {/* UX-F T29: 生圖工廠橋接 — 僅「圖片待標示」站顯示 */}
+        {stage === "image_review" ? (
+          <FactoryBridgeStrip summary={factoryBridgeSummary} />
+        ) : null}
 
         {message ? (
           <div className="notice results-batch-notice" role="status">

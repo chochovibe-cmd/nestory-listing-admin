@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 
 const THEMES = [
   { value: "dark", icon: "🌙", title: "夜色" },
-  { value: "nordic", icon: "❄️", title: "海鹽" },
+  { value: "nordic", icon: "🐉", title: "龍珠" },
   { value: "kitty", icon: "🐱", title: "奶茶" }
 ] as const;
 

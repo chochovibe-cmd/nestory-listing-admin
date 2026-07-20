@@ -8421,7 +8421,23 @@ body[data-theme="kitty"] .rate-val {
 body[data-theme="kitty"] .fx-ref-primary {
   color: var(--warn);
 }
-/* ── Toast / snackbar system (UX-Z T110: mockup-style solid pill) ───────────
+/* 頂欄藍底：CNY／套用中 勿用 text-muted 灰字（會被吃掉） */
+body[data-theme="kitty"] .topbar .hdr-fx {
+  color: color-mix(in srgb, var(--on-solid) 92%, transparent);
+}
+body[data-theme="kitty"] .topbar .rate-val-secondary {
+  color: color-mix(in srgb, var(--on-solid) 82%, transparent);
+}
+/* 龍珠（nordic）頂欄匯率對比 */
+body[data-theme="nordic"] .topbar .hdr-fx {
+  color: var(--text-dim);
+}
+body[data-theme="nordic"] .topbar .fx-ref-primary {
+  color: var(--accent);
+}
+body[data-theme="nordic"] .topbar .rate-val-secondary {
+  color: var(--text-dim);
+}/* ── Toast / snackbar system (UX-Z T110: mockup-style solid pill) ───────────
    Solid fill + 999px pill. Success/error: --on-solid on status colour.
    Warn: --accent-fg on --warn (dark text in dark theme). Kitty warn yellow
    (#ffd966) is too bright for light text → force --text. */

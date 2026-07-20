@@ -481,14 +481,18 @@ export function PublishRecordsPanel() {
         ) : null}
       </div>
 
-      <div className="rec-filters stage-filter-pills" role="tablist" aria-label="紀錄分頁">
+      <div
+        className="records-status-tabs"
+        role="tablist"
+        aria-label="紀錄分頁"
+      >
         {PUBLISH_RECORDS_TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             role="tab"
             aria-selected={tab === t.key}
-            className={`pill-btn${tab === t.key ? " sel sel--fill" : ""}`}
+            className={`tab-btn${tab === t.key ? " active" : ""}`}
             onClick={() => setTabAndUrl(t.key)}
           >
             {t.label}
@@ -499,7 +503,7 @@ export function PublishRecordsPanel() {
       {tab === "batches" || tab === "failed" ? (
         <div className="rec-kind-filters" aria-label="通路篩選">
           <div
-            className="rec-filters stage-filter-pills rec-kind-pills"
+            className="pill-group rec-kind-pills"
             role="group"
             aria-label="依通路篩選"
           >
@@ -507,7 +511,7 @@ export function PublishRecordsPanel() {
               <button
                 key={k.key}
                 type="button"
-                className={`pill-btn${kindFilter === k.key ? " sel sel--fill" : ""}`}
+                className={`pill-btn${kindFilter === k.key ? " active" : ""}`}
                 aria-pressed={kindFilter === k.key}
                 onClick={() => setKindFilter(k.key)}
               >

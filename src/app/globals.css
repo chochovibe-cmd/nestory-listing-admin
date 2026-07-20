@@ -4139,28 +4139,69 @@ textarea {
   width: 100%;
   max-width: 920px;
 }
-.rec-filters {
+/* UX-B2-P12: 發布紀錄 — 狀態主分頁（底線，非實心 pill） */
+.records-status-tabs {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  gap: 4px 12px;
+  border-bottom: 1px solid var(--border);
   margin: 12px 0 14px;
 }
+.records-status-tabs .tab-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 4px;
+  margin-bottom: -1px; /* 貼齊底線 */
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  min-height: 40px;
+  line-height: 1.2;
+}
+.records-status-tabs .tab-btn:hover {
+  color: var(--text);
+}
+.records-status-tabs .tab-btn.active {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+  font-weight: 700;
+  background: transparent; /* 明確不要實心 accent */
+  box-shadow: none;
+}
+@media (max-width: 959px) {
+  .records-status-tabs .tab-btn {
+    min-height: 44px;
+    padding: 10px 6px;
+  }
+}
+
 .rec-filter-muted {
   font-size: 11px;
   color: var(--text-muted);
   margin-left: 4px;
   margin-bottom: 8px;
 }
-/* UX-N T65: kind filter under tab pills (reuses .pill-btn / .sel) */
+/* UX-B2-P12: 通路次篩選 — 既有 .pill-group + .pill-btn.active */
 .rec-kind-filters {
   margin: 0 0 12px;
 }
 .rec-kind-pills {
+  /* 已是 .pill-group；避免再套 stage-filter 的大間距搶主排 */
   margin: 0 0 4px;
+  flex-wrap: wrap;
 }
 .rec-kind-pills .pill-btn {
-  min-height: 44px;
+  min-height: 36px; /* 桌機可略小於主 tab；手機可在 959 升 44 */
+}
+@media (max-width: 959px) {
+  .rec-kind-pills .pill-btn {
+    min-height: 44px;
+  }
 }
 .rec-process-tag {
   flex-shrink: 0;

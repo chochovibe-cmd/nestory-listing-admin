@@ -1164,7 +1164,8 @@ select {
   padding: 10px 13px;
   width: 100%;
   outline: none;
-  transition: border-color .2s;
+  /* UX-AF T137: focus ring fades with border (not instant) */
+  transition: border-color .2s, box-shadow .2s;
 }
 
 /* UX-AB T101: type-scoped floor (checkboxes/radios/file keep min-height:auto via local overrides) */
@@ -1196,6 +1197,8 @@ select:focus {
 :focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
+  /* UX-AF T150: outline follows common control radius */
+  border-radius: 6px;
 }
 
 /* T84 暫留-B: paired with A above — text fields use border+focus-ring instead of outline. */
@@ -1206,11 +1209,13 @@ select:focus-visible {
 }
 
 /* Reuses --accent2, the same tone already used for .rc-status.error /
-   .button.danger, instead of introducing a separate --danger token. */
+   .button.danger, instead of introducing a separate --danger token.
+   UX-AF T138: soft red glow matches focus-ring strength (error should feel stronger). */
 .field.error input,
 .field.error textarea,
 .field.error select {
   border-color: var(--accent2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent2) 14%, transparent);
 }
 
 /* UX-AC T119: long field errors must wrap inside the form column */
@@ -2337,7 +2342,8 @@ textarea {
   box-shadow: var(--shadow-m);
 }
 
-/* B11: approve summary modal (desktop center / mobile bottom sheet) — tokens only */
+/* B11: approve summary modal (desktop center / mobile bottom sheet) — tokens only
+   UX-AF T148: overlay clickable cursor; box resets so content stays default */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -2347,6 +2353,7 @@ textarea {
   justify-content: center;
   padding: 20px;
   background: color-mix(in srgb, var(--bg) 35%, rgba(0, 0, 0, 0.5));
+  cursor: pointer;
 }
 .modal-overlay.open {
   display: flex;
@@ -2359,6 +2366,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius-l);
   box-shadow: var(--shadow-m);
+  cursor: default;
 }
 
 /* UX-Q T70 / BX1: sequential review — near-fullscreen; reuses modal tokens */
@@ -6193,8 +6201,10 @@ textarea {
   }
 }
 
+/* UX-AF T142: horizontal scrollbar height + rounded thumb */
 ::-webkit-scrollbar {
   width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -6203,6 +6213,7 @@ textarea {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
+  border-radius: 3px;
 }
 
 /* UX-AD T125: Kitty accent button hover brightness */

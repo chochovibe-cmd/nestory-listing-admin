@@ -7126,11 +7126,10 @@ body[data-theme="nordic"] {
   }
 
   /* UX-PKG2: nested header-status mobile layout removed with flatten */
-
   /*
-   * UX-B2-P15-r2 mobile topbar order (signed-in):
-   * row1: 匯率 → 商品庫 → 主題
-   * row2: ⋯更多 (full-width capsule + small popover, not bottom sheet)
+   * UX-B2-P15-r2b mobile topbar (signed-in):
+   * row1: 匯率 → 商品庫 → 主題（扁膠囊，對齊桌機，不強制 44px）
+   * row2: ⋯更多 → bottom sheet（工具在上，設定／登出在下）
    */
   .nav.open .hdr-fx {
     order: 1;
@@ -7140,14 +7139,10 @@ body[data-theme="nordic"] {
   .nav.open .hdr-btn-library {
     order: 2;
     flex: 0 0 auto;
-    min-height: 44px;
   }
   .nav.open .theme-picker {
     order: 3;
     flex: 0 0 auto;
-  }
-  .nav.open .theme-picker-toggle {
-    min-height: 44px;
   }
   .nav.open .hdr-more {
     order: 10;
@@ -7158,62 +7153,115 @@ body[data-theme="nordic"] {
     display: none;
   }
 
-  /* ⋯更多 = small floating popover (desktop-like), not full-width sheet */
-  .hdr-more-toggle {
-    min-height: 44px;
+  /* 頂欄控件：維持桌機扁膠囊，取消 44px 胖化 */
+  .nav.open .hdr-btn,
+  .nav.open .hdr-btn-library,
+  .nav.open .theme-picker-toggle,
+  .nav.open .hdr-more-toggle {
+    min-height: 0;
+    padding: 4px 10px;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+  .nav.open .hdr-more-toggle {
     width: 100%;
     justify-content: center;
   }
-  .hdr-more-menu {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: calc(100% + 8px);
-    bottom: auto;
-    width: auto;
-    max-width: none;
-    min-width: 0;
-    margin-top: 0;
-    z-index: 400;
-    box-shadow: var(--shadow-m);
-  }
-  .hdr-more-account {
+
+  /* ⋯更多：手機改 portal sheet；桌機仍用 .hdr-more-menu absolute */
+  .hdr-more-sheet-body {
     display: flex;
-    padding-bottom: 8px;
-    margin-bottom: 2px;
-    border-bottom: 1px solid var(--border);
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 4px;
   }
-  .hdr-more-action {
-    min-height: 44px;
+  .hdr-more-sheet-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .hdr-more-sheet .hdr-more-row {
+    flex-wrap: wrap;
+  }
+  /* sheet 內帳號列：最下方；桌機仍 display:none */
+  .hdr-more-sheet .hdr-more-account {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    border-bottom: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+  .hdr-more-sheet .hdr-more-action {
+    min-height: 0;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  /* Link 當 action 時別吃全域 a 樣 */
+  .hdr-more-sheet a.hdr-more-action {
+    text-decoration: none;
+    color: var(--text);
   }
 
   /*
-   * 15r2-6: keep AI 模型／生成模式 pills desktop-sized inside more popover.
-   * Do not inherit global mobile .pill-btn { min-height: 44px }.
-   * Specificity beats the later .pill-btn rule in this same media block.
+   * 15r2-6: AI 模型／生成模式 pills 桌機高度（sheet 與 desktop menu 共用 .hdr-more-row）
    */
-  .hdr-more-menu .pill-btn {
+  .hdr-more-menu .pill-btn,
+  .hdr-more-sheet .pill-btn {
     min-height: 0;
     padding: 5px 11px;
     font-size: 11px;
     line-height: 1;
   }
   .hdr-more-menu .btn-mini,
-  .hdr-more-menu .deploy-status-check {
-    min-height: 36px;
+  .hdr-more-menu .deploy-status-check,
+  .hdr-more-sheet .btn-mini,
+  .hdr-more-sheet .deploy-status-check {
+    min-height: 0;
+    padding: 5px 10px;
+    font-size: 11px;
   }
 
-  /* 15r2-3: theme menu fixed to viewport (also used when portaled to body) */
-  .theme-picker-menu,
-  .theme-picker-menu.theme-picker-menu--mobile-fixed {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    top: auto;
-    bottom: calc(var(--tabbar-h) + 8px + env(safe-area-inset-bottom));
-    z-index: 400;
-    max-width: none;
-    min-width: 0;
+  /* 主題底部 sheet 選項列 */
+  .theme-picker-sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 4px;
+  }
+  .theme-sheet-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    justify-content: flex-start;
+  }
+  .theme-sheet-option.active {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    color: var(--accent);
+  }
+  .theme-sheet-option-ic {
+    width: 1.5em;
+    text-align: center;
+  }
+  .theme-sheet-option-check {
+    margin-left: auto;
+    font-size: 12px;
   }
 
   /* UX-AB T83 + BX6 FAB: slightly taller for raised center + */

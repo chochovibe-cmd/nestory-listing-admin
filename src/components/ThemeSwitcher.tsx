@@ -4,16 +4,17 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const THEMES = [
-  { value: "dark", icon: "🌑", title: "夜色" },
-  { value: "nordic", icon: "🐰", title: "奶茶" },
-  { value: "kitty", icon: "🎀", title: "海鹽" }
+  { value: "dark", icon: "🌙", title: "夜色" },
+  { value: "nordic", icon: "❄️", title: "海鹽" },
+  { value: "kitty", icon: "🐱", title: "奶茶" }
 ] as const;
 
 const STORAGE_KEY = "nestory_theme";
 
 /**
- * Theme picker. UX-B2-P15-r2: on ≤959px the menu portals to body + fixed
- * bottom placement so it is not clipped by topbar backdrop-filter / edges.
+ * Theme picker.
+ * UX-B2-P15-r2b: mobile opens bottom sheet (same shell as library / more),
+ * not a clipped fixed list. Desktop keeps compact dropdown.
  */
 export function ThemeSwitcher() {
   const [theme, setTheme] = useState<string>("dark");
@@ -22,6 +23,7 @@ export function ThemeSwitcher() {
   const [mounted, setMounted] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const sheetTitleId = useId();
 
   useEffect(() => {
     setMounted(true);
@@ -45,15 +47,13 @@ export function ThemeSwitcher() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
 
     function onPointerDown(event: MouseEvent | TouchEvent) {
       const root = wrapRef.current;
       const target = event.target;
       if (!(target instanceof Node)) return;
-      // Portal menu lives outside wrap — still treat as inside if it has our id
-      const menuEl = document.getElementById(menuId);
-      if (root?.contains(target) || menuEl?.contains(target)) return;
+      if (root?.contains(target)) return;
       setOpen(false);
     }
 
@@ -69,7 +69,24 @@ export function ThemeSwitcher() {
       document.removeEventListener("touchstart", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, menuId]);
+  }, [open, isMobile]);
+
+  useEffect(() => {
+    if (!open || !isMobile) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, isMobile]);
 
   const current = THEMES.find((item) => item.value === theme) ?? THEMES[0];
 
@@ -78,11 +95,9 @@ export function ThemeSwitcher() {
     setOpen(false);
   }
 
-  const menu = (
+  const desktopMenu = (
     <div
-      className={`theme-picker-menu${open ? " open" : ""}${
-        isMobile && open ? " theme-picker-menu--mobile-fixed" : ""
-      }`}
+      className={`theme-picker-menu${open ? " open" : ""}`}
       id={menuId}
       role="listbox"
       aria-label="主題"
@@ -103,12 +118,64 @@ export function ThemeSwitcher() {
     </div>
   );
 
+  const mobileSheet =
+    mounted && open && isMobile
+      ? createPortal(
+          <div
+            aria-labelledby={sheetTitleId}
+            aria-modal="true"
+            className="modal-overlay open"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setOpen(false);
+            }}
+            role="dialog"
+          >
+            <div className="modal-box mobile-more-sheet theme-picker-sheet">
+              <div className="modal-hdr">
+                <span id={sheetTitleId}>選擇主題</span>
+                <button
+                  aria-label="關閉"
+                  className="modal-close"
+                  onClick={() => setOpen(false)}
+                  type="button"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="modal-body theme-picker-sheet-body">
+                {THEMES.map((item) => (
+                  <button
+                    className={`theme-sheet-option${
+                      theme === item.value ? " active" : ""
+                    }`}
+                    key={item.value}
+                    onClick={() => choose(item.value)}
+                    type="button"
+                  >
+                    <span aria-hidden className="theme-sheet-option-ic">
+                      {item.icon}
+                    </span>
+                    <span>{item.title}</span>
+                    {theme === item.value ? (
+                      <span className="theme-sheet-option-check" aria-hidden>
+                        ✓
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
     <div className="theme-picker" ref={wrapRef}>
       <button
-        aria-controls={menuId}
+        aria-controls={isMobile ? undefined : menuId}
         aria-expanded={open}
-        aria-haspopup="listbox"
+        aria-haspopup={isMobile ? "dialog" : "listbox"}
         className="theme-picker-toggle"
         onClick={() => setOpen((currentOpen) => !currentOpen)}
         title="切換主題"
@@ -116,9 +183,7 @@ export function ThemeSwitcher() {
       >
         {current.icon} {current.title} <span>{open ? "▴" : "▾"}</span>
       </button>
-      {isMobile && open && mounted
-        ? createPortal(menu, document.body)
-        : menu}
+      {isMobile ? mobileSheet : desktopMenu}
     </div>
   );
 }

@@ -5705,9 +5705,9 @@ textarea {
   }
 }
 
-/* UX-AC T114: chips sit with header chrome (compact; not a heavy row)
-   UX-PKG6 6-1: was flex 1 1 auto — stole free space from .rc-headmain and left
-   a wide blank next to station pills. Shrink-wrap only; stick right if room. */
+/* UX-B2-P07 7-3: station pills as top-right corner badge (out of flex flow).
+   Desktop: absolute so title / price / quick get full mid-row width.
+   Mobile: static again — absolute can cover the title (see media below). */
 .rc-status-chips {
   display: inline-flex;
   flex-wrap: wrap;
@@ -5715,21 +5715,31 @@ textarea {
   align-items: center;
   padding: 0;
   margin: 0;
-  margin-left: auto;
-  flex: 0 0 auto;
+  margin-left: 0;
+  flex: none;
+  position: absolute;
+  top: 10px;
+  /* leave room for in-flow × (~28) + toggle (~16) + gaps */
+  right: 48px;
+  z-index: 1;
+  font-size: 10px;
+  max-width: min(52%, 280px);
+  justify-content: flex-end;
 }
 
-/* UX-AC T114: archive → icon-only × on card corner */
+/* UX-AC T114 + UX-B2-P07 7-2: archive × sits in header flex (not absolute corner) */
 .result-card {
   position: relative;
 }
 .rc-dismiss-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  position: static;
+  top: auto;
+  right: auto;
   z-index: 2;
   width: 28px;
   height: 28px;
+  margin-left: 6px;
+  flex-shrink: 0;
   padding: 0;
   border: none;
   background: transparent;
@@ -5742,10 +5752,10 @@ textarea {
   align-items: center;
   justify-content: center;
   transition: background .15s, color .15s, opacity .15s;
-  opacity: 0;
+  opacity: 0.45;
 }
-.result-card:hover .rc-dismiss-btn,
-.rc-dismiss-btn:focus-visible {
+.result-card:hover .rc-dismiss-btn:not(:disabled),
+.rc-dismiss-btn:focus-visible:not(:disabled) {
   opacity: 1;
 }
 .rc-dismiss-btn:hover:not(:disabled) {
@@ -5755,6 +5765,13 @@ textarea {
 .rc-dismiss-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* Desktop: reserve a thin top strip so corner station chips don't sit on title row */
+@media (min-width: 961px) {
+  .result-card > .rc-header {
+    padding-top: 28px;
+  }
 }
 
 /* UX-AC T116: product library — accent-tint vs generic hdr-btn */
@@ -5769,7 +5786,7 @@ textarea {
   border-color: var(--accent);
 }
 
-/* UX-AC T118: mobile card touch + always-visible dismiss */
+/* UX-AC T118 + UX-B2-P07 7-2/7-3: mobile card touch; × in-flow; chips not absolute */
 @media (max-width: 960px) {
   .rc-header {
     padding: 14px;
@@ -5784,15 +5801,21 @@ textarea {
     flex: 0 1 auto;
   }
   .rc-dismiss-btn {
-    opacity: 1;
+    position: static;
+    top: auto;
+    right: auto;
+    opacity: 0.55;
     width: 32px;
     height: 32px;
-    top: 10px;
-    right: 10px;
+    margin-left: 6px;
   }
-  /* room for × so title doesn't collide */
-  .result-card .rc-header {
-    padding-right: 40px;
+  .rc-status-chips {
+    position: static;
+    top: auto;
+    right: auto;
+    margin-left: auto;
+    max-width: 100%;
+    justify-content: flex-end;
   }
 }
 
@@ -5821,7 +5844,7 @@ textarea {
 
 .rc-collapsed-notice.is-warn {
   background: color-mix(in srgb, var(--warn) 12%, var(--surface));
-  color: var(--warn);
+  color: var(--warn-text);
   border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
   font-weight: 600;
 }
@@ -6055,7 +6078,7 @@ textarea {
   display: inline-flex;
   align-items: center;
   font-size: 10px;
-  /* UX-BTN2: slightly stronger weight + accent3 wash (IP/role/tone must scan) */
+  /* UX-BTN2: slightly stronger weight; default wash (type / lock / etc.) */
   font-weight: 700;
   padding: 3px 9px;
   border-radius: 999px;
@@ -6067,10 +6090,31 @@ textarea {
   white-space: nowrap;
 }
 
+/* UX-B2-P07 7-4: IP / character / tone distinct hues (tokens only, 3 themes) */
+.rc-detect-chip--ip {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface2));
+  color: var(--accent);
+}
+.rc-detect-chip--char {
+  background: color-mix(in srgb, var(--accent3) 14%, var(--surface2));
+  color: color-mix(in srgb, var(--accent3) 75%, var(--text));
+}
+.rc-detect-chip--tone {
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+}
+
+/* UX-B2-P07 7-1: warn text on pale fill needs --warn-text for contrast */
 .rc-detect-chip.is-warn {
-  color: var(--warn);
+  color: var(--warn-text);
   background: color-mix(in srgb, var(--warn) 13%, var(--surface));
   font-weight: 700;
+}
+/* 7-4: warn must override --char colors */
+.rc-detect-chip--char.is-warn {
+  color: var(--warn-text);
+  background: color-mix(in srgb, var(--warn) 13%, var(--surface));
 }
 
 /* T31: ⚠ confirm 用 --warn-text（UX-A 對比度）；⛔ block 另見 .is-block */
@@ -7442,7 +7486,7 @@ body[data-theme="nordic"] {
 .price-soft-warn {
   margin-top: 8px;
   font-size: 11px;
-  color: var(--warn);
+  color: var(--warn-text);
   line-height: 1.45;
 }
 .price-opts { display: flex; gap: 14px; margin-top: 9px; flex-wrap: wrap; }

@@ -1,5 +1,6 @@
 /**
- * P1-5 / 回饋 49: card price display helpers (single or min~max range).
+ * P1-5 / 回饋 49: card price display helpers (single or min～max range).
+ * UX-B2-P07 7-6: multi-SKU uses fullwidth ～ and NT$ on both ends.
  */
 
 export function formatPriceRangeLabel(prices: Array<number | null | undefined>): string | null {
@@ -10,7 +11,8 @@ export function formatPriceRangeLabel(prices: Array<number | null | undefined>):
   const min = Math.min(...nums);
   const max = Math.max(...nums);
   if (min === max) return `NT$${min.toLocaleString()}`;
-  return `NT$${min.toLocaleString()}~${max.toLocaleString()}`;
+  // UX-B2-P07 7-6: fullwidth ～ and NT$ on both ends
+  return `NT$${min.toLocaleString()}～NT$${max.toLocaleString()}`;
 }
 
 /** Prefer variant sell prices when multi-SKU; else draft.twd_price. */

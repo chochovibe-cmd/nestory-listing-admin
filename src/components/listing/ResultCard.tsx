@@ -1777,27 +1777,14 @@ export function ResultCard({
     setExpanded((current) => !current);
   }
 
+  // UX-B2-P07 7-6: accept halfwidth ~ (legacy) or fullwidth ～
+  const isPriceRange = Boolean(priceRangeLabel && /~|～/.test(priceRangeLabel));
+
   return (
     <div
       className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}${leaving ? " is-leaving" : ""}${isJumpTarget ? " is-jump-target" : ""}`}
       id={`draft-card-${draft.id}`}
     >
-      {/* UX-AC T114: archive as corner × (not text 移出) */}
-      {!isArchived && !sequentialMode ? (
-        <button
-          aria-label="移出工作佇列"
-          className="rc-dismiss-btn"
-          disabled={archiveBusy || quickBusy || regenerating || regeneratingField != null}
-          onClick={(event) => {
-            event.stopPropagation();
-            void archiveOne();
-          }}
-          title="移出工作佇列（可救回）"
-          type="button"
-        >
-          {archiveBusy ? "…" : "×"}
-        </button>
-      ) : null}
       <div className="rc-header" onClick={() => tryToggleExpand()}>
         {onToggle ? (
           <input
@@ -1806,6 +1793,8 @@ export function ResultCard({
             onClick={(event) => event.stopPropagation()}
             onChange={onToggle}
             type="checkbox"
+            title="勾選以加入批次操作（核准/退回/發布多筆）"
+            aria-label="勾選以加入批次操作"
           />
         ) : null}
         <span className={`rc-status ${className}`}>{icon}</span>
@@ -1827,9 +1816,13 @@ export function ResultCard({
           {/* B4: 收合列即可見 IP／角色／類型 chips＋⚠（不用展開才發現未建檔） */}
           {draft.ip_name || draft.character_name || detectTypeLabel || generationToneLabel || confirmWarnCount > 0 || blockWarnCount > 0 || suggestWarnCount > 0 || copyLocked ? (
             <span className="rc-detect-chips">
-              {draft.ip_name ? <span className="rc-detect-chip">{draft.ip_name}</span> : null}
+              {draft.ip_name ? (
+                <span className="rc-detect-chip rc-detect-chip--ip">{draft.ip_name}</span>
+              ) : null}
               {draft.character_name ? (
-                <span className={`rc-detect-chip${characterChipWarned ? " is-warn" : ""}`}>
+                <span
+                  className={`rc-detect-chip rc-detect-chip--char${characterChipWarned ? " is-warn" : ""}`}
+                >
                   {characterChipWarned ? "⚠ " : ""}
                   {draft.character_name}
                 </span>
@@ -1837,7 +1830,10 @@ export function ResultCard({
               {detectTypeLabel ? <span className="rc-detect-chip">{detectTypeLabel}</span> : null}
               {/* T8: 有 generation_tone 才顯示；null/空不唬「預設」 */}
               {generationToneLabel ? (
-                <span className="rc-detect-chip rc-tone-chip" title={`文案語氣：${generationToneLabel}`}>
+                <span
+                  className="rc-detect-chip rc-detect-chip--tone rc-tone-chip"
+                  title={`文案語氣：${generationToneLabel}`}
+                >
                   🎙 {generationToneLabel}
                 </span>
               ) : null}
@@ -1873,19 +1869,15 @@ export function ResultCard({
               <span className="rc-price-mini-label">售價</span>
               <span className="rc-price-mini-value">{priceRangeLabel}</span>
             </div>
-            {(priceMode === "sale" &&
-              draft.compare_at_price &&
-              !priceRangeLabel.includes("~")) ||
-            (profit != null && !priceRangeLabel.includes("~")) ? (
+            {(priceMode === "sale" && draft.compare_at_price && !isPriceRange) ||
+            (profit != null && !isPriceRange) ? (
               <div className="rc-price-mini-sub">
-                {priceMode === "sale" &&
-                draft.compare_at_price &&
-                !priceRangeLabel.includes("~") ? (
+                {priceMode === "sale" && draft.compare_at_price && !isPriceRange ? (
                   <span className="rc-price-mini-strike">
                     NT${draft.compare_at_price.toLocaleString()}
                   </span>
                 ) : null}
-                {profit != null && !priceRangeLabel.includes("~") ? (
+                {profit != null && !isPriceRange ? (
                   <span className="rc-price-mini-profit">
                     利潤 NT${profit.toLocaleString()}
                     {profitPct != null ? `（約 ${profitPct}%）` : ""}
@@ -2072,6 +2064,22 @@ export function ResultCard({
             </span>
           ) : null}
         </div>
+        {/* UX-B2-P07 7-2: × in header chrome (after chips / before toggle) */}
+        {!isArchived && !sequentialMode ? (
+          <button
+            aria-label="移出工作佇列"
+            className="rc-dismiss-btn"
+            disabled={archiveBusy || quickBusy || regenerating || regeneratingField != null}
+            onClick={(event) => {
+              event.stopPropagation();
+              void archiveOne();
+            }}
+            title="移出工作佇列（可救回）"
+            type="button"
+          >
+            {archiveBusy ? "…" : "×"}
+          </button>
+        ) : null}
         <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
       </div>
 

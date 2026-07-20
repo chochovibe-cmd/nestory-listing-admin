@@ -7182,6 +7182,30 @@ body[data-theme="nordic"] {
   gap: 6px;
 }
 .source-card-loading .spinner { margin-right: 0; }
+/* UX-B2-P03: 截圖卡可貼上聚焦框（非 dropzone／upload-section／drop-grid） */
+.source-shot-paste-input {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-s);
+  padding: 8px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: text;
+  min-height: 40px;
+}
+.source-shot-paste-input:focus {
+  outline: none;
+  border-style: solid;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+.source-shot-paste-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 @media (max-width: 640px) {
   .source-input-cards { grid-template-columns: 1fr; }
 }

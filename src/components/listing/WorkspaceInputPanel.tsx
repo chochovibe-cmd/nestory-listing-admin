@@ -87,6 +87,21 @@ function shortFromSecondhandGrade(value: string | null | undefined): SecondhandG
     ? (raw as SecondhandGradeShort)
     : "";
 }
+
+/** UX-B2-P03: shared by document paste listener + screenshot card paste input. */
+function imageFilesFromClipboard(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  const fromFiles = Array.from(data.files ?? []).filter((f) => f.type.startsWith("image/"));
+  if (fromFiles.length > 0) return fromFiles;
+  const out: File[] = [];
+  for (const item of Array.from(data.items ?? [])) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) out.push(file);
+    }
+  }
+  return out;
+}
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 
 /** B7: insert-first overwrite so a failed insert never leaves variants empty. */
@@ -265,10 +280,15 @@ export function WorkspaceInputPanel({
   const [variantSectionOpen, setVariantSectionOpen] = useState(false);
   const [noteSectionOpen, setNoteSectionOpen] = useState(false);
   const [videoSectionOpen, setVideoSectionOpen] = useState(false);
+  /** UX-B2-P03: 商品來源雙卡預設收合 */
+  const [sourceSectionOpen, setSourceSectionOpen] = useState(false);
+  /** Session flag: product screenshot OCR succeeded at least once (for summary badge). */
+  const [productShotProvided, setProductShotProvided] = useState(false);
   const prevAiContentRef = useRef(false);
   const prevVariantContentRef = useRef(false);
   const prevNoteContentRef = useRef(false);
   const prevVideoContentRef = useRef(false);
+  const prevSourceContentRef = useRef(false);
   // B17 mobile accordion: 1基本 2圖片 3價格規格 4風格；never hard-block manual jumps
   type AccordionStep = 1 | 2 | 3 | 4;
   const [isNarrow, setIsNarrow] = useState(false);
@@ -364,6 +384,8 @@ export function WorkspaceInputPanel({
   const variantHasContent = variants.length > 0 || variantDimensions.length > 0;
   const noteHasContent = note.trim().length > 0;
   const videoHasContent = videoUrlsText.trim().length > 0;
+  // UX-B2-P03: URL filled or product screenshot OCR succeeded (recognizing alone does not count)
+  const sourceHasContent = Boolean(taobaoUrl.trim()) || productShotProvided;
 
   useEffect(() => {
     if (aiHasContent && !prevAiContentRef.current) setAiSectionOpen(true);
@@ -381,6 +403,10 @@ export function WorkspaceInputPanel({
     if (videoHasContent && !prevVideoContentRef.current) setVideoSectionOpen(true);
     prevVideoContentRef.current = videoHasContent;
   }, [videoHasContent]);
+  useEffect(() => {
+    if (sourceHasContent && !prevSourceContentRef.current) setSourceSectionOpen(true);
+    prevSourceContentRef.current = sourceHasContent;
+  }, [sourceHasContent]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1032,6 +1058,9 @@ export function WorkspaceInputPanel({
         return;
       }
 
+      // UX-B2-P03: mark product source provided only after successful product OCR
+      if (mode === "product") setProductShotProvided(true);
+
       const fields = (payload.fields ?? {}) as RecognitionFields;
       const snap = formSnapshotRef.current;
       const plan = planScreenshotFill(
@@ -1074,20 +1103,6 @@ export function WorkspaceInputPanel({
   runScreenshotRecognitionRef.current = runScreenshotRecognition;
 
   useEffect(() => {
-    function imageFilesFromClipboard(data: DataTransfer | null): File[] {
-      if (!data) return [];
-      const fromFiles = Array.from(data.files ?? []).filter((f) => f.type.startsWith("image/"));
-      if (fromFiles.length > 0) return fromFiles;
-      const out: File[] = [];
-      for (const item of Array.from(data.items ?? [])) {
-        if (item.kind === "file" && item.type.startsWith("image/")) {
-          const file = item.getAsFile();
-          if (file) out.push(file);
-        }
-      }
-      return out;
-    }
-
     function onPaste(event: ClipboardEvent) {
       const images = imageFilesFromClipboard(event.clipboardData);
       if (images.length === 0) return; // pure text → never intercept
@@ -1095,6 +1110,8 @@ export function WorkspaceInputPanel({
       const target = event.target as HTMLElement | null;
       // ImageUploader zones handle their own paste → upload pipeline.
       if (target?.closest?.(".drop-grid, .upload-section, .dropzone")) return;
+      // UX-B2-P03: focused paste input handles product OCR itself (avoid double-fire).
+      if (target?.closest?.(".source-shot-paste-input")) return;
 
       if (recognizingRef.current) return;
 
@@ -1401,6 +1418,9 @@ export function WorkspaceInputPanel({
     setDedupeDismissed(false);
     setIsDraggingShot(false);
     setSpecShotOpen(false);
+    setProductShotProvided(false);
+    setSourceSectionOpen(false);
+    prevSourceContentRef.current = false;
     // B17: collapse advanced after light reset (tone/length/web kept → AI may stay open if non-default)
     setVariantSectionOpen(false);
     setNoteSectionOpen(false);
@@ -1448,12 +1468,15 @@ export function WorkspaceInputPanel({
       (seed.variants?.length ?? 0) > 0 || (seed.variantDimensions?.length ?? 0) > 0;
     const restoredNote = Boolean(seed.note?.trim());
     const restoredVideo = Boolean(seed.videoUrlsText?.trim());
+    const restoredSource = Boolean(seed.taobaoUrl?.trim());
     if (restoredVariants) setVariantSectionOpen(true);
     if (restoredNote) setNoteSectionOpen(true);
     if (restoredVideo) setVideoSectionOpen(true);
+    if (restoredSource) setSourceSectionOpen(true);
     prevVariantContentRef.current = restoredVariants;
     prevNoteContentRef.current = restoredNote;
     prevVideoContentRef.current = restoredVideo;
+    prevSourceContentRef.current = restoredSource;
 
     draftIdRef.current = seed.draftId;
     setDraftId(seed.draftId);
@@ -1514,15 +1537,18 @@ export function WorkspaceInputPanel({
       (fields.variants?.length ?? 0) > 0 || (fields.variantDimensions?.length ?? 0) > 0;
     const restoredNote = Boolean(fields.note?.trim());
     const restoredVideo = Boolean(fields.videoUrlsText?.trim());
+    const restoredSource = Boolean(fields.taobaoUrl?.trim());
     if (restoredAi) setAiSectionOpen(true);
     if (restoredVariants) setVariantSectionOpen(true);
     if (restoredNote) setNoteSectionOpen(true);
     if (restoredVideo) setVideoSectionOpen(true);
+    if (restoredSource) setSourceSectionOpen(true);
     // Align prev refs so effects don't fight manual collapse right after restore
     prevAiContentRef.current = restoredAi;
     prevVariantContentRef.current = restoredVariants;
     prevNoteContentRef.current = restoredNote;
     prevVideoContentRef.current = restoredVideo;
+    prevSourceContentRef.current = restoredSource;
 
     if (fields.draftId) {
       draftIdRef.current = fields.draftId;
@@ -2074,98 +2100,126 @@ export function WorkspaceInputPanel({
             />
             {fieldErrors.title ? <div className="field-msg">請輸入商品標題</div> : null}
 
-            {/* UX-PKG4: 來源雙卡 — 連結抓取 ｜ 截圖辨識（勿用 dropzone 等 paste 排除 class） */}
-            <div className="source-input-cards">
-              <div className="source-card source-card--link">
-                <div className="source-card-icon">🔗</div>
-                <div className="source-card-title">貼上商品連結</div>
-                <input
-                  type="url"
-                  placeholder="淘寶／蝦皮／官網連結"
-                  value={taobaoUrl}
-                  onChange={(e) => handleSourceUrlChange(e.target.value)}
-                  onBlur={() => void runUrlDedupe(taobaoUrl)}
-                  onClick={(e) => e.stopPropagation()}
-                  disabled={b3Busy}
-                />
-                <Button
-                  size="sm"
-                  disabled={b3Busy}
-                  onClick={() => void handleFetchClick()}
-                  type="button"
-                >
-                  {sourceFetching ? "抓取中…" : "自動抓取"}
-                </Button>
-              </div>
-              <div
-                className={`source-card source-card--shot${isDraggingShot ? " dragover" : ""}`}
-                onClick={() => {
-                  if (!b3Busy) productShotInputRef.current?.click();
-                }}
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (b3Busy) return;
-                  setIsDraggingShot(true);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDraggingShot(false);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDraggingShot(false);
-                  if (b3Busy) return;
-                  const files = Array.from(e.dataTransfer.files ?? []).filter((f) =>
-                    f.type.startsWith("image/")
-                  );
-                  if (files.length > 0) void runScreenshotRecognition(files, "product");
-                }}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (b3Busy) return;
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    productShotInputRef.current?.click();
-                  }
-                }}
-              >
-                <div className="source-card-icon">📷</div>
-                <div className="source-card-title">上傳截圖辨識</div>
-                {recognizing ? (
-                  <div className="source-card-loading">
-                    <span className="spinner" aria-hidden="true" />
-                    辨識中…
-                  </div>
-                ) : (
-                  <div className="source-card-hint">
-                    點擊選擇／拖曳／Ctrl+V 貼上
-                    <br />
-                    最多 {MAX_SCREENSHOT_IMAGES} 張
-                  </div>
-                )}
-                <input
-                  accept="image/*"
-                  multiple
-                  hidden
-                  onChange={(e) => {
-                    if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "product");
+            {/* UX-B2-P03: 來源雙卡預設收合；UX-PKG4 雙卡殼層（勿用 dropzone 等 paste 排除 class） */}
+            <CollapsibleSection
+              className="adv-source"
+              title="🔗📷 商品來源（連結／截圖）"
+              open={sourceSectionOpen}
+              onToggle={() => setSourceSectionOpen((v) => !v)}
+              summary={!sourceSectionOpen && sourceHasContent ? "已提供來源" : undefined}
+            >
+              <div className="source-input-cards">
+                <div className="source-card source-card--link">
+                  <div className="source-card-icon">🔗</div>
+                  <div className="source-card-title">貼上商品連結</div>
+                  <input
+                    type="url"
+                    placeholder="淘寶／蝦皮／官網連結"
+                    value={taobaoUrl}
+                    onChange={(e) => handleSourceUrlChange(e.target.value)}
+                    onBlur={() => void runUrlDedupe(taobaoUrl)}
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={b3Busy}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={b3Busy}
+                    onClick={() => void handleFetchClick()}
+                    type="button"
+                  >
+                    {sourceFetching ? "抓取中…" : "自動抓取"}
+                  </Button>
+                </div>
+                <div
+                  className={`source-card source-card--shot${isDraggingShot ? " dragover" : ""}`}
+                  onClick={() => {
+                    if (!b3Busy) productShotInputRef.current?.click();
                   }}
-                  onClick={(e) => e.stopPropagation()}
-                  ref={productShotInputRef}
-                  type="file"
-                  disabled={b3Busy}
-                />
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (b3Busy) return;
+                    setIsDraggingShot(true);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingShot(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingShot(false);
+                    if (b3Busy) return;
+                    const files = Array.from(e.dataTransfer.files ?? []).filter((f) =>
+                      f.type.startsWith("image/")
+                    );
+                    if (files.length > 0) void runScreenshotRecognition(files, "product");
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (b3Busy) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      productShotInputRef.current?.click();
+                    }
+                  }}
+                >
+                  <div className="source-card-icon">📷</div>
+                  <div className="source-card-title">上傳截圖辨識</div>
+                  {recognizing ? (
+                    <div className="source-card-loading">
+                      <span className="spinner" aria-hidden="true" />
+                      辨識中…
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      className="source-shot-paste-input"
+                      value=""
+                      onChange={() => {
+                        /* no-op：刻意不存字，只當貼上目標 */
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      onPaste={(e) => {
+                        if (b3Busy) return;
+                        const images = imageFilesFromClipboard(e.clipboardData);
+                        if (images.length === 0) return; // 純文字不搶
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void runScreenshotRecognition(images, "product");
+                      }}
+                      placeholder="點這裡後 Ctrl+V 貼上截圖"
+                      disabled={b3Busy}
+                      aria-label="貼上截圖辨識"
+                      autoComplete="off"
+                    />
+                  )}
+                  <div className="source-card-hint">
+                    或拖曳／點擊選擇檔案，最多 {MAX_SCREENSHOT_IMAGES} 張
+                  </div>
+                  <input
+                    accept="image/*"
+                    multiple
+                    hidden
+                    onChange={(e) => {
+                      if (e.target.files?.length) void runScreenshotRecognition(e.target.files, "product");
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    ref={productShotInputRef}
+                    type="file"
+                    disabled={b3Busy}
+                  />
+                </div>
               </div>
-            </div>
+            </CollapsibleSection>
+            {/* Status/errors outside collapsible so they stay visible when section is collapsed */}
             {b3Status ? <div className={`b3-status ${b3Status.kind}`}>{b3Status.text}</div> : null}
             {dedupeHits.length > 0 && !dedupeDismissed ? (
               <div className="dedupe-alert" role="status">

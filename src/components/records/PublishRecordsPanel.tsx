@@ -106,7 +106,9 @@ export function PublishRecordsPanel() {
 
   const loadBatches = useCallback(async () => {
     if (!hasSupabaseBrowserEnv()) {
-      setError("需要設定 Supabase 才能使用發布紀錄");
+      const msg = "需要設定 Supabase 才能使用發布紀錄";
+      showToast(msg, "error");
+      setError(msg);
       setRows([]);
       setLoading(false);
       setRoleReady(true);
@@ -133,8 +135,9 @@ export function PublishRecordsPanel() {
         return;
       }
       if (!user) {
-        // Blocking notice
-        setError("請先登入");
+        const msg = "請先登入";
+        showToast(msg, "error");
+        setError(msg);
         setRows([]);
         setRole(null);
         setRoleReady(true);
@@ -192,7 +195,9 @@ export function PublishRecordsPanel() {
   const loadProducts = useCallback(
     async (mode: "shopify_drafts" | "published") => {
       if (!hasSupabaseBrowserEnv()) {
-        setProductError("需要設定 Supabase");
+        const msg = "需要設定 Supabase";
+        showToast(msg, "error");
+        setProductError(msg);
         return;
       }
       setProductLoading(true);
@@ -203,7 +208,9 @@ export function PublishRecordsPanel() {
           data: { user }
         } = await supabase.auth.getUser();
         if (!user) {
-          setProductError("請先登入");
+          const msg = "請先登入";
+          showToast(msg, "error");
+          setProductError(msg);
           setProductRows([]);
           return;
         }
@@ -229,13 +236,16 @@ export function PublishRecordsPanel() {
 
         const { data, error: qErr } = await query;
         if (qErr) {
+          showToast(`商品列表載入失敗：${qErr.message}`, "error");
           setProductError(qErr.message);
           setProductRows([]);
           return;
         }
         setProductRows((data ?? []) as RecordsProductRow[]);
       } catch (e) {
-        setProductError(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        showToast(msg, "error");
+        setProductError(msg);
         setProductRows([]);
       } finally {
         setProductLoading(false);

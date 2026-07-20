@@ -61,9 +61,9 @@ export const JUMP_STRIP_GROUP_ORDER: JumpStripGroupKey[] = [
 /** §2.2 / T10: input remnants = 未完成草稿 (not scary 待輸入). */
 export const JUMP_STRIP_GROUP_LABELS: Record<JumpStripGroupKey, string> = {
   input: "未完成草稿",
-  copy_review: "審文案",
-  image_review: "標圖",
-  ready: "待發布"
+  copy_review: "文案待審核",
+  image_review: "圖片待標示",
+  ready: "完成待發布"
 };
 
 export type JumpStripItem = {

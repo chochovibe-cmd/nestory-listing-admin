@@ -12,19 +12,27 @@ import {
 
 /**
  * C1 desktop collapsible sidebar + C2 settings pin at bottom (Q1-C).
- * Default collapsed (icon column); preference in localStorage `nestory_nav`.
+ * UX-PKG1 1-5: default expanded when no preference; icon «/» by open state.
+ * Preference in localStorage `nestory_nav` (open / closed).
  * Parent `.shell` receives `.nav-open` via class on the shell node.
  */
 export function AppSidebar() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  // Default open until hydrate; navInitScript also defaults to open when no key.
+  const [open, setOpen] = useState(true);
   const [ready, setReady] = useState(false);
 
   // Hydrate preference after mount. Do not sync class until ready — otherwise
-  // open=false would wipe the navInitScript class before localStorage is read.
+  // open would wipe / fight the navInitScript class before localStorage is read.
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(NAV_STORAGE_KEY) === "open") {
+      const stored = window.localStorage.getItem(NAV_STORAGE_KEY);
+      if (stored === "closed") {
+        setOpen(false);
+      } else if (stored === "open") {
+        setOpen(true);
+      } else {
+        // Never written → default expanded
         setOpen(true);
       }
     } catch {
@@ -65,10 +73,10 @@ export function AppSidebar() {
         aria-label={open ? "收合側邊選單" : "展開側邊選單"}
         className="sidebar-toggle"
         onClick={toggle}
-        title="展開/收合選單"
+        title={open ? "收合選單" : "展開選單"}
         type="button"
       >
-        ☰
+        {open ? "«" : "»"}
       </button>
       {SIDEBAR_NAV.map((item) => {
         const active = isNavActive(pathname, item.href);

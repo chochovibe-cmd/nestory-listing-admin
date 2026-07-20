@@ -36,9 +36,9 @@ export const STATION_OPTIONS: {
   key: StationFilterKey;
   label: string;
 }[] = [
-  { key: "copy_review", label: "審文案" },
-  { key: "image_review", label: "標圖" },
-  { key: "ready", label: "待發布" },
+  { key: "copy_review", label: "文案待審核" },
+  { key: "image_review", label: "圖片待標示" },
+  { key: "ready", label: "完成待發布" },
 ];
 
 export const FAIL_FILTER_LABEL = "⚠ 失敗";

@@ -47,10 +47,12 @@ const themeInitScript = `
   } catch (e) {}
 `;
 
-// C1: restore sidebar open preference before paint (matches Mockup nestory_nav).
+// C1 / UX-PKG1 1-5: restore sidebar open preference before paint.
+// Default expanded when key missing; only "closed" keeps icon column.
 const navInitScript = `
   try {
-    if (window.localStorage.getItem('nestory_nav') === 'open') {
+    var navPref = window.localStorage.getItem('nestory_nav');
+    if (navPref !== 'closed') {
       var shell = document.getElementById('app-shell');
       if (shell) shell.classList.add('nav-open');
     }

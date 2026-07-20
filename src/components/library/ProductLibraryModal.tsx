@@ -44,7 +44,9 @@ export function ProductLibraryModal({
 
   const load = useCallback(async () => {
     if (!hasSupabaseBrowserEnv()) {
-      setError("需要設定 Supabase 才能使用商品庫");
+      const msg = "需要設定 Supabase 才能使用商品庫";
+      showToast(msg, "error");
+      setError(msg);
       setRows([]);
       setLoadedOnce(true);
       return;
@@ -69,8 +71,9 @@ export function ProductLibraryModal({
         return;
       }
       if (!user) {
-        // Blocking: stay on page notice (not toast-only)
-        setError("請先登入後再開商品庫");
+        const msg = "請先登入後再開商品庫";
+        showToast(msg, "error");
+        setError(msg);
         setRows([]);
         setLoadedOnce(true);
         return;

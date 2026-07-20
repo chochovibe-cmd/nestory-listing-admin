@@ -21,11 +21,11 @@ export function stationFlowPrimaryLabel(
   const station = resolveDraftStation(draft);
   switch (station as PipelineStage) {
     case "copy_review":
-      return { label: "審文案", kind: "station" };
+      return { label: "文案待審核", kind: "station" };
     case "image_review":
-      return { label: "標圖", kind: "station" };
+      return { label: "圖片待標示", kind: "station" };
     case "ready":
-      return { label: "待發布", kind: "station" };
+      return { label: "完成待發布", kind: "station" };
     case "published":
       return { label: "已發布", kind: "station" };
     case "archived":

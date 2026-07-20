@@ -282,15 +282,17 @@ check("source: /drafts permanentRedirect", () => {
   assert.match(src, /\/records/);
 });
 
-check("source: jump strip + WorkbenchMobileShell continue", () => {
-  assert.ok(exists("src/components/listing/StationJumpStrip.tsx"));
+check("source: jump strip lib + WorkbenchMobileShell continue", () => {
+  // UX-PKG1 1-6a: StationJumpStrip.tsx removed; lib + QuickPreview remain
+  assert.ok(!exists("src/components/listing/StationJumpStrip.tsx"));
   assert.ok(exists("src/lib/drafts/stationJumpStrip.ts"));
   assert.ok(exists("src/lib/drafts/jumpToDraft.ts"));
+  assert.ok(exists("src/components/listing/QuickPreviewPanel.tsx"));
   const shell = read("src/components/listing/WorkbenchMobileShell.tsx");
   assert.match(shell, /繼續新增/);
   assert.match(shell, /pane=results|setPaneAndUrl\(\"results\"\)/);
   const input = read("src/components/listing/WorkspaceInputPanel.tsx");
-  assert.match(input, /StationJumpStrip/);
+  assert.doesNotMatch(input, /StationJumpStrip/);
   assert.match(input, /規則引擎 → Vision/);
 });
 

@@ -62,7 +62,9 @@ export function ImageReviewPanel() {
 
   const load = useCallback(async () => {
     if (!hasSupabaseBrowserEnv()) {
-      setError("需要設定 Supabase 才能使用生圖工廠");
+      const msg = "需要設定 Supabase 才能使用生圖工廠";
+      showToast(msg, "error");
+      setError(msg);
       setCards([]);
       setLoading(false);
       setRoleReady(true);
@@ -80,13 +82,16 @@ export function ImageReviewPanel() {
       } = await supabase.auth.getUser();
 
       if (userError) {
+        showToast(userError.message, "error");
         setError(userError.message);
         setCards([]);
         setRoleReady(true);
         return;
       }
       if (!user) {
-        setError("請先登入");
+        const msg = "請先登入";
+        showToast(msg, "error");
+        setError(msg);
         setCards([]);
         setUserId(null);
         setRole(null);
@@ -118,6 +123,7 @@ export function ImageReviewPanel() {
 
       const { data: drafts, error: draftError } = await query;
       if (draftError) {
+        showToast(`圖審列表載入失敗：${draftError.message}`, "error");
         setError(draftError.message);
         setCards([]);
         return;
@@ -149,6 +155,7 @@ export function ImageReviewPanel() {
           .order("sort_order", { ascending: true });
 
         if (imageError) {
+          showToast(`圖審圖片載入失敗：${imageError.message}`, "error");
           setError(imageError.message);
           setCards([]);
           return;
@@ -170,7 +177,9 @@ export function ImageReviewPanel() {
         }))
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "圖審列表載入失敗");
+      const msg = e instanceof Error ? e.message : "圖審列表載入失敗";
+      showToast(msg, "error");
+      setError(msg);
       setCards([]);
       setRoleReady(true);
     } finally {

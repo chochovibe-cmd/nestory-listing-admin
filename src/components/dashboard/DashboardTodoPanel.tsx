@@ -101,7 +101,9 @@ export function DashboardTodoPanel() {
 
   const load = useCallback(async () => {
     if (!hasSupabaseBrowserEnv()) {
-      setError("需要設定 Supabase 才能使用儀表板");
+      const msg = "需要設定 Supabase 才能使用儀表板";
+      showToast(msg, "error");
+      setError(msg);
       setRows([]);
       setLoading(false);
       setQuotaLoading(false);
@@ -144,8 +146,9 @@ export function DashboardTodoPanel() {
         return;
       }
       if (!user) {
-        // Blocking: page notice only
-        setError("請先登入");
+        const msg = "請先登入";
+        showToast(msg, "error");
+        setError(msg);
         setRows([]);
         setRole(null);
         setRoleReady(true);

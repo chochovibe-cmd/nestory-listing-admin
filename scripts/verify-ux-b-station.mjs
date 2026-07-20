@@ -101,15 +101,16 @@ console.log("UX-B station checks\n");
 
 check("source wiring: labels §2.2", () => {
   const sf = read("src/lib/drafts/stationFilter.ts");
-  assert.match(sf, /審文案/);
-  assert.match(sf, /標圖/);
-  assert.match(sf, /待發布/);
+  // UX-PKG1 1-2: long station labels
+  assert.match(sf, /文案待審核/);
+  assert.match(sf, /圖片待標示/);
+  assert.match(sf, /完成待發布/);
   assert.match(sf, /ResultsFilterKey/);
   assert.match(sf, /filterDraftsByResultsFilter/);
   const sj = read("src/lib/drafts/stationJumpStrip.ts");
   assert.match(sj, /未完成草稿/);
   assert.match(sj, /excludeDraftIds/);
-  assert.match(sj, /標圖/);
+  assert.match(sj, /圖片待標示/);
 });
 
 check("StageFilterPills always-on + fail", () => {

@@ -13,6 +13,7 @@ import {
 
 /**
  * C6: topbar shows applied CNY→TWD + today's reference (display only).
+ * UX-PKG1 1-3: 今日參考 is primary visual; 套用中 is secondary.
  * Never one-click applies; fetch/apply live on /settings (pricing).
  * Open-page auto-fetch updates nestory_fx_reference only — not pricing rate.
  */
@@ -107,12 +108,15 @@ export function ExchangeRateWidget() {
 
   return (
     <>
-      <span title="套用中匯率（到設定頁可套用今日匯率）">CNY/TWD</span>
-      <span className="rate-val" title={`套用中匯率 ${applied.toFixed(2)}`}>
-        {applied.toFixed(2)}
-      </span>
-      <span className="fx-ref" title={todayTitle}>
+      <span title="匯率（今日參考為主；套用中到設定頁才改算價）">CNY/TWD</span>
+      <span className="fx-ref-primary" title={todayTitle}>
         今日 {todayLabel}
+      </span>
+      <span
+        className="rate-val-secondary"
+        title={`目前商品套用中的匯率 ${applied.toFixed(2)}`}
+      >
+        套用中 {applied.toFixed(2)}
       </span>
     </>
   );

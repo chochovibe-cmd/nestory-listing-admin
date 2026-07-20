@@ -232,8 +232,9 @@ export function WorkspaceInputPanel({
   const [costCurrency, setCostCurrency] = useState<CostCurrency>("CNY");
   const [taobaoUrl, setTaobaoUrl] = useState("");
   const [note, setNote] = useState("");
-  // B1 (Mockup差異備忘 差異2): 規格以「系統自動整理」為主，此欄是常駐可編輯的補充/修正入口，
-  // 預設留空。留空時生成會用 LLM 從證據池整理的規格回寫 spec_text；有填則以此為準不被覆蓋。
+  // UX-PKG5: 背景欄（無可見輸入框）。規格截圖／restore／snapshot 仍寫入；
+  // 送 generate 時若非空則為權威不被覆蓋；空則後端用 LLM 整理 [[spec]] 回寫。
+  // 使用者要改規格 → 結果卡「商品規格」或「補充備註」（note）。
   const [specText, setSpecText] = useState("");
   // D10-open: YouTube links (one per line, max 3) → product_drafts.video_urls
   const [videoUrlsText, setVideoUrlsText] = useState("");
@@ -262,12 +263,10 @@ export function WorkspaceInputPanel({
   // B17: advanced sections collapsed by default; auto-open when content / non-default (incl. B13 restore)
   const [aiSectionOpen, setAiSectionOpen] = useState(false);
   const [variantSectionOpen, setVariantSectionOpen] = useState(false);
-  const [specSectionOpen, setSpecSectionOpen] = useState(false);
   const [noteSectionOpen, setNoteSectionOpen] = useState(false);
   const [videoSectionOpen, setVideoSectionOpen] = useState(false);
   const prevAiContentRef = useRef(false);
   const prevVariantContentRef = useRef(false);
-  const prevSpecContentRef = useRef(false);
   const prevNoteContentRef = useRef(false);
   const prevVideoContentRef = useRef(false);
   // B17 mobile accordion: 1基本 2圖片 3價格規格 4風格；never hard-block manual jumps
@@ -363,7 +362,6 @@ export function WorkspaceInputPanel({
     useWebSearch !== DEFAULT_WEB_SEARCH ||
     sessionProvider !== null;
   const variantHasContent = variants.length > 0 || variantDimensions.length > 0;
-  const specHasContent = specText.trim().length > 0;
   const noteHasContent = note.trim().length > 0;
   const videoHasContent = videoUrlsText.trim().length > 0;
 
@@ -375,10 +373,6 @@ export function WorkspaceInputPanel({
     if (variantHasContent && !prevVariantContentRef.current) setVariantSectionOpen(true);
     prevVariantContentRef.current = variantHasContent;
   }, [variantHasContent]);
-  useEffect(() => {
-    if (specHasContent && !prevSpecContentRef.current) setSpecSectionOpen(true);
-    prevSpecContentRef.current = specHasContent;
-  }, [specHasContent]);
   useEffect(() => {
     if (noteHasContent && !prevNoteContentRef.current) setNoteSectionOpen(true);
     prevNoteContentRef.current = noteHasContent;
@@ -1409,11 +1403,9 @@ export function WorkspaceInputPanel({
     setSpecShotOpen(false);
     // B17: collapse advanced after light reset (tone/length/web kept → AI may stay open if non-default)
     setVariantSectionOpen(false);
-    setSpecSectionOpen(false);
     setNoteSectionOpen(false);
     setVideoSectionOpen(false);
     prevVariantContentRef.current = false;
-    prevSpecContentRef.current = false;
     prevNoteContentRef.current = false;
     prevVideoContentRef.current = false;
     setMobileStep(1);
@@ -1454,15 +1446,12 @@ export function WorkspaceInputPanel({
 
     const restoredVariants =
       (seed.variants?.length ?? 0) > 0 || (seed.variantDimensions?.length ?? 0) > 0;
-    const restoredSpec = Boolean(seed.specText?.trim());
     const restoredNote = Boolean(seed.note?.trim());
     const restoredVideo = Boolean(seed.videoUrlsText?.trim());
     if (restoredVariants) setVariantSectionOpen(true);
-    if (restoredSpec) setSpecSectionOpen(true);
     if (restoredNote) setNoteSectionOpen(true);
     if (restoredVideo) setVideoSectionOpen(true);
     prevVariantContentRef.current = restoredVariants;
-    prevSpecContentRef.current = restoredSpec;
     prevNoteContentRef.current = restoredNote;
     prevVideoContentRef.current = restoredVideo;
 
@@ -1523,18 +1512,15 @@ export function WorkspaceInputPanel({
       fields.useWebSearch !== DEFAULT_WEB_SEARCH;
     const restoredVariants =
       (fields.variants?.length ?? 0) > 0 || (fields.variantDimensions?.length ?? 0) > 0;
-    const restoredSpec = Boolean(fields.specText?.trim());
     const restoredNote = Boolean(fields.note?.trim());
     const restoredVideo = Boolean(fields.videoUrlsText?.trim());
     if (restoredAi) setAiSectionOpen(true);
     if (restoredVariants) setVariantSectionOpen(true);
-    if (restoredSpec) setSpecSectionOpen(true);
     if (restoredNote) setNoteSectionOpen(true);
     if (restoredVideo) setVideoSectionOpen(true);
     // Align prev refs so effects don't fight manual collapse right after restore
     prevAiContentRef.current = restoredAi;
     prevVariantContentRef.current = restoredVariants;
-    prevSpecContentRef.current = restoredSpec;
     prevNoteContentRef.current = restoredNote;
     prevVideoContentRef.current = restoredVideo;
 
@@ -2537,29 +2523,6 @@ export function WorkspaceInputPanel({
               warning={variantWarning}
             />
           </CollapsibleSection>
-
-          <CollapsibleSection
-            className="adv-spec"
-            onToggle={() => setSpecSectionOpen((v) => !v)}
-            open={specSectionOpen}
-            summary={specHasContent ? "已填" : undefined}
-            title="商品規格"
-          >
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label className="label-with-help">
-                <span>商品規格</span>
-                <FieldHelp label="商品規格說明">
-                  選填。留空時系統會從款式／標題／圖片自動整理；也可先用規格截圖填入。有手填內容時生成不會覆蓋。
-                </FieldHelp>
-              </label>
-              <textarea
-                onChange={(e) => setSpecText(e.target.value)}
-                placeholder="留空即可——系統會自動整理。例：材質／尺寸／包裝內容"
-                rows={3}
-                value={specText}
-              />
-            </div>
-          </CollapsibleSection>
             </div>
           </div>
 
@@ -2656,10 +2619,14 @@ export function WorkspaceInputPanel({
               <label className="label-with-help">
                 <span>補充備註</span>
                 <FieldHelp label="備註說明">
-                  截圖辨識的特色會自動填入空白欄。可手寫含底座、預購、限定等補充給文案用。
+                  截圖辨識的特色會自動填入空白欄。可手寫含底座、預購、限定等補充給文案用。材質、尺寸等規格相關資訊也可以寫在這裡，生成時會自動整理進規格欄位。
                 </FieldHelp>
               </label>
-              <input onChange={(e) => setNote(e.target.value)} placeholder="例如：含底座、預購款、限定版..." value={note} />
+              <input
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="例如：含底座、預購款、限定版；材質、尺寸也可寫這裡"
+                value={note}
+              />
             </div>
           </CollapsibleSection>
 

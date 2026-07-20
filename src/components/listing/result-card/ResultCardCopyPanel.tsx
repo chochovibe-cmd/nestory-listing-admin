@@ -38,6 +38,8 @@ export function ResultCardCopyPanel({
   descriptionView,
   faq,
   faqView,
+  specText,
+  onSpecTextChange,
   onDetectedCategoryChange,
   onSkuChange,
   onQuickAddCharacter,
@@ -72,6 +74,9 @@ export function ResultCardCopyPanel({
   descriptionView: "preview" | "source";
   faq: string;
   faqView: "preview" | "html";
+  /** UX-PKG5: local editable mid-field (not CopyVersionField). */
+  specText: string;
+  onSpecTextChange: (value: string) => void;
   onDetectedCategoryChange: (value: string) => void;
   onSkuChange: (value: string) => void;
   onQuickAddCharacter: (name: string) => void;
@@ -83,7 +88,6 @@ export function ResultCardCopyPanel({
   onSaveCombo: () => void;
 }) {
   const fieldBusy = regeneratingField != null || regenerating || comboSaving;
-  const specTextDisplay = (draft.spec_text ?? "").trim();
 
   return (
     <div className="rc-tabpanel rc-tabpanel--copy" role="tabpanel">
@@ -290,12 +294,14 @@ export function ResultCardCopyPanel({
           <p className="rc-copy-group-dest muted">→ Shopify 規格／給 D 段</p>
         </div>
         <div className="rc-field rc-span-2">
-          <div className="rc-label">商品規格（唯讀）</div>
-          {specTextDisplay ? (
-            <div className="rc-text rc-spec-readonly">{specTextDisplay}</div>
-          ) : (
-            <div className="muted">（空）</div>
-          )}
+          <div className="rc-label">商品規格</div>
+          <textarea
+            className="edit-textarea"
+            onChange={(event) => onSpecTextChange(event.target.value)}
+            placeholder="（空）可手填材質、尺寸、包裝內容等"
+            rows={4}
+            value={specText}
+          />
         </div>
 
         <div className="rc-copy-group rc-span-2">

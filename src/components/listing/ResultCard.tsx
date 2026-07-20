@@ -250,6 +250,8 @@ export function ResultCard({
   const [compareAtPrice, setCompareAtPrice] = useState(draft.compare_at_price?.toString() ?? "");
   const [detectedCategory, setDetectedCategory] = useState(draft.detected_category ?? "");
   const [sku, setSku] = useState(draft.sku ?? "");
+  // UX-PKG5: editable mid-field spec_text (local state; not CopyVersionField)
+  const [specText, setSpecText] = useState(draft.spec_text ?? "");
   const [publishMode, setPublishMode] = useState(draft.publish_mode);
   // UX-M T64: specs tab local state (hydrate from draft.variant_dimensions + variants)
   const [variantDimensions, setVariantDimensions] = useState<VariantDimension[]>([]);
@@ -669,6 +671,7 @@ export function ResultCard({
     setCompareAtPrice(draft.compare_at_price?.toString() ?? "");
     setDetectedCategory(draft.detected_category ?? "");
     setSku(draft.sku ?? "");
+    setSpecText(draft.spec_text ?? "");
     setPublishMode(draft.publish_mode);
     setCopyDirty(emptyDirtyMap());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -847,6 +850,8 @@ export function ResultCard({
           priceMode === "single" ? null : compareAtPrice ? Number(compareAtPrice) : null,
         detected_category: detectedCategory || null,
         sku: sku || null,
+        // UX-PKG5: editable result-card mid-field
+        spec_text: specText.trim() || null,
         publish_mode: publishMode,
         // UX-M T64: axis defs on draft (same column as WorkspaceInputPanel)
         variant_dimensions: dimsForSave
@@ -1270,9 +1275,19 @@ export function ResultCard({
     return curSell !== draftSell || curCmp !== draftCmp;
   }
 
+  /** UX-PKG5: local mid-field dirty (not copy-version). */
+  function hasUncommittedSpecText(): boolean {
+    return specText.trim() !== (draft.spec_text ?? "").trim();
+  }
+
   /** Copy / pricing / specs — any card edit that needs footer save. */
   function hasUncommittedEdits(): boolean {
-    return hasUncommittedCopy() || hasUncommittedPricing() || variantsDirty;
+    return (
+      hasUncommittedCopy() ||
+      hasUncommittedPricing() ||
+      variantsDirty ||
+      hasUncommittedSpecText()
+    );
   }
 
   function buildFieldVersionInputs(): FieldVersionInput[] {
@@ -2130,6 +2145,7 @@ export function ResultCard({
               onSaveCombo={() => void saveComboOnly()}
               onSetFieldDisplay={setFieldDisplay}
               onSkuChange={setSku}
+              onSpecTextChange={setSpecText}
               onSwitchVersion={switchVersion}
               priceMode={priceMode}
               productHighlights={productHighlights}
@@ -2137,6 +2153,7 @@ export function ResultCard({
               regenerating={regenerating}
               regeneratingField={regeneratingField}
               sku={sku}
+              specText={specText}
               title={title}
               versionIndex={versionIndex}
               versionsByField={versionsByField}

@@ -6424,6 +6424,40 @@ textarea {
   margin-top: 4px;
 }
 
+/* UX-B2-P08: Tags tab — group chips by Nestory prefix */
+.rc-tags-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.rc-tag-group-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.rc-tag-group-label {
+  flex-shrink: 0;
+  min-width: 4.5em;
+  width: 56px;
+  font-size: 11px;
+  padding-top: 4px;
+  font-weight: 600;
+}
+.rc-tag-group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 960px) {
+  .rc-tag-group-label {
+    width: auto;
+    min-width: 3em;
+  }
+}
+
 .rc-tag {
   background: var(--surface);
   border: 1px solid var(--border);

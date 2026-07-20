@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/listing/result-card/resultCardUi";
 import { extractMissingCharacterNames } from "@/lib/characters/missingCharacterWarnings";
+import { groupTagsByPrefix } from "@/lib/drafts/tagDisplayGroups";
 import type { GradedWarning } from "@/lib/drafts/warningTiers";
 
 /** S2: Tags／提醒分頁 — 從 ResultCard 展開區拆出。 */
@@ -33,6 +35,14 @@ export function ResultCardTagsPanel({
   regenerating: boolean;
   onQuickAddCharacter: (name: string) => void;
 }) {
+  const tagGroups = useMemo(() => {
+    const tagList = tags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return groupTagsByPrefix(tagList);
+  }, [tags]);
+
   return (
     <div className="rc-tabpanel" role="tabpanel">
       <div className="rc-tabpanel-grid">
@@ -40,16 +50,23 @@ export function ResultCardTagsPanel({
           <label>
             Tags <CopyButton getValue={() => tags} />
           </label>
-          <div className="rc-tags">
-            {tags
-              .split(",")
-              .map((tag) => tag.trim())
-              .filter(Boolean)
-              .map((tag) => (
-                <span className="rc-tag" key={tag}>
-                  {tag}
-                </span>
-              ))}
+          <div className="rc-tags-grouped">
+            {tagGroups.length === 0 ? (
+              <span className="muted">尚無 Tags</span>
+            ) : (
+              tagGroups.map((group) => (
+                <div className="rc-tag-group-row" key={group.key}>
+                  <span className="rc-tag-group-label muted">{group.label}</span>
+                  <div className="rc-tag-group-chips">
+                    {group.tags.map((tag) => (
+                      <span className="rc-tag" key={tag}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
           <input className="edit-input" onChange={(event) => onTagsChange(event.target.value)} value={tags} />
         </div>

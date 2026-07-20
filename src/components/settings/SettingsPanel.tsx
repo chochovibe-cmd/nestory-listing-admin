@@ -60,8 +60,9 @@ function isSectionId(value: string | null): value is SectionId {
  * C2 settings page body — five B17 collapsible sections.
  * Write locks: System Prompt + automation prefs = admin; pricing/theme/model default = all operators.
  * No secrets / webhook URL in client storage (Q8-A-restricted).
+ * UX-B2-P15: embedded=true for mobile settings sheet (same logic; no second page shell).
  */
-export function SettingsPanel() {
+export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const searchParams = useSearchParams();
   const initialSection = searchParams.get("section");
 
@@ -396,19 +397,24 @@ export function SettingsPanel() {
     }
   }
 
+  const shellClass = embedded
+    ? "settings-page settings-page--embedded"
+    : "container settings-page";
+  const ShellTag = embedded ? "div" : "main";
+
   if (!roleReady) {
     return (
-      <main className="container settings-page">
-        <h1 className="settings-page-title">⚙ 設定</h1>
+      <ShellTag className={shellClass}>
+        {embedded ? null : <h1 className="settings-page-title">⚙ 設定</h1>}
         <p className="settings-page-lead">載入中…</p>
-      </main>
+      </ShellTag>
     );
   }
 
   if (!allowed) {
     return (
-      <main className="container settings-page">
-        <h1 className="settings-page-title">⚙ 設定</h1>
+      <ShellTag className={shellClass}>
+        {embedded ? null : <h1 className="settings-page-title">⚙ 設定</h1>}
         <p className="settings-page-lead">
           請先登入具上架權限的帳號（admin／operator）才能使用設定。
         </p>
@@ -417,17 +423,19 @@ export function SettingsPanel() {
             前往登入
           </Link>
         </p>
-      </main>
+      </ShellTag>
     );
   }
 
   return (
-    <main className="container settings-page">
-      <h1 className="settings-page-title">⚙ 設定</h1>
-      <p className="settings-page-lead">
-        分類收合。定價與本機偏好會立刻生效；System Prompt 版本庫與自動化管線標示「待接線」的項目不會假裝已通。
-        {admin ? null : " 你目前是 operator：可改定價／模型／外觀；System Prompt 與自動化僅 Admin 可改。"}
-      </p>
+    <ShellTag className={shellClass}>
+      {embedded ? null : <h1 className="settings-page-title">⚙ 設定</h1>}
+      {embedded ? null : (
+        <p className="settings-page-lead">
+          分類收合。定價與本機偏好會立刻生效；System Prompt 版本庫與自動化管線標示「待接線」的項目不會假裝已通。
+          {admin ? null : " 你目前是 operator：可改定價／模型／外觀；System Prompt 與自動化僅 Admin 可改。"}
+        </p>
+      )}
 
       <div className="settings-stack">
         {/* ── 1. Model + System Prompt ── */}
@@ -839,7 +847,7 @@ export function SettingsPanel() {
           </div>
         </CollapsibleSection>
       </div>
-    </main>
+    </ShellTag>
   );
 }
 

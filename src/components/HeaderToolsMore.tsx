@@ -14,9 +14,9 @@ import { ProviderSwitcher } from "@/components/ProviderSwitcher";
 /**
  * UX-G T34: secondary topbar tools behind one "⋯ 更多" layer.
  * UX-R T71: test mode gets a small topbar chip + warn outline on the mode row.
- * Same component for desktop row and mobile ☰ — does not remove capabilities.
+ * UX-B2-P15: embedded=true → inline rows for mobile tools sheet (no nested ⋯).
  */
-export function HeaderToolsMore() {
+export function HeaderToolsMore({ embedded = false }: { embedded?: boolean }) {
   const [open, setOpen] = useState(false);
   const [runMode, setRunMode] = useState<RunMode>("llm");
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -44,7 +44,7 @@ export function HeaderToolsMore() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (embedded || !open) return;
 
     function onPointerDown(event: MouseEvent | TouchEvent) {
       const root = wrapRef.current;
@@ -67,7 +67,42 @@ export function HeaderToolsMore() {
       document.removeEventListener("touchstart", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, embedded]);
+
+  const toolRows = (
+    <>
+      <div className="hdr-more-row">
+        <span className="hdr-more-label">AI 模型</span>
+        <ProviderSwitcher />
+      </div>
+      <div
+        className={`hdr-more-row hdr-more-row--section${isTest ? " hdr-more-row--test" : ""}`}
+      >
+        <span className="hdr-more-label">生成模式</span>
+        <ModeSwitcher />
+      </div>
+      <div className="hdr-more-row hdr-more-row--section hdr-more-row--deploy">
+        <span className="hdr-more-label">部署／連線</span>
+        <DeploymentStatus />
+      </div>
+    </>
+  );
+
+  // UX-B2-P15: mobile tools sheet embeds rows directly (no second ⋯ toggle).
+  if (embedded) {
+    return (
+      <div className="hdr-more hdr-more--embedded" role="group" aria-label="次要工具">
+        {isTest ? (
+          <span className="schip schip--warn hdr-run-mode-badge" title="目前是測試模式：不呼叫 AI">
+            測試
+          </span>
+        ) : null}
+        <div className="hdr-more-menu open hdr-more-menu--embedded" id={menuId}>
+          {toolRows}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="hdr-more" ref={wrapRef}>
@@ -93,20 +128,7 @@ export function HeaderToolsMore() {
         role="group"
         aria-label="次要工具"
       >
-        <div className="hdr-more-row">
-          <span className="hdr-more-label">AI 模型</span>
-          <ProviderSwitcher />
-        </div>
-        <div
-          className={`hdr-more-row hdr-more-row--section${isTest ? " hdr-more-row--test" : ""}`}
-        >
-          <span className="hdr-more-label">生成模式</span>
-          <ModeSwitcher />
-        </div>
-        <div className="hdr-more-row hdr-more-row--section hdr-more-row--deploy">
-          <span className="hdr-more-label">部署／連線</span>
-          <DeploymentStatus />
-        </div>
+        {toolRows}
       </div>
     </div>
   );

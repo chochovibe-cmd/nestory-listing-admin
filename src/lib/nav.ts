@@ -103,11 +103,11 @@ export const MOBILE_SIDE_TABS: readonly MobileSideTab[] = [
 ] as const;
 
 /**
- * 「更多」抽屜：發布紀錄／選品（UX-PKG3：儀表板升右側 tab；設定改頂欄 ⚙）.
+ * 「更多」抽屜：僅發布紀錄（UX-B2-P15：選品情報在 Dashboard 捷徑；儀表板在右側 tab）。
+ * UX-PKG3：設定改頂欄 ⚙，不進更多.
  */
 export const MOBILE_MORE_LINKS: readonly NavItem[] = [
-  { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" },
-  { href: "/scouting", icon: "🔭", label: "選品情報", shortLabel: "選品" }
+  { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" }
 ] as const;
 
 export const NAV_STORAGE_KEY = "nestory_nav";

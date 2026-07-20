@@ -15,7 +15,7 @@ const FAB_LONG_PRESS_MS = 500;
 /**
  * C1 mobile tabbar — R4 §14-4 + UX-B + BX6 + UX-AE T135 + UX-PKG3:
  * 審核 | 工廠 | 中央凸起＋新增（短按跳轉／長按擴展選單）| 儀表板 | 更多
- * 更多僅紀錄＋選品；審核 = /drafts/new?pane=results.
+ * UX-B2-P15：更多僅發布紀錄（選品改 Dashboard 捷徑）；審核 = /drafts/new?pane=results.
  */
 export function MobileTabbar() {
   const pathname = usePathname();

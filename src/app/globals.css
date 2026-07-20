@@ -610,9 +610,9 @@ body[data-theme="kitty"] .topbar {
   text-transform: uppercase;
 }
 
-/* Desktop: tools stay on the header row. Collapsed behind .nav-toggle
-   on mobile (<960px, aligned with C1 tabbar — Q3-A). Page links live in
-   AppSidebar / MobileTabbar (C1 Q1-A removed .nav-links-menu). */
+/* Desktop: tools stay on the header row.
+   UX-B2-P15: mobile ≤959 uses compact 4-control topbar (no ☰ expand).
+   Page links live in AppSidebar / MobileTabbar (C1 Q1-A). */
 .nav {
   display: flex;
   flex-wrap: wrap;
@@ -620,8 +620,28 @@ body[data-theme="kitty"] .topbar {
   gap: 8px;
 }
 
+/* Desktop cluster: rate / tools / theme / auth (hidden on mobile). */
+.nav-desktop-cluster {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 
-/* Mobile-only hamburger for the header tool cluster (not page nav). */
+/* Library label: full text desktop, icon-only mobile */
+.hdr-library-icon {
+  display: none;
+}
+.hdr-library-full {
+  display: inline;
+}
+
+/* Mobile tools ⋯ — desktop hidden */
+.hdr-tools-mobile {
+  display: none;
+}
+
+/* Legacy hamburger kept for any residual markup; P15 no longer uses it. */
 .nav-toggle {
   display: none;
   font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
@@ -885,6 +905,20 @@ body[data-theme="kitty"] .topbar {
   border-radius: var(--radius-s);
   padding: 6px 8px;
   font-size: 12px;
+}
+
+/* UX-B2-P15: 主題選單手機 fixed，對齊 .field-help-pop 避 tabbar 裁切 */
+@media (max-width: 959px) {
+  .theme-picker-menu {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(var(--tabbar-h) + 8px + env(safe-area-inset-bottom));
+    z-index: 400;
+    max-width: none;
+    min-width: 0;
+  }
 }
 
 .nav a,
@@ -3342,10 +3376,13 @@ textarea {
   flex-shrink: 0;
 }
 
+/* UX-B2-P15: library sheet 對齊 mobile-more-sheet（滿寬半頁從下滑） */
 @media (max-width: 959px) {
   .modal-box.library-modal {
     width: 100%;
+    max-width: none;
     max-height: 88vh;
+    border-radius: var(--radius-l) var(--radius-l) 0 0;
   }
   .lib-row {
     flex-wrap: wrap;
@@ -7017,59 +7054,123 @@ body[data-theme="nordic"] {
     padding-bottom: 84px;
   }
 
+  /* UX-B2-P15: single-row topbar — Logo | 商品庫 | ⚙ | ⋯ */
   .topbar {
     padding: 10px 14px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 8px;
-    row-gap: 8px;
+    row-gap: 0;
   }
 
-  /* Collapsed by default: brand + tools toggle only. */
   .brand {
     order: 1;
     flex: 1 1 auto;
+    min-width: 0;
   }
   .nav-toggle {
-    display: inline-flex;
-    order: 2;
-    margin-left: auto;
-  }
-  .nav {
-    order: 3;
-    width: 100%;
     display: none;
   }
-  .nav.open {
+  .nav,
+  .nav.nav--topbar {
+    order: 2;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    margin-top: 0;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .nav-desktop-cluster {
+    display: none;
+  }
+
+  .hdr-library-full {
+    display: none;
+  }
+  .hdr-library-icon {
+    display: inline;
+  }
+
+  .nav .hdr-btn-library,
+  .nav .hdr-settings-mobile,
+  .nav .hdr-tools-mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+
+  .hdr-tools-mobile {
+    display: inline-flex;
+  }
+
+  /* Tools sheet: embedded HeaderToolsMore rows, touch ≥44px */
+  .hdr-more--embedded {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+  .hdr-more-menu--embedded {
+    position: static;
+    display: flex;
+    width: 100%;
+    max-width: none;
+    margin-top: 0;
+    box-shadow: none;
+  }
+  .hdr-more-menu--embedded .pill-btn,
+  .hdr-more-menu--embedded .btn-mini,
+  .hdr-more-menu--embedded .deploy-status-check {
+    min-height: 44px;
+  }
+
+  .tools-sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-top: 4px;
+  }
+  .tools-sheet-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tools-sheet-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+  }
+  .tools-sheet-fx-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin-top: 8px;
+    min-height: 44px;
   }
-
-  /* UX-PKG2: nested header-status mobile layout removed with flatten */
-
-  /* UX-G T34: ⋯ 更多 in mobile ☰ — full-width layer, touch ≥44px */
-  .hdr-more {
-    flex-basis: 100%;
-  }
-  .hdr-more-toggle {
+  .tools-sheet-auth .hdr-btn {
     min-height: 44px;
     width: 100%;
     justify-content: center;
   }
-  .hdr-more-menu {
-    position: static;
-    width: 100%;
-    max-width: none;
-    margin-top: 4px;
-    box-shadow: none;
+
+  /* Settings sheet: reuse more-sheet; pad embedded panel */
+  .settings-sheet-body {
+    padding-top: 4px;
   }
-  .hdr-more-menu .pill-btn,
-  .hdr-more-menu .btn-mini,
-  .hdr-more-menu .deploy-status-check {
-    min-height: 44px;
+  .settings-page--embedded {
+    max-width: none;
+    padding: 0 0 12px;
+  }
+  .settings-page--embedded .settings-stack {
+    gap: 8px;
   }
 
   /* UX-AB T83 + BX6 FAB: slightly taller for raised center + */
@@ -7954,18 +8055,10 @@ body[data-theme="nordic"] {
    All hdr-btn elements live inside <nav class="nav"> (HeaderControls). */
 .nav .hdr-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 11px; transition: all .2s; }
 .nav .hdr-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-/* UX-PKG3: ⚙ settings only on mobile top tools; desktop uses sidebar SETTINGS_NAV */
+/* UX-PKG3 / UX-B2-P15: ⚙ settings only on mobile top tools; desktop uses sidebar */
 .nav .hdr-settings-mobile {
   display: none;
   text-decoration: none;
-}
-@media (max-width: 959px) {
-  .nav .hdr-settings-mobile {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 36px;
-  }
 }
 /* UX-H T40: .btn-mini core rules live with .mini-btn above; header-specific overrides remain below */
 

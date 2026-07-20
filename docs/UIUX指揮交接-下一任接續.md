@@ -26,7 +26,7 @@
 | SYN-1 站②生成詳情圖 UI | ✅ |
 | T112-r3 胖鈕 | ✅ |
 | git | 功能曾收口 `34ab4d3`；**後續 A19／iframe／BX-P1／站②逐件可能未 commit**；分支超前 origin、**未 push** |
-| Fable 債 | **T105** 按鈕 class 全收斂；**T84** CSS modules |
+| Fable 債 | **T84 CSS modules** 長期拆檔（!important 清舊＋T105 可遷移批已於 **P7** 完成） |
 | 老闆 | **BX-P2** 截圖（T106 不改名已結） |
 
 ## 本輪 commits（已入庫功能）
@@ -63,7 +63,7 @@
 
 1. Claude 核 AA～AC（T74–T119）畫面  
 2. ~~老闆拍 T106~~ → **已定不改**（維持「審核」）  
-3. Fable：T105／T84  
+3. ~~Fable：T105／T84 !important~~ → **P7 已完成**；剩餘僅 CSS modules 長期債  
 4. BX-P2 **等截圖再開**（勿無圖零碎美化）  
-5. **不要重做**：BX2/6/7/9/10、SYN-1 toggle、站②逐件、A19、Shopify iframe、BX-P1、UX-BTN/S1–S5/BTN2–3  
+5. **不要重做**：BX2/6/7/9/10、SYN-1 toggle、站②逐件、A19、Shopify iframe、BX-P1、UX-BTN/S1–S5/BTN2–3、**P7 T84/T105 已清項**  
 

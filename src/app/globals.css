@@ -2,19 +2,20 @@
    Do not re-add Google Fonts @import (FOUT / CSP / privacy). */
 
 /* ============================================================
-   UX-BTN S3 / UX-V T84：!important 止血規則（2026-07-19）
+   UX-BTN S3 / UX-V T84：!important 止血規則（2026-07-19；P7 清舊 2026-07-19）
    ------------------------------------------------------------
-   ✅ 允許：本檔既有的 !important（約 13 處屬性，見下表）——歷史 specificity
-      補丁，本輪不拆。
+   ✅ 允許：暫留 A–E 共 5 處屬性（見下）——歷史 specificity／壓 inline 補丁。
    ❌ 禁止：再新增任何 !important。
       衝突時優先：① 提高 selector 精確度 ② 調整 source order ③ 抽共用 class
       真的繞不開 → 先寫進施工清單／進度筆記等確認，不要默默加。
    長期：拆 CSS modules 屬 T84／Fable 工程債，不在本規則範圍。
 
-   既有 !important 清單（改動既有規則時可對照；數字會隨重構變動）：
-   - .nav button/a min-height:0（壓過全域 button 38px）
-   - focus-visible outline 與 .edit-input outline:none 對打
-   - 少數 RWD 觸控高度／display 切換／.hdr-btn 尺寸
+   現況 !important 清單（P7 後；搜尋 `T84 暫留`）：
+   - 暫留-A：:focus-visible outline（全站 focus ring）
+   - 暫留-B：text field outline:none（與 A 配對）
+   - 暫留-C/D/E：.workbench-pane* display（壓 JS inline display:none）
+   P7 已降級（勿加回）：.nav min-height、.vgrid-row、hdr-more min-height、
+   .mtb-fab bg/border、.hdr-btn padding/font-size（改 .nav .hdr-btn）
 
    UX-SYS 間距使用規則：
    新增 padding/margin/gap 一律用 var(--sp-1) ~ var(--sp-6)，

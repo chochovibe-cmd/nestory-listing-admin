@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * R2 station②: 📄 定稿預覽 — locked copy / tags / price (read-only).
  * UX-I T54/T57: modal-hdr shell + Esc close (display only).
+ * UX-B2-P01 1-2: portal to body so fixed overlay is not trapped inside
+ * .result-card (transform/overflow → wrong containing block / collapse ghost).
  */
 export function LockedCopyPreview({
   open,
@@ -49,8 +52,9 @@ export function LockedCopyPreview({
   }, [open]);
 
   if (!open) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
       className="modal-overlay open"
       onClick={(event) => {
@@ -115,6 +119,7 @@ export function LockedCopyPreview({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

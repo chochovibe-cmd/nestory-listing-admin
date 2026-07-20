@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   filterLibraryRows,
   LIBRARY_FETCH_LIMIT,
@@ -206,9 +207,12 @@ export function ProductLibraryModal({
     router.push(`/drafts/${id}?focus=images`);
   }
 
+  // UX-B2-P01 1-1: portal to body so fixed overlay is not trapped by .topbar
+  // backdrop-filter containing block. Keep null when closed (no empty portal).
   if (!open) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
       aria-labelledby={titleId}
       aria-modal="true"
@@ -312,6 +316,7 @@ export function ProductLibraryModal({
           ) : null}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

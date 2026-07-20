@@ -7635,15 +7635,20 @@ body[data-theme="kitty"] .nav {
 body[data-theme="kitty"] .brand-dot {
   background: var(--warn);
 }
+/* UX-B2-P01 1-3: kitty white-on-dark only in topbar (deep header).
+   Do NOT force --on-solid on workbench/settings pills (light surfaces). */
 body[data-theme="kitty"] .theme-btn,
 body[data-theme="kitty"] .hdr-btn,
-body[data-theme="kitty"] .pill-group {
+body[data-theme="kitty"] .topbar .pill-group {
   background: color-mix(in srgb, var(--on-solid) 14%, transparent);
   color: var(--on-solid);
   border-color: color-mix(in srgb, var(--on-solid) 76%, transparent);
 }
-body[data-theme="kitty"] .pill-btn { color: var(--on-solid); }
-body[data-theme="kitty"] .pill-btn.active {
+/* was: body[data-theme="kitty"] .pill-btn { color: var(--on-solid); } — too broad */
+body[data-theme="kitty"] .topbar .pill-btn {
+  color: var(--on-solid);
+}
+body[data-theme="kitty"] .topbar .pill-btn.active {
   background: var(--accent);
   color: var(--on-solid);
   border-color: var(--border);
@@ -8064,9 +8069,8 @@ body[data-theme="kitty"] .pill-btn.active {
   border-color: var(--border);
 }
 
-/* T121: 「更多」下拉面板內的 pill 文字色（淺色主題）
-   header topbar 的 pill 已由全域 kitty/nordic .pill-btn 規則設成白色；
-   .hdr-more-menu 多一層 selector，cascade 較晚且 specificity 較高，覆蓋頂部欄不受影響 */
+/* T121 + UX-B2-P01 1-3: 「更多」下拉在淺底，pill 用 --text（非 on-solid）。
+   topbar 深色區白字已收窄為 .topbar .pill-btn；此處保留覆蓋以防 cascade 變動。 */
 body[data-theme="kitty"] .hdr-more-menu .pill-btn {
   color: var(--text);
 }

@@ -251,8 +251,22 @@ select {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* T151: 手機版頁面進場淡入（page-level main only；不碰 WorkbenchMobileShell tab 滑動） */
+@media (max-width: 960px) {
+  .shell-main > main {
+    animation: mobilePageIn .2s ease;
+  }
+}
+@keyframes mobilePageIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .shell-main > * { animation: none; }
+  /* .shell-main > main 需單獨寫：type 選擇器 specificity 高於 *，否則 T151 會蓋掉降級 */
+  .shell-main > *,
+  .shell-main > main {
+    animation: none;
+  }
 }
 
 /* Desktop collapsible sidebar (default icon column; .shell.nav-open expands) */
@@ -7564,6 +7578,10 @@ body[data-theme="kitty"] .toast--warn {
   }
 }
 @media (max-width: 960px) {
+  /* T153: 定位在 .toast-host（fixed），非 .toast 本體；抬高避開 tabbar + safe area */
+  .toast-host {
+    bottom: calc(90px + env(safe-area-inset-bottom));
+  }
   .toast {
     min-width: 0;
   }
@@ -8017,5 +8035,22 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
   }
   .pocket-add input {
     min-height: 44px;
+  }
+}
+
+/* UX-AF T143: prefers-reduced-motion 無障礙降級（檔案末尾統一管理）
+   已有降級、此處不重複：page-enter、brand-pulse（.brand-dot）、rc-tab-fade、
+   arm-shake（.v-arm-confirm）、workbench-mobile-tab-enter、mobilePageIn（見 shell-main 區） */
+@media (prefers-reduced-motion: reduce) {
+  /* uploadSpin / pulse / spinStatus → 停動畫、保留靜態樣式 */
+  .pthumb-status-overlay,
+  .gen-dot.running,
+  .rc-status.generating,
+  .rc-status.schip--run {
+    animation-duration: 0s;
+  }
+  /* toast-in 進場 */
+  .toast {
+    animation: none;
   }
 }

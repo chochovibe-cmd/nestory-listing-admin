@@ -237,10 +237,11 @@ body[data-theme="dark"] {
 已有 `prefers-reduced-motion` 的動畫（`page-enter`、`brand-pulse`、`rc-tab-fade`）不需再加。
 
 ### 驗收
-- [ ] 開啟系統「減少動態效果」後，旋轉環停止旋轉（但仍顯示靜態環）
-- [ ] toast 不滑入（直接出現）
-- [ ] 品牌圓點不閃爍
-- [ ] 頁面切換等有用的過渡不受影響
+- [x] 開啟系統「減少動態效果」後，旋轉環停止旋轉（但仍顯示靜態環）— 程式 2026-07-20 第十八批
+- [x] toast 不滑入（直接出現）— 程式 2026-07-20 第十八批
+- [x] 品牌圓點不閃爍 — 既有 `.brand-dot` reduced-motion（本批跳過）
+- [x] 頁面切換等有用的過渡不受影響 — 本批只降級 spin／pulse／toast-in
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -514,9 +515,10 @@ CSS（在 `@media max-width: 960px` 區塊內）：
 不做左右方向判斷（太複雜且 Next.js App Router 不原生支持），只做淡入 + 微向上，製造「到了新地方」的存在感。
 
 ### 驗收
-- [ ] 手機版切頁時有輕微淡入
-- [ ] 桌面版不受影響
-- [ ] 不與 WorkbenchMobileShell 的 tab slide 衝突
+- [x] 手機版切頁時有輕微淡入 — 程式 2026-07-20 第十八批（`.shell-main > main`）
+- [x] 桌面版不受影響 — 僅 `@media (max-width: 960px)`
+- [x] 不與 WorkbenchMobileShell 的 tab slide 衝突 — 套 page-level `main`，不碰 tab 容器
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -557,17 +559,19 @@ Toast 固定在 `bottom: 84px`，但手機版 tabbar 高度 + safe area 可能�
 ### 規格
 
 ```css
-/* T153: toast 在手機版抬高（避開 tabbar + safe area） */
+/* T153: toast 在手機版抬高（避開 tabbar + safe area）
+   實作註：定位在 .toast-host（position:fixed），非 .toast 本體 */
 @media (max-width: 960px) {
-  .toast {
+  .toast-host {
     bottom: calc(90px + env(safe-area-inset-bottom));
   }
 }
 ```
 
 ### 驗收
-- [ ] 手機版 toast 不被 tabbar 遮住
-- [ ] 桌面版 toast 位置不變
+- [x] 手機版 toast 不被 tabbar 遮住 — 程式 2026-07-20 第十八批（`.toast-host` bottom 90px+safe）
+- [x] 桌面版 toast 位置不變 — 僅 max-width 960 覆寫
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -578,7 +582,7 @@ Toast 固定在 `bottom: 84px`，但手機版 tabbar 高度 + safe area 可能�
 ```
 第十六批（純 CSS 快打）：T137 + T138 + T142 + T148 + T150 → 5 行 CSS 改動，5 分鐘
 第十七批（動畫組）：T139 + T140 + T141 + T144 + T145 → CSS 動畫，10 分鐘
-第十八批（無障礙 + 手機體驗）：T143 + T151 + T153 → 10 分鐘
+第十八批（無障礙 + 手機體驗）：T143 + T151 + T153 → ✅ 2026-07-20 程式完成待 Claude 核
 第十九批（TSX 結構）：T146 + T147 + T149 + T152 → 新增 error.tsx + loading.tsx + CTA，15 分鐘
 ```
 

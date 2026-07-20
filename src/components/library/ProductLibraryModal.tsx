@@ -222,7 +222,7 @@ export function ProductLibraryModal({
       }}
       role="dialog"
     >
-      <div className="modal-box library-modal mobile-sheet">
+      <div className="modal-box library-modal">
         <div className="modal-hdr">
           <span id={titleId}>🔍 商品庫</span>
           <button aria-label="關閉" className="modal-close" onClick={onClose} type="button">

@@ -118,10 +118,11 @@ Modal 打開時瞬間出現，沒有任何過渡。感覺像「跳出來嚇人�
 ```
 
 ### 驗收
-- [ ] 桌面：modal 有輕微縮放 + 淡入（0.18s）
-- [ ] 手機：modal 從底部滑入（0.22s）
-- [ ] 連續開關不卡頓
-- [ ] Sequential Review overlay 不受影響（`.seq-review-overlay` 有自己的動畫）
+- [x] 桌面：modal 有輕微縮放 + 淡入（0.18s）— 程式 2026-07-20 第十七批
+- [x] 手機：modal 從底部滑入（0.22s）— 程式 2026-07-20 第十七批
+- [x] 連續開關不卡頓 — 純 CSS animation，無 JS 狀態
+- [x] Sequential Review overlay 不受影響（`.seq-review-box { animation: none }`）
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -149,10 +150,11 @@ body[data-theme="dark"] {
 - 需要在 dark 主題下確認：卡片、modal、dropzone、toast 都不會太重
 
 ### 驗收
-- [ ] dark 模式卡片有明顯深度
-- [ ] 不會太重（不像浮在空中）
-- [ ] nordic/kitty 不受影響
-- [ ] modal 的 shadow-m 自然
+- [x] dark 模式卡片有明顯深度 — 程式 2026-07-20 第十七批（.30 / .38）
+- [x] 不會太重（不像浮在空中）— 取中間值（非 mockup .35/.45）
+- [x] nordic/kitty 不受影響 — 僅改 `:root`/dark 區塊
+- [x] modal 的 shadow-m 自然 — token 路徑
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -176,9 +178,10 @@ body[data-theme="dark"] {
 只加一行 `transform: translateY(-1px)`。保持現有 `transition: all .2s` 已足夠。
 
 ### 驗收
-- [ ] hover 時輕微上浮
-- [ ] active 狀態不上浮（`.tone-card.active` 是選中不是 hover）
-- [ ] 三主題確認
+- [x] hover 時輕微上浮 — 程式 2026-07-20 第十七批
+- [x] active 狀態不上浮（`.tone-card:hover` 獨立規則加 transform）
+- [x] 三主題確認（token 路徑）
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -263,9 +266,10 @@ body[data-theme="dark"] {
 需在 `.dropzone` 加 `transition: border-color .15s, transform .15s, box-shadow .15s;`（如果沒有的話）。
 
 ### 驗收
-- [ ] hover 有微微放大 + 陰影加深
-- [ ] 離開後回彈自然
-- [ ] 手機版不影響（touch 沒有 hover）
+- [x] hover 有微微放大 + 陰影加深 — 程式 2026-07-20 第十七批
+- [x] 離開後回彈自然 — transition 0.15s
+- [x] 手機版不影響（touch 沒有 hover）
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -287,9 +291,10 @@ body[data-theme="dark"] {
 ```
 
 ### 驗收
-- [ ] 長按/拖曳 thumbnail 時放大 + 陰影加深
-- [ ] 放開後回彈
-- [ ] 不影響拖曳排序功能
+- [x] 長按/拖曳 thumbnail 時放大 + 陰影加深 — 程式 2026-07-20 第十七批
+- [x] 放開後回彈 — :active 偽類
+- [x] 不影響拖曳排序功能 — 僅視覺 transform/shadow
+- [ ] **待 Claude 核畫面**
 
 ---
 

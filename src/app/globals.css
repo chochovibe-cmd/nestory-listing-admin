@@ -2028,10 +2028,18 @@ textarea {
   background: color-mix(in srgb, var(--danger, var(--accent2)) 13%, var(--surface));
 }
 
+/* 與站別 chip 同一排（inline），勿再另起一列 */
 .rc-meta-marks {
-  display: block;
+  display: inline;
   font-size: 11px;
-  margin-top: 2px;
+  margin-top: 0;
+  white-space: nowrap;
+}
+.rc-head-meta .rc-meta-marks {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .result-card.is-copy-locked .rc-title::after {
@@ -6136,16 +6144,20 @@ textarea {
 /* UX-AC T118 + UX-B2-P07 7-2/7-3: mobile card touch; × in-flow; chips not absolute */
 @media (max-width: 960px) {
   .rc-header {
-    padding: 14px;
+    padding: 12px;
     gap: 10px;
   }
   .rc-quick {
     width: 100%;
-    justify-content: flex-end;
+    justify-content: stretch;
+    margin-left: 0;
+    flex-shrink: 1;
+    min-width: 0;
   }
   .rc-quick-btn {
     min-height: 44px;
-    flex: 0 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
   }
   .rc-dismiss-btn {
     position: static;
@@ -7665,9 +7677,6 @@ body[data-theme="nordic"] {
     align-items: flex-start;
     flex-wrap: wrap;
   }
-  .rc-headmain {
-    flex-basis: 100%;
-  }
   .rc-title {
     white-space: normal;
   }
@@ -7734,14 +7743,13 @@ body[data-theme="nordic"] {
   }
 
   .rc-header { align-items: flex-start; flex-wrap: wrap; }
-  .rc-headmain { flex-basis: 100%; }
   .rc-title { white-space: normal; }
   .rc-detect-chips { max-width: 100%; }
   .mini-btn { min-height: 44px; padding: 8px 12px; }
   .version-nav-btn { min-height: 44px; min-width: 44px; }
   .btn-save-version { min-height: 44px; }
-  .rc-quick { width: 100%; }
-  .rc-quick-btn { min-height: 44px; flex: 1; }
+  .rc-quick { width: 100%; margin-left: 0; flex-shrink: 1; min-width: 0; }
+  .rc-quick-btn { min-height: 44px; flex: 1 1 0; min-width: 0; }
   .rc-tab { min-height: 44px; }
   .rc-price-stack { flex-direction: row; align-items: center; gap: 8px; }
   .rc-price-mini { align-items: flex-start; }
@@ -7787,71 +7795,111 @@ body[data-theme="nordic"] {
   .act-btn { min-height: 44px; }
 }
 
-/* UX-B2-P09: phone result-card header stack — full-width quick actions
-   Place after 768/960 rc-* rules so cascade wins without !important.
-   Scope .result-card > .rc-header so queue-card (also uses .rc-header) is not mis-styled. */
-@media (max-width: 640px) {
-  .result-card > .rc-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+/* UX-B2-P09r: 手機／平板審核結果卡 — grid 響應式
+   對齊 shell 斷點 959：縮圖+標題並排；售價、快捷鈕各自滿寬；不裁切按鈕。
+   Scope .result-card > .rc-header，避免誤傷 queue-card。 */
+@media (max-width: 959px) {
+  .workbench-panes,
+  .workbench-pane,
+  .workbench-pane-results,
+  .panel.results-panel,
+  .panel-body,
+  .results-list {
+    min-width: 0;
+    max-width: 100%;
   }
-
-  /* 頂列：checkbox / thumb 與同列元素垂直置中 */
-  .result-card > .rc-header > .rc-thumb {
+  .result-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .result-card > .rc-header {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "check thumb main dismiss toggle"
+      "price price price price   price"
+      "quick quick quick quick   quick";
+    align-items: start;
+    column-gap: 8px;
+    row-gap: 10px;
+    padding: 12px;
+    min-width: 0;
+  }
+  .result-card > .rc-header > .rc-checkbox {
+    grid-area: check;
     align-self: center;
   }
-
-  /* 標題＋標籤整塊獨佔一行（detect chips 已在 headmain 內垂直堆） */
-  .result-card > .rc-header > .rc-headmain {
-    flex: 1 1 100%;
-    min-width: 100%;
-    order: 1;
+  .result-card > .rc-header > .rc-thumb {
+    grid-area: thumb;
+    align-self: start;
+    width: 64px;
+    height: 64px;
   }
-
+  .result-card > .rc-header > .rc-headmain {
+    grid-area: main;
+    min-width: 0;
+    flex: none;
+    width: auto;
+  }
   .result-card > .rc-header .rc-title {
     white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
-
-  /* 售價獨立一列（真實 class 是 .rc-price-mini；stack 一併對齊） */
   .result-card > .rc-header > .rc-price-mini,
   .result-card > .rc-header > .rc-price-stack {
-    flex: 1 1 100%;
-    min-width: 100%;
-    order: 2;
+    grid-area: price;
+    width: 100%;
+    min-width: 0;
     align-items: flex-start;
   }
   .result-card > .rc-header .rc-price-mini-sub {
     justify-content: flex-start;
   }
-
-  /* 操作列：滿寬；核准/重生／標圖 2–3 鈕等分 */
   .result-card > .rc-header > .rc-quick {
-    order: 3;
+    grid-area: quick;
+    display: flex;
+    flex-wrap: wrap;
     width: 100%;
-    flex: 1 1 100%;
+    max-width: 100%;
+    min-width: 0;
     margin-left: 0;
+    flex-shrink: 1;
     justify-content: stretch;
     gap: 8px;
   }
   .result-card > .rc-header > .rc-quick .nb-btn,
   .result-card > .rc-header > .rc-quick .rc-quick-btn {
-    flex: 1 1 0;
+    flex: 1 1 calc(50% - 4px);
     min-width: 0;
     min-height: 44px;
+    white-space: normal;
+    text-align: center;
+    padding-left: 8px;
+    padding-right: 8px;
   }
-
-  /* 狀態 chip、×、展開：標題與按鈕之後，勿插到 title 上方 */
+  .result-card > .rc-header > .rc-quick .nb-btn .nb-btn__label {
+    white-space: normal;
+    line-height: 1.2;
+  }
   .result-card > .rc-header > .rc-status-chips {
-    order: 4;
-    width: 100%;
-    margin-left: 0;
+    display: none; /* 站別已併入 head-meta */
   }
   .result-card > .rc-header > .rc-dismiss-btn {
-    order: 5;
+    grid-area: dismiss;
+    align-self: start;
+    justify-self: end;
+    margin-left: 0;
   }
   .result-card > .rc-header > .rc-toggle {
-    order: 5;
+    grid-area: toggle;
+    align-self: start;
+    justify-self: end;
+    margin-left: 0;
+  }
+  /* 無 checkbox：thumb 從第一欄開始 */
+  .result-card > .rc-header > .rc-thumb:first-child {
+    grid-column: check / thumb;
   }
 }
 

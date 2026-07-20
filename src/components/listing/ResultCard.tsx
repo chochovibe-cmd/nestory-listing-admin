@@ -1837,6 +1837,12 @@ export function ResultCard({
                 >
                   {primary.label}
                 </span>
+                {/* 標圖摘要：跟站別同一排（例如 1 保留／0 簡轉繁…） */}
+                {isImageStation ? (
+                  <span className="rc-meta-marks muted">
+                    {formatMarkSummaryLine(markSummary)}
+                  </span>
+                ) : null}
                 {secondary ? <StatusBadge status={secondary} /> : null}
                 {timeLabel ? (
                   <span
@@ -1925,9 +1931,6 @@ export function ResultCard({
                 </span>
               ) : null}
             </span>
-          ) : null}
-          {isImageStation ? (
-            <span className="rc-meta-marks muted">{formatMarkSummaryLine(markSummary)}</span>
           ) : null}
         </span>
         {/* UX-PKG6 6-2: collapsed price mini (label + hero value); PricingPanel 4-grid untouched */}
@@ -2047,10 +2050,10 @@ export function ResultCard({
                 className="rc-quick-btn"
                 disabled={quickBusy}
                 onClick={() => setLockedPreviewOpen(true)}
-                title="定稿預覽（唯讀）"
+                title="文案預覽（唯讀）"
                 type="button"
               >
-                📄
+                文案預覽
               </Button>
               <Button
                 variant={actionArm === "revision" ? "danger" : "secondary"}
@@ -2429,7 +2432,7 @@ export function ResultCard({
                   {actionArm === "review" ? station2Btn.arm : station2Btn.primary}
                 </Button>
                 <Button size="sm" onClick={() => setLockedPreviewOpen(true)} type="button">
-                  📄 定稿預覽
+                  文案預覽
                 </Button>
                 <Button
                   variant={actionArm === "revision" ? "danger" : "secondary"}

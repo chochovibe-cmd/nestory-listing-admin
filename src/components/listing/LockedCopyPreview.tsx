@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 /**
- * R2 station②: 📄 定稿預覽 — locked copy / tags / price (read-only).
+ * R2 station②: 文案預覽 — locked copy / tags / price (read-only).
  * UX-I T54/T57: modal-hdr shell + Esc close (display only).
  * UX-B2-P01 1-2: portal to body so fixed overlay is not trapped inside
  * .result-card (transform/overflow → wrong containing block / collapse ghost).
@@ -70,7 +70,7 @@ export function LockedCopyPreview({
         aria-labelledby="locked-copy-title"
       >
         <div className="modal-hdr">
-          <span id="locked-copy-title">📄 定稿預覽（唯讀）</span>
+          <span id="locked-copy-title">文案預覽（唯讀）</span>
           <button aria-label="關閉" className="modal-close" onClick={onClose} type="button">
             ×
           </button>

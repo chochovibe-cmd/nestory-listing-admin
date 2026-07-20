@@ -448,13 +448,16 @@ export function DashboardTodoPanel() {
                 {error}
               </p>
             ) : todoAllEmpty ? (
-              /* UX-AB T85: unified empty-state when no backlog */
+              /* UX-AB T85 + UX-AF T152: unified empty-state + CTA when no backlog */
               <div className="empty-state">
                 <div className="empty-icon" aria-hidden>
                   ✅
                 </div>
                 <p className="empty-state-title">今日待辦已清空</p>
                 <p className="empty-state-desc">太棒了，沒有待處理項目</p>
+                <Link className="act-btn fill empty-state-cta" href="/drafts/new">
+                  ✦ 新增下一件商品
+                </Link>
               </div>
             ) : (
               <>

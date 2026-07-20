@@ -340,10 +340,11 @@ export default function GlobalError({
 用現有的 `.empty-state` 樣式，不需新增 CSS。品牌內的錯誤頁，不是白底紅字。
 
 ### 驗收
-- [ ] 任何頁面 throw error 時顯示品牌內錯誤頁
-- [ ] 「重新載入」按鈕能 reset
-- [ ] 三主題確認
-- [ ] 不影響現有的 per-component error handling
+- [x] 任何頁面 throw error 時顯示品牌內錯誤頁 — 程式 2026-07-20 第十九批
+- [x] 「重新載入」按鈕能 reset — `reset()` onClick
+- [x] 三主題確認（token 路徑：`.empty-state`／`.button`）
+- [x] 不影響現有的 per-component error handling — 僅新增 `error.tsx`
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -406,9 +407,10 @@ export default function Loading() {
 `/settings` 已有 Suspense fallback 且結構簡單（accordion），不需額外 loading.tsx。
 
 ### 驗收
-- [ ] 各頁面首次載入時顯示骨架而非空白
-- [ ] 骨架動畫平滑（已有 `.skel` pulse）
-- [ ] 三主題確認（`.skel` 用 `--surface2`）
+- [x] 各頁面首次載入時顯示骨架而非空白 — 程式 2026-07-20 第十九批
+- [x] 骨架動畫平滑（已有 `.skel` pulse）
+- [x] 三主題確認（`.skel` 用 `--surface2`）
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -461,7 +463,8 @@ export default function Loading() {
 ```
 
 ### 驗收
-- [ ] 訪問 `/scouting` 時有骨架閃過（如果有 auth latency）
+- [x] 訪問 `/scouting` 時有骨架閃過（如果有 auth latency）— 程式 2026-07-20 第十九批
+- [ ] **待 Claude 核畫面**
 
 ---
 
@@ -546,8 +549,9 @@ CSS（在 `@media max-width: 960px` 區塊內）：
 **PublishRecordsPanel `shopify_drafts` tab**（如果沒有 CTA）：確認已有（T129 應該做過）。
 
 ### 驗收
-- [ ] Dashboard 待辦清空時有「新增下一件」按鈕
-- [ ] 所有空狀態都有至少一個行動選項
+- [x] Dashboard 待辦清空時有「新增下一件」按鈕 — 程式 2026-07-20 第十九批（`act-btn fill empty-state-cta` 對齊 ImageReviewPanel）
+- [x] 所有空狀態都有至少一個行動選項 — 本批補 Dashboard；其他既有 CTA 保留
+- [ ] **待 Claude 核畫面**
 
 ---
 

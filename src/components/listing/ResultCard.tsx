@@ -45,6 +45,10 @@ import {
   hasBlockingWarnings,
   countConfirmOnly
 } from "@/lib/drafts/warningTiers";
+import {
+  formatAbsoluteLocalTime,
+  formatRelativeTime
+} from "@/lib/formatRelativeTime";
 import { RegenCopyModal } from "@/components/listing/RegenCopyModal";
 import { LockedCopyPreview } from "@/components/listing/LockedCopyPreview";
 import { COPY_TONES, type CopyTone } from "@/lib/providers/copy";
@@ -210,6 +214,10 @@ export function ResultCard({
   approveSignal,
   /** UX-Q T70: parent sets tab (1–5 shortcuts); null = no-op */
   externalTab = null,
+  /** UX-B2-P14: default false＝「只看我的」不顯示帳號 chip */
+  showOwnerChip = false,
+  /** UX-B2-P14: resolved display name; no chip if empty (never dump full UUID as body) */
+  ownerLabel = null,
 }: {
   draft: ProductDraft;
   images: ProductImage[];
@@ -227,6 +235,10 @@ export function ResultCard({
   onApproveSuccess?: () => void;
   approveSignal?: number;
   externalTab?: ResultCardTabId | null;
+  /** 預設 false＝「只看我的」不顯示帳號 */
+  showOwnerChip?: boolean;
+  /** 已解析的顯示名；無則不渲染 chip（勿直接印整段 UUID） */
+  ownerLabel?: string | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -1813,6 +1825,34 @@ export function ResultCard({
         </span>
         <span className="rc-headmain">
           <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+          {/* UX-B2-P14: relative time always; owner chip only in all-scope */}
+          {(() => {
+            const timeLabel = formatRelativeTime(draft.created_at);
+            const timeTitle = formatAbsoluteLocalTime(draft.created_at);
+            const showOwner =
+              showOwnerChip && Boolean(ownerLabel?.trim());
+            if (!timeLabel && !showOwner) return null;
+            return (
+              <span className="rc-head-meta">
+                {timeLabel ? (
+                  <span
+                    className="rc-time-ago muted"
+                    title={timeTitle || undefined}
+                  >
+                    {timeLabel}
+                  </span>
+                ) : null}
+                {showOwner ? (
+                  <span
+                    className="rc-owner-chip"
+                    title={draft.created_by ?? undefined}
+                  >
+                    {ownerLabel}
+                  </span>
+                ) : null}
+              </span>
+            );
+          })()}
           {/* B4: 收合列即可見 IP／角色／類型 chips＋⚠（不用展開才發現未建檔） */}
           {draft.ip_name || draft.character_name || detectTypeLabel || generationToneLabel || confirmWarnCount > 0 || blockWarnCount > 0 || suggestWarnCount > 0 || copyLocked ? (
             <span className="rc-detect-chips">

@@ -82,8 +82,18 @@ import {
   UNDO_TOAST_MS
 } from "@/lib/drafts/quickUndo";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
+import { isAdmin } from "@/lib/auth/roles";
+import { libraryCreatorLabel } from "@/lib/library/productLibrary";
 import { createClient } from "@/lib/supabase/client";
-import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
+import type {
+  ProductDraft,
+  ProductImage,
+  ProductVariantRow,
+  UserRole
+} from "@/types/domain";
+
+/** UX-B2-P14: workbench results list scope (align Dashboard / 紀錄) */
+type ResultsScopeMode = "mine" | "all";
 
 /**
  * Workbench variant row for ResultCard price range + UX-M T64 specs hydrate.
@@ -116,16 +126,25 @@ const EMPTY_VARIANT_PRICES: VariantPriceRow[] = [];
 export function DraftResultsPanel({
   drafts,
   images,
-  variants = []
+  variants = [],
+  userId = null
 }: {
   drafts: ProductDraft[];
   images: ProductImage[];
   /** P1-5: multi-variant sell prices for card range display */
   variants?: VariantPriceRow[];
+  /** UX-B2-P14: current user for mine filter + owner chip gate */
+  userId?: string | null;
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  /** UX-B2-P14: default「只看我的」；admin 可切「全部成員」 */
+  const [scope, setScope] = useState<ResultsScopeMode>("mine");
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [roleReady, setRoleReady] = useState(false);
+  const [nameById, setNameById] = useState<Map<string, string>>(() => new Map());
+  const admin = isAdmin(role);
   /** BX5: progress text on the primary batch button itself (not toast-only) */
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -225,6 +244,72 @@ export function DraftResultsPanel({
     window.addEventListener(GENERATION_PROGRESS_EVENT, onProgress);
     return () => window.removeEventListener(GENERATION_PROGRESS_EVENT, onProgress);
   }, []);
+
+  // UX-B2-P14: resolve role so only admin sees「全部成員」toggle
+  useEffect(() => {
+    if (!userId) {
+      setRole(null);
+      setRoleReady(true);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const supabase = createClient();
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .single();
+        if (cancelled) return;
+        setRole((profile?.role as UserRole | undefined) ?? null);
+      } catch {
+        if (!cancelled) setRole(null);
+      } finally {
+        if (!cancelled) setRoleReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // UX-B2-P14: batch-resolve creator display names (same pattern as 商品庫)
+  useEffect(() => {
+    const creatorIds = [
+      ...new Set(
+        drafts
+          .map((d) => d.created_by)
+          .filter((id): id is string => Boolean(id))
+      )
+    ];
+    if (creatorIds.length === 0) {
+      setNameById(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const supabase = createClient();
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, name")
+          .in("id", creatorIds);
+        if (cancelled) return;
+        const map = new Map<string, string>();
+        for (const p of profiles ?? []) {
+          const row = p as { id: string; name: string | null };
+          if (row.id && row.name?.trim()) map.set(row.id, row.name.trim());
+        }
+        setNameById(map);
+      } catch {
+        if (!cancelled) setNameById(new Map());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [drafts]);
 
   function clearJumpHighlightTimer() {
     if (jumpHighlightTimerRef.current != null) {
@@ -360,8 +445,26 @@ export function DraftResultsPanel({
     [images]
   );
 
+  /**
+   * UX-B2-P14: scope filter before station queue.
+   * mine（預設）→ created_by === userId；all → 已載入全部（RLS 可見範圍）.
+   * Operator 沒有「全部」切換；若 RLS 已只給自己，filter 仍安全.
+   */
+  const scopedDrafts = useMemo(() => {
+    const useMine = !admin || scope === "mine";
+    if (useMine && userId) {
+      return drafts.filter((d) => d.created_by === userId);
+    }
+    return drafts;
+  }, [admin, drafts, scope, userId]);
+
+  const showOwnerChip = admin && scope === "all";
+
   // R2: work queue excludes input / published / archived
-  const workQueueDrafts = useMemo(() => filterWorkQueueDrafts(drafts), [drafts]);
+  const workQueueDrafts = useMemo(
+    () => filterWorkQueueDrafts(scopedDrafts),
+    [scopedDrafts]
+  );
 
   /**
    * UX-F T29: client classify enrolled pipeline drafts → factory bridge.
@@ -369,9 +472,9 @@ export function DraftResultsPanel({
    * processing/pending factory items still show after leaving 標圖.
    */
   const factoryBridgeSummary = useMemo(() => {
-    const active = drafts.filter((d) => d.status !== "archived");
+    const active = scopedDrafts.filter((d) => d.status !== "archived");
     return buildFactoryBridgeSummary(active, imagesByDraft);
-  }, [drafts, imagesByDraft]);
+  }, [scopedDrafts, imagesByDraft]);
 
   const stageCounts = useMemo(
     () => countStations(workQueueDrafts),
@@ -1224,7 +1327,7 @@ export function DraftResultsPanel({
     router.push("/drafts/new");
   }
 
-  const showToolbar = workQueueDrafts.length > 0 || drafts.length > 0;
+  const showToolbar = workQueueDrafts.length > 0 || scopedDrafts.length > 0;
   const isCopyStation = stage === "copy_review";
   const isImageStation = stage === "image_review";
   const isReadyStation = stage === "ready";
@@ -1449,7 +1552,24 @@ export function DraftResultsPanel({
         ) : null}
 
         {/* UX-B2-P02 2-2: 站別 pills + 排序同行；pills 常駐（不綁 showToolbar） */}
+        {/* UX-B2-P14: admin scope（只看我的／全部）放 pills 列，重用 ir-scope-select */}
         <div className="stage-filter-row">
+          {roleReady && admin ? (
+            <label className="results-scope-label">
+              <span className="sr-only">範圍</span>
+              <select
+                aria-label="範圍"
+                className="ir-scope-select"
+                onChange={(event) =>
+                  setScope(event.target.value as ResultsScopeMode)
+                }
+                value={scope}
+              >
+                <option value="mine">只看我的</option>
+                <option value="all">全部成員</option>
+              </select>
+            </label>
+          ) : null}
           <StageFilterPills
             counts={stageCounts}
             onChange={onStageChange}
@@ -1497,14 +1617,22 @@ export function DraftResultsPanel({
           </div>
         ) : null}
 
-        {drafts.length === 0 && !progress ? (
+        {scopedDrafts.length === 0 && !progress ? (
           /* UX-AB T85 + UX-AD T129: full-empty + CTA */
           <div className="empty-state">
             <div className="empty-icon" aria-hidden>
               📦
             </div>
-            <p className="empty-state-title">還沒有任何草稿</p>
-            <p className="empty-state-desc">使用左側表單新增第一筆商品</p>
+            <p className="empty-state-title">
+              {drafts.length > 0 && scope === "mine"
+                ? "目前沒有你的草稿"
+                : "還沒有任何草稿"}
+            </p>
+            <p className="empty-state-desc">
+              {drafts.length > 0 && scope === "mine"
+                ? "可切換「全部成員」查看其他人，或用左側表單新增"
+                : "使用左側表單新增第一筆商品"}
+            </p>
             <button
               className="act-btn fill empty-state-cta"
               onClick={goToAddFirstProduct}
@@ -1554,6 +1682,12 @@ export function DraftResultsPanel({
                 key={draft.id}
                 leaving={leavingIds.has(draft.id)}
                 onToggle={() => toggleOne(draft.id)}
+                ownerLabel={
+                  draft.created_by
+                    ? libraryCreatorLabel(draft.created_by, nameById)
+                    : null
+                }
+                showOwnerChip={showOwnerChip}
                 variantPrices={variantsByDraft.get(draft.id) ?? EMPTY_VARIANT_PRICES}
               />
             ))}

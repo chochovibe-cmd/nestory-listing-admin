@@ -73,7 +73,12 @@ export function WorkbenchPageClient({
         <QuickPreviewPanel drafts={jumpDrafts} excludeDraftIds={excludeDraftIds} />
       }
       results={
-        <DraftResultsPanel drafts={drafts} images={images} variants={variants} />
+        <DraftResultsPanel
+          drafts={drafts}
+          images={images}
+          userId={userId}
+          variants={variants}
+        />
       }
     />
   );

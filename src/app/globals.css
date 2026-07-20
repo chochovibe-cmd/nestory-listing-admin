@@ -1761,6 +1761,15 @@ textarea {
   margin-left: 0;
   flex-shrink: 0;
 }
+/* UX-B2-P14: mine/all scope beside station pills (reuses .ir-scope-select) */
+.stage-filter-row .results-scope-label {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.stage-filter-row .results-scope-label .ir-scope-select {
+  min-height: 36px;
+}
 
 /* B12: stage filter pills under batch toolbar (reuse .pill-group/.pill-btn tokens). */
 .stage-filter-pills {
@@ -6260,6 +6269,31 @@ textarea {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* UX-B2-P14: relative time + owner chip under title (inside headmain; P09 order safe) */
+.rc-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 2px;
+}
+.rc-time-ago {
+  font-size: 11px;
+}
+.rc-owner-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  max-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* B4: system-status chips under collapsed title (tokens only) */

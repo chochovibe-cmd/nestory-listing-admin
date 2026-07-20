@@ -5521,6 +5521,27 @@ textarea {
   font-size: 12px;
   font-weight: 700;
 }
+/* UX-PKG6 6-3: rc-quick scope contrast — tokens only, no hard-coded white */
+.rc-quick .nb-btn--primary {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.rc-quick .nb-btn--secondary {
+  color: var(--text);
+  border-color: var(--border);
+}
+.rc-quick .nb-btn--primary .nb-btn__spinner,
+.rc-quick .nb-btn--primary.nb-btn--loading {
+  color: var(--accent-fg);
+}
+.rc-quick .nb-btn--secondary .nb-btn__spinner {
+  color: var(--text);
+}
+/* Station pills in header: keep soft outline, strengthen run text if pale */
+.rc-status-chips .schip--run {
+  color: color-mix(in srgb, var(--warn) 55%, var(--text));
+}
 @media (max-width: 960px) {
   .rc-quick .nb-btn,
   .rc-collapsed-notice .nb-btn {
@@ -5528,7 +5549,9 @@ textarea {
   }
 }
 
-/* UX-AC T114: chips sit with header chrome (compact; not a heavy row) */
+/* UX-AC T114: chips sit with header chrome (compact; not a heavy row)
+   UX-PKG6 6-1: was flex 1 1 auto — stole free space from .rc-headmain and left
+   a wide blank next to station pills. Shrink-wrap only; stick right if room. */
 .rc-status-chips {
   display: inline-flex;
   flex-wrap: wrap;
@@ -5536,8 +5559,8 @@ textarea {
   align-items: center;
   padding: 0;
   margin: 0;
-  flex: 1 1 auto;
-  min-width: 0;
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 /* UX-AC T114: archive → icon-only × on card corner */
@@ -5852,13 +5875,16 @@ textarea {
 }
 
 .rc-title {
-  /* UX-H T42: high-frequency titles ≥14px; UX-BTN2: visual hero of the row */
+  /* UX-H T42: high-frequency titles ≥14px; UX-BTN2: visual hero of the row
+     UX-PKG6 6-1: two-line clamp (was nowrap+ellipsis — truncated too early) */
   font-size: 15px;
   font-weight: 700;
   color: var(--text);
-  white-space: nowrap;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* B4: system-status chips under collapsed title (tokens only) */
@@ -6972,6 +6998,8 @@ body[data-theme="nordic"] {
   .rc-quick-btn { min-height: 44px; flex: 1; }
   .rc-tab { min-height: 44px; }
   .rc-price-stack { flex-direction: row; align-items: center; gap: 8px; }
+  .rc-price-mini { align-items: flex-start; }
+  .rc-price-mini-sub { justify-content: flex-start; }
   .rc-actions { flex-wrap: wrap; }
   .rc-header-actions { margin-left: 0; width: 100%; }
   .results-batch-toolbar { gap: 8px; }
@@ -7275,6 +7303,47 @@ body[data-theme="nordic"] {
   border-radius: 999px;
 }
 .rc-compare { font-size: 10px; color: var(--text-muted); text-decoration: line-through; white-space: nowrap; }
+
+/* UX-PKG6 6-2: collapsed-row price mini (label + hero number); PricingPanel 4-grid untouched */
+.rc-price-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.rc-price-mini-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.rc-price-mini-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.rc-price-mini-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  white-space: nowrap;
+}
+.rc-price-mini-sub {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.rc-price-mini-strike {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  white-space: nowrap;
+}
+.rc-price-mini-profit {
+  color: var(--success);
+  white-space: nowrap;
+}
 
 /* ── Header: live rate + deployment status dropdown ── */
 .rate-val { font-weight: 800; }
@@ -7910,11 +7979,14 @@ body[data-theme="kitty"] .toast--warn {
    Dark keeps surface2 contrast; light themes lift default mini actions onto
    --surface with a semi-transparent border + soft shadow so they don't blend
    into panels. fill/good solid CTAs are excluded. Hover reasserts accent so
-   this block (later in the cascade) doesn't pin the idle surface bg. ── */
+   this block (later in the cascade) doesn't pin the idle surface bg.
+   UX-PKG6 6-3: exclude .nb-btn--primary — T113 surface lift was painting
+   solid CTAs cream/white while .nb-btn--primary kept color: var(--accent-fg)
+   (#fff) → white-on-white “字消失”. Secondary/danger still get surface lift. ── */
 body[data-theme="nordic"] .mini-btn,
 body[data-theme="nordic"] .btn-mini,
 body[data-theme="nordic"] .act-btn:not(.fill):not(.good),
-body[data-theme="nordic"] .rc-quick-btn {
+body[data-theme="nordic"] .rc-quick-btn:not(.nb-btn--primary) {
   background: var(--surface);
   border-color: color-mix(in srgb, var(--border) 55%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--border) 6%, transparent);
@@ -7923,7 +7995,7 @@ body[data-theme="nordic"] .rc-quick-btn {
 body[data-theme="kitty"] .mini-btn,
 body[data-theme="kitty"] .btn-mini,
 body[data-theme="kitty"] .act-btn:not(.fill):not(.good),
-body[data-theme="kitty"] .rc-quick-btn {
+body[data-theme="kitty"] .rc-quick-btn:not(.nb-btn--primary) {
   background: var(--surface);
   border-color: color-mix(in srgb, var(--border) 50%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--border) 5%, transparent);

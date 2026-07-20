@@ -1862,23 +1862,41 @@ export function ResultCard({
             <span className="rc-meta-marks muted">{formatMarkSummaryLine(markSummary)}</span>
           ) : null}
         </span>
+        {/* UX-PKG6 6-2: collapsed price mini (label + hero value); PricingPanel 4-grid untouched */}
         {isCopyStation && priceRangeLabel ? (
-          <div className="rc-price-stack">
-            <span className="rc-price">{priceRangeLabel}</span>
-            {priceMode === "sale" && draft.compare_at_price && !priceRangeLabel.includes("~") ? (
-              <span className="rc-compare muted">定價 NT${draft.compare_at_price.toLocaleString()}</span>
-            ) : null}
-            {profit != null && !priceRangeLabel.includes("~") ? (
-              <span className="rc-profit">
-                利潤 NT${profit.toLocaleString()}
-                {profitPct != null ? `（約 ${profitPct}%）` : ""}
-              </span>
+          <div className="rc-price-mini">
+            <div className="rc-price-mini-main">
+              <span className="rc-price-mini-label">售價</span>
+              <span className="rc-price-mini-value">{priceRangeLabel}</span>
+            </div>
+            {(priceMode === "sale" &&
+              draft.compare_at_price &&
+              !priceRangeLabel.includes("~")) ||
+            (profit != null && !priceRangeLabel.includes("~")) ? (
+              <div className="rc-price-mini-sub">
+                {priceMode === "sale" &&
+                draft.compare_at_price &&
+                !priceRangeLabel.includes("~") ? (
+                  <span className="rc-price-mini-strike">
+                    NT${draft.compare_at_price.toLocaleString()}
+                  </span>
+                ) : null}
+                {profit != null && !priceRangeLabel.includes("~") ? (
+                  <span className="rc-price-mini-profit">
+                    利潤 NT${profit.toLocaleString()}
+                    {profitPct != null ? `（約 ${profitPct}%）` : ""}
+                  </span>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}
         {isReadyStation && priceRangeLabel ? (
-          <div className="rc-price-stack">
-            <span className="rc-price">{priceRangeLabel}</span>
+          <div className="rc-price-mini">
+            <div className="rc-price-mini-main">
+              <span className="rc-price-mini-label">售價</span>
+              <span className="rc-price-mini-value">{priceRangeLabel}</span>
+            </div>
           </div>
         ) : null}
         {/* R2: station-scoped quick actions — UX-BTN3: unified Button + rc-quick compact */}

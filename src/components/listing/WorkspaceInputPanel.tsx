@@ -2630,33 +2630,36 @@ export function WorkspaceInputPanel({
                   ))}
                 </div>
               </div>
-              <div className="copy-len-row field">
-                <label style={{ margin: 0 }}>文案長度</label>
-                <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
-                  {LENGTH_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="wsearch-row">
-                <div className="wsearch-label">
-                  <span className="wsearch-label-row">
-                    🔍 Web Search 補充資訊
-                    <FieldHelp label="Web Search 說明">
-                      預設開啟（冷門 IP／規格更準）；趕時間可關。搜尋結果只當內部核實，不會寫進上架文案。
-                    </FieldHelp>
-                  </span>
+              {/* UX-B2-P05: 文案長度 + Web Search 同一子選項組 */}
+              <div className="copy-options-group">
+                <div className="copy-len-row field">
+                  <label style={{ margin: 0 }}>文案長度</label>
+                  <select onChange={(e) => setCopyLength(e.target.value as (typeof LENGTH_OPTIONS)[number])} value={copyLength}>
+                    {LENGTH_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
-                <div className="toggle-wrap">
-                  <label className="toggle">
-                    <input
-                      checked={useWebSearch}
-                      onChange={(e) => setUseWebSearch(e.target.checked)}
-                      type="checkbox"
-                    />
-                    <span className="toggle-slider" />
-                  </label>
-                  <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "已關閉"}</span>
+                <div className="wsearch-row">
+                  <div className="wsearch-label">
+                    <span className="wsearch-label-row">
+                      🔍 Web Search 補充資訊
+                      <FieldHelp label="Web Search 說明">
+                        預設開啟（冷門 IP／規格更準）；趕時間可關。搜尋結果只當內部核實，不會寫進上架文案。
+                      </FieldHelp>
+                    </span>
+                  </div>
+                  <div className="toggle-wrap">
+                    <label className="toggle">
+                      <input
+                        checked={useWebSearch}
+                        onChange={(e) => setUseWebSearch(e.target.checked)}
+                        type="checkbox"
+                      />
+                      <span className="toggle-slider" />
+                    </label>
+                    <span className="toggle-cost">{useWebSearch ? "+約 10–15 秒" : "已關閉"}</span>
+                  </div>
                 </div>
               </div>
             </div>

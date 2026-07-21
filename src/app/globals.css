@@ -1672,6 +1672,10 @@ textarea {
   flex-shrink: 0;
   white-space: nowrap;
 }
+/* UX-B3-P04: clear multi-select from batch strip */
+.rc-batch-cancel {
+  flex-shrink: 0;
+}
 .rc-batch-strip .batch-actions,
 .rc-batch-actions {
   display: flex;
@@ -1680,6 +1684,82 @@ textarea {
   gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* UX-B3-P04: mobile swipe-to-reveal quick actions (narrow only; desktop inert) */
+.rc-swipe-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--frame-radius-panel);
+  min-width: 0;
+  max-width: 100%;
+}
+.rc-swipe-actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 140px;
+  display: flex;
+  z-index: 0;
+  align-items: stretch;
+}
+.rc-swipe-actions .rc-swipe-approve,
+.rc-swipe-actions .rc-swipe-secondary {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: normal;
+  word-break: break-word;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.rc-swipe-actions .rc-swipe-approve {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.rc-swipe-actions .rc-swipe-secondary {
+  background: var(--surface2);
+  color: var(--text);
+  border-left: 1px solid var(--border);
+}
+.rc-swipe-actions .rc-swipe-approve:disabled,
+.rc-swipe-actions .rc-swipe-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.rc-swipe-front {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  transition: transform 0.15s ease-out, box-shadow 0.2s, border-color 0.2s, opacity 0.25s ease;
+}
+.rc-swipe-front.rc-swipe-dragging {
+  transition: none;
+}
+/* Checked card cue in multi-select (tokens only) */
+.result-card.is-checked {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+/* Mobile: do not fight swipe translateX with hover lift */
+@media (max-width: 959px) {
+  .rc-swipe-wrap .result-card:hover:not(.active) {
+    transform: none;
+  }
+  .rc-swipe-wrap.is-swiping .result-card:hover:not(.active) {
+    transform: none;
+  }
+  .rc-checkbox.sel {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
 /* UX-E T27: primary batch CTA + overflow "更多" (tokens only). */

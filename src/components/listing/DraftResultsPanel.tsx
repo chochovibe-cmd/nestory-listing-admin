@@ -138,6 +138,8 @@ export function DraftResultsPanel({
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /** UX-B3-P04: only one card may keep swipe-open actions */
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** UX-B2-P14: default「只看我的」；admin 可切「全部成員」 */
   const [scope, setScope] = useState<ResultsScopeMode>("mine");
@@ -546,6 +548,25 @@ export function DraftResultsPanel({
       return next;
     });
   }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setOpenSwipeId(null);
+  }
+
+  // UX-B3-P04: Esc clears multi-select
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        clearSelection();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear on Esc only while selected
+  }, [selectedIds.size]);
 
   function toggleAll() {
     setSelectedIds((current) => {
@@ -1440,6 +1461,15 @@ export function DraftResultsPanel({
             aria-label="批次操作"
           >
             <span className="rc-batch-count">已選 {selectedIds.size} 筆</span>
+            <Button
+              size="sm"
+              className="rc-batch-cancel"
+              onClick={clearSelection}
+              title="取消多選"
+              type="button"
+            >
+              取消
+            </Button>
             <div className="rc-batch-actions batch-actions">
               {isCopyStation ? (
                 <>
@@ -1689,13 +1719,21 @@ export function DraftResultsPanel({
                 isJumpTarget={jumpTargetId === draft.id}
                 key={draft.id}
                 leaving={leavingIds.has(draft.id)}
+                onGestureStart={() => {
+                  setOpenSwipeId((cur) => (cur === draft.id ? cur : null));
+                }}
+                onSwipeOpenChange={(open) => {
+                  setOpenSwipeId(open ? draft.id : null);
+                }}
                 onToggle={() => toggleOne(draft.id)}
                 ownerLabel={
                   draft.created_by
                     ? libraryCreatorLabel(draft.created_by, nameById)
                     : null
                 }
+                selectMode={selectedIds.size > 0}
                 showOwnerChip={showOwnerChip}
+                swipeOpen={openSwipeId === draft.id}
                 variantPrices={variantsByDraft.get(draft.id) ?? EMPTY_VARIANT_PRICES}
               />
             ))}

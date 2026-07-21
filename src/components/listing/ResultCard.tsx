@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type TouchEvent as ReactTouchEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
@@ -134,6 +141,12 @@ import { ResultCardTagsPanel } from "@/components/listing/result-card/ResultCard
 import { ResultCardSeoPanel } from "@/components/listing/result-card/ResultCardSeoPanel";
 import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCardImagesPanel";
 
+/** UX-B3-P04: align with MobileTabbar FAB long-press */
+export const LONG_PRESS_MS = 500;
+const GESTURE_MOVE_PX = 10;
+const SWIPE_ACTION_W = 140;
+const SWIPE_ACTION_W_SINGLE = 80;
+
 /** UX-M T64: full-enough row for dbRowsToForm (price range still uses twd_price). */
 type ResultCardVariantRow = {
   twd_price?: number | null;
@@ -211,6 +224,14 @@ export function ResultCard({
   showOwnerChip = false,
   /** UX-B2-P14: resolved display name; no chip if empty (never dump full UUID as body) */
   ownerLabel = null,
+  /** UX-B3-P04: parent has any selection → header tap toggles, not expand */
+  selectMode = false,
+  /** UX-B3-P04: this card's swipe is the open peer (others closed by parent) */
+  swipeOpen = false,
+  /** UX-B3-P04: notify parent when swipe snaps open/closed */
+  onSwipeOpenChange,
+  /** UX-B3-P04: touch start → parent closes other cards' swipe */
+  onGestureStart,
 }: {
   draft: ProductDraft;
   images: ProductImage[];
@@ -232,6 +253,12 @@ export function ResultCard({
   showOwnerChip?: boolean;
   /** 已解析的顯示名；無則不渲染 chip（勿直接印整段 UUID） */
   ownerLabel?: string | null;
+  /** UX-B3-P04: multi-select mode (selectedIds.size > 0) */
+  selectMode?: boolean;
+  /** UX-B3-P04: whether this card currently owns open swipe */
+  swipeOpen?: boolean;
+  onSwipeOpenChange?: (open: boolean) => void;
+  onGestureStart?: () => void;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -1781,22 +1808,269 @@ export function ResultCard({
     if (message.startsWith("再點一次確認收合")) {
       setMessage("");
     }
+    // UX-B3-P04: expanding closes swipe
+    closeSwipe();
     setExpanded((current) => !current);
+  }
+
+  // UX-B3-P04: narrow viewport for mobile gestures only
+  const [isNarrow, setIsNarrow] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
+  const [swipeDragging, setSwipeDragging] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
+  const touchStartRef = useRef({ x: 0, y: 0 });
+  const swipeAxisRef = useRef<"none" | "h" | "v">("none");
+
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current != null) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function closeSwipe() {
+    setSwipeX(0);
+    setSwipeDragging(false);
+    onSwipeOpenChange?.(false);
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 959px)");
+    const sync = () => setIsNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => () => clearLongPressTimer(), []);
+
+  // Peer closed by parent / leave multi-select → snap shut
+  useEffect(() => {
+    if (!swipeOpen && swipeX !== 0) {
+      setSwipeX(0);
+      setSwipeDragging(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only peer flag
+  }, [swipeOpen]);
+
+  useEffect(() => {
+    if (expanded || selectMode || !isNarrow) {
+      if (swipeX !== 0) closeSwipe();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mode gates
+  }, [expanded, selectMode, isNarrow]);
+
+  const swipeEnabled =
+    isNarrow &&
+    !expanded &&
+    !selectMode &&
+    !sequentialMode &&
+    !isArchived &&
+    (isCopyStation || isImageStation || isReadyStation);
+
+  const swipeActionWidth =
+    isReadyStation && !isCopyStation && !isImageStation
+      ? SWIPE_ACTION_W_SINGLE
+      : SWIPE_ACTION_W;
+
+  function handleHeaderTouchStart(event: ReactTouchEvent) {
+    if (!isNarrow || sequentialMode) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    onGestureStart?.();
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    swipeAxisRef.current = "none";
+    longPressTriggeredRef.current = false;
+    setSwipeDragging(false);
+
+    if (onToggle) {
+      clearLongPressTimer();
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTriggeredRef.current = true;
+        longPressTimerRef.current = null;
+        closeSwipe();
+        // Enter multi-select: check if not already checked
+        if (!(checked ?? false)) {
+          onToggle();
+        }
+      }, LONG_PRESS_MS);
+    }
+  }
+
+  function handleHeaderTouchMove(event: ReactTouchEvent) {
+    if (!isNarrow || sequentialMode) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+
+    if (Math.abs(dx) > GESTURE_MOVE_PX || Math.abs(dy) > GESTURE_MOVE_PX) {
+      clearLongPressTimer();
+    }
+
+    if (!swipeEnabled) return;
+
+    if (swipeAxisRef.current === "none") {
+      if (Math.abs(dy) > GESTURE_MOVE_PX && Math.abs(dy) >= Math.abs(dx)) {
+        swipeAxisRef.current = "v";
+        return;
+      }
+      if (Math.abs(dx) > GESTURE_MOVE_PX && Math.abs(dx) > Math.abs(dy)) {
+        swipeAxisRef.current = "h";
+        setSwipeDragging(true);
+        clearLongPressTimer();
+      }
+    }
+
+    if (swipeAxisRef.current === "h") {
+      // Left swipe only
+      const next = Math.max(Math.min(dx, 0), -swipeActionWidth);
+      setSwipeX(next);
+    }
+  }
+
+  function handleHeaderTouchEnd() {
+    if (!isNarrow) return;
+    clearLongPressTimer();
+    if (swipeAxisRef.current === "h" && swipeEnabled) {
+      setSwipeDragging(false);
+      setSwipeX((current) => {
+        const open = current < -swipeActionWidth / 2;
+        const next = open ? -swipeActionWidth : 0;
+        onSwipeOpenChange?.(open);
+        return next;
+      });
+    }
+    swipeAxisRef.current = "none";
+  }
+
+  function handleHeaderClick() {
+    // Long-press already selected — swallow synthetic click (do not expand)
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
+      return;
+    }
+    // Multi-select mode: tap card = toggle selection (expand via ▸ only)
+    if (isNarrow && selectMode && onToggle) {
+      onToggle();
+      return;
+    }
+    tryToggleExpand();
+  }
+
+  function runSwipeAction(action: () => void) {
+    action();
+    closeSwipe();
   }
 
   // UX-B2-P07 7-6: accept halfwidth ~ (legacy) or fullwidth ～
   const isPriceRange = Boolean(priceRangeLabel && /~|～/.test(priceRangeLabel));
 
+  const swipeActions =
+    !isArchived && isCopyStation ? (
+      <>
+        <button
+          className="rc-swipe-approve"
+          disabled={
+            regenerating ||
+            regeneratingField != null ||
+            !canQuickApprove ||
+            hasBlockingWarnings(warningSummary) ||
+            quickBusy
+          }
+          onClick={() => runSwipeAction(() => void approveOnly())}
+          type="button"
+        >
+          ✓ 核准
+        </button>
+        <button
+          className="rc-swipe-secondary"
+          disabled={quickBusy || regeneratingField != null || regenerating}
+          onClick={() =>
+            runSwipeAction(() => {
+              const remembered = recalledToneForIp(
+                typeof window !== "undefined" ? window.localStorage : null,
+                draft.ip_name
+              );
+              if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
+                setRegenTone(remembered as CopyTone);
+              }
+              setRegenOpen(true);
+            })
+          }
+          type="button"
+        >
+          ↻ 重生
+        </button>
+      </>
+    ) : !isArchived && isImageStation ? (
+      <>
+        <button
+          className="rc-swipe-approve"
+          disabled={hasBlockingWarnings(warningSummary) || quickBusy}
+          onClick={() => runSwipeAction(() => void stationReview())}
+          type="button"
+        >
+          {actionArm === "review" ? station2Btn.arm : station2Btn.primary}
+        </button>
+        <button
+          className="rc-swipe-secondary"
+          disabled={quickBusy}
+          onClick={() => runSwipeAction(() => void requestRevision())}
+          type="button"
+        >
+          {actionArm === "revision" ? "⚠ 確認退回" : "↩ 退回"}
+        </button>
+      </>
+    ) : !isArchived && isReadyStation ? (
+      <button
+        className="rc-swipe-approve"
+        disabled={approveSummaryBusy || comboSaving || station3Busy}
+        onClick={() => runSwipeAction(() => setStation3Open(true))}
+        type="button"
+      >
+        發布／匯出
+      </button>
+    ) : null;
+
   return (
-    <div
-      className={`result-card${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}${leaving ? " is-leaving" : ""}${isJumpTarget ? " is-jump-target" : ""}`}
-      id={`draft-card-${draft.id}`}
-    >
-      <div className="rc-header" onClick={() => tryToggleExpand()}>
+    <div className={`rc-swipe-wrap${swipeX !== 0 || swipeDragging ? " is-swiping" : ""}`}>
+      {isNarrow && swipeActions ? (
+        <div
+          aria-hidden={swipeX === 0}
+          className="rc-swipe-actions"
+          style={{ width: swipeActionWidth }}
+        >
+          {swipeActions}
+        </div>
+      ) : null}
+      <div
+        className={`result-card rc-swipe-front${expanded ? " active" : ""}${copyLocked ? " is-copy-locked" : ""}${leaving ? " is-leaving" : ""}${isJumpTarget ? " is-jump-target" : ""}${swipeDragging ? " rc-swipe-dragging" : ""}${checked ? " is-checked" : ""}`}
+        id={`draft-card-${draft.id}`}
+        style={
+          isNarrow && !leaving
+            ? { transform: `translateX(${swipeX}px)` }
+            : undefined
+        }
+      >
+      <div
+        className="rc-header"
+        onClick={handleHeaderClick}
+        onContextMenu={(event) => {
+          // UX-B3-P04: avoid long-press callout/menu on mobile
+          if (isNarrow) event.preventDefault();
+        }}
+        onTouchCancel={handleHeaderTouchEnd}
+        onTouchEnd={handleHeaderTouchEnd}
+        onTouchMove={handleHeaderTouchMove}
+        onTouchStart={handleHeaderTouchStart}
+      >
         {onToggle ? (
           <input
             checked={checked ?? false}
-            className="rc-checkbox"
+            className={`rc-checkbox${checked ? " sel" : ""}`}
             onClick={(event) => event.stopPropagation()}
             onChange={onToggle}
             type="checkbox"
@@ -2121,7 +2395,26 @@ export function ResultCard({
             {archiveBusy ? "…" : "×"}
           </button>
         ) : null}
-        <span className="rc-toggle">{expanded ? "▾" : "▸"}</span>
+        <span
+          className="rc-toggle"
+          onClick={(event) => {
+            // UX-B3-P04: in multi-select, only ▸ expands; stop header toggle-select
+            event.stopPropagation();
+            tryToggleExpand();
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              tryToggleExpand();
+            }
+          }}
+          aria-label={expanded ? "收合卡片" : "展開卡片"}
+        >
+          {expanded ? "▾" : "▸"}
+        </span>
       </div>
 
       {failReasonSummary ? (
@@ -2559,6 +2852,7 @@ export function ResultCard({
         highlights={productHighlights}
         description={description}
       />
+    </div>
     </div>
   );
 }

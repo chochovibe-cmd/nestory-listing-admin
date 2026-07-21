@@ -9515,6 +9515,59 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
   display: none; /* chip moved next to 新增商品 title */
 }
 
+/* ── UX-B3-P05: 輸入區視覺分層（僅 .workspace-input-panel）──
+ * 問題：面板／收合區／內卡都是同色底 + 1px 框 → 大框套小框分不出層級。
+ * 原則：同一層只用一種區隔（底色或邊框）；相鄰層交替淺→深→淺。
+ * 範圍鎖定輸入面板，勿動設定頁／Dashboard 的全域 .adv-section。
+ *
+ * L1 外層面板 — surface + 既有 .panel 框（不另加第二層框）
+ * L2 收合區   — surface2 底、無框；箭頭低調
+ * L3 內卡     — surface + border-soft 淡框；選取／hover accent 保留
+ */
+.panel.workspace-input-panel {
+  background: var(--surface);
+  /* border / radius / shadow 沿用 .panel；overflow:visible 見上方 UX-PKG3 */
+}
+
+/* L2：用底色分層，拿掉重框 */
+.workspace-input-panel .adv-section {
+  background: var(--surface2);
+  border: none;
+  border-radius: var(--radius-m);
+  box-shadow: none;
+}
+
+/* L2 箭頭 ▾／▸：縮小淡化，不跟標題搶 */
+.workspace-input-panel .adv-section-title > span:first-child {
+  opacity: 0.5;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+/* L3 內卡：回到 surface + 淡框（shot 的 dashed 樣式保留） */
+.workspace-input-panel .source-card,
+.workspace-input-panel .tone-card {
+  background: var(--surface);
+  border-color: var(--border-soft);
+}
+
+/* 語氣卡選中／hover：維持 accent 框；混色基底改 L3 surface */
+.workspace-input-panel .tone-card:hover,
+.workspace-input-panel .tone-card.active,
+.workspace-input-panel .tone-card.sel,
+.workspace-input-panel .tone-card.sel--ring {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+/* source-card--shot hover／dragover 既有 accent 規則維持，不覆寫 */
+
+/* 文案設定子組：淡框 + 輕混底，避免第四層重框 */
+.workspace-input-panel .copy-options-group {
+  border-color: var(--border-soft);
+  background: color-mix(in srgb, var(--surface) 70%, var(--surface2));
+}
+
 /* 桌機頂欄順序：匯率 → 主題 → 商品庫 → 更多 → 登出 */
 @media (min-width: 960px) {
   .nav .hdr-fx { order: 1; }

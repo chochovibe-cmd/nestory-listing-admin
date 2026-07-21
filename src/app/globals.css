@@ -6850,7 +6850,7 @@ textarea {
   gap: 4px;
 }
 
-/* UX-B4-P06: title + sale chip (P02) + fail reason share one wrap row */
+/* UX-B4-P02/P06: title + sale badge + fail reason share one wrap row */
 .rc-title-row {
   display: flex;
   flex-wrap: wrap;
@@ -6874,6 +6874,39 @@ textarea {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
+}
+
+/* UX-B4-P02: muted sale-status chip after title (tokens only) */
+.rc-sale-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-muted);
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* UX-B4-P04: meta + detect + warn cluster (desktop stack; mobile row2 right) */
+.rc-head-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* UX-B4-P04: mobile regen + price share display:contents; desktop hide regen slot */
+.rc-m-row3 {
+  display: contents;
+}
+.rc-m-regen-slot {
+  display: none;
 }
 
 /* UX-B2-P14: relative time + owner chip under title (inside headmain; P09 order safe) */
@@ -8237,8 +8270,9 @@ body[data-theme="nordic"] {
   .act-btn { min-height: 44px; }
 }
 
-/* UX-B2-P09r: 手機／平板審核結果卡 — grid 響應式
-   對齊 shell 斷點 959：縮圖+標題並排；售價、快捷鈕各自滿寬；不裁切按鈕。
+/* UX-B4-P04: 手機結果卡三排骨架
+   1 標題(+銷售小標/失敗紅字)  2 縮圖|chips  3 重生|售價
+   chrome：checkbox／核准列／×／▸ 隱藏；重生在第 3 排左
    Scope .result-card > .rc-header，避免誤傷 queue-card。 */
 @media (max-width: 959px) {
   .workbench-panes,
@@ -8256,20 +8290,36 @@ body[data-theme="nordic"] {
   }
   .result-card > .rc-header {
     display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-columns: 64px minmax(0, 1fr);
     grid-template-areas:
-      "check thumb main"
-      "price price price"
-      "quick quick quick";
+      "title title"
+      "thumb chips"
+      "regen price";
     align-items: start;
-    column-gap: 8px;
+    column-gap: 10px;
     row-gap: 10px;
     padding: 12px;
     min-width: 0;
   }
+  /* chrome 精簡：長按多選；左滑核准／快捷 */
   .result-card > .rc-header > .rc-checkbox {
-    grid-area: check;
-    align-self: center;
+    display: none;
+  }
+  .result-card > .rc-header > .rc-quick-row {
+    display: none;
+  }
+  .result-card > .rc-header > .rc-headmain {
+    display: contents;
+  }
+  .result-card > .rc-header .rc-title-row {
+    grid-area: title;
+    width: 100%;
+    min-width: 0;
+  }
+  .result-card > .rc-header .rc-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .result-card > .rc-header > .rc-thumb {
     grid-area: thumb;
@@ -8277,73 +8327,77 @@ body[data-theme="nordic"] {
     width: 64px;
     height: 64px;
   }
-  .result-card > .rc-header > .rc-headmain {
-    grid-area: main;
+  .result-card > .rc-header .rc-head-chips {
+    grid-area: chips;
     min-width: 0;
-    flex: none;
-    width: auto;
   }
-  .result-card > .rc-header .rc-title {
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+  .result-card > .rc-header .rc-m-regen-slot {
+    grid-area: regen;
+    display: flex;
+    align-items: center;
+    align-self: center;
+    min-width: 0;
   }
-  .result-card > .rc-header > .rc-price-mini,
-  .result-card > .rc-header > .rc-price-stack {
+  .result-card > .rc-header .rc-m-regen-btn,
+  .result-card > .rc-header .rc-m-regen-slot .nb-btn {
+    min-height: 44px;
+    min-width: 72px;
+  }
+  .result-card > .rc-header .rc-price-mini,
+  .result-card > .rc-header .rc-price-stack {
     grid-area: price;
     width: 100%;
     min-width: 0;
-    align-items: flex-start;
+    align-items: flex-end;
+    justify-self: end;
+    align-self: center;
   }
   .result-card > .rc-header .rc-price-mini-sub {
-    justify-content: flex-start;
-  }
-  /* 快捷＋×＋▸ 同一 grid 列 */
-  .result-card > .rc-header > .rc-quick-row {
-    grid-area: quick;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    margin-left: 0;
-    gap: 8px;
-  }
-  .result-card > .rc-header > .rc-quick-row .rc-quick {
-    display: flex;
-    flex-wrap: wrap;
-    flex: 1 1 auto;
-    width: auto;
-    max-width: 100%;
-    min-width: 0;
-    margin-left: 0;
-    justify-content: stretch;
-    gap: 8px;
-  }
-  .result-card > .rc-header > .rc-quick-row .rc-quick .nb-btn,
-  .result-card > .rc-header > .rc-quick-row .rc-quick .rc-quick-btn {
-    flex: 1 1 calc(50% - 4px);
-    min-width: 0;
-    min-height: 44px;
-    white-space: normal;
-    text-align: center;
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-  .result-card > .rc-header > .rc-quick-row .rc-quick .nb-btn .nb-btn__label {
-    white-space: normal;
-    line-height: 1.2;
-  }
-  .result-card > .rc-header > .rc-quick-row .rc-dismiss-btn,
-  .result-card > .rc-header > .rc-quick-row .rc-toggle {
-    flex-shrink: 0;
-    align-self: center;
-    margin-left: 0;
+    justify-content: flex-end;
   }
   .result-card > .rc-header > .rc-status-chips {
-    display: none; /* 站別已併入 head-meta */
+    display: none;
   }
-  /* 無 checkbox：thumb 從第一欄開始 */
-  .result-card > .rc-header > .rc-thumb:first-child {
-    grid-column: check / thumb;
+
+  /* 列表頂：長按／左滑提示（桌機隱藏） */
+  .rc-gesture-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--accent3) 8%, var(--surface2));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+  }
+  .rc-gesture-hint-dismiss {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .rc-gesture-hint-dismiss:hover {
+    background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+    color: var(--text);
+  }
+}
+
+@media (min-width: 960px) {
+  .rc-gesture-hint {
+    display: none;
   }
 }
 

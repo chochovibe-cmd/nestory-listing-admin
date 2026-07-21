@@ -52,6 +52,7 @@ import {
 } from "@/lib/drafts/toneMemory";
 import { resolveDraftStation } from "@/lib/drafts/stationFilter";
 import { formatDraftFailSummary } from "@/lib/drafts/failReasons";
+import { formatSaleStatusBadge } from "@/lib/saleStatus";
 import {
   gradeDraftWarnings,
   hasBlockingWarnings,
@@ -517,6 +518,8 @@ export function ResultCard({
   const collapsedNotice = markMessage || message;
   // UX-I T53: surface generation_error / warnings on failed cards (display only).
   const failReasonSummary = formatDraftFailSummary(draft);
+  // UX-B4-P02: sale status short badge after title (display only).
+  const saleStatusBadge = formatSaleStatusBadge(draft.sale_status);
 
   // fix(B12): commit notice first; defer refresh so UI isn't racing RSC.
   async function archiveOne() {
@@ -1968,6 +1971,171 @@ export function ResultCard({
   // UX-B2-P07 7-6: accept halfwidth ~ (legacy) or fullwidth ～
   const isPriceRange = Boolean(priceRangeLabel && /~|～/.test(priceRangeLabel));
 
+  function openRegenModal() {
+    const remembered = recalledToneForIp(
+      typeof window !== "undefined" ? window.localStorage : null,
+      draft.ip_name
+    );
+    if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
+      setRegenTone(remembered as CopyTone);
+    }
+    setRegenOpen(true);
+  }
+
+  const titleRowEl = (
+    <span className="rc-title-row">
+      <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+      {saleStatusBadge ? (
+        <span className="rc-sale-badge" title={`銷售狀態：${saleStatusBadge}`}>
+          {saleStatusBadge}
+        </span>
+      ) : null}
+      {failReasonSummary ? (
+        <span className="rc-fail-reason" role="status" title={failReasonSummary}>
+          {failReasonSummary}
+        </span>
+      ) : null}
+    </span>
+  );
+
+  const headMetaEl = (() => {
+    const timeLabel = formatRelativeTime(draft.created_at);
+    const timeTitle = formatAbsoluteLocalTime(draft.created_at);
+    const showOwner = showOwnerChip && Boolean(ownerLabel?.trim());
+    const primary = stationFlowPrimaryLabel(draft);
+    const secondary = secondaryStatusForResultCard(draft);
+    return (
+      <span className="rc-head-meta">
+        <span
+          className={
+            primary.kind === "fail"
+              ? "schip schip--error rc-station-chip"
+              : "schip schip--run rc-station-chip"
+          }
+        >
+          {primary.label}
+        </span>
+        {isImageStation ? (
+          <span className="rc-meta-marks muted">
+            {formatMarkSummaryLine(markSummary)}
+          </span>
+        ) : null}
+        {secondary ? <StatusBadge status={secondary} /> : null}
+        {timeLabel ? (
+          <span className="rc-time-ago muted" title={timeTitle || undefined}>
+            {timeLabel}
+          </span>
+        ) : null}
+        {showOwner ? (
+          <span className="rc-owner-chip" title={draft.created_by ?? undefined}>
+            {ownerLabel}
+          </span>
+        ) : null}
+      </span>
+    );
+  })();
+
+  const detectTagsEl =
+    draft.ip_name ||
+    draft.character_name ||
+    detectTypeLabel ||
+    generationToneLabel ? (
+      <span className="rc-detect-chips rc-detect-chips--tags">
+        {draft.ip_name ? (
+          <span className="rc-detect-chip rc-detect-chip--ip">{draft.ip_name}</span>
+        ) : null}
+        {draft.character_name ? (
+          <span
+            className={`rc-detect-chip rc-detect-chip--char${
+              characterChipWarned ? " is-warn" : ""
+            }`}
+          >
+            {characterChipWarned ? "⚠ " : ""}
+            {draft.character_name}
+          </span>
+        ) : null}
+        {detectTypeLabel ? (
+          <span className="rc-detect-chip">{detectTypeLabel}</span>
+        ) : null}
+        {generationToneLabel ? (
+          <span
+            className="rc-detect-chip rc-detect-chip--tone rc-tone-chip"
+            title={`文案語氣：${generationToneLabel}`}
+          >
+            🎙 {generationToneLabel}
+          </span>
+        ) : null}
+      </span>
+    ) : null;
+
+  const detectWarnsEl =
+    copyLocked || blockWarnCount > 0 || confirmWarnCount > 0 || suggestWarnCount > 0 ? (
+      <span className="rc-detect-chips rc-detect-chips--warns">
+        {copyLocked ? (
+          <span className="rc-detect-chip" title="文案已鎖定">
+            🔒 文案已鎖定
+          </span>
+        ) : null}
+        {blockWarnCount > 0 ? (
+          <span
+            className="rc-detect-warn is-block"
+            title={warningSummary.block.map((w) => w.text).join("\n")}
+          >
+            ⛔ {blockWarnCount}
+          </span>
+        ) : null}
+        {confirmWarnCount > 0 ? (
+          <span
+            className="rc-detect-warn"
+            title={warningSummary.confirm.map((w) => w.text).join("\n")}
+          >
+            ⚠ {confirmWarnCount} 項待確認
+          </span>
+        ) : null}
+        {suggestWarnCount > 0 ? (
+          <span
+            className="rc-detect-chip rc-detect-suggest"
+            title={warningSummary.suggest.map((w) => w.text).join("\n")}
+          >
+            🔍 {suggestWarnCount}
+          </span>
+        ) : null}
+      </span>
+    ) : null;
+
+  const priceMiniEl =
+    isCopyStation && priceRangeLabel ? (
+      <div className="rc-price-mini">
+        <div className="rc-price-mini-main">
+          <span className="rc-price-mini-label">售價</span>
+          <span className="rc-price-mini-value">{priceRangeLabel}</span>
+        </div>
+        {(priceMode === "sale" && draft.compare_at_price && !isPriceRange) ||
+        (profit != null && !isPriceRange) ? (
+          <div className="rc-price-mini-sub">
+            {priceMode === "sale" && draft.compare_at_price && !isPriceRange ? (
+              <span className="rc-price-mini-strike">
+                NT${draft.compare_at_price.toLocaleString()}
+              </span>
+            ) : null}
+            {profit != null && !isPriceRange ? (
+              <span className="rc-price-mini-profit">
+                利潤 NT${profit.toLocaleString()}
+                {profitPct != null ? `（約 ${profitPct}%）` : ""}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    ) : isReadyStation && priceRangeLabel ? (
+      <div className="rc-price-mini">
+        <div className="rc-price-mini-main">
+          <span className="rc-price-mini-label">售價</span>
+          <span className="rc-price-mini-value">{priceRangeLabel}</span>
+        </div>
+      </div>
+    ) : null;
+
   const swipeActions =
     !isArchived && isCopyStation ? (
       <>
@@ -1988,18 +2156,7 @@ export function ResultCard({
         <button
           className="rc-swipe-secondary"
           disabled={quickBusy || regeneratingField != null || regenerating}
-          onClick={() =>
-            runSwipeAction(() => {
-              const remembered = recalledToneForIp(
-                typeof window !== "undefined" ? window.localStorage : null,
-                draft.ip_name
-              );
-              if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
-                setRegenTone(remembered as CopyTone);
-              }
-              setRegenOpen(true);
-            })
-          }
+          onClick={() => runSwipeAction(() => openRegenModal())}
           type="button"
         >
           ↻ 重生
@@ -2092,163 +2249,38 @@ export function ResultCard({
           )}
         </span>
         <span className="rc-headmain">
-          {/* UX-B4-P06: title + fail reason on same wrap row (sale chip slot for P02) */}
-          <span className="rc-title-row">
-            <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
-            {failReasonSummary ? (
-              <span className="rc-fail-reason" role="status" title={failReasonSummary}>
-                {failReasonSummary}
-              </span>
-            ) : null}
+          {/* UX-B4-P02/P06: title + sale badge + fail reason */}
+          {titleRowEl}
+          {/* UX-B4-P04: chips cluster (meta / tags / warns) — mobile row2 right */}
+          <span className="rc-head-chips">
+            {headMetaEl}
+            {detectTagsEl}
+            {detectWarnsEl}
           </span>
-          {/* Row1: 站別狀態 + 日期（+ owner） */}
-          {(() => {
-            const timeLabel = formatRelativeTime(draft.created_at);
-            const timeTitle = formatAbsoluteLocalTime(draft.created_at);
-            const showOwner = showOwnerChip && Boolean(ownerLabel?.trim());
-            const primary = stationFlowPrimaryLabel(draft);
-            const secondary = secondaryStatusForResultCard(draft);
-            return (
-              <span className="rc-head-meta">
-                <span
-                  className={
-                    primary.kind === "fail"
-                      ? "schip schip--error rc-station-chip"
-                      : "schip schip--run rc-station-chip"
-                  }
-                >
-                  {primary.label}
-                </span>
-                {/* 標圖摘要：跟站別同一排（例如 1 保留／0 簡轉繁…） */}
-                {isImageStation ? (
-                  <span className="rc-meta-marks muted">
-                    {formatMarkSummaryLine(markSummary)}
-                  </span>
-                ) : null}
-                {secondary ? <StatusBadge status={secondary} /> : null}
-                {timeLabel ? (
-                  <span
-                    className="rc-time-ago muted"
-                    title={timeTitle || undefined}
-                  >
-                    {timeLabel}
-                  </span>
-                ) : null}
-                {showOwner ? (
-                  <span
-                    className="rc-owner-chip"
-                    title={draft.created_by ?? undefined}
-                  >
-                    {ownerLabel}
-                  </span>
-                ) : null}
-              </span>
-            );
-          })()}
-          {/* Row2: IP／角色／類型／語氣（不含鎖定） */}
-          {draft.ip_name ||
-          draft.character_name ||
-          detectTypeLabel ||
-          generationToneLabel ? (
-            <span className="rc-detect-chips rc-detect-chips--tags">
-              {draft.ip_name ? (
-                <span className="rc-detect-chip rc-detect-chip--ip">{draft.ip_name}</span>
-              ) : null}
-              {draft.character_name ? (
-                <span
-                  className={`rc-detect-chip rc-detect-chip--char${
-                    characterChipWarned ? " is-warn" : ""
-                  }`}
-                >
-                  {characterChipWarned ? "⚠ " : ""}
-                  {draft.character_name}
-                </span>
-              ) : null}
-              {detectTypeLabel ? (
-                <span className="rc-detect-chip">{detectTypeLabel}</span>
-              ) : null}
-              {generationToneLabel ? (
-                <span
-                  className="rc-detect-chip rc-detect-chip--tone rc-tone-chip"
-                  title={`文案語氣：${generationToneLabel}`}
-                >
-                  🎙 {generationToneLabel}
-                </span>
-              ) : null}
-            </span>
-          ) : null}
-          {/* Row3: 文案已鎖定／警告／待確認／搜尋 */}
-          {copyLocked ||
-          blockWarnCount > 0 ||
-          confirmWarnCount > 0 ||
-          suggestWarnCount > 0 ? (
-            <span className="rc-detect-chips rc-detect-chips--warns">
-              {copyLocked ? (
-                <span className="rc-detect-chip" title="文案已鎖定">
-                  🔒 文案已鎖定
-                </span>
-              ) : null}
-              {blockWarnCount > 0 ? (
-                <span
-                  className="rc-detect-warn is-block"
-                  title={warningSummary.block.map((w) => w.text).join("\n")}
-                >
-                  ⛔ {blockWarnCount}
-                </span>
-              ) : null}
-              {confirmWarnCount > 0 ? (
-                <span
-                  className="rc-detect-warn"
-                  title={warningSummary.confirm.map((w) => w.text).join("\n")}
-                >
-                  ⚠ {confirmWarnCount} 項待確認
-                </span>
-              ) : null}
-              {suggestWarnCount > 0 ? (
-                <span
-                  className="rc-detect-chip rc-detect-suggest"
-                  title={warningSummary.suggest.map((w) => w.text).join("\n")}
-                >
-                  🔍 {suggestWarnCount}
-                </span>
-              ) : null}
-            </span>
-          ) : null}
         </span>
-        {/* UX-PKG6 6-2: collapsed price mini (label + hero value); PricingPanel 4-grid untouched */}
-        {isCopyStation && priceRangeLabel ? (
-          <div className="rc-price-mini">
-            <div className="rc-price-mini-main">
-              <span className="rc-price-mini-label">售價</span>
-              <span className="rc-price-mini-value">{priceRangeLabel}</span>
-            </div>
-            {(priceMode === "sale" && draft.compare_at_price && !isPriceRange) ||
-            (profit != null && !isPriceRange) ? (
-              <div className="rc-price-mini-sub">
-                {priceMode === "sale" && draft.compare_at_price && !isPriceRange ? (
-                  <span className="rc-price-mini-strike">
-                    NT${draft.compare_at_price.toLocaleString()}
-                  </span>
-                ) : null}
-                {profit != null && !isPriceRange ? (
-                  <span className="rc-price-mini-profit">
-                    利潤 NT${profit.toLocaleString()}
-                    {profitPct != null ? `（約 ${profitPct}%）` : ""}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {isReadyStation && priceRangeLabel ? (
-          <div className="rc-price-mini">
-            <div className="rc-price-mini-main">
-              <span className="rc-price-mini-label">售價</span>
-              <span className="rc-price-mini-value">{priceRangeLabel}</span>
-            </div>
-          </div>
-        ) : null}
-        {/* UX-B3-fix: 快捷鈕 + × + ▸ 同一列（手機避免 ×▸ 被 .rc-quick 100% 擠到下一行） */}
+        {/* UX-B4-P04: mobile row3 left regen (desktop hidden via CSS); price shares contents row */}
+        <span className="rc-m-row3">
+          {!isArchived && isCopyStation ? (
+            <span
+              className="rc-m-regen-slot"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Button
+                size="sm"
+                className="rc-quick-btn rc-m-regen-btn"
+                disabled={quickBusy || regeneratingField != null}
+                loading={regenerating}
+                onClick={() => openRegenModal()}
+                title="重新生成（可換語氣／填方向）"
+                type="button"
+              >
+                ↻ 重生
+              </Button>
+            </span>
+          ) : null}
+          {priceMiniEl}
+        </span>
+        {/* UX-B3-fix: 快捷鈕 + × + ▸ 同一列（桌機；手機整列隱藏，重生改 rc-m-regen-slot） */}
         <div className="rc-quick-row">
           <span className="rc-quick" onClick={(event) => event.stopPropagation()}>
             {isArchived ? (
@@ -2290,17 +2322,7 @@ export function ResultCard({
                   className="rc-quick-btn"
                   disabled={quickBusy || regeneratingField != null}
                   loading={regenerating}
-                  onClick={() => {
-                    // BX10: open with last tone for this IP when remembered
-                    const remembered = recalledToneForIp(
-                      typeof window !== "undefined" ? window.localStorage : null,
-                      draft.ip_name
-                    );
-                    if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
-                      setRegenTone(remembered as CopyTone);
-                    }
-                    setRegenOpen(true);
-                  }}
+                  onClick={() => openRegenModal()}
                   title="重新生成（可換語氣／填方向）"
                   type="button"
                 >

@@ -123,6 +123,9 @@ export type VariantPriceRow = Pick<
 /** Stable empty ref so ResultCard hydrate effect does not thrash on every render. */
 const EMPTY_VARIANT_PRICES: VariantPriceRow[] = [];
 
+/** UX-B4-P04: dismissible mobile gesture tip (long-press / swipe). */
+const RC_GESTURE_HINT_KEY = "nestory-rc-gesture-hint-v1";
+
 export function DraftResultsPanel({
   drafts,
   images,
@@ -140,6 +143,8 @@ export function DraftResultsPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   /** UX-B3-P04: only one card may keep swipe-open actions */
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
+  /** UX-B4-P04: list-top hint; CSS hides on desktop */
+  const [showGestureHint, setShowGestureHint] = useState(false);
   const [busy, setBusy] = useState(false);
   /** UX-B2-P14: default「只看我的」；admin 可切「全部成員」 */
   const [scope, setScope] = useState<ResultsScopeMode>("mine");
@@ -184,6 +189,27 @@ export function DraftResultsPanel({
   }
 
   useEffect(() => () => clearArchiveUndoTimer(), []);
+
+  // UX-B4-P04: show gesture tip until dismissed (localStorage)
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && window.localStorage.getItem(RC_GESTURE_HINT_KEY) !== "1") {
+        setShowGestureHint(true);
+      }
+    } catch {
+      setShowGestureHint(true);
+    }
+  }, []);
+
+  function dismissGestureHint() {
+    try {
+      window.localStorage.setItem(RC_GESTURE_HINT_KEY, "1");
+    } catch {
+      /* ignore quota / private mode */
+    }
+    setShowGestureHint(false);
+  }
+
   // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
   /** UX-H T49 / UX-AD T128: brief leave fade before hide or refresh. */
@@ -1710,34 +1736,49 @@ export function DraftResultsPanel({
             </button>
           </div>
         ) : (
-          <div className="results-list" id="results-list">
-            {visibleDrafts.map((draft) => (
-              <ResultCard
-                checked={selectedIds.has(draft.id)}
-                draft={draft}
-                images={imagesByDraft.get(draft.id) ?? []}
-                isJumpTarget={jumpTargetId === draft.id}
-                key={draft.id}
-                leaving={leavingIds.has(draft.id)}
-                onGestureStart={() => {
-                  setOpenSwipeId((cur) => (cur === draft.id ? cur : null));
-                }}
-                onSwipeOpenChange={(open) => {
-                  setOpenSwipeId(open ? draft.id : null);
-                }}
-                onToggle={() => toggleOne(draft.id)}
-                ownerLabel={
-                  draft.created_by
-                    ? libraryCreatorLabel(draft.created_by, nameById)
-                    : null
-                }
-                selectMode={selectedIds.size > 0}
-                showOwnerChip={showOwnerChip}
-                swipeOpen={openSwipeId === draft.id}
-                variantPrices={variantsByDraft.get(draft.id) ?? EMPTY_VARIANT_PRICES}
-              />
-            ))}
-          </div>
+          <>
+            {showGestureHint ? (
+              <p className="rc-gesture-hint" role="note">
+                <span>長按卡片可多選；左滑可快捷</span>
+                <button
+                  aria-label="關閉提示"
+                  className="rc-gesture-hint-dismiss"
+                  onClick={dismissGestureHint}
+                  type="button"
+                >
+                  ×
+                </button>
+              </p>
+            ) : null}
+            <div className="results-list" id="results-list">
+              {visibleDrafts.map((draft) => (
+                <ResultCard
+                  checked={selectedIds.has(draft.id)}
+                  draft={draft}
+                  images={imagesByDraft.get(draft.id) ?? []}
+                  isJumpTarget={jumpTargetId === draft.id}
+                  key={draft.id}
+                  leaving={leavingIds.has(draft.id)}
+                  onGestureStart={() => {
+                    setOpenSwipeId((cur) => (cur === draft.id ? cur : null));
+                  }}
+                  onSwipeOpenChange={(open) => {
+                    setOpenSwipeId(open ? draft.id : null);
+                  }}
+                  onToggle={() => toggleOne(draft.id)}
+                  ownerLabel={
+                    draft.created_by
+                      ? libraryCreatorLabel(draft.created_by, nameById)
+                      : null
+                  }
+                  selectMode={selectedIds.size > 0}
+                  showOwnerChip={showOwnerChip}
+                  swipeOpen={openSwipeId === draft.id}
+                  variantPrices={variantsByDraft.get(draft.id) ?? EMPTY_VARIANT_PRICES}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
 

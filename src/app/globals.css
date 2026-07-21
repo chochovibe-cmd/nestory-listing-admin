@@ -2313,6 +2313,9 @@ textarea {
   border-color: var(--success);
   border-style: solid;
   background: color-mix(in srgb, var(--success) 6%, transparent);
+  /* 已有圖時縮小空白綠區，避免看起來像版面壞掉 */
+  min-height: 0;
+  padding: 12px 14px;
 }
 
 .dropzone input[type="file"] {
@@ -3763,6 +3766,7 @@ textarea {
   flex-shrink: 0;
 }
 /* UX-B4-P06: fail reason after title (inline note, not under-header banner) */
+/* fix: 勿 flex:1 搶滿整列，長文會把桌機 header 撐亂 */
 .rc-fail-reason {
   margin: 0;
   padding: 0;
@@ -3773,9 +3777,9 @@ textarea {
   background: transparent;
   border-radius: 0;
   display: inline;
-  flex: 1 1 10em;
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 100%;
+  max-width: min(100%, 36em);
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -6956,6 +6960,11 @@ textarea {
   display: none;
 }
 
+/* UX-B4-P04 fix: 手勢提示預設隱藏，只在 max-width:959 顯示（避免桌機出現「長按」文案） */
+.rc-gesture-hint {
+  display: none;
+}
+
 /* UX-B2-P14: relative time + owner chip under title (inside headmain; P09 order safe) */
 .rc-head-meta {
   display: flex;
@@ -8509,7 +8518,7 @@ body[data-theme="nordic"] {
     display: none;
   }
 
-  /* 列表頂：長按／左滑提示（桌機隱藏） */
+  /* 列表頂：長按／左滑提示（僅手機；桌機見下方 base display:none） */
   .rc-gesture-hint {
     display: flex;
     align-items: center;

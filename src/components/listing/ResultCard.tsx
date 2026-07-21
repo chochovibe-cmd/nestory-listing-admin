@@ -2240,181 +2240,182 @@ export function ResultCard({
             </div>
           </div>
         ) : null}
-        {/* R2: station-scoped quick actions — UX-BTN3: unified Button + rc-quick compact */}
-        <span className="rc-quick" onClick={(event) => event.stopPropagation()}>
-          {isArchived ? (
-            <Button
-              size="sm"
-              className="rc-quick-btn"
-              loading={archiveBusy}
-              onClick={() => void unarchiveOne()}
-              title="解除封存"
+        {/* UX-B3-fix: 快捷鈕 + × + ▸ 同一列（手機避免 ×▸ 被 .rc-quick 100% 擠到下一行） */}
+        <div className="rc-quick-row">
+          <span className="rc-quick" onClick={(event) => event.stopPropagation()}>
+            {isArchived ? (
+              <Button
+                size="sm"
+                className="rc-quick-btn"
+                loading={archiveBusy}
+                onClick={() => void unarchiveOne()}
+                title="解除封存"
+                type="button"
+              >
+                解除封存
+              </Button>
+            ) : isCopyStation ? (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="rc-quick-btn"
+                  disabled={
+                    regenerating ||
+                    regeneratingField != null ||
+                    !canQuickApprove ||
+                    hasBlockingWarnings(warningSummary)
+                  }
+                  loading={quickBusy}
+                  onClick={() => void approveOnly()}
+                  title={
+                    hasBlockingWarnings(warningSummary)
+                      ? "有必修警告，無法核准（⛔ 必修）"
+                      : "核准文案 → 標圖"
+                  }
+                  type="button"
+                >
+                  ✓ 核准
+                </Button>
+                <Button
+                  size="sm"
+                  className="rc-quick-btn"
+                  disabled={quickBusy || regeneratingField != null}
+                  loading={regenerating}
+                  onClick={() => {
+                    // BX10: open with last tone for this IP when remembered
+                    const remembered = recalledToneForIp(
+                      typeof window !== "undefined" ? window.localStorage : null,
+                      draft.ip_name
+                    );
+                    if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
+                      setRegenTone(remembered as CopyTone);
+                    }
+                    setRegenOpen(true);
+                  }}
+                  title="重新生成（可換語氣／填方向）"
+                  type="button"
+                >
+                  ↻ 重生
+                </Button>
+              </>
+            ) : isImageStation ? (
+              <>
+                <Button
+                  variant={actionArm === "review" ? "danger" : "primary"}
+                  size="sm"
+                  className="rc-quick-btn"
+                  disabled={hasBlockingWarnings(warningSummary)}
+                  loading={quickBusy}
+                  onClick={() => void stationReview()}
+                  title={
+                    actionArm === "review"
+                      ? formatStation2ConfirmHint(
+                          station2Btn.primary.includes("待發布"),
+                          markSummary.aiCount
+                        )
+                      : station2Btn.title
+                  }
+                  type="button"
+                >
+                  {actionArm === "review" ? station2Btn.arm : station2Btn.primary}
+                </Button>
+                <Button
+                  size="sm"
+                  className="rc-quick-btn"
+                  disabled={quickBusy}
+                  onClick={() => setLockedPreviewOpen(true)}
+                  title="文案預覽（唯讀）"
+                  type="button"
+                >
+                  文案預覽
+                </Button>
+                <Button
+                  variant={actionArm === "revision" ? "danger" : "secondary"}
+                  size="sm"
+                  className="rc-quick-btn"
+                  disabled={quickBusy}
+                  onClick={() => void requestRevision()}
+                  title={actionArm === "revision" ? "再點確認退回文案" : "退回修改文案（解鎖）"}
+                  type="button"
+                >
+                  {actionArm === "revision" ? "⚠ 確認退回" : "↩ 退回"}
+                </Button>
+              </>
+            ) : isReadyStation ? (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="rc-quick-btn"
+                  disabled={approveSummaryBusy || comboSaving || station3Busy}
+                  onClick={() => setStation3Open(true)}
+                  title="發布／匯出（API 與 CSV 可多選）"
+                  type="button"
+                >
+                  發布／匯出
+                </Button>
+                <Button
+                  variant={actionArm === "return-copy" ? "danger" : "secondary"}
+                  size="sm"
+                  className="rc-quick-btn"
+                  disabled={quickBusy}
+                  onClick={() => void returnFromReady("copy_review")}
+                  title={actionArm === "return-copy" ? "再點確認退回改文案" : "退回改文案"}
+                  type="button"
+                >
+                  {actionArm === "return-copy" ? "⚠ 確認" : "↩ 改文案"}
+                </Button>
+                <Button
+                  variant={actionArm === "return-image" ? "danger" : "secondary"}
+                  size="sm"
+                  className="rc-quick-btn"
+                  disabled={quickBusy}
+                  onClick={() => void returnFromReady("image_review")}
+                  title={actionArm === "return-image" ? "再點確認退回改圖" : "退回改圖"}
+                  type="button"
+                >
+                  {actionArm === "return-image" ? "⚠ 確認" : "↩ 改圖"}
+                </Button>
+              </>
+            ) : null}
+          </span>
+          {!isArchived && !sequentialMode ? (
+            <button
+              aria-label="移出工作佇列"
+              className="rc-dismiss-btn"
+              disabled={archiveBusy || quickBusy || regenerating || regeneratingField != null}
+              onClick={(event) => {
+                event.stopPropagation();
+                void archiveOne();
+              }}
+              title="移出工作佇列（可救回）"
               type="button"
             >
-              解除封存
-            </Button>
-          ) : isCopyStation ? (
-            <>
-              <Button
-                variant="primary"
-                size="sm"
-                className="rc-quick-btn"
-                disabled={
-                  regenerating ||
-                  regeneratingField != null ||
-                  !canQuickApprove ||
-                  hasBlockingWarnings(warningSummary)
-                }
-                loading={quickBusy}
-                onClick={() => void approveOnly()}
-                title={
-                  hasBlockingWarnings(warningSummary)
-                    ? "有必修警告，無法核准（⛔ 必修）"
-                    : "核准文案 → 標圖"
-                }
-                type="button"
-              >
-                ✓ 核准
-              </Button>
-              <Button
-                size="sm"
-                className="rc-quick-btn"
-                disabled={quickBusy || regeneratingField != null}
-                loading={regenerating}
-                onClick={() => {
-                  // BX10: open with last tone for this IP when remembered
-                  const remembered = recalledToneForIp(
-                    typeof window !== "undefined" ? window.localStorage : null,
-                    draft.ip_name
-                  );
-                  if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
-                    setRegenTone(remembered as CopyTone);
-                  }
-                  setRegenOpen(true);
-                }}
-                title="重新生成（可換語氣／填方向）"
-                type="button"
-              >
-                ↻ 重生
-              </Button>
-            </>
-          ) : isImageStation ? (
-            <>
-              <Button
-                variant={actionArm === "review" ? "danger" : "primary"}
-                size="sm"
-                className="rc-quick-btn"
-                disabled={hasBlockingWarnings(warningSummary)}
-                loading={quickBusy}
-                onClick={() => void stationReview()}
-                title={
-                  actionArm === "review"
-                    ? formatStation2ConfirmHint(
-                        station2Btn.primary.includes("待發布"),
-                        markSummary.aiCount
-                      )
-                    : station2Btn.title
-                }
-                type="button"
-              >
-                {actionArm === "review" ? station2Btn.arm : station2Btn.primary}
-              </Button>
-              <Button
-                size="sm"
-                className="rc-quick-btn"
-                disabled={quickBusy}
-                onClick={() => setLockedPreviewOpen(true)}
-                title="文案預覽（唯讀）"
-                type="button"
-              >
-                文案預覽
-              </Button>
-              <Button
-                variant={actionArm === "revision" ? "danger" : "secondary"}
-                size="sm"
-                className="rc-quick-btn"
-                disabled={quickBusy}
-                onClick={() => void requestRevision()}
-                title={actionArm === "revision" ? "再點確認退回文案" : "退回修改文案（解鎖）"}
-                type="button"
-              >
-                {actionArm === "revision" ? "⚠ 確認退回" : "↩ 退回"}
-              </Button>
-            </>
-          ) : isReadyStation ? (
-            <>
-              <Button
-                variant="primary"
-                size="sm"
-                className="rc-quick-btn"
-                disabled={approveSummaryBusy || comboSaving || station3Busy}
-                onClick={() => setStation3Open(true)}
-                title="發布／匯出（API 與 CSV 可多選）"
-                type="button"
-              >
-                發布／匯出
-              </Button>
-              <Button
-                variant={actionArm === "return-copy" ? "danger" : "secondary"}
-                size="sm"
-                className="rc-quick-btn"
-                disabled={quickBusy}
-                onClick={() => void returnFromReady("copy_review")}
-                title={actionArm === "return-copy" ? "再點確認退回改文案" : "退回改文案"}
-                type="button"
-              >
-                {actionArm === "return-copy" ? "⚠ 確認" : "↩ 改文案"}
-              </Button>
-              <Button
-                variant={actionArm === "return-image" ? "danger" : "secondary"}
-                size="sm"
-                className="rc-quick-btn"
-                disabled={quickBusy}
-                onClick={() => void returnFromReady("image_review")}
-                title={actionArm === "return-image" ? "再點確認退回改圖" : "退回改圖"}
-                type="button"
-              >
-                {actionArm === "return-image" ? "⚠ 確認" : "↩ 改圖"}
-              </Button>
-            </>
+              {archiveBusy ? "…" : "×"}
+            </button>
           ) : null}
-        </span>
-        {/* UX-B2-P07 7-2: × in header chrome (after chips / before toggle) */}
-        {!isArchived && !sequentialMode ? (
-          <button
-            aria-label="移出工作佇列"
-            className="rc-dismiss-btn"
-            disabled={archiveBusy || quickBusy || regenerating || regeneratingField != null}
+          <span
+            className="rc-toggle"
             onClick={(event) => {
-              event.stopPropagation();
-              void archiveOne();
-            }}
-            title="移出工作佇列（可救回）"
-            type="button"
-          >
-            {archiveBusy ? "…" : "×"}
-          </button>
-        ) : null}
-        <span
-          className="rc-toggle"
-          onClick={(event) => {
-            // UX-B3-P04: in multi-select, only ▸ expands; stop header toggle-select
-            event.stopPropagation();
-            tryToggleExpand();
-          }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
+              // UX-B3-P04: in multi-select, only ▸ expands; stop header toggle-select
               event.stopPropagation();
               tryToggleExpand();
-            }
-          }}
-          aria-label={expanded ? "收合卡片" : "展開卡片"}
-        >
-          {expanded ? "▾" : "▸"}
-        </span>
+            }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                tryToggleExpand();
+              }
+            }}
+            aria-label={expanded ? "收合卡片" : "展開卡片"}
+          >
+            {expanded ? "▾" : "▸"}
+          </span>
+        </div>
       </div>
 
       {failReasonSummary ? (

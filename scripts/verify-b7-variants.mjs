@@ -762,8 +762,11 @@ await check("src variantCrossExpand has Fable clamp + exports", async () => {
     path.join(root, "src/components/listing/VariantEditor.tsx"),
     "utf8"
   );
-  assert.match(ve, /依軸值展開列/);
+  // UX-B4-P03: auto expand on axis change; secondary re-expand CTA
+  assert.match(ve, /tryAutoExpandFromDimensions/);
   assert.match(ve, /expandAndMergeVariantRows/);
+  assert.match(ve, /重新展開|自動展開/);
+  assert.match(ve, /duplicateRow/);
   assert.doesNotMatch(ve, /VariantEditor2|fork/i);
 });
 

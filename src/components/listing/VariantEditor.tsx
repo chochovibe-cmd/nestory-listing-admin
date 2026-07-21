@@ -338,7 +338,7 @@ export function VariantEditor({
       setDimOpen(false);
       return;
     }
-    // New axis starts with empty values — does not auto-cartesian (Fable).
+    // New axis starts empty — no new combos until values are added.
     onDimensionsChange(
       clampDimensions([...dimensions, { name: trimmed, values: [] }])
     );
@@ -364,24 +364,55 @@ export function VariantEditor({
     onWarning(null);
   }
 
+  /**
+   * UX-B4-P03: auto expand after axis-value changes.
+   * Same core as expandFromAxisValues; never silently discard hand-fill.
+   * Called only from handlers (not useEffect) so setRows never loops dimensions.
+   */
+  function tryAutoExpandFromDimensions(
+    nextDims: VariantDimension[],
+    currentRows: VariantFormRow[]
+  ) {
+    if (!canExpandFromDimensions(nextDims)) return;
+    const result = expandAndMergeVariantRows(nextDims, currentRows);
+    if (result.comboCount === 0) return;
+    if (result.wouldDiscardHandFilled.length > 0) {
+      const count = result.wouldDiscardHandFilled.length;
+      armConfirm({ kind: "expand", count });
+      onWarning(
+        `軸值已變更，重新展開會影響 ${count} 筆手填 — 請按下方確認`
+      );
+      return;
+    }
+    clearConfirmArm();
+    setRowsSafe(withInheritedProductCost(result.rows));
+    if (result.warning) onWarning(result.warning);
+    else onWarning(null);
+  }
+
   function addAxisValue(dimIndex: number) {
     const draft = (axisValueDraft[dimIndex] ?? "").trim();
     if (!draft) return;
-    onDimensionsChange(appendDimensionValue(dimensions, dimIndex, draft));
+    const nextDims = appendDimensionValue(dimensions, dimIndex, draft);
+    onDimensionsChange(nextDims);
     setAxisValueDraft((cur) => ({ ...cur, [dimIndex]: "" }));
+    tryAutoExpandFromDimensions(nextDims, rows);
   }
 
   function dropAxisValue(dimIndex: number, value: string) {
-    onDimensionsChange(removeDimensionValue(dimensions, dimIndex, value));
+    const nextDims = removeDimensionValue(dimensions, dimIndex, value);
+    onDimensionsChange(nextDims);
+    tryAutoExpandFromDimensions(nextDims, rows);
   }
 
   /**
-   * Fable: expand is a separate button — never auto full cartesian.
+   * UX-B4-P03: manual re-expand (secondary CTA).
+   * Auto path covers main flow; this remains for explicit re-run / discard confirm.
    * Merge preserves hand-fill on key hit; discard needs double-confirm.
    */
   function expandFromAxisValues() {
     if (!canExpandFromDimensions(dimensions)) {
-      onWarning("請先在各維度加上軸值，再按展開。");
+      onWarning("請先在各維度加上軸值。");
       return;
     }
     const result = expandAndMergeVariantRows(dimensions, rows);
@@ -395,6 +426,9 @@ export function VariantEditor({
       const armed = confirmArm?.kind === "expand";
       if (!armed) {
         armConfirm({ kind: "expand", count });
+        onWarning(
+          `軸值已變更，重新展開會影響 ${count} 筆手填 — 確認`
+        );
         return;
       }
     }
@@ -405,8 +439,43 @@ export function VariantEditor({
     else onWarning(null);
   }
 
+  /** UX-B4-P03 ③: deep-copy form fields; insert at index+1 as a new editable row. */
+  function duplicateRow(index: number) {
+    if (rows.length >= MAX_VARIANT_ROWS) {
+      onWarning(`款式列已達上限 ${MAX_VARIANT_ROWS} 列，無法再複製。`);
+      return;
+    }
+    const source = rows[index];
+    if (!source) return;
+    const copy: VariantFormRow = {
+      optionValues: [
+        source.optionValues[0] ?? "",
+        source.optionValues[1] ?? "",
+        source.optionValues[2] ?? ""
+      ],
+      cost: source.cost,
+      costIsInherited: source.costIsInherited,
+      sellPrice: source.sellPrice,
+      compareAt: source.compareAt,
+      priceLocked: source.priceLocked,
+      qty: source.qty,
+      sku: source.sku,
+      imageId: source.imageId,
+      sortOrder: index + 1
+    };
+    const next = [
+      ...rows.slice(0, index + 1),
+      copy,
+      ...rows.slice(index + 1)
+    ].map((r, i) => ({ ...r, sortOrder: i }));
+    setRowsSafe(next);
+    onWarning(null);
+  }
+
   const expandArmed = confirmArm?.kind === "expand";
   const expandArmCount = expandArmed ? confirmArm.count : 0;
+  const canExpand = canExpandFromDimensions(dimensions);
+  const rowsAtMax = rows.length >= MAX_VARIANT_ROWS;
 
   function applyCharacters() {
     const names = Object.entries(charSelected)
@@ -569,8 +638,9 @@ export function VariantEditor({
             const armCount = dimArmed ? confirmArm.count : 0;
             return (
               <div className="vh-dim-row" key={`${d.name}-${i}`}>
+                {/* UX-B4-P03 ②: type on its own row (heavier chip); values below */}
                 <div className="vh-dim-label">
-                  <span className="v-dim-chip">
+                  <span className="v-dim-chip vh-dim-type">
                     {d.name}
                     <button
                       aria-label={
@@ -791,31 +861,36 @@ export function VariantEditor({
           </div>
         ) : null}
 
+        {/* UX-B4-P03 ①: auto-expand is main path; CTA = re-expand / discard confirm */}
         <Button
           size="md"
           fullWidth
-          variant={expandArmed ? "danger" : "primary"}
-          className={`vh-expand-primary${expandArmed ? " v-arm-confirm" : ""}`}
-          disabled={!canExpandFromDimensions(dimensions)}
+          variant={expandArmed ? "danger" : canExpand ? "secondary" : "ghost"}
+          className={`vh-expand-primary${expandArmed ? " v-arm-confirm" : ""}${
+            canExpand && !expandArmed ? " vh-expand-re" : ""
+          }`}
+          disabled={!canExpand}
           onClick={expandFromAxisValues}
           title={
             expandArmed
               ? `再點一次確認展開（${expandArmCount} 筆手填會丟失）`
-              : canExpandFromDimensions(dimensions)
-                ? "依各軸值交叉展開款式列（不會自動展開，需按此鈕）"
+              : canExpand
+                ? "加軸值後會自動展開；需要時可手動重新展開"
                 : "請先在維度上加入軸值"
           }
           type="button"
         >
           {expandArmed
             ? `確定展開？${expandArmCount}筆會丟失`
-            : "依軸值展開列"}
+            : canExpand
+              ? "重新展開"
+              : "加入軸值後自動展開"}
         </Button>
       </div>
 
       {!showGrid || rows.length === 0 ? (
         <div className="variant-empty">
-          單一款式可留空；先設維度與軸值，再按「依軸值展開列」。
+          單一款式可留空，或按下方「＋ 加入一列」。有軸值時會自動展開款式列。
         </div>
       ) : (
         <>
@@ -1021,6 +1096,24 @@ export function VariantEditor({
                         </button>
                       </span>
                     ) : null}
+                    <button
+                      type="button"
+                      className="v-row-dup"
+                      aria-label={
+                        rowsAtMax
+                          ? `款式列已達上限 ${MAX_VARIANT_ROWS}，無法複製`
+                          : "複製此列再編輯"
+                      }
+                      title={
+                        rowsAtMax
+                          ? `已達上限 ${MAX_VARIANT_ROWS} 列，無法再複製`
+                          : "複製此列（可再改軸值／成本）"
+                      }
+                      disabled={rowsAtMax}
+                      onClick={() => duplicateRow(index)}
+                    >
+                      複製
+                    </button>
                     <button
                       aria-label="刪除此列"
                       className="variant-del"

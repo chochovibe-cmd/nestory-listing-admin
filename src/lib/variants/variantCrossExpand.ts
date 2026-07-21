@@ -177,7 +177,9 @@ export function indexRowsByMergeKey(
 /**
  * Expand from dimensions.values (cartesian) and merge with existing rows.
  * Hit → keep cost/sell/lock/qty/sku/image. Miss on hand-fill → listed for confirm.
- * Cap at MAX_VARIANT_ROWS with Fable clamp copy. Does not auto-run.
+ * Cap at MAX_VARIANT_ROWS with Fable clamp copy.
+ * UX-B4-P03: VariantEditor may call this on axis-value change (auto path);
+ * still never silently discard wouldDiscardHandFilled — caller must confirm.
  */
 export function expandAndMergeVariantRows(
   dimensions: VariantDimension[],

@@ -1,13 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/listing/result-card/resultCardUi";
 import { extractMissingCharacterNames } from "@/lib/characters/missingCharacterWarnings";
-import { groupTagsByPrefix } from "@/lib/drafts/tagDisplayGroups";
+import { groupTagsByPrefix, tagToneClass } from "@/lib/drafts/tagDisplayGroups";
 import type { GradedWarning } from "@/lib/drafts/warningTiers";
 
-/** S2: Tags／提醒分頁 — 從 ResultCard 展開區拆出。 */
+function parseTagList(tags: string): string[] {
+  return tags
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function joinTagList(list: string[]): string {
+  return list.join(", ");
+}
+
+/** S2: Tags／提醒分頁 — 從 ResultCard 展開區拆出。UX-B4-P01: 色分類／× 移除／＋新增。 */
 export function ResultCardTagsPanel({
   tags,
   onTagsChange,
@@ -35,13 +46,47 @@ export function ResultCardTagsPanel({
   regenerating: boolean;
   onQuickAddCharacter: (name: string) => void;
 }) {
-  const tagGroups = useMemo(() => {
-    const tagList = tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    return groupTagsByPrefix(tagList);
-  }, [tags]);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const addInputRef = useRef<HTMLInputElement>(null);
+
+  const tagList = useMemo(() => parseTagList(tags), [tags]);
+  const tagGroups = useMemo(() => groupTagsByPrefix(tagList), [tagList]);
+
+  const removeTag = (tagToRemove: string) => {
+    const next = tagList.filter((t) => t !== tagToRemove);
+    onTagsChange(joinTagList(next));
+  };
+
+  const commitAdd = () => {
+    const value = draft.trim();
+    if (!value) {
+      setAdding(false);
+      setDraft("");
+      return;
+    }
+    // Exact match after trim — do not force-prefix rewrite
+    if (tagList.some((t) => t === value)) {
+      setDraft("");
+      setAdding(false);
+      return;
+    }
+    onTagsChange(joinTagList([...tagList, value]));
+    setDraft("");
+    setAdding(false);
+  };
+
+  const cancelAdd = () => {
+    setDraft("");
+    setAdding(false);
+  };
+
+  const startAdd = () => {
+    setAdding(true);
+    setDraft("");
+    // Focus after paint
+    requestAnimationFrame(() => addInputRef.current?.focus());
+  };
 
   return (
     <div className="rc-tabpanel" role="tabpanel">
@@ -51,24 +96,89 @@ export function ResultCardTagsPanel({
             Tags <CopyButton getValue={() => tags} />
           </label>
           <div className="rc-tags-grouped">
-            {tagGroups.length === 0 ? (
+            {tagGroups.length === 0 && !adding ? (
               <span className="muted">尚無 Tags</span>
             ) : (
               tagGroups.map((group) => (
                 <div className="rc-tag-group-row" key={group.key}>
                   <span className="rc-tag-group-label muted">{group.label}</span>
                   <div className="rc-tag-group-chips">
-                    {group.tags.map((tag) => (
-                      <span className="rc-tag" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
+                    {group.tags.map((tag) => {
+                      const tone = tagToneClass(tag);
+                      return (
+                        <span className={tone ? `rc-tag ${tone}` : "rc-tag"} key={tag}>
+                          {tag}
+                          <button
+                            aria-label={`移除 ${tag}`}
+                            className="rc-tag-remove"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeTag(tag);
+                            }}
+                            type="button"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               ))
             )}
+            <div className="rc-tag-add-row">
+              {adding ? (
+                <span className="rc-tag-add-form">
+                  <input
+                    ref={addInputRef}
+                    aria-label="新增 tag"
+                    className="rc-tag-add-input edit-input"
+                    onBlur={() => {
+                      // Commit on blur if non-empty; otherwise cancel
+                      if (draft.trim()) commitAdd();
+                      else cancelAdd();
+                    }}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        commitAdd();
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelAdd();
+                      }
+                    }}
+                    placeholder="角色_某某"
+                    type="text"
+                    value={draft}
+                  />
+                  <button
+                    className="mini-btn rc-tag-add-confirm"
+                    onMouseDown={(event) => {
+                      // Prevent blur-before-click race
+                      event.preventDefault();
+                      commitAdd();
+                    }}
+                    type="button"
+                  >
+                    確認
+                  </button>
+                </span>
+              ) : (
+                <button className="rc-tag add" onClick={startAdd} type="button">
+                  + 新增
+                </button>
+              )}
+            </div>
           </div>
-          <input className="edit-input" onChange={(event) => onTagsChange(event.target.value)} value={tags} />
+          <details className="rc-tags-raw-details">
+            <summary className="muted">編輯完整字串</summary>
+            <input
+              className="edit-input"
+              onChange={(event) => onTagsChange(event.target.value)}
+              value={tags}
+            />
+          </details>
         </div>
         {blockWarnCount + confirmWarnCount + suggestWarnCount > 0 ? (
           <div className="rc-field">

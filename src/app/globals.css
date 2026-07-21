@@ -4959,21 +4959,23 @@ textarea {
   max-width: 100%;
   min-width: 0;
 }
+/* UX-B4-P03 ②: type row above axis values (no side-by-side squeeze) */
 .vh-dim-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   min-width: 0;
 }
 .vh-dim-label {
   flex: 0 0 auto;
-  min-width: 4.5em;
-  padding-top: 4px;
+  min-width: 0;
+  padding-top: 0;
 }
 .vh-dim-values {
-  flex: 1 1 160px;
+  flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
 }
 .vh-dims-empty {
   display: flex;
@@ -5075,6 +5077,10 @@ textarea {
   justify-content: center;
   min-height: 44px;
   font-weight: 800;
+}
+/* UX-B4-P03: secondary re-expand after auto path */
+.variant-box .nb-btn.vh-expand-primary.vh-expand-re {
+  font-weight: 700;
 }
 .vh-inline-pop {
   position: relative;
@@ -5217,6 +5223,17 @@ textarea {
   background: var(--surface2);
   color: var(--text);
   border: 1px solid var(--border);
+}
+/* UX-B4-P03 ②: type chip heavier (near primary, still a label not a CTA) */
+.vh-dim-type {
+  font-weight: 800;
+  font-size: 13px;
+  padding: 6px 12px;
+  min-height: 36px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .v-axis-val {
   display: inline-flex; align-items: center; gap: 2px;
@@ -5489,7 +5506,30 @@ textarea {
   opacity: 0.4;
   cursor: not-allowed;
 }
-.v-row-actions { display: flex; gap: 2px; align-items: center; }
+.v-row-actions { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; }
+/* UX-B4-P03 ③: duplicate row — mini text, 44px touch on mobile via media below */
+.v-row-dup {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  min-height: 36px;
+  min-width: 44px;
+  padding: 4px 8px;
+  line-height: 1.2;
+}
+.v-row-dup:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.v-row-dup:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .v-manual { font-size: 12px; color: var(--accent2); cursor: help; }
 .v-inline-edit {
   background: none; border: 0; color: var(--accent); cursor: pointer;
@@ -5595,6 +5635,13 @@ textarea {
     padding: 8px 6px;
   }
   .vt-addrow {
+    min-height: 44px;
+  }
+  .v-row-dup {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .vh-dim-type {
     min-height: 44px;
   }
   .variant-head .btn-mini {
@@ -7357,12 +7404,115 @@ textarea {
 }
 
 .rc-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 11px;
   color: var(--text-dim);
+}
+/* UX-B4-P01: Mockup-style prefix tones (color-mix + existing tokens only) */
+.rc-tag.t-ip {
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+}
+.rc-tag.t-char {
+  background: color-mix(in srgb, var(--accent3) 24%, var(--surface));
+}
+.rc-tag.t-type {
+  background: color-mix(in srgb, var(--accent2) 10%, var(--surface));
+}
+.rc-tag.t-ctx {
+  background: color-mix(in srgb, var(--success) 13%, var(--surface));
+}
+.rc-tag.warned {
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  color: var(--warn-text);
+  font-weight: 700;
+}
+.rc-tag-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  margin: 0;
+  min-height: 0;
+  border-radius: 3px;
+}
+.rc-tag-remove:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.rc-tag.add {
+  border-style: dashed;
+  border-color: var(--line-soft, var(--border));
+  color: var(--text-muted);
+  cursor: pointer;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 10px;
+  min-height: 28px;
+}
+.rc-tag.add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.rc-tag-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.rc-tag-add-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+.rc-tag-add-input {
+  min-width: 10em;
+  max-width: 16em;
+  width: auto;
+  font-size: 12px;
+  padding: 4px 8px;
+  min-height: 32px;
+}
+.rc-tag-add-confirm {
+  flex-shrink: 0;
+}
+.rc-tags-raw-details {
+  margin-top: 10px;
+}
+.rc-tags-raw-details > summary {
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+  list-style: none;
+}
+.rc-tags-raw-details > summary::-webkit-details-marker {
+  display: none;
+}
+.rc-tags-raw-details > summary::before {
+  content: "▸ ";
+  opacity: 0.7;
+}
+.rc-tags-raw-details[open] > summary::before {
+  content: "▾ ";
+}
+.rc-tags-raw-details .edit-input {
+  margin-top: 6px;
 }
 
 /* UX-AA T107: copy preview reading size (was ~12–12.5px) */
@@ -8925,6 +9075,12 @@ select,
   border: var(--frame-w) solid var(--border);
   border-radius: var(--radius-s);
   box-shadow: var(--control-shadow);
+}
+/* UX-B4-P01: reassert dashed add chip after frame-token rules */
+.rc-tag.add {
+  border: var(--frame-w) dashed var(--line-soft, var(--border));
+  box-shadow: none;
+  background: transparent;
 }
 .dropzone,
 .manual-pricing,

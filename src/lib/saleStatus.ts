@@ -68,3 +68,24 @@ export function mapSaleStatusToNestoryTagValue(
 export function isPreorderSaleStatus(value: string | null | undefined): boolean {
   return normalizeSaleStatusLabel(value) === '預購中';
 }
+
+/**
+ * UX-B4-P02: result-card title badge (display-only short labels).
+ * Unknown / empty → null (do not render dirty free text).
+ */
+export function formatSaleStatusBadge(
+  value: string | null | undefined,
+): string | null {
+  switch (normalizeSaleStatusLabel(value)) {
+    case '海外代購（約14天）':
+      return '海外現貨';
+    case '台灣現貨':
+      return '台灣現貨';
+    case '二手現貨':
+      return '二手現貨';
+    case '預購中':
+      return '預購中';
+    default:
+      return null;
+  }
+}

@@ -2092,7 +2092,15 @@ export function ResultCard({
           )}
         </span>
         <span className="rc-headmain">
-          <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+          {/* UX-B4-P06: title + fail reason on same wrap row (sale chip slot for P02) */}
+          <span className="rc-title-row">
+            <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+            {failReasonSummary ? (
+              <span className="rc-fail-reason" role="status" title={failReasonSummary}>
+                {failReasonSummary}
+              </span>
+            ) : null}
+          </span>
           {/* Row1: 站別狀態 + 日期（+ owner） */}
           {(() => {
             const timeLabel = formatRelativeTime(draft.created_at);
@@ -2418,11 +2426,7 @@ export function ResultCard({
         </div>
       </div>
 
-      {failReasonSummary ? (
-        <p className="rc-fail-reason" role="status" title={failReasonSummary}>
-          {failReasonSummary}
-        </p>
-      ) : null}
+      {/* UX-B4-P06: failReason moved into .rc-title-row (after title); no under-header banner */}
 
       {/* B9 req2: collapsed-visible notice for quick-action block/fail; B12 low-cost undo */}
       {collapsedNotice ? (

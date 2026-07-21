@@ -3762,20 +3762,20 @@ textarea {
   color: var(--text-muted);
   flex-shrink: 0;
 }
-/* UX-I T53 + UX-AC T115: workbench fail reason under status chips (contain overflow) */
+/* UX-B4-P06: fail reason after title (inline note, not under-header banner) */
 .rc-fail-reason {
-  margin: 4px 14px 0;
-  padding: 6px 10px;
+  margin: 0;
+  padding: 0;
   font-size: 12px;
-  font-weight: 500;
-  line-height: 1.5;
+  font-weight: 600;
+  line-height: 1.35;
   color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
-  border-radius: var(--radius-s);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+  display: inline;
+  flex: 1 1 10em;
+  min-width: 0;
+  max-width: 100%;
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -6850,6 +6850,16 @@ textarea {
   gap: 4px;
 }
 
+/* UX-B4-P06: title + sale chip (P02) + fail reason share one wrap row */
+.rc-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .rc-title {
   /* UX-H T42: high-frequency titles ≥14px; UX-BTN2: visual hero of the row
      UX-PKG6 6-1: two-line clamp (was nowrap+ellipsis — truncated too early) */
@@ -6861,6 +6871,9 @@ textarea {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* UX-B2-P14: relative time + owner chip under title (inside headmain; P09 order safe) */
@@ -6875,6 +6888,21 @@ textarea {
   font-size: 10px;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+/* UX-B4-P06 strategy A: 失敗 station chip 與「需修改」StatusBadge 同大
+   只 scope .result-card，避免誤傷設定頁等全域 .status */
+.result-card .rc-station-chip,
+.result-card .rc-head-meta > .status.action,
+.result-card .rc-head-meta > .status.failed {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 4px 10px;
+  min-height: 24px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
 }
 .rc-detect-chips--tags {
   margin-top: 0;

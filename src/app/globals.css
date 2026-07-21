@@ -1049,10 +1049,12 @@ button.success:hover:not(:disabled) {
 .workbench {
   display: block;
 }
+/* UX-B4-P07: minmax(0, …) so 1fr cannot grow past track from long min-content
+   (titles / failReason / price+actions). Plain `1fr` ≡ minmax(auto, 1fr). */
 .workbench-panes {
   display: grid;
   gap: 20px;
-  grid-template-columns: 420px 1fr;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
   align-items: start;
 }
 /* Desktop left column: A form above B quick preview */
@@ -1061,6 +1063,12 @@ button.success:hover:not(:disabled) {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  max-width: 100%;
+}
+/* UX-B4-P07: right results column must shrink inside grid track */
+.workbench-pane-results {
+  min-width: 0;
+  max-width: 100%;
 }
 .wb-form-slot,
 .wb-preview-slot {
@@ -1576,13 +1584,50 @@ textarea {
   background: color-mix(in srgb, var(--text-muted) 8%, transparent);
 }
 
-/* B9: results panel allows sticky toolbar (overflow:hidden on .panel breaks sticky). */
-.panel.results-panel {
-  overflow: visible;
-}
-/* UX-PKG3: sticky generate footer — same overflow caveat as B9 */
+/* B9 / UX-PKG3: overflow:hidden on .panel breaks sticky (batch strip / gen footer).
+   UX-B4-P07: keep vertical sticky, clip horizontal bleed into the other column.
+   overflow-x: clip + overflow-y: visible stays clip/visible (not auto) per CSS Overflow 3. */
+.panel.results-panel,
 .panel.workspace-input-panel {
-  overflow: visible;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+/* UX-B4-P07: belt-and-suspenders if a child still tries to paint sideways */
+.workspace-input-panel .panel-body,
+.results-panel-body,
+.results-list {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* UX-B4-P07: form controls must not force left column wider than track */
+.workspace-input-panel input,
+.workspace-input-panel textarea,
+.workspace-input-panel select,
+.workspace-input-panel .field,
+.workspace-input-panel .source-card,
+.workspace-input-panel .dropzone {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* UX-B4-P07: result cards stay inside right column */
+.results-panel .rc-swipe-wrap,
+.results-panel .result-card {
+  max-width: 100%;
+  min-width: 0;
+}
+.results-panel .rc-header,
+.results-panel .rc-headmain,
+.results-panel .rc-title-row,
+.results-panel .rc-title {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* UX-B2-P02 2-1 / UX-B3-P02: results header title + 全選 + 逐件 */

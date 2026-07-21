@@ -808,7 +808,7 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
       {/* UX-D T23: short form-side tip only; process-intent hard gate stays at station ② / B5. */}
       {mainItems.length > 0 ? (
         <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-          主圖右上角可標規格圖
+          縮圖下方可標規格圖
         </div>
       ) : null}
       {markError ? (

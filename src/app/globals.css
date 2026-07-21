@@ -2421,16 +2421,20 @@ textarea {
 .thumb-remove:hover { filter: brightness(1.1); }
 
 /* B5: per-thumbnail 規格圖 mark + result-card process intent (tokens only) */
-/* UX-B2-P10: input strip horizontal scroll + larger thumbs */
+/* UX-B4-P08: input .pthumb-strip restore wrap + square grid (pre-P10).
+   Station② 橫滑是 .s2-img-panel .imgmark-list／.imgmark-strip，與此 class 分離。 */
 .pthumb-strip {
   display: flex;
-  gap: 11px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  gap: 10px 12px;
+  flex-wrap: wrap;
+  overflow-x: visible;
+  overflow-y: visible;
   margin-top: 11px;
-  align-items: flex-end;
-  padding-bottom: 6px;
-  -webkit-overflow-scrolling: touch;
+  align-items: flex-start;
+  /* absolute ×／主圖 badge 外側仍落在 P07 overflow-x:clip 盒內 */
+  padding: 8px 8px 4px;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 .pthumb {
   display: flex;
@@ -2439,6 +2443,7 @@ textarea {
   gap: 5px;
   cursor: grab;
   flex: 0 0 auto;
+  max-width: 100%;
 }
 /* UX-H T49: thumb soft hover */
 .pthumb:hover .pthumb-img,
@@ -2462,17 +2467,24 @@ textarea {
 }
 .pthumb-img-wrap {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
 }
-/* UX-B2-P10 audit: free top-right for .pthumb-spec-badge (input strip) */
+/* UX-B4-P08 strategy A: × 回右上外側（.thumb-remove 預設 top/right:-6）；
+   不再為規格圖騰右上而釘左上。規格圖改圖下小標，見下方 .pthumb-strip .pthumb-spec-badge */
 .pthumb-img-wrap > .thumb-remove {
-  top: 6px;
-  left: 6px;
-  right: auto;
+  top: -6px;
+  right: -6px;
+  left: auto;
+  z-index: 3;
 }
 .pthumb-img {
-  width: 96px;
-  height: 96px;
+  width: 72px;
+  height: 72px;
+  aspect-ratio: 1;
   object-fit: cover;
   border-radius: var(--radius-s);
   border: 1px solid var(--border-soft);
@@ -2486,10 +2498,11 @@ textarea {
   z-index: 10;
   position: relative;
 }
-/* B17 / P10: main thumb larger than siblings (AGENTS 呼吸感) */
+/* B17 / UX-B4-P08: main thumb larger square (pre-P10 96; siblings 72) */
 .pthumb.is-main .pthumb-img {
-  width: 120px;
-  height: 120px;
+  width: 96px;
+  height: 96px;
+  aspect-ratio: 1;
   border: 2px solid var(--accent);
 }
 .pthumb-badge {
@@ -2505,7 +2518,7 @@ textarea {
   border-radius: 999px;
   line-height: 1.2;
 }
-/* UX-B2-P10: 規格圖 corner badge (station② / input / station③) */
+/* UX-B2-P10: 規格圖 corner badge (station② / station③ 預設角標) */
 .pthumb-spec-badge {
   position: absolute;
   top: 6px;
@@ -2525,6 +2538,16 @@ textarea {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* UX-B4-P08 strategy A: 輸入區規格圖改圖下方 chip，不與 × 同角。
+   relative（非 absolute 角標）保留文件流，並讓觸控 ::before 以按鈕為定位基準 */
+.pthumb-strip .pthumb-spec-badge {
+  position: relative;
+  top: auto;
+  right: auto;
+  max-width: 100%;
+  margin: 0;
+  flex-shrink: 0;
 }
 .pthumb-spec-badge.active {
   background: var(--accent);

@@ -43,7 +43,9 @@ export const viewport: Viewport = {
 const themeInitScript = `
   try {
     var theme = window.localStorage.getItem('nestory_theme');
-    if (theme) document.body.dataset.theme = theme;
+    if (theme === 'dark' || theme === 'nordic' || theme === 'kitty') {
+      document.body.dataset.theme = theme;
+    }
   } catch (e) {}
 `;
 

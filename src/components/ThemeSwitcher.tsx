@@ -9,15 +9,39 @@ const THEMES = [
   { value: "kitty", icon: "🐉", title: "龍珠" }
 ] as const;
 
+type ThemeId = (typeof THEMES)[number]["value"];
+
 const STORAGE_KEY = "nestory_theme";
+const VALID_THEMES = new Set<string>(THEMES.map((t) => t.value));
+
+function isThemeId(value: string | null | undefined): value is ThemeId {
+  return Boolean(value && VALID_THEMES.has(value));
+}
+
+/** Read last theme from localStorage or body (themeInitScript). Never invent dark overwrite. */
+function readPersistedTheme(): ThemeId {
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (isThemeId(stored)) return stored;
+  } catch {
+    /* ignore */
+  }
+  const bodyTheme = document.body?.dataset?.theme;
+  if (isThemeId(bodyTheme)) return bodyTheme;
+  return "dark";
+}
 
 /**
  * Theme picker.
  * UX-B2-P15-r2b: mobile opens bottom sheet (same shell as library / more),
  * not a clipped fixed list. Desktop keeps compact dropdown.
+ *
+ * Persistence: only write localStorage AFTER hydrate from stored value.
+ * (Previously default "dark" mounted and overwrote last theme on refresh.)
  */
 export function ThemeSwitcher() {
   const [theme, setTheme] = useState<string>("dark");
+  const [hydrated, setHydrated] = useState(false);
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -27,14 +51,21 @@ export function ThemeSwitcher() {
 
   useEffect(() => {
     setMounted(true);
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) setTheme(stored);
+    setTheme(readPersistedTheme());
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    // Gate writes until we restored the real preference — otherwise the
+    // initial useState("dark") wipes nordic/kitty on every refresh (Strict Mode too).
+    if (!hydrated || !isThemeId(theme)) return;
     document.body.dataset.theme = theme;
-    window.localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, theme);
+    } catch {
+      /* ignore */
+    }
+  }, [theme, hydrated]);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 959px)");

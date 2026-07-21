@@ -1361,27 +1361,43 @@ export function DraftResultsPanel({
     <section className="panel results-panel">
       <div className="panel-header rc-panel-header">
         <h2>◈ 生成結果（三站工作佇列）</h2>
-        {/* UX-B2-P02 2-1: 逐件審核／標圖搬到 header 右側（僅站①／②） */}
-        {isCopyStation || isImageStation ? (
-          <Button
-            size="sm"
-            className="rc-header-seq-btn"
-            disabled={busy || visibleDrafts.length === 0}
-            onClick={openSequentialReview}
-            title={
-              isImageStation
-                ? selectedIds.size > 0
-                  ? "逐件標圖已勾選商品（通過後自動下一張）"
-                  : "逐件標圖目前列表全部（通過後自動下一張）"
-                : selectedIds.size > 0
-                  ? "逐件審核已勾選文案（核准後自動下一張）"
-                  : "逐件審核目前列表全部（核准後自動下一張）"
-            }
-            type="button"
-          >
-            {isImageStation ? "▶ 逐件標圖" : "▶ 逐件審核"}
-          </Button>
-        ) : null}
+        {/* UX-B3-P02: header 精簡列＝全選（有佇列）+ 逐件（站①／②） */}
+        <div className="rc-header-actions">
+          {showToolbar ? (
+            <label className="rc-header-select-all">
+              <input
+                checked={allSelected}
+                onChange={toggleAll}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected;
+                }}
+                type="checkbox"
+                aria-label="全選目前列表"
+              />
+              <span>全選</span>
+            </label>
+          ) : null}
+          {isCopyStation || isImageStation ? (
+            <Button
+              size="sm"
+              className="rc-header-seq-btn"
+              disabled={busy || visibleDrafts.length === 0}
+              onClick={openSequentialReview}
+              title={
+                isImageStation
+                  ? selectedIds.size > 0
+                    ? "逐件標圖已勾選商品（通過後自動下一張）"
+                    : "逐件標圖目前列表全部（通過後自動下一張）"
+                  : selectedIds.size > 0
+                    ? "逐件審核已勾選文案（核准後自動下一張）"
+                    : "逐件審核目前列表全部（核准後自動下一張）"
+              }
+              type="button"
+            >
+              {isImageStation ? "▶ 逐件標圖" : "▶ 逐件審核"}
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="panel-body results-panel-body">
         {progress ? (
@@ -1416,138 +1432,127 @@ export function DraftResultsPanel({
           </div>
         ) : null}
 
-        {showToolbar ? (
-          <div className="results-batch-toolbar" role="toolbar" aria-label="批次操作">
-            <label className="check-row results-batch-check">
-              <input
-                checked={allSelected}
-                onChange={toggleAll}
-                ref={(el) => {
-                  if (el) el.indeterminate = someSelected;
-                }}
-                type="checkbox"
-              />
-              全選
-            </label>
-            <span className="batch-selected-count">
-              {selectedIds.size > 0 ? `已選 ${selectedIds.size} 筆` : "勾選商品以使用批次操作"}
-            </span>
-            {/* UX-E T27: hide batch actions until selection; primary + 更多 overflow */}
-            {selectedIds.size > 0 ? (
-              <div className="batch-actions">
-                {isCopyStation ? (
-                  <>
-                    <Button
-                      variant={batchArm?.action === "approve" ? "danger" : "primary"}
-                      size="sm"
-                      className="batch-primary-action"
-                      disabled={!selectedArray.length}
-                      loading={busy}
-                      onClick={() => void batchApproveOnly()}
-                      title={
-                        batchArm?.action === "approve"
-                          ? batchArm.hint
-                          : "核准文案 → 進入標圖；未標記圖寫入保留原圖"
-                      }
-                      type="button"
-                    >
-                      {busy && busyLabel
-                        ? busyLabel
-                        : batchArm?.action === "approve"
-                          ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
-                          : "✓ 批次核准"}
-                    </Button>
-                    <details className="batch-more">
-                      <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
-                      <div className="batch-more-menu">
-                        <Button
-                          size="sm"
-                          fullWidth
-                          disabled={busy || !selectedArray.length}
-                          onClick={() => void batchArchiveOrUnarchive("archive")}
-                          title="移出工作佇列（軟刪除，可救回）"
-                          type="button"
-                        >
-                          🗄 移出佇列
-                        </Button>
-                      </div>
-                    </details>
-                  </>
-                ) : null}
-                {isImageStation ? (
-                  <>
-                    <Button
-                      variant={batchArm?.action === "review" ? "danger" : "primary"}
-                      size="sm"
-                      className="batch-primary-action"
-                      disabled={!selectedArray.length}
-                      loading={busy}
-                      onClick={() => void batchStationReview()}
-                      title={
-                        batchArm?.action === "review"
-                          ? batchArm.hint
-                          : "標圖分流：全保留→待發布；有 AI 標記→生圖工廠"
-                      }
-                      type="button"
-                    >
-                      {busy && busyLabel
-                        ? busyLabel
-                        : batchArm?.action === "review"
-                          ? `⚠ 再點確認 ${selectedArray.length} 筆`
-                          : "✓ 批次標圖通過"}
-                    </Button>
-                    <details className="batch-more">
-                      <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
-                      <div className="batch-more-menu">
-                        <Button
-                          size="sm"
-                          fullWidth
-                          disabled={busy || !selectedArray.length}
-                          onClick={() => void batchSetGenerateDetail(true)}
-                          title="勾選商品：開啟合成詳情圖（預設）"
-                          type="button"
-                        >
-                          開·生成詳情圖
-                        </Button>
-                        <Button
-                          size="sm"
-                          fullWidth
-                          disabled={busy || !selectedArray.length}
-                          onClick={() => void batchSetGenerateDetail(false)}
-                          title="勾選商品：關閉合成詳情圖（不進合成佇列）"
-                          type="button"
-                        >
-                          關·生成詳情圖
-                        </Button>
-                        <Button
-                          size="sm"
-                          fullWidth
-                          disabled={busy || !selectedArray.length}
-                          onClick={() => void batchArchiveOrUnarchive("archive")}
-                          title="移出工作佇列（軟刪除，可救回）"
-                          type="button"
-                        >
-                          🗄 移出佇列
-                        </Button>
-                      </div>
-                    </details>
-                  </>
-                ) : null}
-                {isReadyStation ? (
+        {/* UX-B3-P02: 有選取才出批次動作條；未選取不渲染空 toolbar */}
+        {selectedIds.size > 0 ? (
+          <div
+            className="rc-batch-strip"
+            role="toolbar"
+            aria-label="批次操作"
+          >
+            <span className="rc-batch-count">已選 {selectedIds.size} 筆</span>
+            <div className="rc-batch-actions batch-actions">
+              {isCopyStation ? (
+                <>
                   <Button
-                    variant="primary"
+                    variant={batchArm?.action === "approve" ? "danger" : "primary"}
                     size="sm"
                     className="batch-primary-action"
-                    disabled={busy || station3Busy || !selectedArray.length}
-                    onClick={() => openStation3Modal()}
-                    title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
+                    disabled={!selectedArray.length}
+                    loading={busy}
+                    onClick={() => void batchApproveOnly()}
+                    title={
+                      batchArm?.action === "approve"
+                        ? batchArm.hint
+                        : "核准文案 → 進入標圖；未標記圖寫入保留原圖"
+                    }
                     type="button"
                   >
-                    發布／匯出
+                    {busy && busyLabel
+                      ? busyLabel
+                      : batchArm?.action === "approve"
+                        ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
+                        : "✓ 批次核准"}
                   </Button>
-                ) : null}
-              </div>
-            ) : null}
+                  <details className="batch-more">
+                    <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
+                    <div className="batch-more-menu">
+                      <Button
+                        size="sm"
+                        fullWidth
+                        disabled={busy || !selectedArray.length}
+                        onClick={() => void batchArchiveOrUnarchive("archive")}
+                        title="移出工作佇列（軟刪除，可救回）"
+                        type="button"
+                      >
+                        🗄 移出佇列
+                      </Button>
+                    </div>
+                  </details>
+                </>
+              ) : null}
+              {isImageStation ? (
+                <>
+                  <Button
+                    variant={batchArm?.action === "review" ? "danger" : "primary"}
+                    size="sm"
+                    className="batch-primary-action"
+                    disabled={!selectedArray.length}
+                    loading={busy}
+                    onClick={() => void batchStationReview()}
+                    title={
+                      batchArm?.action === "review"
+                        ? batchArm.hint
+                        : "標圖分流：全保留→待發布；有 AI 標記→生圖工廠"
+                    }
+                    type="button"
+                  >
+                    {busy && busyLabel
+                      ? busyLabel
+                      : batchArm?.action === "review"
+                        ? `⚠ 再點確認 ${selectedArray.length} 筆`
+                        : "✓ 批次標圖通過"}
+                  </Button>
+                  <details className="batch-more">
+                    <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
+                    <div className="batch-more-menu">
+                      <Button
+                        size="sm"
+                        fullWidth
+                        disabled={busy || !selectedArray.length}
+                        onClick={() => void batchSetGenerateDetail(true)}
+                        title="勾選商品：開啟合成詳情圖（預設）"
+                        type="button"
+                      >
+                        開·生成詳情圖
+                      </Button>
+                      <Button
+                        size="sm"
+                        fullWidth
+                        disabled={busy || !selectedArray.length}
+                        onClick={() => void batchSetGenerateDetail(false)}
+                        title="勾選商品：關閉合成詳情圖（不進合成佇列）"
+                        type="button"
+                      >
+                        關·生成詳情圖
+                      </Button>
+                      <Button
+                        size="sm"
+                        fullWidth
+                        disabled={busy || !selectedArray.length}
+                        onClick={() => void batchArchiveOrUnarchive("archive")}
+                        title="移出工作佇列（軟刪除，可救回）"
+                        type="button"
+                      >
+                        🗄 移出佇列
+                      </Button>
+                    </div>
+                  </details>
+                </>
+              ) : null}
+              {isReadyStation ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="batch-primary-action"
+                  disabled={busy || station3Busy || !selectedArray.length}
+                  onClick={() => openStation3Modal()}
+                  title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
+                  type="button"
+                >
+                  發布／匯出
+                </Button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 

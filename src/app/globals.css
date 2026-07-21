@@ -1585,7 +1585,7 @@ textarea {
   overflow: visible;
 }
 
-/* UX-B2-P02 2-1: results header title + 逐件 btn; keep PKG1 min-height */
+/* UX-B2-P02 2-1 / UX-B3-P02: results header title + 全選 + 逐件 */
 .rc-panel-header {
   display: flex;
   align-items: center;
@@ -1596,7 +1596,6 @@ textarea {
 }
 .rc-header-seq-btn {
   flex-shrink: 0;
-  margin-left: auto;
 }
 @media (max-width: 960px) {
   .rc-header-seq-btn.nb-btn {
@@ -1612,6 +1611,30 @@ textarea {
   margin-left: auto;
 }
 
+/* UX-B3-P02: select-all lives in header (not empty batch toolbar) */
+.rc-header-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.rc-header-select-all input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+@media (max-width: 959px) {
+  .rc-header-select-all input {
+    width: 20px;
+    height: 20px;
+  }
+}
+
 .batch-selected-count {
   font-size: 11px;
   color: var(--text-muted);
@@ -1625,6 +1648,40 @@ textarea {
   gap: 6px;
 }
 
+/* UX-B3-P02: selection batch strip (only when selectedIds.size > 0) */
+.rc-batch-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 14px;
+  margin: 0 0 10px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface2));
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  overflow: visible;
+  box-sizing: border-box;
+}
+.rc-batch-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.rc-batch-strip .batch-actions,
+.rc-batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* UX-E T27: primary batch CTA + overflow "更多" (tokens only). */
 .batch-primary-action {
   min-height: 36px;
@@ -1632,6 +1689,7 @@ textarea {
 }
 /* UX-BTN4: batch toolbar uses unified Button; keep compact like mini */
 .results-batch-toolbar .nb-btn,
+.rc-batch-strip .nb-btn,
 .batch-actions .nb-btn,
 .batch-primary-action.nb-btn {
   min-height: 36px;
@@ -1671,6 +1729,7 @@ textarea {
 }
 @media (max-width: 960px) {
   .results-batch-toolbar .nb-btn,
+  .rc-batch-strip .nb-btn,
   .batch-actions .nb-btn,
   .batch-primary-action.nb-btn,
   .batch-more > summary.nb-btn {
@@ -1711,7 +1770,7 @@ textarea {
   justify-content: flex-start;
 }
 
-/* B9: sticky batch toolbar + sorter above result cards (tokens only). */
+/* B9: legacy sticky batch toolbar — JSX retired by UX-B3-P02 (.rc-batch-strip). */
 .results-batch-toolbar {
   position: sticky;
   top: 0;
@@ -5222,10 +5281,31 @@ textarea {
 
   /* fix(B9): mobile sticky batch toolbar was a tall wrap wall that permanently
      covered card quick-actions / checkboxes (z-index 5). Drop sticky under
-     960px so the bar scrolls away with the page; desktop keeps sticky above. */
-  .results-batch-toolbar {
+     960px so the bar scrolls away with the page; desktop keeps sticky above.
+     UX-B3-P02: same rule for .rc-batch-strip. */
+  .results-batch-toolbar,
+  .rc-batch-strip {
     position: static;
     z-index: auto;
+  }
+
+  /* UX-B3-P02: mobile full-width batch strip + header actions layout */
+  .rc-batch-strip {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .rc-batch-strip .batch-actions {
+    width: 100%;
+  }
+  .rc-batch-strip .nb-btn,
+  .rc-batch-strip .batch-primary-action.nb-btn,
+  .rc-batch-strip .batch-more > summary.nb-btn {
+    min-height: 44px;
+  }
+  .rc-header-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
   }
 }
 
@@ -7757,6 +7837,7 @@ body[data-theme="nordic"] {
   .rc-actions { flex-wrap: wrap; }
   .rc-header-actions { margin-left: 0; width: 100%; }
   .results-batch-toolbar { gap: 8px; }
+  .rc-batch-strip { gap: 8px; }
   .batch-primary-action { min-height: 44px; }
   .batch-more > summary.btn-mini { min-height: 44px; }
   /* UX-B2-P02 2-2: sort in stage-filter-row — touch height, not full-width wall */

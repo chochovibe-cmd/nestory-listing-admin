@@ -2190,32 +2190,41 @@ export function WorkspaceInputPanel({
                       <span className="spinner" aria-hidden="true" />
                       辨識中…
                     </div>
+                  ) : isNarrow ? (
+                    <div className="source-card-hint">
+                      點擊或拖曳選擇檔案，最多 {MAX_SCREENSHOT_IMAGES} 張
+                    </div>
                   ) : (
-                    <input
-                      type="text"
-                      className="source-shot-paste-input"
-                      value=""
-                      onChange={() => {
-                        /* no-op：刻意不存字，只當貼上目標 */
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      onPaste={(e) => {
-                        if (b3Busy) return;
-                        const images = imageFilesFromClipboard(e.clipboardData);
-                        if (images.length === 0) return; // 純文字不搶
-                        e.preventDefault();
-                        e.stopPropagation();
-                        void runScreenshotRecognition(images, "product");
-                      }}
-                      placeholder="點這裡後 Ctrl+V 貼上截圖"
-                      disabled={b3Busy}
-                      aria-label="貼上截圖辨識"
-                      autoComplete="off"
-                    />
+                    <>
+                      <input
+                        type="text"
+                        className="source-shot-paste-input"
+                        value=""
+                        onChange={() => {
+                          /* no-op：刻意不存字，只當貼上目標 */
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation(); // 避免外層再點一次＝開兩次檔案窗
+                          if (!b3Busy) productShotInputRef.current?.click();
+                        }}
+                        onPaste={(e) => {
+                          if (b3Busy) return;
+                          const images = imageFilesFromClipboard(e.clipboardData);
+                          if (images.length === 0) return; // 純文字不搶
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void runScreenshotRecognition(images, "product");
+                        }}
+                        placeholder="點這裡選檔案，或 Ctrl+V 貼上截圖"
+                        disabled={b3Busy}
+                        aria-label="貼上截圖辨識"
+                        autoComplete="off"
+                      />
+                      <div className="source-card-hint">
+                        拖曳也可上傳，最多 {MAX_SCREENSHOT_IMAGES} 張
+                      </div>
+                    </>
                   )}
-                  <div className="source-card-hint">
-                    或拖曳／點擊選擇檔案，最多 {MAX_SCREENSHOT_IMAGES} 張
-                  </div>
                   <input
                     accept="image/*"
                     multiple

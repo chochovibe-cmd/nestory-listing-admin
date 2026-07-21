@@ -134,6 +134,7 @@ export async function publishDraft(
     request_payload: payload
   };
 
+  // UX-B4-P05: only exact "false" is live; anything else (unset / true) = safe mock.
   const mockMode = process.env.SHOPIFY_PUBLISH_MOCK !== "false";
 
   // D10: non-YouTube video_urls skipped at payload build → yellow warnings (do not block publish).
@@ -143,13 +144,38 @@ export async function publishDraft(
     ? ((payload as { videoWarnings?: string[] }).videoWarnings as string[])
     : [];
 
-  if (mockMode || !hasShopifyAdminCredentials()) {
+  // Live mode without credentials must fail honestly — never pretend success
+  // with mock-product-id and a null admin URL (boss would think it went live).
+  if (!mockMode && !hasShopifyAdminCredentials()) {
+    const message =
+      "已關閉模擬發布（SHOPIFY_PUBLISH_MOCK=false），但缺少 Shopify 憑證。請設定 SHOPIFY_STORE_DOMAIN、SHOPIFY_CLIENT_ID、SHOPIFY_CLIENT_SECRET 後重試。";
+    await serviceSupabase.from("publish_jobs").insert({
+      ...publishJobBase,
+      publish_status: "api_failed",
+      response_payload: { error: message, mock: false },
+      error_message: message,
+      completed_at: new Date().toISOString()
+    });
+    await serviceSupabase
+      .from("product_drafts")
+      .update({
+        status: "api_failed",
+        pipeline_stage: mapStatusToPipelineStage("api_failed"),
+        publish_status: "api_failed",
+        error_message: message
+      })
+      .eq("id", id);
+    await notifyMake("api_failed", { draftId: id, error: message });
+    return { ok: false, status: 503, error: message };
+  }
+
+  if (mockMode) {
     await serviceSupabase.from("publish_jobs").insert({
       ...publishJobBase,
       publish_status: publishMode === "active" ? "active_published" : "draft_created",
       response_payload: {
         mock: true,
-        note: "SHOPIFY_PUBLISH_MOCK is enabled or Shopify credentials are missing",
+        note: "SHOPIFY_PUBLISH_MOCK is enabled (safe simulation; no real Shopify product)",
         ...(videoWarnings.length ? { videoWarnings } : {})
       },
       completed_at: new Date().toISOString()

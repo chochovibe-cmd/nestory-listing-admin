@@ -807,15 +807,23 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             />
             <ConnRow
               label="Shopify Admin API"
-              ok={status?.shopify}
+              ok={
+                !status
+                  ? null
+                  : !status.shopify
+                    ? false
+                    : status.shopifyMock
+                      ? null
+                      : true
+              }
               text={
                 !status
                   ? "未檢查"
-                  : status.shopify
-                    ? status.shopifyMock
-                      ? "已設定（mock）"
-                      : "已設定"
-                    : "未設定"
+                  : !status.shopify
+                    ? "未設定憑證"
+                    : status.shopifyMock
+                      ? "模擬中（不會建真實商品）"
+                      : "已接真店（真實發布）"
               }
             />
             {/*

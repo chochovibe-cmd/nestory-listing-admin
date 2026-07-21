@@ -55,14 +55,14 @@ export function DeploymentStatus() {
       ? { text: "已設定", tone: "ok" }
       : { text: "未設定", tone: "warn" };
 
+  // UX-B4-P05: 白話二擇一，避免「mock-safe」讓人以為要開 mock 才能發。
   const shopify: RowValue = !status
     ? { text: "未檢查", tone: "muted" }
-    : status.shopify
-      ? {
-          text: status.shopifyMock ? "已設定（mock-safe）" : "已設定",
-          tone: "ok"
-        }
-      : { text: "未設定", tone: "warn" };
+    : !status.shopify
+      ? { text: "未設定憑證", tone: "warn" }
+      : status.shopifyMock
+        ? { text: "模擬中（不會建真實商品）", tone: "warn" }
+        : { text: "已接真店（真實發布）", tone: "ok" };
 
   const rows: { label: string; value: RowValue }[] = [
     { label: "Supabase", value: supabase },

@@ -1933,28 +1933,6 @@ textarea {
   white-space: nowrap;
 }
 
-/* UX-B2-P02 2-3: phone — single-row horizontal scroll for long station names */
-@media (max-width: 640px) {
-  .stage-filter-pills {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .stage-filter-pills::-webkit-scrollbar {
-    display: none;
-  }
-  .stage-filter-pills .pill-btn {
-    flex-shrink: 0;
-  }
-  /* 排序貼右／可換行，不強制 100% 擠掉 pills */
-  .stage-filter-row .results-sort-label {
-    flex: 0 0 auto;
-    width: auto;
-    max-width: 100%;
-  }
-}
-
 /* UX-B2-P02 2-4: factory pending badge on 圖片待標示 pill */
 .pill-sub-badge {
   font-size: 9px;
@@ -7767,20 +7745,6 @@ body[data-theme="nordic"] {
     margin-left: 0;
     width: 100%;
   }
-  /* UX-B2-P02 2-2: sort sits in stage-filter-row; avoid full-width wall */
-  .stage-filter-row .results-sort-label {
-    margin-left: 0;
-    width: auto;
-    flex: 0 0 auto;
-  }
-  .results-sort-label {
-    margin-left: 0;
-  }
-  .stage-filter-row .sort-sel {
-    width: auto;
-    flex: 0 1 auto;
-    min-width: 0;
-  }
   /* 16px stops iOS Safari auto-zoom on focus (also for tablet-width phones) */
   input[type="text"],
   input[type="number"],
@@ -7840,20 +7804,6 @@ body[data-theme="nordic"] {
   .rc-batch-strip { gap: 8px; }
   .batch-primary-action { min-height: 44px; }
   .batch-more > summary.btn-mini { min-height: 44px; }
-  /* UX-B2-P02 2-2: sort in stage-filter-row — touch height, not full-width wall */
-  .stage-filter-row .results-sort-label {
-    margin-left: 0;
-    width: auto;
-    flex: 0 0 auto;
-    min-height: 44px;
-  }
-  .results-sort-label { margin-left: 0; min-height: 44px; }
-  .stage-filter-row .sort-sel {
-    width: auto;
-    flex: 0 1 auto;
-    min-width: 0;
-    min-height: 44px;
-  }
   .sort-sel { min-height: 44px; }
 
   /* 16px keeps iOS Safari from auto-zooming when a field gains focus. */
@@ -9401,6 +9351,7 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
     font-size: 11px;
     line-height: 1.2;
   }
+  /* UX-B3-P03: stage-filter mobile — single source（唯一手機覆蓋） */
   .stage-filter-row {
     flex-direction: column;
     align-items: stretch;
@@ -9409,31 +9360,45 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
   .stage-filter-row .stage-filter-pills {
     width: 100%;
     order: 1;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .stage-filter-row .stage-filter-pills::-webkit-scrollbar {
+    display: none;
+  }
+  .stage-filter-row .stage-filter-pills .pill-btn {
+    flex-shrink: 0;
+    min-height: 36px;
   }
   .stage-filter-row .stage-filter-end {
     width: 100%;
     order: 2;
-    justify-content: stretch;
-    margin-top: 0;
+    display: flex;
+    flex-wrap: nowrap;
     gap: 8px;
+    margin-left: 0;
+    margin-top: 0;
+    justify-content: stretch;
   }
   .stage-filter-row .stage-filter-end .results-scope-label,
   .stage-filter-row .stage-filter-end .results-sort-label {
     flex: 1 1 0;
     min-width: 0;
+    width: auto;
+    margin-left: 0;
     justify-content: center;
   }
   .stage-filter-row .stage-filter-end .results-scope-label .ir-scope-select,
-  .stage-filter-row .stage-filter-end .results-sort-label {
-    width: 100%;
-    min-height: 36px;
-    justify-content: center;
-  }
+  .stage-filter-row .stage-filter-end .results-sort-label,
   .stage-filter-row .stage-filter-end .sort-sel {
     width: 100%;
-    text-align: center;
+    min-width: 0;
+    box-sizing: border-box;
   }
-  .stage-filter-row .stage-filter-pills .pill-btn {
+  .stage-filter-row .stage-filter-end .sort-sel {
+    text-align: center;
     min-height: 36px;
   }
   .result-card .rc-thumb {

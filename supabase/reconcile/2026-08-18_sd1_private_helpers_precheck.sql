@@ -23,12 +23,15 @@ begin
     raise exception 'SD-1 PRECHECK FAIL: unexpected latest tracked migration %', latest_version;
   end if;
 
+  -- Count any policy reference to the seven legacy helpers as long as it is NOT
+  -- already a private.* reference. This accepts PostgreSQL rendering either
+  -- `is_admin()` or `public.is_admin()` without weakening the state assertion.
   select count(*), count(distinct tablename)
     into affected_policy_count, affected_table_count
   from pg_policies
   where schemaname='public'
     and (coalesce(qual,'') || ' ' || coalesce(with_check,'')) ~
-      '(^|[^[:alnum:]_.])(current_user_role|is_admin|is_reviewer|user_owns_image_batch|user_owns_items_in_image_batch|user_owns_publish_batch|user_owns_items_in_publish_batch)\('
+      '(current_user_role|is_admin|is_reviewer|user_owns_image_batch|user_owns_items_in_image_batch|user_owns_publish_batch|user_owns_items_in_publish_batch)\('
     and (coalesce(qual,'') || ' ' || coalesce(with_check,'')) !~
       'private\.(current_user_role|is_admin|is_reviewer|user_owns_image_batch|user_owns_items_in_image_batch|user_owns_publish_batch|user_owns_items_in_publish_batch)';
 

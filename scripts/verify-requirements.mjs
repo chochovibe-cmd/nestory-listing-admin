@@ -15,9 +15,11 @@ function contains(relativePath, pattern) {
   return exists(relativePath) && pattern.test(read(relativePath));
 }
 
-const initialSchema = "supabase/migrations/001_initial_schema.sql";
+const initialSchema = "supabase/history/pre_tracking_migrations/001_initial_schema.sql";
 const releaseReadiness = "docs/RELEASE_READINESS.md";
 const productionSupabaseAudit = "docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md";
+const productionPackageAudit = "docs/audits/SUPABASE-PRODUCTION-PACKAGE-2026-08-18.md";
+const migrationBaselineAudit = "docs/audits/SUPABASE-MIGRATION-BASELINE-2026-08-18.md";
 
 const checks = [
   {
@@ -25,7 +27,7 @@ const checks = [
     ok: exists("src/app/layout.tsx") && exists("src/app/page.tsx") && exists("package.json")
   },
   {
-    name: "Supabase schema and core RLS exist",
+    name: "Historical Supabase schema and core RLS contract are archived",
     ok: exists(initialSchema)
       && contains(initialSchema, /create type public\.user_role/)
       && contains(initialSchema, /enable row level security/i)
@@ -157,18 +159,23 @@ const checks = [
       && contains(releaseReadiness, /Every new coding session should start with/)
   },
   {
-    name: "Production Supabase reconciliation is documented and replay-safe",
+    name: "Production Supabase reconciliation and tracked baseline are documented",
     ok: exists(productionSupabaseAudit)
       && contains(productionSupabaseAudit, /nestory-listing-tool-test/)
-      && contains(productionSupabaseAudit, /001–039 live-state reconciliation complete/i)
-      && contains(productionSupabaseAudit, /Do not replay `001–039`/i)
       && contains(productionSupabaseAudit, /004_ip_tag_collection_tables\.sql/)
-      && contains(productionSupabaseAudit, /ip_catalog/)
-      && contains(productionSupabaseAudit, /ip_characters/)
-      && contains(productionSupabaseAudit, /tag_rules/)
-      && contains(productionSupabaseAudit, /collection_rules/)
-      && contains(productionSupabaseAudit, /8 policies total/i)
-      && exists("supabase/reconcile/2026-08-18_production_reconcile_draft.sql")
+      && contains(productionSupabaseAudit, /Do not replay `001–039`/i)
+      && exists(productionPackageAudit)
+      && contains(productionPackageAudit, /POSTCHECK_OK/)
+      && contains(productionPackageAudit, /20260818142712/)
+      && contains(productionPackageAudit, /20260818142919/)
+      && exists(migrationBaselineAudit)
+      && contains(migrationBaselineAudit, /pre_tracking_migrations/)
+      && contains(migrationBaselineAudit, /20260818142712/)
+      && contains(migrationBaselineAudit, /20260818142919/)
+      && exists("supabase/migrations/20260818142712_baseline_existing_schema_20260818.sql")
+      && exists("supabase/migrations/20260818142919_production_reconcile_20260818.sql")
+      && exists("supabase/history/pre_tracking_migrations/001_initial_schema.sql")
+      && exists("supabase/history/pre_tracking_migrations/039_image_dual_size_urls.sql")
   },
   {
     name: "PWA smoke verifier remains wired",

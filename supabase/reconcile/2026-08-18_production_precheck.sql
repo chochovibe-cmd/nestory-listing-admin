@@ -1,12 +1,14 @@
--- Nestory production Supabase PRECHECK — 2026-08-18
--- READ/CHECK ONLY: this script must not modify product/business data or schema.
+-- Nestory production Supabase PRE-APPLY CHECK RECORD — 2026-08-18
+-- READ/CHECK ONLY. This describes the audited PRE-RECONCILE state.
 --
--- Purpose: refuse production apply if the live DB no longer matches the exact
--- state audited on 2026-08-18. If this script fails, STOP and re-audit instead
--- of editing the apply SQL until it passes.
+-- Production has since been successfully reconciled and migration tracking now
+-- contains 20260818142712 + 20260818142919. Therefore this historical precheck
+-- is EXPECTED TO FAIL after the successful apply (for example, policies now
+-- exist and search_path is hardened). Do not use that expected failure as a
+-- reason to roll back or rewrite the current production state.
 --
--- Expected target: nestory-listing-tool-test / tbgtqwvuohmdxnxisrgr
--- Historical migration ledger is empty. Do NOT replay 001–039.
+-- Retained as evidence of the exact gate that passed immediately before apply.
+-- Target: nestory-listing-tool-test / tbgtqwvuohmdxnxisrgr
 
 do $$
 declare
@@ -16,7 +18,6 @@ declare
   role_labels text[];
   already_hardened integer;
 begin
-  -- Canonical role model must remain exact.
   select array_agg(e.enumlabel order by e.enumsortorder)
     into role_labels
   from pg_type ty
@@ -29,7 +30,6 @@ begin
     raise exception 'PRECHECK FAIL: public.user_role changed; found %', role_labels;
   end if;
 
-  -- All 4 catalog/rule tables must exist and already have RLS enabled.
   foreach t in array array['ip_catalog','ip_characters','tag_rules','collection_rules'] loop
     if to_regclass(format('public.%I', t)) is null then
       raise exception 'PRECHECK FAIL: missing table public.%', t;
@@ -47,7 +47,6 @@ begin
     end if;
   end loop;
 
-  -- Audit truth: these 4 tables currently have zero policies total.
   select count(*)
     into policy_total
   from pg_policies
@@ -58,7 +57,6 @@ begin
     raise exception 'PRECHECK FAIL: expected 0 catalog/rule policies before apply, found %. Re-audit live DB.', policy_total;
   end if;
 
-  -- Functions touched by the package must exist.
   if to_regprocedure('public.set_updated_at()') is null
      or to_regprocedure('public.touch_image_batches_updated_at()') is null
      or to_regprocedure('public.touch_publish_batches_updated_at()') is null
@@ -67,7 +65,6 @@ begin
     raise exception 'PRECHECK FAIL: one or more required functions are missing';
   end if;
 
-  -- Timestamp helpers must still be in the audited pre-hardening state.
   select count(*)
     into already_hardened
   from pg_proc p
@@ -84,8 +81,6 @@ begin
     raise exception 'PRECHECK FAIL: timestamp helper search_path already changed on % function(s); re-audit first', already_hardened;
   end if;
 
-  -- Current audited exposure: trigger functions are directly executable by
-  -- client roles through PUBLIC. Apply will remove that direct surface.
   if not has_function_privilege('authenticated', 'public.handle_new_user()', 'EXECUTE')
      or not has_function_privilege('anon', 'public.handle_new_user()', 'EXECUTE')
      or not has_function_privilege('authenticated', 'public.guard_sensitive_product_draft_fields()', 'EXECUTE')
@@ -93,14 +88,12 @@ begin
     raise exception 'PRECHECK FAIL: trigger-function EXECUTE ACL no longer matches audited pre-state';
   end if;
 
-  -- RLS helpers are intentionally required by authenticated policy evaluation.
   if not has_function_privilege('authenticated', 'public.current_user_role()', 'EXECUTE')
      or not has_function_privilege('authenticated', 'public.is_admin()', 'EXECUTE')
      or not has_function_privilege('authenticated', 'public.is_reviewer()', 'EXECUTE') then
     raise exception 'PRECHECK FAIL: authenticated RLS helper execution changed';
   end if;
 
-  -- Trigger wiring must still exist before changing function ACLs.
   if not exists (
     select 1 from pg_trigger t
     join pg_class c on c.oid = t.tgrelid

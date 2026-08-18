@@ -18,6 +18,7 @@
     "verify:browser-storage-secrets": "node scripts/verify-browser-storage-secret-policy.mjs",
     "verify:client-secret-refs": "node scripts/verify-client-secret-reference-policy.mjs",
     "verify:batch-archive-auth": "node scripts/verify-batch-archive-authorization.mjs",
+    "verify:supabase-migration-baseline": "node scripts/verify-supabase-migration-baseline.mjs",
     "verify:d3-sharp": "node scripts/verify-d3-sharp.mjs",
     "verify:r1-stage": "node scripts/verify-r1-stage.mjs",
     "verify:cap1": "node scripts/verify-cap1.mjs",

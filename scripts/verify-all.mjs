@@ -10,6 +10,7 @@ const scripts = [
   "scripts/verify-browser-storage-secret-policy.mjs",
   "scripts/verify-client-secret-reference-policy.mjs",
   "scripts/verify-batch-archive-authorization.mjs",
+  "scripts/verify-supabase-migration-baseline.mjs",
   "scripts/verify-variant-axis-atomic.mjs",
   "scripts/verify-variant-duplicate-protection.mjs",
   "scripts/verify-mobile-resultcard-expand.mjs",

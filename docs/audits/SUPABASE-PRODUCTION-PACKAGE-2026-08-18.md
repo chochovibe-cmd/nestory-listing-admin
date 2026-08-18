@@ -1,141 +1,165 @@
 # Supabase Production Reconcile Package — 2026-08-18
 
-> Purpose: turn the audited/local-proven reconciliation into an exact, reversible production execution package.
-> Current status: **package locally proven; production NOT modified; explicit user approval still required.**
+> Purpose: record the audited, locally proven, and now successfully applied production reconciliation.
+> Final status: **production apply complete + POSTCHECK_OK + migration tracking established.**
 
-## Branch / PR
+## Production target
 
-- Branch: `agent/supabase-production-package`
-- Base: `agent/supabase-local-ci`
-- Draft PR: #4
-- No application `src/` changes.
-- No production Supabase mutation.
-- No deploy.
-- No paid Supabase Development Branch.
+- Supabase project: `nestory-listing-tool-test`
+- project ref: `tbgtqwvuohmdxnxisrgr`
+- PostgreSQL: 17
+- user explicitly approved production DB repair on 2026-08-18.
+- no Vercel production deploy was performed by this DB operation.
 
-## Package files
+## Pre-apply proof
 
-- `supabase/reconcile/2026-08-18_production_precheck.sql`
-- `supabase/reconcile/2026-08-18_production_apply.sql`
-- `supabase/reconcile/2026-08-18_production_rollback.sql`
-- `supabase/reconcile/2026-08-18_production_postcheck.sql`
-- local package-cycle test: `scripts/test-supabase-production-package-local.sh`
+Before production DDL, the exact read-only precheck returned:
 
-These remain under `supabase/reconcile/`, not `supabase/migrations/`. Production's migration ledger is empty and historical `001–039` must not be replayed.
+- `PRECHECK_OK` ✅
+- `product_drafts = 32`
+- `product_images = 147`
+- `product_variants = 143`
+- `profiles = 1`
 
-## PRECHECK contract
+The same package had already passed the free local reversible cycle on GitHub Actions / local Supabase Postgres 17.
 
-`2026-08-18_production_precheck.sql` is designed to refuse execution if the live DB no longer matches the audited pre-state.
+## Migration tracking decision
 
-It checks:
-- `public.user_role` is exactly `admin / operator / reviewer`;
-- `ip_catalog / ip_characters / tag_rules / collection_rules` exist and RLS is enabled;
-- those four tables still have **0 policies total** before apply;
-- all functions touched by the package exist;
-- the 3 timestamp helpers have not already been partially hardened to `search_path=pg_catalog`;
-- `handle_new_user()` and `guard_sensitive_product_draft_fields()` still have the audited pre-state direct client EXECUTE surface;
-- authenticated RLS helpers remain executable;
-- `on_auth_user_created` and `product_drafts_guard_sensitive_fields` trigger wiring still exists.
+Production previously had **no `supabase_migrations` tracking history at all** even though live schema/data strongly reflected historical repo SQL `001–039`.
 
-If any condition changed, the correct action is **STOP and re-audit**, not force the apply SQL.
+The user chose the safe baseline strategy instead of manually applying untracked DDL.
 
-## APPLY contract
+Tracking therefore starts **from the audited live state on 2026-08-18**. Historical SQL `001–039` is not fabricated into the ledger and is never replayed to production.
 
-`2026-08-18_production_apply.sql` only:
-1. restores the 8 migration-004 catalog/rule RLS policies;
-2. sets `search_path=pg_catalog` for:
+Two real tracked migrations now exist:
+
+1. `20260818142712` — `baseline_existing_schema_20260818`
+   - state-assertion marker only;
+   - verifies the audited pre-reconcile schema/role/function conditions;
+   - does **not** recreate historical schema or alter business rows.
+2. `20260818142919` — `production_reconcile_20260818`
+   - the actual narrow production reconciliation.
+
+Repo active migration filenames must match these versions exactly.
+
+## Applied production scope
+
+Tracked migration `20260818142919` only:
+
+1. restored the 8 missing migration-004 catalog/rule RLS policies:
+   - `ip_catalog_select_authenticated`
+   - `ip_catalog_write_admin`
+   - `ip_characters_select_authenticated`
+   - `ip_characters_write_admin`
+   - `tag_rules_select_authenticated`
+   - `tag_rules_write_admin`
+   - `collection_rules_select_authenticated`
+   - `collection_rules_write_admin`
+2. set `search_path=pg_catalog` for:
    - `set_updated_at()`
    - `touch_image_batches_updated_at()`
    - `touch_publish_batches_updated_at()`
-3. removes direct PUBLIC/anon/authenticated EXECUTE from:
+3. removed direct PUBLIC/anon/authenticated EXECUTE from repo-owned trigger-only functions:
    - `handle_new_user()`
    - `guard_sensitive_product_draft_fields()`
-   while keeping service-role execution explicit.
+   while retaining explicit `service_role` execution.
 
-It intentionally does **not**:
-- replay migrations;
-- alter product/business rows;
-- change roles;
-- change migration history;
-- disable RLS;
-- revoke authenticated execution from RLS helpers;
-- modify hosted-only `rls_auto_enable()`.
+Intentionally unchanged:
 
-## ROLLBACK contract
+- `admin / operator / reviewer` role semantics;
+- authenticated EXECUTE for `current_user_role()`, `is_admin()`, `is_reviewer()`;
+- `user_owns_*_batch(...)` RLS helpers;
+- hosted-only `rls_auto_enable()` / event trigger `ensure_rls`;
+- product/business rows;
+- Shopify/Vercel configuration.
 
-`2026-08-18_production_rollback.sql` reverses only this package and restores the audited pre-reconcile state:
-- removes the 8 restored policies;
-- resets function-level `search_path` on the 3 timestamp helpers;
-- restores PUBLIC direct EXECUTE on the 2 trigger-only functions.
+## Production postcheck
 
-Rollback intentionally returns to the known old/insecure state; it is an emergency recovery path, not a desirable final state.
+Immediately after the tracked reconcile migration, the exact postcheck returned:
 
-It does not touch product/business rows or migration history.
+- `POSTCHECK_OK` ✅
+- `product_drafts = 32`
+- `product_images = 147`
+- `product_variants = 143`
+- `profiles = 1`
 
-## POSTCHECK contract
+The protected row counts are identical to precheck, confirming the narrow package did not mutate those business records.
 
-`2026-08-18_production_postcheck.sql` asserts:
-- role enum unchanged;
-- RLS still enabled on all 4 catalog/rule tables;
-- exactly 2 intended policies per table / all 8 names present;
-- all 3 timestamp helpers have `search_path=pg_catalog`;
-- direct client EXECUTE is removed from the 2 trigger-only functions;
-- service_role retains execution;
-- authenticated RLS helper execution remains intact;
+Postcheck also confirmed:
+
+- all 4 catalog/rule tables still have RLS enabled;
+- exactly 2 intended policies exist on each table / all 8 policy names exist;
+- all 3 timestamp helpers use `search_path=pg_catalog`;
+- the 2 trigger-only functions are no longer directly executable by anon/authenticated;
+- service_role execution remains;
+- authenticated RLS helper execution remains;
 - auth new-user and product-draft sensitive-field trigger wiring remains present.
 
-## Free local reversible proof
+## Security Advisor after apply
 
-Initial package-cycle run:
-- Supabase Local Reconcile run `32141584338`
-- job `95725267127`
-- result: ✅ success
+The advisor was rerun immediately after the production change.
 
-Same-head standard CI:
-- run `32141584347`
-- job `95725266572`
-- result: ✅ success
+Resolved by this package:
 
-The local package test performed:
-1. rollback current local applied state to the audited production pre-state;
-2. verify rollback state;
-3. run exact production precheck;
-4. run exact production apply;
-5. run exact postcheck;
-6. run exact rollback;
-7. verify rollback state again;
-8. run precheck again;
-9. re-apply;
-10. postcheck again;
-11. assert protected row counts are unchanged before vs after the full cycle.
+- the 4 `RLS enabled but no policy` findings for catalog/rule tables are gone;
+- the 3 timestamp-trigger mutable-search-path findings targeted by this package are gone.
 
-Result: **reversible + repeatable + data-preserving in the free isolated Postgres 17 environment.**
+Known remaining findings are **separate future hardening work**, not permission to broaden this migration:
 
-## Production execution gate
+- `function_search_path_mutable` for `public.current_user_role`;
+- `security_definer_function_exposed` / RPC-surface warnings for RLS/security helpers such as `current_user_role`, `is_admin`, `is_reviewer`, and `user_owns_*_batch(...)`;
+- hosted/platform helper warnings including `rls_auto_enable()` where free-local runtime parity is unavailable;
+- Auth leaked-password protection disabled;
+- anonymous-sign-in advisory/info depending on project Auth configuration.
 
-This audit is NOT permission to apply production DDL.
+Do not revoke RLS helper execution wholesale just to clear advisor output; these helpers participate in policy evaluation and require a separate tested design.
 
-Before any live change:
-1. final branch must be squashed and both CI gates green on the final head;
-2. user must explicitly approve production DB modification;
-3. run the live precheck first;
-4. if precheck fails, stop without apply;
-5. if precheck passes, run only the exact apply package;
-6. immediately run postcheck and Supabase Security Advisor;
-7. if validation fails, investigate and use the reviewed rollback only when appropriate.
+## Historical SQL and active queue
 
-## Hosted-only `rls_auto_enable()`
+Historical repo SQL `001–039` predates formal Supabase migration tracking.
 
-Production has `public.rls_auto_enable()` / `ensure_rls`; free local Supabase does not recreate it.
+It is preserved byte-for-byte under:
 
-This package intentionally leaves its ACL untouched. Do not broaden the package just to remove an advisor warning without a safe proof path.
+`supabase/history/pre_tracking_migrations/`
+
+It must **not** return to `supabase/migrations/`.
+
+Active `supabase/migrations/` starts with only:
+
+- `20260818142712_baseline_existing_schema_20260818.sql`
+- `20260818142919_production_reconcile_20260818.sql`
+
+Future migrations must use normal timestamped tracked migration discipline after these two versions.
+
+The free local historical reconstruction gate continues to bootstrap from the archived `001–039`, because the baseline marker is intentionally not a blank-database schema dump.
+
+## Rollback semantics changed after tracking began
+
+The review-era file:
+
+`supabase/reconcile/2026-08-18_production_rollback.sql`
+
+was proven locally before production apply and remains useful as a **reference for inverse SQL**.
+
+However, now that `20260818142919` is a real tracked production migration, **do not manually run the old rollback file in production by itself**. Doing so would revert schema state while leaving the migration ledger claiming the reconcile is applied.
+
+If production ever needs to revert this change, create and test a **new forward tracked revert migration** using the reviewed inverse operations, apply it through migration tracking, then postcheck. Do not delete or falsify existing migration ledger rows.
+
+## Branch / PR state
+
+- production package branch: `agent/supabase-production-package` / `2d96fce`
+- Draft PR #4 remains unmerged.
+- migration-baseline follow-up branch: `agent/supabase-migration-baseline`
+- no application `src/` changes are part of the DB baseline housekeeping.
 
 ## Handoff
 
-Any agent preparing production DB work must read, in order:
+Any agent touching production Supabase must read:
+
 1. `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
 2. `docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md`
 3. this file
-4. the four SQL package files under `supabase/reconcile/`
+4. `docs/audits/SUPABASE-MIGRATION-BASELINE-2026-08-18.md`
+5. current active files under `supabase/migrations/`
 
-Production is still unchanged at the end of this audit.
+Production reconciliation is complete. The next database work is **future tracked migration discipline and separately scoped residual security hardening**, not replaying historical SQL.

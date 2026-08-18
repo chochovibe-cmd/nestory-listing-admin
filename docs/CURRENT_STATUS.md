@@ -2,9 +2,9 @@
 
 > 給新 AI session 的短版現況；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 
-更新基準：2026-08-18
+更新基準：2026-08-19
 正式 app 基準分支：`codex/nestory-v0.1-safety-skeleton`
-目前 DB/migration 工作分支：`agent/supabase-migration-baseline`
+目前 release regression 分支：`agent/release-thumbnail-regression-fix`
 
 ## 1. 最重要的現況切分
 
@@ -44,6 +44,40 @@ P0/P1 UI、Variant、ResultCard、archive API 等 stabilization 修復仍在 Git
 - P0 batch archive owner authorization / `fdc5527`
 
 Source-contract/verifier已有；mobile/Variant/role UX仍要按 `docs/RELEASE_READINESS.md` 做實機 cases。
+
+### 2026-08-19 UIUX collateral-regression audit + mobile restore
+
+使用者最後確認的修復規則：**不要整包回退 UIUX。先對照「原本要改的 A」與實際 diff／現況，只修已證實是 collateral 的 B；證據不足就不動程式碼。**
+
+本輪已完整盤點 ImageUploader / ResultCard / Variant / workbench，並回掃 B2/B3/B4、UX-PKG1～6、AF polish 等高風險 UIUX commits。完整矩陣見：
+
+- `docs/audits/UIUX-COLLATERAL-REGRESSION-AUDIT-2026-08-19.md`
+- `docs/audits/MOBILE-REGRESSION-RESTORE-2026-08-19.md`
+
+目前只有兩個效果通過「可修改」證據門檻：
+
+1. **ImageUploader geometry**
+   - B17 `4304866` 是 P10 前最後一個有意識的正常比例：次縮圖 64×64、主圖 96×96、wrap。
+   - P10 `ed342ce` 後變成 nowrap + 96/120；P08 `159721e` 曾修成 72/96；P09 `8c7db19` 又恢復 P10 geometry。
+   - 現在只恢復 **wrap + 64/96**。
+   - P10/P09 的「規格圖右上角標＋刪除 × 左上」有明確歷史紀錄，尚無證據屬於誤傷，因此**不回退位置**；等 Preview 若實際壞掉再處理。
+   - spinner、retry、paste、drag/reorder、soft-remove、dual-size upload 全保留。
+
+2. **ResultCard P04 row-3 track coupling**
+   - B4-P04 `47a96c` 的三排本身是明確 A：`title` / `thumb+chips` / `regen+price`，不能回退成舊卡。
+   - 真正 B 是實作把第 3 排重生按鈕塞進第 2 排縮圖共用的 64px 欄，但重生按鈕最小 72px，會侵入價格區；price nowrap + P07 clip 讓問題在窄手機變成右側裁切。
+   - 修法只把第 3 排改成自己的 `max-content + minmax(0,1fr)` 內層 grid；**仍然是左重生、右價格的第 3 排**。
+   - long-press、swipe、multi-select、gesture hint、explicit expand 全保留。
+
+已查過但**沒有足夠現行 bug 證據，因此不動**：
+
+- Variant P01/P03 混在同一 tree 的歷史；
+- B3-P06 Variant B-layout / reorder / picker zoom；
+- P07 workbench `overflow-x:clip` containment（P1-2 已處理 picker interaction）；
+- B2/B3 station/filter/scope chrome；
+- UX-PKG1～6 與 AF 動畫／a11y polish。
+
+這一包仍未 merge / production deploy。Vercel Hobby 目前因前面 branch deployment 過多觸發 `api-deployments-free-per-day`，不要把 Preview quota error 當 code failure。
 
 ## 3. CI gate
 
@@ -167,18 +201,19 @@ Historical local-only conditions：
 - Draft PR #2：production reconcile planning
 - Draft PR #3：free local runtime gate
 - Draft PR #4：reversible production package
-- current follow-up：`agent/supabase-migration-baseline`
+- migration baseline：`agent/supabase-migration-baseline`
+- current release regression restore：`agent/release-thumbnail-regression-fix`
 
-以上 PR仍未 merge；production DB repair是透過明確授權後的 Supabase tracked migrations完成，並不代表 GitHub app branches已 merge。
+以上 app-related branches仍未 merge；production DB repair是透過明確授權後的 Supabase tracked migrations完成，並不代表 GitHub app branches已 merge。
 
 ## 10. 下一步順序
 
-1. 收尾 `agent/supabase-migration-baseline`：standard CI + free local DB gate green、squash、Draft PR。
-2. 再讀 production migration list，必須精確對上兩個 tracked versions。
-3. 另開 SECURITY DEFINER / Auth hardening audit，不直接擴權限修改。
-4. Vercel production env + Shopify production config audit。
-5. manual mobile/Variant/role UX + controlled real-product E2E。
-6. 最後整理 stabilization branch stack，決定 merge / Vercel production deploy。
+1. 完成 `agent/release-thumbnail-regression-fix` collateral-only source verifier / scope review。
+2. Vercel Preview capacity恢復後只產生一次新的 Release Preview。
+3. 手機實測 ImageUploader：64/96 wrap、規格角標/×、spinner/retry/drag；ResultCard：P04 三排仍在、row3 不裁切、expand/gesture；Variant picker/zoom。
+4. final Release Candidate跑一次 GitHub CI：`verify:all` → `typecheck` → `build`。
+5. 實測＋CI 綠後再決定 merge / Vercel production deploy。
+6. SECURITY DEFINER private-helper hardening先停，不列為目前 release blocker。
 7. 再進 E6/F/G。
 
 ## 11. 文件 source of truth
@@ -192,5 +227,7 @@ Historical local-only conditions：
 - `docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md`
 - `docs/audits/SUPABASE-PRODUCTION-PACKAGE-2026-08-18.md`
 - `docs/audits/SUPABASE-MIGRATION-BASELINE-2026-08-18.md`
+- `docs/audits/MOBILE-REGRESSION-RESTORE-2026-08-19.md`
+- `docs/audits/UIUX-COLLATERAL-REGRESSION-AUDIT-2026-08-19.md`
 
 新 agent不要再從歷史文件推論「production DB尚未修改」；那已經是舊狀態。

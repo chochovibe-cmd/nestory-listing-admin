@@ -14,6 +14,7 @@
 - `docs/Mockup差異備忘.md`
 - `docs/REGRESSION_AUDIT.md`
 - `docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`（P07 overflow / Variant / swipe / sticky 專項稽核）
+- `docs/audits/VARIANT-B3P06-B4P03-AUDIT-2026-08-18.md`（Variant state consistency / duplicate row 專項稽核）
 
 如工作涉及歷史細節，再查：
 - `docs/施工清單.md`
@@ -32,6 +33,7 @@ Nestory 是潮巢玩居內部使用的 Shopify 商品上架 PWA：從商品輸�
 - 目前不是缺功能為主，而是需要做 **穩定化、文件收斂、權限/資料庫驗證、UI regression 修復**。
 - 最近 UIUX 修改密度很高，已確認有「優化後造成版面回歸、再補修」的 commit 歷史；前端工作不要假設最新 UI 一定是正確版本。
 - P07 containment 已完成第一輪專項稽核：Variant 桌機圖片 hover preview 有高可信裁切風險；ResultCard swipe / sticky 目前不是 P07 的主要嫌疑。
+- Variant B3-P06 + B4-P03 稽核已找到兩個優先 P0：axis value 先改 dimensions、rows 等二次確認造成 state 不一致；duplicate row 同 merge key 的手填資料可能不進 discard protection。
 - 不要優先開 Phase F/G 新功能，除非目前 P0 穩定化事項已處理。
 
 完整內容看 `docs/CURRENT_STATUS.md`。
@@ -67,6 +69,7 @@ Nestory 是潮巢玩居內部使用的 Shopify 商品上架 PWA：從商品輸�
 - `docs/mockups/nestory-v7-mockup.html`
 - `docs/REGRESSION_AUDIT.md`
 - `docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`
+- `docs/audits/VARIANT-B3P06-B4P03-AUDIT-2026-08-18.md`
 
 ### 歷史／按需查詢
 - `docs/施工清單.md`

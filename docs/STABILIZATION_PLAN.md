@@ -1,168 +1,93 @@
 # Nestory — Stabilization Plan
 
-> 目的：把 regression audits 轉成可執行修復順序。
+> 目的：把 regression / authorization audits 轉成可執行修復順序。
 > 詳細證據看 `docs/audits/`；實際修改看 `docs/CHANGELOG.md`。
 
 更新：2026-08-18
-狀態：**P0-1 / P0-2 / P0-3 / P1-1 / P1-2 / P1-3 都已有獨立修復分支；皆尚未完整 runtime 驗證/merge。**
 
-## 已實作，待完整驗證/merge
+## 已實作，待完整 runtime 驗證/merge
 
-### ✅ P0-1 Variant dimensions / rows atomic confirm
-- branch：`agent/p0-variant-atomic-confirm`
-- fixed commit：`171bbaa`
-- destructive axis change 未確認前不改正式 state。
-- verifier：`verify:variant-axis-atomic`
+1. **P0-1 Variant axis atomic confirm** — `agent/p0-variant-atomic-confirm` / `verify:variant-axis-atomic`
+2. **P0-2 Variant duplicate option protection** — `agent/p0-variant-duplicate-protection` / `verify:variant-duplicates`
+3. **P0-3 Mobile ResultCard expand affordance** — `agent/p0-mobile-resultcard-expand` / `verify:mobile-resultcard-expand`
+4. **P1-1 Mobile interactive-target gesture guard** — `agent/p1-mobile-gesture-guard` / `verify:mobile-resultcard-gesture`
+5. **P1-2 P07 Variant hover containment** — `agent/p1-variant-picker-clipping` / `verify:variant-picker-containment`
+6. **P1-3 Browser-storage secret policy** — `agent/p1-localstorage-secret-policy` / `verify:browser-storage-secrets`
 
-### ✅ P0-2 Variant duplicate option protection
-- branch：`agent/p0-variant-duplicate-protection`
-- canonical：branch HEAD / `fix(variants): protect duplicate option combinations`
-- protect：expand、Workspace、shared persistence、Shopify publish 409。
-- verifier：`verify:variant-duplicates`
+上述修復細節與手動驗證矩陣留在 `docs/CHANGELOG.md` 與對應 audits；本檔不再重複全部內容。
 
-### ✅ P0-3 Mobile ResultCard expand affordance
-- branch：`agent/p0-mobile-resultcard-expand`
-- canonical：branch HEAD / `fix(mobile): restore ResultCard expand affordance`
-- mobile 只恢復既有 `.rc-toggle`；quick/dismiss 不恢復。
-- isolated hotfix：`src/app/stabilization.css`
-- verifier：`verify:mobile-resultcard-expand`
+## Role / RLS audit — 第一輪完成
 
-### ✅ P1-1 Mobile interactive-target gesture guard
-- branch：`agent/p1-mobile-gesture-guard`
-- canonical：branch HEAD / `fix(mobile): isolate ResultCard controls from card gestures`
+專項：`docs/audits/ROLE-RLS-CONSISTENCY-AUDIT-2026-08-18.md`
+分支：`agent/role-rls-consistency-audit`
 
-Root cause：interactive child 的 touch 先冒泡到 `rc-header`，click stopPropagation 來不及阻止 long-press/swipe。
+### 建議 canonical role model
 
-已實作：
-- centralized closest-based interactive target guard。
-- ResultCard touch start/move/end 在 interactive target 退出。
-- blank card surface gesture 保留。
-- verifier 鎖 selector、guard 順序、原本 long-press/swipe contract、tab active predicate。
-- package / verify-all wiring 已補齊。
+- **operator**：建立/操作自己的商品；不審核、不發布。
+- **reviewer**：可讀全隊、審核、發布。
+- **admin**：reviewer 能力 + profiles / 成員角色 / 敏感 team settings 管理。
+- **viewer**：目前沒有 TS/DB role；不要先新增。
 
-待驗證：
-- 長按「重生」不進多選
-- 在 toggle/重生上水平移動不拖 card
-- 空白卡面 long-press/swipe 正常
-- `npm run verify:mobile-resultcard-gesture`
-- `npm run typecheck`
+理由：這最符合目前 `UserRole`、Postgres enum、新使用者 default、`canReview/canPublish`、publish/approve API、RLS 與 sensitive-field guard。
 
-### ✅ P1-2 P07 Variant desktop picker / hover preview clipping
-來源：`docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`
-分支：`agent/p1-variant-picker-clipping`
-canonical：branch HEAD / `fix(ui): keep Variant hover preview inside picker`
+### 文字 drift（後續低風險整理）
+- `canAccessSettings()` 實際三角色都可進，但註解寫 admin + operator。
+- capture-token API 實際 `canOperate()` 三角色都可用，但註解/403 文案寫 operator + admin。
 
-Root cause：
-- P07 的 WorkspaceInputPanel `overflow-x:clip` 是必要 containment，不能直接移除。
-- Variant picker：260px。
-- `.pick-grid`：72px tile + 8px gap + wrap，現況形成三欄。
-- hover preview：160px，原本每格 `left:50%; transform:translateX(-50%)`。
-- 第一/第三欄的 preview 會超出 picker 水平邊界，之後被 P07 clipping ancestor 裁掉。
+不要拿 stale 文案反推實際安全模型；可獨立修文案。
 
-已實作：
-- **保留 P07 containment，不改 `globals.css`。**
-- **不改 `VariantEditor.tsx`。**
-- `stabilization.css` 只在 desktop + fine pointer：
-  - 第 1 欄 `nth-child(3n + 1)` preview 改 `left:0; transform:none`。
-  - 第 3 欄 `nth-child(3n)` preview 改 `right:0; transform:none`。
-  - 中間欄仍置中。
-- 新增 `verify-variant-picker-containment.mjs`：
-  - 要求 P07 `overflow-x:clip` 仍存在。
-  - 鎖定 picker 260 / tile 72 / gap 8 / preview 160 幾何 contract。
-  - 鎖定 edge alignment rules。
-  - 禁止 hotfix 加 `!important`。
-- package 新增 `verify:variant-picker-containment`，並納入 `verify:all`。
+## P0 — Batch archive owner authorization
 
-待驗證：
-- desktop 第一/中間/第三欄 hover preview
-- 960px 附近
-- dark / nordic / kitty
-- picker shell 本身是否始終維持 panel 內；如果實機仍有 shell clipping，另做獨立 follow-up，不放寬 P07 containment
-- `npm run verify:variant-picker-containment`
-- `npm run typecheck`
+分支：`agent/p0-archive-owner-authorization`
+狀態：**已實作，待 squash / verifier / runtime 驗證。**
 
-### ✅ P1-3 Browser-storage secret policy
-來源：ResultCard audit + verifier drift audit
-分支：`agent/p1-localstorage-secret-policy`
-canonical：branch HEAD / `fix(verify): enforce sensitive browser-storage writes`
+### Root cause
+`/api/drafts/batch/archive` 原本：
+- 只做 `canOperate()`。
+- 接著直接用 service-role client select request 傳入的 `draftIds`。
+- service role bypass RLS。
+- 沒有 owner check。
 
-Root cause：
-- `verify-no-secrets.mjs` 註解承認 localStorage 本身不是 leak。
-- 實作卻仍用檔名 allowlist + `/localStorage/i` blanket-ban。
-- 合法 UI state（automation prefs、tone memory、gesture hint、其他 prefs/autosave）會造成 false positive，讓 `verify:all` 失去可信度。
+因此 operator 可能跨 owner 封存／解封其他成員商品。
 
-已實作：
-- 新增 `browser-storage-secret-policy.mjs`：只檢查 browser storage write 的 key/value expression 是否 credential-like。
-- 敏感命名涵蓋：api key、access/refresh/auth/bearer token、client secret、private key、service role、secret/password/credential/authorization、webhook、Shopify/GitHub/OpenAI/Anthropic key/token。
-- `verify-no-secrets.mjs` 移除 localStorage allowlist / blanket-ban。
-- 保留既有 env name、frontend Anthropic call、硬編碼 token prefix、root `.env` / `.gitignore` 檢查。
-- 新增 `verify-browser-storage-secret-policy.mjs`：
-  - 合法 theme/prefs/session/tone writes 必須通過。
-  - credential-like writes 必須失敗。
-  - 直接讀現有 `automationPrefsStore.ts`、`toneMemory.ts`、`DraftResultsPanel.tsx` 防 false positive。
-- package 新增 `verify:browser-storage-secrets`，並納入 `verify:all`。
+### 已實作
+- authorization read 改走 `authSupabase`；由既有 RLS 決定 row visibility。
+- migration-024 fallback read 也維持 `authSupabase`，不能藉 fallback bypass owner scope。
+- service role 僅保留已授權 rows 的 archive/unarchive mutation。
+- reviewer/admin 仍可依 RLS 讀全隊 rows；operator 只會取得自己的 rows。
+- 新增 `verify-batch-archive-authorization.mjs`。
+- 新增 `verify:batch-archive-auth` 並納入 `verify:all`。
 
-目前 code/verifier diff 相對 P1-2 只含 5 檔：
-- `scripts/browser-storage-secret-policy.mjs`
-- `scripts/verify-no-secrets.mjs`
-- `scripts/verify-browser-storage-secret-policy.mjs`
+### Scope control
+相對 role audit 的 code/verifier diff 只有：
+- `src/app/api/drafts/batch/archive/route.ts`
+- `scripts/verify-batch-archive-authorization.mjs`
 - `package.json`
 - `scripts/verify-all.mjs`
 
-待驗證：
-- `npm run verify:browser-storage-secrets`
-- `npm run verify:no-secrets`
-- `npm run verify:all`（後續仍可能被其他既有 verifier 問題擋住，要按錯誤分類）
+沒有改 `roles.ts`、沒有 migration、沒有擴大任何角色權限。
+
+### 待驗證
+- operator：自己的 draft archive/unarchive 正常。
+- operator：他人 draft id 不被 service write 處理。
+- reviewer/admin：跨成員 archive/unarchive 仍正常。
+- migration 024 missing fallback 同樣遵守 RLS。
+- `npm run verify:batch-archive-auth`
 - `npm run typecheck`
 
 ## 下一個主線
 
-### P0 Role / permission / RLS consistency audit + decision
-目前已知：
-- 實際 type / DB 角色是 `admin | operator | reviewer`。
-- 部分較新文件曾寫 `viewer`，不一致。
-- 新使用者預設 operator。
-- 現有 publish guard 主要允許 admin/reviewer，operator 不能 publish。
+1. squash P0 archive authorization。
+2. production Supabase migration / RLS reconcile。
+3. CI gate：verify → typecheck → build。
+4. real-product E2E。
+5. 再處理 E6/F/G。
 
-**不要直接把 operator 加進 `canPublish()`。**
-先 audit：
-- TS role type / helper
-- 新使用者預設角色
-- UI publish visibility
-- API publish authorization
-- RLS / SQL policies / sensitive-field guards
-- admin-only settings/member controls
+## 不要做
 
-需要產品裁決：
-1. operator 是否應發布？
-2. reviewer 是否可發布或只審核？
-3. viewer 是否真的需要成為正式角色？
-4. 新使用者預設角色應是哪個？
-
-決策後一次對齊 code + DB/RLS，避免半套權限。
-
-## 之後
-
-1. production Supabase migration reconcile
-2. CI gate
-3. real-product E2E
-4. Phase E6/F/G
-
-## 每個修復 commit 規則
-
-- 一題一 commit
-- root cause + scope control
-- verifier/test
-- 手動驗證清單
-- update CURRENT_STATUS / STABILIZATION_PLAN / 對應 audit
-- append CHANGELOG
-- 不刪歷史證據
-
-## 暫不做
-
-- 不整包 revert B4/P07
-- 不大量重寫 `globals.css`
-- `stabilization.css` 不擴成第二份 general stylesheet
-- 不直接加 product_variants unique constraint（先改 replacement transaction strategy）
-- 權限未裁決前不做 operator publish 半套放行
-- 不先開 E6/F/G
+- 不把 operator 直接加進 `canPublish()`。
+- 不新增 viewer，除非先有明確 read-only 成員需求。
+- 不信任前端傳入的 IDs 後直接用 service role 改資料。
+- 不整包 revert B4/P07。
+- 不大量重寫 `globals.css`。
+- 不先開 E6/F/G。

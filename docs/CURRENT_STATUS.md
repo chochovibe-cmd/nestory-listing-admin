@@ -1,144 +1,110 @@
 # Nestory — Current Status
 
-> 這是給新 AI session 的「唯一短版現況」。
-> 只放現在還成立的資訊；歷史細節看 `docs/CHANGELOG.md` / audits。
+> 給新 AI session 的短版現況；歷史細節看 `docs/CHANGELOG.md` / audits。
 
 更新基準：2026-08-18
 正式基準分支：`codex/nestory-v0.1-safety-skeleton`
-目前穩定化 stack：cleanup → P0-1 → P0-2 → P0-3 → P1-1 → P1-2 → **P1-3**
-目前工作分支：`agent/p1-localstorage-secret-policy`
+目前穩定化 stack：cleanup → P0-1 → P0-2 → P0-3 → P1-1 → P1-2 → P1-3 → role audit → **P0 archive auth**
+目前工作分支：`agent/p0-archive-owner-authorization`
 
 ## 1. 專案狀態
 
-Nestory 核心商品上架、AI 文案、圖片/規格、審核、Shopify publish 架構已相當完整。現在主要工作是**穩定化與正式環境一致性**，不是擴新功能。
+Nestory 核心商品上架、AI 文案、圖片/規格、審核、Shopify publish 架構已相當完整；目前主線是**穩定化與正式環境一致性**，不是擴新功能。
 
 粗略判斷：
 - 功能完整度：約 85–90%
 - 正式上線準備度：約 70–75%
 
-## 2. 已實作的穩定化修復（皆尚未完整 runtime 驗證/merge）
+## 2. 已實作的穩定化修復（尚待完整 runtime 驗證/merge）
 
-### P0-1 Variant axis atomic confirm
-分支：`agent/p0-variant-atomic-confirm`
-固定 commit：`171bbaa`
+- **P0-1** `agent/p0-variant-atomic-confirm`：Variant destructive axis confirm atomic；固定 commit `171bbaa`。
+- **P0-2** `agent/p0-variant-duplicate-protection`：duplicate option protection，涵蓋 expand / Workspace / persistence / Shopify 409。
+- **P0-3** `agent/p0-mobile-resultcard-expand`：mobile selectMode 恢復既有 compact expand toggle，不恢復整條 quick row。
+- **P1-1** `agent/p1-mobile-gesture-guard`：interactive child touch 不再被 ResultCard long-press/swipe 接管。
+- **P1-2** `agent/p1-variant-picker-clipping`：保留 P07 containment，只讓 desktop Variant hover preview 向 picker 內側展開。
+- **P1-3** `agent/p1-localstorage-secret-policy`：no-secrets 改成檢查 credential-like browser-storage writes，不再 blanket-ban localStorage。
 
-Destructive axis change 未確認前不再先改 dimensions；確認後 dimensions + rows 一起套用。
+P1-3 最終 preview 的 Vercel status 曾回 failure，但 target 明確是 `build-rate-limit / upgradeToPro`，不是程式 build error；因此只記為「preview 額度阻擋、未驗證」。
 
-### P0-2 Variant duplicate option protection
-分支：`agent/p0-variant-duplicate-protection`
-canonical：branch HEAD / `fix(variants): protect duplicate option combinations`
+## 3. Role / RLS audit 結論
 
-四層 guard：expand/merge、Workspace pre-submit、shared persistence、Shopify publish 409。
+專項：`docs/audits/ROLE-RLS-CONSISTENCY-AUDIT-2026-08-18.md`
+分支：`agent/role-rls-consistency-audit`
 
-### P0-3 Mobile ResultCard expand affordance
-分支：`agent/p0-mobile-resultcard-expand`
-canonical：branch HEAD / `fix(mobile): restore ResultCard expand affordance`
+目前真正 canonical role 是：
+- `admin`
+- `operator`
+- `reviewer`
 
-只在 mobile 恢復既有 `.rc-toggle`（44×44），不恢復 desktop quick actions；使用 isolated `stabilization.css` hotfix。
+`viewer` 沒有進 TypeScript 或 DB enum，只是部分舊/後期文件語意；目前不建議新增。
 
-### P1-1 Mobile interactive-target gesture guard
-分支：`agent/p1-mobile-gesture-guard`
-canonical：branch HEAD / `fix(mobile): isolate ResultCard controls from card gestures`
+### 建議 canonical capability model
+- **operator**：建立/操作自己的商品；不審核、不發布。
+- **reviewer**：可讀全隊、審核、發布。
+- **admin**：reviewer 能力 + profiles / 成員角色 / 敏感 team settings 管理。
 
-- centralized `cardGestureTarget.ts`
-- ResultCard touch start/move/end 在 interactive target 退出
-- blank card surface long-press/swipe 保留
-- verifier 已接入 package / verify-all
-- 額外鎖住 `activeTab === tab.id`
+這個模型最接近現有 source + DB：
+- 新使用者預設 `operator`。
+- `canReview` / `canPublish` = admin + reviewer。
+- DB sensitive-field guard 也只讓 admin/reviewer 進 generation/review/publish system state。
+- reviewer/admin 可讀全隊 draft；operator 主要只讀自己的 draft。
 
-### P1-2 P07 Variant desktop hover preview containment
-分支：`agent/p1-variant-picker-clipping`
-canonical：branch HEAD / `fix(ui): keep Variant hover preview inside picker`
+因此：**不要只把 operator 塞進 `canPublish()`。** 若未來真要讓一般 operator 直接發布，要另做完整 role-model change（helper + API + DB/RLS + UI + tests）。
 
-保留 P07 `overflow-x:clip`；只在 desktop fine pointer 將 picker 第一/第三欄 160px hover preview 向 260px picker 內側對齊。不改 VariantEditor / globals.css；新增 `verify:variant-picker-containment`。
+### 已確認文字 drift
+- `canAccessSettings()` 實際用 `canOperate()`，所以三角色都可進設定頁，但註解仍寫 admin + operator。
+- capture-token API 也用 `canOperate()`，實際 reviewer 可產生個人 token，但註解/403 文案寫 operator + admin。
 
-### P1-3 Browser-storage secret policy
-分支：`agent/p1-localstorage-secret-policy`
-canonical：branch HEAD / `fix(verify): enforce sensitive browser-storage writes`
+這些屬文字/語意 drift，後續可獨立修文案，不應拿 stale 註解反推安全權限。
 
-Root cause：`verify-no-secrets.mjs` 的註解已承認 localStorage 不等於洩密，但實作仍以檔名 allowlist blanket-ban `/localStorage/i`，因此合法 UI state（automation prefs、tone memory、ResultCard gesture hint、autosave/prefs）會造成 verifier drift。
+## 4. 新找到並已修的 P0 authorization bug
 
-已改：
-- 新增 `scripts/browser-storage-secret-policy.mjs`。
-- `findSensitiveBrowserStorageWrites()` 只檢查 browser storage 的 write arguments / assignment key+value，敏感命名包含：
-  - `apiKey`
-  - `accessToken / refreshToken / authToken / bearerToken`
-  - `clientSecret / privateKey / serviceRole`
-  - `secret / password / credential / authorization`
-  - `webhook`
-  - provider-specific `shopify/github/openai/anthropic` key/token
-- `verify-no-secrets.mjs` 移除 localStorage allowlist 與 blanket-ban；保留既有：
-  - client-side Anthropic call guard
-  - client-side OpenAI/Anthropic secret env name guard
-  - hard-coded key/token prefix scans
-  - `.env` / `.gitignore` checks
-- 新增 `verify-browser-storage-secret-policy.mjs`：
-  - 合法 theme/prefs/session/tone storage 必須通過
-  - `openaiApiKey/accessToken/webhook/clientSecret/service_role` storage writes 必須被抓
-  - 直接讀現有 `automationPrefsStore.ts`、`toneMemory.ts`、`DraftResultsPanel.tsx` 確認不誤殺
-- 新增 `verify:browser-storage-secrets` 並納入 `verify:all`。
+分支：`agent/p0-archive-owner-authorization`
 
-目前 code/verifier diff 相對 P1-2 已確認只含 5 檔：
-- `scripts/browser-storage-secret-policy.mjs`
-- `scripts/verify-no-secrets.mjs`
-- `scripts/verify-browser-storage-secret-policy.mjs`
+### 原問題
+`/api/drafts/batch/archive`：
+1. 只檢查 `canOperate()`。
+2. 接著用 service-role client 讀 request 傳入的任意 `draftIds`。
+3. service role bypass RLS。
+4. route 沒有 owner check。
+
+因此 operator 原本可能跨 owner 封存／解封其他人的商品。
+
+### 已實作
+- requested draft IDs 的 initial read + migration-024 fallback read 全改成 `authSupabase`。
+- 先由 authenticated RLS 篩出使用者可見 rows：operator 只拿自己的 rows；reviewer/admin 可拿全隊 rows。
+- service role 仍只用於後續 archive/unarchive mutation，不再負責 request ID authorization read。
+- 新增 `verify-batch-archive-authorization.mjs`：
+  - 鎖定 initial/fallback read 必須用 authSupabase。
+  - 禁止 authorization phase 用 service role select requested draft IDs。
+  - 鎖定 001 migration 的 team/owner read RLS contract。
+- 新增 `verify:batch-archive-auth` 並納入 `verify:all`。
+
+目前 code/verifier diff 相對 role audit 只含：
+- `src/app/api/drafts/batch/archive/route.ts`
+- `scripts/verify-batch-archive-authorization.mjs`
 - `package.json`
 - `scripts/verify-all.mjs`
 
-**下一個主線：role / permission / RLS consistency audit。**
+沒有擴張任何角色能力、沒有改 migration、沒有改 `roles.ts`。
 
-## 3. 仍待處理的高優先事項
+## 5. 接下來高優先事項
 
-### P0 role / permission model
-實際角色 `admin | operator | reviewer`；部分文件曾寫 viewer。operator 預設不能 publish，牽涉前端 + RLS/DB guard，不能只改 `canPublish()`。
-
-下一步應先做 audit/decision：
-- 新使用者預設 operator 是否合理
-- operator 是否應 publish
-- reviewer 是否只審核或也可發布
-- admin 專屬能力有哪些
-- 對應 TS type / frontend guard / API auth / RLS / SQL trigger/policy 一次對齊
-
-### P0 migration verification drift
-migrations 已到 039，但 SQL verifier 主要驗早期 schema；需對 production Supabase 做 reconcile。
-
-### CI
-目前沒有正式 GitHub Actions CI gate。未來建議：install → verify → typecheck → build。
-
-## 4. 重要穩定化結論
-
-- P0-1 / P0-2：Variant state consistency / duplicate option guard 已做。
-- P0-3 / P1-1：Mobile ResultCard expand + gesture isolation 已做。
-- P1-2：P07 containment 保留，Variant hover preview 用局部 collision fix。
-- P1-3：`verify:no-secrets` 不再把所有 localStorage 當風險，而是檢查敏感 browser-storage writes。
-- 過去 commit scope 混雜；現在一題一 commit。
-
-## 5. 功能階段摘要
-
-- Phase A/B：核心後端與 listing UI 大致完成。
-- Phase C：shell/settings/library/FX 完成；member management 未完成；records 部分。
-- Phase D：Shopify/image chain/Sharp/image review 大致完成；Showmore/preview/YouTube 有殘留驗證。
-- Phase E：E1–E5 大致完成；E6 未完成。
-- Phase F/G：大多未開始，**現在不優先**。
+1. 收尾/squash P0 archive owner authorization。
+2. production Supabase migration / RLS reconcile（repo migrations 已到 039，但實際 production 尚未驗證）。
+3. CI gate：verify → typecheck → build。
+4. real-product E2E。
+5. 再往 E6/F/G。
 
 ## 6. 正式環境尚未確認
 
 仍需：
 - Vercel production env
-- Supabase migration / RLS 實際狀態
+- Supabase migration / RLS live state
 - Shopify production mode / credentials
 - real-product E2E
 
-## 7. 下一步順序
-
-1. 收尾/squash P1-3；專用 verifier / typecheck 留待可執行環境驗證
-2. role / permission / RLS consistency audit + decision
-3. production Supabase migration reconcile
-4. CI
-5. real-product E2E
-6. 再往 E6/F/G
-
-## 8. 文件讀取順序
+## 7. 文件讀取順序
 
 1. `AI_START_HERE.md`
 2. 本檔

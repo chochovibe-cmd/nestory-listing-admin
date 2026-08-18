@@ -39,7 +39,12 @@ export async function POST(request: NextRequest) {
   }
 
   const serviceSupabase = createServiceSupabaseClient();
-  const { data: rows, error: loadError } = await serviceSupabase
+
+  // P0 authorization: scope requested draft IDs through the authenticated/RLS
+  // client before any service-role write. Under current policies, operator sees
+  // only own drafts while reviewer/admin may see the full team. Using the service
+  // client for this read would bypass that owner boundary.
+  const { data: rows, error: loadError } = await authSupabase
     .from("product_drafts")
     .select(
       "id, status, generation_status, title_zh, taobao_title, original_title, status_before_archive, description_html, description_plain, shopify_product_id, image_status, image_flags"
@@ -48,7 +53,8 @@ export async function POST(request: NextRequest) {
 
   if (loadError) {
     // 024 not applied: status_before_archive missing — retry without restore columns.
-    const fallback = await serviceSupabase
+    // Keep this read on authSupabase too so fallback cannot bypass owner/team RLS.
+    const fallback = await authSupabase
       .from("product_drafts")
       .select(
         "id, status, generation_status, title_zh, taobao_title, original_title, description_html, description_plain, shopify_product_id, image_status, image_flags"

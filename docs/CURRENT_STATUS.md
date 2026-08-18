@@ -4,9 +4,9 @@
 
 更新基準：2026-08-18
 正式基準分支：`codex/nestory-v0.1-safety-skeleton`
-目前穩定化 stack：cleanup → P0-1 → P0-2 → P0-3 → P1-1 → P1-2 → P1-3 → role audit → P0 archive auth → production Supabase audit → **CI gate**
-目前工作分支：`agent/ci-gate`
-目前 Draft PR：#1 `ci: add verify, typecheck, and build gate`
+目前穩定化 stack：cleanup → P0-1 → P0-2 → P0-3 → P1-1 → P1-2 → P1-3 → role audit → P0 archive auth → production Supabase audit → CI gate → **Supabase 001–039 reconcile plan**
+目前工作分支：`agent/supabase-reconcile-plan`
+目前 Draft PR：#1 `ci: add verified quality gate and modernize repo checks`（base 是 production Supabase audit；仍未 merge）
 
 ## 1. 專案狀態
 
@@ -14,7 +14,7 @@ Nestory 核心商品上架、AI 文案、圖片/規格、審核、Shopify publis
 
 粗略判斷：
 - 功能完整度：約 85–90%
-- 正式上線準備度：約 75–80%（CI gate 已建立並首次全綠；production DB/security reconcile、實機 E2E 仍未完成）
+- 正式上線準備度：約 75–80%（CI gate 已全綠；production DB security reconcile、實機 E2E 仍未完成）
 
 ## 2. 已實作的 stabilization stack
 
@@ -28,10 +28,11 @@ Nestory 核心商品上架、AI 文案、圖片/規格、審核、Shopify publis
 
 以上功能修復仍需要對應手機/Variant/角色實機 cases；不要只因 CI compile green 就宣稱所有 UX runtime 已驗證。
 
-## 3. CI gate — 已建立且首次完整全綠
+## 3. CI gate — complete / final squashed head green
 
 專項：`docs/audits/CI-GATE-2026-08-18.md`
 分支：`agent/ci-gate`
+final head：`b935290`
 Draft PR：#1
 
 Workflow：
@@ -40,7 +41,7 @@ Workflow：
 3. `pnpm run typecheck`
 4. `pnpm run build`
 
-首次完整 green run：`32132498629` / job `95696500082`
+Final squashed-head green run：`32132941280` / job `95697924316`
 - install ✅
 - verify:all ✅
 - typecheck ✅
@@ -55,7 +56,7 @@ Workflow：
 - `verify-contracts` / `verify-mock-flow` 直接讀已不存在的 legacy docs。
 
 現在：
-- client scope 由 `"use client"` import graph 推導；green run 映射 135 client-reachable modules。
+- client scope 由 `"use client"` import graph 推導。
 - release/deployment/API/manual QA/handoff contract 集中到 `docs/RELEASE_READINESS.md`。
 - verifier 優先驗 current source + fixture + canonical docs，不再把歷史檔名本身當產品 contract。
 
@@ -76,35 +77,77 @@ Canonical role：
 
 不要只把 operator 加進 `canPublish()`；未來若要改，必須 helper + API + UI + DB/RLS + tests 一次對齊。
 
-## 5. Production Supabase reconcile — 唯讀第一輪完成
+## 5. Production Supabase reconcile — 001–039 live-state matrix complete
 
 專項：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
 實際 Supabase：`nestory-listing-tool-test` / `tbgtqwvuohmdxnxisrgr`
+工作分支：`agent/supabase-reconcile-plan`
 production DB：**尚未修改**。
 
-已確認：
-- migration ledger 空白，但 production schema 有 late-stage fields；**不要 replay `001–039`**。
-- `ip_catalog / ip_characters / tag_rules / collection_rules`：RLS enabled 但 live policy 缺失。
-- SECURITY DEFINER direct EXECUTE / trigger search_path 有 Security Advisor warnings。
-- Auth leaked-password protection disabled。
-- production profiles 目前只有 1 個 admin，尚無 operator/reviewer。
-- core draft owner/reviewer RLS 與 archive auth 新設計方向一致。
+### 已完成
 
-因此 live DB 現況應視為：**晚期 schema + migration ledger 不可用 + 部分 authorization/security drift**。
+Repo migration `001–039` 已逐份讀取並和 live schema / constraints / indexes / policies / functions / grants / representative seed data 對照。
+
+結論：
+- migration ledger 空白，但 production live end-state 幾乎完整反映 `001–039`。
+- **不要 replay `001–039`。**「ledger 沒紀錄」不等於「schema 沒套」。
+- `009` 的中間 sale-status state 已由 `010` 正確取代。
+- `019` 的 process-intent constraint 已由 `030` 正確擴充。
+- `025/027` 的 recursive batch RLS 已由 `028` helper-based policies 正確取代。
+- `032/033/037/038` 的大量 catalog/tag/knowledge seed 也有強證據已存在。
+- `039` dual image URLs 已存在。
+
+### 唯一明確 migration-level drift
+
+`004_ip_tag_collection_tables.sql`：
+- 4 張表存在
+- RLS enabled
+- grants / constraints / triggers 存在
+- **但 8 條預期 policies 全部不存在**
+
+受影響表：
+- `ip_catalog`
+- `ip_characters`
+- `tag_rules`
+- `collection_rules`
+
+### 其他 security hardening debt
+
+- SECURITY DEFINER direct EXECUTE / RPC surface 有 Security Advisor warnings。
+- `set_updated_at / touch_image_batches_updated_at / touch_publish_batches_updated_at` 沒有 explicit function search_path。
+- Auth leaked-password protection disabled。
+
+### 已建立安全 reconcile SQL review draft
+
+`supabase/reconcile/2026-08-18_production_reconcile_draft.sql`
+
+刻意放在 `supabase/reconcile/`，**不是** `supabase/migrations/`：
+- migration ledger 空白時，現在不能讓 future `db push` 把歷史 `001–039` 當未套用 migration 重播。
+
+Draft 的 active SQL 目前只包含：
+1. restore 8 missing catalog/rule policies
+2. 3 個 timestamp trigger helper 固定 `search_path = pg_catalog`
+
+SECURITY DEFINER trigger/event-trigger direct EXECUTE revoke 目前只留**註解候選**，不會執行；要在隔離 DB 測過 trigger behavior 才能啟用。
 
 ## 6. 下一步順序
 
-1. 收尾 `agent/ci-gate`：整理成少量可讀 commits；Draft PR #1 保持不 merge，先做 final diff/status 核對。
-2. Production Supabase reconciliation：用新的乾淨 migration workflow，不重播歷史 SQL、不偽造 migration history。
-3. Reconcile scope：
-   - restore/驗證 4 張 catalog/rule RLS policies
-   - 移除不必要 trigger/event-trigger direct RPC execute
-   - harden flagged trigger search_path
-   - 保留 RLS helper 真正需要的執行能力
-4. rerun Supabase Security Advisor。
-5. Vercel production env + Shopify production config audit。
-6. 執行 release-readiness manual/runtime matrix + real-product E2E。
-7. 再往 E6/F/G。
+1. **Production 不動。**
+2. Review `supabase/reconcile/2026-08-18_production_reconcile_draft.sql` 的最小 SQL scope。
+3. 決定隔離 Supabase 測試環境：目前 project 沒有 development branch；建立 branch 會產生成本，必須先取得成本並由使用者明確確認。
+4. 隔離測試：
+   - authenticated 可讀 active catalog rows
+   - operator 不可直接 admin-write catalog
+   - admin 可管理 catalog / 讀 inactive
+   - core draft owner/reviewer RLS 不受影響
+   - batch RLS 不回歸 42P17 recursion
+   - auth new-user / sensitive-field / updated_at triggers 正常
+   - SECURITY DEFINER revoke 候選逐一驗證
+5. 測過後才決定真正 tracked migration/baseline 策略。
+6. rerun Supabase Security Advisor。
+7. Vercel production env + Shopify production config audit。
+8. 執行 release-readiness manual/runtime matrix + real-product E2E。
+9. 再往 E6/F/G。
 
 ## 7. Release / validation source of truth
 
@@ -112,7 +155,8 @@ production DB：**尚未修改**。
 - Current state：本檔
 - Stabilization ordering：`docs/STABILIZATION_PLAN.md`
 - CI history：`docs/audits/CI-GATE-2026-08-18.md`
-- Production DB truth：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
+- Production DB truth + 001–039 matrix：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
+- Reconcile SQL review draft：`supabase/reconcile/2026-08-18_production_reconcile_draft.sql`
 
 CI green = source/verifier/typecheck/build green；**不等於手機/角色/真 Shopify E2E 已全部手動驗證**。
 

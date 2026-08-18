@@ -21,6 +21,7 @@
 
 專項：`docs/audits/CI-GATE-2026-08-18.md`
 分支：`agent/ci-gate`
+final squashed commit：`b935290`
 Draft PR：#1
 
 Canonical pipeline：
@@ -29,7 +30,7 @@ Canonical pipeline：
 3. `typecheck`
 4. `build`
 
-首次完整 green run：`32132498629` / job `95696500082`。
+Final squashed-head run `32132941280` / job `95697924316`：全部成功。
 
 ### CI verifier modernization
 
@@ -38,8 +39,6 @@ CI 第一輪把多個舊 verifier drift 暴露出來，已做結構性修正，�
 - client secret env：只阻擋 client-reachable module 真正的 `process.env.<secret>` access；環境變數名稱作為 UI 說明文字不誤報。
 - client/server 邊界：由 `"use client"` import graph 推導，不靠脆弱路徑 allowlist。
 - requirements/contracts/mock-flow：改驗 current source + fixtures + canonical `docs/RELEASE_READINESS.md`，不綁死已淘汰 v0.1 文件名稱。
-
-Green run client graph：135 client-reachable modules。
 
 ### Vercel 與 CI 的關係
 
@@ -57,58 +56,106 @@ GitHub CI 已成功跑 `next build`，因此目前 Vercel preview failure 不應
 
 不要只把 operator 加進 `canPublish()`。
 
-## Production Supabase reconcile — read-only audit complete
+## Production Supabase reconcile — 001–039 live-state matrix complete
 
 專項：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
+分支：`agent/supabase-reconcile-plan`
 production：`nestory-listing-tool-test` / `tbgtqwvuohmdxnxisrgr`
 狀態：**live DB 尚未修改。**
 
-Confirmed state：
-- migration ledger 空白。
-- live schema 已有 late-stage fields；不能 replay `001–039`。
-- core RLS enabled，draft owner/reviewer policy 大致符合 canonical role model。
-- production 目前只有 1 個 admin profile。
+### Matrix conclusion
 
-Confirmed drift/security work：
-- `ip_catalog / ip_characters / tag_rules / collection_rules`：RLS enabled、live policy 缺失。
-- public SECURITY DEFINER RPC surface 有 Security Advisor warnings。
-- `set_updated_at / touch_image_batches_updated_at / touch_publish_batches_updated_at` 有 mutable search_path warnings。
+Repo `001–039` 已逐份和 production live state 比對。
+
+- migration ledger 空白，但 schema/data final state 幾乎完整。
+- 不可 replay `001–039`。
+- `009 → 010`、`019 → 030`、`025/027 policies → 028` 是正常 supersede chain。
+- late catalog/tag/knowledge seeds `032/033/037/038` 有代表性與數量證據已套用。
+- `039` dual-size image URL fields 存在。
+
+### Confirmed drift
+
+唯一明確 migration-level drift：migration `004` 的 4 張 table：
+- `ip_catalog`
+- `ip_characters`
+- `tag_rules`
+- `collection_rules`
+
+目前狀態：
+- tables ✅
+- RLS enabled ✅
+- grants ✅
+- triggers/constraints ✅
+- **policies 0/8 ❌**
+
+### Other security hardening debt
+
+- SECURITY DEFINER direct RPC surface 有 Security Advisor warnings。
+- `set_updated_at / touch_image_batches_updated_at / touch_publish_batches_updated_at` mutable search_path warnings。
 - leaked-password protection disabled。
+
+## Safe reconciliation draft — prepared, NOT applied
+
+Path：`supabase/reconcile/2026-08-18_production_reconcile_draft.sql`
+
+它刻意不在 `supabase/migrations/`：production ledger 空白時，不能讓 CLI 把歷史 migration 當成待執行 queue。
+
+Active SQL scope：
+1. idempotently restore 8 migration-004 catalog/rule policies
+2. pin 3 simple timestamp trigger helpers to `search_path = pg_catalog`
+
+NOT active yet：
+- trigger/event-trigger SECURITY DEFINER EXECUTE revokes
+- moving RLS helpers to private schema
+- any migration-history repair
+
+Supabase 官方目前建議：SECURITY DEFINER 必須固定 search_path；RLS policy 使用的 definer helper 不需要暴露在 Data API schema。Direct EXECUTE hardening仍需隔離 runtime proof，不能靠 advisor 警告直接全 revoke。
 
 ## 下一個施工 gate
 
-### 1. 先收尾 CI branch / Draft PR
+### 1. Production 保持不動
 
-- final diff 核對。
-- squash connector 產生的碎 commits，保留少量可理解歷史。
-- Draft PR #1 暫不 merge 到 production/default branch。
-- merge 前重新確認 final head CI green。
+不要在 live DB 直接貼 reconcile draft。
 
-### 2. Production Supabase reconciliation
+### 2. 建立隔離測試策略
 
-不要直接 replay 歷史 migration，也不要手造 migration ledger。
+目前 Supabase project 沒有 development branch。
 
-需要乾淨的新 reconciliation migration workflow，scope 只放已確認 drift：
-- restore/驗證 4 張 catalog/rule RLS policies
-- revoke 不必要 trigger/event-trigger direct client EXECUTE
-- harden trigger search_path
-- 保留真正需要的 RLS helper execution capability
-- 不改 canonical role model
-- 不改商品資料
+Supabase branch 會產生成本：
+- 若要建立，必須先查 cost
+- 顯示成本給使用者
+- 使用者明確確認後才能建立
 
-### 3. Supabase 驗證矩陣
+在未取得隔離環境前，不執行 production DDL。
 
-- authenticated 可讀 active IP/tag catalog
+### 3. 隔離環境驗證 reconcile draft
+
+最低測試矩陣：
+- authenticated 可讀 active IP/tag/collection catalog
 - operator 不可 admin-write catalog
+- admin 可讀 inactive 並管理 catalog
 - operator own-draft read/update 正常
 - reviewer/admin cross-team read 正常
 - batch archive owner/reviewer scope 正常
-- auth/sensitive-field triggers 正常
+- image/publish batch SELECT 不回歸 42P17 recursion
+- `handle_new_user` 仍能建立 operator profile
+- sensitive-field trigger 正常阻擋 operator escalation
+- timestamp triggers 正常更新 updated_at
+- SECURITY DEFINER direct EXECUTE revoke 候選逐一測，不批次猜
 - rerun Supabase Security Advisor
 
-### 4. Production config / E2E
+### 4. Baseline / tracked migration strategy
 
-CI/source compile green 後才做：
+只有隔離測試完成後，才決定如何建立「從現在開始」的 tracked migration baseline。
+
+鐵則：
+- 不把 `001–039` 重新套進 production
+- 不手動插假 migration rows
+- 不直接把 review draft 搬進 `supabase/migrations/` 就 `db push`
+
+### 5. Production config / E2E
+
+DB reconcile 路徑確認後：
 - Vercel production env audit
 - Shopify production config audit
 - manual mobile/Variant/role cases
@@ -131,6 +178,7 @@ Supabase reconciliation 完成後再補：
 - 不為了 catalog 可讀而 disable RLS。
 - 不直接把 operator 加進 publish。
 - 不把所有 SECURITY DEFINER authenticated EXECUTE 一刀切掉。
+- 不把 reconcile review draft 當正式 migration 直接 push。
 - 不信任前端 IDs 後直接用 service role 改資料。
 - 不為了 CI green 關掉 verifier；先修 verifier/source drift。
 - 不整包 revert B4/P07。

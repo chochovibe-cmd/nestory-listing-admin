@@ -13,6 +13,7 @@
 
 碰 production Supabase / migration / RLS，**必讀**：
 - `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
+- `supabase/reconcile/2026-08-18_production_reconcile_draft.sql`（review draft，**不是 migration、不可直接 production apply**）
 
 查 CI 歷史與 verifier 整理：
 - `docs/audits/CI-GATE-2026-08-18.md`
@@ -36,11 +37,12 @@ Nestory 是潮巢玩居內部的 Shopify 商品上架 PWA：商品輸入、圖�
 - **P1-3** `agent/p1-localstorage-secret-policy`：browser storage 改成阻擋 credential-like writes，不 blanket-ban localStorage。
 - **P0 archive authorization** `agent/p0-archive-owner-authorization` / `fdc5527`：batch archive requested IDs 先走 authenticated RLS，再由 service role mutation。
 - **Production Supabase audit** `agent/production-supabase-reconcile-audit` / `7e1c49d`：已唯讀盤點 live DB，production DB 未修改。
-- **CI gate** `agent/ci-gate` / Draft PR #1：GitHub Actions `verify:all → typecheck → build` 已取得完整 green run。
+- **CI gate** `agent/ci-gate` / `b935290` / Draft PR #1：GitHub Actions `verify:all → typecheck → build` 最終 squashed head 已完整 green。
+- **Supabase 001–039 reconciliation** `agent/supabase-reconcile-plan`：逐份 live-state 對帳完成，production 仍未修改。
 
 ### CI canonical state
 
-GitHub Actions run `32132498629`：
+Final squashed CI run `32132941280`：
 - install ✅
 - `pnpm run verify:all` ✅
 - `pnpm run typecheck` ✅
@@ -64,23 +66,34 @@ Vercel recent preview failure 的 GitHub status target 是 `build-rate-limit / u
 實際專案：`nestory-listing-tool-test` (`tbgtqwvuohmdxnxisrgr`)。
 
 - migration ledger **空白**，但 live schema 已包含 late-stage fields。
-- **不要 replay repo `001–039`。**
-- `ip_catalog / ip_characters / tag_rules / collection_rules`：RLS enabled，但 production 沒 policy；repo migration 004 原本有 authenticated read + admin write policies。
+- **`001–039` 已逐份對照 live end-state；不要 replay。**
+- 幾乎所有最終 schema/data effects 都能在 live DB 找到。
+- 唯一明確 migration-level drift：`004` 的 4 張 catalog/rule table 都 RLS enabled，但 **8 條預期 policy 全部缺失**。
+- `025/027` 的 recursive batch policy 已由 `028` 正確取代。
+- `009` 已由 `010` 取代；`019` 的 constraint 已由 `030` 擴充。
 - Security Advisor 另有 SECURITY DEFINER direct EXECUTE / trigger search_path warnings。
 - production 目前只有 1 個 admin profile，尚無 operator/reviewer。
-- production DB 在 audit/CI 工作中都**沒有被修改**。
+- production DB 在 audit / CI / 001–039 reconcile 工作中都**沒有被修改**。
 
-完整證據：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`。
+完整矩陣與證據：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`。
+
+目前安全 SQL 草稿：
+- `supabase/reconcile/2026-08-18_production_reconcile_draft.sql`
+- 刻意**不放** `supabase/migrations/`，避免 migration ledger 空白時誤用 `db push` 重播歷史 SQL。
+- Active draft 只含：8 條 catalog/rule policy restore + 3 個 timestamp trigger `search_path` hardening。
+- SECURITY DEFINER direct-RPC revoke 仍是註解候選，必須隔離測試後才能啟用。
 
 ## 4. 下一步順序
 
-1. 收尾 `agent/ci-gate`：整理 Git 歷史、保持 Draft PR #1，不直接 merge。
-2. Production Supabase reconciliation：建立乾淨的新 migration workflow，不 replay `001–039`、不偽造 history。
-3. 驗證/修復 catalog RLS policies + SECURITY DEFINER RPC surface + trigger search_path。
-4. rerun Supabase Security Advisor。
-5. Vercel production env / Shopify production config audit。
-6. real-product E2E。
-7. 再進 E6/F/G。
+1. `agent/ci-gate` / Draft PR #1 保持不 merge；它目前是已驗證的 CI 基底。
+2. 在 `agent/supabase-reconcile-plan` review/驗證 reconcile draft；production 不動。
+3. 決定隔離 DB 測試方式。Supabase 目前沒有 development branch；建立 branch 有成本，需使用者明確確認成本後才能建立。
+4. 在隔離環境測：8 policies、timestamp trigger search_path、trigger/event-trigger EXECUTE hardening候選、RLS/role matrix。
+5. 測試通過後才形成真正的新 tracked migration/baseline 策略；仍不可直接 replay `001–039`。
+6. rerun Supabase Security Advisor。
+7. Vercel production env / Shopify production config audit。
+8. real-product E2E。
+9. 再進 E6/F/G。
 
 ## 5. 修改鐵則
 
@@ -93,6 +106,7 @@ Vercel recent preview failure 的 GitHub status target 是 `build-rate-limit / u
 - `src/app/stabilization.css` 只作小型已記錄 hotfix，不得長成第二份 general stylesheet。
 - Production Supabase DDL 前必讀 production reconcile audit。
 - **不要 replay `001–039`；不要手動偽造 migration history。**
+- `supabase/reconcile/` 是審核草稿區，不是可直接 deploy 的 migration queue。
 - 權限/RLS 改動要對齊 frontend helper + API + DB。
 - service-role API 不可信任前端傳來的 IDs；先 authenticated/RLS 或明確 owner authorization。
 - 不 deploy / 不套 production DDL，除非使用者明確同意。
@@ -100,4 +114,4 @@ Vercel recent preview failure 的 GitHub status target 是 `build-rate-limit / u
 
 ## 6. 新 session 開場指令
 
-> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。再確認 branch/HEAD、Draft PR/CI 狀態，以及是否已有對應 stabilization/audit。碰 DB 必讀 production Supabase reconcile audit；判斷 release readiness 必讀 `docs/RELEASE_READINESS.md`。不要從歷史施工文件猜目前狀態。
+> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。再確認 branch/HEAD、Draft PR/CI 狀態，以及是否已有對應 stabilization/audit。碰 DB 必讀 production Supabase reconcile audit與 `supabase/reconcile/` draft；判斷 release readiness 必讀 `docs/RELEASE_READINESS.md`。不要從歷史施工文件猜目前狀態。

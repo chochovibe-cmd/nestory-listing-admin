@@ -17,6 +17,7 @@ function contains(relativePath, pattern) {
 
 const initialSchema = "supabase/migrations/001_initial_schema.sql";
 const releaseReadiness = "docs/RELEASE_READINESS.md";
+const productionSupabaseAudit = "docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md";
 
 const checks = [
   {
@@ -156,9 +157,18 @@ const checks = [
       && contains(releaseReadiness, /Every new coding session should start with/)
   },
   {
-    name: "Production Supabase drift audit exists",
-    ok: exists("docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md")
-      && contains("docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md", /Do not replay `001–039` wholesale/)
+    name: "Production Supabase reconciliation is documented and replay-safe",
+    ok: exists(productionSupabaseAudit)
+      && contains(productionSupabaseAudit, /nestory-listing-tool-test/)
+      && contains(productionSupabaseAudit, /001–039 live-state reconciliation complete/i)
+      && contains(productionSupabaseAudit, /Do not replay `001–039`/i)
+      && contains(productionSupabaseAudit, /004_ip_tag_collection_tables\.sql/)
+      && contains(productionSupabaseAudit, /ip_catalog/)
+      && contains(productionSupabaseAudit, /ip_characters/)
+      && contains(productionSupabaseAudit, /tag_rules/)
+      && contains(productionSupabaseAudit, /collection_rules/)
+      && contains(productionSupabaseAudit, /8 policies total/i)
+      && exists("supabase/reconcile/2026-08-18_production_reconcile_draft.sql")
   },
   {
     name: "PWA smoke verifier remains wired",

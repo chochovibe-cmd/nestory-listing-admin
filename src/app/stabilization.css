@@ -57,3 +57,25 @@
     box-sizing: border-box;
   }
 }
+
+/* P1-2 / 2026-08-18:
+ * P07 intentionally keeps WorkspaceInputPanel horizontally clipped so the left
+ * workbench column cannot paint over the results column. Variant's desktop image
+ * picker is 260px wide and uses 72px tiles in a 3-column flex grid; the 160px
+ * centered hover preview can therefore escape the picker on column 1 / 3 and be
+ * clipped by that ancestor. Keep the containment and picker geometry; only clamp
+ * the preview toward the inside edge for the outer columns.
+ */
+@media (min-width: 960px) and (hover: hover) and (pointer: fine) {
+  .workspace-input-panel .v-pop-pick .pick-grid .pk:nth-child(3n + 1) .pk-zoom-preview {
+    left: 0;
+    right: auto;
+    transform: none;
+  }
+
+  .workspace-input-panel .v-pop-pick .pick-grid .pk:nth-child(3n) .pk-zoom-preview {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+}

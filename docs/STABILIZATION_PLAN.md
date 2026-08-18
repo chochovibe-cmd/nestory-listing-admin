@@ -4,7 +4,7 @@
 > 詳細證據看 `docs/audits/`；實際修改看 `docs/CHANGELOG.md`。
 
 更新：2026-08-18
-狀態：**P0-1 / P0-2 / P0-3 / P1-1 都已有獨立修復分支；皆尚未完整 runtime 驗證/merge。**
+狀態：**P0-1 / P0-2 / P0-3 / P1-1 / P1-2 都已有獨立修復分支；皆尚未完整 runtime 驗證/merge。**
 
 ## 已實作，待完整驗證/merge
 
@@ -34,11 +34,11 @@
 Root cause：interactive child 的 touch 先冒泡到 `rc-header`，click stopPropagation 來不及阻止 long-press/swipe。
 
 已實作：
-- `cardGestureTarget.ts`：closest-based centralized interactive target guard。
-- `ResultCard.tsx`：touch start/move/end 在 interactive target 退出；start guard 位於 `onGestureStart` / long-press timer 之前。
+- centralized closest-based interactive target guard。
+- ResultCard touch start/move/end 在 interactive target 退出。
 - blank card surface gesture 保留。
-- `verify-mobile-resultcard-gesture-guard.mjs`：鎖 selector、guard 順序、原本 long-press/swipe contract、ResultCard tab active predicate。
-- `package.json` / `verify-all` 已補 verifier wiring（舊 P1 branch 原本漏掉）。
+- verifier 鎖 selector、guard 順序、原本 long-press/swipe contract、tab active predicate。
+- package / verify-all wiring 已補齊。
 
 待驗證：
 - 長按「重生」不進多選
@@ -47,27 +47,55 @@ Root cause：interactive child 的 touch 先冒泡到 `rc-header`，click stopPr
 - `npm run verify:mobile-resultcard-gesture`
 - `npm run typecheck`
 
-## 下一個主線
-
-### P1-2 P07 Variant desktop picker / hover preview clipping
+### ✅ P1-2 P07 Variant desktop picker / hover preview clipping
 來源：`docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`
+分支：`agent/p1-variant-picker-clipping`
+canonical：branch HEAD / `fix(ui): keep Variant hover preview inside picker`
 
-已確認：P07 的 ancestor `overflow-x:clip` 會包住 Variant desktop absolute picker / hover preview。mobile portal preview 不在同一裁切路徑。
+Root cause：
+- P07 的 WorkspaceInputPanel `overflow-x:clip` 是必要 containment，不能直接移除。
+- Variant picker：260px。
+- `.pick-grid`：72px tile + 8px gap + wrap，現況形成三欄。
+- hover preview：160px，原本每格 `left:50%; transform:translateX(-50%)`。
+- 第一/第三欄的 preview 會超出 picker 水平邊界，之後被 P07 clipping ancestor 裁掉。
 
-修復目標：
-- 保留雙欄 workbench containment
-- 不整包 revert P07
-- 讓 picker / hover preview 在左右邊界可見
-- 優先局部/Portal/collision-aware 解法，不放寬整個 panel overflow
+已實作：
+- **保留 P07 containment，不改 `globals.css`。**
+- **不改 `VariantEditor.tsx`。**
+- `stabilization.css` 只在 desktop + fine pointer：
+  - 第 1 欄 `nth-child(3n + 1)` preview 改 `left:0; transform:none`。
+  - 第 3 欄 `nth-child(3n)` preview 改 `right:0; transform:none`。
+  - 中間欄仍置中。
+- 新增 `verify-variant-picker-containment.mjs`：
+  - 要求 P07 `overflow-x:clip` 仍存在。
+  - 鎖定 picker 260 / tile 72 / gap 8 / preview 160 幾何 contract。
+  - 鎖定 edge alignment rules。
+  - 禁止 hotfix 加 `!important`。
+- package 新增 `verify:variant-picker-containment`，並納入 `verify:all`。
 
-驗證：
-- desktop 左/右邊界 picker
-- hover preview
+目前 code/verifier diff 相對 P1-1 只含 4 檔：
+- `src/app/stabilization.css`
+- `scripts/verify-variant-picker-containment.mjs`
+- `package.json`
+- `scripts/verify-all.mjs`
+
+待驗證：
+- desktop 第一/中間/第三欄 hover preview
 - 960px 附近
-- dark/nordic/kitty
+- dark / nordic / kitty
+- picker shell 本身是否始終維持 panel 內；如果實機仍有 shell clipping，另做獨立 follow-up，不放寬 P07 containment
+- `npm run verify:variant-picker-containment`
+- `npm run typecheck`
+
+## 下一個主線
 
 ### P1-3 verifier localStorage policy
 目標：從 blanket ban localStorage 改成禁止 secret/token 寫 browser storage；合法 autosave/gesture hint 要通過。
+
+驗證：
+- 合法 UI preference/autosave localStorage 通過
+- 明顯 API key/token/secret 寫 localStorage 必須失敗
+- 不降低現有 env/server-secret 掃描能力
 
 ## 之後
 

@@ -27,6 +27,7 @@
     "verify:variant-duplicates": "node scripts/verify-variant-duplicate-protection.mjs",
     "verify:mobile-resultcard-expand": "node scripts/verify-mobile-resultcard-expand.mjs",
     "verify:mobile-resultcard-gesture": "node scripts/verify-mobile-resultcard-gesture-guard.mjs",
+    "verify:variant-picker-containment": "node scripts/verify-variant-picker-containment.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

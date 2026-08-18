@@ -1,9 +1,47 @@
 # P07 Containment Audit — 2026-08-18
 
 > 範圍：只稽核 `5f73952`（UX-B4-P07）造成的水平 containment 交叉影響。
-> 原則：本輪不修功能、不改 `src/`；只確認 selector / DOM 路徑並留下可接手紀錄。
+> 原 audit 保留在下方；修復進度以本段更新為準。
 
-## 結論摘要
+## 2026-08-18 修復狀態更新
+
+### P1-2 Variant desktop hover preview containment — 已實作，待 desktop 實機/merge
+
+分支：`agent/p1-variant-picker-clipping`
+canonical：branch HEAD / commit message `fix(ui): keep Variant hover preview inside picker`
+
+本輪重新確認後，最明確的 P07 交叉問題是 **picker 內 160px desktop hover preview 的水平溢出**：
+- picker `260px`
+- tile `72px`
+- gap `8px`
+- flex-wrap 現況形成三欄
+- preview 原本每格置中 `left:50% + translateX(-50%)`
+
+因此第 1 / 第 3 欄 preview 會超出 picker 水平邊界，之後被 WorkspaceInputPanel 的 P07 `overflow-x:clip` 裁掉。
+
+本輪採用最小 collision-aware CSS：
+- **不移除** `.panel.workspace-input-panel` / `.workspace-input-panel .panel-body` 的 P07 clip。
+- **不改** `globals.css`。
+- **不改** `VariantEditor.tsx`。
+- `stabilization.css` 僅在 desktop fine-pointer：
+  - 第 1 欄 preview 靠左、向 picker 內展開。
+  - 第 3 欄 preview 靠右、向 picker 內展開。
+  - 中間欄維持置中。
+- 新增 `verify-variant-picker-containment.mjs`，鎖住 P07 containment 仍存在與 picker 三欄幾何 assumption。
+
+目前 code/verifier diff 相對 P1-1 只有：`stabilization.css`、新 verifier、`package.json`、`verify-all.mjs`。
+
+尚未聲稱完成：
+- desktop 960px 附近
+- dark / nordic / kitty
+- 第一/中間/第三欄 hover
+- picker shell 本身在極端寬度是否仍完整位於 panel 內
+
+若實機仍發現 **picker shell 本身** 被裁，應另開 follow-up 做 picker positioning；不要因此放寬整個 P07 containment。
+
+---
+
+## 結論摘要（原 audit）
 
 ### A. 已確認高可信交叉風險：Variant 桌機圖片 hover preview
 
@@ -19,10 +57,9 @@
 
 原因：桌機 hover preview 仍在 WorkspaceInputPanel DOM 樹內，不是 portal；只要 preview 或 picker 超出祖先 panel 的水平 padding box，就會被 `overflow-x:clip` 裁掉。
 
-目前建議：不要整包撤 P07。修復時優先考慮：
-1. hover preview 改 portal / fixed layer；或
-2. picker 在接近左右邊界時做 collision-aware positioning；或
-3. 只針對真正需要溢出的局部 ancestor 調整，不移除整個 workbench containment。
+原建議：不要整包撤 P07。修復時優先考慮 portal / collision-aware positioning / 局部安全策略。
+
+> 狀態更新：已先採用「hover preview 局部 collision-aware」方案；實機若證實 picker shell 也裁，再獨立處理 shell positioning。
 
 ### B. 手機 Variant 長按圖片預覽：目前較安全
 
@@ -67,8 +104,6 @@
 - remove / spec badge：P07 造成裁切的風險低，因為目前都在縮圖盒內。
 - main badge 使用負座標，若看到被裁，**先查 `.pthumb-strip` 自己的 scroll overflow**，不要先怪 P07。
 
-注意：`overflow-x:auto` 會讓該 strip 本身形成 scroll containment；所以 P09 還原後若有角標問題，可能是 B2-P10/P09 的既有布局特性。
-
 ### F. ResultCard swipe：P07 不是主要嫌疑
 
 現況：
@@ -94,12 +129,13 @@ P07 使用：
 
 `.rc-batch-strip` 仍是 `position:sticky; top:0`；P07 的 horizontal clip 不應等同把祖先變成 vertical scroll container。
 
-## 修復優先序（等正式進入修復階段）
+## 修復／驗證優先序（更新）
 
-1. Variant desktop image picker / hover zoom（最高）
-2. 實機確認 `.vh-more-menu` 邊界
-3. 縮圖 main badge 是否被 `.pthumb-strip` 自己裁切
-4. swipe / sticky 只做驗證，不先改 P07
+1. ~~Variant desktop hover zoom 水平裁切~~ — 已做局部 collision fix，待實機
+2. picker shell 本身 960px 邊界實機確認；有問題才另開 follow-up
+3. `.vh-more-menu` 邊界
+4. 縮圖 main badge 是否被 `.pthumb-strip` 自己裁切
+5. swipe / sticky 只做驗證，不先改 P07
 
 ## 不建議的修法
 
@@ -113,7 +149,8 @@ P07 使用：
 先讀：
 1. `AI_START_HERE.md`
 2. `docs/CURRENT_STATUS.md`
-3. `docs/REGRESSION_AUDIT.md`
+3. `docs/STABILIZATION_PLAN.md`
 4. 本檔
+5. `docs/CHANGELOG.md`
 
-下一個 audit：**VariantEditor B3-P06 + B4-P03 疊加後的功能與欄位變形**。
+P1-2 已有修復分支，**不要重做或直接撤 P07 containment**。下一個主線是 P1-3：修正 `verify-no-secrets.mjs` 的 localStorage policy。

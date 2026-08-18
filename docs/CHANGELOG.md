@@ -176,3 +176,57 @@ ResultCard 的 mobile `rc-header` 在 touch boundary 直接接收 `touchstart/mo
 1. 同步 `CURRENT_STATUS` / `STABILIZATION_PLAN` / ResultCard audit / AI entry。
 2. squash 成相對 P0-3 單一 P1-1 commit。
 3. 下一個主線：P1-2 P07 Variant desktop picker/hover preview clipping。
+
+## 2026-08-18 — P1-2 P07 Variant desktop hover preview containment
+
+狀態：**已實作在 `agent/p1-variant-picker-clipping`，尚未 merge / deploy；仍需 desktop 960px / 三主題實機與 verifier/typecheck 驗證。**
+
+### Root cause
+P07 為了阻止左側 WorkspaceInputPanel 與右側 ResultsPanel 互相覆蓋，刻意加入 `overflow-x:clip`。這個 containment 本身不能直接撤掉。
+
+Variant 圖片 picker 現況是：
+- `.v-pop-pick` width 260px
+- `.pick-grid` flex + 8px gap + wrap
+- `.pk` 72px，因此正常是三欄
+- `.pk-zoom-preview` 160px，原本每格用 `left:50%` + `translateX(-50%)` 置中
+
+第 1 / 第 3 欄的 160px preview 會超出 picker 水平邊界；由於仍在 WorkspaceInputPanel DOM tree 內，最終會被 P07 clipping ancestor 裁掉。
+
+### 實際修改
+- `src/app/stabilization.css`
+  - 只在 `min-width:960px` + fine pointer + hover 生效。
+  - 第 1 欄 `nth-child(3n + 1)` preview 改成 `left:0; right:auto; transform:none`。
+  - 第 3 欄 `nth-child(3n)` preview 改成 `left:auto; right:0; transform:none`。
+  - 中間欄維持原本 centered preview。
+- 新增 `scripts/verify-variant-picker-containment.mjs`
+  - 鎖定 P07 `overflow-x:clip` 仍存在。
+  - 鎖定 picker 260 / tile 72 / gap 8 / preview 160 的幾何 contract。
+  - 鎖定 desktop edge-alignment selectors。
+  - hotfix 不可新增 `!important`。
+- `package.json` 新增 `verify:variant-picker-containment`。
+- `scripts/verify-all.mjs` 納入此 verifier。
+
+### 變更範圍控制
+相對 P1-1 的 code/verifier diff 只有 4 檔：
+- `src/app/stabilization.css`
+- `scripts/verify-variant-picker-containment.mjs`
+- `package.json`
+- `scripts/verify-all.mjs`
+
+本修復**沒有**修改：
+- `globals.css`
+- `VariantEditor.tsx`
+- ResultCard
+- API / DB / Shopify
+- P07 workbench containment
+
+### 尚未聲稱完成的驗證
+- 靜態 diff 已確認只含上述 4 個檔案。
+- 專用 verifier / typecheck 尚未在可執行 Node repo 環境實跑。
+- desktop 需實測：第一/中間/第三欄 hover、960px 附近、dark/nordic/kitty。
+- picker shell 本身若在極端寬度仍被裁，另開獨立 positioning follow-up；不要放寬 P07 containment。
+
+### 下一步
+1. 同步 P07 audit / CURRENT_STATUS / STABILIZATION_PLAN / AI entry。
+2. squash 成相對 P1-1 單一 P1-2 commit。
+3. 下一個主線：P1-3 `verify-no-secrets.mjs` localStorage policy。

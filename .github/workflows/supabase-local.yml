@@ -9,6 +9,7 @@ on:
       - "scripts/test-supabase-reconcile-local.sh"
       - "scripts/test-supabase-role-rls-local.sh"
       - "scripts/test-supabase-function-hardening-local.sh"
+      - "scripts/test-supabase-production-package-local.sh"
       - ".github/workflows/supabase-local.yml"
       - "scripts/verify-requirements.mjs"
   workflow_dispatch:
@@ -74,6 +75,9 @@ jobs:
 
       - name: Test trigger and event-trigger EXECUTE hardening
         run: bash scripts/test-supabase-function-hardening-local.sh
+
+      - name: Test production precheck/apply/rollback/postcheck package
+        run: bash scripts/test-supabase-production-package-local.sh
 
       - name: Stop local database
         if: always()

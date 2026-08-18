@@ -18,7 +18,7 @@
 | 🟠 高風險 | `6af3a25` B4-P03 | 名義 UX，實際改 Variant auto-expand/duplicate row 功能 |
 | 🟠 高風險 | `47a96c4` B4-P04 | 手機 ResultCard 大幅改 grid，並隱藏原 checkbox/quick row |
 | 🔴 已知回歸 | `754a879` B4-P06 | fail reason flex 曾撐壞 desktop header，後續另補修 |
-| 🟠 高風險 | `5f73952` B4-P07 | 大範圍 overflow-x:clip / containment，可能裁浮層 |
+| 🔴 已確認交叉風險 | `5f73952` × `e798b5a` | P07 `overflow-x:clip` 可裁 Variant 桌機 hover zoom / popover |
 | 🔴 已知來回 | `159721e` → `8c7db19` | P08 縮圖方案做完後 P09 又還原到 B2-P10 |
 | ⚠️ scope 污染 | `2b5d3f7` B4-P01 | Tags commit 同時帶入 Variant layout CSS |
 
@@ -112,15 +112,19 @@ P09：
 
 風險：
 - 同時改 CSS、DOM、交互、drag、mobile long-press、portal preview。
-- `.v-pop-pick` / `.pick-grid` 使用 overflow visible，而後面的 P07 containment 可能互相衝突。
+- `.v-pop-pick` / `.pick-grid` 使用 overflow visible，而後面的 P07 containment 會與其形成實際裁切衝突。
 
 判定：**高風險**。
 
-待查：
-- desktop hover zoom 是否被裁。
-- mobile long-press portal 是否仍正常。
-- row reorder / up-down 是否會影響輸入欄布局。
-- menu 在窄欄是否位移。
+已確認：
+- 桌機 hover zoom `.pk-zoom-preview` 是 `position:absolute`，仍留在 VariantEditor / WorkspaceInputPanel DOM 樹內，寬 160px，會橫向超出 72px thumb。
+- P07 之後祖先 `.workspace-input-panel .panel-body` 使用 `overflow-x: clip`，所以 hover zoom / popover 只要越過 panel 左右邊界就會被裁。
+- mobile long-press zoom 使用 `createPortal(..., document.body)`，因此不受這個 ancestor clip 影響，風險較低。
+
+待實機驗證：
+- 第一列最左 image picker hover zoom 是否被左邊界裁。
+- `.v-pop-pick` 260px 在 420px 左欄、窄視窗與接近右邊界時是否裁切。
+- `.vh-more-menu` 及其他 `.pop-menu` 是否有同類問題。
 
 ## 3. B4 高風險與 scope 問題
 
@@ -133,12 +137,16 @@ P09：
 - `.panel-body` / `.results-list` 也加 containment
 - 多個 form controls / cards 加 `max-width:100%`、`min-width:0`
 
-風險：
-- 會修 overflow，但也可能裁掉 popover / badge / zoom preview / absolute controls。
-- P08 的歷史紀錄已提到 P07 clip 會加劇 thumb/角標問題。
+判定：**已確認存在交叉回歸風險**，不是單純「可能」。
+
+已確認 selector 路徑：
+`WorkspaceInputPanel` → `.panel.workspace-input-panel` → `.panel-body` → `CollapsibleSection(adv-variant)` → `VariantEditor(.variant-box)` → `.vthumb-wrap` → `.v-pop-pick` / `.pk-zoom-preview`
+
+P07 對 `.workspace-input-panel .panel-body` 設 `overflow-x: clip`；Variant desktop zoom 是 absolute child，不是 portal。因此任何超出 ancestor horizontal padding box 的內容都可能被裁。
+
+目前不要直接拿掉整個 P07，因為它原本解決左右欄互相覆蓋。正確修法應是「保留 grid containment，針對需要浮出的 UI 改 portal / positioning / 局部 overflow 策略」。
 
 待查：
-- Variant image picker hover preview
 - dropdown / overflow menu
 - thumbnail remove/spec badge
 - result-card swipe layer
@@ -183,7 +191,7 @@ commit 名稱主要是 Tags，但同時包含 Variant layout/CSS 變更，例如
 ## 4. 我目前認為最可能對應你描述的問題
 
 如果症狀是「欄位變形、框框移位、浮層被切掉」：
-1. `5f73952` P07 containment
+1. `5f73952` P07 containment（已找到 Variant desktop zoom 的實際裁切路徑）
 2. `e798b5a` Variant popover / zoom
 3. `47a96c4` mobile ResultCard grid
 4. `2b5d3f7` 混入的 Variant CSS
@@ -210,7 +218,7 @@ commit 名稱主要是 Tags，但同時包含 Variant layout/CSS 變更，例如
 
 ## 6. 下一輪 audit 優先順序
 
-1. **P07 containment 對 Variant/image popover 的實際 selector 路徑**。
+1. **P07 containment 對其他 popover / dropdown / thumbnail overlay 的實際 selector 路徑**。
 2. **VariantEditor B3-P06 + B4-P03 疊加後的 DOM/功能互動**。
 3. **ResultCard B3-P02 + B3-P04 + B4-P04 + B4-P06 疊加效果**。
 4. `globals.css` 中 `.result-card`、`.variant-*`、`.workspace-input-panel` 同 selector 多次 override 的區域。

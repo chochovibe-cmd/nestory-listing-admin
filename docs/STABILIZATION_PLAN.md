@@ -4,7 +4,7 @@
 > 詳細證據看 `docs/audits/`；實際修改看 `docs/CHANGELOG.md`。
 
 更新：2026-08-18
-狀態：**P0-1 / P0-2 / P0-3 / P1-1 / P1-2 都已有獨立修復分支；皆尚未完整 runtime 驗證/merge。**
+狀態：**P0-1 / P0-2 / P0-3 / P1-1 / P1-2 / P1-3 都已有獨立修復分支；皆尚未完整 runtime 驗證/merge。**
 
 ## 已實作，待完整驗證/merge
 
@@ -73,12 +73,6 @@ Root cause：
   - 禁止 hotfix 加 `!important`。
 - package 新增 `verify:variant-picker-containment`，並納入 `verify:all`。
 
-目前 code/verifier diff 相對 P1-1 只含 4 檔：
-- `src/app/stabilization.css`
-- `scripts/verify-variant-picker-containment.mjs`
-- `package.json`
-- `scripts/verify-all.mjs`
-
 待驗證：
 - desktop 第一/中間/第三欄 hover preview
 - 960px 附近
@@ -87,23 +81,72 @@ Root cause：
 - `npm run verify:variant-picker-containment`
 - `npm run typecheck`
 
+### ✅ P1-3 Browser-storage secret policy
+來源：ResultCard audit + verifier drift audit
+分支：`agent/p1-localstorage-secret-policy`
+canonical：branch HEAD / `fix(verify): enforce sensitive browser-storage writes`
+
+Root cause：
+- `verify-no-secrets.mjs` 註解承認 localStorage 本身不是 leak。
+- 實作卻仍用檔名 allowlist + `/localStorage/i` blanket-ban。
+- 合法 UI state（automation prefs、tone memory、gesture hint、其他 prefs/autosave）會造成 false positive，讓 `verify:all` 失去可信度。
+
+已實作：
+- 新增 `browser-storage-secret-policy.mjs`：只檢查 browser storage write 的 key/value expression 是否 credential-like。
+- 敏感命名涵蓋：api key、access/refresh/auth/bearer token、client secret、private key、service role、secret/password/credential/authorization、webhook、Shopify/GitHub/OpenAI/Anthropic key/token。
+- `verify-no-secrets.mjs` 移除 localStorage allowlist / blanket-ban。
+- 保留既有 env name、frontend Anthropic call、硬編碼 token prefix、root `.env` / `.gitignore` 檢查。
+- 新增 `verify-browser-storage-secret-policy.mjs`：
+  - 合法 theme/prefs/session/tone writes 必須通過。
+  - credential-like writes 必須失敗。
+  - 直接讀現有 `automationPrefsStore.ts`、`toneMemory.ts`、`DraftResultsPanel.tsx` 防 false positive。
+- package 新增 `verify:browser-storage-secrets`，並納入 `verify:all`。
+
+目前 code/verifier diff 相對 P1-2 只含 5 檔：
+- `scripts/browser-storage-secret-policy.mjs`
+- `scripts/verify-no-secrets.mjs`
+- `scripts/verify-browser-storage-secret-policy.mjs`
+- `package.json`
+- `scripts/verify-all.mjs`
+
+待驗證：
+- `npm run verify:browser-storage-secrets`
+- `npm run verify:no-secrets`
+- `npm run verify:all`（後續仍可能被其他既有 verifier 問題擋住，要按錯誤分類）
+- `npm run typecheck`
+
 ## 下一個主線
 
-### P1-3 verifier localStorage policy
-目標：從 blanket ban localStorage 改成禁止 secret/token 寫 browser storage；合法 autosave/gesture hint 要通過。
+### P0 Role / permission / RLS consistency audit + decision
+目前已知：
+- 實際 type / DB 角色是 `admin | operator | reviewer`。
+- 部分較新文件曾寫 `viewer`，不一致。
+- 新使用者預設 operator。
+- 現有 publish guard 主要允許 admin/reviewer，operator 不能 publish。
 
-驗證：
-- 合法 UI preference/autosave localStorage 通過
-- 明顯 API key/token/secret 寫 localStorage 必須失敗
-- 不降低現有 env/server-secret 掃描能力
+**不要直接把 operator 加進 `canPublish()`。**
+先 audit：
+- TS role type / helper
+- 新使用者預設角色
+- UI publish visibility
+- API publish authorization
+- RLS / SQL policies / sensitive-field guards
+- admin-only settings/member controls
+
+需要產品裁決：
+1. operator 是否應發布？
+2. reviewer 是否可發布或只審核？
+3. viewer 是否真的需要成為正式角色？
+4. 新使用者預設角色應是哪個？
+
+決策後一次對齊 code + DB/RLS，避免半套權限。
 
 ## 之後
 
-1. role / permission / RLS consistency
-2. production Supabase migration reconcile
-3. CI gate
-4. real-product E2E
-5. Phase E6/F/G
+1. production Supabase migration reconcile
+2. CI gate
+3. real-product E2E
+4. Phase E6/F/G
 
 ## 每個修復 commit 規則
 
@@ -121,4 +164,5 @@ Root cause：
 - 不大量重寫 `globals.css`
 - `stabilization.css` 不擴成第二份 general stylesheet
 - 不直接加 product_variants unique constraint（先改 replacement transaction strategy）
+- 權限未裁決前不做 operator publish 半套放行
 - 不先開 E6/F/G

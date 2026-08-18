@@ -5,8 +5,8 @@
 
 更新基準：2026-08-18
 正式基準分支：`codex/nestory-v0.1-safety-skeleton`
-目前穩定化 stack：cleanup → P0-1 → P0-2 → P0-3 → P1-1 → **P1-2**
-目前工作分支：`agent/p1-variant-picker-clipping`
+目前穩定化 stack：cleanup → P0-1 → P0-2 → P0-3 → P1-1 → P1-2 → **P1-3**
+目前工作分支：`agent/p1-localstorage-secret-policy`
 
 ## 1. 專案狀態
 
@@ -40,41 +40,64 @@ canonical：branch HEAD / `fix(mobile): restore ResultCard expand affordance`
 分支：`agent/p1-mobile-gesture-guard`
 canonical：branch HEAD / `fix(mobile): isolate ResultCard controls from card gestures`
 
-已改：
 - centralized `cardGestureTarget.ts`
 - ResultCard touch start/move/end 在 interactive target 退出
 - blank card surface long-press/swipe 保留
 - verifier 已接入 package / verify-all
-- 額外鎖住 `activeTab === tab.id`，防止舊 whole-file replacement regression 再發生
+- 額外鎖住 `activeTab === tab.id`
 
 ### P1-2 P07 Variant desktop hover preview containment
 分支：`agent/p1-variant-picker-clipping`
 canonical：branch HEAD / `fix(ui): keep Variant hover preview inside picker`
 
-Root cause：P07 為了防 left/right workbench 互相覆蓋，刻意在 WorkspaceInputPanel 保留 `overflow-x:clip`；Variant desktop picker 是 260px、72px tile + 8px gap 的三欄布局，而每格 160px centered hover preview 在第一/第三欄會超出 picker 水平邊界，進而被 clipping ancestor 裁掉。
+保留 P07 `overflow-x:clip`；只在 desktop fine pointer 將 picker 第一/第三欄 160px hover preview 向 260px picker 內側對齊。不改 VariantEditor / globals.css；新增 `verify:variant-picker-containment`。
+
+### P1-3 Browser-storage secret policy
+分支：`agent/p1-localstorage-secret-policy`
+canonical：branch HEAD / `fix(verify): enforce sensitive browser-storage writes`
+
+Root cause：`verify-no-secrets.mjs` 的註解已承認 localStorage 不等於洩密，但實作仍以檔名 allowlist blanket-ban `/localStorage/i`，因此合法 UI state（automation prefs、tone memory、ResultCard gesture hint、autosave/prefs）會造成 verifier drift。
 
 已改：
-- 不移除 P07 containment。
-- 不改 `VariantEditor.tsx`。
-- 不改 `globals.css`。
-- 只在 `stabilization.css` 的 desktop + fine-pointer scope：
-  - 第一欄 preview 改靠左向內展開。
-  - 第三欄 preview 改靠右向內展開。
-  - 中間欄維持原本置中。
-- 新增 `verify-variant-picker-containment.mjs`：鎖定 P07 clip 仍存在、picker 260 / tile 72 / gap 8 / preview 160 的三欄幾何假設，以及 edge alignment rules。
-- 新增 `verify:variant-picker-containment` 並納入 `verify:all`。
+- 新增 `scripts/browser-storage-secret-policy.mjs`。
+- `findSensitiveBrowserStorageWrites()` 只檢查 browser storage 的 write arguments / assignment key+value，敏感命名包含：
+  - `apiKey`
+  - `accessToken / refreshToken / authToken / bearerToken`
+  - `clientSecret / privateKey / serviceRole`
+  - `secret / password / credential / authorization`
+  - `webhook`
+  - provider-specific `shopify/github/openai/anthropic` key/token
+- `verify-no-secrets.mjs` 移除 localStorage allowlist 與 blanket-ban；保留既有：
+  - client-side Anthropic call guard
+  - client-side OpenAI/Anthropic secret env name guard
+  - hard-coded key/token prefix scans
+  - `.env` / `.gitignore` checks
+- 新增 `verify-browser-storage-secret-policy.mjs`：
+  - 合法 theme/prefs/session/tone storage 必須通過
+  - `openaiApiKey/accessToken/webhook/clientSecret/service_role` storage writes 必須被抓
+  - 直接讀現有 `automationPrefsStore.ts`、`toneMemory.ts`、`DraftResultsPanel.tsx` 確認不誤殺
+- 新增 `verify:browser-storage-secrets` 並納入 `verify:all`。
 
-目前 code/verifier diff 相對 P1-1 已確認只含：`stabilization.css`、新 verifier、`package.json`、`verify-all.mjs`。
+目前 code/verifier diff 相對 P1-2 已確認只含 5 檔：
+- `scripts/browser-storage-secret-policy.mjs`
+- `scripts/verify-no-secrets.mjs`
+- `scripts/verify-browser-storage-secret-policy.mjs`
+- `package.json`
+- `scripts/verify-all.mjs`
 
-**下一個主線：P1-3 verifier localStorage policy。**
+**下一個主線：role / permission / RLS consistency audit。**
 
 ## 3. 仍待處理的高優先事項
 
-### P1-3 verifier localStorage policy
-`verify-no-secrets.mjs` blanket-ban 多數 localStorage，合法 autosave / gesture hint 會誤報。應改成檢查「secret/token 是否寫 browser storage」，而不是把所有 browser storage 當 secret。
-
 ### P0 role / permission model
 實際角色 `admin | operator | reviewer`；部分文件曾寫 viewer。operator 預設不能 publish，牽涉前端 + RLS/DB guard，不能只改 `canPublish()`。
+
+下一步應先做 audit/decision：
+- 新使用者預設 operator 是否合理
+- operator 是否應 publish
+- reviewer 是否只審核或也可發布
+- admin 專屬能力有哪些
+- 對應 TS type / frontend guard / API auth / RLS / SQL trigger/policy 一次對齊
 
 ### P0 migration verification drift
 migrations 已到 039，但 SQL verifier 主要驗早期 schema；需對 production Supabase 做 reconcile。
@@ -82,13 +105,12 @@ migrations 已到 039，但 SQL verifier 主要驗早期 schema；需對 product
 ### CI
 目前沒有正式 GitHub Actions CI gate。未來建議：install → verify → typecheck → build。
 
-## 4. 重要 UIUX regression 結論
+## 4. 重要穩定化結論
 
-- B4-P06 fail reason desktop flex 曾回歸，後續 source 已修。
-- P08 image thumb 方案後來被 P09 還原到 B2-P10。
-- P07 broad `overflow-x:clip` 保留；Variant desktop hover preview 的已確認水平裁切路徑已做 P1-2 局部 collision fix，待 960px / 三主題實機驗證。
-- B3-P04 + B4-P04 mobile selectMode expand 缺口已做 P0-3 hotfix。
-- interactive child touch 與 card gesture 衝突已做 P1-1 guard，待實機驗證。
+- P0-1 / P0-2：Variant state consistency / duplicate option guard 已做。
+- P0-3 / P1-1：Mobile ResultCard expand + gesture isolation 已做。
+- P1-2：P07 containment 保留，Variant hover preview 用局部 collision fix。
+- P1-3：`verify:no-secrets` 不再把所有 localStorage 當風險，而是檢查敏感 browser-storage writes。
 - 過去 commit scope 混雜；現在一題一 commit。
 
 ## 5. 功能階段摘要
@@ -109,13 +131,12 @@ migrations 已到 039，但 SQL verifier 主要驗早期 schema；需對 product
 
 ## 7. 下一步順序
 
-1. 收尾/squash P1-2；desktop picker/hover 在 960px 與 dark/nordic/kitty 實機留待有執行環境驗證
-2. P1-3 localStorage verifier policy
-3. role/RLS consistency
-4. production Supabase migration reconcile
-5. CI
-6. real-product E2E
-7. 再往 E6/F/G
+1. 收尾/squash P1-3；專用 verifier / typecheck 留待可執行環境驗證
+2. role / permission / RLS consistency audit + decision
+3. production Supabase migration reconcile
+4. CI
+5. real-product E2E
+6. 再往 E6/F/G
 
 ## 8. 文件讀取順序
 

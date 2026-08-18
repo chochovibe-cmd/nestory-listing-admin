@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { findSensitiveBrowserStorageWrites } from "./browser-storage-secret-policy.mjs";
 
 const root = process.cwd();
 
@@ -53,28 +54,12 @@ if (!/\.env\.\*/.test(gitignore)) {
   errors.push("Local env files are not ignored: .env.*");
 }
 
-// Next.js Route Handlers (src/app/api/**) and the provider modules they call
-// (src/lib/providers/**) are server-only by framework convention -- they never
-// ship to the browser bundle, so calling Anthropic/OpenAI or reading their
-// secret env vars there is expected, not a leak. Everything else under src/
-// is fair game to flag (React components, client-shared libs, etc).
+// Next.js Route Handlers (src/app/api/**) and provider modules are server-only
+// by project convention. Everything else under src/ may ship to or be shared
+// with the browser and therefore must not reference server credentials.
 const clientScope = /^src[\\/](?!app[\\/]api[\\/]|lib[\\/]providers[\\/])/;
 
-// localStorage itself isn't a leak -- the original concern was API keys/tokens
-// stored client-side (the old PWA prototype did that). These files only ever
-// store a UI preference string (theme name, provider pill choice), never a
-// secret, so they're an explicit allowlist rather than a blanket ban.
-const localStorageAllowlist = new Set([
-  path.join("src", "app", "layout.tsx"),
-  path.join("src", "components", "ProviderSwitcher.tsx"),
-  path.join("src", "components", "ThemeSwitcher.tsx"),
-  path.join("src", "components", "ExchangeRateWidget.tsx"),
-  path.join("src", "components", "ModeSwitcher.tsx"),
-  path.join("src", "lib", "pricingSettingsStore.ts")
-]);
-
 const forbiddenPatterns = [
-  { label: "browser localStorage usage", pattern: /localStorage/i, scope: /^src[\\/]/, except: localStorageAllowlist },
   { label: "frontend Anthropic API call", pattern: /api\.anthropic/i, scope: clientScope },
   { label: "OpenAI secret env name in source", pattern: /OPENAI_API_KEY/i, scope: clientScope },
   { label: "Anthropic secret env name in source", pattern: /ANTHROPIC_API_KEY/i, scope: clientScope },
@@ -89,9 +74,20 @@ for (const file of sourceFiles) {
   const relative = path.relative(root, file);
   if (/^scripts[\\/]verify-.*\.mjs$/.test(relative)) continue;
   const source = fs.readFileSync(file, "utf8");
-  for (const { label, pattern, scope, except } of forbiddenPatterns) {
+
+  // P1-3: browser storage itself is allowed for non-sensitive UI state.
+  // Reject only writes whose key/value expression looks credential-like.
+  if (clientScope.test(relative)) {
+    const storageFindings = findSensitiveBrowserStorageWrites(source);
+    for (const finding of storageFindings) {
+      errors.push(
+        `${relative} matched browser storage secret write (${finding.kind}: ${finding.snippet})`
+      );
+    }
+  }
+
+  for (const { label, pattern, scope } of forbiddenPatterns) {
     if (scope && !scope.test(relative)) continue;
-    if (except && except.has(relative)) continue;
     if (pattern.test(source)) {
       errors.push(`${relative} matched ${label}`);
     }

@@ -15,6 +15,7 @@
     "verify:mock-flow": "node scripts/verify-mock-flow.mjs",
     "verify:pwa-smoke": "node scripts/verify-pwa-smoke.mjs",
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
+    "verify:browser-storage-secrets": "node scripts/verify-browser-storage-secret-policy.mjs",
     "verify:d3-sharp": "node scripts/verify-d3-sharp.mjs",
     "verify:r1-stage": "node scripts/verify-r1-stage.mjs",
     "verify:cap1": "node scripts/verify-cap1.mjs",

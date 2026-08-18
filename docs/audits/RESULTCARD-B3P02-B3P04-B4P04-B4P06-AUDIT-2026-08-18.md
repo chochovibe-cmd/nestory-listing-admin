@@ -27,11 +27,26 @@ canonical：branch HEAD / `fix(mobile): isolate ResultCard controls from card ge
 - 新增 `verify-mobile-resultcard-gesture-guard.mjs`；已補 package script / `verify:all` wiring。
 - verifier 額外鎖定 ResultCard tab active predicate，避免整檔替換再次把 `activeTab === tab.id` 誤改。
 
-目前 code/verifier diff 相對 P0-3 已確認只含 5 檔，沒有 CSS/API/DB/Shopify/Variant 改動。
+### P1-C localStorage verifier policy — 已實作，待 verifier/runtime 驗證/merge
 
-待驗證：長按重生不進多選、toggle/重生上水平移動不拖卡、空白卡面 gesture 正常、專用 verifier/typecheck。
+分支：`agent/p1-localstorage-secret-policy`
+canonical：branch HEAD / `fix(verify): enforce sensitive browser-storage writes`
 
-下一個主線改為 **P1-C verifier localStorage policy**；P07 Variant clipping 則由 P07 audit/plan 繼續處理。
+原 mismatch：`DraftResultsPanel` 的 gesture hint、automation prefs、tone memory 等非敏感 UI state 會因 blanket `/localStorage/i` 被 `verify:no-secrets` 誤判。
+
+已實作：
+- 移除 `localStorageAllowlist` 與 blanket-ban。
+- browser storage 本身允許；只有 write key/value expression 像 credential 才阻擋。
+- 敏感命名包含 api key、access/refresh/auth/bearer token、client secret、private key、service role、secret/password/credential/authorization、webhook、provider-specific key/token。
+- 保留原本 env/server-secret/hard-coded key prefix 掃描。
+- 新增 `verify-browser-storage-secret-policy.mjs`：合法 UI state 必須通過、credential-like writes 必須失敗，並直接讀現有 `DraftResultsPanel.tsx` / `automationPrefsStore.ts` / `toneMemory.ts` 做 false-positive regression。
+- `verify:browser-storage-secrets` 已納入 `verify:all`。
+
+因此 **不再建議擴充檔名 allowlist**；未來若新增 UI preference storage，只要不存 credential 就不需改 verifier。
+
+待驗證：專用 verifier、`verify:no-secrets`、`verify:all`、typecheck。
+
+下一個主線：**role / permission / RLS consistency audit**。
 
 ---
 
@@ -111,16 +126,16 @@ B4-P04 mobile 第 3 排會顯示 `rc-m-regen-slot`。
 - `window.localStorage.getItem(RC_GESTURE_HINT_KEY)`
 - `window.localStorage.setItem(...)`
 
-`verify-no-secrets.mjs`：
+原 `verify-no-secrets.mjs`：
 - 對所有 `src/**` 搜 `/localStorage/i`
 - 只有 allowlist 內檔案放行
-- allowlist **沒有** `src/components/listing/DraftResultsPanel.tsx`
+- allowlist 沒有 `DraftResultsPanel.tsx`
 
-所以目前靜態規則下，`verify:no-secrets` 會把 DraftResultsPanel 判成 `browser localStorage usage`。
+所以原規則會把非敏感 UI state 判成 `browser localStorage usage`。
 
 判定：**確定的 verifier mismatch。**
 
-注意：其他合法 autosave 也有類似問題。修 verifier 時應重新定義「禁止 secret 存 browser」，不要只擴檔名 allowlist。
+> 狀態更新：P1-3 已把規則改成「禁止 credential-like browser-storage writes」，不再 blanket-ban localStorage；詳見本檔最上方與 `docs/CHANGELOG.md`。
 
 ---
 
@@ -157,7 +172,7 @@ mobile CSS 隱藏 `.rc-quick-row`，而 `swipeEnabled` 要求 `!isArchived`；qu
 
 1. ~~P0-A mobile selectMode expand affordance~~ — 已實作，待驗證/merge
 2. ~~P1-B interactive target gesture guard~~ — 已實作，待驗證/merge
-3. **P1-C verifier localStorage policy**
+3. ~~P1-C verifier localStorage policy~~ — 已實作，待 verifier/typecheck/merge
 4. archived mobile unarchive action 實機確認
 5. 長 title / fail / chips mobile grid 壓力測試
 
@@ -166,10 +181,11 @@ mobile CSS 隱藏 `.rc-quick-row`，而 `swipeEnabled` 要求 `!isArchived`；qu
 - 不恢復整條 mobile desktop quick row
 - 不拿掉 long-press/swipe
 - 不 revert 整個 B4-P04
-- 不為了 localStorage 直接關掉 no-secrets check
+- 不為了 localStorage 關掉 no-secrets check
+- 不重新引入檔名 localStorage allowlist
 
 ## 下一位 Agent 接手
 
 先讀 `AI_START_HERE.md`、`CURRENT_STATUS`、`STABILIZATION_PLAN`、`CHANGELOG` 與本檔。
 
-**不要重做 P0-3 / P1-1。** ResultCard 下一個直接問題是 P1-C localStorage verifier policy；另一路主線是 P07 Variant desktop clipping。
+**不要重做 P0-3 / P1-1 / P1-3。** 下一個主線是 role / permission / RLS consistency audit；ResultCard 剩餘項目以實機驗證為主。

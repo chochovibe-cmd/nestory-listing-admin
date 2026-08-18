@@ -86,7 +86,7 @@ B4-P03 的 duplicate row 會先產生與原列相同的 option merge key；`inde
 ### 下一步
 1. squash 本分支為單一 P0-2 commit。
 2. 下一個獨立修復：P0-3 mobile ResultCard selectMode expand affordance。
-3. 有執行環境後跑 `npm run verify:variant-duplicates`、`npm run verify:variant-axis-atomic`、`npm run typecheck`，並實測 duplicate → add/drop axis → save → publish guard。
+3. 有可執行環境後跑 `npm run verify:variant-duplicates`、`npm run verify:variant-axis-atomic`、`npm run typecheck`，並實測 duplicate → add/drop axis → save → publish guard。
 
 ## 2026-08-18 — P0-2 squash / remote build status update
 
@@ -230,3 +230,53 @@ Variant 圖片 picker 現況是：
 1. 同步 P07 audit / CURRENT_STATUS / STABILIZATION_PLAN / AI entry。
 2. squash 成相對 P1-1 單一 P1-2 commit。
 3. 下一個主線：P1-3 `verify-no-secrets.mjs` localStorage policy。
+
+## 2026-08-18 — P1-3 Browser-storage secret policy
+
+狀態：**已實作在 `agent/p1-localstorage-secret-policy`，尚未 merge / deploy；仍需專用 verifier / `verify:no-secrets` / typecheck 驗證。**
+
+### Root cause
+`verify-no-secrets.mjs` 原本的註解已說明「localStorage 本身不是 leak」，但實作仍以檔名 allowlist 搭配 `/localStorage/i` blanket-ban。這會讓合法 browser-local UI state 一直造成 false positive，例如：
+- automation worker / notification preferences
+- IP → 文案語氣記憶
+- ResultCard mobile gesture hint
+- 其他 session/local UI preferences
+
+更糟的是，白名單模式會隨功能增加持續 drift，讓 `verify:all` 的紅燈失去「真的有 secret 風險」的意義。
+
+### 實際修改
+- 新增 `scripts/browser-storage-secret-policy.mjs`
+  - `findSensitiveBrowserStorageWrites()` 只檢查 storage write 的 argument / assignment key+value。
+  - 會阻擋 credential-like 命名：api key、access/refresh/auth/bearer token、client secret、private key、service role、secret/password/credential/authorization、webhook，以及 Shopify/GitHub/OpenAI/Anthropic key/token。
+  - 非敏感 UI state 可以正常使用 localStorage/sessionStorage。
+- 更新 `scripts/verify-no-secrets.mjs`
+  - 移除 `localStorageAllowlist`。
+  - 移除 `browser localStorage usage` blanket pattern。
+  - client scope 改呼叫 `findSensitiveBrowserStorageWrites()`。
+  - **保留** frontend Anthropic call、OpenAI/Anthropic secret env name、hard-coded key/token prefix、root `.env`、`.gitignore` 等既有 guard。
+- 新增 `scripts/verify-browser-storage-secret-policy.mjs`
+  - safe cases：theme、prefs、session sort、tone memory、含「NEVER store tokens/secrets」註解的 automation prefs 都不得誤報。
+  - unsafe cases：`openaiApiKey`、`accessToken`、webhook URL、`clientSecret`、`service_role` storage writes 必須被抓。
+  - 直接讀現有 `automationPrefsStore.ts`、`toneMemory.ts`、`DraftResultsPanel.tsx` 做 false-positive regression。
+- `package.json` 新增 `verify:browser-storage-secrets`。
+- `scripts/verify-all.mjs` 納入 browser-storage policy verifier。
+
+### 變更範圍控制
+相對 P1-2 的 code/verifier diff 只有 5 檔：
+- `scripts/browser-storage-secret-policy.mjs`
+- `scripts/verify-no-secrets.mjs`
+- `scripts/verify-browser-storage-secret-policy.mjs`
+- `package.json`
+- `scripts/verify-all.mjs`
+
+沒有修改 UI、API、Supabase、Shopify 或產品業務邏輯。
+
+### 尚未聲稱完成的驗證
+- 靜態 diff 已確認只含上述 5 檔。
+- 尚未在可執行 repo Node 環境跑 `verify:browser-storage-secrets` / `verify:no-secrets` / `verify:all` / typecheck。
+- `verify:all` 若仍失敗，需按實際下一個 verifier 錯誤處理，不再假設是 localStorage blanket-ban。
+
+### 下一步
+1. 同步 CURRENT_STATUS / STABILIZATION_PLAN / ResultCard audit / AI entry。
+2. squash 成相對 P1-2 單一 P1-3 commit。
+3. 下一個主線：role / permission / RLS consistency audit；先裁決模型，不直接半套放行 operator publish。

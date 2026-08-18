@@ -4,7 +4,7 @@
 
 更新基準：2026-08-18
 正式 app 基準分支：`codex/nestory-v0.1-safety-skeleton`
-目前 DB/migration 工作分支：`agent/supabase-migration-baseline`
+目前安全工作分支：`agent/supabase-security-definer-audit`
 
 ## 1. 最重要的現況切分
 
@@ -43,13 +43,21 @@ P0/P1 UI、Variant、ResultCard、archive API 等 stabilization 修復仍在 Git
 - P1-3 browser-storage secret policy
 - P0 batch archive owner authorization / `fdc5527`
 
-Source-contract/verifier已有；mobile/Variant/role UX仍要按 `docs/RELEASE_READINESS.md` 做實機 cases。
+Source-contract/verifier 已有；mobile/Variant/role UX仍要按 `docs/RELEASE_READINESS.md` 做實機 cases。
 
-## 3. CI gate
+## 3. CI / migration-baseline gate
 
-`agent/ci-gate` / `b935290` / Draft PR #1。
+CI canonical：frozen pnpm install → `verify:all` → `typecheck` → `build`。
 
-Canonical：frozen pnpm install → `verify:all` → `typecheck` → `build`。
+`agent/supabase-migration-baseline` 最終 head：`92c5869c9470adc8d4547417a5da157b849f0802`，Draft PR #6，未 merge。
+
+Final PR validation：
+- standard CI run #160：verify ✅ / typecheck ✅ / build ✅
+- Supabase Local Reconcile run #38：historical rebuild ✅ / role+RLS ✅ / function hardening ✅ / precheck-apply-rollback-postcheck ✅
+
+舊 PR #5 因 squash/force-push 後無法 reopen，保持 closed / unmerged；PR #6 是乾淨 final validation PR。
+
+通知策略：中間施工不開 PR；整理完才開 Draft PR 跑一次 final CI，避免每個小 commit 都寄 Actions email。
 
 Vercel recent preview failure曾是 `build-rate-limit / upgradeToPro`；GitHub CI可成功 production build，不要把 Preview quota failure當 code compile failure。
 
@@ -82,53 +90,26 @@ Vercel recent preview failure曾是 `build-rate-limit / upgradeToPro`；GitHub C
 5. hosted-only `rls_auto_enable()` 未修改。
 6. role/business rows/Shopify/Vercel config未改。
 
-### Security Advisor after apply
-
-這次目標已解掉：
-- 4 張 catalog/rule table 的 `RLS enabled but no policy` findings；
-- 3 個 timestamp helper 的目標 mutable-search-path findings。
-
-仍存在、要獨立設計/測試：
-- `current_user_role` mutable search_path；
-- SECURITY DEFINER / RPC surface findings（RLS helpers、batch ownership helpers等）；
-- hosted/platform helper findings；
-- Auth leaked-password protection disabled；
-- anonymous-sign-in advisory/info。
-
-**不要為了 advisor 變綠就一刀切 revoke authenticated RLS helpers。**
-
 ## 6. Migration tracking — 從 2026-08-18 正式開始
 
 Production在本次以前完全沒有 Supabase migration tracking，但 live schema/data已反映歷史 repo SQL `001–039` 大部分最終狀態。
 
 因此沒有 replay / 沒有偽造歷史 ledger，而是從 audited live state建立新 tracking boundary。
 
-Production migration list目前 canonical：
-
+Production migration list canonical：
 1. `20260818142712 baseline_existing_schema_20260818`
 2. `20260818142919 production_reconcile_20260818`
 
-### Active queue
+Active `supabase/migrations/` 只保留上述兩個 tracked versions + future tracked migrations。
 
-`supabase/migrations/`
-- `20260818142712_baseline_existing_schema_20260818.sql`
-- `20260818142919_production_reconcile_20260818.sql`
-- future tracked migrations append here。
-
-### Historical archive
-
+舊 `001–039` 已 byte-for-byte archive 到：
 `supabase/history/pre_tracking_migrations/`
-- 完整保留舊 `001–039`；Git blob/tree直接搬移，內容不改。
-- 用於歷史證據 / controlled local reconstruction。
-- **不可 production replay，不可搬回 active queue。**
 
-Baseline marker是 state assertion，不是完整 blank-DB schema dump；free local historical reconstruction仍使用 archived SQL + documented 032/033 conditions。
+不可 production replay，也不可搬回 active queue。
 
-`scripts/verify-supabase-migration-baseline.mjs` 已接入 `verify:all`，鎖住 active queue / archive / local bootstrap contract。
+`scripts/verify-supabase-migration-baseline.mjs` 已接入 `verify:all`；舊 verifier 對 migration 001 / 036 的硬編碼路徑也已改讀 historical archive。
 
 ## 7. Free local Supabase runtime proof
-
-`agent/supabase-local-ci` / `f017765` / Draft PR #3。
 
 使用免費 GitHub runner + Docker + Supabase CLI + Postgres 17；使用者要求**不要付費 Supabase Development Branch**。
 
@@ -150,9 +131,27 @@ Historical local-only conditions：
 
 這些是 reconstruction debt，不表示 production缺 032/033。
 
-## 8. Rollback semantics after tracking
+## 8. SECURITY DEFINER / RPC hardening audit — READ ONLY
 
-舊 `supabase/reconcile/2026-08-18_production_rollback.sql` 現在只是**inverse SQL reference**。
+Current branch：`agent/supabase-security-definer-audit`。
+
+詳見：`docs/audits/SUPABASE-SECURITY-DEFINER-AUDIT-2026-08-18.md`。
+
+Production唯讀確認：
+- 主要 app tables 對 `anon` 沒有 SELECT / INSERT grant；
+- `current_user_role` / `is_admin` / `is_reviewer` 與 4 個 batch ownership helpers 是 RLS 核心 helper，不能直接 revoke authenticated EXECUTE；
+- Supabase官方建議 RLS SECURITY DEFINER helper 不必留在 exposed schema；長期較乾淨方案是移到 non-exposed `private` schema，再讓 policies明確呼叫 `private.*`；
+- `requeue_revision_for_generation` 是具 auth/ownership/status 檢查的 privileged business function，是否仍需要 direct RPC尚待 source usage裁決，不先改；
+- `rls_auto_enable` 真正掛在 hosted event trigger `ensure_rls`，且 local stack無法重現，現在不碰；
+- Auth leaked-password protection 是 Supabase Pro+ 功能；本專案維持 Free，因此只記錄、不要求升級。
+
+**本 audit 尚未對 production做任何新 DDL / Auth 設定變更。**
+
+下一個安全實作候選：在免費 local DB 做 SD-1 private-schema RLS helper prototype，完整跑 role/RLS matrix後再決定是否產生 production migration。
+
+## 9. Rollback semantics after tracking
+
+舊 `supabase/reconcile/2026-08-18_production_rollback.sql` 現在只是 inverse SQL reference。
 
 因 production reconcile 已 tracked，如果需要回復：
 - 不要只手動跑 rollback.sql；
@@ -161,27 +160,29 @@ Historical local-only conditions：
 
 否則會產生 schema狀態和 ledger不一致。
 
-## 9. GitHub branch / PR 狀態
+## 10. GitHub branch / PR 狀態
 
 - Draft PR #1：CI gate
 - Draft PR #2：production reconcile planning
 - Draft PR #3：free local runtime gate
 - Draft PR #4：reversible production package
-- current follow-up：`agent/supabase-migration-baseline`
+- PR #5：closed / unmerged（被 final squashed PR取代）
+- Draft PR #6：migration baseline final validation，green / unmerged
+- current branch：`agent/supabase-security-definer-audit`，目前**不開 PR**以避免中間 CI/email spam
 
-以上 PR仍未 merge；production DB repair是透過明確授權後的 Supabase tracked migrations完成，並不代表 GitHub app branches已 merge。
+Production DB repair是透過明確授權後的 Supabase tracked migrations完成，並不代表 GitHub app branches已 merge。
 
-## 10. 下一步順序
+## 11. 下一步順序
 
-1. 收尾 `agent/supabase-migration-baseline`：standard CI + free local DB gate green、squash、Draft PR。
-2. 再讀 production migration list，必須精確對上兩個 tracked versions。
-3. 另開 SECURITY DEFINER / Auth hardening audit，不直接擴權限修改。
+1. SD-1：在免費 local Supabase prototype `private` RLS helpers + policy rewrite；先測、不碰 production。
+2. 裁決 `requeue_revision_for_generation` 是否仍為 intentional direct RPC。
+3. 若 SD-1 全綠，才準備 tracked forward migration + pre/postcheck + revert；production apply 需再次明確授權。
 4. Vercel production env + Shopify production config audit。
 5. manual mobile/Variant/role UX + controlled real-product E2E。
 6. 最後整理 stabilization branch stack，決定 merge / Vercel production deploy。
 7. 再進 E6/F/G。
 
-## 11. 文件 source of truth
+## 12. 文件 source of truth
 
 - 本檔：current state
 - `AI_START_HERE.md`：新 session入口
@@ -192,5 +193,6 @@ Historical local-only conditions：
 - `docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md`
 - `docs/audits/SUPABASE-PRODUCTION-PACKAGE-2026-08-18.md`
 - `docs/audits/SUPABASE-MIGRATION-BASELINE-2026-08-18.md`
+- `docs/audits/SUPABASE-SECURITY-DEFINER-AUDIT-2026-08-18.md`
 
 新 agent不要再從歷史文件推論「production DB尚未修改」；那已經是舊狀態。

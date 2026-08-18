@@ -10,6 +10,7 @@ on:
       - "scripts/test-supabase-role-rls-local.sh"
       - "scripts/test-supabase-function-hardening-local.sh"
       - "scripts/test-supabase-production-package-local.sh"
+      - "scripts/test-supabase-private-rls-helpers-local.sh"
       - ".github/workflows/supabase-local.yml"
       - "scripts/verify-requirements.mjs"
   workflow_dispatch:
@@ -81,6 +82,9 @@ jobs:
 
       - name: Test production precheck/apply/rollback/postcheck package
         run: bash scripts/test-supabase-production-package-local.sh
+
+      - name: Test private-schema RLS helper prototype
+        run: bash scripts/test-supabase-private-rls-helpers-local.sh
 
       - name: Stop local database
         if: always()

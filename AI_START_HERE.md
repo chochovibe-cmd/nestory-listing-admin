@@ -9,12 +9,16 @@
 2. `docs/CURRENT_STATUS.md` — 目前真實進度、已知風險、下一步
 3. `AGENTS.md` — 常駐施工規則與 UI/安全鐵則
 
-如工作涉及 UI，再讀：
+目前若要接著做穩定化，再讀：
+- `docs/STABILIZATION_PLAN.md` — 已排序的 P0/P1 修復清單
+- `docs/REGRESSION_AUDIT.md` — regression 總索引
+- `docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`
+- `docs/audits/VARIANT-B3P06-B4P03-AUDIT-2026-08-18.md`
+- `docs/audits/RESULTCARD-B3P02-B3P04-B4P04-B4P06-AUDIT-2026-08-18.md`
+
+如工作涉及 UI 規格，再讀：
 - `docs/mockups/nestory-v7-mockup.html`
 - `docs/Mockup差異備忘.md`
-- `docs/REGRESSION_AUDIT.md`
-- `docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`（P07 overflow / Variant / swipe / sticky 專項稽核）
-- `docs/audits/VARIANT-B3P06-B4P03-AUDIT-2026-08-18.md`（Variant state consistency / duplicate row 專項稽核）
 
 如工作涉及歷史細節，再查：
 - `docs/施工清單.md`
@@ -31,45 +35,46 @@ Nestory 是潮巢玩居內部使用的 Shopify 商品上架 PWA：從商品輸�
 
 - 核心上架流程已相當完整，曾完成「輸入 → AI 生成 → 審核 → Shopify DRAFT」真實流程測試。
 - 目前不是缺功能為主，而是需要做 **穩定化、文件收斂、權限/資料庫驗證、UI regression 修復**。
-- 最近 UIUX 修改密度很高，已確認有「優化後造成版面回歸、再補修」的 commit 歷史；前端工作不要假設最新 UI 一定是正確版本。
-- P07 containment 已完成第一輪專項稽核：Variant 桌機圖片 hover preview 有高可信裁切風險；ResultCard swipe / sticky 目前不是 P07 的主要嫌疑。
-- Variant B3-P06 + B4-P03 稽核已找到兩個優先 P0：axis value 先改 dimensions、rows 等二次確認造成 state 不一致；duplicate row 同 merge key 的手填資料可能不進 discard protection。
+- 最近 UIUX 修改密度很高，第一輪高風險 regression audit 已完成，現在已有可執行 `docs/STABILIZATION_PLAN.md`。
+- Variant 目前有兩個優先 P0：axis value 先改 dimensions、rows 等二次確認造成 state 不一致；duplicate row 同 merge key 的手填資料可能不進 discard protection。
+- Mobile ResultCard 有一個優先 P0：multi-select 時 code 要求用 ▸ 展開，但 B4-P04 CSS 把含 ▸ 的 quick row 隱藏。
+- P07 containment 對 Variant desktop hover preview 有高可信裁切風險；ResultCard swipe / vertical sticky 目前不是 P07 的主要嫌疑。
 - 不要優先開 Phase F/G 新功能，除非目前 P0 穩定化事項已處理。
 
-完整內容看 `docs/CURRENT_STATUS.md`。
+完整內容看 `docs/CURRENT_STATUS.md`；下一步修復順序看 `docs/STABILIZATION_PLAN.md`。
 
 ## 4. 修改前的鐵則
 
 - 不刪舊文件；歷史文件之後只做 archive/索引整理。
 - 不因「對齊 Mockup」而移除現有功能。
-- UI 修改前先看 Git 歷史與 `docs/REGRESSION_AUDIT.md`，避免重複踩回歸。
+- UI 修改前先看 Git 歷史與 regression audit，避免重複踩回歸。
 - 不要大包混改：文件整理、UI 修復、權限/DB 修復、功能新增分開 commit。
+- 一個 regression 一個 commit，並同步更新對應 audit / status。
 - SQL 只新增 migration 檔，不自行跑 Supabase CLI。
 - 不 deploy，除非使用者明確同意。
 - push/PR 前先驗證改動範圍與可跑的 checks。
 
 ## 5. 目前建議工作順序
 
-1. 完成最近 UIUX commit regression audit
-2. 文件收斂：把 CURRENT_STATUS 當唯一短版進度真相
-3. 修已確認的 UI regression（小包、可回退）
-4. 角色/權限模型一致化
-5. Supabase migration 實際環境核對
-6. CI / verify / typecheck / build gate
-7. 真實商品 E2E
-8. 再繼續新功能 Phase E6 / F / G
+1. 依 `docs/STABILIZATION_PLAN.md` 修 P0/P1 regression
+2. 每個修復補 verifier/test 並更新 audit/status
+3. 角色/權限模型一致化
+4. Supabase migration 實際環境核對
+5. CI / verify / typecheck / build gate
+6. 真實商品 E2E
+7. 再繼續新功能 Phase E6 / F / G
 
 ## 6. 文件權威分級
 
 ### 現役／優先
 - `AI_START_HERE.md`
 - `docs/CURRENT_STATUS.md`
+- `docs/STABILIZATION_PLAN.md`
 - `AGENTS.md`
+- `docs/REGRESSION_AUDIT.md`
+- `docs/audits/*.md`（對應當前 regression 專項）
 - `docs/Mockup差異備忘.md`
 - `docs/mockups/nestory-v7-mockup.html`
-- `docs/REGRESSION_AUDIT.md`
-- `docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`
-- `docs/audits/VARIANT-B3P06-B4P03-AUDIT-2026-08-18.md`
 
 ### 歷史／按需查詢
 - `docs/施工清單.md`
@@ -84,6 +89,6 @@ Nestory 是潮巢玩居內部使用的 Shopify 商品上架 PWA：從商品輸�
 
 新的 AI coding session 可以直接說：
 
-> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`，只讀完成目前任務必要的其他文件。不要先掃完整 docs。先確認目前 branch/HEAD 與相關 Git 歷史，再開始修改。
+> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。如果是穩定化工作，再讀 `docs/STABILIZATION_PLAN.md` 與對應 audit。不要先掃完整 docs。先確認目前 branch/HEAD 與相關 Git 歷史，再開始修改。
 
 這樣可以避免每個新 session 因 context 太長而讀到一半就開始施工。

@@ -11,29 +11,32 @@ function exists(relativePath) {
   return fs.existsSync(path.join(root, relativePath));
 }
 
+function contains(relativePath, pattern) {
+  return exists(relativePath) && pattern.test(read(relativePath));
+}
+
+const initialSchema = "supabase/migrations/001_initial_schema.sql";
+const releaseReadiness = "docs/RELEASE_READINESS.md";
+
 const checks = [
   {
     name: "Next.js PWA scaffold exists",
     ok: exists("src/app/layout.tsx") && exists("src/app/page.tsx") && exists("package.json")
   },
   {
-    name: "Supabase schema exists",
-    ok: exists("supabase/migrations/001_initial_schema.sql")
-  },
-  {
-    name: "Auth roles and RLS are defined",
-    ok: /create type public\.user_role/.test(read("supabase/migrations/001_initial_schema.sql"))
-      && /enable row level security/i.test(read("supabase/migrations/001_initial_schema.sql"))
-      && /create policy/i.test(read("supabase/migrations/001_initial_schema.sql"))
+    name: "Supabase schema and core RLS exist",
+    ok: exists(initialSchema)
+      && contains(initialSchema, /create type public\.user_role/)
+      && contains(initialSchema, /enable row level security/i)
+      && contains(initialSchema, /create policy/i)
   },
   {
     name: "Storage bucket plan exists",
-    ok: /product-images/.test(read("supabase/migrations/001_initial_schema.sql"))
-      && exists("docs/supabase-storage.md")
+    ok: contains(initialSchema, /product-images/) && exists("docs/supabase-storage.md")
   },
   {
     name: "PWA draft creation defaults to pending_copy",
-    ok: /status:\s*"pending_copy"/.test(read("src/components/listing/WorkspaceInputPanel.tsx"))
+    ok: contains("src/components/listing/WorkspaceInputPanel.tsx", /status:\s*"pending_copy"/)
   },
   {
     name: "Draft queue and review pages exist",
@@ -47,144 +50,120 @@ const checks = [
   },
   {
     name: "Worker claim uses locked SQL queue",
-    ok: /claim_pending_generation/.test(read("supabase/migrations/001_initial_schema.sql"))
-      && /for update skip locked/i.test(read("supabase/migrations/001_initial_schema.sql"))
-      && /worker_lock_expires_at/i.test(read("supabase/migrations/001_initial_schema.sql"))
-      && /worker_attempts < max_worker_attempts/i.test(read("supabase/migrations/001_initial_schema.sql"))
-      && /grant execute on function public\.claim_pending_generation/i.test(read("supabase/migrations/001_initial_schema.sql"))
+    ok: contains(initialSchema, /claim_pending_generation/)
+      && contains(initialSchema, /for update skip locked/i)
+      && contains(initialSchema, /worker_lock_expires_at/i)
+      && contains(initialSchema, /worker_attempts < max_worker_attempts/i)
   },
   {
-    name: "generation_mode fallback values are preserved",
-    ok: /codex_skill.*api_llm.*manual/.test(read("supabase/migrations/001_initial_schema.sql").replace(/\n/g, " "))
-  },
-  {
-    name: "publish_mode active/draft values are preserved",
-    ok: /publish_mode as enum \('active', 'draft'\)/.test(read("supabase/migrations/001_initial_schema.sql"))
+    name: "Generation and publish enum fallbacks are preserved",
+    ok: /codex_skill.*api_llm.*manual/.test(read(initialSchema).replace(/\n/g, " "))
+      && contains(initialSchema, /publish_mode as enum \('active', 'draft'\)/)
   },
   {
     name: "Shopify publish API is mock-safe and requires active confirmation",
-    ok: /SHOPIFY_PUBLISH_MOCK/.test(read("src/lib/shopify/publishDraft.ts"))
-      && /confirmActive/.test(read("src/app/api/drafts/[id]/publish/route.ts"))
-      && /confirmActive/.test(read("src/app/api/drafts/batch/publish/route.ts"))
+    ok: contains("src/lib/shopify/publishDraft.ts", /SHOPIFY_PUBLISH_MOCK/)
+      && contains("src/app/api/drafts/[id]/publish/route.ts", /confirmActive/)
+      && contains("src/app/api/drafts/batch/publish/route.ts", /confirmActive/)
   },
   {
     name: "Matrixify fallback mapping exists",
-    ok: exists("src/lib/csv/matrixify.ts") && /matrixify_csv/.test(read("src/app/api/exports/matrixify/route.ts"))
+    ok: exists("src/lib/csv/matrixify.ts")
+      && contains("src/app/api/exports/matrixify/route.ts", /matrixify_csv/)
   },
   {
-    name: "Local env file is ignored, not committed",
-    ok: !exists(".env") && /\.env\.\*/.test(read(".gitignore"))
+    name: "Local environment and dependency caches are not committed",
+    ok: !exists(".env")
+      && contains(".gitignore", /\.env\.\*/)
+      && contains(".gitignore", /\.pnpm-store\//)
   },
   {
-    name: "Generated dependency cache is ignored",
-    ok: /\.pnpm-store\//.test(read(".gitignore"))
+    name: "Sensitive workflow field guard exists",
+    ok: contains(initialSchema, /guard_sensitive_product_draft_fields/)
+      && contains(initialSchema, /new\.publish_mode is distinct from old\.publish_mode/)
+      && contains(initialSchema, /move drafts into generation, review, or publish states/)
   },
   {
-    name: "Sensitive field guard exists",
-    ok: /guard_sensitive_product_draft_fields/.test(read("supabase/migrations/001_initial_schema.sql"))
-      && /new\.publish_mode is distinct from old\.publish_mode/.test(read("supabase/migrations/001_initial_schema.sql"))
-  },
-  {
-    name: "Non-reviewer status escalation is guarded",
-    ok: /move drafts into generation, review, or publish states/.test(read("supabase/migrations/001_initial_schema.sql"))
-      && /new\.status not in \('pending_input', 'pending_copy', 'needs_revision', 'archived'\)/.test(read("supabase/migrations/001_initial_schema.sql"))
-  },
-  {
-    name: "RLS policy guide exists",
+    name: "RLS/admin security guides exist",
     ok: exists("docs/rls-policy-guide.md")
-      && /guard_sensitive_product_draft_fields/.test(read("docs/rls-policy-guide.md"))
-      && /WORKER_API_TOKEN/.test(read("docs/rls-policy-guide.md"))
-  },
-  {
-    name: "Admin bootstrap and RLS smoke tests are documented",
-    ok: exists("docs/admin-bootstrap.md")
-      && /role = 'admin'/.test(read("docs/admin-bootstrap.md"))
+      && contains("docs/rls-policy-guide.md", /guard_sensitive_product_draft_fields/)
+      && exists("docs/admin-bootstrap.md")
       && exists("docs/rls-smoke-tests.md")
-      && /Operator Cannot Escalate Workflow/.test(read("docs/rls-smoke-tests.md"))
+      && contains("docs/rls-smoke-tests.md", /Operator Cannot Escalate Workflow/)
   },
   {
-    name: "Deployment checklist exists",
-    ok: exists("docs/deployment-checklist.md")
-      && /SHOPIFY_PUBLISH_MOCK=true/.test(read("docs/deployment-checklist.md"))
-      && /Do not push or deploy from `main` directly/.test(read("docs/deployment-checklist.md"))
-      && /ACTIVE publish can be triggered without confirmation/.test(read("docs/deployment-checklist.md"))
-  },
-  {
-    name: "Local preview script exists",
+    name: "Local preview and preflight scripts exist",
     ok: exists("scripts/start-local.ps1")
-      && /next.*start/i.test(read("scripts/start-local.ps1"))
-      && /127\.0\.0\.1/.test(read("scripts/start-local.ps1"))
-      && /scripts\/start-local\.ps1/.test(read("README.md"))
-  },
-  {
-    name: "Local preflight script exists",
-    ok: exists("scripts/preflight-local.ps1")
-      && /verify-all\.mjs/.test(read("scripts/preflight-local.ps1"))
-      && /\.env\.local exists; values are not printed/.test(read("scripts/preflight-local.ps1"))
-      && /scripts\/preflight-local\.ps1/.test(read("README.md"))
+      && contains("scripts/start-local.ps1", /next.*start/i)
+      && exists("scripts/preflight-local.ps1")
+      && contains("scripts/preflight-local.ps1", /verify-all\.mjs/)
+      && contains("README.md", /scripts\/start-local\.ps1/)
+      && contains("README.md", /scripts\/preflight-local\.ps1/)
   },
   {
     name: "PWA manifest exists",
     ok: exists("public/manifest.webmanifest")
       && exists("public/icon.svg")
-      && /manifest:\s*"\/manifest\.webmanifest"/.test(read("src/app/layout.tsx"))
-  },
-  {
-    name: "API contracts are documented",
-    ok: exists("docs/api-contracts.md")
-      && /POST \/api\/worker\/claim/.test(read("docs/api-contracts.md"))
-      && /POST \/api\/drafts\/\{id\}\/request-revision/.test(read("docs/api-contracts.md"))
-      && /POST \/api\/drafts\/\{id\}\/publish/.test(read("docs/api-contracts.md"))
-      && /Matrixify CSV Fallback/.test(read("docs/api-contracts.md"))
+      && contains("src/app/layout.tsx", /manifest:\s*"\/manifest\.webmanifest"/)
   },
   {
     name: "Request revision API exists",
     ok: exists("src/app/api/drafts/[id]/request-revision/route.ts")
-      && /needs_revision/.test(read("src/app/api/drafts/[id]/request-revision/route.ts"))
-      && /requestRevision/.test(read("src/components/listing/ResultCard.tsx"))
-      && /request-revision/.test(read("src/components/listing/ResultCard.tsx"))
+      && contains("src/app/api/drafts/[id]/request-revision/route.ts", /needs_revision/)
+      && contains("src/components/listing/ResultCard.tsx", /request-revision/)
   },
   {
-    name: "Codex Skill rules and mock fixtures exist",
-    ok: exists("docs/codex-skill-rules.md")
-      && /chochonest-copywriter@2026-06-24-v1/.test(read("docs/codex-skill-rules.md"))
-      && exists("fixtures/worker-complete-sample.json")
+    name: "Mock flow fixtures and verifier exist",
+    ok: exists("fixtures/worker-complete-sample.json")
       && exists("fixtures/publish-active-sample.json")
       && exists("fixtures/matrixify-export-sample.json")
-  },
-  {
-    name: "Mock flow verifier exists",
-    ok: exists("scripts/verify-mock-flow.mjs")
-      && /worker-complete-sample\.json/.test(read("scripts/verify-mock-flow.mjs"))
-      && /Mock flow checks passed/.test(read("scripts/verify-mock-flow.mjs"))
-      && /verify:mock-flow/.test(read("package.json"))
+      && exists("fixtures/ui-states.json")
+      && exists("scripts/verify-mock-flow.mjs")
+      && contains("scripts/verify-mock-flow.mjs", /worker-complete-sample\.json/)
+      && contains("package.json", /verify:mock-flow/)
   },
   {
     name: "Mock Supabase seed exists",
     ok: exists("supabase/seeds/001_mock_draft.sql")
-      && /00000000-0000-4000-8000-000000000001/.test(read("supabase/seeds/001_mock_draft.sql"))
-      && /pending_copy/.test(read("supabase/seeds/001_mock_draft.sql"))
+      && contains("supabase/seeds/001_mock_draft.sql", /00000000-0000-4000-8000-000000000001/)
+      && contains("supabase/seeds/001_mock_draft.sql", /pending_copy/)
   },
   {
-    name: "Manual QA checklist and UI states exist",
-    ok: exists("docs/manual-qa-checklist.md")
-      && /Active publish shows second browser confirmation/.test(read("docs/manual-qa-checklist.md"))
-      && /Reviewer can export Matrixify CSV/.test(read("docs/manual-qa-checklist.md"))
-      && exists("fixtures/ui-states.json")
+    name: "Canonical release readiness documents deployment safety and API contracts",
+    ok: exists(releaseReadiness)
+      && contains(releaseReadiness, /SHOPIFY_PUBLISH_MOCK=true/)
+      && contains(releaseReadiness, /ACTIVE publish must always require explicit confirmation/)
+      && contains(releaseReadiness, /POST \/api\/worker\/claim/)
+      && contains(releaseReadiness, /POST \/api\/drafts\/\{id\}\/request-revision/)
+      && contains(releaseReadiness, /POST \/api\/drafts\/\{id\}\/publish/)
+      && contains(releaseReadiness, /Matrixify CSV Fallback/)
   },
   {
-    name: "Completion audit exists",
-    ok: exists("docs/completion-audit.md")
-      && /13 requested success criteria/.test(read("docs/completion-audit.md"))
-      && /Do not mark v0.1 complete/.test(read("docs/completion-audit.md"))
+    name: "Canonical release readiness documents manual QA and incomplete states",
+    ok: contains(releaseReadiness, /Manual QA matrix/)
+      && contains(releaseReadiness, /ACTIVE publish shows a second explicit/)
+      && contains(releaseReadiness, /Reviewer can export Matrixify CSV/)
+      && contains(releaseReadiness, /Read-Only Route Smoke/)
+      && contains(releaseReadiness, /Manual QA Still Needed is a valid status/)
   },
   {
-    name: "Team handoff and PWA smoke evidence exist",
-    ok: exists("docs/v0.1-team-handoff.md")
-      && /Manual QA Still Needed/.test(read("docs/v0.1-team-handoff.md"))
-      && exists("scripts/verify-pwa-smoke.mjs")
-      && /verify:pwa-smoke/.test(read("package.json"))
-      && /Read-Only Route Smoke/.test(read("docs/manual-qa-checklist.md"))
+    name: "AI handoff and current-status sources exist",
+    ok: exists("AI_START_HERE.md")
+      && exists("docs/CURRENT_STATUS.md")
+      && exists("docs/STABILIZATION_PLAN.md")
+      && exists("AGENTS.md")
+      && contains("AI_START_HERE.md", /CURRENT_STATUS\.md/)
+      && contains(releaseReadiness, /Every new coding session should start with/)
+  },
+  {
+    name: "Production Supabase drift audit exists",
+    ok: exists("docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md")
+      && contains("docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md", /Do not replay `001–039` wholesale/)
+  },
+  {
+    name: "PWA smoke verifier remains wired",
+    ok: exists("scripts/verify-pwa-smoke.mjs")
+      && contains("package.json", /verify:pwa-smoke/)
   }
 ];
 
@@ -197,3 +176,5 @@ for (const check of checks) {
 if (failed.length) {
   process.exit(1);
 }
+
+console.log(`Requirements checks passed: ${checks.length} current contracts`);

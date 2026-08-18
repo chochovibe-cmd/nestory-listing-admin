@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { findSensitiveBrowserStorageWrites } from "./browser-storage-secret-policy.mjs";
+import { collectClientReachableFiles } from "./client-module-graph.mjs";
+import { findClientSecretEnvAccesses } from "./client-secret-reference-policy.mjs";
 
 const root = process.cwd();
 
@@ -54,15 +56,9 @@ if (!/\.env\.\*/.test(gitignore)) {
   errors.push("Local env files are not ignored: .env.*");
 }
 
-// Next.js Route Handlers (src/app/api/**) and provider modules are server-only
-// by project convention. Everything else under src/ may ship to or be shared
-// with the browser and therefore must not reference server credentials.
-const clientScope = /^src[\\/](?!app[\\/]api[\\/]|lib[\\/]providers[\\/])/;
-
+const clientReachable = collectClientReachableFiles(root);
 const forbiddenPatterns = [
-  { label: "frontend Anthropic API call", pattern: /api\.anthropic/i, scope: clientScope },
-  { label: "OpenAI secret env name in source", pattern: /OPENAI_API_KEY/i, scope: clientScope },
-  { label: "Anthropic secret env name in source", pattern: /ANTHROPIC_API_KEY/i, scope: clientScope },
+  { label: "frontend Anthropic API call", pattern: /api\.anthropic/i, clientOnly: true },
   { label: "Anthropic-looking key", pattern: /sk-ant-/i },
   { label: "OpenAI-looking key", pattern: /sk-proj-|sk-[A-Za-z0-9]{20,}/i },
   { label: "Shopify token-looking key", pattern: /shpat_/i },
@@ -74,20 +70,23 @@ for (const file of sourceFiles) {
   const relative = path.relative(root, file);
   if (/^scripts[\\/]verify-.*\.mjs$/.test(relative)) continue;
   const source = fs.readFileSync(file, "utf8");
+  const isClientReachable = clientReachable.has(file);
 
-  // P1-3: browser storage itself is allowed for non-sensitive UI state.
-  // Reject only writes whose key/value expression looks credential-like.
-  if (clientScope.test(relative)) {
-    const storageFindings = findSensitiveBrowserStorageWrites(source);
-    for (const finding of storageFindings) {
+  if (isClientReachable) {
+    for (const finding of findSensitiveBrowserStorageWrites(source)) {
       errors.push(
         `${relative} matched browser storage secret write (${finding.kind}: ${finding.snippet})`
       );
     }
+    for (const finding of findClientSecretEnvAccesses(source)) {
+      errors.push(
+        `${relative} matched client secret env access (${finding.kind}: ${finding.snippet})`
+      );
+    }
   }
 
-  for (const { label, pattern, scope } of forbiddenPatterns) {
-    if (scope && !scope.test(relative)) continue;
+  for (const { label, pattern, clientOnly } of forbiddenPatterns) {
+    if (clientOnly && !isClientReachable) continue;
     if (pattern.test(source)) {
       errors.push(`${relative} matched ${label}`);
     }
@@ -99,4 +98,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log("No-secret checks passed");
+console.log(`No-secret checks passed; ${clientReachable.size} client-reachable modules inspected`);

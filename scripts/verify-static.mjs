@@ -1,5 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { findSensitiveBrowserStorageWrites } from "./browser-storage-secret-policy.mjs";
+import { collectClientReachableFiles } from "./client-module-graph.mjs";
+import { findClientSecretEnvAccesses } from "./client-secret-reference-policy.mjs";
 
 const root = process.cwd();
 const files = [];
@@ -44,30 +47,17 @@ if (missingImports.length) {
 }
 
 const sourceFiles = files.map((file) => [file, fs.readFileSync(file, "utf8")]);
+const clientReachable = collectClientReachableFiles(root);
 const alwaysForbiddenPatterns = [/sk-ant-/i, /shpat_/i];
-// Next.js Route Handlers (src/app/api/**) and the provider modules they call
-// (src/lib/providers/**) are server-only by framework convention -- calling
-// Anthropic/OpenAI or reading their secret env vars there is expected.
-const clientOnlyForbiddenPatterns = [/api\.anthropic/i, /OPENAI_API_KEY/i, /ANTHROPIC_API_KEY/i];
-const serverOnlyDir = /^src[\\/](app[\\/]api[\\/]|lib[\\/]providers[\\/])/;
-// localStorage itself isn't a leak -- the original concern was API keys/tokens
-// stored client-side (the old PWA prototype did that). These files only ever
-// store a UI preference string (theme name, provider pill choice), never a
-// secret, so they're an explicit allowlist rather than a blanket ban.
-const localStorageAllowlist = new Set([
-  path.join("src", "app", "layout.tsx"),
-  path.join("src", "components", "ProviderSwitcher.tsx"),
-  path.join("src", "components", "ThemeSwitcher.tsx"),
-  path.join("src", "components", "ExchangeRateWidget.tsx"),
-  path.join("src", "components", "ModeSwitcher.tsx"),
-  path.join("src", "lib", "pricingSettingsStore.ts")
-]);
+const clientOnlyForbiddenPatterns = [/api\.anthropic/i];
 
 const forbiddenHits = [];
 for (const [file, source] of sourceFiles) {
   const relative = path.relative(root, file);
-  const isServerOnly = serverOnlyDir.test(relative);
-  const patterns = isServerOnly ? alwaysForbiddenPatterns : [...alwaysForbiddenPatterns, ...clientOnlyForbiddenPatterns];
+  const isClientReachable = clientReachable.has(file);
+  const patterns = isClientReachable
+    ? [...alwaysForbiddenPatterns, ...clientOnlyForbiddenPatterns]
+    : alwaysForbiddenPatterns;
 
   for (const pattern of patterns) {
     if (pattern.test(source)) {
@@ -75,8 +65,17 @@ for (const [file, source] of sourceFiles) {
     }
   }
 
-  if (/localStorage/i.test(source) && !localStorageAllowlist.has(relative)) {
-    forbiddenHits.push(`${relative} matched /localStorage/i`);
+  if (isClientReachable) {
+    for (const finding of findSensitiveBrowserStorageWrites(source)) {
+      forbiddenHits.push(
+        `${relative} matched browser storage secret write (${finding.kind}: ${finding.snippet})`
+      );
+    }
+    for (const finding of findClientSecretEnvAccesses(source)) {
+      forbiddenHits.push(
+        `${relative} matched client secret env access (${finding.kind}: ${finding.snippet})`
+      );
+    }
   }
 }
 
@@ -86,4 +85,4 @@ if (forbiddenHits.length) {
   process.exit(1);
 }
 
-console.log(`Static checks passed: ${files.length} TS/TSX files`);
+console.log(`Static checks passed: ${files.length} TS/TSX files; ${clientReachable.size} client-reachable modules`);

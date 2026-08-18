@@ -25,6 +25,7 @@
     "verify:p4": "node scripts/verify-p4-source-and-seller.mjs",
     "verify:variant-axis-atomic": "node scripts/verify-variant-axis-atomic.mjs",
     "verify:variant-duplicates": "node scripts/verify-variant-duplicate-protection.mjs",
+    "verify:mobile-resultcard-expand": "node scripts/verify-mobile-resultcard-expand.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

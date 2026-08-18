@@ -1,9 +1,34 @@
 # ResultCard B3-P02 + B3-P04 + B4-P04 + B4-P06 Audit — 2026-08-18
 
 > 範圍：結果列表批次操作、手機長按/左滑、三排 ResultCard、fail reason header。
-> 本輪只稽核，不修 `src/`。
+> 原 audit 保留在下方；修復進度以本段更新為準。
 
-## 快速結論
+## 2026-08-18 修復狀態更新
+
+### P0-A mobile selectMode expand affordance — 已實作，待手機驗證/merge
+
+分支：`agent/p0-mobile-resultcard-expand`
+canonical：branch HEAD / commit message `fix(mobile): restore ResultCard expand affordance`
+
+已確認 root cause 不在 ResultCard handler：
+- `handleHeaderClick()` 在 mobile selectMode 會 toggle selection，這是原設計。
+- `.rc-toggle` 本身會 `stopPropagation()` 後呼叫 `tryToggleExpand()`，也是正確的。
+- regression 是 B4-P04 mobile CSS 隱藏整個 `.rc-quick-row`，把唯一 toggle 一起藏掉。
+
+本輪最小修法：
+- 新增 `src/app/stabilization.css`，只在 `max-width:959px` 生效。
+- `.rc-quick-row { display: contents }`，但 `.rc-quick` / `.rc-dismiss-btn` 繼續隱藏。
+- 只恢復原有 `.rc-toggle`，44×44px；title row 預留右側 48px。
+- `layout.tsx` 在 `globals.css` 後載入 hotfix。
+- 新增 `verify-mobile-resultcard-expand.mjs` 並納入 `verify:all`。
+
+本輪**沒有**處理下方 P0/P1-B touch gesture 冒泡；那是下一個獨立 P1-1，避免把兩個 regression 混成一包。
+
+待驗證：normal tap、long-press 進多選、多選中 toggle 展開/收合、退出多選、窄手機長標題、專用 verifier/typecheck。
+
+---
+
+## 快速結論（原 audit）
 
 已確認 3 個需要處理的交叉問題：
 
@@ -38,9 +63,11 @@
 
 判定：**已確認交叉 regression。**
 
-### 修復方向（尚未實作）
+### 原修復方向
 不要重新顯示整條 desktop quick row。
 應該只提供 mobile 專用 compact expand control，或讓 selectMode 下某個明確 gesture/按鈕可展開。
+
+> 狀態更新：已採用「只恢復既有 compact toggle」方案，詳見本檔最上方。
 
 ---
 
@@ -64,7 +91,7 @@ B4-P04 mobile 第 3 排會顯示 `rc-m-regen-slot`。
 
 判定：**已確認事件冒泡路徑；需實機確認體感嚴重度。**
 
-### 修復方向（尚未實作）
+### 修復方向（下一個 P1-1）
 建立共用 interactive-target guard，而不是每個按鈕散加 touch stop：
 - header gesture handler 遇到 `button/input/select/textarea/a/[role=button]` 等 interactive target 直接 return
 - 或使用明確的 `data-no-card-gesture`
@@ -138,10 +165,10 @@ quick row 內有 archived 狀態的「解除封存」按鈕。
 
 ---
 
-## 修復順序
+## 修復順序（更新）
 
-1. P0-A mobile selectMode expand affordance
-2. P0/P1-B interactive target gesture guard
+1. ~~P0-A mobile selectMode expand affordance~~ — 已實作，待手機驗證/merge
+2. P1-B interactive target gesture guard — **下一個主線**
 3. P1-C verifier localStorage policy
 4. archived mobile unarchive action 實機確認
 5. 長 title / fail / chips 的 mobile grid 壓力測試
@@ -158,7 +185,8 @@ quick row 內有 archived 狀態的「解除封存」按鈕。
 先讀：
 - `AI_START_HERE.md`
 - `docs/CURRENT_STATUS.md`
-- `docs/REGRESSION_AUDIT.md`
+- `docs/STABILIZATION_PLAN.md`
+- `docs/CHANGELOG.md`
 - 本檔
 
-下一步：把三份專項 audit 彙總成「可執行修復清單」，再決定是否開始修 code。
+P0-A 已有修復分支，**不要重做 P0-3**。下一個修復是 P1-1：集中隔離 interactive child 的 touch gesture。

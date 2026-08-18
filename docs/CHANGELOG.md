@@ -96,3 +96,46 @@ B4-P03 的 duplicate row 會先產生與原列相同的 option merge key；`inde
 - Vercel commit status 曾回 `success`；這只代表遠端 build/deploy 未直接失敗。
 - 專案自己的 `verify:variant-duplicates`、`verify:variant-axis-atomic`、`typecheck` 與實機案例仍待可執行環境正式跑，因此狀態仍是「已實作，待完整驗證/merge」，不是「正式完成」。
 - 下一個主線修復：P0-3 Mobile ResultCard selectMode expand affordance。
+
+## 2026-08-18 — P0-3 Mobile ResultCard expand affordance
+
+狀態：**已實作在 `agent/p0-mobile-resultcard-expand`，尚未 merge / deploy；目前 Vercel status pending，仍需手機實機驗證。**
+
+### Root cause
+B3-P04 在 `selectMode=true` 時把 mobile header tap 改成「切換選取」，並明確保留 `rc-toggle`（▸/▾）作為唯一展開入口；但 B4-P04 的 mobile CSS 隱藏整個 `.rc-quick-row`，因此連 `rc-toggle` 一起消失，手機多選模式沒有可見 expand/collapse control。
+
+### 實際修改
+- 新增 `src/app/stabilization.css`
+  - 只在 `max-width:959px` 生效。
+  - `.rc-quick-row` 改 `display:contents`，但 `.rc-quick` 與 `.rc-dismiss-btn` 仍保持隱藏。
+  - 只恢復原本已存在的 `.rc-toggle`，做成 44×44px compact control。
+  - title row 預留右側 48px，避免長標題與 toggle 重疊。
+- `src/app/layout.tsx`
+  - 在 `globals.css` 後載入 `stabilization.css`，讓 scoped regression override 生效。
+- 新增 `scripts/verify-mobile-resultcard-expand.mjs`
+  - 鎖定 CSS 載入順序、mobile scope、quick/dismiss 仍隱藏、toggle 44px，以及 ResultCard 原本 `stopPropagation + tryToggleExpand()` contract。
+- `package.json` 新增 `verify:mobile-resultcard-expand`；`verify:all` 納入此 guard。
+
+### 為什麼不直接改 ResultCard / globals.css
+- `ResultCard.tsx` 的 toggle 邏輯本來就是正確的：selectMode header tap 切選取，而 toggle 自己 stop propagation 後 expand/collapse，所以不需要改業務/互動邏輯。
+- `globals.css` 體積很大；本輪只修單一 regression，先用明確註解、mobile-scoped 的 `stabilization.css` 降低 connector 整檔誤改風險。
+- `stabilization.css` 明確標註不得長成第二份 general stylesheet；實機驗證穩定後再決定是否整併回主 CSS 架構。
+
+### 變更範圍控制
+本修復沒有修改：
+- ResultCard TSX 邏輯
+- desktop quick actions
+- API / Supabase / Shopify
+- VariantEditor
+- 原本 long-press / swipe gesture 行為
+
+### 尚未聲稱完成的驗證
+- 已確認 P0-3 code-only diff 相對 P0-2 剛好 1 commit / 5 files。
+- `verify:mobile-resultcard-expand` 尚未在本機 Node 環境實際跑。
+- 手機 normal tap、long-press 進 multi-select、selectMode expand/collapse、退出 selectMode 後 normal behavior 仍需實機驗證。
+- P1 interactive-target gesture 衝突仍存在，未混入本 commit。
+
+### 下一步
+1. 將本次 handoff docs 收進 P0-3 單一 squash commit。
+2. 下一個獨立修復：P1-1 mobile interactive-target gesture guard。
+3. 有執行環境後跑 `npm run verify:mobile-resultcard-expand` 與手機實機案例。

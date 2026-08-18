@@ -13,6 +13,7 @@
 
 碰 production Supabase / migration / RLS，**必讀**：
 - `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
+- `docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md`
 - `supabase/reconcile/2026-08-18_production_reconcile_draft.sql`（review draft，**不是 migration、不可直接 production apply**）
 
 查 CI 歷史與 verifier 整理：
@@ -37,20 +38,32 @@ Nestory 是潮巢玩居內部的 Shopify 商品上架 PWA：商品輸入、圖�
 - **P1-3** `agent/p1-localstorage-secret-policy`：browser storage 改成阻擋 credential-like writes，不 blanket-ban localStorage。
 - **P0 archive authorization** `agent/p0-archive-owner-authorization` / `fdc5527`：batch archive requested IDs 先走 authenticated RLS，再由 service role mutation。
 - **Production Supabase audit** `agent/production-supabase-reconcile-audit` / `7e1c49d`：已唯讀盤點 live DB，production DB 未修改。
-- **CI gate** `agent/ci-gate` / `b935290` / Draft PR #1：GitHub Actions `verify:all → typecheck → build` 最終 squashed head 已完整 green。
-- **Supabase 001–039 reconciliation** `agent/supabase-reconcile-plan`：逐份 live-state 對帳完成，production 仍未修改。
+- **CI gate** `agent/ci-gate` / `b935290` / Draft PR #1：`verify:all → typecheck → build` 最終 squashed head green。
+- **Supabase 001–039 reconciliation** `agent/supabase-reconcile-plan` / Draft PR #2：live-state matrix 完成，production unchanged。
+- **Free local Supabase runtime gate** `agent/supabase-local-ci` / Draft PR #3：GitHub runner + Docker + Postgres 17 已完成 current reconcile / role / batch / trigger matrix；不用付費 Supabase branch、不連 production。
 
-### CI canonical state
+### Current CI / DB runtime proof
 
-Final squashed CI run `32132941280`：
-- install ✅
-- `pnpm run verify:all` ✅
-- `pnpm run typecheck` ✅
-- `pnpm run build` ✅
+Source CI canonical：`agent/ci-gate` / `b935290`。
 
-這次 CI 同時清掉多個舊 verifier/document drift；詳見 `docs/audits/CI-GATE-2026-08-18.md`。
+Current free-DB same-head proof after latest reconcile draft：
+- Standard CI run `32140335793` / job `95721221015` ✅
+- Supabase Local run `32140335899` / job `95721221385` ✅
 
-Vercel recent preview failure 的 GitHub status target 是 `build-rate-limit / upgradeToPro`。GitHub CI 已能在乾淨 Ubuntu runner 完成 production build，所以不要把該 Vercel 狀態當成 code build failure。
+Local gate 已 runtime 證明：
+- production-like `001–039` reconstruction 可執行，但要遵守已記錄的歷史 032/033 reconstruction conditions；
+- migration 004 的 8-policy drift 可重現並由 reconcile draft 補回；
+- operator/admin catalog RLS 正常；
+- operator own-vs-other draft、reviewer/admin cross-team RLS 正常；
+- sensitive-field guard、new-user trigger、batch ownership helpers、archive authorization scope 正常；
+- image/publish batch paths 不回歸 `42P17`；
+- timestamp functions設 `search_path=pg_catalog` 後正常；
+- `handle_new_user()` / `guard_sensitive_product_draft_fields()` 拿掉 client direct EXECUTE 後 trigger behavior仍正常；
+- RLS helper authenticated EXECUTE 保留。
+
+完整證據：`docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md`。
+
+Vercel recent preview failure target = `build-rate-limit / upgradeToPro`；GitHub CI 已可 production build，不要把 Vercel preview quota failure 當 code compile failure。
 
 ### Canonical role model
 
@@ -61,38 +74,42 @@ Vercel recent preview failure 的 GitHub status target 是 `build-rate-limit / u
 
 詳細證據：`docs/audits/ROLE-RLS-CONSISTENCY-AUDIT-2026-08-18.md`。
 
-### Production Supabase 已確認
+### Production Supabase truth
 
 實際專案：`nestory-listing-tool-test` (`tbgtqwvuohmdxnxisrgr`)。
 
-- migration ledger **空白**，但 live schema 已包含 late-stage fields。
-- **`001–039` 已逐份對照 live end-state；不要 replay。**
-- 幾乎所有最終 schema/data effects 都能在 live DB 找到。
-- 唯一明確 migration-level drift：`004` 的 4 張 catalog/rule table 都 RLS enabled，但 **8 條預期 policy 全部缺失**。
-- `025/027` 的 recursive batch policy 已由 `028` 正確取代。
-- `009` 已由 `010` 取代；`019` 的 constraint 已由 `030` 擴充。
-- Security Advisor 另有 SECURITY DEFINER direct EXECUTE / trigger search_path warnings。
-- production 目前只有 1 個 admin profile，尚無 operator/reviewer。
-- production DB 在 audit / CI / 001–039 reconcile 工作中都**沒有被修改**。
+- migration ledger **空白**，但 live end-state 幾乎反映 `001–039`。
+- **不要 replay `001–039`。**
+- 唯一明確 migration-level drift：migration `004` 的 4 張 catalog/rule tables RLS enabled，但 8 條預期 policy 全缺。
+- production DB 在 audit / CI / local runtime 工作中都**沒有被修改**。
+- `rls_auto_enable()` 是 production hosted-only event-trigger helper；free local Supabase 沒有它，minimal reconcile **不改它**。
 
-完整矩陣與證據：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`。
+Current review draft：`supabase/reconcile/2026-08-18_production_reconcile_draft.sql`
+- restore 8 policies
+- pin 3 timestamp search_path
+- revoke client direct EXECUTE from `handle_new_user()` / sensitive guard（local-proven）
+- preserve RLS helpers
+- leave `rls_auto_enable` alone
+- no role/data/history change
+- 不在 `supabase/migrations/`，不可直接 `db push` production。
 
-目前安全 SQL 草稿：
-- `supabase/reconcile/2026-08-18_production_reconcile_draft.sql`
-- 刻意**不放** `supabase/migrations/`，避免 migration ledger 空白時誤用 `db push` 重播歷史 SQL。
-- Active draft 只含：8 條 catalog/rule policy restore + 3 個 timestamp trigger `search_path` hardening。
-- SECURITY DEFINER direct-RPC revoke 仍是註解候選，必須隔離測試後才能啟用。
+### Historical reconstruction debt — do not misread
+
+- migration `033` 假設 production 早已有 `ip_catalog.ip_name='吉伊卡哇'`; local CI 用 `supabase/reconcile/local-production-baseline.sql` 模擬最低 legacy state。**禁止 production apply。**
+- migration `032` 用 `pg_temp ... ON COMMIT DROP`; manual replay 必須把 staged copy 視為單一 transaction。
+
+這些是歷史 test-reconstruction conditions，不是 production 缺 migration。
 
 ## 4. 下一步順序
 
-1. `agent/ci-gate` / Draft PR #1 保持不 merge；它目前是已驗證的 CI 基底。
-2. 在 `agent/supabase-reconcile-plan` review/驗證 reconcile draft；production 不動。
-3. 決定隔離 DB 測試方式。Supabase 目前沒有 development branch；建立 branch 有成本，需使用者明確確認成本後才能建立。
-4. 在隔離環境測：8 policies、timestamp trigger search_path、trigger/event-trigger EXECUTE hardening候選、RLS/role matrix。
-5. 測試通過後才形成真正的新 tracked migration/baseline 策略；仍不可直接 replay `001–039`。
-6. rerun Supabase Security Advisor。
+1. 收尾 `agent/supabase-local-ci` / Draft PR #3：文件同步、squash、final-head standard CI + local DB gate再跑一次。
+2. 建立下一個 review branch：準備 production **precheck / apply / rollback / postcheck** SQL，仍然不執行 production。
+3. 用相同免費 local DB 測 `apply → postcheck → rollback → verify rollback → apply again → postcheck`。
+4. 設計 future tracked-migration baseline；不 replay 001–039、不偽造 ledger。
+5. **任何 production DDL 前重新取得使用者明確授權。**
+6. 若授權，才跑 live precheck、narrow apply、postcheck、Security Advisor。
 7. Vercel production env / Shopify production config audit。
-8. real-product E2E。
+8. manual mobile/Variant/role + controlled real-product E2E。
 9. 再進 E6/F/G。
 
 ## 5. 修改鐵則
@@ -104,14 +121,17 @@ Vercel recent preview failure 的 GitHub status target 是 `build-rate-limit / u
 - Release / deploy 前讀 `docs/RELEASE_READINESS.md` 並要求 CI green。
 - UI 改前看 Git 歷史與 regression audit。
 - `src/app/stabilization.css` 只作小型已記錄 hotfix，不得長成第二份 general stylesheet。
-- Production Supabase DDL 前必讀 production reconcile audit。
+- Production Supabase DDL 前必讀 production reconcile audit + local reconcile audit。
 - **不要 replay `001–039`；不要手動偽造 migration history。**
-- `supabase/reconcile/` 是審核草稿區，不是可直接 deploy 的 migration queue。
+- `supabase/reconcile/` 是審核／隔離測試素材區，不是可直接 deploy 的 migration queue。
+- `local-production-baseline.sql` 只允許 local/CI；禁止 production apply。
+- 不改 hosted-only `rls_auto_enable()` without proof。
 - 權限/RLS 改動要對齊 frontend helper + API + DB。
 - service-role API 不可信任前端傳來的 IDs；先 authenticated/RLS 或明確 owner authorization。
 - 不 deploy / 不套 production DDL，除非使用者明確同意。
+- **不要建立付費 Supabase branch；使用者要求免費方案，目前採 GitHub Actions + Docker local Supabase。**
 - push/PR 前核對 diff 與 GitHub CI。
 
 ## 6. 新 session 開場指令
 
-> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。再確認 branch/HEAD、Draft PR/CI 狀態，以及是否已有對應 stabilization/audit。碰 DB 必讀 production Supabase reconcile audit與 `supabase/reconcile/` draft；判斷 release readiness 必讀 `docs/RELEASE_READINESS.md`。不要從歷史施工文件猜目前狀態。
+> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。再確認 branch/HEAD、Draft PR/CI 狀態，以及是否已有對應 stabilization/audit。碰 DB 必讀 production Supabase reconcile audit、free local reconcile audit 與 `supabase/reconcile/` review artifacts；判斷 release readiness 必讀 `docs/RELEASE_READINESS.md`。不要從歷史施工文件猜目前狀態。

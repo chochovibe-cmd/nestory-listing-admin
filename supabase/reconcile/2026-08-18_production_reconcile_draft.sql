@@ -5,14 +5,17 @@
 --   2. It intentionally lives under supabase/reconcile/, NOT supabase/migrations/.
 --   3. Production migration ledger is empty while live schema already reflects 001–039.
 --      Do NOT run `supabase db push` against production from the current historical migration set.
---   4. Do NOT execute this file in production until an isolated test path is approved.
+--   4. Do NOT execute this file in production without explicit production-DB approval.
 --
--- Evidence source:
+-- Evidence:
 --   docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md
+--   docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md
 --
--- Phase A below contains only confirmed, narrow, data-preserving drift fixes:
+-- Active scope below is narrow and data-preserving:
 --   - restore 8 missing catalog/rule RLS policies from migration 004
 --   - pin search_path for 3 simple updated_at trigger functions
+--   - remove direct PUBLIC/anon/authenticated EXECUTE from 2 repo-owned trigger
+--     functions whose trigger behavior has been proven in free local Supabase CI
 --
 -- It does NOT:
 --   - replay 001–039
@@ -20,7 +23,8 @@
 --   - change role semantics
 --   - disable RLS
 --   - modify migration history
---   - revoke SECURITY DEFINER helper EXECUTE privileges yet
+--   - revoke RLS helper EXECUTE privileges
+--   - modify hosted-only public.rls_auto_enable()
 
 begin;
 
@@ -108,13 +112,30 @@ alter function public.touch_image_batches_updated_at()
 alter function public.touch_publish_batches_updated_at()
   set search_path = pg_catalog;
 
+-- ---------------------------------------------------------------------------
+-- A3. Remove direct client EXECUTE from repo-owned trigger-only SECURITY DEFINER
+-- functions. Their trigger behavior has been runtime-tested after this revoke in
+-- the free local Supabase gate. Keep service_role explicit; owner/postgres retains
+-- owner capability. Do NOT apply the same pattern blindly to RLS helper functions.
+-- ---------------------------------------------------------------------------
+
+revoke execute on function public.guard_sensitive_product_draft_fields()
+  from public, anon, authenticated;
+grant execute on function public.guard_sensitive_product_draft_fields()
+  to service_role;
+
+revoke execute on function public.handle_new_user()
+  from public, anon, authenticated;
+grant execute on function public.handle_new_user()
+  to service_role;
+
 commit;
 
 -- ---------------------------------------------------------------------------
--- POST-APPLY READ-ONLY VALIDATION (run only in isolated test environment first)
+-- POST-APPLY READ-ONLY VALIDATION
 -- ---------------------------------------------------------------------------
 --
--- 1. Exactly 2 policies should exist on each table:
+-- 1. Exactly 2 policies should exist on each catalog/rule table:
 --
 -- select tablename, policyname, cmd, roles, qual, with_check
 -- from pg_policies
@@ -135,43 +156,47 @@ commit;
 --   )
 -- order by p.proname;
 --
--- 3. Runtime/RLS test matrix is documented in:
--- docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md
+-- 3. Direct client EXECUTE should be false for the 2 repo trigger functions,
+-- while authenticated RLS helpers remain executable:
+--
+-- select
+--   has_function_privilege('authenticated', 'public.handle_new_user()', 'EXECUTE')
+--     as authenticated_handle_new_user,
+--   has_function_privilege('authenticated', 'public.guard_sensitive_product_draft_fields()', 'EXECUTE')
+--     as authenticated_sensitive_guard,
+--   has_function_privilege('authenticated', 'public.current_user_role()', 'EXECUTE')
+--     as authenticated_current_user_role,
+--   has_function_privilege('authenticated', 'public.is_admin()', 'EXECUTE')
+--     as authenticated_is_admin,
+--   has_function_privilege('authenticated', 'public.is_reviewer()', 'EXECUTE')
+--     as authenticated_is_reviewer;
+--
+-- Expected: false, false, true, true, true.
+--
+-- 4. Runtime/RLS proof:
+-- docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md
 
 -- ---------------------------------------------------------------------------
--- PHASE B — SECURITY DEFINER direct-RPC hardening (INTENTIONALLY NOT ACTIVE)
+-- PHASE B — HOSTED-ONLY / ARCHITECTURAL HARDENING (INTENTIONALLY NOT ACTIVE)
 -- ---------------------------------------------------------------------------
 --
--- Supabase advises granting EXECUTE only to roles that need to CALL a function,
--- and notes that SECURITY DEFINER helpers used inside RLS policies do not need
--- to be exposed through the Data API schema.
+-- public.rls_auto_enable()
+-- ------------------------
+-- Production contains this SECURITY DEFINER event-trigger helper and exposes
+-- EXECUTE through PUBLIC. The free local Supabase stack used by CI does NOT
+-- create this hosted-only helper, so we cannot honestly claim local runtime
+-- proof for changing its ACL.
 --
--- Current live candidates that appear to be trigger/event-trigger-only:
---   public.guard_sensitive_product_draft_fields()
---   public.handle_new_user()
---   public.rls_auto_enable()
+-- Therefore this draft intentionally does NOT alter public.rls_auto_enable().
+-- Revisit only with a safe hosted-compatible proof path; do not change it merely
+-- to silence Security Advisor.
 --
--- DO NOT uncomment these until tested in an isolated Supabase branch/database:
---
--- revoke execute on function public.guard_sensitive_product_draft_fields()
---   from public, anon, authenticated;
--- revoke execute on function public.handle_new_user()
---   from public, anon, authenticated;
--- revoke execute on function public.rls_auto_enable()
---   from public, anon, authenticated;
---
--- Required proof before enabling:
---   - inserting auth.users still fires handle_new_user and creates operator profile
---   - product_drafts sensitive-field trigger still fires for authenticated DML
---   - rls_auto_enable event trigger still performs its intended DDL protection
---   - Supabase Security Advisor warnings improve without functional regressions
---
--- RLS helper functions are intentionally NOT revoke candidates in this draft:
+-- RLS helper functions are intentionally NOT revoke candidates here:
 --   current_user_role()
 --   is_admin()
 --   is_reviewer()
 --   user_owns_*_batch(...)
 --
--- Long-term hardening can move RLS-only SECURITY DEFINER helpers into a private,
--- non-exposed schema and update policies to call them schema-qualified. That is
--- a separate architectural migration, not part of this minimal reconciliation.
+-- They are called by RLS policies. A separate architectural hardening can move
+-- RLS-only SECURITY DEFINER helpers into a private, non-exposed schema and update
+-- policies to call them schema-qualified. That is not part of this minimal repair.

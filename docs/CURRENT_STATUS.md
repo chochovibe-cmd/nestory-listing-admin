@@ -77,9 +77,14 @@ repo migrations 已到 039，但 `verify-sql-schema.mjs` 主要仍驗證早期 s
 已確認：
 - `754a879`（B4-P06）把 fail reason 移進 title row 後，後續 `24c8d9b` 又修「長文撐亂 desktop header」。
 - `159721e`（B4-P08）改圖片縮圖 wrap/尺寸/角標後，`8c7db19`（B4-P09）又撤回，還原 B2-P10。
-- `5f73952`（B4-P07）為解決 workbench 雙欄重疊，加入廣泛 `overflow-x: clip` / `max-width:100%` containment；這類規則可能影響 popover、badge、preview、thumb 等子元件，需繼續檢查。
+- `5f73952`（B4-P07）為解決 workbench 雙欄重疊，加入廣泛 `overflow-x: clip` / `max-width:100%` containment。
+- P07 已找到一條實際交叉風險路徑：`WorkspaceInputPanel .panel-body` 的 `overflow-x: clip` 會包住 `VariantEditor`；而 B3-P06 的 desktop image hover zoom / image picker popover 是該 DOM 樹內的 absolute 元素，不是 portal。只要橫向超出 panel 邊界就會被裁。mobile long-press zoom 使用 `createPortal(..., document.body)`，不受同一 ancestor clip 影響。
 - `2b5d3f7` 名義是 Tags UI，但同 commit 也改 Variant CSS，commit scope 混雜。
 - `6af3a25` 名義是 UX 改善，但實際改了 Variant 自動展開行為與複製列邏輯，屬功能變更。
+
+下一個 audit：
+- 繼續查 P07 對 `.vh-more-menu`、其他 popover、thumbnail overlay、ResultCard swipe/sticky 的影響。
+- 再查 VariantEditor B3-P06 + B4-P03 的功能疊加。
 
 ## 5. 功能階段摘要
 

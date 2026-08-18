@@ -1,7 +1,26 @@
 # Variant B3-P06 + B4-P03 Audit — 2026-08-18
 
 > 範圍：`e798b5a`（B3-P06 VariantEditor 大改）+ `6af3a25`（B4-P03 auto-expand / duplicate row）。
-> 本輪只稽核，不修 `src/`。
+> Audit 已完成；P0-A 已於 `agent/p0-variant-atomic-confirm` 實作修復，P0-B 尚待處理。
+
+## 修復狀態更新
+
+### P0-A — dimensions / rows atomic confirm
+狀態：**已實作，尚未 merge / deploy / runtime 驗證。**
+
+實作內容：
+- 新增 `src/lib/variants/variantAxisChange.ts` 的 `planVariantAxisChange()`。
+- add/drop axis 先做 plan；若會丟 hand-filled rows，只保存 pending `nextDimensions`，不先改正式 dimensions。
+- 第二次確認才一起套用 target dimensions + rows。
+- 若移除最後一個有效軸值導致 cartesian=0，確認後會一起套用 dimensions 並清空 rows。
+- 新增 `scripts/verify-variant-axis-atomic.mjs`，並納入 `verify:all`。
+
+詳細紀錄：`docs/CHANGELOG.md`。
+
+### P0-B — duplicate row 同 merge key
+狀態：**尚未修，仍是下一個 Variant P0。**
+
+---
 
 ## 快速結論
 
@@ -9,7 +28,7 @@
 
 ### P0-A — dimensions 先變、rows 等確認，會進入不一致狀態
 
-目前 `addAxisValue` / `dropAxisValue` 的順序：
+原本 `addAxisValue` / `dropAxisValue` 的順序：
 
 1. 算 `nextDims`
 2. **立即** `onDimensionsChange(nextDims)`
@@ -44,6 +63,8 @@ dimensions.values：角色=[小八, 烏薩奇]
 - 但 rows 仍含烏薩奇
 
 此時「軸值 UI」和「實際 row source of truth」已互相矛盾。
+
+> 上述是修復前 root cause；目前工作分支已改成 pending plan，未確認前不先改 dimensions。
 
 ### P0-B — duplicate row 同 merge key，手填資料可能在 expand 時無法被保護
 
@@ -96,7 +117,7 @@ B3-P06 在 drag start 會 `closeAllPops()`，所以 desktop drag 相對有保護
 
 ## verifier 缺口
 
-`verify-b7-variants.mjs` 現在有測：
+`verify-b7-variants.mjs` 原本有測：
 - merge 保留手填欄位
 - clamp 50
 - empty axis
@@ -105,29 +126,27 @@ B3-P06 在 drag start 會 `closeAllPops()`，所以 desktop drag 相對有保護
 - rebuild values from rows
 - shrink expand 的 wouldDiscard
 
-但沒有測：
+原本沒有測：
 1. add/drop axis value 在 confirm pending 時 dimensions / rows 一致性
 2. confirm timeout 是否 rollback
 3. duplicate rows 同 merge key 的 hand-fill 是否進 wouldDiscard
 4. duplicate option combination 是否會進 persistence/publish
 5. duplicate / reorder / picker index 的 UI state
 
-另外 source-contract test 目前只是 regex 確認 `tryAutoExpandFromDimensions` / `duplicateRow` 存在，無法驗證上述行為正確。
+目前已新增 `verify-variant-axis-atomic.mjs`，先補 P0-A 的 source-contract guard；P0-B 與實際 runtime interaction tests 仍未補齊。
 
-## 建議修復方向（尚未實作）
+## 建議修復方向
 
-### 對 P0-A
-優先方案：**把 dimensions + rows 當成同一筆 transaction。**
+### 對 P0-A — 已實作
+採用方案：**把 dimensions + rows 當成同一筆 transaction。**
 
-當 auto-expand 會丟手填時：
-- 不要先 commit `onDimensionsChange(nextDims)`；
-- 暫存 pending nextDims；
-- 使用者第二次確認後再一次 commit dimensions + rows；
-- 使用者取消/timeout 則完全不改現況。
+現在 axis change 會：
+- 先 plan next dimensions / rows；
+- destructive 時只暫存 pending nextDims；
+- 使用者第二次確認後再一起 commit dimensions + rows；
+- timeout 不先留下 half-state。
 
-另一方案是 dimensions 先變但立即 rollback，不建議，狀態更複雜。
-
-### 對 P0-B
+### 對 P0-B — 下一步
 `expandAndMergeVariantRows` 在建立 existing map 前，應先偵測 duplicate merge keys；任何被 map 淘汰但 `isVariantRowHandFilled()` 的 duplicate 都必須加入 discard/duplicate conflict 名單，不能靜默消失。
 
 UI 的「複製」也應考慮：
@@ -137,9 +156,9 @@ UI 的「複製」也應考慮：
 
 ## 修復順序
 
-1. P0-A dimensions/rows atomic confirm
+1. ~~P0-A dimensions/rows atomic confirm~~ — 已實作，待驗證/merge
 2. P0-B duplicate merge-key hand-fill protection
-3. 補 verifier tests
+3. 補 duplicate / persistence verifier tests
 4. 再處理 index-based picker/reorder UI state
 5. 最後才調 Variant 視覺/欄位 layout
 
@@ -148,8 +167,8 @@ UI 的「複製」也應考慮：
 先讀：
 - `AI_START_HERE.md`
 - `docs/CURRENT_STATUS.md`
-- `docs/REGRESSION_AUDIT.md`
-- `docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`
+- `docs/STABILIZATION_PLAN.md`
+- `docs/CHANGELOG.md`
 - 本檔
 
-**不要先改 CSS。Variant 現在優先是 state consistency，而不是外觀。**
+**不要先改 CSS。Variant 現在下一個優先是 P0-B duplicate merge-key data protection。**

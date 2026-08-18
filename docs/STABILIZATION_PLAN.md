@@ -4,25 +4,34 @@
 > 這是「下一步做什麼」的短清單；證據與細節留在 `docs/audits/`。
 
 更新：2026-08-18
-狀態：**Audit 完成第一輪，尚未開始修改功能 code。**
+狀態：**第一輪 Audit 已完成；P0-1 已實作於 `agent/p0-variant-atomic-confirm`，尚未 merge / deploy。**
 
 ## P0 — 先修，且一題一 commit
 
-### P0-1 Variant dimensions / rows atomic confirm
+### ✅ P0-1 Variant dimensions / rows atomic confirm
 來源：`docs/audits/VARIANT-B3P06-B4P03-AUDIT-2026-08-18.md`
 
-問題：B4-P03 add/drop axis value 會先 commit dimensions；若 hand-filled rows 需要二次確認，rows 留舊狀態，造成 dimensions 與 rows 不一致。
+原問題：B4-P03 add/drop axis value 會先 commit dimensions；若 hand-filled rows 需要二次確認，rows 留舊狀態，造成 dimensions 與 rows 不一致。
 
-修復目標：
-- dimensions + rows 必須視為同一 transaction
-- confirm pending 時不改正式 state
-- timeout / cancel 不留下半套 state
+已實作：
+- 新增 `planVariantAxisChange()` 純邏輯 planner。
+- add/drop axis 不再先改 dimensions。
+- destructive axis change 暫存 `nextDimensions`，第二次確認才和 rows 一起套用。
+- target cartesian 為 0 時也能完成確認清空。
+- 新增 `verify-variant-axis-atomic.mjs` 並納入 `verify:all`。
 
-驗證：
+目前狀態：
+- Git diff 已確認沒有修改 CSS / ResultCard / API / migration。
+- 尚未在可執行 repo 環境跑 typecheck / build / 實機案例，因此**未標記正式完成**。
+- 詳細變更看 `docs/CHANGELOG.md`。
+
+待驗證：
 - add axis value + hand-filled conflict
 - drop axis value + hand-filled conflict
-- confirm / timeout / cancel
-- rows 與 dimensions 永遠一致
+- drop last active axis value + confirm
+- confirm timeout 不改正式 state
+- `npm run verify:variant-axis-atomic`
+- `npm run typecheck`
 
 ### P0-2 Variant duplicate merge-key protection
 來源：同上。
@@ -131,10 +140,11 @@
 5. 手動驗證項目
 6. 更新 `docs/CURRENT_STATUS.md` 或本檔狀態
 7. 若屬 regression，再回寫對應 `docs/audits/*`
+8. 實際變更追加到 `docs/CHANGELOG.md`
 
 ## 建議 commit 順序
 
-1. `fix(variants): keep dimensions and rows atomic on expand confirm`
+1. `fix(variants): keep dimensions and rows atomic on expand confirm` — **已實作，待驗證/merge**
 2. `fix(variants): protect duplicate merge-key hand-filled rows`
 3. `test(variants): cover pending-confirm and duplicate-key regressions`
 4. `fix(mobile): restore ResultCard expand affordance in select mode`

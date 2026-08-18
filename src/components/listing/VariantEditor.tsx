@@ -26,6 +26,7 @@ import {
   formatVariantPriceLine,
   isVariantRowFilled,
   lockVariantPrice,
+  planVariantAxisChange,
   recalculateUnlockedVariantPrices,
   removeDimensionMergingRows,
   removeDimensionValue,
@@ -71,7 +72,12 @@ const PICK_MOVE_PX = 10;
 type ConfirmArm =
   | null
   | { kind: "remove-dim"; dimIndex: number; count: number }
-  | { kind: "expand"; count: number };
+  | {
+      kind: "expand";
+      count: number;
+      /** P0-1: candidate axis change stays pending until the second confirm click. */
+      nextDimensions?: VariantDimension[];
+    };
 
 /** Reorder rows by index-key string; updates sortOrder. */
 function reorderVariantRows(
@@ -365,58 +371,72 @@ export function VariantEditor({
   }
 
   /**
-   * UX-B4-P03: auto expand after axis-value changes.
-   * Same core as expandFromAxisValues; never silently discard hand-fill.
-   * Called only from handlers (not useEffect) so setRows never loops dimensions.
+   * P0-1 / UX-B4-P03: plan axis-value changes before mutating either state surface.
+   * dimensions + rows must apply together; destructive changes stay pending until
+   * the existing double-confirm CTA is clicked a second time.
    */
   function tryAutoExpandFromDimensions(
     nextDims: VariantDimension[],
     currentRows: VariantFormRow[]
-  ) {
-    if (!canExpandFromDimensions(nextDims)) return;
-    const result = expandAndMergeVariantRows(nextDims, currentRows);
-    if (result.comboCount === 0) return;
-    if (result.wouldDiscardHandFilled.length > 0) {
-      const count = result.wouldDiscardHandFilled.length;
-      armConfirm({ kind: "expand", count });
+  ): boolean {
+    const plan = planVariantAxisChange(nextDims, currentRows);
+    if (plan.kind === "confirm") {
+      armConfirm({
+        kind: "expand",
+        count: plan.affectedCount,
+        nextDimensions: plan.dimensions
+      });
       onWarning(
-        `軸值已變更，重新展開會影響 ${count} 筆手填 — 請按下方確認`
+        `軸值已變更，重新展開會影響 ${plan.affectedCount} 筆手填 — 請按下方確認`
       );
-      return;
+      return false;
     }
+
     clearConfirmArm();
-    setRowsSafe(withInheritedProductCost(result.rows));
-    if (result.warning) onWarning(result.warning);
+    onDimensionsChange(plan.dimensions);
+    setRowsSafe(withInheritedProductCost(plan.rows));
+    if (plan.warning) onWarning(plan.warning);
     else onWarning(null);
+    return true;
   }
 
   function addAxisValue(dimIndex: number) {
     const draft = (axisValueDraft[dimIndex] ?? "").trim();
     if (!draft) return;
     const nextDims = appendDimensionValue(dimensions, dimIndex, draft);
-    onDimensionsChange(nextDims);
     setAxisValueDraft((cur) => ({ ...cur, [dimIndex]: "" }));
     tryAutoExpandFromDimensions(nextDims, rows);
   }
 
   function dropAxisValue(dimIndex: number, value: string) {
     const nextDims = removeDimensionValue(dimensions, dimIndex, value);
-    onDimensionsChange(nextDims);
     tryAutoExpandFromDimensions(nextDims, rows);
   }
 
   /**
    * UX-B4-P03: manual re-expand (secondary CTA).
-   * Auto path covers main flow; this remains for explicit re-run / discard confirm.
-   * Merge preserves hand-fill on key hit; discard needs double-confirm.
+   * P0-1: if an axis change is pending, this second click commits the pending
+   * dimensions and rows atomically instead of expanding the old dimensions.
    */
   function expandFromAxisValues() {
-    if (!canExpandFromDimensions(dimensions)) {
+    const pendingDimensions =
+      confirmArm?.kind === "expand" ? confirmArm.nextDimensions : undefined;
+    const targetDimensions = pendingDimensions ?? dimensions;
+
+    if (!pendingDimensions && !canExpandFromDimensions(targetDimensions)) {
       onWarning("請先在各維度加上軸值。");
       return;
     }
-    const result = expandAndMergeVariantRows(dimensions, rows);
+
+    const result = expandAndMergeVariantRows(targetDimensions, rows);
     if (result.comboCount === 0) {
+      if (pendingDimensions && confirmArm?.kind === "expand") {
+        clearConfirmArm();
+        onDimensionsChange(targetDimensions);
+        setRowsSafe([]);
+        onWarning(null);
+        return;
+      }
       onWarning("沒有可展開的軸值組合。");
       return;
     }
@@ -433,6 +453,7 @@ export function VariantEditor({
       }
     }
     clearConfirmArm();
+    if (pendingDimensions) onDimensionsChange(targetDimensions);
     // New expand base rows start blank; write product cost into value when applicable.
     setRowsSafe(withInheritedProductCost(result.rows));
     if (result.warning) onWarning(result.warning);
@@ -474,7 +495,7 @@ export function VariantEditor({
 
   const expandArmed = confirmArm?.kind === "expand";
   const expandArmCount = expandArmed ? confirmArm.count : 0;
-  const canExpand = canExpandFromDimensions(dimensions);
+  const canExpand = expandArmed || canExpandFromDimensions(dimensions);
   const rowsAtMax = rows.length >= MAX_VARIANT_ROWS;
 
   function applyCharacters() {

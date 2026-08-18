@@ -23,6 +23,7 @@
     "verify:pkg2a": "node scripts/verify-pkg2a.mjs",
     "verify:syn1": "node scripts/verify-syn1.mjs",
     "verify:p4": "node scripts/verify-p4-source-and-seller.mjs",
+    "verify:variant-axis-atomic": "node scripts/verify-variant-axis-atomic.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

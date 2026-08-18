@@ -5,7 +5,11 @@ import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/paylo
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
-import { toBulkVariantInput, type MultiVariantPublishPlan } from "@/lib/variants/shopifyVariants";
+import {
+  findDuplicateProductVariantRows,
+  toBulkVariantInput,
+  type MultiVariantPublishPlan
+} from "@/lib/variants/shopifyVariants";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductVariantRow, PublishMode } from "@/types/domain";
 
@@ -94,6 +98,19 @@ export async function publishDraft(
     .select("*")
     .eq("draft_id", id)
     .order("sort_order", { ascending: true });
+  const typedVariantRows = (variantRows ?? []) as ProductVariantRow[];
+
+  // P0-2: hard server-side guard for legacy/manual duplicate combinations.
+  // This runs before payload creation and before status changes to publishing,
+  // so mock/live publish can never report success for an invalid duplicate set.
+  const duplicateVariantRows = findDuplicateProductVariantRows(typedVariantRows);
+  if (duplicateVariantRows.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      error: `款式組合重複（${duplicateVariantRows.length} 列）— 請回到商品卡修正重複規格後再發布`
+    };
+  }
 
   // A21-3: team_settings-editable IP -> collection URL map (migration 017).
   // Fetched fresh at publish time (not generate time) so filling in the map
@@ -110,7 +127,7 @@ export async function publishDraft(
   const payload = buildShopifyProductPayload(
     {
       ...draftForPayload,
-      product_variants: (variantRows ?? []) as ProductVariantRow[]
+      product_variants: typedVariantRows
     },
     publishMode,
     internalLinkMap

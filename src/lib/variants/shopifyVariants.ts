@@ -15,6 +15,7 @@
  */
 
 import type { ProductVariantRow } from "@/types/domain";
+import { normalizeOptionValueForMerge } from "./variantCrossExpand";
 import type { ShopifyProductOptionInput, ShopifyVariantSeed } from "./types";
 
 export type MultiVariantPublishPlan = {
@@ -76,6 +77,38 @@ function optionValuesFromRow(row: ProductVariantRow, dimCount: number): string[]
 
 function isValidVariantRow(row: ProductVariantRow): boolean {
   return Boolean(row.option1_value?.trim() || row.option2_value?.trim() || row.option3_value?.trim());
+}
+
+/**
+ * Return every duplicate DB variant row after the first normalized option combination.
+ * Character aliases use the same normalization as VariantEditor merge logic, so e.g.
+ * 米飛 / 米菲 cannot bypass the duplicate guard as two visually different strings.
+ */
+export function findDuplicateProductVariantRows(
+  rows: ProductVariantRow[] | null | undefined
+): ProductVariantRow[] {
+  const duplicates: ProductVariantRow[] = [];
+  const seen = new Set<string>();
+  const sorted = [...(rows ?? [])]
+    .filter(isValidVariantRow)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  for (const row of sorted) {
+    const raw = [
+      row.option1_value?.trim() || "",
+      row.option2_value?.trim() || "",
+      row.option3_value?.trim() || ""
+    ];
+    const key = raw.map((value) => normalizeOptionValueForMerge(value)).join("\u0001");
+    if (!key.replace(/\u0001/g, "")) continue;
+    if (seen.has(key)) {
+      duplicates.push(row);
+      continue;
+    }
+    seen.add(key);
+  }
+
+  return duplicates;
 }
 
 /**

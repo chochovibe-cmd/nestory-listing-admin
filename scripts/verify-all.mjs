@@ -8,6 +8,7 @@ const scripts = [
   "scripts/verify-mock-flow.mjs",
   "scripts/verify-no-secrets.mjs",
   "scripts/verify-variant-axis-atomic.mjs",
+  "scripts/verify-variant-duplicate-protection.mjs",
   // CAP-1 / CAP-2 / CAP-2.5
   "scripts/verify-cap1.mjs",
   "scripts/verify-cap2.mjs",

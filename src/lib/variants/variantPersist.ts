@@ -15,11 +15,13 @@
  * This is insert-first-then-delete-old (not delete-first).
  */
 
+import { normalizeOptionValueForMerge } from "./variantCrossExpand";
+
 export type VariantInsertPayload = Record<string, unknown> & { draft_id: string };
 
 export type PersistVariantsResult =
   | { ok: true; inserted: number; deleted: number }
-  | { ok: false; error: string; phase: "load_old" | "insert" | "delete_old" };
+  | { ok: false; error: string; phase: "validate" | "load_old" | "insert" | "delete_old" };
 
 export type SupabaseLike = {
   from: (table: string) => {
@@ -42,8 +44,39 @@ export type SupabaseLike = {
   };
 };
 
+function optionValue(payload: VariantInsertPayload, key: string): string {
+  const value = payload[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** Duplicate DB insert rows after the first normalized option combination. */
+export function findDuplicateVariantInsertRows(
+  rows: VariantInsertPayload[]
+): VariantInsertPayload[] {
+  const duplicates: VariantInsertPayload[] = [];
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    const values = [
+      optionValue(row, "option1_value"),
+      optionValue(row, "option2_value"),
+      optionValue(row, "option3_value")
+    ];
+    const key = values.map((value) => normalizeOptionValueForMerge(value)).join("\u0001");
+    if (!key.replace(/\u0001/g, "")) continue;
+    if (seen.has(key)) {
+      duplicates.push(row);
+      continue;
+    }
+    seen.add(key);
+  }
+
+  return duplicates;
+}
+
 /**
  * Replace all variants for a draft safely.
+ * - duplicate option combinations fail before any DB read/write
  * - empty `rows` → delete all existing (single-SKU product); delete failure is reported
  * - non-empty → insert first, then delete previous ids only after insert succeeds
  */
@@ -52,6 +85,15 @@ export async function persistVariantsSafe(
   draftId: string,
   rows: VariantInsertPayload[]
 ): Promise<PersistVariantsResult> {
+  const duplicateRows = findDuplicateVariantInsertRows(rows);
+  if (duplicateRows.length > 0) {
+    return {
+      ok: false,
+      phase: "validate",
+      error: `款式組合重複（${duplicateRows.length} 列）— 請先修改重複的規格值再儲存`
+    };
+  }
+
   const { data: oldRows, error: loadError } = await client
     .from("product_variants")
     .select("id")

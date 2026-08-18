@@ -4,7 +4,7 @@
 > 這是「下一步做什麼」的短清單；證據與細節留在 `docs/audits/`。
 
 更新：2026-08-18
-狀態：**第一輪 Audit 已完成；P0-1 已實作於 `agent/p0-variant-atomic-confirm`，尚未 merge / deploy。**
+狀態：**第一輪 Audit 已完成；P0-1 / P0-2 已各自在獨立分支實作並 squash，尚未 merge / deploy / 完整 runtime 驗證。**
 
 ## P0 — 先修，且一題一 commit
 
@@ -21,6 +21,8 @@
 - 新增 `verify-variant-axis-atomic.mjs` 並納入 `verify:all`。
 
 目前狀態：
+- 分支 `agent/p0-variant-atomic-confirm`。
+- 已 squash 為單一 commit `171bbaa`。
 - Git diff 已確認沒有修改 CSS / ResultCard / API / migration。
 - 尚未在可執行 repo 環境跑 typecheck / build / 實機案例，因此**未標記正式完成**。
 - 詳細變更看 `docs/CHANGELOG.md`。
@@ -33,21 +35,38 @@
 - `npm run verify:variant-axis-atomic`
 - `npm run typecheck`
 
-### P0-2 Variant duplicate merge-key protection
+### ✅ P0-2 Variant duplicate merge-key protection
 來源：同上。
 
-問題：duplicate row 初始具有相同 optionValues；`indexRowsByMergeKey` 只保留第一列，後列 hand-fill 可能不進 `wouldDiscardHandFilled`。
+原問題：duplicate row 初始具有相同 optionValues；`indexRowsByMergeKey` 只保留第一列，後列 hand-fill 可能不進 `wouldDiscardHandFilled`。DB 本身也沒有 option-combination unique constraint，舊重複 rows 可能一路到 Shopify publish。
 
-修復目標：
-- duplicate merge key 不可靜默丟 hand-filled row
-- expand 前能偵測 duplicate identity conflict
-- save/publish 前確認是否允許相同 option combination
+已實作：
+- 分支 `agent/p0-variant-duplicate-protection`。
+- 已 squash 為單一 commit；以該 branch HEAD / message `fix(variants): protect duplicate option combinations` 為準。
+- expand/merge：duplicate hand-filled loser 一律加入 `wouldDiscardHandFilled`。
+- Workspace：沿用既有 pre-submit validator，在 `persistDraft()` 前擋重複組合。
+- ResultCard/shared persistence：`persistVariantsSafe()` 在任何 DB read/write 前以 `phase: validate` 阻擋 duplicate insert rows。
+- Shopify：`publishDraft()` 在 payload / `status: publishing` 前檢查 legacy/manual duplicate DB rows；重複回 409，mock/live 都不會誤報成功。
+- 新增 `verify-variant-duplicate-protection.mjs` 並納入 `verify:all`。
 
-驗證：
+沒有做：
+- 沒有新增 DB unique index；目前 insert-first replacement 架構會和直接 unique constraint 衝突。
+- 沒有改 VariantEditor DOM/CSS、ResultCard DOM/gesture 或 Shopify GraphQL mutation。
+
+目前驗證：
+- Git diff 已做範圍核對。
+- Vercel status 曾回 `success`。
+- 自己的 verifier、typecheck、實機案例仍待執行，所以**不是完整驗證完成**。
+
+待驗證：
 - duplicate 後不改 axis value
 - duplicate 後改成本/SKU/圖片
-- 再 add/drop axis value
-- hand-fill 不得無警告消失
+- 再 add/drop axis value時一定進 confirm
+- Workspace submit duplicate 時停在 persistDraft 前
+- ResultCard save duplicate 時舊 product_variants 保留
+- legacy duplicate DB row publish 回 409
+- `npm run verify:variant-duplicates`
+- `npm run typecheck`
 
 ### P0-3 Mobile ResultCard selectMode expand affordance
 來源：`docs/audits/RESULTCARD-B3P02-B3P04-B4P04-B4P06-AUDIT-2026-08-18.md`
@@ -130,6 +149,7 @@
 - vertical sticky 目前沒有 P07 直接破壞證據
 - B4-P06 fail reason desktop flex 撐版已有後續 source 修正
 - B3-P03 mobile stage filter CSS consolidation 方向正確
+- product_variants 不直接加 unique index；需先改 replacement transaction strategy 才適合 DB constraint
 
 ## 每個修復 commit 必須附
 
@@ -144,13 +164,12 @@
 
 ## 建議 commit 順序
 
-1. `fix(variants): keep dimensions and rows atomic on expand confirm` — **已實作，待驗證/merge**
-2. `fix(variants): protect duplicate merge-key hand-filled rows`
-3. `test(variants): cover pending-confirm and duplicate-key regressions`
-4. `fix(mobile): restore ResultCard expand affordance in select mode`
-5. `fix(mobile): isolate interactive controls from card gestures`
-6. `fix(ui): prevent Variant picker preview clipping without removing workbench containment`
-7. `fix(verify): check browser-stored secrets instead of blanket localStorage ban`
+1. `fix(variants): keep dimensions and rows atomic on expand confirm` — **已實作/已 squash，待完整驗證/merge**
+2. `fix(variants): protect duplicate option combinations` — **已實作/已 squash，待完整驗證/merge**
+3. `fix(mobile): restore ResultCard expand affordance in select mode`
+4. `fix(mobile): isolate interactive controls from card gestures`
+5. `fix(ui): prevent Variant picker preview clipping without removing workbench containment`
+6. `fix(verify): check browser-stored secrets instead of blanket localStorage ban`
 
 ## 之後才做
 

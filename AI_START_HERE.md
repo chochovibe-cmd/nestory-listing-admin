@@ -37,9 +37,9 @@ Nestory 是潮巢玩居內部使用的 Shopify 商品上架 PWA：從商品輸�
 - 核心上架流程已相當完整，曾完成「輸入 → AI 生成 → 審核 → Shopify DRAFT」真實流程測試。
 - 目前不是缺功能為主，而是需要做 **穩定化、文件收斂、權限/資料庫驗證、UI regression 修復**。
 - 第一輪高風險 regression audit 已完成，已有可執行 `docs/STABILIZATION_PLAN.md`。
-- **P0-1 Variant axis atomic confirm 已實作在 `agent/p0-variant-atomic-confirm`，尚未 merge / deploy / runtime 驗證。**
-- 下一個 Variant P0 是 duplicate row 同 merge key 的 hand-fill protection。
-- Mobile ResultCard 仍有一個 P0：multi-select 時 code 要求用 ▸ 展開，但 B4-P04 CSS 把含 ▸ 的 quick row 隱藏。
+- **P0-1 Variant axis atomic confirm 已實作在 `agent/p0-variant-atomic-confirm`，單一 commit `171bbaa`，尚未 merge / deploy / 完整 runtime 驗證。**
+- **P0-2 duplicate option protection 已實作並 squash 在 `agent/p0-variant-duplicate-protection`；以該 branch HEAD 與 commit message `fix(variants): protect duplicate option combinations` 為準。Vercel build/deploy status 曾成功，但 verifier/typecheck/實機案例仍待正式執行。**
+- 下一個主線 P0 是 Mobile ResultCard：multi-select 時 code 要求用 ▸ 展開，但 B4-P04 CSS 把含 ▸ 的 quick row 隱藏。
 - P07 containment 對 Variant desktop hover preview 有高可信裁切風險；ResultCard swipe / vertical sticky 目前不是 P07 的主要嫌疑。
 - 不要優先開 Phase F/G 新功能，除非目前 P0 穩定化事項已處理。
 
@@ -58,10 +58,10 @@ Nestory 是潮巢玩居內部使用的 Shopify 商品上架 PWA：從商品輸�
 
 ## 5. 目前建議工作順序
 
-1. 驗證 / 收尾 P0-1 atomic confirm
-2. 修 P0-2 duplicate merge-key hand-fill protection
-3. 修 P0-3 mobile ResultCard selectMode expand affordance
-4. 再依 `docs/STABILIZATION_PLAN.md` 處理 P1
+1. 修 P0-3 mobile ResultCard selectMode expand affordance
+2. 修 P1 mobile interactive-target gesture guard
+3. 修 P07 Variant desktop picker/hover clipping
+4. 修 verifier localStorage policy
 5. 角色/權限模型一致化
 6. Supabase migration 實際環境核對
 7. CI / verify / typecheck / build gate

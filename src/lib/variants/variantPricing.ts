@@ -7,6 +7,7 @@ import {
 } from "@/lib/pricing";
 import type { VariantFormRow } from "./types";
 import { isVariantRowFilled } from "./types";
+import { findDuplicateVariantMergeKeyRows } from "./variantCrossExpand";
 
 /**
  * Effective cost for a variant row (P1-5 / 回饋 8):
@@ -179,12 +180,20 @@ export function applyProductCostToBlankRows(
 
 /**
  * P1-5 / 回饋 49: cost required = product cost OR every filled variant row has its own cost.
+ * P0-2: duplicate option combinations are also blocked here because WorkspaceInputPanel
+ * already runs this validation before persistDraft; this keeps duplicate rows out of DB
+ * without adding another validation path to the large form component.
  * Returns null when ok, else error message.
  */
 export function validateCostRequirement(input: {
   productCost: number;
   variants: VariantFormRow[];
 }): string | null {
+  const duplicateRows = findDuplicateVariantMergeKeyRows(input.variants);
+  if (duplicateRows.length > 0) {
+    return `款式組合重複（${duplicateRows.length} 列）— 請先修改複製列的規格值再生成`;
+  }
+
   const productOk = Number.isFinite(input.productCost) && input.productCost > 0;
   const filled = input.variants.filter(isVariantRowFilled);
   if (filled.length === 0) {

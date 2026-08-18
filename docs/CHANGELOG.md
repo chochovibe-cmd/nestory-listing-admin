@@ -99,7 +99,7 @@ B4-P03 的 duplicate row 會先產生與原列相同的 option merge key；`inde
 
 ## 2026-08-18 — P0-3 Mobile ResultCard expand affordance
 
-狀態：**已實作在 `agent/p0-mobile-resultcard-expand`，尚未 merge / deploy；目前 Vercel status pending，仍需手機實機驗證。**
+狀態：**已實作在 `agent/p0-mobile-resultcard-expand`，尚未 merge / deploy；仍需手機實機驗證。**
 
 ### Root cause
 B3-P04 在 `selectMode=true` 時把 mobile header tap 改成「切換選取」，並明確保留 `rc-toggle`（▸/▾）作為唯一展開入口；但 B4-P04 的 mobile CSS 隱藏整個 `.rc-quick-row`，因此連 `rc-toggle` 一起消失，手機多選模式沒有可見 expand/collapse control。
@@ -133,9 +133,46 @@ B3-P04 在 `selectMode=true` 時把 mobile header tap 改成「切換選取」�
 - 已確認 P0-3 code-only diff 相對 P0-2 剛好 1 commit / 5 files。
 - `verify:mobile-resultcard-expand` 尚未在本機 Node 環境實際跑。
 - 手機 normal tap、long-press 進 multi-select、selectMode expand/collapse、退出 selectMode 後 normal behavior 仍需實機驗證。
-- P1 interactive-target gesture 衝突仍存在，未混入本 commit。
+
+## 2026-08-18 — P1-1 Mobile ResultCard interactive gesture guard
+
+狀態：**已實作在 `agent/p1-mobile-gesture-guard`，尚未 merge / deploy；仍需手機實機與 verifier/typecheck 驗證。**
+
+### Root cause
+ResultCard 的 mobile `rc-header` 在 touch boundary 直接接收 `touchstart/move/end`。子控制項（例如重生、P0-3 恢復的 expand toggle）即使在 click 階段 stopPropagation，touch 事件仍先冒泡到 header，因此長按可能啟動 500ms multi-select timer，水平移動也可能進入 swipe 判斷。
+
+### 實際修改
+- 新增 `src/components/listing/result-card/cardGestureTarget.ts`
+  - `isCardGestureInteractiveTarget()` 用 `closest()` 集中辨識 button/input/select/textarea/a、role=button/link、contenteditable 與 `data-no-card-gesture`。
+  - 未來新增控制項不需要每顆散補 touch stop。
+- 更新 `ResultCard.tsx`
+  - `handleHeaderTouchStart()` 在 `onGestureStart` 與 long-press timer **之前**先做 interactive guard。
+  - interactive touch start 會清 timer / reset swipe axis，不接管卡片 gesture。
+  - `handleHeaderTouchMove()` / `handleHeaderTouchEnd(event)` 也在 interactive target 直接退出。
+  - blank card surface 原有 long-press、swipe、selectMode 行為保留。
+- 新增 `scripts/verify-mobile-resultcard-gesture-guard.mjs`
+  - 鎖定 interactive selector、start/move/end guard 順序、原本 long-press/swipe contract。
+  - 額外鎖定 ResultCard tab active predicate，因舊分支整檔替換時曾意外把 `activeTab === tab.id` 改成不存在/錯誤的 `active`，後續已修正；乾淨重疊時保留正確 predicate。
+- 補上舊 P1 分支漏掉的 verifier wiring：
+  - `package.json` 新增 `verify:mobile-resultcard-gesture`
+  - `scripts/verify-all.mjs` 納入 gesture guard verifier
+
+### 變更範圍控制
+本修復目前相對 P0-3 的 code/verifier diff 只有：
+- `ResultCard.tsx`
+- `cardGestureTarget.ts`
+- `verify-mobile-resultcard-gesture-guard.mjs`
+- `package.json`
+- `verify-all.mjs`
+
+沒有修改 CSS、API、DB、Shopify、VariantEditor，也沒有移除 long-press/swipe 功能。
+
+### 尚未聲稱完成的驗證
+- 靜態 diff 已確認只含上述 5 個檔案。
+- 專用 verifier / typecheck 尚未在可執行 Node repo 環境實跑。
+- 手機需實測：長按重生不進多選、在 toggle/重生上水平移動不拖卡、空白卡面 long-press/swipe 仍正常。
 
 ### 下一步
-1. 將本次 handoff docs 收進 P0-3 單一 squash commit。
-2. 下一個獨立修復：P1-1 mobile interactive-target gesture guard。
-3. 有執行環境後跑 `npm run verify:mobile-resultcard-expand` 與手機實機案例。
+1. 同步 `CURRENT_STATUS` / `STABILIZATION_PLAN` / ResultCard audit / AI entry。
+2. squash 成相對 P0-3 單一 P1-1 commit。
+3. 下一個主線：P1-2 P07 Variant desktop picker/hover preview clipping。

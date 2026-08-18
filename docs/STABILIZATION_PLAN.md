@@ -1,144 +1,96 @@
 # Nestory — Stabilization Plan
 
-> 目的：把 2026-08-18 regression audits 轉成可執行修復順序。
-> 證據與細節留在 `docs/audits/`；實際改動留在 `docs/CHANGELOG.md`。
+> 目的：把 regression audits 轉成可執行修復順序。
+> 詳細證據看 `docs/audits/`；實際修改看 `docs/CHANGELOG.md`。
 
 更新：2026-08-18
-狀態：**第一輪 Audit 已完成；P0-1 / P0-2 / P0-3 都已有獨立修復分支。皆尚未 merge / deploy / 完整 runtime 驗證。**
+狀態：**P0-1 / P0-2 / P0-3 / P1-1 都已有獨立修復分支；皆尚未完整 runtime 驗證/merge。**
 
-## P0 — 已實作，待完整驗證/merge
+## 已實作，待完整驗證/merge
 
 ### ✅ P0-1 Variant dimensions / rows atomic confirm
-分支：`agent/p0-variant-atomic-confirm`
-固定 parent commit：`171bbaa` — `fix(variants): keep axis confirm atomic`
+- branch：`agent/p0-variant-atomic-confirm`
+- fixed commit：`171bbaa`
+- destructive axis change 未確認前不改正式 state。
+- verifier：`verify:variant-axis-atomic`
 
-效果：destructive axis change 未確認前不改正式 dimensions；確認後 dimensions + rows 一起套用。
+### ✅ P0-2 Variant duplicate option protection
+- branch：`agent/p0-variant-duplicate-protection`
+- canonical：branch HEAD / `fix(variants): protect duplicate option combinations`
+- protect：expand、Workspace、shared persistence、Shopify publish 409。
+- verifier：`verify:variant-duplicates`
 
-待驗證：
-- add/drop axis hand-filled conflict
-- drop last active axis + confirm
-- confirm timeout 不改正式 state
-- `npm run verify:variant-axis-atomic`
-- `npm run typecheck`
+### ✅ P0-3 Mobile ResultCard expand affordance
+- branch：`agent/p0-mobile-resultcard-expand`
+- canonical：branch HEAD / `fix(mobile): restore ResultCard expand affordance`
+- mobile 只恢復既有 `.rc-toggle`；quick/dismiss 不恢復。
+- isolated hotfix：`src/app/stabilization.css`
+- verifier：`verify:mobile-resultcard-expand`
 
-### ✅ P0-2 Variant duplicate merge-key protection
-分支：`agent/p0-variant-duplicate-protection`
-canonical：branch HEAD / `fix(variants): protect duplicate option combinations`
+### ✅ P1-1 Mobile interactive-target gesture guard
+- branch：`agent/p1-mobile-gesture-guard`
+- canonical：branch HEAD / `fix(mobile): isolate ResultCard controls from card gestures`
 
-效果：
-- expand/merge 不再靜默吃 duplicate hand-filled loser
-- Workspace pre-submit 擋 duplicate
-- shared persistence 在 DB access 前擋 duplicate
-- Shopify publish 在 payload/status mutation 前回 409
-
-待驗證：
-- duplicate + add/drop axis
-- Workspace submit guard
-- ResultCard save 保留舊 rows
-- legacy duplicate publish 409
-- `npm run verify:variant-duplicates`
-- `npm run typecheck`
-
-### ✅ P0-3 Mobile ResultCard selectMode expand affordance
-來源：`docs/audits/RESULTCARD-B3P02-B3P04-B4P04-B4P06-AUDIT-2026-08-18.md`
-分支：`agent/p0-mobile-resultcard-expand`
-canonical：branch HEAD / `fix(mobile): restore ResultCard expand affordance`
-
-原問題：mobile selectMode 下 header tap 只 toggle selection；B4-P04 又把包含唯一 ▸/▾ 的 `.rc-quick-row` 隱藏，造成沒有可見 expand/collapse control。
+Root cause：interactive child 的 touch 先冒泡到 `rc-header`，click stopPropagation 來不及阻止 long-press/swipe。
 
 已實作：
-- 新增 `src/app/stabilization.css`，只在 `max-width:959px` 生效。
-- `.rc-quick-row` 用 `display:contents`，但 `.rc-quick` / `.rc-dismiss-btn` 仍隱藏。
-- 只恢復原本 `.rc-toggle`，44×44px；title row 預留右側空間。
-- `layout.tsx` 在 `globals.css` 後載入 hotfix。
-- 新增 `verify-mobile-resultcard-expand.mjs` 並納入 `verify:all`。
-
-沒有做：
-- 沒改 ResultCard handler/業務邏輯
-- 沒恢復整條 desktop quick row
-- 沒改 long-press/swipe
-- 沒改 API/DB/Shopify/Variant
+- `cardGestureTarget.ts`：closest-based centralized interactive target guard。
+- `ResultCard.tsx`：touch start/move/end 在 interactive target 退出；start guard 位於 `onGestureStart` / long-press timer 之前。
+- blank card surface gesture 保留。
+- `verify-mobile-resultcard-gesture-guard.mjs`：鎖 selector、guard 順序、原本 long-press/swipe contract、ResultCard tab active predicate。
+- `package.json` / `verify-all` 已補 verifier wiring（舊 P1 branch 原本漏掉）。
 
 待驗證：
-- normal mobile tap
-- long-press 進 multi-select
-- selectMode 中 ▸/▾ expand/collapse
-- 離開 multi-select 後 normal behavior
-- 320/375/430 寬度下長標題不壓 toggle
-- `npm run verify:mobile-resultcard-expand`
+- 長按「重生」不進多選
+- 在 toggle/重生上水平移動不拖 card
+- 空白卡面 long-press/swipe 正常
+- `npm run verify:mobile-resultcard-gesture`
 - `npm run typecheck`
 
-## P1 — 接著修
-
-### P1-1 Mobile interactive-target gesture guard
-來源：ResultCard audit。
-
-問題：`rc-header` 捕捉 touchstart/move/end；重生、toggle 等 interactive child 只 stop click，touch 仍可能冒泡，觸發 long-press selection / swipe。
-
-修復目標：
-- gesture handlers 遇到 `button/input/select/textarea/a/[role=button]` 或 `data-no-card-gesture` 直接退出
-- 不靠每顆按鈕散補 touch stop
-- card 空白區 gesture 不受影響
-
-驗證：
-- 長按重生不進多選
-- 在重生/toggle 上水平移動不拖 card
-- card 空白區 long-press/swipe 仍正常
+## 下一個主線
 
 ### P1-2 P07 Variant desktop picker / hover preview clipping
 來源：`docs/audits/P07-CONTAINMENT-AUDIT-2026-08-18.md`
 
-問題：P07 `.workspace-input-panel .panel-body { overflow-x:clip }` 可裁 Variant desktop absolute picker / hover zoom。
+已確認：P07 的 ancestor `overflow-x:clip` 會包住 Variant desktop absolute picker / hover preview。mobile portal preview 不在同一裁切路徑。
 
 修復目標：
-- 保留 workbench 防跨欄 containment
-- 浮層改 portal / collision-aware positioning / 局部安全策略
+- 保留雙欄 workbench containment
+- 不整包 revert P07
+- 讓 picker / hover preview 在左右邊界可見
+- 優先局部/Portal/collision-aware 解法，不放寬整個 panel overflow
 
-驗證：desktop 左/右邊界、160px hover preview、960px 附近、dark/nordic/kitty。
+驗證：
+- desktop 左/右邊界 picker
+- hover preview
+- 960px 附近
+- dark/nordic/kitty
 
 ### P1-3 verifier localStorage policy
-問題：`verify-no-secrets.mjs` 以檔名 allowlist blanket-ban 多數 localStorage，合法 autosave / gesture hint 會誤報。
+目標：從 blanket ban localStorage 改成禁止 secret/token 寫 browser storage；合法 autosave/gesture hint 要通過。
 
-修復目標：檢查「secret/token 是否寫 browser storage」，不是 blanket ban `localStorage`；不降低 API key/token 掃描能力。
+## 之後
 
-## P1 — 實機確認後再決定
+1. role / permission / RLS consistency
+2. production Supabase migration reconcile
+3. CI gate
+4. real-product E2E
+5. Phase E6/F/G
 
-- Archived mobile unarchive action
-- Thumbnail main badge clipping（優先查 `.pthumb-strip` 自己的 `overflow-x:auto`）
-- `.vh-more-menu` edge collision
+## 每個修復 commit 規則
 
-## 已排除／目前不先動
+- 一題一 commit
+- root cause + scope control
+- verifier/test
+- 手動驗證清單
+- update CURRENT_STATUS / STABILIZATION_PLAN / 對應 audit
+- append CHANGELOG
+- 不刪歷史證據
 
-- 不整包 revert P07 / B4-P04
-- ResultCard swipe wrapper 的 `overflow:hidden` 是設計本身，不是 P07 主因
-- B4-P06 fail reason desktop flex 已有後續 source 修正
-- B3-P03 mobile stage filter consolidation 方向正確
-- product_variants 不直接加 unique index；需先改 replacement transaction strategy
+## 暫不做
 
-## 每個修復 commit 必須附
-
-1. root cause
-2. 改哪些檔案/function/class
-3. scope control
-4. verifier/test
-5. 手動驗證項目
-6. 更新 `CURRENT_STATUS` / 本檔
-7. regression 回寫對應 audit
-8. append `CHANGELOG`
-
-## 建議 commit 順序
-
-1. `fix(variants): keep dimensions and rows atomic on expand confirm` — 已實作/已 squash
-2. `fix(variants): protect duplicate option combinations` — 已實作/已 squash
-3. `fix(mobile): restore ResultCard expand affordance` — 已實作，收尾 squash 中
-4. `fix(mobile): isolate interactive controls from card gestures`
-5. `fix(ui): prevent Variant picker preview clipping without removing workbench containment`
-6. `fix(verify): check browser-stored secrets instead of blanket localStorage ban`
-
-## 之後才做
-
-- role / permission model
-- production Supabase migration reconcile
-- CI gate
-- real-product E2E
-- Phase E6 / F / G 新功能
+- 不整包 revert B4/P07
+- 不大量重寫 `globals.css`
+- `stabilization.css` 不擴成第二份 general stylesheet
+- 不直接加 product_variants unique constraint（先改 replacement transaction strategy）
+- 不先開 E6/F/G

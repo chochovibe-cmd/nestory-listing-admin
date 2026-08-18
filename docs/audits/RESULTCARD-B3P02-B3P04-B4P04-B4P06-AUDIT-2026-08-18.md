@@ -8,23 +8,30 @@
 ### P0-A mobile selectMode expand affordance — 已實作，待手機驗證/merge
 
 分支：`agent/p0-mobile-resultcard-expand`
-canonical：branch HEAD / commit message `fix(mobile): restore ResultCard expand affordance`
+canonical：branch HEAD / `fix(mobile): restore ResultCard expand affordance`
 
-已確認 root cause 不在 ResultCard handler：
-- `handleHeaderClick()` 在 mobile selectMode 會 toggle selection，這是原設計。
-- `.rc-toggle` 本身會 `stopPropagation()` 後呼叫 `tryToggleExpand()`，也是正確的。
-- regression 是 B4-P04 mobile CSS 隱藏整個 `.rc-quick-row`，把唯一 toggle 一起藏掉。
+- root cause 是 B4-P04 CSS 隱藏 `.rc-quick-row`，不是 ResultCard toggle handler。
+- mobile-scoped hotfix 只恢復既有 44×44 `.rc-toggle`；quick/dismiss 繼續隱藏。
+- `verify:mobile-resultcard-expand` 已接入。
 
-本輪最小修法：
-- 新增 `src/app/stabilization.css`，只在 `max-width:959px` 生效。
-- `.rc-quick-row { display: contents }`，但 `.rc-quick` / `.rc-dismiss-btn` 繼續隱藏。
-- 只恢復原有 `.rc-toggle`，44×44px；title row 預留右側 48px。
-- `layout.tsx` 在 `globals.css` 後載入 hotfix。
-- 新增 `verify-mobile-resultcard-expand.mjs` 並納入 `verify:all`。
+### P1-B interactive target gesture guard — 已實作，待手機驗證/merge
 
-本輪**沒有**處理下方 P0/P1-B touch gesture 冒泡；那是下一個獨立 P1-1，避免把兩個 regression 混成一包。
+分支：`agent/p1-mobile-gesture-guard`
+canonical：branch HEAD / `fix(mobile): isolate ResultCard controls from card gestures`
 
-待驗證：normal tap、long-press 進多選、多選中 toggle 展開/收合、退出多選、窄手機長標題、專用 verifier/typecheck。
+已實作：
+- 新增 `cardGestureTarget.ts`：集中辨識 native controls、role button/link、contenteditable、`data-no-card-gesture`。
+- `handleHeaderTouchStart()` 在 `onGestureStart` 與 long-press timer 前先 guard；interactive touch 不再交給 card gesture。
+- `handleHeaderTouchMove()` / `handleHeaderTouchEnd(event)` 也 guard interactive target。
+- blank card surface 的 long-press/swipe 保留。
+- 新增 `verify-mobile-resultcard-gesture-guard.mjs`；已補 package script / `verify:all` wiring。
+- verifier 額外鎖定 ResultCard tab active predicate，避免整檔替換再次把 `activeTab === tab.id` 誤改。
+
+目前 code/verifier diff 相對 P0-3 已確認只含 5 檔，沒有 CSS/API/DB/Shopify/Variant 改動。
+
+待驗證：長按重生不進多選、toggle/重生上水平移動不拖卡、空白卡面 gesture 正常、專用 verifier/typecheck。
+
+下一個主線改為 **P1-C verifier localStorage policy**；P07 Variant clipping 則由 P07 audit/plan 繼續處理。
 
 ---
 
@@ -67,7 +74,7 @@ canonical：branch HEAD / commit message `fix(mobile): restore ResultCard expand
 不要重新顯示整條 desktop quick row。
 應該只提供 mobile 專用 compact expand control，或讓 selectMode 下某個明確 gesture/按鈕可展開。
 
-> 狀態更新：已採用「只恢復既有 compact toggle」方案，詳見本檔最上方。
+> 狀態更新：已採用「只恢復既有 compact toggle」方案。
 
 ---
 
@@ -75,7 +82,7 @@ canonical：branch HEAD / commit message `fix(mobile): restore ResultCard expand
 
 B4-P04 mobile 第 3 排會顯示 `rc-m-regen-slot`。
 
-目前 wrapper 只有：
+原本 wrapper 只有：
 - `onClick(event => event.stopPropagation())`
 
 但整個 `.rc-header` 有：
@@ -83,20 +90,18 @@ B4-P04 mobile 第 3 排會顯示 `rc-m-regen-slot`。
 - `onTouchMove={handleHeaderTouchMove}`
 - `onTouchEnd={handleHeaderTouchEnd}`
 
-### 影響
+### 原影響
 在 mobile：
-- 使用者長按「重生」約 500ms，header 的 long-press timer 仍可能觸發 `onToggle()`，把卡片加入多選
+- 使用者長按「重生」約 500ms，header 的 long-press timer 可能觸發 `onToggle()`
 - 在重生按鈕上水平移動，也可能進入 card swipe 判斷
-- click 最後雖被 stopPropagation，但 touch gesture 已經先執行
+- click 最後雖被 stopPropagation，但 touch gesture 已先執行
 
-判定：**已確認事件冒泡路徑；需實機確認體感嚴重度。**
+判定：**已確認事件冒泡路徑。**
 
-### 修復方向（下一個 P1-1）
-建立共用 interactive-target guard，而不是每個按鈕散加 touch stop：
-- header gesture handler 遇到 `button/input/select/textarea/a/[role=button]` 等 interactive target 直接 return
-- 或使用明確的 `data-no-card-gesture`
+### 原修復方向
+建立共用 interactive-target guard，而不是每個按鈕散加 touch stop。
 
-這比在每個子按鈕補 `onTouchStart stopPropagation` 更穩。
+> 狀態更新：此方案已在 P1-1 分支實作；仍待手機實機驗證。
 
 ---
 
@@ -111,12 +116,11 @@ B4-P04 mobile 第 3 排會顯示 `rc-m-regen-slot`。
 - 只有 allowlist 內檔案放行
 - allowlist **沒有** `src/components/listing/DraftResultsPanel.tsx`
 
-所以目前靜態規則下，`verify:no-secrets` 會把 DraftResultsPanel 判成：
-`browser localStorage usage`
+所以目前靜態規則下，`verify:no-secrets` 會把 DraftResultsPanel 判成 `browser localStorage usage`。
 
 判定：**確定的 verifier mismatch。**
 
-注意：這不是唯一 localStorage drift；其他合法 autosave 也已有類似問題。因此修 verifier 時應重新定義「禁止 secret 存 browser」，不要只一直擴充檔名 allowlist。
+注意：其他合法 autosave 也有類似問題。修 verifier 時應重新定義「禁止 secret 存 browser」，不要只擴檔名 allowlist。
 
 ---
 
@@ -131,62 +135,41 @@ B4-P06 原本曾把 `.rc-fail-reason` 設成 `flex:1 1 10em`，後續造成 desk
 
 判定：**目前已有針對性補修。**
 
-所以後續如果手機 title row 還亂，不要直接 revert B4-P06；應查 B4-P04 mobile grid + title/chip 內容長度。
-
 ---
 
 ## B3-P02 + B3-P04 selection coupling
 
-B3-P02 把：
-- 全選搬到 header
-- 批次動作改成選取後才出 `.rc-batch-strip`
+B3-P02 把全選搬到 header、批次動作改成選取後才出 `.rc-batch-strip`；B3-P04 再把 long press 作為 mobile 多選入口、selectMode card tap 改成 toggle selection。
 
-B3-P04 再把：
-- long press 作為進入 selection mode 的主要 mobile 手勢
-- selectMode 下 card tap 改成 toggle selection
-
-這兩包本身可以共存，但 B4-P04 把 checkbox/quick row 全隱藏後，mobile selection mode 變得高度依賴 gesture，缺少明確 secondary escape / expand affordance。
-
-目前「取消」仍存在 batch strip，Esc 主要是 desktop 鍵盤路徑。
+B4-P04 隱藏 checkbox/quick row 後，mobile selection 高度依賴 gesture；P0-3 / P1-1 分別補回 expand affordance 與 interactive touch isolation。
 
 ---
 
 ## archived mobile action — 待驗證
 
-current mobile CSS 會隱藏整個 `.rc-quick-row`；而 `swipeEnabled` 明確要求 `!isArchived`。
+mobile CSS 隱藏 `.rc-quick-row`，而 `swipeEnabled` 要求 `!isArchived`；quick row 內又有 archived 的解除封存按鈕。
 
-quick row 內有 archived 狀態的「解除封存」按鈕。
-
-因此需實機/完整 source 再確認：
-- archived card 展開 body 是否另有解除封存入口
-- 若沒有，mobile archived card 可能失去主要 unarchive action
-
-這一點目前標為**待驗證，不先宣稱 bug**。
+仍需確認 expanded body 是否另有解除封存入口；沒有證據前不宣稱 bug。
 
 ---
 
 ## 修復順序（更新）
 
-1. ~~P0-A mobile selectMode expand affordance~~ — 已實作，待手機驗證/merge
-2. P1-B interactive target gesture guard — **下一個主線**
-3. P1-C verifier localStorage policy
+1. ~~P0-A mobile selectMode expand affordance~~ — 已實作，待驗證/merge
+2. ~~P1-B interactive target gesture guard~~ — 已實作，待驗證/merge
+3. **P1-C verifier localStorage policy**
 4. archived mobile unarchive action 實機確認
-5. 長 title / fail / chips 的 mobile grid 壓力測試
+5. 長 title / fail / chips mobile grid 壓力測試
 
 ## 不建議
 
-- 不要恢復整條 mobile desktop quick row
-- 不要拿掉 long-press/swipe 全功能
-- 不要 revert 整個 B4-P04
-- 不要為了 localStorage 直接關掉 no-secrets check
+- 不恢復整條 mobile desktop quick row
+- 不拿掉 long-press/swipe
+- 不 revert 整個 B4-P04
+- 不為了 localStorage 直接關掉 no-secrets check
 
 ## 下一位 Agent 接手
 
-先讀：
-- `AI_START_HERE.md`
-- `docs/CURRENT_STATUS.md`
-- `docs/STABILIZATION_PLAN.md`
-- `docs/CHANGELOG.md`
-- 本檔
+先讀 `AI_START_HERE.md`、`CURRENT_STATUS`、`STABILIZATION_PLAN`、`CHANGELOG` 與本檔。
 
-P0-A 已有修復分支，**不要重做 P0-3**。下一個修復是 P1-1：集中隔離 interactive child 的 touch gesture。
+**不要重做 P0-3 / P1-1。** ResultCard 下一個直接問題是 P1-C localStorage verifier policy；另一路主線是 P07 Variant desktop clipping。

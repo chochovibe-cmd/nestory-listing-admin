@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const route = fs.readFileSync("src/app/api/drafts/batch/archive/route.ts", "utf8");
-const schema = fs.readFileSync("supabase/migrations/001_initial_schema.sql", "utf8");
+const schema = fs.readFileSync("supabase/history/pre_tracking_migrations/001_initial_schema.sql", "utf8");
 
 // The route may use service role for the final archive/unarchive mutation, but
 // requested draft IDs must first be scoped through the signed-in user's RLS.
@@ -31,7 +31,8 @@ assert.doesNotMatch(
 assert.match(route, /handleAction\(action as Action, rows \?\? \[\], serviceSupabase, false\)/);
 assert.match(route, /serviceSupabase\.from\("product_drafts"\)\.update\(patch\)\.eq\("id", id\)/);
 
-// Lock the DB-side visibility model that the route relies on:
+// Lock the DB-side visibility model that the route relies on. Migration 001 is
+// now pre-tracking history, so verifier reads it from the historical archive.
 // reviewer/admin see team drafts; operators only see their own draft rows.
 assert.match(schema, /create policy "team can read product drafts"/);
 assert.match(

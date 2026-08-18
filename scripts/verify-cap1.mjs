@@ -222,7 +222,7 @@ console.log("verify-cap1:");
 
 // --- static: files exist ---
 check("files: migration 036 + lib + routes + fixture", () => {
-  assert.ok(exists("supabase/migrations/036_capture_token_and_raw_capture.sql"));
+  assert.ok(exists("supabase/history/pre_tracking_migrations/036_capture_token_and_raw_capture.sql"));
   assert.ok(exists("src/lib/import/captureAuth.ts"));
   assert.ok(exists("src/lib/import/captureTypes.ts"));
   assert.ok(exists("src/lib/import/mapCaptureFields.ts"));
@@ -234,7 +234,7 @@ check("files: migration 036 + lib + routes + fixture", () => {
 });
 
 check("migration 036: required column strings", () => {
-  const sql = read("supabase/migrations/036_capture_token_and_raw_capture.sql");
+  const sql = read("supabase/history/pre_tracking_migrations/036_capture_token_and_raw_capture.sql");
   assert.match(sql, /capture_token_hash/);
   assert.match(sql, /capture_token_prefix/);
   assert.match(sql, /capture_token_created_at/);

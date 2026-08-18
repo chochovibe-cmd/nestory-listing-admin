@@ -1,11 +1,18 @@
--- Nestory production Supabase ROLLBACK — 2026-08-18
+-- Nestory production Supabase ROLLBACK REFERENCE — 2026-08-18
 --
--- Emergency rollback for ONLY the changes in 2026-08-18_production_apply.sql.
--- It deliberately restores the audited pre-reconcile state, including the
--- missing catalog/rule policies and the prior direct trigger-function EXECUTE
--- surface. It does NOT modify product/business rows or migration history.
+-- IMPORTANT AFTER MIGRATION TRACKING STARTED:
+--   Production reconcile is now tracked as migration 20260818142919.
+--   DO NOT run this file manually in production by itself. Doing so would
+--   revert schema state while leaving the migration ledger inconsistent.
 --
--- Use only if post-apply validation fails and rollback is explicitly chosen.
+-- This file is retained as the locally proven inverse-SQL reference for ONLY
+-- the changes in the 2026-08-18 reconcile. If a production revert is ever
+-- required, create/test/apply a NEW tracked forward revert migration using
+-- these inverse operations, then run postchecks. Never delete/fake ledger rows.
+--
+-- The inverse deliberately restores the audited pre-reconcile state, including
+-- zero catalog/rule policies and the prior trigger-function EXECUTE surface.
+-- It does not modify product/business rows.
 
 begin;
 

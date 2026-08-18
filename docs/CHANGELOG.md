@@ -280,3 +280,35 @@ Variant 圖片 picker 現況是：
 1. 同步 CURRENT_STATUS / STABILIZATION_PLAN / ResultCard audit / AI entry。
 2. squash 成相對 P1-2 單一 P1-3 commit。
 3. 下一個主線：role / permission / RLS consistency audit；先裁決模型，不直接半套放行 operator publish。
+
+## 2026-08-18 — Production Supabase migration tracking baseline + reconcile
+
+狀態：**production DB 已完成；GitHub app branches 尚未 merge / Vercel production deploy。**
+
+### Production 實際執行
+- live precheck：`PRECHECK_OK`。
+- 建立第一筆正式 tracked migration：`20260818142712 baseline_existing_schema_20260818`。
+- 套用 tracked reconcile migration：`20260818142919 production_reconcile_20260818`。
+- live postcheck：`POSTCHECK_OK`。
+- 受保護資料列前後一致：`product_drafts=32`、`product_images=147`、`product_variants=143`、`profiles=1`。
+
+### Production reconcile scope
+- 補回 `ip_catalog` / `ip_characters` / `tag_rules` / `collection_rules` 共 8 條 RLS policies。
+- `set_updated_at()`、`touch_image_batches_updated_at()`、`touch_publish_batches_updated_at()` 固定 `search_path=pg_catalog`。
+- `handle_new_user()`、`guard_sensitive_product_draft_fields()` 移除 PUBLIC/anon/authenticated direct EXECUTE，保留 service_role。
+- hosted-only `rls_auto_enable()` 未修改。
+- 未修改 role enum、商品資料、Shopify flow、Vercel config。
+
+### Migration tracking boundary
+- production 在本次以前沒有 Supabase migration tracking；沒有偽造 001–039 ledger，也沒有重播舊 SQL。
+- 舊 `001–039` 已從 active queue 原 blob/tree 搬到 `supabase/history/pre_tracking_migrations/`，內容不變。
+- `supabase/migrations/` 現在只保留 production 真正 tracked 的兩筆 migration，未來 migration 從這裡 append。
+- baseline migration 是 existing-state assertion，不是 blank DB bootstrap。
+- free local production-like reconstruction 改從 archive 讀歷史 SQL。
+- 新增 `scripts/verify-supabase-migration-baseline.mjs` 並接進 `verify:all`，鎖住 active queue / archive / local bootstrap contract。
+
+### Security Advisor after apply
+本輪目標 findings 已消失：4 張 catalog/rule table 的 RLS-no-policy 與 3 個 timestamp helper 的目標 mutable-search-path。仍存在的 SECURITY DEFINER/RPC surface、`current_user_role` search_path 與 Auth leaked-password protection 需另開 audit，不在本次 narrow scope 擴大修改。
+
+### Rollback 規則
+reconcile 已成 tracked migration。未來若需回復，不能只手動跑舊 rollback SQL 或改 ledger；必須新增 timestamped tracked revert migration，再 postcheck，避免 schema / ledger 分岔。

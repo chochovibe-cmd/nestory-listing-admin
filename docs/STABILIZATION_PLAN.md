@@ -5,176 +5,143 @@
 
 更新：2026-08-18
 
-## 已實作，待最終整合/實機驗證
+## A. 已實作、尚待最後 app 整合/實機驗證
 
-1. **P0-1 Variant axis atomic confirm** — `agent/p0-variant-atomic-confirm` / `verify:variant-axis-atomic`
-2. **P0-2 Variant duplicate option protection** — `agent/p0-variant-duplicate-protection` / `verify:variant-duplicates`
-3. **P0-3 Mobile ResultCard expand affordance** — `agent/p0-mobile-resultcard-expand` / `verify:mobile-resultcard-expand`
-4. **P1-1 Mobile interactive-target gesture guard** — `agent/p1-mobile-gesture-guard` / `verify:mobile-resultcard-gesture`
-5. **P1-2 P07 Variant hover containment** — `agent/p1-variant-picker-clipping` / `verify:variant-picker-containment`
-6. **P1-3 Browser-storage secret policy** — `agent/p1-localstorage-secret-policy` / `verify:browser-storage-secrets`
-7. **P0 Batch archive owner authorization** — `agent/p0-archive-owner-authorization` / `fdc5527` / `verify:batch-archive-auth`
+1. P0-1 Variant axis atomic confirm — `verify:variant-axis-atomic`
+2. P0-2 Variant duplicate option protection — `verify:variant-duplicates`
+3. P0-3 Mobile ResultCard expand affordance — `verify:mobile-resultcard-expand`
+4. P1-1 Mobile interactive-target gesture guard — `verify:mobile-resultcard-gesture`
+5. P1-2 P07 Variant hover containment — `verify:variant-picker-containment`
+6. P1-3 Browser-storage secret policy — `verify:browser-storage-secrets`
+7. P0 Batch archive owner authorization — `fdc5527` / `verify:batch-archive-auth`
 
-功能修復已有 source-contract verifier；mobile/Variant/role runtime cases 仍要按 `docs/RELEASE_READINESS.md` 實測。
+這些 app/UI 修復仍在 branch stack，尚未 merge / Vercel production deploy；CI green不等於 UX實機全驗。
 
-## Source CI gate — complete / green
+## B. Source CI — COMPLETE
 
-專項：`docs/audits/CI-GATE-2026-08-18.md`
-分支：`agent/ci-gate` / `b935290`
-Draft PR：#1
+`agent/ci-gate` / `b935290` / Draft PR #1。
 
-Canonical pipeline：frozen pnpm install → `verify:all` → `typecheck` → `build`。
-Final squashed-head run `32132941280` / job `95697924316`：✅。
+Pipeline：frozen pnpm install → `verify:all` → `typecheck` → `build`。
 
-Recent Vercel preview check target = `build-rate-limit / upgradeToPro`；GitHub CI 已成功 `next build`，不把 Vercel quota failure 當 code build failure。
+Vercel Preview曾因 `build-rate-limit / upgradeToPro` failure；GitHub production build可通過。
 
-## Role / RLS canonical model — audit complete
+## C. Production Supabase audit + free runtime proof — COMPLETE
 
-專項：`docs/audits/ROLE-RLS-CONSISTENCY-AUDIT-2026-08-18.md`
+Canonical role model：
+- operator：own drafts / no review / no publish
+- reviewer：team read/review/publish
+- admin：reviewer + profiles/settings administration
+- no viewer role
 
-- **operator**：自己的商品；不審核、不發布。
-- **reviewer**：全隊讀取/審核/發布。
-- **admin**：reviewer + profiles / 成員角色 / 敏感設定。
-- **viewer**：目前沒有 TS/DB role；不要新增。
+Free runtime：GitHub Actions + Docker + Supabase CLI + Postgres 17；**不使用付費 Supabase Development Branch**。
 
-## Production Supabase truth — audit complete / production unchanged
+已驗：catalog RLS、draft owner boundary、reviewer/admin cross-team、new-user/sensitive-field triggers、batch recursion、archive auth、timestamp/function hardening、reversible package cycle。
 
-專項：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
-production：`nestory-listing-tool-test` / `tbgtqwvuohmdxnxisrgr`
-Draft PR：#2
+Historical local reconstruction：
+- archived 001–039
+- 032 transaction modeling
+- 033 local-only legacy parent fixture
 
-- migration ledger 空白，但 live schema/data final state 幾乎完整。
-- **不可 replay `001–039`。**
-- 唯一明確 migration-level drift：migration `004` 的 4 張 catalog/rule table policies 0/8。
-- 3 個 timestamp helper 原本缺 explicit search_path。
-- repo-owned trigger-only SECURITY DEFINER functions有 direct client EXECUTE exposure。
-- hosted-only `rls_auto_enable()` 另有 advisor surface，但 free local stack無法重現。
-- production DB 尚未修改。
+## D. Production Supabase reconcile — COMPLETE / LIVE
 
-## Free local Supabase runtime gate — complete / green
+使用者已明確授權並已成功套用到：
+`nestory-listing-tool-test` / `tbgtqwvuohmdxnxisrgr`。
 
-專項：`docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md`
-分支：`agent/supabase-local-ci` / `f017765`
-Draft PR：#3
+Live results：
+- precheck `PRECHECK_OK` ✅
+- baseline migration `20260818142712` ✅
+- reconcile migration `20260818142919` ✅
+- postcheck `POSTCHECK_OK` ✅
 
-使用者明確要求免費方案：GitHub Actions + Docker + Supabase CLI local Postgres 17；**不建立付費 Supabase Development Branch、不 link production、不讀 production secrets**。
+Protected counts unchanged：32 drafts / 147 images / 143 variants / 1 profile。
 
-Final squashed-head proof：
-- Standard CI `32140954043` / `95723352624` ✅
-- Supabase Local `32140953894` / `95723233923` ✅
+Applied：
+- restore 8 migration-004 catalog/rule RLS policies；
+- pin 3 timestamp helper `search_path=pg_catalog`；
+- remove direct client EXECUTE from `handle_new_user()` / sensitive-field guard；
+- keep service_role + authenticated RLS helper contracts；
+- leave hosted-only `rls_auto_enable()` unchanged。
 
-已 runtime 證明：
-- controlled production-like 001–039 reconstruction；
-- 8-policy drift + restore；
-- operator/admin catalog RLS；
-- operator owner boundary / reviewer-admin cross-team；
-- new-user + sensitive-field triggers；
-- image/publish batch helpers no `42P17`；
-- archive authorization DB scope；
-- timestamp search_path hardening；
-- client direct EXECUTE 可從 `handle_new_user` / sensitive guard 移除而不破壞 trigger runtime；
-- RLS helpers 保留 authenticated EXECUTE。
+Security Advisor target findings resolved：4 no-policy findings + targeted 3 timestamp search-path findings。
 
-Historical reconstruction debt：
-- 033 需要 legacy `吉伊卡哇` parent；local-only baseline fixture，禁止 production apply。
-- staged 032 manual replay 必須以單一 transaction 模擬 temp-table migration semantics。
+Residual warnings需獨立 scope：RLS/security-definer RPC surface、`current_user_role` search_path、Auth leaked-password protection / anonymous-sign-in config。
 
-`rls_auto_enable()` 是 hosted-only，minimal reconcile **不改它**。
+## E. Migration tracking baseline — CURRENT WORK
 
-## Reversible production reconcile package — prepared / local cycle green / NOT applied
+Branch：`agent/supabase-migration-baseline`。
 
-專項：`docs/audits/SUPABASE-PRODUCTION-PACKAGE-2026-08-18.md`
-分支：`agent/supabase-production-package`
-Draft PR：#4
+Production tracking正式從 2026-08-18 audited state開始；不偽造歷史、不 replay 001–039。
 
-Package：
-- `supabase/reconcile/2026-08-18_production_precheck.sql`
-- `supabase/reconcile/2026-08-18_production_apply.sql`
-- `supabase/reconcile/2026-08-18_production_rollback.sql`
-- `supabase/reconcile/2026-08-18_production_postcheck.sql`
+### Active migration queue
 
-第一輪 package-cycle proof：
-- Supabase Local `32141584338` / `95725267127` ✅
-- Standard CI `32141584347` / `95725266572` ✅
+`supabase/migrations/`
+- `20260818142712_baseline_existing_schema_20260818.sql`
+- `20260818142919_production_reconcile_20260818.sql`
+- future tracked migrations append here
 
-Test cycle：
-`rollback to audited pre-state → precheck → apply → postcheck → rollback → verify rollback → precheck → re-apply → postcheck` ✅
+### Historical archive
 
-Protected business row counts在完整 cycle 前後不變 ✅。
+`supabase/history/pre_tracking_migrations/`
+- byte-for-byte保留 001–039
+- history / local bootstrap only
+- 禁止 production replay / 禁止回 active queue
 
-### Package contract
+### CI guard
 
-**Precheck**
-- production 若已偏離 audit assumption 就 fail；不可強套。
+`verify:supabase-migration-baseline` / `scripts/verify-supabase-migration-baseline.mjs`
 
-**Apply**
-- restore 8 policies；
-- 3 timestamp helpers → `search_path=pg_catalog`；
-- revoke direct client EXECUTE from `handle_new_user` / sensitive guard；
-- preserve RLS helpers；
-- leave `rls_auto_enable` unchanged；
-- no data/role/history changes。
+必須驗：
+- active queue與production ledger版本對齊；
+- archive完整 001–039；
+- local workflow從 archive bootstrap；
+- `rls_auto_enable()`不被塞進已驗證 minimal reconcile。
 
-**Rollback**
-- 只逆轉這次 package，回到 audited pre-state；不改 business rows。
+### Rollback新規則
 
-**Postcheck**
-- 驗 policy/RLS/search_path/ACL/trigger wiring/role enum。
+production reconcile已 tracked；舊 review `rollback.sql`只作 inverse reference。
 
-## 下一個施工 gate
+若未來真要回復：建立**新的 tracked revert migration**，不可只手動逆 SQL、不可刪/偽造 ledger。
 
-### 1. 收尾 production package branch
+## F. 下一個施工順序
 
-- 更新 AI handoff / Current / audit / plan。
-- squash connector 碎 commits。
-- final squashed head 重跑 standard CI + Supabase Local。
-- Draft PR #4 保持未 merge。
+1. **收尾 migration-baseline branch**
+   - standard CI green
+   - free local Supabase gate green
+   - production `list_migrations` 再核對兩版本
+   - squash單一 commit / Draft PR
+   - 不 merge，除非使用者另行授權
+2. **Residual Supabase security hardening audit**
+   - `current_user_role` search_path
+   - RLS helper / SECURITY DEFINER exposed RPC surface
+   - hosted-only helpers另行評估
+   - Auth leaked-password protection decision
+   - 一律先local/source proof，再決定 production DDL
+3. **Production config audit**
+   - Vercel production env
+   - Shopify production config / publish safety
+4. **Manual UX + controlled E2E**
+   - mobile ResultCard
+   - Variant desktop/mobile
+   - role flows
+   - controlled real-product Shopify E2E
+5. **整合 stabilization stack**
+   - 決定 branch merge順序
+   - final CI / release readiness
+   - 使用者明確授權後才 Vercel production deploy
+6. 再進 E6/F/G。
 
-### 2. Production approval gate — 下一個真正需要使用者決定的點
+## G. 不要做
 
-**沒有明確授權前，production DB 繼續完全不動。**
-
-若使用者明確同意 production DB 修改：
-1. live run `production_precheck.sql`（先檢查，不套變更）；
-2. precheck fail → STOP + re-audit；
-3. precheck pass → exact `production_apply.sql`；
-4. immediately run `production_postcheck.sql`；
-5. rerun Supabase Security Advisor；
-6. validation fail 時依狀況使用 reviewed rollback。
-
-### 3. Future migration discipline
-
-Production reconcile 成功後才設計「從現在開始」的 tracked migration baseline。
-
-鐵則：
-- 不 replay `001–039`
-- 不手動偽造 migration ledger
-- 不把 local baseline 套 production
-- 不因 advisor warning 猜測修改 hosted-only function
-
-### 4. Production config / E2E
-
-DB reconcile 後：
-- Auth leaked-password protection decision
-- Vercel production env audit
-- Shopify production config audit
-- manual mobile/Variant/role cases
-- controlled real-product E2E
-- 再往 E6/F/G
-
-## 不要做
-
-- 不 replay `001–039`。
-- 不手動偽造 Supabase migration history。
-- 不為了 catalog 可讀而 disable RLS。
-- 不直接把 operator 加進 publish。
-- 不把所有 SECURITY DEFINER EXECUTE 一刀切掉。
+- 不 replay archived `001–039` 到 production。
+- 不把 historical 001–039 搬回 active migration queue。
+- 不手動偽造/刪除 Supabase migration ledger。
+- 不手動跑舊 rollback造成 schema/ledger drift；要 tracked revert。
+- 不為了 advisor綠燈一刀切 SECURITY DEFINER/RLS helper EXECUTE。
 - 不改 hosted-only `rls_auto_enable()` without proof。
-- 不把 reconcile SQL 當一般 migration 直接 `db push`。
-- 不把 local production baseline 套 production。
+- 不 disable RLS。
+- 不直接把 operator加進 publish。
+- 不把 local-only baseline fixture套 production。
 - 不建立付費 Supabase branch。
-- 不信任前端 IDs 後直接用 service role 改資料。
+- 不信任前端 IDs 後直接 service-role mutation。
 - 不為了 CI green 關掉 verifier。
-- 不整包 revert B4/P07。
-- 不大量重寫 `globals.css`。
-- 不先開 E6/F/G。
+- 不 merge / 不 production deploy，除非使用者明確同意。

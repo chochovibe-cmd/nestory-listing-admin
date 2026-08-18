@@ -42,11 +42,11 @@ jobs:
           perl -0pi -e 's/major_version = \d+/major_version = 17/' supabase/config.toml
           grep -n "major_version" supabase/config.toml
 
-      - name: Stage historical SQL outside Supabase auto-migration path
+      - name: Stage pre-tracking historical SQL outside active migration queue
         shell: bash
         run: |
           mkdir -p /tmp/nestory-migrations
-          cp supabase/migrations/*.sql /tmp/nestory-migrations/
+          cp supabase/history/pre_tracking_migrations/*.sql /tmp/nestory-migrations/
 
           # Migration 032 relies on pg_temp objects declared ON COMMIT DROP.
           # The hosted migration runner executes a migration transactionally;
@@ -59,8 +59,11 @@ jobs:
           } > "$tmp_file"
           mv "$tmp_file" /tmp/nestory-migrations/032_ip_catalog_v3_100_ips.sql
 
+          # Active tracked migrations are state assertions / forward changes from
+          # the 2026-08-18 baseline, not a blank-database bootstrap chain.
+          # Remove them only from this ephemeral CI checkout before db start.
           rm supabase/migrations/*.sql
-          echo "Historical SQL staged for controlled production-like replay."
+          echo "Pre-tracking SQL staged for controlled production-like replay."
 
       - name: Start isolated local database
         run: supabase db start

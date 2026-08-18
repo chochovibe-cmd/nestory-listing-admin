@@ -4,8 +4,8 @@
 
 更新基準：2026-08-18
 正式基準分支：`codex/nestory-v0.1-safety-skeleton`
-目前穩定化 stack：cleanup → P0-1 → P0-2 → P0-3 → P1-1 → P1-2 → P1-3 → role audit → **P0 archive auth**
-目前工作分支：`agent/p0-archive-owner-authorization`
+目前穩定化 stack：cleanup → P0-1 → P0-2 → P0-3 → P1-1 → P1-2 → P1-3 → role audit → P0 archive auth → **production Supabase audit**
+目前工作分支：`agent/production-supabase-reconcile-audit`
 
 ## 1. 專案狀態
 
@@ -23,95 +23,118 @@ Nestory 核心商品上架、AI 文案、圖片/規格、審核、Shopify publis
 - **P1-1** `agent/p1-mobile-gesture-guard`：interactive child touch 不再被 ResultCard long-press/swipe 接管。
 - **P1-2** `agent/p1-variant-picker-clipping`：保留 P07 containment，只讓 desktop Variant hover preview 向 picker 內側展開。
 - **P1-3** `agent/p1-localstorage-secret-policy`：no-secrets 改成檢查 credential-like browser-storage writes，不再 blanket-ban localStorage。
+- **P0 archive auth** `agent/p0-archive-owner-authorization` / `fdc5527`：batch archive authorization read 改走 authenticated RLS；service role 只做已授權 rows 的後續 mutation。
 
-P1-3 最終 preview 的 Vercel status 曾回 failure，但 target 明確是 `build-rate-limit / upgradeToPro`，不是程式 build error；因此只記為「preview 額度阻擋、未驗證」。
+P1-3 與 P0 archive preview 的 Vercel status 曾回 failure，但 target 明確是 `build-rate-limit / upgradeToPro`，不是程式 build error；因此只記為「preview 額度阻擋、未驗證」。
 
-## 3. Role / RLS audit 結論
+## 3. Role / RLS canonical model
 
 專項：`docs/audits/ROLE-RLS-CONSISTENCY-AUDIT-2026-08-18.md`
-分支：`agent/role-rls-consistency-audit`
 
-目前真正 canonical role 是：
+目前真正 canonical role：
 - `admin`
 - `operator`
 - `reviewer`
 
 `viewer` 沒有進 TypeScript 或 DB enum，只是部分舊/後期文件語意；目前不建議新增。
 
-### 建議 canonical capability model
+建議 capability：
 - **operator**：建立/操作自己的商品；不審核、不發布。
 - **reviewer**：可讀全隊、審核、發布。
 - **admin**：reviewer 能力 + profiles / 成員角色 / 敏感 team settings 管理。
 
-這個模型最接近現有 source + DB：
-- 新使用者預設 `operator`。
-- `canReview` / `canPublish` = admin + reviewer。
-- DB sensitive-field guard 也只讓 admin/reviewer 進 generation/review/publish system state。
-- reviewer/admin 可讀全隊 draft；operator 主要只讀自己的 draft。
+不要只把 operator 塞進 `canPublish()`。若未來真要改，必須一次對齊 helper + API + UI + DB/RLS + tests。
 
-因此：**不要只把 operator 塞進 `canPublish()`。** 若未來真要讓一般 operator 直接發布，要另做完整 role-model change（helper + API + DB/RLS + UI + tests）。
+## 4. Production Supabase reconcile — 已完成唯讀第一輪
 
-### 已確認文字 drift
-- `canAccessSettings()` 實際用 `canOperate()`，所以三角色都可進設定頁，但註解仍寫 admin + operator。
-- capture-token API 也用 `canOperate()`，實際 reviewer 可產生個人 token，但註解/403 文案寫 operator + admin。
+專項：`docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
+分支：`agent/production-supabase-reconcile-audit`
+production DB：**尚未修改**。
 
-這些屬文字/語意 drift，後續可獨立修文案，不應拿 stale 註解反推安全權限。
+實際 Supabase：
+- project：`nestory-listing-tool-test`
+- ref：`tbgtqwvuohmdxnxisrgr`
+- Postgres 17
 
-## 4. 新找到並已修的 P0 authorization bug
+### 已確認
 
-分支：`agent/p0-archive-owner-authorization`
+1. **Supabase migration ledger 是空的。**
+   - `list_migrations` 沒有 entries。
+   - 但 production schema 已有後期欄位，例如 `raw_capture`、`generation_tone`、`list_thumb_url`、`vision_mid_url`。
+   - 結論：historical SQL 很可能用 SQL Editor/manual flow 套過，不能用 migration ledger 判斷 schema 版本。
 
-### 原問題
-`/api/drafts/batch/archive`：
-1. 只檢查 `canOperate()`。
-2. 接著用 service-role client 讀 request 傳入的任意 `draftIds`。
-3. service role bypass RLS。
-4. route 沒有 owner check。
+2. **不要 replay repo `001–039`。**
+   - migration row 缺失 ≠ DDL 缺失。
+   - 直接重播會有 schema/policy/data 風險。
 
-因此 operator 原本可能跨 owner 封存／解封其他人的商品。
+3. **4 張 catalog/rule table 有 RLS 但沒有 policy：**
+   - `ip_catalog`
+   - `ip_characters`
+   - `tag_rules`
+   - `collection_rules`
+   - repo migration 004 本來有 authenticated read + admin write policies；production 現在沒有。
+   - authenticated 仍有 SELECT grant，但 RLS 無 policy，Data API direct read 會被擋。
 
-### 已實作
-- requested draft IDs 的 initial read + migration-024 fallback read 全改成 `authSupabase`。
-- 先由 authenticated RLS 篩出使用者可見 rows：operator 只拿自己的 rows；reviewer/admin 可拿全隊 rows。
-- service role 仍只用於後續 archive/unarchive mutation，不再負責 request ID authorization read。
-- 新增 `verify-batch-archive-authorization.mjs`：
-  - 鎖定 initial/fallback read 必須用 authSupabase。
-  - 禁止 authorization phase 用 service role select requested draft IDs。
-  - 鎖定 001 migration 的 team/owner read RLS contract。
-- 新增 `verify:batch-archive-auth` 並納入 `verify:all`。
+4. **SECURITY DEFINER exposure / trigger hardening：**
+   - Security Advisor flags `current_user_role / is_admin / is_reviewer / guard_sensitive_product_draft_fields / handle_new_user / rls_auto_enable` 等 public-schema functions。
+   - trigger/event-trigger functions 不應維持不必要 direct client EXECUTE。
+   - RLS helper functions不能盲目 revoke authenticated EXECUTE，否則可能破壞 policy evaluation；需用更安全的 schema/RPC surface 設計。
 
-目前 code/verifier diff 相對 role audit 只含：
-- `src/app/api/drafts/batch/archive/route.ts`
-- `scripts/verify-batch-archive-authorization.mjs`
-- `package.json`
-- `scripts/verify-all.mjs`
+5. **search_path warnings：**
+   - `set_updated_at`
+   - `touch_image_batches_updated_at`
+   - `touch_publish_batches_updated_at`
 
-沒有擴張任何角色能力、沒有改 migration、沒有改 `roles.ts`。
+6. **Auth leaked-password protection disabled。**
+   - production 擴大成員前建議啟用。
 
-## 5. 接下來高優先事項
+7. **目前 production profiles 只有 1 個 admin。**
+   - 尚無 operator/reviewer。
+   - 所以 P0 archive owner bug 目前沒有其他 team member 可實際被越權，但仍必須在新增成員前修好。
 
-1. 收尾/squash P0 archive owner authorization。
-2. production Supabase migration / RLS reconcile（repo migrations 已到 039，但實際 production 尚未驗證）。
-3. CI gate：verify → typecheck → build。
-4. real-product E2E。
-5. 再往 E6/F/G。
+## 5. Production schema 目前可視為「晚期 schema + 權限 drift」
 
-## 6. 正式環境尚未確認
+核心 tables/columns 大致完整，RLS 也普遍 enabled；主要未知/風險是：
+- migration history 不可用
+- catalog policies 漂移
+- SECURITY DEFINER function RPC surface
+- current schema verifier 太舊
 
-仍需：
+因此下一步不是補所有 missing migration，而是建立**乾淨 reconciliation baseline**。
+
+## 6. 下一步順序
+
+1. 保持 production DB 不動。
+2. 在有正式 local Supabase CLI repo 環境後，先從 live schema 產生/確認 baseline，再建立新的 reconciliation migration。
+3. migration scope：
+   - restore/驗證 4 張 catalog/rule RLS policies
+   - revoke 不必要 trigger/event-trigger direct EXECUTE
+   - harden flagged trigger search_path
+   - 保留 RLS helpers 真正需要的 policy execution capability
+4. 對 migration 做 operator/reviewer/admin RLS 測試。
+5. rerun Supabase Security Advisor。
+6. 更新 `verify-sql-schema.mjs` 讓它驗 current schema，而不是主要停留在早期 001/003。
+7. 建 CI：verify → typecheck → build。
+8. real-product E2E。
+9. 再往 E6/F/G。
+
+## 7. 正式環境仍待確認
+
 - Vercel production env
-- Supabase migration / RLS live state
 - Shopify production mode / credentials
 - real-product E2E
 
-## 7. 文件讀取順序
+Supabase live schema/RLS 第一輪已確認，後續是 reconciliation，不再標成「完全未知」。
+
+## 8. 文件讀取順序
 
 1. `AI_START_HERE.md`
 2. 本檔
 3. `AGENTS.md`
 4. `docs/STABILIZATION_PLAN.md`
-5. 對應 audit
-6. `docs/CHANGELOG.md`
-7. 歷史施工文件（按需）
+5. `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`（碰 DB 必讀）
+6. 對應其他 audit
+7. `docs/CHANGELOG.md`
+8. 歷史施工文件（按需）
 
 不要要求新 session 一開始全文讀 `施工清單.md` 或全部 dated docs。

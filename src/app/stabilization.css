@@ -80,18 +80,15 @@
   }
 }
 
-/* RC-THUMB / 2026-08-19:
- * Canonical geometry anchor is B17 (4304866), the last intentional pre-P10
- * thumbnail sizing pass: wrapped strip, 64px secondary thumbs, 96px main thumb.
- * UX-B2-P10 (ed342ce) later changed the uploader to nowrap horizontal scrolling
- * and 96/120px thumbs; P08 was only a later 72/96 repair, not the original state;
- * P09 then restored the P10 geometry again.
+/* RC-THUMB / 2026-08-20:
+ * Desktop keeps the recovered B17 geometry (64px secondary / 96px main / wrap).
+ * iPhone runtime then showed that the restored thumbnails are still too small for
+ * comfortable touch review. Mobile therefore gets an explicit 3-column grid so
+ * every thumbnail is larger and equal-width without reviving P10/P09 horizontal
+ * scrolling. Main/spec identity is still conveyed by the existing badges.
  *
- * Runtime validation on iPhone confirmed the 64/96 wrap restore is correct.
- * The same validation also confirmed the inherited 18px input delete control is
- * too small on touch screens and its left placement is not desired. Desktop is
- * left untouched; mobile gets a larger top-right delete control. The spec badge
- * remains available and shifts inward just enough to avoid overlapping the ×.
+ * Useful later UX remains untouched: spinner, retry, paste, drag/reorder,
+ * soft-remove, dual-size upload and spec marking.
  */
 .pthumb-strip {
   display: flex;
@@ -125,6 +122,33 @@
 }
 
 @media (max-width: 959px) {
+  .pthumb-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 12px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    align-items: start;
+  }
+
+  .pthumb-strip .pthumb,
+  .pthumb-strip .pthumb.is-main,
+  .pthumb-strip .pthumb-img-wrap {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .pthumb-strip .pthumb-img,
+  .pthumb-strip .pthumb.is-main .pthumb-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    object-fit: cover;
+  }
+
   .pthumb-img-wrap > .thumb-remove {
     top: -8px;
     right: -8px;
@@ -146,24 +170,26 @@
   }
 
   .pthumb-img-wrap > .pthumb-spec-badge {
-    right: 32px;
-    max-width: calc(100% - 38px);
+    right: 28px;
+    max-width: calc(100% - 34px);
   }
 }
 
-/* RC-CARD / 2026-08-19:
- * History showed several overlapping ResultCard layout generations. Runtime
- * validation on iPhone is now the authority: the card still overflows after the
- * earlier row-3-only fix because multiple nowrap/intrinsic-width children (tone
- * chip, price/profit text, row3 controls) can exceed the available card width.
- *
- * Treat this as a responsive-layout bug, not as a historical revert target.
- * Preserve all card behavior (regen, expand, swipe, long-press, multi-select),
- * but require every visual child to honor the mobile card width. Phones <=520px
- * may stack regen and price; wider mobile/tablet can keep them side-by-side.
+/* RC-CARD / 2026-08-20:
+ * The latest iPhone evidence shows the overflow is not isolated to ResultCard:
+ * the results filters/sort row and card are clipped together. Treat the mobile
+ * results pane as the first containment boundary, then let ResultCard adapt
+ * inside that boundary. No interaction/business logic is changed.
  */
 @media (max-width: 959px) {
-  .results-panel,
+  .workbench,
+  .workbench-panes,
+  .workbench-mobile-body,
+  .workbench-pane-results,
+  .workbench-pane-results.mob-active,
+  .panel.results-panel,
+  .results-panel-body,
+  .stage-filter-row,
   .results-list,
   .rc-swipe-wrap,
   .result-card,
@@ -174,20 +200,47 @@
     box-sizing: border-box;
   }
 
+  .workbench-mobile-body,
+  .workbench-pane-results.mob-active,
+  .panel.results-panel,
+  .results-panel-body {
+    overflow-x: clip;
+  }
+
+  .stage-filter-row .stage-filter-pills,
+  .stage-filter-row .stage-filter-end {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .stage-filter-row .stage-filter-pills {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
   .result-card > .rc-header {
     grid-template-columns: 64px minmax(0, 1fr);
     grid-template-areas:
       "title title"
       "thumb chips"
       "row3 row3";
-    overflow: hidden;
+    column-gap: 10px;
+    row-gap: 8px;
+    overflow: clip;
+  }
+
+  .result-card > .rc-header > .rc-thumb,
+  .result-card > .rc-header > .rc-headmain,
+  .result-card > .rc-header .rc-title-row,
+  .result-card > .rc-header .rc-head-chips,
+  .result-card > .rc-header .rc-m-row3 {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .result-card > .rc-header .rc-head-chips {
     grid-area: chips;
     width: 100%;
-    min-width: 0;
-    max-width: 100%;
     overflow: hidden;
   }
 
@@ -201,9 +254,11 @@
 
   .result-card > .rc-header .rc-head-meta > *,
   .result-card > .rc-header .rc-detect-chips > *,
-  .result-card > .rc-header .rc-sale-badge {
+  .result-card > .rc-header .rc-sale-badge,
+  .result-card > .rc-header .rc-fail-reason {
     min-width: 0;
     max-width: 100%;
+    box-sizing: border-box;
   }
 
   .result-card > .rc-header .rc-detect-chip,
@@ -216,6 +271,10 @@
     white-space: nowrap;
   }
 
+  .result-card > .rc-header .rc-fail-reason {
+    overflow-wrap: anywhere;
+  }
+
   .result-card > .rc-header .rc-m-row3 {
     grid-area: row3;
     display: grid;
@@ -223,14 +282,11 @@
     align-items: center;
     column-gap: 10px;
     width: 100%;
-    min-width: 0;
-    max-width: 100%;
     overflow: hidden;
     box-sizing: border-box;
   }
 
   .result-card > .rc-header .rc-m-regen-slot {
-    grid-area: auto;
     grid-column: 1;
     min-width: 0;
     max-width: 100%;
@@ -238,7 +294,6 @@
 
   .result-card > .rc-header .rc-m-row3 > .rc-price-mini,
   .result-card > .rc-header .rc-m-row3 > .rc-price-stack {
-    grid-area: auto;
     grid-column: 2;
     width: 100%;
     min-width: 0;
@@ -261,27 +316,36 @@
   }
 }
 
-@media (max-width: 520px) {
+/* Phone cards favor readability over forcing dense controls onto one row. */
+@media (max-width: 639px) {
   .result-card > .rc-header .rc-m-row3 {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 8px;
     overflow: visible;
   }
 
-  .result-card > .rc-header .rc-m-regen-slot {
+  .result-card > .rc-header .rc-m-regen-slot,
+  .result-card > .rc-header .rc-m-row3 > .rc-price-mini,
+  .result-card > .rc-header .rc-m-row3 > .rc-price-stack {
     grid-column: 1;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .result-card > .rc-header .rc-m-regen-slot {
     justify-self: start;
   }
 
   .result-card > .rc-header .rc-m-row3 > .rc-price-mini,
   .result-card > .rc-header .rc-m-row3 > .rc-price-stack {
-    grid-column: 1;
     align-items: flex-start;
     justify-self: stretch;
     overflow: visible;
   }
 
-  .result-card > .rc-header .rc-price-mini-main {
+  .result-card > .rc-header .rc-price-mini-main,
+  .result-card > .rc-header .rc-price-mini-sub {
     display: flex;
     width: 100%;
     flex-wrap: wrap;
@@ -295,9 +359,8 @@
     overflow-wrap: anywhere;
   }
 
-  .result-card > .rc-header .rc-price-mini-sub {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
+  .result-card > .rc-header .rc-tone-chip {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }

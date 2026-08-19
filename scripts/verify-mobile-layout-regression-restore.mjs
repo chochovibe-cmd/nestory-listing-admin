@@ -23,7 +23,7 @@ if (thumbStart < 0 || cardStart < 0 || cardStart <= thumbStart) {
 const thumb = stabilization.slice(thumbStart, cardStart);
 const card = stabilization.slice(cardStart);
 
-// ImageUploader: restore only the owner-confirmed geometry regression.
+// ImageUploader geometry: owner-confirmed canonical mobile behavior.
 expect(thumb, /\.pthumb-strip\s*\{[^}]*flex-wrap:\s*wrap;/s, "ImageUploader strip must wrap");
 expect(thumb, /\.pthumb-strip\s*\{[^}]*overflow-x:\s*visible;/s, "ImageUploader strip must not use horizontal-scroll geometry");
 expect(thumb, /\.pthumb-strip\s+\.pthumb-img\s*\{[^}]*width:\s*64px;[^}]*height:\s*64px;/s, "secondary upload thumbnails must stay 64x64");
@@ -31,20 +31,17 @@ expect(thumb, /\.pthumb-strip\s+\.pthumb\.is-main\s+\.pthumb-img\s*\{[^}]*width:
 if (/flex-wrap:\s*nowrap/.test(thumb) || /overflow-x:\s*auto/.test(thumb)) {
   fail("P10 nowrap/horizontal-scroll thumbnail geometry must not return");
 }
-if (/\.pthumb-spec-badge\s*\{|\.thumb-remove\s*\{/.test(thumb)) {
-  fail("geometry-only restore must not reposition P10/P09 spec/remove controls");
-}
 
-// Deliberate P10/P09 A-scope controls remain unchanged unless runtime proves a bug.
+// iPhone runtime evidence: mobile delete control is now a larger top-right affordance.
 expect(
-  globals,
-  /\.pthumb-img-wrap\s*>\s*\.thumb-remove\s*\{[^}]*top:\s*6px;[^}]*left:\s*6px;[^}]*right:\s*auto;/s,
-  "input delete control must keep audited P10/P09 top-left placement"
+  thumb,
+  /@media \(max-width:\s*959px\)[\s\S]*\.pthumb-img-wrap\s*>\s*\.thumb-remove\s*\{[^}]*top:\s*-8px;[^}]*right:\s*-8px;[^}]*left:\s*auto;[^}]*width:\s*32px;[^}]*height:\s*32px;/s,
+  "mobile input delete control must be 32px at the top-right"
 );
 expect(
-  globals,
-  /\.pthumb-spec-badge\s*\{[^}]*position:\s*absolute;[^}]*top:\s*6px;[^}]*right:\s*6px;/s,
-  "input spec badge must keep audited P10/P09 top-right placement"
+  thumb,
+  /\.pthumb-img-wrap\s*>\s*\.pthumb-spec-badge\s*\{[^}]*right:\s*32px;[^}]*max-width:\s*calc\(100%\s*-\s*38px\);/s,
+  "mobile spec badge must stay clear of the enlarged delete control"
 );
 
 // Useful later uploader UX must remain intact.
@@ -58,28 +55,32 @@ expect(uploader, /toggleSpecMark\(item\)/, "per-thumbnail spec marking must rema
 expect(uploader, /className="thumb-remove"/, "thumbnail delete control must remain");
 expect(uploader, /draggable/, "thumbnail reorder capability must remain");
 
-// ResultCard: preserve P04 A; repair only its accidental row-3 track coupling.
+// ResultCard: mobile layout must honor card width regardless of chip/price content.
 expect(
   card,
   /grid-template-areas:\s*\n\s*"title title"\s*\n\s*"thumb chips"\s*\n\s*"row3 row3";/,
-  "mobile ResultCard must preserve P04 three-row semantics"
+  "mobile ResultCard must keep a bounded three-band header"
 );
+expect(card, /\.rc-head-chips\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;/s, "mobile chip cluster must be width-bounded");
+expect(card, /\.rc-detect-chip,[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/, "long mobile chips must ellipsize instead of protruding");
 expect(
   card,
   /\.rc-m-row3\s*\{[^}]*grid-area:\s*row3;[^}]*display:\s*grid;[^}]*grid-template-columns:\s*max-content\s+minmax\(0,\s*1fr\);/s,
-  "row3 must own an independent regen/price grid"
+  "wider mobile row3 must keep a shrink-safe regen/price grid"
 );
-expect(card, /\.rc-m-regen-slot\s*\{[^}]*grid-area:\s*auto;[^}]*grid-column:\s*1;/s, "mobile regen must occupy row3 column 1");
-expect(card, /\.rc-m-row3\s*>\s*\.rc-price-mini,[\s\S]*grid-area:\s*auto;[\s\S]*grid-column:\s*2;/, "mobile price must occupy row3 column 2");
-if (/"thumb main"|"price price"|"regen regen"/.test(card)) {
-  fail("provisional full-width-row rewrite must not replace P04 three-row A");
-}
+expect(
+  card,
+  /@media \(max-width:\s*520px\)[\s\S]*\.rc-m-row3\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
+  "phone row3 must be allowed to stack"
+);
+expect(card, /\.rc-price-mini-value,[\s\S]*white-space:\s*normal;[\s\S]*overflow-wrap:\s*anywhere;/, "phone price/profit text must be allowed to wrap");
 
+// Later ResultCard behavior must remain.
 expect(stabilization, /\.rc-toggle[\s\S]*display:\s*inline-flex;/, "explicit mobile expand affordance must remain");
 expect(resultCard, /handleHeaderTouchStart/, "mobile long-press/swipe gesture handler must remain");
 expect(resultCard, /rc-swipe-wrap/, "mobile swipe actions must remain");
 expect(resultCard, /selectMode/, "mobile multi-select behavior must remain");
-expect(resultCard, /className="rc-quick-btn rc-m-regen-btn"/, "P04 mobile regen action must remain");
-expect(resultCard, /\{priceMiniEl\}/, "P04 mobile price element must remain");
+expect(resultCard, /className="rc-quick-btn rc-m-regen-btn"/, "mobile regenerate action must remain");
+expect(resultCard, /\{priceMiniEl\}/, "mobile price element must remain");
 
-console.log("PASS: collateral geometry repaired while intentional later UX stays intact.");
+console.log("PASS: runtime-confirmed mobile containment fixes preserve uploader/card UX.");

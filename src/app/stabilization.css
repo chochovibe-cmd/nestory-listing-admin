@@ -87,11 +87,11 @@
  * and 96/120px thumbs; P08 was only a later 72/96 repair, not the original state;
  * P09 then restored the P10 geometry again.
  *
- * Restore ONLY the user-confirmed broken geometry. Intentionally do NOT override
- * P10/P09's later spec-corner control or input remove-button position: the full
- * forensic audit found those were deliberate A-scope decisions, not proven B
- * collateral. Upload spinner, retry, drag/reorder, soft-delete and pipeline logic
- * are also preserved.
+ * Runtime validation on iPhone confirmed the 64/96 wrap restore is correct.
+ * The same validation also confirmed the inherited 18px input delete control is
+ * too small on touch screens and its left placement is not desired. Desktop is
+ * left untouched; mobile gets a larger top-right delete control. The spec badge
+ * remains available and shifts inward just enough to avoid overlapping the ×.
  */
 .pthumb-strip {
   display: flex;
@@ -124,27 +124,96 @@
   aspect-ratio: 1;
 }
 
+@media (max-width: 959px) {
+  .pthumb-img-wrap > .thumb-remove {
+    top: -8px;
+    right: -8px;
+    left: auto;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    font-size: 18px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+    box-shadow: var(--shadow-s);
+  }
+
+  .pthumb-img-wrap > .pthumb-spec-badge {
+    right: 32px;
+    max-width: calc(100% - 38px);
+  }
+}
+
 /* RC-CARD / 2026-08-19:
- * B4-P04 (47a96c) is an intentional A feature: mobile ResultCard must remain a
- * three-row skeleton — title / thumb+chips / regen+price. Do NOT revert it to the
- * older B2-P09 card or move regen/price onto separate visual rows.
+ * History showed several overlapping ResultCard layout generations. Runtime
+ * validation on iPhone is now the authority: the card still overflows after the
+ * earlier row-3-only fix because multiple nowrap/intrinsic-width children (tone
+ * chip, price/profit text, row3 controls) can exceed the available card width.
  *
- * The implementation accidentally reused the row-2 64px thumbnail track for the
- * row-3 regen button, while that button has min-width:72px. The button therefore
- * overflows its track into price space; nowrap price text plus P07 horizontal
- * containment makes the collision visible as right-side clipping on narrow cards.
- *
- * Fix only that B collateral: keep the parent three-row contract, but let row 3
- * own an inner grid whose left track sizes to the regen action and whose right
- * track can shrink. All gestures, hidden mobile quick chrome, gesture hint and
- * explicit expand affordance remain untouched.
+ * Treat this as a responsive-layout bug, not as a historical revert target.
+ * Preserve all card behavior (regen, expand, swipe, long-press, multi-select),
+ * but require every visual child to honor the mobile card width. Phones <=520px
+ * may stack regen and price; wider mobile/tablet can keep them side-by-side.
  */
 @media (max-width: 959px) {
+  .results-panel,
+  .results-list,
+  .rc-swipe-wrap,
+  .result-card,
   .result-card > .rc-header {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .result-card > .rc-header {
+    grid-template-columns: 64px minmax(0, 1fr);
     grid-template-areas:
       "title title"
       "thumb chips"
       "row3 row3";
+    overflow: hidden;
+  }
+
+  .result-card > .rc-header .rc-head-chips {
+    grid-area: chips;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .result-card > .rc-header .rc-head-meta,
+  .result-card > .rc-header .rc-detect-chips {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .result-card > .rc-header .rc-head-meta > *,
+  .result-card > .rc-header .rc-detect-chips > *,
+  .result-card > .rc-header .rc-sale-badge {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .result-card > .rc-header .rc-detect-chip,
+  .result-card > .rc-header .rc-owner-chip,
+  .result-card > .rc-header .rc-station-chip,
+  .result-card > .rc-header .rc-head-meta > .status,
+  .result-card > .rc-header .rc-sale-badge {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .result-card > .rc-header .rc-m-row3 {
@@ -156,6 +225,7 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    overflow: hidden;
     box-sizing: border-box;
   }
 
@@ -173,14 +243,61 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    overflow: hidden;
     align-items: flex-end;
     justify-self: stretch;
     box-sizing: border-box;
   }
 
-  .result-card > .rc-header .rc-m-row3 .rc-price-mini-sub {
+  .result-card > .rc-header .rc-price-mini-main,
+  .result-card > .rc-header .rc-price-mini-sub {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .result-card > .rc-header .rc-price-mini-sub {
     justify-content: flex-end;
     flex-wrap: wrap;
-    max-width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .result-card > .rc-header .rc-m-row3 {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+    overflow: visible;
+  }
+
+  .result-card > .rc-header .rc-m-regen-slot {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .result-card > .rc-header .rc-m-row3 > .rc-price-mini,
+  .result-card > .rc-header .rc-m-row3 > .rc-price-stack {
+    grid-column: 1;
+    align-items: flex-start;
+    justify-self: stretch;
+    overflow: visible;
+  }
+
+  .result-card > .rc-header .rc-price-mini-main {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .result-card > .rc-header .rc-price-mini-value,
+  .result-card > .rc-header .rc-price-mini-strike,
+  .result-card > .rc-header .rc-price-mini-profit {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .result-card > .rc-header .rc-price-mini-sub {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }

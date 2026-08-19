@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const sql = fs.readFileSync(path.join(root, "supabase/migrations/001_initial_schema.sql"), "utf8");
-const runtimePermissionsSql = fs.existsSync(path.join(root, "supabase/migrations/003_runtime_permissions_patch.sql"))
-  ? fs.readFileSync(path.join(root, "supabase/migrations/003_runtime_permissions_patch.sql"), "utf8")
+const historicalDir = path.join(root, "supabase", "history", "pre_tracking_migrations");
+const sql = fs.readFileSync(path.join(historicalDir, "001_initial_schema.sql"), "utf8");
+const runtimePermissionsSql = fs.existsSync(path.join(historicalDir, "003_runtime_permissions_patch.sql"))
+  ? fs.readFileSync(path.join(historicalDir, "003_runtime_permissions_patch.sql"), "utf8")
   : "";
 const seed = fs.readFileSync(path.join(root, "supabase/seeds/001_mock_draft.sql"), "utf8");
 
@@ -80,8 +81,7 @@ const errors = [
     /guard_sensitive_product_draft_fields\(\)/i,
     /product_drafts_guard_sensitive_fields/i,
     /claim_pending_generation/i,
-    /for update skip locked/i
-    ,
+    /for update skip locked/i,
     /worker_attempts < max_worker_attempts/i,
     /worker_lock_expires_at is null or worker_lock_expires_at <= now\(\)/i,
     /requeue_revision_for_generation/i
@@ -132,4 +132,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log("SQL schema checks passed");
+console.log("SQL schema checks passed from pre-tracking archive");

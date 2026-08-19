@@ -1,3 +1,18 @@
+# Nestory 新 AI Session 入口（2026-08-18 新增）
+
+新的 Codex / Claude Code / ChatGPT / 其他 AI coding session：
+
+1. 先讀 `AI_START_HERE.md`
+2. 再讀 `docs/CURRENT_STATUS.md`
+3. 再讀本檔其餘常駐規則
+
+若工作涉及 UI，再讀 `docs/REGRESSION_AUDIT.md`、Mockup 與 `docs/Mockup差異備忘.md`。
+**不要一開始通讀全部 docs；dated 施工文件只在需要歷史細節時查。**
+
+> 下方為原本 AGENTS.md 內容，完整保留供歷史與規則追溯。
+
+---
+
 # Nestory 上架系統 — 給所有 AI 模型的常駐規則
 
 接手任何工作前，先讀 `docs/交接指南-給接手的AI模型.md`（含施工順序、鐵則、已知地雷）。

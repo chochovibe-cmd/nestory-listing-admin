@@ -17,6 +17,19 @@ function requireContains(file, labels) {
   return missing.map((label) => `${file} missing ${label}`);
 }
 
+const workerOutputKeys = [
+  "title_zh",
+  "description_html",
+  "description_plain",
+  "seo_title",
+  "seo_description",
+  "tags",
+  "collection_suggestion",
+  "spec_text",
+  "warnings",
+  "image_alt_texts"
+];
+
 const errors = [
   ...requireContains("src/lib/csv/matrixify.ts", [
     "Command",
@@ -61,54 +74,29 @@ const errors = [
     "media",
     "variantSeed"
   ]),
-  ...requireContains("docs/worker-contract.md", [
-    "title_zh",
-    "description_html",
-    "description_plain",
-    "seo_title",
-    "seo_description",
-    "tags",
-    "collection_suggestion",
-    "spec_text",
-    "warnings",
-    "image_alt_texts"
+  ...requireContains("src/app/api/worker/complete/route.ts", [
+    ...workerOutputKeys,
+    'status: "ready_for_review"',
+    'generation_status: "completed"',
+    'mode: "codex_skill"'
   ]),
-  ...requireContains("docs/mock-flow.md", [
-    "pending_copy",
-    "codex_skill",
-    "ready_for_review",
-    "SHOPIFY_PUBLISH_MOCK=true",
-    "csv_ready"
+  ...requireContains("src/app/api/drafts/[id]/request-revision/route.ts", [
+    "needs_revision"
   ]),
-  ...requireContains("docs/codex-skill-rules.md", [
-    "chochonest-copywriter@2026-06-24-v1",
-    "title_zh",
-    "description_html",
-    "seo_title",
-    "seo_description",
-    "image_alt_texts"
-  ]),
-  ...requireContains("docs/api-contracts.md", [
-    "Request Revision",
-    "needs_revision",
-    "POST /api/drafts/{id}/request-revision"
+  ...requireContains("docs/RELEASE_READINESS.md", [
+    "POST /api/worker/claim",
+    "POST /api/worker/complete",
+    "POST /api/worker/fail",
+    "POST /api/drafts/{id}/request-revision",
+    "POST /api/drafts/{id}/publish",
+    "Matrixify CSV Fallback",
+    "SHOPIFY_PUBLISH_MOCK=true"
   ])
 ];
 
 const workerComplete = readJson("fixtures/worker-complete-sample.json");
 const workerOutput = workerComplete.output ?? {};
-for (const key of [
-  "title_zh",
-  "description_html",
-  "description_plain",
-  "seo_title",
-  "seo_description",
-  "tags",
-  "collection_suggestion",
-  "spec_text",
-  "warnings",
-  "image_alt_texts"
-]) {
+for (const key of workerOutputKeys) {
   if (!(key in workerOutput)) {
     errors.push(`fixtures/worker-complete-sample.json missing output.${key}`);
   }
@@ -137,4 +125,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log("Contract checks passed");
+console.log("Contract checks passed using current source, fixtures, and canonical release docs");

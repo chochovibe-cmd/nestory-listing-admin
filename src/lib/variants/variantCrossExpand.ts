@@ -151,11 +151,45 @@ export type ExpandMergeResult = {
   rows: VariantFormRow[];
   truncated: boolean;
   warning: string | null;
-  /** Existing hand-filled rows whose full merge key is absent from the new expand set. */
+  /** Existing hand-filled rows that an expand would drop (including duplicate merge-key losers). */
   wouldDiscardHandFilled: VariantFormRow[];
   /** Theoretical combo count before clamp. */
   comboCount: number;
 };
+
+/**
+ * Return duplicate filled rows after the smallest-sortOrder winner for each merge key.
+ * These rows are important even when the key itself still exists in the cartesian set:
+ * indexRowsByMergeKey can only preserve one row per key, so an expand would otherwise
+ * silently drop the later duplicate.
+ */
+export function findDuplicateVariantMergeKeyRows(
+  rows: VariantFormRow[]
+): VariantFormRow[] {
+  const duplicates: VariantFormRow[] = [];
+  const seen = new Set<string>();
+  const sorted = [...rows].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  for (const row of sorted) {
+    if (!isVariantRowFilled(row)) continue;
+    const key = optionValuesMergeKey(row.optionValues);
+    if (!key.replace(/\u0001/g, "")) continue;
+    if (seen.has(key)) {
+      duplicates.push(row);
+      continue;
+    }
+    seen.add(key);
+  }
+
+  return duplicates;
+}
+
+/** Duplicate merge-key rows whose non-option data must never disappear silently. */
+export function findDuplicateHandFilledVariantRows(
+  rows: VariantFormRow[]
+): VariantFormRow[] {
+  return findDuplicateVariantMergeKeyRows(rows).filter(isVariantRowHandFilled);
+}
 
 /**
  * Build existing map by merge key; duplicate keys keep smallest sortOrder.
@@ -177,6 +211,7 @@ export function indexRowsByMergeKey(
 /**
  * Expand from dimensions.values (cartesian) and merge with existing rows.
  * Hit → keep cost/sell/lock/qty/sku/image. Miss on hand-fill → listed for confirm.
+ * Duplicate merge-key hand-filled rows are also listed because only one row/key can survive merge.
  * Cap at MAX_VARIANT_ROWS with Fable clamp copy.
  * UX-B4-P03: VariantEditor may call this on axis-value change (auto path);
  * still never silently discard wouldDiscardHandFilled — caller must confirm.
@@ -193,7 +228,9 @@ export function expandAndMergeVariantRows(
     combos.map((ov) => optionValuesMergeKey(ov))
   );
 
-  const wouldDiscardHandFilled: VariantFormRow[] = [];
+  const wouldDiscardHandFilled: VariantFormRow[] = [
+    ...findDuplicateHandFilledVariantRows(existing)
+  ];
   for (const [key, row] of existingByKey) {
     if (!expandedKeys.has(key) && isVariantRowHandFilled(row)) {
       wouldDiscardHandFilled.push(row);

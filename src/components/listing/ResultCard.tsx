@@ -135,6 +135,7 @@ import {
 } from "@/lib/characters/missingCharacterWarnings";
 import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import { type DiscardArm } from "@/components/listing/result-card/resultCardUi";
+import { isCardGestureInteractiveTarget } from "@/components/listing/result-card/cardGestureTarget";
 import { ResultCardCopyPanel } from "@/components/listing/result-card/ResultCardCopyPanel";
 import { ResultCardSpecsPanel } from "@/components/listing/result-card/ResultCardSpecsPanel";
 import { ResultCardPricingPanel } from "@/components/listing/result-card/ResultCardPricingPanel";
@@ -1880,6 +1881,12 @@ export function ResultCard({
 
   function handleHeaderTouchStart(event: ReactTouchEvent) {
     if (!isNarrow || sequentialMode) return;
+    if (isCardGestureInteractiveTarget(event.target)) {
+      clearLongPressTimer();
+      swipeAxisRef.current = "none";
+      setSwipeDragging(false);
+      return;
+    }
     const touch = event.touches[0];
     if (!touch) return;
     onGestureStart?.();
@@ -1903,7 +1910,7 @@ export function ResultCard({
   }
 
   function handleHeaderTouchMove(event: ReactTouchEvent) {
-    if (!isNarrow || sequentialMode) return;
+    if (!isNarrow || sequentialMode || isCardGestureInteractiveTarget(event.target)) return;
     const touch = event.touches[0];
     if (!touch) return;
     const dx = touch.clientX - touchStartRef.current.x;
@@ -1934,9 +1941,14 @@ export function ResultCard({
     }
   }
 
-  function handleHeaderTouchEnd() {
+  function handleHeaderTouchEnd(event: ReactTouchEvent) {
     if (!isNarrow) return;
     clearLongPressTimer();
+    if (isCardGestureInteractiveTarget(event.target)) {
+      swipeAxisRef.current = "none";
+      setSwipeDragging(false);
+      return;
+    }
     if (swipeAxisRef.current === "h" && swipeEnabled) {
       setSwipeDragging(false);
       setSwipeX((current) => {

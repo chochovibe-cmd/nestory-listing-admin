@@ -1,0 +1,81 @@
+/*
+ * Small, isolated regression fixes that must load after globals.css.
+ * Keep each rule linked to a documented stabilization item; do not grow this
+ * into a second general stylesheet. Fold resolved rules back into the main UI
+ * architecture only after runtime validation.
+ */
+
+/* P0-3 / 2026-08-18:
+ * B4-P04 hid the whole mobile .rc-quick-row, including the only explicit ▸
+ * control. B3-P04 selectMode then makes header taps toggle selection instead of
+ * expand, leaving no visible expand path. Keep desktop quick actions hidden on
+ * mobile, but restore the existing rc-toggle as a compact 44px affordance.
+ */
+@media (max-width: 959px) {
+  .result-card > .rc-header {
+    position: relative;
+  }
+
+  .result-card > .rc-header > .rc-quick-row {
+    display: contents;
+  }
+
+  .result-card > .rc-header > .rc-quick-row > .rc-quick,
+  .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn {
+    display: none;
+  }
+
+  .result-card > .rc-header > .rc-quick-row > .rc-toggle {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface2);
+    color: var(--text-muted);
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+
+  .result-card > .rc-header > .rc-quick-row > .rc-toggle:hover,
+  .result-card > .rc-header > .rc-quick-row > .rc-toggle:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .result-card > .rc-header .rc-title-row {
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+}
+
+/* P1-2 / 2026-08-18:
+ * P07 intentionally keeps WorkspaceInputPanel horizontally clipped so the left
+ * workbench column cannot paint over the results column. Variant's desktop image
+ * picker is 260px wide and uses 72px tiles in a 3-column flex grid; the 160px
+ * centered hover preview can therefore escape the picker on column 1 / 3 and be
+ * clipped by that ancestor. Keep the containment and picker geometry; only clamp
+ * the preview toward the inside edge for the outer columns.
+ */
+@media (min-width: 960px) and (hover: hover) and (pointer: fine) {
+  .workspace-input-panel .v-pop-pick .pick-grid .pk:nth-child(3n + 1) .pk-zoom-preview {
+    left: 0;
+    right: auto;
+    transform: none;
+  }
+
+  .workspace-input-panel .v-pop-pick .pick-grid .pk:nth-child(3n) .pk-zoom-preview {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+}

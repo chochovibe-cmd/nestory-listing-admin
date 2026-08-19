@@ -1,5 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { findSensitiveBrowserStorageWrites } from "./browser-storage-secret-policy.mjs";
+import { collectClientReachableFiles } from "./client-module-graph.mjs";
+import { findClientSecretEnvAccesses } from "./client-secret-reference-policy.mjs";
 
 const root = process.cwd();
 
@@ -53,31 +56,9 @@ if (!/\.env\.\*/.test(gitignore)) {
   errors.push("Local env files are not ignored: .env.*");
 }
 
-// Next.js Route Handlers (src/app/api/**) and the provider modules they call
-// (src/lib/providers/**) are server-only by framework convention -- they never
-// ship to the browser bundle, so calling Anthropic/OpenAI or reading their
-// secret env vars there is expected, not a leak. Everything else under src/
-// is fair game to flag (React components, client-shared libs, etc).
-const clientScope = /^src[\\/](?!app[\\/]api[\\/]|lib[\\/]providers[\\/])/;
-
-// localStorage itself isn't a leak -- the original concern was API keys/tokens
-// stored client-side (the old PWA prototype did that). These files only ever
-// store a UI preference string (theme name, provider pill choice), never a
-// secret, so they're an explicit allowlist rather than a blanket ban.
-const localStorageAllowlist = new Set([
-  path.join("src", "app", "layout.tsx"),
-  path.join("src", "components", "ProviderSwitcher.tsx"),
-  path.join("src", "components", "ThemeSwitcher.tsx"),
-  path.join("src", "components", "ExchangeRateWidget.tsx"),
-  path.join("src", "components", "ModeSwitcher.tsx"),
-  path.join("src", "lib", "pricingSettingsStore.ts")
-]);
-
+const clientReachable = collectClientReachableFiles(root);
 const forbiddenPatterns = [
-  { label: "browser localStorage usage", pattern: /localStorage/i, scope: /^src[\\/]/, except: localStorageAllowlist },
-  { label: "frontend Anthropic API call", pattern: /api\.anthropic/i, scope: clientScope },
-  { label: "OpenAI secret env name in source", pattern: /OPENAI_API_KEY/i, scope: clientScope },
-  { label: "Anthropic secret env name in source", pattern: /ANTHROPIC_API_KEY/i, scope: clientScope },
+  { label: "frontend Anthropic API call", pattern: /api\.anthropic/i, clientOnly: true },
   { label: "Anthropic-looking key", pattern: /sk-ant-/i },
   { label: "OpenAI-looking key", pattern: /sk-proj-|sk-[A-Za-z0-9]{20,}/i },
   { label: "Shopify token-looking key", pattern: /shpat_/i },
@@ -89,9 +70,23 @@ for (const file of sourceFiles) {
   const relative = path.relative(root, file);
   if (/^scripts[\\/]verify-.*\.mjs$/.test(relative)) continue;
   const source = fs.readFileSync(file, "utf8");
-  for (const { label, pattern, scope, except } of forbiddenPatterns) {
-    if (scope && !scope.test(relative)) continue;
-    if (except && except.has(relative)) continue;
+  const isClientReachable = clientReachable.has(file);
+
+  if (isClientReachable) {
+    for (const finding of findSensitiveBrowserStorageWrites(source)) {
+      errors.push(
+        `${relative} matched browser storage secret write (${finding.kind}: ${finding.snippet})`
+      );
+    }
+    for (const finding of findClientSecretEnvAccesses(source)) {
+      errors.push(
+        `${relative} matched client secret env access (${finding.kind}: ${finding.snippet})`
+      );
+    }
+  }
+
+  for (const { label, pattern, clientOnly } of forbiddenPatterns) {
+    if (clientOnly && !isClientReachable) continue;
     if (pattern.test(source)) {
       errors.push(`${relative} matched ${label}`);
     }
@@ -103,4 +98,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log("No-secret checks passed");
+console.log(`No-secret checks passed; ${clientReachable.size} client-reachable modules inspected`);

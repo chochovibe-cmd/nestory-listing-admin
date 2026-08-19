@@ -1,0 +1,87 @@
+# Free isolated Supabase database gate.
+# This workflow never links to the hosted project and requires no Supabase secrets.
+name: Supabase Local Reconcile
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "scripts/test-supabase-reconcile-local.sh"
+      - "scripts/test-supabase-role-rls-local.sh"
+      - "scripts/test-supabase-function-hardening-local.sh"
+      - "scripts/test-supabase-production-package-local.sh"
+      - ".github/workflows/supabase-local.yml"
+      - "scripts/verify-requirements.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-local-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reconcile-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Initialize local-only Supabase config
+        shell: bash
+        run: |
+          supabase init --force
+          perl -0pi -e 's/major_version = \d+/major_version = 17/' supabase/config.toml
+          grep -n "major_version" supabase/config.toml
+
+      - name: Stage pre-tracking historical SQL outside active migration queue
+        shell: bash
+        run: |
+          mkdir -p /tmp/nestory-migrations
+          cp supabase/history/pre_tracking_migrations/*.sql /tmp/nestory-migrations/
+
+          # Migration 032 relies on pg_temp objects declared ON COMMIT DROP.
+          # The hosted migration runner executes a migration transactionally;
+          # our controlled psql replay must model that for this file only.
+          tmp_file="$(mktemp)"
+          {
+            echo 'begin;'
+            cat /tmp/nestory-migrations/032_ip_catalog_v3_100_ips.sql
+            echo 'commit;'
+          } > "$tmp_file"
+          mv "$tmp_file" /tmp/nestory-migrations/032_ip_catalog_v3_100_ips.sql
+
+          # Active tracked migrations are state assertions / forward changes from
+          # the 2026-08-18 baseline, not a blank-database bootstrap chain.
+          # Remove them only from this ephemeral CI checkout before db start.
+          rm supabase/migrations/*.sql
+          echo "Pre-tracking SQL staged for controlled production-like replay."
+
+      - name: Start isolated local database
+        run: supabase db start
+
+      - name: Rebuild production-like baseline and test reconciliation
+        env:
+          MIGRATION_SOURCE_DIR: /tmp/nestory-migrations
+        run: bash scripts/test-supabase-reconcile-local.sh
+
+      - name: Test role, draft, archive, and batch RLS runtime
+        run: bash scripts/test-supabase-role-rls-local.sh
+
+      - name: Test trigger and event-trigger EXECUTE hardening
+        run: bash scripts/test-supabase-function-hardening-local.sh
+
+      - name: Test production precheck/apply/rollback/postcheck package
+        run: bash scripts/test-supabase-production-package-local.sh
+
+      - name: Stop local database
+        if: always()
+        run: supabase stop --no-backup || true

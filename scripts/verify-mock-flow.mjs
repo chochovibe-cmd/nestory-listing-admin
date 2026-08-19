@@ -23,6 +23,7 @@ function expect(name, condition, detail = "") {
 
 const draftId = "00000000-0000-4000-8000-000000000001";
 const imageId = "00000000-0000-4000-8000-000000000101";
+// Deterministic fixture version. This is test data, not the current production copy-rule version.
 const ruleVersion = "chochonest-copywriter@2026-06-24-v1";
 
 const claim = json("fixtures/worker-claim-sample.json");
@@ -33,12 +34,9 @@ const uiStates = json("fixtures/ui-states.json");
 const seed = read("supabase/seeds/001_mock_draft.sql");
 const productForm = read("src/components/listing/WorkspaceInputPanel.tsx");
 const publishRoute = read("src/app/api/drafts/[id]/publish/route.ts");
-// The Shopify GraphQL call / mock-safe branching lives in this shared helper
-// now (also used by the batch publish route), not inline in the single-draft
-// route handler.
 const publishDraftLib = read("src/lib/shopify/publishDraft.ts");
 const matrixifySource = read("src/lib/csv/matrixify.ts");
-const mockFlowDoc = read("docs/mock-flow.md");
+const releaseReadiness = read("docs/RELEASE_READINESS.md");
 
 expect("worker claim limit", claim?.limit === 1);
 expect("worker claim rule version", claim?.ruleVersion === ruleVersion);
@@ -73,8 +71,7 @@ expect("seed shopify api", seed.includes("'shopify_api'"));
 for (const expected of [
   'status: "pending_copy"',
   // generation_mode moved from "codex_skill" to "api_llm" when copy
-  // generation switched from worker claim/complete to a synchronous
-  // /api/generate call (Phase 1, 2026-07-02).
+  // generation switched from worker claim/complete to synchronous /api/generate.
   'generation_mode: "api_llm"',
   'generation_provider: "codex"',
   'generation_status: "pending"',
@@ -85,8 +82,14 @@ for (const expected of [
   expect(`PWA default ${expected}`, productForm.includes(expected));
 }
 
-expect("mock flow doc references worker complete fixture", mockFlowDoc.includes("fixtures/worker-complete-sample.json"));
-expect("mock flow doc references active double confirm", /Confirm ACTIVE twice/.test(mockFlowDoc));
+expect(
+  "release readiness references worker complete fixture",
+  releaseReadiness.includes("fixtures/worker-complete-sample.json")
+);
+expect(
+  "release readiness documents active double confirmation",
+  /ACTIVE publish shows a second explicit/.test(releaseReadiness)
+);
 expect("ui states fixture parses", Boolean(uiStates));
 
 const scanFiles = [
@@ -94,7 +97,7 @@ const scanFiles = [
   "src/lib/csv/matrixify.ts",
   "fixtures/worker-complete-sample.json",
   "supabase/seeds/001_mock_draft.sql",
-  "docs/mock-flow.md"
+  "docs/RELEASE_READINESS.md"
 ];
 const mojibakePattern = /[-]|銝|撌|隢|敺|雿|瘚|繚|甈|皜|祈岫|||/;
 for (const file of scanFiles) {

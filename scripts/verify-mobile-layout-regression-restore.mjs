@@ -25,7 +25,7 @@ const thumb = stabilization.slice(thumbStart, cardStart);
 const card = stabilization.slice(cardStart);
 
 expect(layout, /import "\.\/globals\.css";\s*import "\.\/stabilization\.css";\s*import "\.\/resultcard-mobile-release\.css";/s, "ResultCard release CSS must load after stabilization.css");
-expect(releaseCss, /ResultCard mobile release contract — owner-corrected 2026-08-20/, "owner-corrected ResultCard release layer must be documented");
+expect(releaseCss, /ResultCard mobile release contract — owner R3 2026-08-20/, "owner R3 ResultCard release layer must be documented");
 
 // Previously accepted uploader contract stays unchanged.
 expect(thumb, /\.pthumb-strip\s*\{[^}]*flex-wrap:\s*wrap;/s, "ImageUploader strip must still wrap");
@@ -44,22 +44,23 @@ expect(uploader, /draggable/, "thumbnail reorder must remain");
 expect(card, /\.workbench,[\s\S]*\.workbench-pane-results\.mob-active,[\s\S]*\.results-list,[\s\S]*\.result-card\s*,[\s\S]*\.result-card\s*>\s*\.rc-header\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/s, "mobile results pane/card chain must remain width-bounded");
 expect(card, /\.stage-filter-row\s+\.stage-filter-pills\s*\{[^}]*overflow-x:\s*auto;/s, "stage pills must scroll inside their own container");
 
-// Corrected row 1 hierarchy: title -> station -> date -> existing soft-remove X.
-expect(releaseCss, /grid-template-columns:\s*80px\s+minmax\(0,\s*1fr\)\s+max-content\s+max-content\s+28px;/, "mobile card must reserve title/station/date/remove columns");
-expect(releaseCss, /\.rc-title\s*\{[^}]*grid-column:\s*1\s*\/\s*3;[^}]*grid-row:\s*1;/s, "title must lead row 1");
-expect(releaseCss, /\.rc-station-chip\s*\{[^}]*grid-column:\s*3;[^}]*grid-row:\s*1;/s, "station must follow title on row 1");
-expect(releaseCss, /\.rc-time-ago\s*\{[^}]*grid-column:\s*4;[^}]*grid-row:\s*1;/s, "date must follow station on row 1");
-expect(releaseCss, />\s*\.rc-quick-row\s*>\s*\.rc-dismiss-btn\s*\{[^}]*grid-column:\s*5;[^}]*display:\s*inline-flex;/s, "existing soft-remove control must be visible at mobile top-right");
+// R3 row 1 hierarchy: title -> station -> date in natural flow; X stays soft-remove.
+expect(releaseCss, /grid-template-columns:\s*94px\s+minmax\(0,\s*1fr\)\s+max-content\s+max-content;/, "mobile card must keep the balanced 94px summary anchor");
+expect(releaseCss, /\.rc-title-flow\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/s, "title, station and date must share one natural wrapping flow");
+expect(resultCard, /className="rc-title-flow"[\s\S]*rc-title-inline-station[\s\S]*rc-title-inline-time/, "R3 inline station/date DOM must follow the title");
+expect(releaseCss, /\.rc-head-meta \.rc-station-chip,[\s\S]*\.rc-head-meta \.rc-time-ago\s*\{[^}]*display:\s*none;/s, "old pinned station/date copies must be hidden on mobile");
+expect(releaseCss, /\.rc-dismiss-btn\s*\{[^}]*top:\s*0;[^}]*display:\s*inline-flex(?:\s*!important)?;[^}]*transform:\s*translateY\(-50%\);/s, "existing soft-remove control must straddle the mobile top border");
 expect(releaseCss, />\s*\.rc-quick-row\s*>\s*\.rc-toggle\s*\{[^}]*display:\s*none;/s, "large mobile expand toggle stays hidden");
 
 // Summary: thumb left, status/tags/warnings right.
 expect(releaseCss, />\s*\.rc-thumb\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*2\s*\/\s*6;/s, "thumbnail must own left summary column");
-expect(releaseCss, /\.rc-sale-badge\s*\{[^}]*grid-column:\s*2\s*\/\s*6;[^}]*grid-row:\s*2;/s, "sale badge must start right summary column");
-expect(releaseCss, /\.rc-detect-chips--tags\s*\{[^}]*grid-column:\s*2\s*\/\s*6;[^}]*grid-row:\s*3;/s, "tags must stay right of thumbnail");
-expect(releaseCss, /\.rc-detect-chips--warns\s*\{[^}]*grid-column:\s*2\s*\/\s*6;[^}]*grid-row:\s*4;/s, "warnings must stay right of thumbnail");
+expect(releaseCss, /\.rc-sale-badge\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*2;/s, "sale badge must start right summary column");
+expect(releaseCss, /\.rc-detect-chips--tags\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*3;/s, "tags must stay right of thumbnail");
+expect(releaseCss, /\.rc-detect-chips--warns\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*4;/s, "warnings must stay right of thumbnail");
 
 // Price remains unboxed and horizontal.
 expect(releaseCss, /\.rc-price-mini\s*\{[^}]*flex-direction:\s*row;[^}]*flex-wrap:\s*nowrap;[\s\S]*white-space:\s*nowrap;/s, "mobile price must remain one compact row");
+expect(releaseCss, /\.rc-price-mini-main,[\s\S]*\.rc-price-mini-sub\s*\{[^}]*display:\s*contents;/s, "price wrappers must flatten into peer items");
 expect(releaseCss, /\.rc-m-regen-slot\s*\{[^}]*display:\s*none;/s, "inline collapsed regenerate must stay hidden");
 
 // Long-press feedback only; gesture math remains source-owned.
@@ -71,12 +72,13 @@ expect(resultCard, /function\s+handleHeaderTouchStart/, "long-press handler must
 
 // Scope/sort controls use equal flex weights; a sole control can fill 100%.
 expect(releaseCss, /\.stage-filter-row\s+\.stage-filter-end\s*\{[^}]*display:\s*flex;[^}]*gap:\s*8px;[^}]*width:\s*100%;/s, "scope/sort peer container must be a full-width flex row");
-expect(releaseCss, /\.results-scope-label,[\s\S]*\.results-sort-label\s*\{[^}]*flex:\s*1\s+1\s+0;[^}]*height:\s*44px;/s, "scope and sort must have equal flex weight and height");
-expect(releaseCss, /\.ir-scope-select,[\s\S]*\.sort-sel\s*\{[^}]*height:\s*44px;/s, "scope and sort selects must share 44px height");
+expect(releaseCss, /\.results-scope-label,[\s\S]*\.results-sort-label\s*\{[^}]*flex:\s*1\s+1\s+0;[^}]*height:\s*38px;/s, "scope and sort must have equal flex weight and 38px height");
+expect(releaseCss, /\.ir-scope-select,[\s\S]*\.sort-sel\s*\{[^}]*height:\s*38px;/s, "scope and sort selects must share 38px height");
 
 // Accent hint + direct single-action batch remove.
-expect(releaseCss, /\.rc-gesture-hint\s*\{[^}]*border-left:\s*3px solid var\(--accent\);[^}]*background:\s*color-mix\([^;]*var\(--accent\)/s, "gesture hint must use theme accent");
-expect(releaseCss, /details\.batch-more:has\(> \.batch-more-menu > :only-child\)/, "single-action batch More menu must be promoted directly");
+expect(releaseCss, /\.rc-gesture-hint\s*\{[^}]*border-left:\s*4px solid var\(--accent\);[^}]*background:\s*color-mix\([^;]*var\(--accent\)/s, "gesture hint must use theme accent");
+expect(resultsPanel, /rc-batch-strip--copy/, "copy-review batch strip must have an explicit R3 class");
+expect(resultsPanel, /className="batch-remove-action"[\s\S]*batchArchiveOrUnarchive\("archive"\)/, "copy-review must expose direct soft remove");
 expect(resultsPanel, /onClick=\{\(\) => void batchArchiveOrUnarchive\("archive"\)\}/, "batch soft-remove handler must remain");
 expect(resultsPanel, /batchSetGenerateDetail\(true\)/, "image-review detail-compose ON action must remain");
 expect(resultsPanel, /batchSetGenerateDetail\(false\)/, "image-review detail-compose OFF action must remain");

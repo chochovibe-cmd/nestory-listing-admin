@@ -2,23 +2,26 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const css = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
+const card = fs.readFileSync("src/components/listing/ResultCard.tsx", "utf8");
+const panel = fs.readFileSync("src/components/listing/DraftResultsPanel.tsx", "utf8");
 
-assert.match(css, /grid-template-columns:\s*92px minmax\(0, 1fr\) max-content max-content;/);
-assert.match(css, /\.rc-title[\s\S]*grid-column:\s*1 \/ 3;[\s\S]*align-self:\s*end;/);
-assert.match(css, /\.rc-station-chip[\s\S]*grid-column:\s*3;[\s\S]*align-self:\s*end;/);
-assert.match(css, /\.rc-time-ago[\s\S]*grid-column:\s*4;[\s\S]*align-self:\s*end;/);
-assert.match(css, /\.rc-dismiss-btn[\s\S]*position:\s*absolute !important;[\s\S]*top:\s*-14px;/);
-assert.match(css, /\.rc-thumb[\s\S]*width:\s*92px;[\s\S]*height:\s*92px;/);
-assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*\.rc-thumb[\s\S]*width:\s*84px;[\s\S]*height:\s*84px;/);
-assert.match(css, /\.rc-price-mini[\s\S]*flex-wrap:\s*nowrap;/);
-assert.match(css, /\.results-scope-label,[\s\S]*height:\s*38px;/);
-assert.match(css, /\.ir-scope-select,[\s\S]*height:\s*38px;/);
-assert.match(css, /\.rc-panel-header[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
-assert.match(css, /\.rc-header-seq-btn[\s\S]*height:\s*34px;/);
-assert.match(css, /\.rc-batch-strip[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/);
-assert.match(css, /details\.batch-more:has\(> \.batch-more-menu > :only-child\)[\s\S]*display:\s*block !important;/);
-assert.match(css, /details\.batch-more:has\(> \.batch-more-menu > :only-child\) > summary[\s\S]*display:\s*none !important;/);
-assert.match(css, /\.rc-gesture-hint[\s\S]*border-left:\s*4px solid var\(--accent\);/);
+assert.match(css, /OWNER-R3-2026-08-20/);
+assert.match(card, /className="rc-title-flow"[\s\S]*rc-title-inline-station[\s\S]*rc-title-inline-time/);
+assert.match(card, /mobileCardPrimary = stationFlowPrimaryLabel\(draft\)/);
+assert.match(css, /\.rc-title-flow\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/s);
+assert.match(css, /\.rc-head-meta \.rc-station-chip,[\s\S]*\.rc-head-meta \.rc-time-ago\s*\{[^}]*display:\s*none;/s);
+assert.match(css, /> \.rc-quick-row > \.rc-dismiss-btn\s*\{[^}]*top:\s*0;[^}]*transform:\s*translateY\(-50%\);/s);
+assert.match(css, /grid-template-columns:\s*94px\s+minmax\(0,\s*1fr\)/);
+assert.match(css, /@media \(max-width:\s*420px\)[\s\S]*grid-template-columns:\s*88px\s+minmax\(0,\s*1fr\)/);
+assert.match(css, /\.rc-price-mini-main,[\s\S]*\.rc-price-mini-sub\s*\{[^}]*display:\s*contents;/s);
+assert.match(css, /\.results-scope-label,[\s\S]*\.results-sort-label\s*\{[^}]*height:\s*38px;/s);
+assert.match(css, /\.rc-panel-header \.rc-header-actions\s*\{[^}]*display:\s*contents;/s);
+assert.match(panel, /rc-batch-strip--copy/);
+assert.match(panel, /className="batch-remove-action"[\s\S]*batchArchiveOrUnarchive\("archive"\)/);
+assert.match(panel, /<details className="batch-more">[\s\S]*batchSetGenerateDetail\(true\)[\s\S]*batchSetGenerateDetail\(false\)/);
+assert.match(card, /export const LONG_PRESS_MS = 500;/);
+assert.match(card, /GESTURE_MOVE_PX = 10;/);
+assert.match(card, /async function archiveOne\(\)/);
+assert.match(card, /function handleHeaderClick\(\)/);
 
-console.log("Mobile ResultCard owner-refinement checks passed");
-// trigger only; R3 workflow replaces this verifier before the final commit.
+console.log("Mobile ResultCard owner R3 checks passed");

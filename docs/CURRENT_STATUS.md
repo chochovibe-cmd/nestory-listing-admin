@@ -8,6 +8,23 @@
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
 
+## 0. ResultCard mobile R3 — source complete, awaiting iPhone QA
+
+Latest owner contract is now implemented directly in formal source: natural
+`title → station → date` flow, balanced image/right summary, one-line
+sale/strike/profit, card X on the border, 38px scope/sort, compact
+generation/sequential-review header, and direct copy-review
+`取消 / 批次核准 / 移出佇列` actions.
+
+The implementation is limited to ResultCard title rendering,
+DraftResultsPanel copy-review action exposure, the dedicated mobile release
+stylesheet, and matching source-contract verifiers/docs. No uploader, Variant,
+Supabase, Shopify, API, auth/role, archive-semantic, long-press timing, or
+swipe-math behavior changed.
+
+Temporary R3 patch-runner workflows have been removed. See
+`docs/audits/RESULTCARD-MOBILE-OWNER-CORRECTION-R3-2026-08-20.md`.
+
 ## 1. Production 現況
 
 ### App production baseline
@@ -158,6 +175,8 @@ Owner 2026-08-20 最新 iPhone review 再次修正資訊階層。現在 mobile c
 
 UI pass 只允許：
 
+- `ResultCard.tsx` 的 mobile title/station/date 最小 DOM；
+- `DraftResultsPanel.tsx` 的 copy-review direct archive action 與 station class；
 - dedicated ResultCard mobile CSS；
 - mobile presentation verifier；
 - CURRENT_STATUS / audit docs。

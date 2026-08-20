@@ -1994,9 +1994,34 @@ export function ResultCard({
     setRegenOpen(true);
   }
 
+  const mobileCardPrimary = stationFlowPrimaryLabel(draft);
+  const mobileCardTimeLabel = formatRelativeTime(draft.created_at);
+  const mobileCardTimeTitle = formatAbsoluteLocalTime(draft.created_at);
+
   const titleRowEl = (
     <span className="rc-title-row">
-      <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+      <span className="rc-title-flow">
+        <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+        {isNarrow ? (
+          <span
+            className={
+              mobileCardPrimary.kind === "fail"
+                ? "schip schip--error rc-title-inline-station"
+                : "schip schip--run rc-title-inline-station"
+            }
+          >
+            {mobileCardPrimary.label}
+          </span>
+        ) : null}
+        {isNarrow && mobileCardTimeLabel ? (
+          <span
+            className="rc-title-inline-time muted"
+            title={mobileCardTimeTitle || undefined}
+          >
+            {mobileCardTimeLabel}
+          </span>
+        ) : null}
+      </span>
       {saleStatusBadge ? (
         <span className="rc-sale-badge" title={`銷售狀態：${saleStatusBadge}`}>
           {saleStatusBadge}

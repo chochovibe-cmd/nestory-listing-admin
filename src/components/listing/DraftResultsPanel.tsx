@@ -1482,7 +1482,15 @@ export function DraftResultsPanel({
         {/* UX-B3-P02: 有選取才出批次動作條；未選取不渲染空 toolbar */}
         {selectedIds.size > 0 ? (
           <div
-            className="rc-batch-strip"
+            className={`rc-batch-strip${
+              isCopyStation
+                ? " rc-batch-strip--copy"
+                : isImageStation
+                  ? " rc-batch-strip--image"
+                  : isReadyStation
+                    ? " rc-batch-strip--ready"
+                    : ""
+            }`}
             role="toolbar"
             aria-label="批次操作"
           >
@@ -1519,21 +1527,16 @@ export function DraftResultsPanel({
                         ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
                         : "✓ 批次核准"}
                   </Button>
-                  <details className="batch-more">
-                    <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
-                    <div className="batch-more-menu">
-                      <Button
-                        size="sm"
-                        fullWidth
-                        disabled={busy || !selectedArray.length}
-                        onClick={() => void batchArchiveOrUnarchive("archive")}
-                        title="移出工作佇列（軟刪除，可救回）"
-                        type="button"
-                      >
-                        🗄 移出佇列
-                      </Button>
-                    </div>
-                  </details>
+                  <Button
+                    size="sm"
+                    className="batch-remove-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchArchiveOrUnarchive("archive")}
+                    title="移出工作佇列（軟刪除，可救回）"
+                    type="button"
+                  >
+                    移出佇列
+                  </Button>
                 </>
               ) : null}
               {isImageStation ? (

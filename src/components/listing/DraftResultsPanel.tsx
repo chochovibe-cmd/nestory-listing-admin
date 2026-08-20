@@ -1465,9 +1465,62 @@ export function DraftResultsPanel({
           </div>
         ) : null}
 
+        {/* D2: controls follow the user's reading order: tabs, filters, select-all,
+            then selected actions. Desktop CSS keeps select-all beside sort. */}
+        <div className="stage-filter-row">
+          <StageFilterPills
+            counts={stageCounts}
+            onChange={onStageChange}
+            stage={stage}
+            factoryPendingCount={factoryBridgeSummary.pendingReview}
+          />
+          <div className="stage-filter-end">
+            {roleReady && admin ? (
+              <label className="results-scope-label">
+                <span className="sr-only">範圍</span>
+                <select
+                  aria-label="範圍"
+                  className="ir-scope-select"
+                  onChange={(event) => setScope(event.target.value as ResultsScopeMode)}
+                  value={scope}
+                >
+                  <option value="mine">只看我的</option>
+                  <option value="all">全部成員</option>
+                </select>
+              </label>
+            ) : null}
+            <label className="results-sort-label">
+              <span aria-hidden="true" className="results-sort-icon">⇅</span>
+              <span className="sr-only">排序</span>
+              <select
+                aria-label="排序"
+                className="sort-sel"
+                onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
+                value={sortMode}
+              >
+                {RESULT_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            {showToolbar ? (
+              <label className="rc-header-select-all rc-header-select-all--desktop">
+                <input
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                  type="checkbox"
+                  aria-label="全選目前列表"
+                />
+                <span>全選</span>
+              </label>
+            ) : null}
+          </div>
+        </div>
+
         {showToolbar ? (
           <div className="rc-selection-guide-row">
-            <label className="rc-header-select-all">
+            <label className="rc-header-select-all rc-header-select-all--mobile">
               <input
                 checked={allSelected}
                 onChange={toggleAll}
@@ -1479,20 +1532,14 @@ export function DraftResultsPanel({
               />
               <span>全選</span>
             </label>
-            {showGestureHint ? (
-              <p className="rc-gesture-hint" role="note">
-                <span>長按卡片可多選；左滑可快捷</span>
-                <button
-                  aria-label="關閉提示"
-                  className="rc-gesture-hint-dismiss"
-                  onClick={dismissGestureHint}
-                  type="button"
-                >
-                  ×
-                </button>
-              </p>
-            ) : null}
           </div>
+        ) : null}
+
+        {showGestureHint ? (
+          <p className="rc-gesture-hint" role="note">
+            <span>長按卡片可多選；左滑可快捷</span>
+            <button aria-label="關閉提示" className="rc-gesture-hint-dismiss" onClick={dismissGestureHint} type="button">×</button>
+          </p>
         ) : null}
 
         {/* UX-B3-P02: 有選取才出批次動作條；未選取不渲染空 toolbar */}
@@ -1625,52 +1672,6 @@ export function DraftResultsPanel({
             </div>
           </div>
         ) : null}
-
-        {/* UX-B2-P02 2-2: 站別 pills 左；只看我的 + 排序靠右 */}
-        <div className="stage-filter-row">
-          <StageFilterPills
-            counts={stageCounts}
-            onChange={onStageChange}
-            stage={stage}
-            factoryPendingCount={factoryBridgeSummary.pendingReview}
-          />
-          <div className="stage-filter-end">
-            {roleReady && admin ? (
-              <label className="results-scope-label">
-                <span className="sr-only">範圍</span>
-                <select
-                  aria-label="範圍"
-                  className="ir-scope-select"
-                  onChange={(event) =>
-                    setScope(event.target.value as ResultsScopeMode)
-                  }
-                  value={scope}
-                >
-                  <option value="mine">只看我的</option>
-                  <option value="all">全部成員</option>
-                </select>
-              </label>
-            ) : null}
-            <label className="results-sort-label">
-              <span aria-hidden="true" className="results-sort-icon">
-                ⇅
-              </span>
-              <span className="sr-only">排序</span>
-              <select
-                aria-label="排序"
-                className="sort-sel"
-                onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
-                value={sortMode}
-              >
-                {RESULT_SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
 
         {/* UX-F T29: 生圖工廠橋接 — 僅「圖片待標示」站顯示 */}
         {stage === "image_review" ? (

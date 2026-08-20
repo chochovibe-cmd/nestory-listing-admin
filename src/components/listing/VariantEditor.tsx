@@ -882,31 +882,25 @@ export function VariantEditor({
           </div>
         ) : null}
 
-        {/* UX-B4-P03 ①: auto-expand is main path; CTA = re-expand / discard confirm */}
-        <Button
-          size="md"
-          fullWidth
-          variant={expandArmed ? "danger" : canExpand ? "secondary" : "ghost"}
-          className={`vh-expand-primary${expandArmed ? " v-arm-confirm" : ""}${
-            canExpand && !expandArmed ? " vh-expand-re" : ""
-          }`}
-          disabled={!canExpand}
-          onClick={expandFromAxisValues}
-          title={
-            expandArmed
-              ? `再點一次確認展開（${expandArmCount} 筆手填會丟失）`
-              : canExpand
-                ? "加軸值後會自動展開；需要時可手動重新展開"
-                : "請先在維度上加入軸值"
-          }
-          type="button"
-        >
-          {expandArmed
-            ? `確定展開？${expandArmCount}筆會丟失`
-            : canExpand
-              ? "重新展開"
-              : "加入軸值後自動展開"}
-        </Button>
+        {/* Normal axis edits auto-expand. A button appears only when preserving
+            hand-entered data requires an explicit destructive confirmation. */}
+        {expandArmed ? (
+          <Button
+            size="md"
+            fullWidth
+            variant="danger"
+            className="vh-expand-primary v-arm-confirm"
+            onClick={expandFromAxisValues}
+            title={`再點一次確認更新款式（${expandArmCount} 筆手填會丟失）`}
+            type="button"
+          >
+            確認更新款式（{expandArmCount} 筆手填會丟失）
+          </Button>
+        ) : (
+          <p className="vh-auto-expand-note" role="status">
+            {canExpand ? "軸值變更後會自動更新款式列" : "加入軸值後會自動建立款式列"}
+          </p>
+        )}
       </div>
 
       {!showGrid || rows.length === 0 ? (

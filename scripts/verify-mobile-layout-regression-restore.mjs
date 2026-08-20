@@ -44,12 +44,12 @@ expect(uploader, /draggable/, "thumbnail reorder must remain");
 expect(card, /\.workbench,[\s\S]*\.workbench-pane-results\.mob-active,[\s\S]*\.results-list,[\s\S]*\.result-card\s*,[\s\S]*\.result-card\s*>\s*\.rc-header\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/s, "mobile results pane/card chain must remain width-bounded");
 expect(card, /\.stage-filter-row\s+\.stage-filter-pills\s*\{[^}]*overflow-x:\s*auto;/s, "stage pills must scroll inside their own container");
 
-// R3 row 1 hierarchy: title -> station -> date in natural flow; X stays soft-remove.
+// D2 row 1 hierarchy: title -> station -> date; mobile X is hidden in favour of swipe.
 expect(releaseCss, /grid-template-columns:\s*94px\s+minmax\(0,\s*1fr\)\s+max-content\s+max-content;/, "mobile card must keep the balanced 94px summary anchor");
 expect(releaseCss, /\.rc-title-flow\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/s, "title, station and date must share one natural wrapping flow");
 expect(resultCard, /className="rc-title-flow"[\s\S]*rc-title-inline-station[\s\S]*mobileCardSecondary[\s\S]*rc-title-inline-time/, "D1 inline station/secondary/date DOM must follow the title");
 expect(releaseCss, /\.rc-head-meta \.rc-station-chip,[\s\S]*\.rc-head-meta > \.status,[\s\S]*\.rc-head-meta \.rc-time-ago\s*\{[^}]*display:\s*none;/s, "old pinned station/status/date copies must be hidden on mobile");
-expect(releaseCss, /\.rc-dismiss-btn\s*\{[^}]*top:\s*6px;[^}]*display:\s*inline-flex;[^}]*transform:\s*none;/s, "existing soft-remove control must remain fully visible at mobile top-right");
+expect(releaseCss, /@media \(max-width:\s*959px\)[\s\S]*\.rc-dismiss-btn\s*\{[^}]*display:\s*none;/s, "mobile visible X must be removed in favour of existing swipe actions");
 expect(releaseCss, />\s*\.rc-quick-row\s*>\s*\.rc-toggle\s*\{[^}]*display:\s*none;/s, "large mobile expand toggle stays hidden");
 
 // Summary: thumb left, status/tags/warnings right.
@@ -57,6 +57,7 @@ expect(releaseCss, />\s*\.rc-thumb\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*2\
 expect(releaseCss, /\.rc-sale-badge\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*2;/s, "sale badge must start right summary column");
 expect(releaseCss, /\.rc-detect-chips--tags\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*3;/s, "tags must stay right of thumbnail");
 expect(releaseCss, /\.rc-detect-chips--warns\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*4;/s, "warnings must stay right of thumbnail");
+expect(resultCard, /className="rc-card-summary-row"[\s\S]*formatMarkSummaryLine\(markSummary\)[\s\S]*variantCount/, "mark summary and variant count must share an independent card summary row");
 
 // Price remains unboxed and horizontal.
 expect(releaseCss, /\.rc-price-mini\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:[^}]*align-items:\s*baseline;[\s\S]*white-space:\s*nowrap;/s, "mobile price must remain one aligned compact row");
@@ -86,7 +87,7 @@ if (/<details className="batch-more">/.test(resultsPanel)) fail("image-review ac
 
 // Existing soft archive / expand / swipe code paths remain.
 expect(resultCard, /async function archiveOne\(\)/, "single-card soft archive handler must remain");
-expect(resultCard, /body:\s*JSON\.stringify\(\{ draftIds: \[draft\.id\], action: "archive" \}\)/, "card X must still use archive API semantics");
+expect(resultCard, /body:\s*JSON\.stringify\(\{ draftIds: \[draft\.id\], action: "archive" \}\)/, "underlying soft archive API semantics must remain");
 expect(resultCard, /function\s+handleHeaderClick\(\)/, "card tap-to-expand handler must remain");
 expect(resultCard, /tryToggleExpand\(\);/, "tap-to-expand path must remain");
 expect(resultCard, /className="rc-swipe-approve"/, "swipe approve action must remain");

@@ -22,6 +22,18 @@ expand triangle is removed while the existing card-tap expand handler remains.
 
 See `docs/audits/RESULTCARD-UIUX-BATCH-D1-2026-08-20.md`.
 
+### UIUX Batch D2 follow-up
+
+Results controls now use the requested mobile hierarchy (filters, select-all,
+then batch actions), while desktop select-all sits beside sort. Mobile cards no
+longer show the corner X and instead rely on the existing swipe affordance;
+image mark statistics have a dedicated summary row, with filled variant count
+and the existing equal-price/range display. Variant editing auto-expands during
+normal changes and only asks for confirmation when hand-entered data would be
+discarded. Login is reduced to the global bar and login form.
+
+See `docs/audits/RESULTCARD-UIUX-BATCH-D2-2026-08-20.md`.
+
 Latest owner contract is now implemented directly in formal source: natural
 `title → station → date` flow, balanced image/right summary, one-line
 sale/strike/profit, card X on the border, 38px scope/sort, compact

@@ -434,6 +434,14 @@ export function ResultCard({
     return formatPriceRangeLabel(prices);
   }, [draft.twd_price, variantPrices, variantsDirty, variantRows]);
 
+  const variantCount = useMemo(
+    () =>
+      variantsDirty
+        ? variantRows.filter(isVariantRowFilled).length
+        : variantPrices.length,
+    [variantPrices, variantsDirty, variantRows]
+  );
+
   const variantImageOptions = useMemo(
     () =>
       imageMarks
@@ -2168,7 +2176,7 @@ export function ResultCard({
           </div>
         ) : null}
       </div>
-    ) : isReadyStation && priceRangeLabel ? (
+    ) : priceRangeLabel ? (
       <div className="rc-price-mini">
         <div className="rc-price-mini-main">
           <span className="rc-price-mini-label">售價</span>
@@ -2298,6 +2306,16 @@ export function ResultCard({
             {detectTagsEl}
             {detectWarnsEl}
           </span>
+        </span>
+        <span className="rc-card-summary-row">
+          {isImageStation ? (
+            <span className="rc-card-mark-summary muted">
+              {formatMarkSummaryLine(markSummary)}
+            </span>
+          ) : null}
+          {variantCount > 0 ? (
+            <span className="schip rc-variant-count">{variantCount} 個規格</span>
+          ) : null}
         </span>
         {/* UX-B4-P04: mobile row3 left regen (desktop hidden via CSS); price shares contents row */}
         <span className="rc-m-row3">

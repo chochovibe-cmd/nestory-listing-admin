@@ -30,8 +30,18 @@
   .result-card > .rc-header .rc-head-chips {
     grid-column: 3;
     grid-row: 2;
-    align-self: center;
+    align-self: start;
   }
+  .result-card > .rc-header .rc-card-summary-row {
+    grid-column: 3;
+    grid-row: 2;
+    align-self: end;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .result-card > .rc-header .rc-card-mark-summary { font-size: 11px; }
   .result-card > .rc-header .rc-m-row3 {
     grid-column: 4;
     grid-row: 2;
@@ -43,6 +53,37 @@
     grid-row: 2;
     align-self: center;
     margin-left: 0;
+  }
+  .rc-header-select-all--mobile { display: none; }
+  .stage-filter-row .stage-filter-end {
+    align-items: center;
+  }
+  .stage-filter-row .rc-header-select-all--desktop {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    white-space: nowrap;
+  }
+  .stage-filter-row .rc-header-select-all--desktop input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    box-shadow: none;
+    outline: none;
+  }
+  .rc-panel-header .rc-header-seq-btn {
+    min-height: 34px;
+    height: 34px;
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+  .stage-filter-row .ir-scope-select,
+  .stage-filter-row .sort-sel {
+    min-height: 36px;
+    height: 36px;
+    padding-block: 0;
   }
 }
 
@@ -140,7 +181,7 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    padding-right: 30px;
+    padding-right: 0;
     box-sizing: border-box;
   }
 
@@ -175,27 +216,7 @@
 
   /* Existing archiveOne() control: soft remove + undo. Put it on the card border. */
   .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn {
-    position: absolute;
-    top: 6px;
-    right: 12px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    margin: 0;
-    padding: 0;
-    border: 1px solid color-mix(in srgb, var(--danger) 46%, var(--border));
-    border-radius: 999px;
-    background: var(--surface);
-    color: color-mix(in srgb, var(--danger) 70%, var(--text));
-    box-shadow: var(--shadow-s);
-    font-size: 17px;
-    line-height: 1;
-    transform: none;
-    z-index: 8;
+    display: none;
   }
 
   .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn:active {
@@ -247,7 +268,6 @@
     gap: 5px;
   }
 
-  .result-card > .rc-header .rc-meta-marks,
   .result-card > .rc-header .rc-head-meta > .status,
   .result-card > .rc-header .rc-owner-chip {
     grid-row: 5;
@@ -257,13 +277,36 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .result-card > .rc-header .rc-meta-marks { grid-column: 2 / 3; }
   .result-card > .rc-header .rc-head-meta > .status { grid-column: 3 / 4; }
   .result-card > .rc-header .rc-owner-chip { grid-column: 4 / 5; }
+  .result-card > .rc-header .rc-head-meta .rc-meta-marks { display: none; }
+
+  .result-card > .rc-header .rc-card-summary-row {
+    grid-column: 1 / 5;
+    grid-row: 6;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    padding-top: 2px;
+  }
+  .result-card > .rc-header .rc-card-mark-summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .result-card > .rc-header .rc-variant-count {
+    flex: 0 0 auto;
+    min-height: 24px;
+    padding: 3px 7px;
+    font-size: 11px;
+  }
 
   .result-card > .rc-header .rc-fail-reason {
     grid-column: 1 / 5;
-    grid-row: 6;
+    grid-row: 7;
     width: 100%;
     overflow-wrap: anywhere;
   }
@@ -272,7 +315,7 @@
   .result-card > .rc-header .rc-m-row3 {
     grid-area: auto;
     grid-column: 1 / 5;
-    grid-row: 7;
+    grid-row: 8;
     display: block;
     width: 100%;
     min-width: 0;
@@ -363,13 +406,11 @@
     display: contents;
   }
   .rc-selection-guide-row {
-    min-height: 32px;
-    margin: 0 0 6px;
+    min-height: 34px;
+    margin: 6px 0;
+    padding-inline: 2px;
   }
-  .rc-selection-guide-row .rc-gesture-hint {
-    flex: 1 1 auto;
-    margin: 0;
-  }
+  .rc-header-select-all--desktop { display: none; }
   .rc-selection-guide-row .rc-header-select-all {
     min-height: 30px;
     font-size: 11px;
@@ -424,6 +465,15 @@
     min-height: 38px;
     box-sizing: border-box;
     font-size: 13px;
+  }
+
+  .result-card > .rc-header .rc-title-flow > .status,
+  .result-card > .rc-header .rc-title-inline-station {
+    min-height: 22px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1.25;
   }
 
   /* Batch strip: count on top; Cancel / primary / direct remove on one row. */
@@ -569,15 +619,6 @@
   }
   .result-card > .rc-header .rc-title-inline-station,
   .result-card > .rc-header .rc-title-inline-time { font-size: 10px; }
-  .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn {
-    width: 27px;
-    height: 27px;
-    min-width: 27px;
-    min-height: 27px;
-    top: 5px;
-    right: 9px;
-    font-size: 16px;
-  }
   .rc-panel-header > h2 {
     font-size: 12.5px;
   }

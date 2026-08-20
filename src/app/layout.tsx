@@ -7,6 +7,7 @@ import { ToastHost } from "@/components/Toast";
 import "./globals.css";
 import "./stabilization.css";
 import "./resultcard-mobile-release.css";
+import "./d32-corrective.css";
 
 /* UX-K T50: self-host via next/font (replaces Google Fonts @import in globals.css). */
 const notoSansTC = Noto_Sans_TC({

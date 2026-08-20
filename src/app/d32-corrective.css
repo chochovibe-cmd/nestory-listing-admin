@@ -1,0 +1,317 @@
+/*
+ * UIUX Batch D3.2 corrective overrides — 2026-08-20.
+ * Loaded after resultcard-mobile-release.css.
+ *
+ * Intent: keep D2/D2.1 layout stability while retaining D3's existing event,
+ * archive, pricing, variant and swipe semantics. This file is presentation-only.
+ */
+
+/* Select-all stays toggle-like but is visibly tied to the active theme even
+ * before selection; checked/indeterminate remains the stronger state. */
+.rc-header-select-all {
+  color: var(--text);
+  font-weight: 800;
+}
+.rc-toggle-track {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+.rc-toggle-track > span {
+  background: color-mix(in srgb, var(--accent) 72%, var(--muted));
+}
+.rc-header-select-all > input:checked + .rc-toggle-track,
+.rc-header-select-all > input:indeterminate + .rc-toggle-track {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 34%, var(--surface));
+}
+.rc-header-select-all > input:checked + .rc-toggle-track > span,
+.rc-header-select-all > input:indeterminate + .rc-toggle-track > span {
+  background: var(--accent);
+}
+
+/* Keep all selected-action controls on one size system. */
+.rc-batch-strip .rc-batch-cancel,
+.rc-batch-strip .batch-primary-action,
+.rc-batch-strip .batch-detail-action,
+.rc-batch-strip .batch-remove-action,
+.rc-batch-strip details.batch-more > summary,
+.rc-batch-strip details.batch-more > .batch-more-menu > button {
+  min-height: 40px;
+  height: 40px;
+  padding-block: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 959px) {
+  /* D3.2 card rollback: restore the D2 grid skeleton. D3's late global flex
+   * rule made rc-head-chips/head-meta escape their intended grid placement. */
+  .result-card > .rc-header > .rc-headmain,
+  .result-card > .rc-header .rc-title-row,
+  .result-card > .rc-header .rc-head-chips,
+  .result-card > .rc-header .rc-head-meta,
+  .result-card > .rc-header > .rc-quick-row {
+    display: contents;
+  }
+
+  .result-card > .rc-header .rc-title-flow {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 7px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .result-card > .rc-header .rc-sale-badge {
+    grid-column: 2 / 4;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+    max-width: 100%;
+  }
+  .result-card > .rc-header .rc-variant-count {
+    grid-column: 4 / 5;
+    grid-row: 2;
+    justify-self: end;
+    align-self: start;
+    max-width: 100%;
+    min-height: 22px;
+    padding: 3px 7px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .result-card > .rc-header .rc-detect-chips--tags {
+    grid-column: 2 / 5;
+    grid-row: 3;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+  }
+  .result-card > .rc-header .rc-detect-chips--warns {
+    grid-column: 2 / 5;
+    grid-row: 4;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .result-card > .rc-header .rc-card-summary-row:empty {
+    display: none;
+    padding: 0;
+  }
+  .result-card > .rc-header .rc-card-summary-row {
+    min-height: 0;
+  }
+
+  /* Keep the existing compact price row intact and stop late flex rules from
+   * turning it into a stretched card section. */
+  .result-card > .rc-header .rc-m-row3 {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin-top: 4px;
+    padding: 0;
+  }
+  .result-card > .rc-header .rc-price-mini {
+    display: grid;
+    grid-template-columns: max-content max-content max-content minmax(0, 1fr);
+    align-items: baseline;
+    gap: 4px 7px;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    white-space: nowrap;
+  }
+  .result-card > .rc-header .rc-price-mini-main,
+  .result-card > .rc-header .rc-price-mini-sub {
+    display: contents;
+  }
+
+  /* Mobile hierarchy: select-all first, then a persistent helper hint. The old
+   * dismissible hint is suppressed so prior localStorage dismissal cannot make
+   * the guidance disappear and there is no close button in the visible UI. */
+  .rc-selection-guide-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 6px;
+    margin: 6px 0 8px;
+    padding: 0 2px;
+  }
+  .rc-selection-guide-row .rc-header-select-all--mobile {
+    justify-self: start;
+    min-height: 34px;
+    padding: 0 4px;
+  }
+  .rc-selection-guide-row .rc-gesture-hint {
+    display: none;
+  }
+  .rc-selection-guide-row::after {
+    content: "長按卡片可多選；左滑顯示『移出佇列』";
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 0;
+    border-left: 4px solid var(--accent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    color: color-mix(in srgb, var(--accent) 76%, var(--text));
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    box-sizing: border-box;
+  }
+  .rc-gesture-hint-dismiss {
+    display: none;
+  }
+
+  /* Batch actions: copy-review keeps three peers; image-review may wrap because
+   * it has more actions, but every peer uses the exact same height/weight. */
+  .rc-batch-strip--copy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .rc-batch-strip--copy .rc-batch-cancel,
+  .rc-batch-strip--copy .batch-primary-action,
+  .rc-batch-strip--copy .batch-remove-action,
+  .rc-batch-strip--image .rc-batch-cancel,
+  .rc-batch-strip--image .batch-primary-action,
+  .rc-batch-strip--image .batch-detail-action,
+  .rc-batch-strip--image .batch-remove-action {
+    min-height: 40px;
+    height: 40px;
+    width: 100%;
+    padding: 0 6px;
+    font-size: 11px;
+    line-height: 1.15;
+    box-sizing: border-box;
+  }
+
+  /* D3.2 spec rollback: keep the controlled builder, but remove the layered
+   * experimental presentation. Controls stay close to the dimensions they edit. */
+  .variant-box {
+    border-width: 0;
+    border-radius: 0;
+  }
+  .variant-box .vh-builder {
+    border: 0;
+  }
+  .variant-box .vh-builder-summary {
+    min-height: 40px;
+    padding: 2px 0;
+  }
+  .variant-box .vh-results-heading {
+    min-height: 36px;
+    padding: 8px 0 5px;
+    border-top: 1px solid var(--border);
+  }
+  .variant-box .vh-dims {
+    padding: 4px 0 10px;
+  }
+  .variant-box .vh-dim-row {
+    padding: 7px 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+  }
+  .variant-box .vh-dim-values {
+    gap: 6px;
+  }
+
+  /* Direct mobile actions: full-width add control, two equal secondary actions.
+   * Their existing onClick handlers are unchanged. */
+  .variant-box .vh-dim-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    align-items: stretch;
+  }
+  .variant-box .vh-add-dim-wrap {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+  .variant-box .vh-add-dim-ghost,
+  .variant-box .vh-toolbar-action {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 9px;
+    box-sizing: border-box;
+    touch-action: manipulation;
+  }
+
+  /* On mobile, the dimension/character panels expand in-flow next to the
+   * trigger instead of floating over buttons or being clipped off-screen. */
+  .variant-box .vh-add-dim-wrap .v-pop-dim.vh-inline-pop,
+  .variant-box .v-pop-char.vh-inline-pop {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: none;
+    margin: 6px 0 0;
+    transform: none;
+    box-sizing: border-box;
+  }
+
+  /* Result rows return to compact, finished cards: one restrained boundary,
+   * tighter internals, and a de-emphasized handle. Existing up/down, duplicate
+   * and delete controls remain available. */
+  .variant-box .vgrid-block {
+    margin: 0 0 8px;
+    padding: 0 7px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    overflow: visible;
+  }
+  .variant-box .vgrid-row {
+    padding: 7px 0 5px;
+    gap: 6px;
+  }
+  .variant-box .vgrid-sub {
+    margin-top: 0;
+    padding: 0 0 7px;
+  }
+  .variant-box .vdrag--mobile {
+    min-width: 20px;
+    min-height: 32px;
+    opacity: .38;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .result-card > .rc-header .rc-sale-badge {
+    grid-column: 2 / 4;
+  }
+  .result-card > .rc-header .rc-variant-count {
+    grid-column: 4 / 5;
+    padding-inline: 5px;
+    font-size: 10px;
+  }
+  .rc-selection-guide-row::after {
+    font-size: 11.5px;
+  }
+  .rc-batch-strip--copy .rc-batch-cancel,
+  .rc-batch-strip--copy .batch-primary-action,
+  .rc-batch-strip--copy .batch-remove-action {
+    padding-inline: 4px;
+    font-size: 10.5px;
+  }
+}

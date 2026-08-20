@@ -1,127 +1,191 @@
 # Nestory — Release Readiness
 
 > Canonical release / QA / deployment gate for humans and AI agents.
-> Current status is intentionally conservative: a check being documented does **not** mean it has passed.
-> For day-to-day progress read `AI_START_HERE.md` and `docs/CURRENT_STATUS.md` first.
+> A documented check is not a pass until it has actually been executed.
+> For day-to-day truth read `AI_START_HERE.md` and `docs/CURRENT_STATUS.md` first.
 
-Updated: 2026-08-18
+Updated: 2026-08-20
 
 ## 1. Release policy
 
-Nestory is not release-ready merely because a preview deploy succeeds. A release candidate must pass the repository CI gate and the manual checks below.
+A Vercel Preview being READY is not sufficient for production release.
 
 Required automated gate:
+
 1. `pnpm install --frozen-lockfile`
 2. `pnpm run verify:all`
 3. `pnpm run typecheck`
 4. `pnpm run build`
 
-Required manual/runtime gate:
-- authenticated app smoke
-- role/RLS cases
-- mobile ResultCard regression cases
-- Variant regression cases
-- Shopify mock publish
-- one controlled real-product E2E only after production configuration is explicitly approved
+Required runtime gate:
 
-Do not mark the current stabilization stack complete until the automated gate is green and the relevant runtime cases have been exercised.
+- authenticated app smoke;
+- role/RLS cases;
+- owner-approved mobile ResultCard cases;
+- ImageUploader mobile sanity;
+- Variant regression cases;
+- Shopify mock publish;
+- one controlled real-product E2E only after production Shopify configuration and the partial-create retry risk are explicitly handled/approved.
 
 ## 2. Deployment safety checklist
 
-Before any production deploy:
-- Review `AI_START_HERE.md`, `docs/CURRENT_STATUS.md`, and `docs/STABILIZATION_PLAN.md`.
-- Confirm the intended branch/commit and review its diff.
-- Confirm GitHub CI is green.
-- Keep `SHOPIFY_PUBLISH_MOCK=true` unless a real Shopify publish test is explicitly intended and approved.
-- ACTIVE publish must always require explicit confirmation; do not weaken the existing `confirmActive` guard.
-- Never place `SUPABASE_SERVICE_ROLE_KEY`, Shopify client secret, AI API keys, worker tokens, or webhooks in browser storage or `NEXT_PUBLIC_*` variables.
-- Do not replay historical Supabase migrations `001–039` into the live database. Read `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md` first.
-- Do not push/deploy directly from the canonical/default branch as an ad-hoc test. Use a reviewed branch/PR and the CI gate.
-- A Vercel preview failure caused by account build-rate-limit is not equivalent to a code build failure; GitHub CI is the independent compile gate.
+Before a production deploy:
+
+- read `AI_START_HERE.md`, `docs/CURRENT_STATUS.md`, this file, and relevant audits;
+- confirm intended branch/commit and review its diff;
+- confirm GitHub CI is green;
+- keep Preview/development Shopify mock-safe;
+- never enable live Shopify publishing by accident: only exact `SHOPIFY_PUBLISH_MOCK=false` is live;
+- ACTIVE publish must retain explicit `confirmActive=true`;
+- verify production `SHOPIFY_STORE_DOMAIN`, client credentials and preferably `SHOPIFY_LOCATION_ID` without exposing secrets;
+- never place service-role, Shopify secret, AI keys, worker tokens or webhooks in browser storage / `NEXT_PUBLIC_*`;
+- do not replay Supabase historical migrations `001–039` to production;
+- do not ad-hoc test by pushing unrelated changes directly into production branch;
+- Vercel Hobby build-rate-limit failure is not the same as code build failure.
 
 ## 3. Core API contracts that must remain stable
 
-These are contract anchors, not an exhaustive API reference.
-
 ### Worker
+
 - `POST /api/worker/claim` — atomically claims eligible generation work.
 - `POST /api/worker/complete` — records successful generation output.
 - `POST /api/worker/fail` — records failed generation work.
 
 ### Draft review
-- `POST /api/drafts/{id}/request-revision` — returns a draft to `needs_revision` without bypassing role/RLS rules.
-- Review/approve actions must preserve reviewer/admin authorization semantics.
+
+- `POST /api/drafts/{id}/request-revision` must preserve role/RLS rules.
+- Review/approve actions preserve reviewer/admin authorization.
 
 ### Publish
+
 - `POST /api/drafts/{id}/publish` — single publish; ACTIVE requires `confirmActive`.
-- Batch publish must preserve the same ACTIVE-confirmation and publisher-role rules.
+- Batch publish preserves the same publisher-role / ACTIVE-confirmation rule.
 - Shopify mock mode must never create a real product.
-- Duplicate variant combinations must be rejected before publish.
+- Duplicate variant combinations are rejected before publish.
+- A partial Shopify create failure must not be blindly retried into duplicate product creation; see `docs/audits/RELEASE-HEALTH-AUDIT-2026-08-20.md`.
 
 ### Matrixify CSV fallback
-- Matrixify CSV Fallback remains available independently of Shopify API publish.
-- Export mapping is implemented under `src/lib/csv/matrixify.ts` and the export route.
 
-### Archive
-- Batch archive/unarchive must authorize requested draft IDs through the signed-in/RLS client before any service-role mutation.
-- Operator scope = own drafts; reviewer/admin may act across the team according to RLS.
+- Matrixify CSV remains independently available from Shopify API publish.
+- Mapping lives under `src/lib/csv/matrixify.ts` and export routes.
 
-## 4. Mock fixtures / deterministic checks
+### Archive / remove from queue
 
-Keep these fixtures available for source-contract and mock-flow checks:
+- ResultCard `×` and batch `移出佇列` are **soft archive**, not hard delete.
+- Existing undo/unarchive behavior must remain.
+- Batch archive/unarchive authorizes requested IDs through the signed-in/RLS client before service-role mutation.
+- Operator scope = own drafts; reviewer/admin according to team RLS.
+
+## 4. Automated/source-contract fixtures
+
+Keep available:
+
 - `fixtures/worker-complete-sample.json`
 - `fixtures/publish-active-sample.json`
 - `fixtures/matrixify-export-sample.json`
 - `fixtures/ui-states.json`
 
-Generation/copy rules are governed by current source + `AGENTS.md` / canonical project docs. Do not make CI depend on a retired hard-coded Codex skill version string unless that exact version is again a runtime contract.
+The `verify:*` suite is valuable but does not replace real browser layout validation. Current package does not have a browser E2E runner; add a small Playwright mobile smoke after this release rather than silently treating source regex checks as visual proof.
 
 ## 5. Manual QA matrix
 
 ### Publish safety
-- ACTIVE publish shows a second explicit browser/user confirmation.
-- DRAFT publish does not require the ACTIVE confirmation but still enforces publisher role.
-- `SHOPIFY_PUBLISH_MOCK=true` produces no real Shopify product.
+
+- ACTIVE requires explicit user confirmation.
+- DRAFT still requires publisher role.
+- `SHOPIFY_PUBLISH_MOCK=true` creates no real Shopify product.
+- Production live test only after env preflight.
 - Reviewer can export Matrixify CSV.
+- Controlled partial-failure/retry behavior is understood before broad live publishing.
 
 ### Role / RLS
+
 - Operator can read/update own eligible draft.
-- Operator cannot update another member's draft by submitting its ID to a service-role API.
-- Reviewer/admin can read team drafts according to current policy.
+- Operator cannot update another member's draft by client-supplied ID through a service-role API.
+- Reviewer/admin can read team drafts according to policy.
 - Operator cannot directly write admin-governed catalog/rule tables.
 
-### Mobile ResultCard
-- Long-press blank card surface enters selection mode.
-- Expand/collapse control remains available in selection mode.
-- Touching an interactive control does not trigger card long-press/swipe.
-- Swipe still works from non-interactive card surface.
+### Mobile ResultCard — owner contract 2026-08-20
+
+Normal mode:
+
+- card does not protrude horizontally;
+- row 1 reads title → station → date → small soft-remove `×`;
+- thumbnail left; sale/tags/warnings right;
+- price/compare/profit stay compact on one row without a heavy box;
+- tapping the card expands/collapses;
+- large mobile expand arrow is intentionally hidden by owner decision;
+- `×` removes from queue and undo works;
+- left-swipe from non-interactive surface still exposes station actions;
+- interactive controls do not accidentally start long-press/swipe.
+
+Multi-select:
+
+- long-press blank card surface (500ms) visibly feels pressed and enters selection mode;
+- selected card has an obvious accent state;
+- while selection mode is active, normal card tap toggles selection (existing behavior); exit/cancel selection before using normal tap-to-expand;
+- copy-review exposes direct `移出佇列` instead of a redundant one-item `更多`;
+- image-review keeps `更多` because it contains additional generate-detail actions.
+
+Results controls:
+
+- `只看我的` / sort are equal width and height on mobile;
+- gesture helper uses current theme accent and remains dismissible.
+
+### ImageUploader
+
+- mobile = three equal square columns;
+- top-right delete `×` usable and not colliding with spec badge;
+- spinner/retry/paste/drag/reorder/spec marking remain.
 
 ### Variant editor
-- Destructive axis change does not commit dimensions before confirmation.
-- Duplicate hand-filled option combinations are protected from silent loss.
-- Desktop picker first/middle/last-column hover preview stays visible within containment.
 
-### Read-Only Route Smoke
-Use `scripts/verify-pwa-smoke.mjs` against a running app and verify `/`, `/login`, `/drafts`, `/drafts/new`, and `/review` return the expected shell/auth states.
+- destructive axis change waits for confirmation atomically;
+- duplicate combinations are protected;
+- desktop picker first/middle/last hover preview remains visible within containment.
 
-## 6. Current completion status
+### Read-only route smoke
 
-Current stabilization work has multiple implemented branches but still requires complete CI/runtime validation before merge/release. See:
-- `docs/CURRENT_STATUS.md`
-- `docs/STABILIZATION_PLAN.md`
-- `docs/REGRESSION_AUDIT.md`
-- `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
+Use `scripts/verify-pwa-smoke.mjs` against a running app and validate `/`, `/login`, `/drafts`, `/drafts/new`, `/review` expected shell/auth states.
 
-Do not interpret historical v0.1 completion/audit filenames as the current source of truth. The canonical completion decision is this release gate plus `CURRENT_STATUS`.
+## 6. Shopify preflight before live use
 
-## 7. Team / AI handoff evidence
+Source currently expects:
 
-Every new coding session should start with:
+- `SHOPIFY_STORE_DOMAIN`
+- `SHOPIFY_CLIENT_ID`
+- `SHOPIFY_CLIENT_SECRET`
+- optional but recommended `SHOPIFY_LOCATION_ID`
+- `SHOPIFY_PUBLISH_MOCK=false` only for a deliberate live environment
+- current documented API version `2026-04`
+
+Important P0:
+
+`publishDraft` creates the Shopify product before later variant/price/inventory sync. If later sync fails, the app records `api_failed` and the created product ID. Before broad live publishing, add/confirm an idempotent recovery rule so retry does not create a duplicate product.
+
+## 7. Current completion state
+
+Production baseline `6ff020dd` is already deployed. The latest owner-corrected mobile UI remains on `agent/release-thumbnail-regression-fix` and is not yet production.
+
+Vercel production runtime error query for the last 7 days reported no runtime error clusters as of 2026-08-20.
+
+Current release still requires:
+
+1. latest iPhone ResultCard runtime check;
+2. full GitHub CI;
+3. Shopify production env/config preflight;
+4. decision/fix for partial product-create retry idempotency;
+5. Shopify mock check;
+6. explicitly approved controlled real-product E2E;
+7. explicit owner approval before merge/production deployment of this release.
+
+## 8. Team / AI handoff evidence
+
+Every coding session starts with:
+
 1. `AI_START_HERE.md`
 2. `docs/CURRENT_STATUS.md`
 3. `AGENTS.md`
-4. `docs/STABILIZATION_PLAN.md` and the relevant audit when changing stabilized areas
+4. this release gate + relevant audit
 
-Before modifying code, confirm current branch/HEAD and whether the issue already has a stabilization branch. After modifying code, update the canonical handoff/status/audit documentation and keep the change scope isolated.
-
-Manual QA Still Needed is a valid status. Agents must not convert an unexecuted manual check into a claimed pass.
+Before code changes, confirm branch/HEAD and scope. After changes, update canonical status/audit. `Manual QA Still Needed` is a valid state; never convert an unexecuted manual check into a claimed pass.

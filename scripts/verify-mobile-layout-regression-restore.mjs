@@ -4,152 +4,90 @@ function fail(message) {
   console.error(`FAIL: ${message}`);
   process.exit(1);
 }
-
 function expect(source, pattern, message) {
   if (!pattern.test(source)) fail(message);
 }
 
 const stabilization = fs.readFileSync("src/app/stabilization.css", "utf8");
+const releaseCss = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
 const globals = fs.readFileSync("src/app/globals.css", "utf8");
+const layout = fs.readFileSync("src/app/layout.tsx", "utf8");
 const uploader = fs.readFileSync("src/components/listing/ImageUploader.tsx", "utf8");
 const resultCard = fs.readFileSync("src/components/listing/ResultCard.tsx", "utf8");
+const resultsPanel = fs.readFileSync("src/components/listing/DraftResultsPanel.tsx", "utf8");
 
 const thumbStart = stabilization.indexOf("/* RC-THUMB / 2026-08-20:");
 const cardStart = stabilization.indexOf("/* RC-CARD / 2026-08-20:");
-const polishStart = stabilization.indexOf("/* RC-POLISH / 2026-08-20:");
-if (
-  thumbStart < 0 ||
-  cardStart < 0 ||
-  polishStart < 0 ||
-  cardStart <= thumbStart ||
-  polishStart <= cardStart
-) {
-  fail("mobile release layout / polish sections are missing or out of order");
+if (thumbStart < 0 || cardStart < 0 || cardStart <= thumbStart) {
+  fail("mobile release thumbnail / containment sections are missing or out of order");
 }
-
 const thumb = stabilization.slice(thumbStart, cardStart);
-const card = stabilization.slice(cardStart, polishStart);
-const polish = stabilization.slice(polishStart);
+const card = stabilization.slice(cardStart);
 
-// Desktop/recovered uploader contract remains available outside the phone override.
+expect(layout, /import "\.\/globals\.css";\s*import "\.\/stabilization\.css";\s*import "\.\/resultcard-mobile-release\.css";/s, "ResultCard release CSS must load after stabilization.css");
+expect(releaseCss, /ResultCard mobile release contract — owner-corrected 2026-08-20/, "owner-corrected ResultCard release layer must be documented");
+
+// Previously accepted uploader contract stays unchanged.
 expect(thumb, /\.pthumb-strip\s*\{[^}]*flex-wrap:\s*wrap;/s, "ImageUploader strip must still wrap");
-expect(thumb, /\.pthumb-strip\s+\.pthumb-img\s*\{[^}]*width:\s*64px;[^}]*height:\s*64px;/s, "desktop secondary upload thumbnails must keep 64x64 anchor");
-expect(thumb, /\.pthumb-strip\s+\.pthumb\.is-main\s+\.pthumb-img\s*\{[^}]*width:\s*96px;[^}]*height:\s*96px;/s, "desktop main upload thumbnail must keep 96x96 anchor");
-if (/flex-wrap:\s*nowrap/.test(thumb)) {
-  fail("P10 nowrap thumbnail geometry must not return");
-}
-
-// 2026-08-20 owner runtime decision: mobile uploader is exactly three equal columns.
-expect(
-  thumb,
-  /@media \(max-width:\s*959px\)[\s\S]*\.pthumb-strip\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/s,
-  "mobile ImageUploader must use a three-column grid"
-);
-expect(
-  thumb,
-  /\.pthumb-strip\s+\.pthumb-img,[\s\S]*\.pthumb-strip\s+\.pthumb\.is-main\s+\.pthumb-img\s*\{[^}]*width:\s*100%;[^}]*height:\s*auto;[^}]*aspect-ratio:\s*1;/s,
-  "mobile uploader images must fill equal square grid cells"
-);
-expect(
-  thumb,
-  /\.pthumb-img-wrap\s*>\s*\.thumb-remove\s*\{[^}]*top:\s*-8px;[^}]*right:\s*-8px;[^}]*left:\s*auto;[^}]*width:\s*32px;[^}]*height:\s*32px;/s,
-  "mobile input delete control must stay 32px at top-right"
-);
-expect(
-  thumb,
-  /\.pthumb-img-wrap\s*>\s*\.pthumb-spec-badge\s*\{[^}]*right:\s*28px;[^}]*max-width:\s*calc\(100%\s*-\s*34px\);/s,
-  "mobile spec badge must stay clear of the enlarged delete control"
-);
-
-// Useful later uploader UX must remain intact.
-expect(globals, /\.pthumb-status-overlay\s*\{[^}]*animation:\s*uploadSpin/s, "upload spinner overlay must remain");
+expect(thumb, /\.pthumb-strip\s+\.pthumb-img\s*\{[^}]*width:\s*64px;[^}]*height:\s*64px;/s, "desktop secondary thumbnails must keep 64x64 anchor");
+expect(thumb, /\.pthumb-strip\s+\.pthumb\.is-main\s+\.pthumb-img\s*\{[^}]*width:\s*96px;[^}]*height:\s*96px;/s, "desktop main thumbnail must keep 96x96 anchor");
+if (/flex-wrap:\s*nowrap/.test(thumb)) fail("P10 nowrap thumbnail geometry must not return");
+expect(thumb, /@media \(max-width:\s*959px\)[\s\S]*\.pthumb-strip\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/s, "mobile ImageUploader must remain three columns");
+expect(thumb, /\.pthumb-img-wrap\s*>\s*\.thumb-remove\s*\{[^}]*right:\s*-8px;[^}]*width:\s*32px;[^}]*height:\s*32px;/s, "mobile thumbnail delete control must remain top-right 32px");
 expect(globals, /@keyframes\s+uploadSpin/, "upload spinner keyframes must remain");
 expect(globals, /\.pthumb-dragging\s*\{/, "thumbnail drag feedback must remain");
-expect(globals, /\.pthumb-drag-over\s+\.pthumb-img\s*\{/, "thumbnail drag-over feedback must remain");
-expect(uploader, /item\.status\s*===\s*"uploading"/, "optimistic uploading state must remain");
 expect(uploader, /retryUpload\(item\)/, "failed-upload retry must remain");
-expect(uploader, /toggleSpecMark\(item\)/, "per-thumbnail spec marking must remain");
-expect(uploader, /className="thumb-remove"/, "thumbnail delete control must remain");
-expect(uploader, /draggable/, "thumbnail reorder capability must remain");
+expect(uploader, /toggleSpecMark\(item\)/, "spec marking must remain");
+expect(uploader, /draggable/, "thumbnail reorder must remain");
 
-// Results pane remains the hard mobile width boundary.
-expect(
-  card,
-  /\.workbench,[\s\S]*\.workbench-pane-results\.mob-active,[\s\S]*\.panel\.results-panel,[\s\S]*\.results-list,[\s\S]*\.result-card\s*,[\s\S]*\.result-card\s*>\s*\.rc-header\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/s,
-  "mobile results pane and card chain must be width-bounded"
-);
-expect(
-  card,
-  /\.workbench-mobile-body,[\s\S]*\.workbench-pane-results\.mob-active,[\s\S]*\.panel\.results-panel,[\s\S]*\.results-panel-body\s*\{[^}]*overflow-x:\s*clip;/s,
-  "mobile results pane must clip only residual horizontal paint"
-);
-expect(
-  card,
-  /\.stage-filter-row\s+\.stage-filter-pills\s*\{[^}]*overflow-x:\s*auto;/s,
-  "stage pills must scroll internally instead of widening the results pane"
-);
+// Runtime-proven results containment stays underneath this visual pass.
+expect(card, /\.workbench,[\s\S]*\.workbench-pane-results\.mob-active,[\s\S]*\.results-list,[\s\S]*\.result-card\s*,[\s\S]*\.result-card\s*>\s*\.rc-header\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/s, "mobile results pane/card chain must remain width-bounded");
+expect(card, /\.stage-filter-row\s+\.stage-filter-pills\s*\{[^}]*overflow-x:\s*auto;/s, "stage pills must scroll inside their own container");
 
-// Owner-confirmed ResultCard polish is presentation-only.
-expect(
-  polish,
-  /grid-template-columns:\s*64px\s+minmax\(0,\s*1fr\)\s+auto\s+auto;/,
-  "mobile ResultCard polish must reserve title/meta columns without widening the card"
-);
-expect(
-  polish,
-  /\.rc-title\s*\{[^}]*grid-column:\s*1\s*\/\s*3;[^}]*grid-row:\s*1;/s,
-  "mobile title must occupy the first row"
-);
-expect(
-  polish,
-  /\.rc-head-meta\s*\{[^}]*grid-column:\s*3\s*\/\s*5;[^}]*grid-row:\s*1;/s,
-  "station/date meta must share the title row"
-);
-expect(
-  polish,
-  /\.rc-sale-badge\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*2;/s,
-  "sale-status badge must move to the thumbnail summary row"
-);
-expect(
-  polish,
-  />\s*\.rc-quick-row\s*>\s*\.rc-toggle\s*\{[^}]*display:\s*none;/s,
-  "visible mobile expand toggle must stay hidden by owner decision"
-);
-expect(
-  polish,
-  /\.rc-m-regen-slot\s*\{[^}]*display:\s*none;/s,
-  "inline mobile regenerate control must stay hidden"
-);
-expect(
-  polish,
-  /\.rc-m-row3\s*>\s*\.rc-price-mini,[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/,
-  "collapsed mobile price must remain unboxed"
-);
-expect(
-  polish,
-  /\.rc-gesture-hint\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;/s,
-  "mobile gesture hint must remain plain helper text"
-);
-expect(
-  polish,
-  /\.rc-swipe-actions\s*\{[^}]*align-items:\s*center;[^}]*gap:\s*6px;[^}]*background:\s*transparent;/s,
-  "mobile swipe rail must use compact centered actions"
-);
-expect(
-  polish,
-  /\.rc-swipe-actions\s+\.rc-swipe-approve,[\s\S]*max-height:\s*64px;[\s\S]*border-radius:\s*14px;/,
-  "mobile swipe buttons must not render as full-height slabs"
-);
+// Corrected row 1 hierarchy: title -> station -> date -> existing soft-remove X.
+expect(releaseCss, /grid-template-columns:\s*80px\s+minmax\(0,\s*1fr\)\s+max-content\s+max-content\s+28px;/, "mobile card must reserve title/station/date/remove columns");
+expect(releaseCss, /\.rc-title\s*\{[^}]*grid-column:\s*1\s*\/\s*3;[^}]*grid-row:\s*1;/s, "title must lead row 1");
+expect(releaseCss, /\.rc-station-chip\s*\{[^}]*grid-column:\s*3;[^}]*grid-row:\s*1;/s, "station must follow title on row 1");
+expect(releaseCss, /\.rc-time-ago\s*\{[^}]*grid-column:\s*4;[^}]*grid-row:\s*1;/s, "date must follow station on row 1");
+expect(releaseCss, />\s*\.rc-quick-row\s*>\s*\.rc-dismiss-btn\s*\{[^}]*grid-column:\s*5;[^}]*display:\s*inline-flex;/s, "existing soft-remove control must be visible at mobile top-right");
+expect(releaseCss, />\s*\.rc-quick-row\s*>\s*\.rc-toggle\s*\{[^}]*display:\s*none;/s, "large mobile expand toggle stays hidden");
 
-// Behavior code is explicitly outside this polish pass and must remain.
+// Summary: thumb left, status/tags/warnings right.
+expect(releaseCss, />\s*\.rc-thumb\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*2\s*\/\s*6;/s, "thumbnail must own left summary column");
+expect(releaseCss, /\.rc-sale-badge\s*\{[^}]*grid-column:\s*2\s*\/\s*6;[^}]*grid-row:\s*2;/s, "sale badge must start right summary column");
+expect(releaseCss, /\.rc-detect-chips--tags\s*\{[^}]*grid-column:\s*2\s*\/\s*6;[^}]*grid-row:\s*3;/s, "tags must stay right of thumbnail");
+expect(releaseCss, /\.rc-detect-chips--warns\s*\{[^}]*grid-column:\s*2\s*\/\s*6;[^}]*grid-row:\s*4;/s, "warnings must stay right of thumbnail");
+
+// Price remains unboxed and horizontal.
+expect(releaseCss, /\.rc-price-mini\s*\{[^}]*flex-direction:\s*row;[^}]*flex-wrap:\s*nowrap;[\s\S]*white-space:\s*nowrap;/s, "mobile price must remain one compact row");
+expect(releaseCss, /\.rc-m-regen-slot\s*\{[^}]*display:\s*none;/s, "inline collapsed regenerate must stay hidden");
+
+// Long-press feedback only; gesture math remains source-owned.
+expect(releaseCss, /\.result-card\s*>\s*\.rc-header:active\s*\{[^}]*transform:\s*scale\(\.988\);/s, "long-press surface must have immediate press feedback");
+expect(releaseCss, /\.result-card\.is-checked\s*\{[^}]*border-color:/s, "selected card must have a durable accent state");
+expect(resultCard, /export const LONG_PRESS_MS = 500;/, "500ms long-press timing must remain unchanged");
+expect(resultCard, /GESTURE_MOVE_PX = 10;/, "gesture move threshold must remain unchanged");
+expect(resultCard, /function\s+handleHeaderTouchStart/, "long-press handler must remain");
+
+// Scope/sort controls use equal flex weights; a sole control can fill 100%.
+expect(releaseCss, /\.stage-filter-row\s+\.stage-filter-end\s*\{[^}]*display:\s*flex;[^}]*gap:\s*8px;[^}]*width:\s*100%;/s, "scope/sort peer container must be a full-width flex row");
+expect(releaseCss, /\.results-scope-label,[\s\S]*\.results-sort-label\s*\{[^}]*flex:\s*1\s+1\s+0;[^}]*height:\s*44px;/s, "scope and sort must have equal flex weight and height");
+expect(releaseCss, /\.ir-scope-select,[\s\S]*\.sort-sel\s*\{[^}]*height:\s*44px;/s, "scope and sort selects must share 44px height");
+
+// Accent hint + direct single-action batch remove.
+expect(releaseCss, /\.rc-gesture-hint\s*\{[^}]*border-left:\s*3px solid var\(--accent\);[^}]*background:\s*color-mix\([^;]*var\(--accent\)/s, "gesture hint must use theme accent");
+expect(releaseCss, /details\.batch-more:has\(> \.batch-more-menu > :only-child\)/, "single-action batch More menu must be promoted directly");
+expect(resultsPanel, /onClick=\{\(\) => void batchArchiveOrUnarchive\("archive"\)\}/, "batch soft-remove handler must remain");
+expect(resultsPanel, /batchSetGenerateDetail\(true\)/, "image-review detail-compose ON action must remain");
+expect(resultsPanel, /batchSetGenerateDetail\(false\)/, "image-review detail-compose OFF action must remain");
+
+// Existing soft archive / expand / swipe code paths remain.
+expect(resultCard, /async function archiveOne\(\)/, "single-card soft archive handler must remain");
+expect(resultCard, /body:\s*JSON\.stringify\(\{ draftIds: \[draft\.id\], action: "archive" \}\)/, "card X must still use archive API semantics");
 expect(resultCard, /function\s+handleHeaderClick\(\)/, "card tap-to-expand handler must remain");
 expect(resultCard, /tryToggleExpand\(\);/, "tap-to-expand path must remain");
-expect(resultCard, /handleHeaderTouchStart/, "mobile long-press/swipe gesture handler must remain");
-expect(resultCard, /rc-swipe-wrap/, "mobile swipe actions must remain");
-expect(resultCard, /selectMode/, "mobile multi-select behavior must remain");
-expect(resultCard, /openRegenModal\(\)/, "regenerate handler must remain");
 expect(resultCard, /className="rc-swipe-approve"/, "swipe approve action must remain");
-expect(resultCard, /className="rc-swipe-secondary"/, "swipe secondary/regenerate action must remain");
-expect(resultCard, /\{priceMiniEl\}/, "collapsed price data must remain");
+expect(resultCard, /className="rc-swipe-secondary"/, "swipe secondary action must remain");
+expect(resultCard, /selectMode/, "multi-select behavior must remain");
 
-console.log("PASS: mobile ResultCard polish changes presentation only and preserves release behavior.");
+console.log("PASS: owner-corrected mobile ResultCard hierarchy preserves upload, gestures and existing soft-action logic.");

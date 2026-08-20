@@ -1,0 +1,83 @@
+name: Mobile ResultCard structural patch temp
+
+on:
+  push:
+    branches:
+      - agent/release-thumbnail-regression-fix
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore: apply mobile ResultCard structural patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply reviewed owner structural patch
+        env:
+          SOURCE_PATCH_COMMIT: 27b0ca98eee755af328dfea9e90cfca81751082c
+          BRANCH_NAME: agent/release-thumbnail-regression-fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import subprocess
+          import textwrap
+
+          source = subprocess.check_output(
+              ["git", "show", f"{os.environ['SOURCE_PATCH_COMMIT']}:.github/workflows/mobile-resultcard-round3-patch.yml"],
+              text=True,
+          )
+          start = "          python - <<'PY'\n"
+          end = "\n          PY\n\n          node scripts/verify-mobile-layout-regression-restore.mjs"
+          if start not in source or end not in source:
+              raise SystemExit("Reviewed source patch markers not found; abort")
+          patch = source.split(start, 1)[1].split(end, 1)[0]
+          Path("/tmp/resultcard_patch.py").write_text(textwrap.dedent(patch))
+          PY
+          python /tmp/resultcard_patch.py
+
+          cat > scripts/verify-mobile-resultcard-owner-refine.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+
+          const css = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
+          const card = fs.readFileSync("src/components/listing/ResultCard.tsx", "utf8");
+          const panel = fs.readFileSync("src/components/listing/DraftResultsPanel.tsx", "utf8");
+
+          assert.match(card, /className="rc-title-flow"[\s\S]*className="rc-title"[\s\S]*rc-title-inline-station[\s\S]*rc-title-inline-time/);
+          assert.match(card, /const cardPrimary = stationFlowPrimaryLabel\(draft\)/);
+          assert.match(css, /\.rc-title-flow\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/s);
+          assert.match(css, /grid-template-columns:\s*94px\s+minmax\(0,\s*1fr\)/);
+          assert.match(css, /> \.rc-quick-row > \.rc-dismiss-btn\s*\{[^}]*position:\s*absolute;[^}]*transform:\s*translateY\(-50%\)/s);
+          assert.match(css, /\.rc-price-mini-main,[\s\S]*\.rc-price-mini-sub\s*\{[^}]*display:\s*contents;/s);
+          assert.match(css, /\.results-scope-label,[\s\S]*\.results-sort-label\s*\{[^}]*height:\s*38px;/s);
+          assert.match(css, /\.rc-panel-header\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/s);
+          assert.match(panel, /rc-batch-strip--copy/);
+          assert.match(panel, /className="batch-remove-action"[\s\S]*batchArchiveOrUnarchive\("archive"\)/s);
+          assert.match(panel, /<details className="batch-more">[\s\S]*batchSetGenerateDetail\(true\)/s);
+          console.log("Mobile ResultCard owner structural checks passed");
+          EOF
+
+          node scripts/verify-mobile-layout-regression-restore.mjs
+          node scripts/verify-mobile-resultcard-owner-refine.mjs
+          node scripts/verify-mobile-resultcard-expand.mjs
+          git diff --check
+
+          git config user.name "chochovibe-cmd"
+          git config user.email "chochovibe@gmail.com"
+          git add src/components/listing/ResultCard.tsx \
+                  src/components/listing/DraftResultsPanel.tsx \
+                  src/app/resultcard-mobile-release.css \
+                  scripts/verify-mobile-layout-regression-restore.mjs \
+                  scripts/verify-mobile-resultcard-owner-refine.mjs \
+                  docs/CURRENT_STATUS.md \
+                  docs/CHANGELOG.md \
+                  docs/audits/RESULTCARD-MOBILE-OWNER-CORRECTION-R3-2026-08-20.md
+          git diff --cached --check
+          git commit -m "style(mobile): align ResultCard owner layout round 3"
+          git push origin HEAD:$BRANCH_NAME

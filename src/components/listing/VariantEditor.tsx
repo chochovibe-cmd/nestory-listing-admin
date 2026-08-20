@@ -121,6 +121,7 @@ export function VariantEditor({
 }: Props) {
   const [charOpen, setCharOpen] = useState(false);
   const [dimOpen, setDimOpen] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(() => dimensions.length === 0);
   const [customDim, setCustomDim] = useState("");
   const [pickIndex, setPickIndex] = useState<number | null>(null);
   const [charQuery, setCharQuery] = useState("");
@@ -629,7 +630,11 @@ export function VariantEditor({
         <span>款式規格</span>
       </div>
 
-      <details className="vh-builder" defaultOpen={dimensions.length === 0}>
+      <details
+        className="vh-builder"
+        open={builderOpen}
+        onToggle={(event) => setBuilderOpen(event.currentTarget.open)}
+      >
         <summary className="vh-builder-summary">
           <span>建立規格</span>
           <span className="muted">{dimensions.length ? `${dimensions.length} 個類型` : "尚未建立"}</span>

@@ -57,7 +57,13 @@ expect(releaseCss, />\s*\.rc-thumb\s*\{[^}]*grid-column:\s*1;[^}]*grid-row:\s*2\
 expect(releaseCss, /\.rc-sale-badge\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*2;/s, "sale badge must start right summary column");
 expect(releaseCss, /\.rc-detect-chips--tags\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*3;/s, "tags must stay right of thumbnail");
 expect(releaseCss, /\.rc-detect-chips--warns\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*4;/s, "warnings must stay right of thumbnail");
-expect(resultCard, /className="rc-card-summary-row"[\s\S]*formatMarkSummaryLine\(markSummary\)[\s\S]*variantCount/, "mark summary and variant count must share an independent card summary row");
+expect(resultCard, /className="rc-card-summary-row"[\s\S]*formatMarkSummaryLine\(markSummary\)/, "image-review mark summary must keep its independent card summary row");
+const summaryRowStart = resultCard.indexOf('className="rc-card-summary-row"');
+const summaryRowEnd = resultCard.indexOf("/* UX-B4-P04: mobile row3", summaryRowStart);
+if (summaryRowStart < 0 || summaryRowEnd < 0) fail("image-review mark summary row boundaries must remain");
+const summaryRowSource = resultCard.slice(summaryRowStart, summaryRowEnd);
+if (/variantCount/.test(summaryRowSource)) fail("variant count must not return to the image-review mark summary row");
+expect(resultCard, /saleStatusBadge[\s\S]*className="rc-sale-badge"[\s\S]*variantCount > 0[\s\S]*className="schip rc-variant-count"/, "variant count must follow the sale-status / overseas-stock metadata in the primary card row");
 
 // Price remains unboxed and horizontal.
 expect(releaseCss, /\.rc-price-mini\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:[^}]*align-items:\s*baseline;[\s\S]*white-space:\s*nowrap;/s, "mobile price must remain one aligned compact row");

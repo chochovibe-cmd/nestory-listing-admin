@@ -15,7 +15,7 @@ assert.match(card, /rc-sale-badge[\s\S]*rc-variant-count/);
 assert.match(card, /!isImageStation && priceRangeLabel/);
 assert.equal((card.match(/className="rc-swipe-remove"/g) ?? []).length, 3);
 assert.equal((card.match(/archiveOne\(\)/g) ?? []).length >= 4, true);
-assert.match(variants, /<details className="vh-builder"/);
+assert.match(variants, /const \[builderOpen, setBuilderOpen\][\s\S]*<details[\s\S]*className="vh-builder"[\s\S]*open=\{builderOpen\}[\s\S]*onToggle=/);
 assert.match(variants, /vh-add-dim-wrap[\s\S]*v-pop-dim vh-inline-pop/);
 assert.doesNotMatch(variants, /moreOpen|vh-more-btn|更多規格操作|更多操作/);
 assert.match(variants, /套用成本[\s\S]*依角色建立/);

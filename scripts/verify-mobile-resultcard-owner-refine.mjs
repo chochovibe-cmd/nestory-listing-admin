@@ -21,3 +21,4 @@ assert.match(css, /details\.batch-more:has\(> \.batch-more-menu > :only-child\) 
 assert.match(css, /\.rc-gesture-hint[\s\S]*border-left:\s*4px solid var\(--accent\);/);
 
 console.log("Mobile ResultCard owner-refinement checks passed");
+// trigger only; R3 workflow replaces this verifier before the final commit.

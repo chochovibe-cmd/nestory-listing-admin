@@ -7,3 +7,5 @@ This marker records the one-time trigger for the already-reviewed R3 structural 
 Do not change ImageUploader, Variant, Supabase, Shopify, auth/roles, publish/review APIs, archive semantics, long-press timing, or swipe math.
 
 After the patch lands, canonical evidence is `docs/audits/RESULTCARD-MOBILE-OWNER-CORRECTION-R3-2026-08-20.md` and `docs/CURRENT_STATUS.md`.
+
+Trigger requested again after conversation retry; exact R3 workflow guard applies.

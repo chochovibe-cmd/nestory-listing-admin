@@ -2,7 +2,7 @@ name: Mobile ResultCard R3 one-shot PR runner
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, reopened]
     branches:
       - codex/nestory-v0.1-safety-skeleton
 
@@ -27,15 +27,18 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import textwrap
 
           source = Path('.github/workflows/mobile-resultcard-r3.yml').read_text()
           start = "          python - <<'PY'\n"
           end = "\n          PY\n\n          node scripts/verify-mobile-resultcard-owner-refine.mjs"
           if start not in source or end not in source:
               raise SystemExit('Reviewed R3 patch markers not found')
-          patch = source.split(start, 1)[1].split(end, 1)[0]
-          Path('/tmp/r3_patch.py').write_text(textwrap.dedent(patch))
+          raw = source.split(start, 1)[1].split(end, 1)[0]
+          patch = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in raw.splitlines()
+          ) + "\n"
+          Path('/tmp/r3_patch.py').write_text(patch)
           PY
 
           python /tmp/r3_patch.py

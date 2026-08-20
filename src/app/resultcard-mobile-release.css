@@ -1,5 +1,5 @@
 /*
- * ResultCard mobile release contract — owner-corrected 2026-08-20.
+ * ResultCard mobile release contract — owner-refined 2026-08-20.
  * Loaded after stabilization.css so this stays a narrow, auditable layer.
  *
  * Scope: mobile ResultCard/results presentation only. Do not move business,
@@ -7,17 +7,17 @@
  */
 
 @media (max-width: 959px) {
-  /* row 1 = title → station → date → soft-remove X
-   * row 2+ = thumbnail left, sale/tags/warnings right
-   * final row = compact one-line price summary */
+  /* Card: title occupies the main line; station/date visually follow its last line.
+   * Summary: image left, sale/tags/warnings right. Price is one compact row. */
   .result-card > .rc-header {
+    position: relative;
     grid-template-areas: none;
-    grid-template-columns: 80px minmax(0, 1fr) max-content max-content 28px;
+    grid-template-columns: 92px minmax(0, 1fr) max-content max-content;
     grid-auto-rows: auto;
-    column-gap: 7px;
+    column-gap: 8px;
     row-gap: 6px;
     align-items: start;
-    overflow: clip;
+    overflow: visible;
   }
 
   .result-card > .rc-header > .rc-headmain,
@@ -33,9 +33,9 @@
     grid-row: 1;
     min-width: 0;
     max-width: 100%;
-    align-self: center;
+    align-self: end;
     font-weight: 800;
-    line-height: 1.32;
+    line-height: 1.3;
     overflow-wrap: anywhere;
   }
 
@@ -43,25 +43,27 @@
     grid-column: 3;
     grid-row: 1;
     justify-self: start;
-    align-self: center;
-    max-width: 124px;
+    align-self: end;
+    max-width: 118px;
+    margin-bottom: 1px;
     white-space: nowrap;
   }
 
   .result-card > .rc-header .rc-time-ago {
     grid-column: 4;
     grid-row: 1;
-    align-self: center;
+    align-self: end;
+    margin-bottom: 2px;
     white-space: nowrap;
     font-size: 11px;
   }
 
-  /* Existing control + archiveOne(): soft-remove with undo, not hard delete. */
+  /* Existing archiveOne() control: soft remove + undo. Put it on the card border. */
   .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn {
-    grid-column: 5;
-    grid-row: 1;
-    position: static;
-    display: inline-flex;
+    position: absolute !important;
+    top: -14px;
+    right: 10px;
+    display: inline-flex !important;
     align-items: center;
     justify-content: center;
     width: 28px;
@@ -70,24 +72,22 @@
     min-height: 28px;
     margin: 0;
     padding: 0;
-    justify-self: end;
-    align-self: center;
-    border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--border));
+    border: 1px solid color-mix(in srgb, var(--danger) 46%, var(--border));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+    background: var(--surface);
     color: color-mix(in srgb, var(--danger) 70%, var(--text));
-    box-shadow: none;
+    box-shadow: 0 1px 0 rgba(0,0,0,.08);
     font-size: 17px;
     line-height: 1;
-    z-index: 3;
+    z-index: 8;
   }
 
   .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn:active {
     transform: scale(.92);
-    background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
   }
 
-  /* Owner prefers whole-card tap to expand in normal mode. */
+  /* Whole-card tap remains the normal mobile expand affordance. */
   .result-card > .rc-header > .rc-quick-row > .rc-toggle {
     display: none;
   }
@@ -95,39 +95,40 @@
   .result-card > .rc-header > .rc-thumb {
     grid-column: 1;
     grid-row: 2 / 6;
-    width: 80px;
-    height: 80px;
+    width: 92px;
+    height: 92px;
     align-self: start;
   }
 
   .result-card > .rc-header .rc-sale-badge {
-    grid-column: 2 / 6;
+    grid-column: 2 / 5;
     grid-row: 2;
     justify-self: start;
     align-self: start;
   }
 
   .result-card > .rc-header .rc-detect-chips--tags {
-    grid-column: 2 / 6;
+    grid-column: 2 / 5;
     grid-row: 3;
     width: 100%;
     min-width: 0;
     display: flex;
     flex-wrap: wrap;
+    align-content: flex-start;
     gap: 5px;
   }
 
   .result-card > .rc-header .rc-detect-chips--warns {
-    grid-column: 2 / 6;
+    grid-column: 2 / 5;
     grid-row: 4;
     width: 100%;
     min-width: 0;
     display: flex;
     flex-wrap: wrap;
+    align-content: flex-start;
     gap: 5px;
   }
 
-  /* Less-common metadata stays available without taking over row 1. */
   .result-card > .rc-header .rc-meta-marks,
   .result-card > .rc-header .rc-head-meta > .status,
   .result-card > .rc-header .rc-owner-chip {
@@ -140,25 +141,25 @@
   }
   .result-card > .rc-header .rc-meta-marks { grid-column: 2 / 3; }
   .result-card > .rc-header .rc-head-meta > .status { grid-column: 3 / 4; }
-  .result-card > .rc-header .rc-owner-chip { grid-column: 4 / 6; }
+  .result-card > .rc-header .rc-owner-chip { grid-column: 4 / 5; }
 
   .result-card > .rc-header .rc-fail-reason {
-    grid-column: 1 / 6;
+    grid-column: 1 / 5;
     grid-row: 6;
     width: 100%;
     overflow-wrap: anywhere;
   }
 
-  /* Price / compare-at / profit stay one compact horizontal line. */
+  /* Price / compare-at / profit = one visual row. */
   .result-card > .rc-header .rc-m-row3 {
     grid-area: auto;
-    grid-column: 1 / 6;
+    grid-column: 1 / 5;
     grid-row: 7;
     display: block;
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    margin: 3px 0 0;
+    margin: 5px 0 0;
     padding: 0;
     border: 0;
     background: transparent;
@@ -175,7 +176,7 @@
     flex-direction: row;
     align-items: baseline;
     flex-wrap: nowrap;
-    gap: 5px 8px;
+    gap: 4px 7px;
     width: 100%;
     min-width: 0;
     margin: 0;
@@ -192,7 +193,7 @@
     flex-direction: row;
     align-items: baseline;
     flex-wrap: nowrap;
-    gap: 4px 6px;
+    gap: 3px 5px;
     width: auto;
     min-width: 0;
     margin: 0;
@@ -204,36 +205,87 @@
     flex: 1 1 auto;
     overflow: hidden;
   }
-  .result-card > .rc-header .rc-price-mini-label { font-size: 11px; }
-  .result-card > .rc-header .rc-price-mini-value {
-    font-size: clamp(18px, 5vw, 22px);
+  .result-card > .rc-header .rc-price-mini-label {
+    font-size: 10px;
     line-height: 1.1;
+  }
+  .result-card > .rc-header .rc-price-mini-value {
+    font-size: clamp(17px, 4.8vw, 21px);
+    line-height: 1.05;
   }
   .result-card > .rc-header .rc-price-mini-strike,
   .result-card > .rc-header .rc-price-mini-profit {
-    font-size: clamp(10px, 2.7vw, 12px);
-    line-height: 1.2;
+    font-size: clamp(9px, 2.55vw, 11px);
+    line-height: 1.1;
+    letter-spacing: -.1px;
     white-space: nowrap;
   }
 
-  /* Immediate hold feedback + durable selected state. Gesture math stays in TSX. */
+  /* Long-press feedback only; gesture timing/math stays in TSX. */
   .result-card > .rc-header {
     transition: transform 110ms ease, background 110ms ease;
     transform-origin: center;
   }
   .result-card > .rc-header:active {
     transform: scale(.988);
-    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
   }
   .result-card.is-checked {
     border-color: color-mix(in srgb, var(--accent) 78%, var(--border));
     box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent), var(--shadow-s);
   }
   .result-card.is-checked > .rc-header {
-    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    background: color-mix(in srgb, var(--accent) 9%, var(--surface));
   }
 
-  /* Scope and sort are equal flex peers when both exist; one control fills 100%. */
+  /* Results header: title + compact sequential-review controls on one line. */
+  .rc-panel-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+  }
+  .rc-panel-header > h2 {
+    min-width: 0;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .rc-panel-header .rc-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  .rc-panel-header .rc-header-select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 34px;
+    margin: 0;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .rc-panel-header .rc-header-select-all input {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+  }
+  .rc-panel-header .rc-header-seq-btn {
+    width: auto;
+    min-width: 0;
+    min-height: 34px;
+    height: 34px;
+    padding: 0 9px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  /* Scope and sort keep equal width, but return to the shorter control height. */
   .stage-filter-row .stage-filter-end {
     display: flex;
     align-items: stretch;
@@ -247,7 +299,7 @@
     width: 0;
     min-width: 0;
     max-width: none;
-    height: 44px;
+    height: 38px;
     margin: 0;
     box-sizing: border-box;
   }
@@ -260,12 +312,93 @@
   .stage-filter-row .sort-sel {
     width: 100%;
     min-width: 0;
-    height: 44px;
-    min-height: 44px;
+    height: 38px;
+    min-height: 38px;
     box-sizing: border-box;
+    font-size: 13px;
   }
 
-  /* Shortcut hint uses current theme accent without becoming a large notice. */
+  /* Batch strip: count on top; Cancel / primary / direct remove on one row. */
+  .rc-batch-strip {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 7px;
+    padding: 10px;
+  }
+  .rc-batch-strip .rc-batch-count {
+    grid-column: 1 / -1;
+    margin: 0 0 1px;
+    align-self: center;
+  }
+  .rc-batch-strip .rc-batch-cancel,
+  .rc-batch-strip .batch-primary-action,
+  .rc-batch-strip details.batch-more > summary,
+  .rc-batch-strip details.batch-more > .batch-more-menu > button {
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    padding-inline: 8px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .rc-batch-strip .rc-batch-cancel {
+    grid-column: 1;
+    width: 100%;
+  }
+  .rc-batch-strip .rc-batch-actions {
+    display: contents !important;
+  }
+  .rc-batch-strip .batch-primary-action {
+    grid-column: 2;
+    width: 100%;
+  }
+  .rc-batch-strip .rc-batch-actions > details.batch-more {
+    grid-column: 3;
+    min-width: 0;
+  }
+  .rc-batch-strip .rc-batch-actions > details.batch-more > summary {
+    width: 100%;
+  }
+
+  /* Copy-review More has exactly one action. Show it directly even while details is closed. */
+  .rc-batch-actions > details.batch-more:has(> .batch-more-menu > :only-child) {
+    display: block !important;
+    position: static !important;
+  }
+  .rc-batch-actions > details.batch-more:has(> .batch-more-menu > :only-child) > summary {
+    display: none !important;
+  }
+  .rc-batch-actions > details.batch-more:has(> .batch-more-menu > :only-child) > .batch-more-menu {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+  }
+  .rc-batch-actions > details.batch-more:has(> .batch-more-menu > :only-child) > .batch-more-menu > :only-child {
+    display: inline-flex !important;
+    width: 100% !important;
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    padding-inline: 7px;
+    border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
+    background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 72%, var(--text));
+    font-size: 10.5px;
+    justify-content: center;
+  }
+
+  /* Shortcut hint = compact theme-accent note. */
   .rc-gesture-hint {
     display: flex;
     align-items: center;
@@ -275,13 +408,13 @@
     padding: 6px 8px 6px 10px;
     min-height: 30px;
     border: 0;
-    border-left: 3px solid var(--accent);
+    border-left: 4px solid var(--accent);
     border-radius: 7px;
-    background: color-mix(in srgb, var(--accent) 11%, var(--surface));
-    color: color-mix(in srgb, var(--accent) 62%, var(--text));
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    color: color-mix(in srgb, var(--accent) 74%, var(--text));
     box-shadow: none;
     font-size: 12px;
-    font-weight: 650;
+    font-weight: 700;
     line-height: 1.35;
   }
   .rc-gesture-hint-dismiss {
@@ -292,36 +425,8 @@
     padding: 0;
     border: 0;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
     color: inherit;
-  }
-
-  /* A one-action More menu is redundant. Multi-action image-review More remains. */
-  .rc-batch-actions > details.batch-more:has(> .batch-more-menu > :only-child) {
-    display: contents;
-  }
-  .rc-batch-actions > details.batch-more:has(> .batch-more-menu > :only-child) > summary {
-    display: none;
-  }
-  .rc-batch-actions > details.batch-more:has(> .batch-more-menu > :only-child) > .batch-more-menu {
-    position: static;
-    display: flex;
-    width: auto;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-  .rc-batch-actions > details.batch-more:has(> .batch-more-menu > :only-child) > .batch-more-menu > :only-child {
-    width: auto;
-    min-width: 0;
-    min-height: 44px;
-    padding-inline: 12px;
-    border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
-    background: color-mix(in srgb, var(--danger) 6%, var(--surface));
-    color: color-mix(in srgb, var(--danger) 72%, var(--text));
   }
 
   /* Compact, theme-aware swipe actions; handlers and thresholds unchanged. */
@@ -333,8 +438,8 @@
   }
   .rc-swipe-actions .rc-swipe-approve,
   .rc-swipe-actions .rc-swipe-secondary {
-    min-height: 48px;
-    max-height: 56px;
+    min-height: 46px;
+    max-height: 54px;
     padding: 7px 5px;
     border: 1px solid var(--border);
     border-radius: 999px;
@@ -356,24 +461,35 @@
 
 @media (max-width: 520px) {
   .result-card > .rc-header {
-    grid-template-columns: 72px minmax(0, 1fr) max-content max-content 26px;
+    grid-template-columns: 84px minmax(0, 1fr) max-content max-content;
     column-gap: 6px;
   }
   .result-card > .rc-header > .rc-thumb {
-    width: 72px;
-    height: 72px;
+    width: 84px;
+    height: 84px;
   }
   .result-card > .rc-header .rc-station-chip {
-    max-width: 112px;
+    max-width: 106px;
     font-size: 10px;
   }
-  .result-card > .rc-header .rc-time-ago { font-size: 10px; }
+  .result-card > .rc-header .rc-time-ago {
+    font-size: 10px;
+  }
   .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn {
-    width: 26px;
-    height: 26px;
-    min-width: 26px;
-    min-height: 26px;
+    width: 27px;
+    height: 27px;
+    min-width: 27px;
+    min-height: 27px;
+    top: -13px;
+    right: 9px;
     font-size: 16px;
+  }
+  .rc-panel-header > h2 {
+    font-size: 12.5px;
+  }
+  .rc-panel-header .rc-header-seq-btn {
+    padding-inline: 7px;
+    font-size: 10.5px;
   }
 }
 

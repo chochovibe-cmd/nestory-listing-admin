@@ -50,7 +50,7 @@ Vercel 已有 production deployment：
 - desktop 維持 recovered anchor：secondary 64×64 / main 96×96 / wrap；
 - mobile (`<=959px`) 改為 **3 欄等寬正方形**；
 - mobile delete `×`：右上、32×32；
-- spec badge保留並避開 `×`。
+- spec badge 保留並避開 `×`。
 
 必須保留的後期有效 UX：
 
@@ -72,16 +72,15 @@ Vercel 已有 production deployment：
 
 因此 width containment 不再重做。
 
-### ResultCard — latest owner-corrected contract
+### ResultCard — latest owner-refined contract
 
-Owner 最新截圖指出前一版 polish 對資訊階層理解錯誤。現在 mobile contract 改為：
+Owner 2026-08-20 最新 iPhone review 再次修正資訊階層。現在 mobile contract：
 
-**Row 1**
+**Top/title row**
 
-1. 商品標題；
-2. station label（例：`文案待審核`）；
-3. 日期；
-4. 右上小 `×`。
+1. 商品標題是主要內容；
+2. station label（例：`文案待審核`）與日期必須視覺上跟在**標題最後一行**後面，不再浮在標題第一行右側；
+3. 右上 `×` 放在卡片 top border 上，而不是縮在卡片內容內。
 
 `×` 必須重用既有 `archiveOne()`：
 
@@ -94,7 +93,7 @@ Owner 最新截圖指出前一版 polish 對資訊階層理解錯誤。現在 mo
 
 - 圖片在左；
 - 右側依序放 `海外現貨`、IP/角色/類型/語氣 tags、warnings；
-- 圖片與右側資訊並列；
+- wider mobile thumb 約 92px，窄手機約 84px，讓圖片與右側 tags 視覺更平衡；
 - 不允許重新產生水平 overflow。
 
 **Price**
@@ -107,33 +106,41 @@ Owner 最新截圖指出前一版 polish 對資訊階層理解錯誤。現在 mo
 
 - 手機不顯示大型 expand arrow；
 - 正常 tap card 仍走既有 `handleHeaderClick → tryToggleExpand`；
-- long press 仍是 `LONG_PRESS_MS=500`，gesture math不改；
-- 新增按住時視覺壓感 + `is-checked` selected accent，讓多選成功有明確回饋；
-- left swipe handler / threshold不改。
+- long press 仍是 `LONG_PRESS_MS=500`，gesture math 不改；
+- 按住時有視覺壓感；`is-checked` selected accent 保留；
+- left swipe handler / threshold 不改。
+
+**Results header**
+
+- `生成結果（三站工作佇列）` 與 compact `逐件審核/逐件標圖` 在手機同一 header row；
+- `全選` 保留但縮小，不移除功能。
 
 **Batch toolbar**
 
-- copy-review 的 `更多` 只有一個 `移出佇列`，因此直接顯示這個既有 action，不再多按一層；
+- 選取後：count 在上；`取消 / 批次主動作 / 第三動作` 一排；
+- copy-review 的 `更多` 只有 `移出佇列`，因此直接顯示既有 soft-archive action，不再多按一層；
 - image-review 的 `更多` 仍有 generate-detail on/off + archive，**保留 More**，避免 UI 簡化誤刪功能。
 
 **Filters / hint**
 
-- `只看我的` 與 `最新在上` mobile outer box 同寬、同高；
-- gesture hint 保留「長按卡片可多選；左滑可快捷」，但用 theme accent 做醒目、輕量提示；
-- swipe actions只美化外觀，原 handler / API不改。
+- `只看我的` 與 `最新在上` mobile outer box 同寬；
+- 高度從 44px 回到 owner 比較喜歡的 compact 38px；
+- gesture hint 保留「長按卡片可多選；左滑可快捷」，theme accent 更明顯但仍是輕量提示；
+- swipe actions 只美化外觀，原 handler / API 不改。
 
 ### Isolation implementation
 
-最新 owner-corrected UI 使用獨立後載 stylesheet：
+最新 owner-refined UI 使用獨立後載 stylesheet：
 
 - `src/app/resultcard-mobile-release.css`
 - `layout.tsx` 在 `globals.css → stabilization.css → resultcard-mobile-release.css` 順序載入。
 
 目的：不要繼續把已驗證的 `stabilization.css` 疊成無法追蹤的大補丁，也避免 ResultCard UI 改動波及 upload / Variant / desktop。
 
-詳細 audit：
+詳細 audits：
 
 - `docs/audits/RESULTCARD-MOBILE-OWNER-CORRECTION-2026-08-20.md`
+- `docs/audits/RESULTCARD-MOBILE-REFINE-2026-08-20.md`（latest）
 
 ## 3. Explicit C guard for current UI pass
 
@@ -152,8 +159,7 @@ Owner 最新截圖指出前一版 polish 對資訊階層理解錯誤。現在 mo
 UI pass 只允許：
 
 - dedicated ResultCard mobile CSS；
-- root stylesheet import；
-- verifier；
+- mobile presentation verifier；
 - CURRENT_STATUS / audit docs。
 
 ## 4. CI gate
@@ -167,9 +173,9 @@ Canonical final automated gate：
 
 `agent/ci-gate` / `b935290` 曾建立 green CI baseline。
 
-目前 release branch每次 runtime UI調整後仍需 final CI；Vercel Preview READY ≠ GitHub full CI complete。
+目前 release branch 每次 runtime UI 調整後仍需 final CI；Vercel Preview READY ≠ GitHub full CI complete。
 
-Vercel Hobby build-rate-limit/quota error不要誤判成 code compile failure。
+Vercel Hobby build-rate-limit/quota error 不要誤判成 code compile failure。
 
 ## 5. Runtime / tool health audit — 2026-08-20
 
@@ -278,22 +284,23 @@ Historical `001–039`：`supabase/history/pre_tracking_migrations/`，不可 pr
 Owner iPhone 驗最新 Preview：
 
 1. containment不能回歸；
-2. top row順序：title → station → date → small `×`；
-3. small `×` 可以移出佇列且 undo正常；
-4. thumbnail left / sale+tags+warnings right；
+2. title 正常換行，station + date 視覺跟在 title 最後一行；
+3. card `×` 位在右上 border 上，可以移出佇列且 undo正常；
+4. thumbnail left / sale+tags+warnings right，比例平衡；
 5. price / compare / profit 一排且不 overflow；
 6. long-press有按住 feedback，成功後selected state明顯；
-7. copy-review batch直接看到移出佇列，不需一個只有一項的 More；
-8. image-review More的 generate-detail options仍在；
-9. scope/sort等寬等高；
-10. gesture hint使用theme accent；
-11. left swipe actions可正常執行；
-12. uploader仍3欄；
-13. Variant picker/zoom快速 sanity check。
+7. results header 與逐件審核 compact 且不 overflow；
+8. copy-review batch直接看到移出佇列，不需一個只有一項的 More；
+9. image-review More的 generate-detail options仍在；
+10. scope/sort等寬且 compact 38px；
+11. gesture hint使用theme accent；
+12. left swipe actions可正常執行；
+13. uploader仍3欄；
+14. Variant picker/zoom快速 sanity check。
 
 ## 9. Shortest path to formal production use
 
-1. 本輪 owner-corrected ResultCard Preview通過 iPhone runtime。
+1. 本輪 owner-refined ResultCard Preview通過 iPhone runtime。
 2. **停止 mobile UI施工**。
 3. final GitHub CI：`verify:all → typecheck → build`。
 4. Production Shopify env/config preflight（不曝露secret）。
@@ -320,7 +327,8 @@ UI / regression：
 - `docs/audits/MOBILE-RUNTIME-VALIDATION-2026-08-19.md`
 - `docs/audits/MOBILE-RELEASE-LAYOUT-2026-08-20.md`
 - `docs/audits/RESULTCARD-MOBILE-POLISH-2026-08-20.md`（前一版 owner後續已修正）
-- `docs/audits/RESULTCARD-MOBILE-OWNER-CORRECTION-2026-08-20.md`（最新）
+- `docs/audits/RESULTCARD-MOBILE-OWNER-CORRECTION-2026-08-20.md`
+- `docs/audits/RESULTCARD-MOBILE-REFINE-2026-08-20.md`（latest）
 - `docs/audits/RELEASE-HEALTH-AUDIT-2026-08-20.md`
 
 DB / security：

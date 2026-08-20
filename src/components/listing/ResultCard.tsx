@@ -1995,6 +1995,7 @@ export function ResultCard({
   }
 
   const mobileCardPrimary = stationFlowPrimaryLabel(draft);
+  const mobileCardSecondary = secondaryStatusForResultCard(draft);
   const mobileCardTimeLabel = formatRelativeTime(draft.created_at);
   const mobileCardTimeTitle = formatAbsoluteLocalTime(draft.created_at);
 
@@ -2012,6 +2013,9 @@ export function ResultCard({
           >
             {mobileCardPrimary.label}
           </span>
+        ) : null}
+        {isNarrow && mobileCardSecondary ? (
+          <StatusBadge status={mobileCardSecondary} />
         ) : null}
         {isNarrow && mobileCardTimeLabel ? (
           <span

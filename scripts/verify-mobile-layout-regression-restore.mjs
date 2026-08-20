@@ -47,9 +47,9 @@ expect(card, /\.stage-filter-row\s+\.stage-filter-pills\s*\{[^}]*overflow-x:\s*a
 // R3 row 1 hierarchy: title -> station -> date in natural flow; X stays soft-remove.
 expect(releaseCss, /grid-template-columns:\s*94px\s+minmax\(0,\s*1fr\)\s+max-content\s+max-content;/, "mobile card must keep the balanced 94px summary anchor");
 expect(releaseCss, /\.rc-title-flow\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap;/s, "title, station and date must share one natural wrapping flow");
-expect(resultCard, /className="rc-title-flow"[\s\S]*rc-title-inline-station[\s\S]*rc-title-inline-time/, "R3 inline station/date DOM must follow the title");
-expect(releaseCss, /\.rc-head-meta \.rc-station-chip,[\s\S]*\.rc-head-meta \.rc-time-ago\s*\{[^}]*display:\s*none;/s, "old pinned station/date copies must be hidden on mobile");
-expect(releaseCss, /\.rc-dismiss-btn\s*\{[^}]*top:\s*0;[^}]*display:\s*inline-flex(?:\s*!important)?;[^}]*transform:\s*translateY\(-50%\);/s, "existing soft-remove control must straddle the mobile top border");
+expect(resultCard, /className="rc-title-flow"[\s\S]*rc-title-inline-station[\s\S]*mobileCardSecondary[\s\S]*rc-title-inline-time/, "D1 inline station/secondary/date DOM must follow the title");
+expect(releaseCss, /\.rc-head-meta \.rc-station-chip,[\s\S]*\.rc-head-meta > \.status,[\s\S]*\.rc-head-meta \.rc-time-ago\s*\{[^}]*display:\s*none;/s, "old pinned station/status/date copies must be hidden on mobile");
+expect(releaseCss, /\.rc-dismiss-btn\s*\{[^}]*top:\s*6px;[^}]*display:\s*inline-flex;[^}]*transform:\s*none;/s, "existing soft-remove control must remain fully visible at mobile top-right");
 expect(releaseCss, />\s*\.rc-quick-row\s*>\s*\.rc-toggle\s*\{[^}]*display:\s*none;/s, "large mobile expand toggle stays hidden");
 
 // Summary: thumb left, status/tags/warnings right.
@@ -59,7 +59,7 @@ expect(releaseCss, /\.rc-detect-chips--tags\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[
 expect(releaseCss, /\.rc-detect-chips--warns\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*4;/s, "warnings must stay right of thumbnail");
 
 // Price remains unboxed and horizontal.
-expect(releaseCss, /\.rc-price-mini\s*\{[^}]*flex-direction:\s*row;[^}]*flex-wrap:\s*nowrap;[\s\S]*white-space:\s*nowrap;/s, "mobile price must remain one compact row");
+expect(releaseCss, /\.rc-price-mini\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:[^}]*align-items:\s*baseline;[\s\S]*white-space:\s*nowrap;/s, "mobile price must remain one aligned compact row");
 expect(releaseCss, /\.rc-price-mini-main,[\s\S]*\.rc-price-mini-sub\s*\{[^}]*display:\s*contents;/s, "price wrappers must flatten into peer items");
 expect(releaseCss, /\.rc-m-regen-slot\s*\{[^}]*display:\s*none;/s, "inline collapsed regenerate must stay hidden");
 
@@ -82,6 +82,7 @@ expect(resultsPanel, /className="batch-remove-action"[\s\S]*batchArchiveOrUnarch
 expect(resultsPanel, /onClick=\{\(\) => void batchArchiveOrUnarchive\("archive"\)\}/, "batch soft-remove handler must remain");
 expect(resultsPanel, /batchSetGenerateDetail\(true\)/, "image-review detail-compose ON action must remain");
 expect(resultsPanel, /batchSetGenerateDetail\(false\)/, "image-review detail-compose OFF action must remain");
+if (/<details className="batch-more">/.test(resultsPanel)) fail("image-review actions must not remain hidden under More");
 
 // Existing soft archive / expand / swipe code paths remain.
 expect(resultCard, /async function archiveOne\(\)/, "single-card soft archive handler must remain");

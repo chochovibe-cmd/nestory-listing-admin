@@ -1408,22 +1408,8 @@ export function DraftResultsPanel({
     <section className="panel results-panel">
       <div className="panel-header rc-panel-header">
         <h2>◈ 生成結果（三站工作佇列）</h2>
-        {/* UX-B3-P02: header 精簡列＝全選（有佇列）+ 逐件（站①／②） */}
+        {/* Header keeps only the station-specific sequential action. */}
         <div className="rc-header-actions">
-          {showToolbar ? (
-            <label className="rc-header-select-all">
-              <input
-                checked={allSelected}
-                onChange={toggleAll}
-                ref={(el) => {
-                  if (el) el.indeterminate = someSelected;
-                }}
-                type="checkbox"
-                aria-label="全選目前列表"
-              />
-              <span>全選</span>
-            </label>
-          ) : null}
           {isCopyStation || isImageStation ? (
             <Button
               size="sm"
@@ -1476,6 +1462,36 @@ export function DraftResultsPanel({
               ))}
             </div>
             {progress.error ? <div className="gen-error">⚠ {progress.error}</div> : null}
+          </div>
+        ) : null}
+
+        {showToolbar ? (
+          <div className="rc-selection-guide-row">
+            <label className="rc-header-select-all">
+              <input
+                checked={allSelected}
+                onChange={toggleAll}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected;
+                }}
+                type="checkbox"
+                aria-label="全選目前列表"
+              />
+              <span>全選</span>
+            </label>
+            {showGestureHint ? (
+              <p className="rc-gesture-hint" role="note">
+                <span>長按卡片可多選；左滑可快捷</span>
+                <button
+                  aria-label="關閉提示"
+                  className="rc-gesture-hint-dismiss"
+                  onClick={dismissGestureHint}
+                  type="button"
+                >
+                  ×
+                </button>
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -1561,41 +1577,36 @@ export function DraftResultsPanel({
                         ? `⚠ 再點確認 ${selectedArray.length} 筆`
                         : "✓ 批次標圖通過"}
                   </Button>
-                  <details className="batch-more">
-                    <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
-                    <div className="batch-more-menu">
-                      <Button
-                        size="sm"
-                        fullWidth
-                        disabled={busy || !selectedArray.length}
-                        onClick={() => void batchSetGenerateDetail(true)}
-                        title="勾選商品：開啟合成詳情圖（預設）"
-                        type="button"
-                      >
-                        開·生成詳情圖
-                      </Button>
-                      <Button
-                        size="sm"
-                        fullWidth
-                        disabled={busy || !selectedArray.length}
-                        onClick={() => void batchSetGenerateDetail(false)}
-                        title="勾選商品：關閉合成詳情圖（不進合成佇列）"
-                        type="button"
-                      >
-                        關·生成詳情圖
-                      </Button>
-                      <Button
-                        size="sm"
-                        fullWidth
-                        disabled={busy || !selectedArray.length}
-                        onClick={() => void batchArchiveOrUnarchive("archive")}
-                        title="移出工作佇列（軟刪除，可救回）"
-                        type="button"
-                      >
-                        🗄 移出佇列
-                      </Button>
-                    </div>
-                  </details>
+                  <Button
+                    size="sm"
+                    className="batch-detail-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchSetGenerateDetail(true)}
+                    title="勾選商品：開啟合成詳情圖（預設）"
+                    type="button"
+                  >
+                    開啟詳情圖
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="batch-detail-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchSetGenerateDetail(false)}
+                    title="勾選商品：關閉合成詳情圖（不進合成佇列）"
+                    type="button"
+                  >
+                    關閉詳情圖
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="batch-remove-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchArchiveOrUnarchive("archive")}
+                    title="移出工作佇列（軟刪除，可救回）"
+                    type="button"
+                  >
+                    移出佇列
+                  </Button>
                 </>
               ) : null}
               {isReadyStation ? (
@@ -1740,19 +1751,6 @@ export function DraftResultsPanel({
           </div>
         ) : (
           <>
-            {showGestureHint ? (
-              <p className="rc-gesture-hint" role="note">
-                <span>長按卡片可多選；左滑可快捷</span>
-                <button
-                  aria-label="關閉提示"
-                  className="rc-gesture-hint-dismiss"
-                  onClick={dismissGestureHint}
-                  type="button"
-                >
-                  ×
-                </button>
-              </p>
-            ) : null}
             <div className="results-list" id="results-list">
               {visibleDrafts.map((draft) => (
                 <ResultCard

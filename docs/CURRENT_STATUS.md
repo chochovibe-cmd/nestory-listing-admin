@@ -10,6 +10,18 @@
 
 ## 0. ResultCard mobile R3 — source complete, awaiting iPhone QA
 
+### UIUX Batch D1 follow-up
+
+ResultCard / results-panel now uses the same selection hierarchy on mobile and
+desktop: select-all is on the guide row and selected batch actions appear on
+the next row. Image-review batch actions are directly visible (no More menu).
+Mobile status labels precede the date, the archive X is fully visible, and the
+price row uses an aligned grid. Desktop cards use a title-only first row with
+the thumbnail and vertically centred supporting content beneath it. The visible
+expand triangle is removed while the existing card-tap expand handler remains.
+
+See `docs/audits/RESULTCARD-UIUX-BATCH-D1-2026-08-20.md`.
+
 Latest owner contract is now implemented directly in formal source: natural
 `title → station → date` flow, balanced image/right summary, one-line
 sale/strike/profit, card X on the border, 38px scope/sort, compact

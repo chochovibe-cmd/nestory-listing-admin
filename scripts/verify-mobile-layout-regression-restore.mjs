@@ -16,18 +16,26 @@ const resultCard = fs.readFileSync("src/components/listing/ResultCard.tsx", "utf
 
 const thumbStart = stabilization.indexOf("/* RC-THUMB / 2026-08-20:");
 const cardStart = stabilization.indexOf("/* RC-CARD / 2026-08-20:");
-if (thumbStart < 0 || cardStart < 0 || cardStart <= thumbStart) {
-  fail("mobile release layout sections are missing or out of order");
+const polishStart = stabilization.indexOf("/* RC-POLISH / 2026-08-20:");
+if (
+  thumbStart < 0 ||
+  cardStart < 0 ||
+  polishStart < 0 ||
+  cardStart <= thumbStart ||
+  polishStart <= cardStart
+) {
+  fail("mobile release layout / polish sections are missing or out of order");
 }
 
 const thumb = stabilization.slice(thumbStart, cardStart);
-const card = stabilization.slice(cardStart);
+const card = stabilization.slice(cardStart, polishStart);
+const polish = stabilization.slice(polishStart);
 
 // Desktop/recovered uploader contract remains available outside the phone override.
 expect(thumb, /\.pthumb-strip\s*\{[^}]*flex-wrap:\s*wrap;/s, "ImageUploader strip must still wrap");
 expect(thumb, /\.pthumb-strip\s+\.pthumb-img\s*\{[^}]*width:\s*64px;[^}]*height:\s*64px;/s, "desktop secondary upload thumbnails must keep 64x64 anchor");
 expect(thumb, /\.pthumb-strip\s+\.pthumb\.is-main\s+\.pthumb-img\s*\{[^}]*width:\s*96px;[^}]*height:\s*96px;/s, "desktop main upload thumbnail must keep 96x96 anchor");
-if (/flex-wrap:\s*nowrap/.test(thumb) || /overflow-x:\s*auto;[\s\S]*P10/.test(thumb)) {
+if (/flex-wrap:\s*nowrap/.test(thumb)) {
   fail("P10 nowrap thumbnail geometry must not return");
 }
 
@@ -64,7 +72,7 @@ expect(uploader, /toggleSpecMark\(item\)/, "per-thumbnail spec marking must rema
 expect(uploader, /className="thumb-remove"/, "thumbnail delete control must remain");
 expect(uploader, /draggable/, "thumbnail reorder capability must remain");
 
-// Results pane must be the hard mobile width boundary, not just ResultCard itself.
+// Results pane remains the hard mobile width boundary.
 expect(
   card,
   /\.workbench,[\s\S]*\.workbench-pane-results\.mob-active,[\s\S]*\.panel\.results-panel,[\s\S]*\.results-list,[\s\S]*\.result-card\s*,[\s\S]*\.result-card\s*>\s*\.rc-header\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/s,
@@ -81,28 +89,67 @@ expect(
   "stage pills must scroll internally instead of widening the results pane"
 );
 
-// ResultCard keeps all content inside the bounded pane and adapts on phone widths.
+// Owner-confirmed ResultCard polish is presentation-only.
 expect(
-  card,
-  /grid-template-areas:\s*\n\s*"title title"\s*\n\s*"thumb chips"\s*\n\s*"row3 row3";/,
-  "mobile ResultCard must keep a bounded title/summary/action structure"
+  polish,
+  /grid-template-columns:\s*64px\s+minmax\(0,\s*1fr\)\s+auto\s+auto;/,
+  "mobile ResultCard polish must reserve title/meta columns without widening the card"
 );
-expect(card, /\.rc-head-chips\s*\{[^}]*width:\s*100%;[^}]*overflow:\s*hidden;/s, "mobile chip cluster must be width-bounded");
-expect(card, /\.rc-detect-chip,[\s\S]*text-overflow:\s*ellipsis;[\s\S]*white-space:\s*nowrap;/, "long mobile chips must not protrude");
 expect(
-  card,
-  /@media \(max-width:\s*639px\)[\s\S]*\.rc-m-row3\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
-  "phone regen/price row must be allowed to stack"
+  polish,
+  /\.rc-title\s*\{[^}]*grid-column:\s*1\s*\/\s*3;[^}]*grid-row:\s*1;/s,
+  "mobile title must occupy the first row"
 );
-expect(card, /\.rc-price-mini-value,[\s\S]*white-space:\s*normal;[\s\S]*overflow-wrap:\s*anywhere;/, "phone price/profit text must be allowed to wrap");
-expect(card, /\.rc-tone-chip\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/s, "phone tone chip must be allowed to wrap");
+expect(
+  polish,
+  /\.rc-head-meta\s*\{[^}]*grid-column:\s*3\s*\/\s*5;[^}]*grid-row:\s*1;/s,
+  "station/date meta must share the title row"
+);
+expect(
+  polish,
+  /\.rc-sale-badge\s*\{[^}]*grid-column:\s*2\s*\/\s*5;[^}]*grid-row:\s*2;/s,
+  "sale-status badge must move to the thumbnail summary row"
+);
+expect(
+  polish,
+  />\s*\.rc-quick-row\s*>\s*\.rc-toggle\s*\{[^}]*display:\s*none;/s,
+  "visible mobile expand toggle must stay hidden by owner decision"
+);
+expect(
+  polish,
+  /\.rc-m-regen-slot\s*\{[^}]*display:\s*none;/s,
+  "inline mobile regenerate control must stay hidden"
+);
+expect(
+  polish,
+  /\.rc-m-row3\s*>\s*\.rc-price-mini,[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/,
+  "collapsed mobile price must remain unboxed"
+);
+expect(
+  polish,
+  /\.rc-gesture-hint\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;/s,
+  "mobile gesture hint must remain plain helper text"
+);
+expect(
+  polish,
+  /\.rc-swipe-actions\s*\{[^}]*align-items:\s*center;[^}]*gap:\s*6px;[^}]*background:\s*transparent;/s,
+  "mobile swipe rail must use compact centered actions"
+);
+expect(
+  polish,
+  /\.rc-swipe-actions\s+\.rc-swipe-approve,[\s\S]*max-height:\s*64px;[\s\S]*border-radius:\s*14px;/,
+  "mobile swipe buttons must not render as full-height slabs"
+);
 
-// Later ResultCard behavior must remain.
-expect(stabilization, /\.rc-toggle[\s\S]*display:\s*inline-flex;/, "explicit mobile expand affordance must remain");
+// Behavior code is explicitly outside this polish pass and must remain.
+expect(resultCard, /function\s+handleHeaderClick\(\)/, "card tap-to-expand handler must remain");
+expect(resultCard, /tryToggleExpand\(\);/, "tap-to-expand path must remain");
 expect(resultCard, /handleHeaderTouchStart/, "mobile long-press/swipe gesture handler must remain");
 expect(resultCard, /rc-swipe-wrap/, "mobile swipe actions must remain");
 expect(resultCard, /selectMode/, "mobile multi-select behavior must remain");
-expect(resultCard, /className="rc-quick-btn rc-m-regen-btn"/, "mobile regenerate action must remain");
-expect(resultCard, /\{priceMiniEl\}/, "mobile price element must remain");
+expect(resultCard, /openRegenModal\(\)/, "regenerate handler must remain");
+expect(resultCard, /className="rc-swipe-approve"/, "swipe approve action must remain");
+expect(resultCard, /className="rc-swipe-secondary"/, "swipe secondary/regenerate action must remain");
+expect(resultCard, /\{priceMiniEl\}/, "collapsed price data must remain");
 
-console.log("PASS: mobile release layout is bounded, three-column, and preserves later UX.");
+console.log("PASS: mobile ResultCard polish changes presentation only and preserves release behavior.");

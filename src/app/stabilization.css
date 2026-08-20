@@ -10,6 +10,10 @@
  * control. B3-P04 selectMode then makes header taps toggle selection instead of
  * expand, leaving no visible expand path. Keep desktop quick actions hidden on
  * mobile, but restore the existing rc-toggle as a compact 44px affordance.
+ *
+ * 2026-08-20 owner runtime review supersedes the visible mobile affordance:
+ * normal card tap remains the preferred expand path, and RC-POLISH below hides
+ * the visual toggle on mobile without changing ResultCard handlers.
  */
 @media (max-width: 959px) {
   .result-card > .rc-header {
@@ -362,5 +366,248 @@
   .result-card > .rc-header .rc-tone-chip {
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+}
+
+/* RC-POLISH / 2026-08-20:
+ * Owner-confirmed containment now passes on iPhone. This pass is presentation
+ * polish only: no ResultCard handlers, review/publish APIs, swipe semantics,
+ * ImageUploader, Variant or database code are changed.
+ *
+ * Mobile visual contract:
+ * - title + station/date share the top row;
+ * - sale-status badge moves to the summary row beside the thumbnail;
+ * - visible expand toggle is removed (normal card tap remains the expand path);
+ * - inline mobile regenerate button is hidden; regenerate remains in swipe actions;
+ * - price stays visible but loses the heavy boxed treatment;
+ * - gesture hint becomes plain helper text;
+ * - swipe actions become compact centered buttons instead of full-height slabs.
+ */
+@media (max-width: 959px) {
+  .result-card > .rc-header {
+    grid-template-areas: none;
+    grid-template-columns: 64px minmax(0, 1fr) auto auto;
+    grid-auto-flow: row;
+    column-gap: 8px;
+    row-gap: 6px;
+  }
+
+  .result-card > .rc-header > .rc-headmain,
+  .result-card > .rc-header .rc-title-row,
+  .result-card > .rc-header .rc-head-chips {
+    display: contents;
+  }
+
+  .result-card > .rc-header .rc-title {
+    grid-column: 1 / 3;
+    grid-row: 1;
+    min-width: 0;
+    max-width: 100%;
+    align-self: center;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .result-card > .rc-header .rc-head-meta {
+    grid-column: 3 / 5;
+    grid-row: 1;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-self: end;
+    align-self: center;
+  }
+
+  .result-card > .rc-header .rc-station-chip,
+  .result-card > .rc-header .rc-time-ago {
+    flex-shrink: 0;
+  }
+
+  .result-card > .rc-header > .rc-thumb {
+    grid-area: auto;
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+  }
+
+  .result-card > .rc-header .rc-sale-badge {
+    grid-column: 2 / 5;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+  }
+
+  .result-card > .rc-header .rc-detect-chips--tags {
+    grid-column: 2 / 5;
+    grid-row: 3;
+    width: 100%;
+  }
+
+  .result-card > .rc-header .rc-detect-chips--warns {
+    grid-column: 2 / 5;
+    grid-row: 4;
+    width: 100%;
+  }
+
+  .result-card > .rc-header .rc-fail-reason {
+    grid-column: 1 / 5;
+    grid-row: 5;
+    width: 100%;
+  }
+
+  .result-card > .rc-header .rc-m-row3 {
+    grid-area: auto;
+    grid-column: 1 / 5;
+    grid-row: 6;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin-top: 2px;
+    padding: 2px 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .result-card > .rc-header .rc-m-regen-slot {
+    display: none;
+  }
+
+  .result-card > .rc-header .rc-m-row3 > .rc-price-mini,
+  .result-card > .rc-header .rc-m-row3 > .rc-price-stack {
+    grid-column: auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+    align-items: flex-start;
+    justify-self: stretch;
+  }
+
+  .result-card > .rc-header .rc-price-mini {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 4px 10px;
+    flex-wrap: wrap;
+  }
+
+  .result-card > .rc-header .rc-price-mini-main,
+  .result-card > .rc-header .rc-price-mini-sub {
+    width: auto;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 4px 8px;
+    flex-wrap: wrap;
+  }
+
+  .result-card > .rc-header > .rc-quick-row > .rc-toggle {
+    display: none;
+  }
+
+  .result-card > .rc-header .rc-title-row {
+    padding-right: 0;
+  }
+
+  .rc-gesture-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin: 0 2px 8px;
+    padding: 2px 4px;
+    min-height: 24px;
+    color: var(--text-muted);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .rc-gesture-hint-dismiss {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .rc-swipe-actions {
+    align-items: center;
+    gap: 6px;
+    padding: 8px 6px;
+    background: transparent;
+  }
+
+  .rc-swipe-actions .rc-swipe-approve,
+  .rc-swipe-actions .rc-swipe-secondary {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 52px;
+    max-height: 64px;
+    height: auto;
+    padding: 8px 5px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+    box-shadow: var(--shadow-s);
+  }
+
+  .rc-swipe-actions .rc-swipe-approve {
+    background: color-mix(in srgb, var(--accent) 88%, var(--surface));
+    color: var(--accent-fg);
+    border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  }
+
+  .rc-swipe-actions .rc-swipe-secondary {
+    background: color-mix(in srgb, var(--surface2) 86%, var(--surface));
+    color: var(--text);
+    border-left: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 520px) {
+  .result-card > .rc-header {
+    grid-template-columns: 56px minmax(0, 1fr) auto auto;
+  }
+
+  .result-card > .rc-header > .rc-thumb {
+    width: 56px;
+    height: 56px;
+  }
+
+  .result-card > .rc-header .rc-head-meta {
+    gap: 4px;
+  }
+
+  .result-card > .rc-header .rc-station-chip,
+  .result-card > .rc-header .rc-time-ago {
+    font-size: 11px;
   }
 }

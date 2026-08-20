@@ -4,6 +4,7 @@
 
 更新基準：2026-08-20
 正式 app 基準分支：`codex/nestory-v0.1-safety-skeleton`
+正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release regression 分支：`agent/release-thumbnail-regression-fix`
 
 ## 1. Production / app 狀態切分
@@ -28,29 +29,40 @@ Supabase production reconciliation 已完成。
 - product_variants 143
 - profiles 1
 
-### 尚未進 production app
+### Production app baseline 已部署；目前 mobile polish 尚未進 production
 
-P0/P1 UI、Variant、ResultCard、archive API、目前 mobile release-layout 修復都仍在 GitHub branch stack，**尚未 merge 到正式 app 基準，也沒有 Vercel production deploy**。
+Vercel 目前可確認有一筆 **production deployment**：
 
-所以：「DB repair 已上 production」≠「這輪 app 修復已上線」。
+- target：production
+- Git commit：`6ff020dd1d68152b6688c9695f8f96188b7862be`
+- commit message：`release: merge Nestory stabilization and tracked Supabase baseline (#6)`
+
+GitHub 正式 app 基準分支 `codex/nestory-v0.1-safety-skeleton` 目前 HEAD 也正是 `6ff020dd`。
+
+因此要明確切分：
+
+- baseline stabilization / migration-baseline release：**已在 production**；
+- 之後的 ImageUploader / ResultCard mobile runtime 修復與本輪 polish：仍在 `agent/release-thumbnail-regression-fix`，**尚未 merge / 尚未 production deploy**。
+
+不要再寫「目前完全沒有 Vercel production deploy」；那已是過時資訊。
 
 ## 2. Stabilization stack
 
-已實作、待最後整合/實機：
+已實作、待目前 mobile polish 最後實機：
 
 - P0-1 Variant destructive axis confirm atomic
 - P0-2 duplicate option combination protection
-- P0-3 mobile ResultCard compact expand affordance
+- P0-3 mobile ResultCard explicit expand affordance：歷史修復已實作；**2026-08-20 owner runtime review 明確改為手機正常模式以整卡點按展開，不再顯示大型 rc-toggle**。原 handler 保留，這是 owner supersede，不是遺失修復。
 - P1-1 mobile interactive-target gesture isolation
 - P1-2 desktop Variant hover containment
 - P1-3 browser-storage secret policy
 - P0 batch archive owner authorization / `fdc5527`
 
-Source-contract/verifier 已有；mobile / Variant / role UX 仍需 release runtime gate。
+目前 production baseline 已包含先前 merge 的 stabilization 組；本輪 mobile runtime/polish 分支仍要通過 release runtime gate 才能再整合。
 
 ## 3. UIUX collateral audit + runtime state
 
-使用者規則：**不要整包回退 UIUX。先確認原本要改的 A 與實際 diff，只修已證實是 collateral 的 B；證據不足就不動。**
+使用者規則：**不要整包回退 UIUX。先確認原本要改的 A 與實際 diff，只修已證實是 collateral 的 B；證據不足就不動。後續 polish 也必須避免改 A 時動到無關 C。**
 
 已盤點 ImageUploader / ResultCard / Variant / workbench，並回掃 B2/B3/B4、UX-PKG1～6、AF polish 等高風險 UIUX commits。
 
@@ -60,6 +72,7 @@ Source-contract/verifier 已有；mobile / Variant / role UX 仍需 release runt
 - `docs/audits/MOBILE-REGRESSION-RESTORE-2026-08-19.md`
 - `docs/audits/MOBILE-RUNTIME-VALIDATION-2026-08-19.md`
 - `docs/audits/MOBILE-RELEASE-LAYOUT-2026-08-20.md`
+- `docs/audits/RESULTCARD-MOBILE-POLISH-2026-08-20.md`
 
 ### ImageUploader
 
@@ -79,23 +92,39 @@ Source-contract/verifier 已有；mobile / Variant / role UX 仍需 release runt
 - desktop 保留 64/96 anchor；
 - spinner、retry、paste、drag/reorder、soft-remove、dual-size upload、spec marking 全保留。
 
-### Results / ResultCard — release blocker
+2026-08-20 owner 最新 iPhone 截圖顯示三欄縮圖可接受；本輪 ResultCard polish **不再修改 ImageUploader**。
+
+### Results / ResultCard — containment 已通過，進入窄範圍 polish
 
 2026-08-19 的 row3/nowrap 窄修在 iPhone 上仍不足。
 
-2026-08-20 重新對照 runtime screenshot 後，根因範圍提升：**不只 ResultCard，stage filter / scope / sort 也可能一起被右側裁切**。因此 mobile results pane 必須先成為硬性寬度邊界，不能再只修卡片內某一列。
+2026-08-20 release-layout 改成：`workbench → active results pane → results panel/body/list → swipe wrapper → card/header` 全鏈寬度 containment，並讓 stage pills 只在自己的容器內水平滑動。
 
-目前 release-safe 策略：
+**最新 iPhone 實測已確認：ResultCard 不再凸出手機可視框。** 因此 width containment 不再重做。
 
-- `workbench → active results pane → results panel/body/list → swipe wrapper → card/header` 全鏈 `width:100% + min-width:0 + max-width:100%`；
-- results pane 本身阻止 residual horizontal paint；
-- stage pills 維持「容器內水平滑動」，不得反向撐寬 results pane；
-- ResultCard 保留 title / thumb+chips / regen+price 結構與所有功能；
-- chips/meta/failReason/price 全部必須服從卡片寬度；
-- `<=639px` 允許 regen / price 上下排列，price/profit/tone 可換行；
-- regen、expand、long-press、swipe、multi-select 全保留。
+Owner 接著要求的只是一輪手機 presentation polish；不改 ResultCard 行為程式：
 
-**這不是歷史 revert。** ResultCard 已累積太多功能，release contract 改為：功能保留，但手機任何內容都不能把 results pane / card 撐出可視框。
+- 商品標題保持主視覺；`文案待審核` / station label + 日期放在標題同一列右側；
+- `海外現貨` / sale-status badge 移到縮圖 summary row；
+- 手機正常模式隱藏大型 rc-toggle，整卡點按仍走原 `handleHeaderClick → tryToggleExpand`；
+- collapsed card 內不再顯示獨立 `重生`，重生保留在 swipe action；
+- 售價 / 原價 / 利潤資料保留，但移除厚重外框；
+- `長按卡片可多選；左滑可快捷` 改為小字 helper，不用大 notice 框；
+- swipe 核准 / 重生（或各 station 對應 action）只美化成較短、圓角的 action buttons，handler / API / disabled rules 不動。
+
+這一輪使用 **CSS-only mobile presentation override**；`ResultCard.tsx` 不修改。
+
+明確 C guard（本輪不動）：
+
+- ImageUploader / upload pipeline；
+- VariantEditor / variant persistence；
+- long-press / swipe gesture math；
+- multi-select state；
+- review / approve / revision / archive / publish APIs；
+- Shopify config；
+- Supabase schema/data/RLS；
+- roles/auth；
+- desktop ResultCard quick actions。
 
 已查過但沒有足夠現行 bug 證據，因此目前不動：
 
@@ -174,8 +203,10 @@ Production reconcile 已 tracked。若未來要回復：
 - 不要刪/偽造 migration ledger；
 - 建立新的 timestamped tracked revert migration，再 postcheck。
 
-## 10. GitHub / PR 狀態
+## 10. GitHub / deployment 狀態
 
+- 正式 app 基準：`codex/nestory-v0.1-safety-skeleton` @ `6ff020dd`
+- Vercel production：已有 `6ff020dd` production deployment
 - Draft PR #1：CI gate
 - Draft PR #2：production reconcile planning
 - Draft PR #3：free local runtime gate
@@ -183,21 +214,25 @@ Production reconcile 已 tracked。若未來要回復：
 - migration baseline：`agent/supabase-migration-baseline`
 - current release regression：`agent/release-thumbnail-regression-fix`
 
-以上 app-related branches仍未 merge；production DB repair已完成不代表 app branch已上線。
+目前 mobile runtime / polish branch尚未 merge到 `6ff020dd` production baseline。
 
 ## 11. 下一步 — 以最快正式可用為目標
 
-1. 產生本輪 mobile release-layout 單一 clean commit / Preview。
-2. iPhone 只驗 release blockers：
-   - uploader 一排 3 張、正方形、`×` / spec badge正常；
-   - stage filters / scope / sort 不超出螢幕；
-   - ResultCard border、chips、price/profit 全部不凸出；
-   - regen / expand / long-press / swipe / multi-select 正常；
-   - Variant picker/zoom 快速 sanity check。
-3. 上述通過後，**停止 mobile layout 施工**。
+1. 產生本輪 ResultCard mobile polish 的單一 clean commit / Preview。
+2. iPhone 只驗這一輪指定項目：
+   - containment 不得回歸；
+   - title + station/date 視覺順序正確；
+   - sale-status badge 在 summary row；
+   - mobile 不顯示大型 expand toggle，但正常點卡仍可展開；
+   - collapsed price 無大外框；
+   - collapsed card 無 inline `重生`；
+   - swipe action 仍可用且視覺較精簡；
+   - long-press multi-select 正常；
+   - uploader 三欄保持不變。
+3. 上述通過後，**停止 ResultCard/mobile layout 施工**。
 4. final Release Candidate 跑一次 GitHub CI：`verify:all` → `typecheck` → `build`。
 5. 再做最短 production env / Shopify config preflight。
-6. 實測 + CI + production config preflight 綠後，由使用者明確同意 merge / Vercel production deploy。
+6. 實測 + CI + production config preflight 綠後，由使用者明確同意把本輪 release 整合進 production baseline / Vercel production deploy。
 7. SECURITY DEFINER private-helper hardening留到 release 後，不列目前 blocker。
 
 ## 12. Source of truth
@@ -210,10 +245,11 @@ Production reconcile 已 tracked。若未來要回復：
 - `docs/audits/MOBILE-REGRESSION-RESTORE-2026-08-19.md`
 - `docs/audits/MOBILE-RUNTIME-VALIDATION-2026-08-19.md`
 - `docs/audits/MOBILE-RELEASE-LAYOUT-2026-08-20.md`
+- `docs/audits/RESULTCARD-MOBILE-POLISH-2026-08-20.md`
 - `docs/audits/CI-GATE-2026-08-18.md`
 - `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
 - `docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md`
 - `docs/audits/SUPABASE-PRODUCTION-PACKAGE-2026-08-18.md`
 - `docs/audits/SUPABASE-MIGRATION-BASELINE-2026-08-18.md`
 
-`docs/CHANGELOG.md` 是 append-only；若 connector 無安全 append primitive，不要為了補一筆紀錄而整檔覆寫/截斷。這次 mobile release-layout change 已完整記錄於本檔 + dedicated audit。
+`docs/CHANGELOG.md` 是 append-only；若 connector 無安全 append primitive，不要為了補一筆紀錄而整檔覆寫/截斷。本輪已完整記錄於本檔 + dedicated audit。

@@ -1,0 +1,425 @@
+/*
+ * D3.3 Mobile UIUX corrective — select / chips / Variant mobile presentation.
+ * Loaded after d32-corrective.css. Business/data semantics stay in existing TSX.
+ */
+
+/* ResultCard sale-status + variant-count chips share one density on all viewports.
+ * Source order is already sale status -> variant count, so geometry alone is enough. */
+.result-card .rc-sale-badge,
+.result-card .rc-variant-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  height: 22px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-s);
+  font-size: 11px;
+  line-height: 1;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+@media (max-width: 959px) {
+  /* Tabs stay first. The next row is one compact control system:
+   * [全選] [只看我的] [排序]. Reuse the existing desktop select-all node so
+   * selection semantics stay untouched; hide the old guide-row duplicate. */
+  .stage-filter-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: var(--sp-2);
+  }
+  .stage-filter-row:not(:has(.results-scope-label)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stage-filter-row .stage-filter-pills {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    order: initial;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop {
+    display: inline-flex;
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    margin: 0;
+    padding: 0 var(--sp-2);
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    box-sizing: border-box;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop:has(input:checked),
+  .stage-filter-row > .rc-header-select-all--desktop:has(input:indeterminate) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+    color: var(--text);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track {
+    flex: 0 0 auto;
+  }
+  .stage-filter-row .stage-filter-end {
+    display: contents;
+    width: auto;
+    margin: 0;
+  }
+  .stage-filter-row .results-scope-label,
+  .stage-filter-row .results-sort-label {
+    min-width: 0;
+    width: 100%;
+    min-height: 38px;
+    height: 38px;
+    margin: 0;
+    padding: 0;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+  }
+  .stage-filter-row .results-scope-label {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .stage-filter-row .results-sort-label {
+    grid-column: 3;
+    grid-row: 2;
+    padding: 0 var(--sp-2);
+  }
+  .stage-filter-row:not(:has(.results-scope-label)) .results-sort-label {
+    grid-column: 2;
+  }
+  .stage-filter-row .results-scope-label .ir-scope-select,
+  .stage-filter-row .results-sort-label,
+  .stage-filter-row .results-sort-label .sort-sel {
+    min-height: 38px;
+    height: 38px;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+  }
+  .stage-filter-row .results-scope-label .ir-scope-select {
+    width: 100%;
+    padding: 0 var(--sp-2);
+    text-align: center;
+  }
+  .stage-filter-row .results-sort-label .sort-sel {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    text-align: center;
+  }
+  .rc-selection-guide-row .rc-header-select-all--mobile {
+    display: none;
+  }
+
+  /* ResultCard: sale status and variant count are adjacent peers in row 2.
+   * Tags/warnings keep the remaining width below them. */
+  .result-card > .rc-header {
+    grid-template-columns: 94px max-content max-content minmax(0, 1fr);
+  }
+  .result-card > .rc-header .rc-sale-badge {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+  }
+  .result-card > .rc-header .rc-variant-count {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+  }
+  .result-card > .rc-header .rc-detect-chips--tags,
+  .result-card > .rc-header .rc-detect-chips--warns {
+    grid-column: 2 / 5;
+  }
+
+  /* Batch actions use one geometry. Primary emphasis is color/weight only. */
+  .rc-batch-strip .rc-batch-cancel,
+  .rc-batch-strip .batch-primary-action,
+  .rc-batch-strip .batch-detail-action,
+  .rc-batch-strip .batch-remove-action,
+  .rc-batch-strip details.batch-more > summary,
+  .rc-batch-strip details.batch-more > .batch-more-menu > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    line-height: 1.15;
+  }
+  .rc-batch-strip--copy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* Variant builder: one dimension section, title + single horizontal value rail.
+   * The rail owns horizontal touch scrolling; the page stays contained. */
+  .variant-box,
+  .variant-box .vh-builder,
+  .variant-box .vh-dims,
+  .variant-box .vh-dim-row,
+  .variant-box .vh-dim-values {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .variant-box .vh-dim-row {
+    display: block;
+    margin: 0;
+    padding: var(--sp-2) 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+  }
+  .variant-box .vh-dim-label {
+    margin: 0 0 var(--sp-1);
+  }
+  .variant-box .vh-dim-type {
+    display: inline-flex;
+    min-height: 32px;
+    padding: 0 var(--sp-2);
+    align-items: center;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-weight: 800;
+  }
+  .variant-box .vh-dim-values {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-2);
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--sp-1) 0;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .variant-box .vh-dim-values::-webkit-scrollbar {
+    display: none;
+  }
+  .variant-box .vh-dim-values .v-axis-val,
+  .variant-box .vh-dim-values .vh-dim-add-input {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .variant-box .vh-dim-values .v-axis-val {
+    min-height: 32px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--radius-s);
+  }
+  .variant-box .vh-dim-values .vh-dim-add-input {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+  }
+  .variant-box .vh-dim-values .vh-dim-add-input input {
+    width: 112px;
+    min-height: 44px;
+  }
+
+  /* "新增規格類型" is a stable in-flow accordion-like expansion. */
+  .variant-box .vh-add-dim-ghost {
+    min-height: 44px;
+    height: 44px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--radius-s);
+  }
+  .variant-box .vh-add-dim-wrap .v-pop-dim.vh-inline-pop,
+  .variant-box .v-pop-char.vh-inline-pop {
+    position: static;
+    inset: auto;
+    width: 100%;
+    max-width: 100%;
+    margin: var(--sp-2) 0 0;
+    padding: var(--sp-2) 0 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+    overflow: visible;
+  }
+  .variant-box .vh-add-dim-wrap .v-pop-dim.vh-inline-pop label,
+  .variant-box .vh-add-dim-wrap .v-pop-dim.vh-inline-pop input,
+  .variant-box .vh-add-dim-wrap .v-pop-dim.vh-inline-pop button {
+    min-height: 44px;
+  }
+
+  /* Variant results: one compact row per variant with per-row horizontal scroll.
+   * Dynamic dimension cells come from the existing dimension map, so unused
+   * dimension 2/3 columns are never invented. */
+  .variant-box {
+    counter-reset: d33-variant-row;
+  }
+  .variant-box .vgrid-hdr {
+    display: none;
+  }
+  .variant-box .vgrid-block {
+    counter-increment: d33-variant-row;
+    position: relative;
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-2);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: var(--sp-2) 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .variant-box .vgrid-block::-webkit-scrollbar {
+    display: none;
+  }
+  .variant-box .vgrid-block:has(.v-pop-pick.open) {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+  .variant-box .vgrid-row,
+  .variant-box .vgrid-sub,
+  .variant-box .v-row-actions {
+    display: contents;
+  }
+  .variant-box .vgrid-block::before {
+    content: counter(d33-variant-row);
+    order: 3;
+    display: inline-flex;
+    flex: 0 0 32px;
+    inline-size: 32px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-weight: 800;
+    box-sizing: border-box;
+  }
+  /* Touch drag is intentionally not faked. Existing ▲/▼ remains the reliable
+   * mobile reorder mechanism and still updates sortOrder for the whole row. */
+  .variant-box .vdrag--mobile {
+    display: none;
+  }
+  .variant-box .v-row-move {
+    order: 0;
+    flex: 0 0 auto;
+    display: inline-flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-row-move-btn,
+  .variant-box .v-row-dup,
+  .variant-box .variant-del {
+    flex: 0 0 44px;
+    inline-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+  }
+  .variant-box .v-row-dup {
+    order: 1;
+  }
+  .variant-box .variant-del {
+    order: 2;
+    font-size: 0;
+  }
+  .variant-box .variant-del::before {
+    content: "×";
+    font-size: 18px;
+    line-height: 1;
+  }
+  .variant-box .vthumb-wrap {
+    order: 4;
+    flex: 0 0 52px;
+    min-width: 52px;
+  }
+  .variant-box .vthumb {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    min-height: 52px;
+  }
+  .variant-box .v-cell {
+    order: 5;
+    flex: 0 0 116px;
+    min-width: 116px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-cell input {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .variant-box .v-cost-badge {
+    max-width: 116px;
+    font-size: 10px;
+    line-height: 1.2;
+    white-space: normal;
+  }
+  .variant-box .vgrid-sub .twd {
+    order: 6;
+    flex: 0 0 auto;
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 44px;
+    padding: 0 var(--sp-2);
+    border-left: 1px solid var(--border);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .variant-box .vgrid-sub .v-inline-edit {
+    flex: 0 0 auto;
+  }
+  .variant-box .vgrid-sub .v-cell--qty {
+    flex: 0 0 104px;
+    min-width: 104px;
+    gap: var(--sp-1);
+  }
+  .variant-box .vgrid-sub .v-cell--qty input.v-qty {
+    width: 104px;
+    max-width: 104px;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .variant-box .v-manual {
+    order: 7;
+    flex: 0 0 auto;
+  }
+}

@@ -9,7 +9,10 @@ const shell = fs.readFileSync("src/components/AppShell.tsx", "utf8");
 const css = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
 
 assert.match(panel, /rc-header-select-all--desktop[\s\S]*StageFilterPills/);
-assert.match(panel, /rc-selection-guide-row[\s\S]*rc-header-select-all--mobile[\s\S]*rc-gesture-hint/);
+// D3.4A supersedes D3's duplicate mobile select-all node. The existing checkbox
+// semantics now render one integrated switch body, while the helper remains real DOM.
+assert.match(panel, /rc-toggle-track rc-toggle-track--labeled[\s\S]*rc-toggle-copy">全選/);
+assert.match(panel, /rc-selection-guide-row[\s\S]*rc-gesture-hint[\s\S]*rc-gesture-hint-dismiss/);
 assert.match(panel, /rc-toggle-track/);
 assert.match(card, /rc-sale-badge[\s\S]*rc-variant-count/);
 assert.match(card, /!isImageStation && priceRangeLabel/);
@@ -27,4 +30,4 @@ assert.match(shell, /!isLogin \? \([\s\S]*<MobileTabbar/);
 assert.match(css, /results-sort-label:focus-within[\s\S]*box-shadow: none/);
 assert.match(css, /rc-head-chips[\s\S]*flex-wrap: wrap/);
 
-console.log("ResultCard UIUX D3 source checks passed");
+console.log("ResultCard UIUX D3 source checks passed (D3.4A integrated select-all contract)");

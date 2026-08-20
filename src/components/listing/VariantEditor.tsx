@@ -121,7 +121,6 @@ export function VariantEditor({
 }: Props) {
   const [charOpen, setCharOpen] = useState(false);
   const [dimOpen, setDimOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [customDim, setCustomDim] = useState("");
   const [pickIndex, setPickIndex] = useState<number | null>(null);
   const [charQuery, setCharQuery] = useState("");
@@ -204,7 +203,6 @@ export function VariantEditor({
       if (!rootRef.current?.contains(e.target as Node)) {
         setCharOpen(false);
         setDimOpen(false);
-        setMoreOpen(false);
         setPickIndex(null);
       }
     }
@@ -535,13 +533,11 @@ export function VariantEditor({
     }
     setRowsSafe(result.rows);
     onWarning(null);
-    setMoreOpen(false);
   }
 
   function closeAllPops() {
     setCharOpen(false);
     setDimOpen(false);
-    setMoreOpen(false);
     setPickIndex(null);
   }
 
@@ -633,8 +629,12 @@ export function VariantEditor({
         <span>款式規格</span>
       </div>
 
-      {/* UX-B3-P06 ①: B 方案 — 維度列常駐 + 主 CTA 展開 + ⋯ 次要 */}
-      <div className="vh-dims">
+      <details className="vh-builder" defaultOpen={dimensions.length === 0}>
+        <summary className="vh-builder-summary">
+          <span>建立規格</span>
+          <span className="muted">{dimensions.length ? `${dimensions.length} 個類型` : "尚未建立"}</span>
+        </summary>
+        <div className="vh-dims">
         {dimensions.length === 0 ? (
           <div className="vh-dims-empty">
             <span className="vh-dims-empty-text">尚無規格類型，可一鍵加入常用維度（軸值請自行填）</span>
@@ -722,117 +722,46 @@ export function VariantEditor({
         )}
 
         <div className="vh-dim-toolbar">
-          {dimensions.length < MAX_VARIANT_DIMENSIONS ? (
-            <button
-              type="button"
-              className="vh-add-dim-ghost"
-              onClick={() => {
-                setDimOpen((o) => !o);
-                setCharOpen(false);
-                setMoreOpen(false);
-                setPickIndex(null);
-              }}
-            >
-              ＋ 新增一個規格類型
-            </button>
-          ) : (
-            <span className="vh-add-dim-ghost is-disabled" aria-disabled>
-              規格類型已滿（{MAX_VARIANT_DIMENSIONS}）
-            </span>
-          )}
-
-          <div className="vh-more">
-            <button
-              type="button"
-              className="vh-more-btn"
-              aria-expanded={moreOpen}
-              aria-label="更多規格操作"
-              onClick={() => {
-                setMoreOpen((o) => !o);
-                setDimOpen(false);
-                setCharOpen(false);
-                setPickIndex(null);
-              }}
-            >
-              ⋯
-            </button>
-            {moreOpen ? (
-              <div className="pop-menu open vh-more-menu">
-                <div className="pm-title">更多操作</div>
-                <button
-                  type="button"
-                  className="vh-more-item"
-                  disabled={!canApplyProductCost}
-                  title={
-                    canApplyProductCost
-                      ? "只填空白成本列，已填不覆蓋"
-                      : rows.length === 0
-                        ? "請先新增款式列"
-                        : "請先填商品成本"
-                  }
-                  onClick={applyCostToAllVariants}
-                >
-                  套用成本到全部款式
-                </button>
-                <button
-                  type="button"
-                  className="vh-more-item"
-                  onClick={() => {
-                    setCharOpen(true);
-                    setMoreOpen(false);
-                    setDimOpen(false);
-                    setPickIndex(null);
-                  }}
-                >
-                  依角色建立
-                </button>
+          <div className="vh-add-dim-wrap">
+            {dimensions.length < MAX_VARIANT_DIMENSIONS ? (
+              <button type="button" className="vh-add-dim-ghost" aria-expanded={dimOpen}
+                onClick={() => { setDimOpen((o) => !o); setCharOpen(false); setPickIndex(null); }}>
+                ＋ 新增規格類型
+              </button>
+            ) : (
+              <span className="vh-add-dim-ghost is-disabled" aria-disabled>規格類型已滿（{MAX_VARIANT_DIMENSIONS}）</span>
+            )}
+            {dimOpen ? (
+              <div className="pop-menu open v-pop-dim vh-inline-pop">
+                <div className="pm-title">新增規格維度</div>
+                {QUICK_DIMS.map((name) => (
+                  <label key={name}>
+                    <input checked={dimensions.some((d) => d.name === name)}
+                      onChange={(e) => {
+                        if (e.target.checked) addDimension(name);
+                        else {
+                          const idx = dimensions.findIndex((d) => d.name === name);
+                          if (idx >= 0) removeDimension(idx);
+                        }
+                      }} type="checkbox" />
+                    {name}（常用）
+                  </label>
+                ))}
+                <label className="v-custom-dim">
+                  <input onChange={(e) => setCustomDim(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addDimension(customDim); } }}
+                    placeholder="自訂維度名稱" value={customDim} />
+                </label>
+                <Button size="sm" className="v-pop-full" onClick={() => addDimension(customDim)} type="button">加入</Button>
               </div>
             ) : null}
           </div>
+          <button type="button" className="vh-toolbar-action" disabled={!canApplyProductCost}
+            title={canApplyProductCost ? "只填空白成本列，已填不覆蓋" : rows.length === 0 ? "請先新增款式列" : "請先填商品成本"}
+            onClick={applyCostToAllVariants}>套用成本</button>
+          <button type="button" className="vh-toolbar-action"
+            onClick={() => { setCharOpen(true); setDimOpen(false); setPickIndex(null); }}>依角色建立</button>
         </div>
-
-        {dimOpen ? (
-          <div className="pop-menu open v-pop-dim vh-inline-pop">
-            <div className="pm-title">新增規格維度</div>
-            {QUICK_DIMS.map((name) => (
-              <label key={name}>
-                <input
-                  checked={dimensions.some((d) => d.name === name)}
-                  onChange={(e) => {
-                    if (e.target.checked) addDimension(name);
-                    else {
-                      const idx = dimensions.findIndex((d) => d.name === name);
-                      if (idx >= 0) removeDimension(idx);
-                    }
-                  }}
-                  type="checkbox"
-                />
-                {name}（常用）
-              </label>
-            ))}
-            <label className="v-custom-dim">
-              <input
-                onChange={(e) => setCustomDim(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addDimension(customDim);
-                  }
-                }}
-                placeholder="自訂維度名稱"
-                value={customDim}
-              />
-            </label>
-            <Button
-              size="sm"
-              className="v-pop-full"
-              onClick={() => addDimension(customDim)}
-              type="button"
-            >
-              加入
-            </Button>
-          </div>
-        ) : null}
 
         {charOpen ? (
           <div className="pop-menu open v-pop-char vh-inline-pop">
@@ -901,6 +830,12 @@ export function VariantEditor({
             {canExpand ? "軸值變更後會自動更新款式列" : "加入軸值後會自動建立款式列"}
           </p>
         )}
+        </div>
+      </details>
+
+      <div className="vh-results-heading">
+        <span>款式結果</span>
+        <span className="muted">{rows.length ? `${rows.length} 款` : "尚無款式"}</span>
       </div>
 
       {!showGrid || rows.length === 0 ? (
@@ -952,12 +887,11 @@ export function VariantEditor({
                     applyRowReorder(fromKey, rowKey);
                   }}
                 >
-                  {!isNarrow ? (
-                    <span
-                      className="vdrag"
-                      title="拖曳排序"
-                      draggable
-                      aria-label={`拖曳排序第 ${index + 1} 列`}
+                  <span
+                      className={`vdrag${isNarrow ? " vdrag--mobile" : ""}`}
+                      title={isNarrow ? "使用上下按鈕排序" : "拖曳排序"}
+                      draggable={!isNarrow}
+                      aria-label={isNarrow ? `第 ${index + 1} 列排序把手；使用上下按鈕移動` : `拖曳排序第 ${index + 1} 列`}
                       onDragStart={(event) => {
                         event.stopPropagation();
                         event.dataTransfer.effectAllowed = "move";
@@ -976,7 +910,6 @@ export function VariantEditor({
                     >
                       ⠿
                     </span>
-                  ) : null}
                   <span className="vthumb-wrap">
                     <button
                       className="vthumb"
@@ -984,7 +917,6 @@ export function VariantEditor({
                         setPickIndex(pickIndex === index ? null : index);
                         setCharOpen(false);
                         setDimOpen(false);
-                        setMoreOpen(false);
                       }}
                       type="button"
                     >

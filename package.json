@@ -32,6 +32,7 @@
     "verify:mobile-resultcard-expand": "node scripts/verify-mobile-resultcard-expand.mjs",
     "verify:mobile-resultcard-gesture": "node scripts/verify-mobile-resultcard-gesture-guard.mjs",
     "verify:resultcard-uiux-d2": "node scripts/verify-resultcard-uiux-d2.mjs",
+    "verify:resultcard-uiux-d3": "node scripts/verify-resultcard-uiux-d3.mjs",
     "verify:variant-picker-containment": "node scripts/verify-variant-picker-containment.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"

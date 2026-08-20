@@ -146,8 +146,8 @@ import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCa
 /** UX-B3-P04: align with MobileTabbar FAB long-press */
 export const LONG_PRESS_MS = 500;
 const GESTURE_MOVE_PX = 10;
-const SWIPE_ACTION_W = 140;
-const SWIPE_ACTION_W_SINGLE = 80;
+const SWIPE_ACTION_W = 210;
+const SWIPE_ACTION_W_SINGLE = 140;
 
 /** UX-M T64: full-enough row for dbRowsToForm (price range still uses twd_price). */
 type ResultCardVariantRow = {
@@ -2039,6 +2039,9 @@ export function ResultCard({
           {saleStatusBadge}
         </span>
       ) : null}
+      {variantCount > 0 ? (
+        <span className="schip rc-variant-count">{variantCount} 個規格</span>
+      ) : null}
       {failReasonSummary ? (
         <span className="rc-fail-reason" role="status" title={failReasonSummary}>
           {failReasonSummary}
@@ -2176,7 +2179,7 @@ export function ResultCard({
           </div>
         ) : null}
       </div>
-    ) : priceRangeLabel ? (
+    ) : !isImageStation && priceRangeLabel ? (
       <div className="rc-price-mini">
         <div className="rc-price-mini-main">
           <span className="rc-price-mini-label">售價</span>
@@ -2210,6 +2213,14 @@ export function ResultCard({
         >
           ↻ 重生
         </button>
+        <button
+          className="rc-swipe-remove"
+          disabled={archiveBusy}
+          onClick={() => runSwipeAction(() => void archiveOne())}
+          type="button"
+        >
+          移出佇列
+        </button>
       </>
     ) : !isArchived && isImageStation ? (
       <>
@@ -2229,16 +2240,34 @@ export function ResultCard({
         >
           {actionArm === "revision" ? "⚠ 確認退回" : "↩ 退回"}
         </button>
+        <button
+          className="rc-swipe-remove"
+          disabled={archiveBusy}
+          onClick={() => runSwipeAction(() => void archiveOne())}
+          type="button"
+        >
+          移出佇列
+        </button>
       </>
     ) : !isArchived && isReadyStation ? (
-      <button
-        className="rc-swipe-approve"
-        disabled={approveSummaryBusy || comboSaving || station3Busy}
-        onClick={() => runSwipeAction(() => setStation3Open(true))}
-        type="button"
-      >
-        發布／匯出
-      </button>
+      <>
+        <button
+          className="rc-swipe-approve"
+          disabled={approveSummaryBusy || comboSaving || station3Busy}
+          onClick={() => runSwipeAction(() => setStation3Open(true))}
+          type="button"
+        >
+          發布／匯出
+        </button>
+        <button
+          className="rc-swipe-remove"
+          disabled={archiveBusy}
+          onClick={() => runSwipeAction(() => void archiveOne())}
+          type="button"
+        >
+          移出佇列
+        </button>
+      </>
     ) : null;
 
   return (
@@ -2312,9 +2341,6 @@ export function ResultCard({
             <span className="rc-card-mark-summary muted">
               {formatMarkSummaryLine(markSummary)}
             </span>
-          ) : null}
-          {variantCount > 0 ? (
-            <span className="schip rc-variant-count">{variantCount} 個規格</span>
           ) : null}
         </span>
         {/* UX-B4-P04: mobile row3 left regen (desktop hidden via CSS); price shares contents row */}

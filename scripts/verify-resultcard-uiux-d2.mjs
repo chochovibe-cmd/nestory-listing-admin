@@ -8,7 +8,8 @@ const login = fs.readFileSync("src/app/login/page.tsx", "utf8");
 const css = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
 
 assert.match(panel, /stage-filter-row[\s\S]*rc-selection-guide-row[\s\S]*rc-batch-strip/);
-assert.match(panel, /results-sort-label[\s\S]*rc-header-select-all--desktop/);
+assert.match(panel, /results-sort-label/);
+assert.match(panel, /rc-header-select-all--desktop/);
 assert.match(css, /@media \(max-width:\s*959px\)[\s\S]*\.rc-dismiss-btn\s*\{\s*display:\s*none;/s);
 assert.match(card, /className="rc-card-summary-row"[\s\S]*formatMarkSummaryLine\(markSummary\)/);
 assert.match(card, /const variantCount = useMemo/);

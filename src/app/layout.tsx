@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_TC, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
-import { Suspense } from "react";
-import { AppSidebar } from "@/components/AppSidebar";
+import { AppShell } from "@/components/AppShell";
 import { HeaderControls } from "@/components/HeaderControls";
-import { MobileTabbar } from "@/components/MobileTabbar";
 import { ToastHost } from "@/components/Toast";
 import "./globals.css";
 import "./stabilization.css";
@@ -86,13 +84,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </Link>
             <HeaderControls />
           </header>
-          <div className="shell" id="app-shell">
-            <AppSidebar />
-            <div className="shell-main">{children}</div>
-          </div>
-          <Suspense fallback={null}>
-            <MobileTabbar />
-          </Suspense>
+          <AppShell>{children}</AppShell>
           <ToastHost />
         </div>
         <script dangerouslySetInnerHTML={{ __html: navInitScript }} />

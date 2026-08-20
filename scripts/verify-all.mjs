@@ -18,6 +18,7 @@ const scripts = [
   "scripts/verify-mobile-layout-regression-restore.mjs",
   "scripts/verify-mobile-resultcard-owner-refine.mjs",
   "scripts/verify-resultcard-uiux-d2.mjs",
+  "scripts/verify-resultcard-uiux-d3.mjs",
   "scripts/verify-variant-picker-containment.mjs",
   // CAP-1 / CAP-2 / CAP-2.5
   "scripts/verify-cap1.mjs",

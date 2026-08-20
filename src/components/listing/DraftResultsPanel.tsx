@@ -1468,6 +1468,19 @@ export function DraftResultsPanel({
         {/* D2: controls follow the user's reading order: tabs, filters, select-all,
             then selected actions. Desktop CSS keeps select-all beside sort. */}
         <div className="stage-filter-row">
+          {showToolbar ? (
+            <label className="rc-header-select-all rc-header-select-all--desktop">
+              <input
+                checked={allSelected}
+                onChange={toggleAll}
+                ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                type="checkbox"
+                aria-label="全選目前列表"
+              />
+              <span className="rc-toggle-track" aria-hidden><span /></span>
+              <span>全選</span>
+            </label>
+          ) : null}
           <StageFilterPills
             counts={stageCounts}
             onChange={onStageChange}
@@ -1503,18 +1516,6 @@ export function DraftResultsPanel({
                 ))}
               </select>
             </label>
-            {showToolbar ? (
-              <label className="rc-header-select-all rc-header-select-all--desktop">
-                <input
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
-                  type="checkbox"
-                  aria-label="全選目前列表"
-                />
-                <span>全選</span>
-              </label>
-            ) : null}
           </div>
         </div>
 
@@ -1530,16 +1531,16 @@ export function DraftResultsPanel({
                 type="checkbox"
                 aria-label="全選目前列表"
               />
+              <span className="rc-toggle-track" aria-hidden><span /></span>
               <span>全選</span>
             </label>
+            {showGestureHint ? (
+              <p className="rc-gesture-hint" role="note">
+                <span>長按卡片可多選；左滑顯示「移出佇列」</span>
+                <button aria-label="關閉提示" className="rc-gesture-hint-dismiss" onClick={dismissGestureHint} type="button">×</button>
+              </p>
+            ) : null}
           </div>
-        ) : null}
-
-        {showGestureHint ? (
-          <p className="rc-gesture-hint" role="note">
-            <span>長按卡片可多選；左滑可快捷</span>
-            <button aria-label="關閉提示" className="rc-gesture-hint-dismiss" onClick={dismissGestureHint} type="button">×</button>
-          </p>
         ) : null}
 
         {/* UX-B3-P02: 有選取才出批次動作條；未選取不渲染空 toolbar */}

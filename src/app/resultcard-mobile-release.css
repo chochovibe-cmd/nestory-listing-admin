@@ -645,3 +645,252 @@
     transition: none;
   }
 }
+
+
+/* UIUX Batch D3 — controls, image-review hierarchy, spec editor and swipe reveal. */
+.results-sort-label,
+.results-sort-label:focus-within,
+.results-sort-label .sort-sel,
+.results-sort-label .sort-sel:focus,
+.results-sort-label .sort-sel:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+.results-sort-label .sort-sel:focus-visible {
+  border-color: var(--border);
+}
+
+.rc-header-select-all {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+.rc-header-select-all > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.rc-toggle-track {
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface2);
+  transition: background .16s ease, border-color .16s ease;
+}
+.rc-toggle-track > span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform .16s ease, background .16s ease;
+}
+.rc-header-select-all > input:checked + .rc-toggle-track,
+.rc-header-select-all > input:indeterminate + .rc-toggle-track {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+}
+.rc-header-select-all > input:checked + .rc-toggle-track > span,
+.rc-header-select-all > input:indeterminate + .rc-toggle-track > span {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+.rc-header-select-all > input:focus-visible + .rc-toggle-track {
+  outline: 2px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  outline-offset: 2px;
+}
+
+.result-card > .rc-header .rc-head-chips,
+.result-card > .rc-header .rc-head-meta,
+.result-card > .rc-header .rc-detect-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: 5px 6px;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.3;
+}
+.result-card > .rc-header .rc-head-chips > *,
+.result-card > .rc-header .rc-head-meta > *,
+.result-card > .rc-header .rc-detect-chips > * {
+  position: static;
+  max-width: 100%;
+  margin: 0;
+}
+.result-card > .rc-header .rc-title-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 6px;
+}
+.result-card > .rc-header .rc-variant-count {
+  flex: 0 0 auto;
+}
+
+.variant-box .vh-builder {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+.variant-box .vh-builder-summary,
+.variant-box .vh-results-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  font-weight: 800;
+}
+.variant-box .vh-builder-summary {
+  cursor: pointer;
+  list-style: none;
+}
+.variant-box .vh-builder-summary::-webkit-details-marker { display: none; }
+.variant-box .vh-builder-summary::after {
+  content: "⌄";
+  color: var(--muted);
+  transition: transform .16s ease;
+}
+.variant-box .vh-builder[open] .vh-builder-summary::after { transform: rotate(180deg); }
+.variant-box .vh-add-dim-wrap {
+  position: relative;
+  min-width: 0;
+}
+.variant-box .vh-add-dim-wrap .vh-inline-pop {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  margin: 0;
+  width: min(320px, calc(100vw - 40px));
+}
+.variant-box .vh-dim-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.variant-box .vh-toolbar-action {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+}
+.variant-box .vh-toolbar-action:disabled { opacity: .48; }
+.variant-box .vdrag--mobile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 44px;
+  color: var(--muted);
+}
+
+@media (min-width: 960px) {
+  .stage-filter-row {
+    align-items: center;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop {
+    order: -1;
+    min-height: 36px;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 959px) {
+  .rc-selection-guide-row {
+    align-items: center;
+    gap: 10px;
+  }
+  .rc-selection-guide-row .rc-gesture-hint {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+  }
+  .rc-batch-strip--image {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rc-batch-strip--image .rc-batch-cancel,
+  .rc-batch-strip--image .batch-primary-action,
+  .rc-batch-strip--image .batch-detail-action,
+  .rc-batch-strip--image .batch-remove-action {
+    min-height: 40px;
+    height: 40px;
+    padding-inline: 6px;
+  }
+  .rc-batch-strip--image .batch-remove-action:last-child {
+    grid-column: auto;
+  }
+  .rc-swipe-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .rc-swipe-actions .rc-swipe-remove {
+    min-height: 46px;
+    max-height: 54px;
+    padding: 7px 5px;
+    border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 74%, var(--text));
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .variant-box {
+    border-width: 1px 0 0;
+    border-radius: 0;
+  }
+  .variant-box .variant-head {
+    padding-inline: 0;
+  }
+  .variant-box .vh-builder-summary,
+  .variant-box .vh-results-heading {
+    padding-inline: 2px;
+  }
+  .variant-box .vh-dims {
+    padding: 6px 0 12px;
+  }
+  .variant-box .vh-dim-row {
+    padding: 8px 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+  }
+  .variant-box .vh-dim-values {
+    gap: 6px;
+  }
+  .variant-box .vh-dim-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .variant-box .vh-add-dim-ghost,
+  .variant-box .vh-toolbar-action {
+    min-height: 44px;
+  }
+  .variant-box .vgrid-block {
+    margin-bottom: 8px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+  }
+  .variant-box .vgrid-row {
+    padding: 8px 0;
+    gap: 7px;
+  }
+  .variant-box .vgrid-hdr {
+    border: 0;
+    background: transparent;
+  }
+}

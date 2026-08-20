@@ -8,6 +8,16 @@
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
 
+## UIUX Batch D3 follow-up
+
+Results controls, image-review hierarchy, collapsible spec creation, login shell
+presentation and the mobile remove affordance were refined on PR #8. The mobile
+interaction remains a single left-swipe reveal, now with a real “移出佇列”
+button wired to the existing soft-archive/undo path. Login route presentation
+hides navigation chrome without changing auth.
+
+See `docs/audits/RESULTCARD-UIUX-BATCH-D3-2026-08-20.md`.
+
 ## 0. ResultCard mobile R3 — source complete, awaiting iPhone QA
 
 ### UIUX Batch D1 follow-up

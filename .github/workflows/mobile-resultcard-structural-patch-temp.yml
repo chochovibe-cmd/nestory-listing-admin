@@ -1,3 +1,4 @@
+# Trigger-only temporary workflow; final release commit will not retain this file.
 name: Mobile ResultCard structural patch temp
 
 on:

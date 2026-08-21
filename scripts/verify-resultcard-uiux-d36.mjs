@@ -59,7 +59,7 @@ assert.match(ownerCss, /\.rc-batch-strip--copy \.batch-remove-action\s*\{[\s\S]*
 assert.match(ownerCss, /\.rc-batch-strip--image\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6, minmax\(0, 1fr\)\);/);
 assert.match(ownerCss, /\.rc-batch-strip--image \.rc-batch-cancel\s*\{[\s\S]*?grid-column:\s*1 \/ 3;[\s\S]*?grid-row:\s*2;/);
 assert.match(ownerCss, /\.rc-batch-strip--image \.batch-primary-action\s*\{[\s\S]*?grid-column:\s*3 \/ 5;[\s\S]*?grid-row:\s*2;/);
-assert.match(ownerCss, /\.rc-batch-strip--image \.batch-remove-action\s*\{[\s\S]*?grid-column:\s*5 \/ 7;[\s\S]*?grid-row:\s*2;/);
+assert.match(ownerCss, /\.rc-batch-strip--image \.batch-remove-action:last-child\s*\{[\s\S]*?grid-column:\s*5 \/ 7;[\s\S]*?grid-row:\s*2;[\s\S]*?width:\s*100%;[\s\S]*?border-color:\s*color-mix\(in srgb, var\(--danger\) 36%, var\(--border\)\);[\s\S]*?background:\s*color-mix\(in srgb, var\(--danger\) 6%, var\(--surface\)\);[\s\S]*?color:\s*color-mix\(in srgb, var\(--danger\) 72%, var\(--text\)\);/);
 assert.match(ownerCss, /\.rc-batch-strip--image \.rc-batch-actions > \.batch-detail-action:nth-child\(2\)\s*\{[\s\S]*?grid-column:\s*1 \/ 4;[\s\S]*?grid-row:\s*3;/);
 assert.match(ownerCss, /\.rc-batch-strip--image \.rc-batch-actions > \.batch-detail-action:nth-child\(3\)\s*\{[\s\S]*?grid-column:\s*4 \/ 7;[\s\S]*?grid-row:\s*3;/);
 

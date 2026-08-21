@@ -1,0 +1,20 @@
+/*
+ * Owner UI consistency corrective — 2026-08-21.
+ * Controls that sit in the same mobile filter row should share one geometry.
+ * D3.6 already matches the 38px height/border rhythm; this final layer aligns
+ * the select-all pill radius with the adjacent scope/sort controls only.
+ */
+
+@media (max-width: 959px) {
+  .stage-filter-row {
+    --stage-control-radius: 999px;
+  }
+
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track,
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track > span,
+  .stage-filter-row .results-scope-label .ir-scope-select,
+  .stage-filter-row .results-sort-label,
+  .stage-filter-row .results-sort-label .sort-sel {
+    border-radius: var(--stage-control-radius);
+  }
+}

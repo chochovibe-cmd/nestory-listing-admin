@@ -76,9 +76,13 @@
     grid-column: 3 / 5;
     grid-row: 2;
   }
-  .rc-batch-strip--image .batch-remove-action {
+  .rc-batch-strip--image .batch-remove-action:last-child {
     grid-column: 5 / 7;
     grid-row: 2;
+    width: 100%;
+    border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
+    background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 72%, var(--text));
   }
   .rc-batch-strip--image .rc-batch-actions > .batch-detail-action:nth-child(2) {
     grid-column: 1 / 4;

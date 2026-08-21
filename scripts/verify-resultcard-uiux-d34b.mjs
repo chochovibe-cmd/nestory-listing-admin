@@ -2,10 +2,19 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const css = fs.readFileSync("src/app/d33-mobile-uiux.css", "utf8");
+const correctiveCss = fs.readFileSync("src/app/d34b-iphone-corrective.css", "utf8");
+const layout = fs.readFileSync("src/app/layout.tsx", "utf8");
+const resultCard = fs.readFileSync("src/components/listing/ResultCard.tsx", "utf8");
 const panel = fs.readFileSync("src/components/listing/DraftResultsPanel.tsx", "utf8");
 const variant = fs.readFileSync("src/components/listing/VariantEditor.tsx", "utf8") + "\n" + fs.readFileSync("src/components/listing/VariantEditorRender.tsx", "utf8");
 
 assert.doesNotMatch(css, /!important/);
+assert.doesNotMatch(correctiveCss, /!important/);
+
+// Corrective stylesheet must load after the historical D3.4B/D3.3 presentation layer.
+const d33ImportPos = layout.indexOf('import "./d33-mobile-uiux.css";');
+const iphoneCorrectiveImportPos = layout.indexOf('import "./d34b-iphone-corrective.css";');
+assert.ok(d33ImportPos >= 0 && iphoneCorrectiveImportPos > d33ImportPos);
 
 // A — select-all copy is visibly inside the actual toggle track; no outer frame.
 assert.match(css, /rc-header-select-all--desktop[\s\S]*border:\s*0;[\s\S]*rc-toggle-track[\s\S]*content:\s*"全選";/s);
@@ -16,6 +25,14 @@ assert.match(panel, /function dismissGestureHint\(\)[\s\S]*setShowGestureHint\(f
 assert.match(panel, /className="rc-gesture-hint-dismiss"/);
 assert.match(css, /向左滑可核准／重送；向右滑可移除/);
 assert.match(css, /rc-gesture-hint-dismiss[\s\S]*display:\s*inline-grid/);
+
+// D3.3 owner contract — sale status stays immediately before a positive variant-count chip.
+const salePos = resultCard.indexOf('className="rc-sale-badge"');
+const variantCountPos = resultCard.indexOf('className="schip rc-variant-count"');
+assert.ok(salePos >= 0 && variantCountPos > salePos);
+assert.match(resultCard, /variantCount\s*>\s*0\s*\?\s*\([\s\S]*className="schip rc-variant-count"[\s\S]*個規格/);
+assert.match(correctiveCss, /\.result-card \.rc-variant-count\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*visibility:\s*visible;[\s\S]*opacity:\s*1;/);
+assert.match(correctiveCss, /\.result-card > \.rc-header \.rc-variant-count\s*\{[\s\S]*grid-column:\s*3;[\s\S]*grid-row:\s*2;/);
 
 // C — Tag-page chip vocabulary + modal-only add dimension/value flow.
 assert.match(variant, /className="rc-tag vh-axis-tag"/);
@@ -61,10 +78,10 @@ assert.match(variant, /vh-mobile-batch-actions[\s\S]*批次手動覆蓋價格[\s
 assert.match(variant, /\) : isNarrow \? \([\s\S]*v-mobile-results[\s\S]*\) : \([\s\S]*vgrid-hdr/);
 assert.match(variant, /className="vdrag"[\s\S]*draggable/);
 
-// F — bottom alignment is intentionally global (outside the mobile media block).
-const mediaPos = css.indexOf("@media (max-width: 959px)");
-const priceAlignPos = css.indexOf(".result-card .rc-price-mini,");
-assert.ok(priceAlignPos >= 0 && mediaPos > priceAlignPos);
-assert.match(css.slice(priceAlignPos, mediaPos), /align-items:\s*flex-end/);
+// F iPhone corrective — mobile price peers align on typographic baselines.
+assert.match(correctiveCss, /@media \(max-width:\s*959px\)[\s\S]*\.result-card > \.rc-header \.rc-price-mini\s*\{[\s\S]*align-items:\s*baseline;/);
+assert.match(correctiveCss, /rc-price-mini-label,[\s\S]*rc-price-mini-profit\s*\{[\s\S]*align-self:\s*baseline;/);
+assert.match(correctiveCss, /rc-price-mini-value\s*\{[\s\S]*line-height:\s*1\.05;/);
+assert.doesNotMatch(correctiveCss, /align-items:\s*flex-end/);
 
-console.log("D3.4B ResultCard/Variant UIUX source contract passed");
+console.log("D3.4B ResultCard/Variant UIUX source contract passed with iPhone corrective");

@@ -1,0 +1,61 @@
+/*
+ * D3.4B iPhone runtime corrective — 2026-08-21.
+ * Loaded after d33-mobile-uiux.css so owner device findings can be fixed without
+ * changing ResultCard data/pricing semantics or reopening the D3.4B variant work.
+ */
+
+/* D3.3 contract: when ResultCard has a positive persisted variant count, the
+ * count chip is a visible peer immediately after the sale-status chip. */
+.result-card .rc-variant-count {
+  display: inline-flex;
+  visibility: visible;
+  opacity: 1;
+  min-width: max-content;
+}
+
+/* Undo D3.4B's global line-box-bottom override. Desktop keeps its existing
+ * column layout; its label/value pair already owns baseline alignment. */
+.result-card .rc-price-mini-main,
+.result-card .rc-price-mini-sub,
+.result-card .rc-price-mini-label,
+.result-card .rc-price-mini-value,
+.result-card .rc-price-mini-strike,
+.result-card .rc-price-mini-profit {
+  align-self: auto;
+}
+.result-card .rc-price-mini-main,
+.result-card .rc-price-mini-sub {
+  align-items: baseline;
+}
+
+@media (max-width: 959px) {
+  /* Keep the D3.3 owner geometry explicit at the final cascade layer. */
+  .result-card > .rc-header .rc-sale-badge {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .result-card > .rc-header .rc-variant-count {
+    display: inline-flex;
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+    visibility: visible;
+    opacity: 1;
+  }
+
+  /* F corrective: align the actual text baselines, not the bottoms of unlike
+   * line boxes. The large price therefore grows upward instead of hanging low. */
+  .result-card > .rc-header .rc-price-mini {
+    align-items: baseline;
+  }
+  .result-card > .rc-header .rc-price-mini-label,
+  .result-card > .rc-header .rc-price-mini-value,
+  .result-card > .rc-header .rc-price-mini-strike,
+  .result-card > .rc-header .rc-price-mini-profit {
+    align-self: baseline;
+  }
+  .result-card > .rc-header .rc-price-mini-value {
+    line-height: 1.05;
+  }
+}

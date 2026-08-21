@@ -18,15 +18,38 @@
     border-radius: var(--stage-control-radius);
   }
 
-  /* Owner runtime QA: the global mobile Button rule has a more-specific
-   * `.batch-primary-action.nb-btn` selector, so D3.6's 40px middle-button
-   * override lost while the two peers stayed at 40px. Normalize the full copy
-   * action trio at the final cascade layer and keep the >=44px touch contract. */
+  /* Owner runtime QA: every action exposed by the same long-press multi-select
+   * toolbar must use one button geometry across copy, image and ready stations.
+   * Stage-specific action counts may produce additional rows, but every cell is
+   * equal-width and every button shares the same 44px touch height/radius. */
+  .rc-batch-strip--copy,
+  .rc-batch-strip--image,
+  .rc-batch-strip--ready {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .rc-batch-strip--copy .rc-batch-count,
+  .rc-batch-strip--image .rc-batch-count,
+  .rc-batch-strip--ready .rc-batch-count {
+    grid-column: 1 / -1;
+  }
+
+  .rc-batch-strip--copy .rc-batch-actions,
+  .rc-batch-strip--image .rc-batch-actions,
+  .rc-batch-strip--ready .rc-batch-actions {
+    display: contents;
+  }
+
   .rc-batch-strip--copy .rc-batch-cancel.nb-btn,
-  .rc-batch-strip--copy .batch-primary-action.nb-btn,
-  .rc-batch-strip--copy .batch-remove-action.nb-btn {
+  .rc-batch-strip--copy .rc-batch-actions > .nb-btn,
+  .rc-batch-strip--image .rc-batch-cancel.nb-btn,
+  .rc-batch-strip--image .rc-batch-actions > .nb-btn,
+  .rc-batch-strip--ready .rc-batch-cancel.nb-btn,
+  .rc-batch-strip--ready .rc-batch-actions > .nb-btn {
     width: 100%;
     min-width: 0;
+    max-width: none;
     min-height: 44px;
     height: 44px;
     margin: 0;

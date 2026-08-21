@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { HeaderControls } from "@/components/HeaderControls";
 import { ToastHost } from "@/components/Toast";
+import { FailBatchRemoveBridge } from "@/components/listing/FailBatchRemoveBridge";
 import "./globals.css";
 import "./stabilization.css";
 import "./resultcard-mobile-release.css";
@@ -89,6 +90,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <HeaderControls />
           </header>
           <AppShell>{children}</AppShell>
+          <FailBatchRemoveBridge />
           <ToastHost />
         </div>
         <script dangerouslySetInnerHTML={{ __html: navInitScript }} />

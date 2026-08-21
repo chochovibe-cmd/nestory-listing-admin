@@ -138,6 +138,7 @@ export function VariantEditor({
   const [modalCompareAt, setModalCompareAt] = useState("");
   const [variantDraft, setVariantDraft] = useState<string[]>([]);
   const [mobileSelected, setMobileSelected] = useState<Set<number>>(() => new Set());
+  const characterPickerOpen = charOpen || editorModal?.kind === "character";
 
   const armTimerRef = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -235,7 +236,7 @@ export function VariantEditor({
   }, []);
 
   useEffect(() => {
-    if (!charOpen) return;
+    if (!characterPickerOpen) return;
     let cancelled = false;
     setCharLoading(true);
     const supabase = createClient();
@@ -263,7 +264,7 @@ export function VariantEditor({
     return () => {
       cancelled = true;
     };
-  }, [charOpen]);
+  }, [characterPickerOpen]);
 
   const filteredChars = useMemo(() => {
     const query = charQuery.trim().toLowerCase();
@@ -531,6 +532,7 @@ export function VariantEditor({
       .map(([name]) => name);
     if (names.length === 0) {
       setCharOpen(false);
+      if (editorModal?.kind === "character") closeEditorModal();
       return;
     }
     const result = appendCharacterRows(dimensions, rows, names);
@@ -539,6 +541,7 @@ export function VariantEditor({
     onWarning(result.warning ?? null);
     setCharSelected({});
     setCharOpen(false);
+    if (editorModal?.kind === "character") closeEditorModal();
   }
 
   function openEditorModal(next: Exclude<EditorModal, null>) {
@@ -715,9 +718,13 @@ export function VariantEditor({
     addDimension,
     addRow,
     applyBatchCost,
+    applyCharacters,
     applyRowReorder,
     batchPreview,
     cancelRowLongPress,
+    charLoading,
+    charQuery,
+    charSelected,
     clearPickLpTimer,
     closeEditorModal,
     costLabel,
@@ -725,6 +732,7 @@ export function VariantEditor({
     dimHeaders,
     duplicateRow,
     editorModal,
+    filteredChars,
     finishTouchDrag,
     gridCols,
     images,
@@ -750,6 +758,8 @@ export function VariantEditor({
     rows,
     rowsAtMax,
     selectPickImage,
+    setCharQuery,
+    setCharSelected,
     setModalCompareAt,
     setModalValue,
     setPickIndex,
@@ -773,19 +783,27 @@ export function VariantEditor({
     <div className="variant-box" ref={rootRef}>
       <div className="variant-head"><span>款式規格</span></div>
 
+      {isNarrow ? (
+        <div className="vh-mobile-primary-actions" role="toolbar" aria-label="規格操作">
+          <button type="button" className="vh-add-dim-ghost" disabled={dimensions.length >= MAX_VARIANT_DIMENSIONS} onClick={() => openEditorModal({ kind: "add-dimension" })}>＋新增維度</button>
+          <button type="button" className="vh-toolbar-action" onClick={() => openEditorModal({ kind: "character" })}>依角色建立</button>
+          <button type="button" className="vh-mobile-batch-btn" disabled={mobileSelected.size === 0} onClick={() => openEditorModal({ kind: "batch-cost" })}>批次手動覆蓋價格{mobileSelected.size ? `（${mobileSelected.size}）` : ""}</button>
+        </div>
+      ) : null}
+
       <details className="vh-builder" open={builderOpen} onToggle={(event) => setBuilderOpen(event.currentTarget.open)}>
         <summary className="vh-builder-summary">
           <span>建立規格</span>
           <span className="muted">{dimensions.length ? `${dimensions.length} 個類型` : "尚未建立"}</span>
         </summary>
         <div className="vh-dims">
-          <div className="vh-dim-toolbar--top">
-            <button type="button" className="vh-add-dim-ghost" disabled={dimensions.length >= MAX_VARIANT_DIMENSIONS} onClick={() => openEditorModal({ kind: "add-dimension" })}>＋ 新增維度</button>
-            <button type="button" className="vh-toolbar-action" onClick={() => setCharOpen(true)}>依角色建立</button>
-            {!isNarrow ? (
+          {!isNarrow ? (
+            <div className="vh-dim-toolbar--top">
+              <button type="button" className="vh-add-dim-ghost" disabled={dimensions.length >= MAX_VARIANT_DIMENSIONS} onClick={() => openEditorModal({ kind: "add-dimension" })}>＋ 新增維度</button>
+              <button type="button" className="vh-toolbar-action" onClick={() => setCharOpen(true)}>依角色建立</button>
               <button type="button" className="vh-toolbar-action" disabled={!canApplyProductCost} title="只填空白成本列，已填不覆蓋" onClick={applyCostToAllVariants}>套用成本</button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           {dimensions.length === 0 ? (
             <div className="vh-dims-empty"><span className="vh-dims-empty-text">尚無規格類型，請新增尺寸、顏色或自訂維度。</span></div>

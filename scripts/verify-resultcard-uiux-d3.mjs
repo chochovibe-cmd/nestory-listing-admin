@@ -7,10 +7,15 @@ const variants = fs.readFileSync("src/components/listing/VariantEditor.tsx", "ut
 const layout = fs.readFileSync("src/app/layout.tsx", "utf8");
 const shell = fs.readFileSync("src/components/AppShell.tsx", "utf8");
 const css = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
+const finalCss = fs.readFileSync("src/app/d34b-iphone-corrective.css", "utf8");
 
 assert.match(panel, /rc-header-select-all--desktop[\s\S]*StageFilterPills/);
 assert.match(panel, /rc-selection-guide-row[\s\S]*rc-header-select-all--mobile[\s\S]*rc-gesture-hint/);
-assert.match(panel, /rc-toggle-track/);
+// D3.5 supersedes the historical switch presentation but keeps the native
+// checkbox and indeterminate behavior.
+assert.match(panel, /type="checkbox"/);
+assert.match(panel, /el\.indeterminate\s*=\s*someSelected/);
+assert.match(finalCss, /rc-header-select-all \.rc-toggle-track\s*\{[\s\S]*display:\s*none;/);
 assert.match(card, /rc-sale-badge[\s\S]*rc-variant-count/);
 assert.match(card, /!isImageStation && priceRangeLabel/);
 assert.equal((card.match(/className="rc-swipe-remove"/g) ?? []).length, 3);
@@ -30,4 +35,4 @@ assert.match(shell, /!isLogin \? \([\s\S]*<MobileTabbar/);
 assert.match(css, /results-sort-label:focus-within[\s\S]*box-shadow: none/);
 assert.match(css, /rc-head-chips[\s\S]*flex-wrap: wrap/);
 
-console.log("ResultCard UIUX D3 source checks passed (D3.4B supersessions acknowledged)");
+console.log("ResultCard UIUX D3 source checks passed (D3.5 owner supersessions acknowledged)");

@@ -21,6 +21,7 @@ const scripts = [
   "scripts/verify-resultcard-uiux-d3.mjs",
   "scripts/verify-resultcard-uiux-d33.mjs",
   "scripts/verify-resultcard-uiux-d34b.mjs",
+  "scripts/verify-resultcard-uiux-d35.mjs",
   "scripts/verify-variant-picker-containment.mjs",
   // CAP-1 / CAP-2 / CAP-2.5
   "scripts/verify-cap1.mjs",

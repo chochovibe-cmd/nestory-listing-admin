@@ -8,7 +8,43 @@
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
 
-## Latest release-branch package — D3.4B owner corrective pass 2
+## Latest release-branch package — D3.5 final pre-Shopify UI freeze
+
+D3.5 是 ResultCard / Variant UI 的最後 corrective polish。Start guard 以
+`3ef8ab0e942aaffba5b9ca0af39ac38897d42b25` 為唯一允許 parent；本包完成後停止
+ResultCard / Variant UI 施工，下一步只能由 Commander 另開 controlled Shopify go-live package。
+
+Final owner UI contract：
+
+- Shared：desktop + mobile `全選` 改為真正可見的 native checkbox +「全選」文字；既有 `toggleAll`、checked 與 indeterminate semantics 保留，歷史 `rc-toggle-track` 僅保留相容 markup、final presentation 隱藏，不再呈現 switch / knob。
+- Desktop results：StageFilterPills、scope、sort 在正常 desktop viewport 同列；desktop `全選` 從 filter hierarchy 視覺移到 panel header，與 `▶ 逐件審核 / ▶ 逐件標圖` 形成同一 review-control group。沒有改 ResultCard desktop information architecture。
+- Desktop login：`>=960px` 將 `.login-panel` 放寬到舒適的 640px 上限；mobile 維持原 compact form。Supabase sign-in / redirect / session / role 全部未改。
+- Mobile Variant：`依角色建立` 改走既有 `createPortal + variant-editor-modal-backdrop + variant-editor-modal` bottom-sheet/modal 系統；搜尋 `ip_characters`、multi-select、loading、`appendCharacterRows` 行為不變。Desktop 仍保留既有 inline role builder。
+- Mobile Variant actions：固定同組 `[＋新增維度] [依角色建立] [批次手動覆蓋價格]`；390/393/375px 以三欄呈現，極窄 `<360px` 才 graceful wrap。原 mobile-only `＋ 新增 Variant` entry 移除，但 `addRow` 與既有 add-variant capability 沒有刪除。
+- Mobile Variant rows：drag glyph / row badge / copy chrome 更 compact；readonly 規格最多兩行；readonly spec / price 與 copy action 去掉 input-like heavy frame；成本 input 保持明確 editable affordance；mobile-only grid 固定規格→價格→成本→庫存節奏並限制 width，desktop Variant grid 不改。
+- Touch reorder / long-press guard 保持 `ROW_LONG_PRESS_MS=500`、`TOUCH_DRAG_PX=8`；pricing helper、manual lock、inherited cost、batch cost semantics 均未改。
+
+Verifier：
+
+- `scripts/verify-resultcard-uiux-d34b.mjs` 已移除被 D3.5 supersede 的 switch / mobile `＋新增 Variant` assertion。
+- 新增 `scripts/verify-resultcard-uiux-d35.mjs`，驗證 final checkbox、desktop controls/login、mobile character modal/action group/row polish 與 desktop Variant freeze。
+- `scripts/verify-all.mjs` 已納入 D3.5 verifier；舊 D3 verifier 已改為承認 D3.5 checkbox supersession。
+
+Dedicated audit：
+
+- `docs/audits/PRE-SHOPIFY-UI-FINAL-2026-08-21.md`
+
+Git / release gate：
+
+- D3.5 start commit：`3ef8ab0e942aaffba5b9ca0af39ac38897d42b25`
+- final commit：本 `ONE FINAL COMMIT` 所在 commit；commit 無法在自身內容中預先嵌入自身 SHA，immutable SHA 以 PR #8 final head 與 Commander final report 為準。
+- PR #8 必須維持 Draft / Open / 未 merge。
+- Work runtime 若無法執行本地 dependency/build，GitHub CI 是 final remote authority；Vercel Preview 與 CI 結果以同一 final HEAD 驗證。
+- 本包明確 **沒有 Shopify production write**；不要建商品、上架、下架、更換 token 或修改 store configuration。
+
+> 以下 D3.4B 與更早章節保留作歷史脈絡。若與 D3.5 final contract 衝突，以 D3.5 為準。
+
+## Previous release-branch package — D3.4B owner corrective pass 2
 
 D3.4A / D3.4A.1 曾被 owner 否決，並由 `3b270b368ac5362e5cfc0048791942fd2f08798a`
 以正常 revert 完整退回 D3.3 source state。本次最新包是重新設計的 **D3.4B**，
@@ -44,8 +80,6 @@ Git / release gate：
 - PR #8 必須維持 Draft / Open / 未 merge。
 - final automated gate 仍是 `verify:all → typecheck → build`；Supabase Local Reconcile / Vercel Preview 狀態需跟 final HEAD 一起驗。
 - Pointer Events touch reorder 是 real pointer-capture implementation，但 Work runtime 沒有實體 iPhone；final Preview 仍需 owner mobile runtime QA。
-
-> 以下章節保留 D3.4B 之前的 release / production / security 歷史脈絡。若舊段落與上方 D3.4B 最新包描述衝突，以本節與 D3.4B audit 為準；不要把舊 scope guard 當成新的施工限制。
 
 ## UIUX Batch D3 follow-up
 
@@ -422,6 +456,7 @@ UI / regression：
 - `docs/audits/RESULTCARD-MOBILE-OWNER-CORRECTION-2026-08-20.md`
 - `docs/audits/RESULTCARD-MOBILE-REFINE-2026-08-20.md`（latest）
 - `docs/audits/RELEASE-HEALTH-AUDIT-2026-08-20.md`
+- `docs/audits/PRE-SHOPIFY-UI-FINAL-2026-08-21.md`（D3.5 latest UI freeze）
 
 DB / security：
 

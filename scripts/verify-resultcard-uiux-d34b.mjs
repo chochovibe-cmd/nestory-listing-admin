@@ -16,9 +16,12 @@ const d33ImportPos = layout.indexOf('import "./d33-mobile-uiux.css";');
 const iphoneCorrectiveImportPos = layout.indexOf('import "./d34b-iphone-corrective.css";');
 assert.ok(d33ImportPos >= 0 && iphoneCorrectiveImportPos > d33ImportPos);
 
-// A — select-all copy is visibly inside the actual toggle track; no outer frame.
-assert.match(css, /rc-header-select-all--desktop[\s\S]*border:\s*0;[\s\S]*rc-toggle-track[\s\S]*content:\s*"全選";/s);
-assert.match(css, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
+// A — D3.5 supersedes D3.4B's switch presentation. The actual checkbox and
+// indeterminate semantics stay in source; the old track is hidden in the final layer.
+assert.match(panel, /type="checkbox"[\s\S]*aria-label="全選目前列表"/);
+assert.match(panel, /el\.indeterminate\s*=\s*someSelected/);
+assert.match(correctiveCss, /rc-header-select-all \.rc-toggle-track\s*\{[\s\S]*display:\s*none;/);
+assert.match(correctiveCss, /input\[type="checkbox"\][\s\S]*accent-color:\s*var\(--accent\)/);
 
 // B — the existing dismiss handler remains data-free; D3.4B restores the real X node.
 assert.match(panel, /function dismissGestureHint\(\)[\s\S]*setShowGestureHint\(false\)/);
@@ -53,7 +56,6 @@ assert.match(variant, /\.\.\.rows\.slice\(0, index \+ 1\),[\s\S]*copy,[\s\S]*\.\
 assert.match(variant, /v-row-dup--icon[\s\S]*v-copy-icon/);
 assert.match(variant, /v-row-badge/);
 assert.match(variant, /v-mobile-option-value[\s\S]*v-mobile-edit-icon/);
-assert.match(css, /v-mobile-option-value[\s\S]*white-space:\s*normal;[\s\S]*text-overflow:\s*clip;/);
 const mobileRowStart = variant.indexOf('className="v-mobile-row-core"');
 const pricePos = variant.indexOf('className="v-mobile-price-result"', mobileRowStart);
 const costPos = variant.indexOf('className="v-mobile-cost"', mobileRowStart);
@@ -65,14 +67,14 @@ assert.match(variant, /庫存視為無限/);
 assert.match(css, /variant-del--trash::before\s*\{[\s\S]*content:\s*none;/);
 assert.doesNotMatch(css, /content:\s*"×";/);
 
-// E/H — long-press selection + modal batch override uses the existing pricing helper.
+// E/H — long-press selection + batch override still use existing pricing logic.
+// D3.5 only relocates the mobile batch entry into the primary action toolbar.
 assert.match(variant, /ROW_LONG_PRESS_MS = 500/);
 assert.match(variant, /toggleMobileRowSelection/);
-assert.match(variant, /批次手動覆蓋價格/);
+assert.match(variant, /vh-mobile-primary-actions[\s\S]*批次手動覆蓋價格/);
 assert.match(variant, /calculatePrice\(cost,/);
 assert.match(variant, /costIsInherited:\s*false/);
 assert.match(variant, /recalculateUnlockedVariantPrices\(next,/);
-assert.match(variant, /vh-mobile-batch-actions[\s\S]*批次手動覆蓋價格[\s\S]*新增 Variant/);
 
 // Desktop D/E result-row path stays separate and retains native desktop drag/input layout.
 assert.match(variant, /\) : isNarrow \? \([\s\S]*v-mobile-results[\s\S]*\) : \([\s\S]*vgrid-hdr/);
@@ -84,4 +86,4 @@ assert.match(correctiveCss, /rc-price-mini-label,[\s\S]*rc-price-mini-profit\s*\
 assert.match(correctiveCss, /rc-price-mini-value\s*\{[\s\S]*line-height:\s*1\.05;/);
 assert.doesNotMatch(correctiveCss, /align-items:\s*flex-end/);
 
-console.log("D3.4B ResultCard/Variant UIUX source contract passed with iPhone corrective");
+console.log("D3.4B ResultCard/Variant source contract passed with D3.5 supersessions");

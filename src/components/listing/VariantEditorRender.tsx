@@ -21,6 +21,7 @@ import {
 
 export type EditorModal =
   | null
+  | { kind: "character" }
   | { kind: "add-dimension" }
   | { kind: "add-value"; dimIndex: number }
   | { kind: "edit-option"; rowIndex: number; dimIndex: number }
@@ -30,15 +31,20 @@ export type EditorModal =
 
 type ImageOption = { id: string; url: string; label: string };
 type ZoomPreview = { url: string; label: string } | null;
+type CharacterOption = { id: string; name: string; ip: string };
 
 type VariantEditorRenderContext = {
   addAxisValue: (dimIndex: number, value: string) => boolean;
   addDimension: (name: string) => boolean;
   addRow: (optionValues?: string[]) => boolean;
   applyBatchCost: () => void;
+  applyCharacters: () => void;
   applyRowReorder: (fromKey: string, toKey: string) => void;
   batchPreview: PriceResult | null;
   cancelRowLongPress: () => void;
+  charLoading: boolean;
+  charQuery: string;
+  charSelected: Record<string, boolean>;
   clearPickLpTimer: () => void;
   closeEditorModal: () => void;
   costLabel: string;
@@ -46,6 +52,7 @@ type VariantEditorRenderContext = {
   dimHeaders: VariantDimension[];
   duplicateRow: (index: number) => void;
   editorModal: EditorModal;
+  filteredChars: CharacterOption[];
   finishTouchDrag: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   gridCols: string;
   images: ImageOption[];
@@ -71,6 +78,8 @@ type VariantEditorRenderContext = {
   rows: VariantFormRow[];
   rowsAtMax: boolean;
   selectPickImage: (rowIndex: number, imageId: string | null) => void;
+  setCharQuery: Dispatch<SetStateAction<string>>;
+  setCharSelected: Dispatch<SetStateAction<Record<string, boolean>>>;
   setModalCompareAt: Dispatch<SetStateAction<string>>;
   setModalValue: Dispatch<SetStateAction<string>>;
   setPickIndex: Dispatch<SetStateAction<number | null>>;
@@ -90,69 +99,69 @@ const QUICK_DIMS = ["尺寸", "顏色"] as const;
 
 function renderImagePicker(ctx: VariantEditorRenderContext, row: VariantFormRow, index: number) {
   const { clearPickLpTimer, images, onPickTouchMove, pickIndex, selectPickImage, setPickIndex, startPickLongPress } = ctx;
-    return (
-      <span className="vthumb-wrap">
-        <button
-          className="vthumb"
-          onClick={() => setPickIndex(pickIndex === index ? null : index)}
-          type="button"
-          aria-label={`選擇第 ${index + 1} 列圖片`}
-        >
-          {row.imageId ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt={images.find((image) => image.id === row.imageId)?.label ?? "規格圖"}
-              src={images.find((image) => image.id === row.imageId)?.url ?? ""}
-            />
+  return (
+    <span className="vthumb-wrap">
+      <button
+        className="vthumb"
+        onClick={() => setPickIndex(pickIndex === index ? null : index)}
+        type="button"
+        aria-label={`選擇第 ${index + 1} 列圖片`}
+      >
+        {row.imageId ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt={images.find((image) => image.id === row.imageId)?.label ?? "規格圖"}
+            src={images.find((image) => image.id === row.imageId)?.url ?? ""}
+          />
+        ) : (
+          <span className="vthumb-ph">＋</span>
+        )}
+      </button>
+      {pickIndex === index ? (
+        <div className="pop-menu open v-pop-pick">
+          <div className="pm-title">選擇對應圖片</div>
+          {images.length === 0 ? (
+            <div className="variant-empty">請先在上方上傳商品圖</div>
           ) : (
-            <span className="vthumb-ph">＋</span>
+            <div className="pick-grid">
+              {images.map((image) => (
+                <button
+                  className={`pk${row.imageId === image.id ? " sel" : ""}`}
+                  key={image.id}
+                  onClick={() => selectPickImage(index, image.id)}
+                  onTouchStart={(event) => {
+                    const touch = event.touches[0];
+                    if (touch) startPickLongPress(image, touch);
+                  }}
+                  onTouchMove={onPickTouchMove}
+                  onTouchEnd={clearPickLpTimer}
+                  onTouchCancel={clearPickLpTimer}
+                  title={image.label}
+                  type="button"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt={image.label} src={image.url} />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt="" aria-hidden className="pk-zoom-preview" src={image.url} />
+                </button>
+              ))}
+            </div>
           )}
-        </button>
-        {pickIndex === index ? (
-          <div className="pop-menu open v-pop-pick">
-            <div className="pm-title">選擇對應圖片</div>
-            {images.length === 0 ? (
-              <div className="variant-empty">請先在上方上傳商品圖</div>
-            ) : (
-              <div className="pick-grid">
-                {images.map((image) => (
-                  <button
-                    className={`pk${row.imageId === image.id ? " sel" : ""}`}
-                    key={image.id}
-                    onClick={() => selectPickImage(index, image.id)}
-                    onTouchStart={(event) => {
-                      const touch = event.touches[0];
-                      if (touch) startPickLongPress(image, touch);
-                    }}
-                    onTouchMove={onPickTouchMove}
-                    onTouchEnd={clearPickLpTimer}
-                    onTouchCancel={clearPickLpTimer}
-                    title={image.label}
-                    type="button"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt={image.label} src={image.url} />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt="" aria-hidden className="pk-zoom-preview" src={image.url} />
-                  </button>
-                ))}
-              </div>
-            )}
-            <Button size="sm" className="v-pop-full" onClick={() => selectPickImage(index, null)} type="button">
-              移除目前圖片
-            </Button>
-          </div>
-        ) : null}
-      </span>
-    );
-  }
-
+          <Button size="sm" className="v-pop-full" onClick={() => selectPickImage(index, null)} type="button">
+            移除目前圖片
+          </Button>
+        </div>
+      ) : null}
+    </span>
+  );
+}
 
 export function renderVariantEditorModal(ctx: VariantEditorRenderContext): ReactNode {
   const {
-    addAxisValue, addDimension, addRow, applyBatchCost, batchPreview, closeEditorModal, costLabel,
-    dimensions, editorModal, mobileSelected, modalCompareAt, modalValue, onManualPrice, portalReady,
-    priceMode, renameAxisValue, rows, setModalCompareAt, setModalValue, setVariantDraft, variantDraft
+    addAxisValue, addDimension, addRow, applyBatchCost, applyCharacters, batchPreview, charLoading,
+    charQuery, charSelected, closeEditorModal, costLabel, dimensions, editorModal, filteredChars,
+    mobileSelected, modalCompareAt, modalValue, onManualPrice, portalReady, priceMode, renameAxisValue,
+    rows, setCharQuery, setCharSelected, setModalCompareAt, setModalValue, setVariantDraft, variantDraft
   } = ctx;
   return portalReady && editorModal
     ? createPortal(
@@ -164,7 +173,29 @@ export function renderVariantEditorModal(ctx: VariantEditorRenderContext): React
           }}
         >
           <div className="variant-editor-modal" role="dialog" aria-modal="true">
-            {editorModal.kind === "add-dimension" ? (
+            {editorModal.kind === "character" ? (
+              <>
+                <div className="variant-editor-modal-title">依角色建立</div>
+                <label className="variant-editor-modal-field">
+                  <span>搜尋角色 / IP</span>
+                  <input className="v-char-search" onChange={(event) => setCharQuery(event.target.value)} placeholder="搜尋角色／IP…" value={charQuery} autoFocus />
+                </label>
+                {charLoading ? <div className="variant-empty">載入角色字典…</div> : (
+                  <div className="v-char-list v-char-list--modal">
+                    {filteredChars.map((character) => (
+                      <label key={character.id}>
+                        <input type="checkbox" checked={Boolean(charSelected[character.name])} onChange={(event) => setCharSelected((current) => ({ ...current, [character.name]: event.target.checked }))} />
+                        <span>{character.name}{character.ip ? <span className="v-char-ip"> · {character.ip}</span> : null}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="variant-editor-modal-actions">
+                  <Button variant="ghost" type="button" onClick={closeEditorModal}>取消</Button>
+                  <Button type="button" onClick={applyCharacters}>建立所選角色列</Button>
+                </div>
+              </>
+            ) : editorModal.kind === "add-dimension" ? (
               <>
                 <div className="variant-editor-modal-title">新增維度</div>
                 <div className="variant-editor-modal-quick">
@@ -304,13 +335,6 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
   } = ctx;
   return (
     <>
-      {isNarrow ? (
-        <div className="vh-mobile-batch-actions">
-          <button type="button" className="vh-mobile-batch-btn" disabled={mobileSelected.size === 0} onClick={() => openEditorModal({ kind: "batch-cost" })}>批次手動覆蓋價格{mobileSelected.size ? `（${mobileSelected.size}）` : ""}</button>
-          <button type="button" className="vh-mobile-batch-btn" disabled={rowsAtMax} onClick={() => openEditorModal({ kind: "add-variant" })}>＋ 新增 Variant</button>
-        </div>
-      ) : null}
-
       <div className="vh-results-heading">
         <span>款式結果</span>
         <span className="muted">{rows.length ? `${rows.length} 款` : "尚無款式"}</span>
@@ -478,7 +502,6 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
       )}
 
       {!isNarrow ? <button className="vt-addrow" onClick={() => addRow()} type="button">＋ 加入一列{rows.length > 0 ? `（${rows.length}/${MAX_VARIANT_ROWS}）` : ""}</button> : null}
-
     </>
   );
 }

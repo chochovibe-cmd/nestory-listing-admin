@@ -45,12 +45,14 @@ assert.match(finalCss, /input:checked \+ \.rc-toggle-track > span\s*\{[\s\S]*?le
 assert.match(finalCss, /input:indeterminate \+ \.rc-toggle-track\s*\{[\s\S]*?border-color:\s*color-mix\(in srgb, var\(--accent\) 58%, var\(--border\)\);[\s\S]*?background:\s*var\(--surface\);/);
 assert.match(finalCss, /input:indeterminate \+ \.rc-toggle-track > span\s*\{[\s\S]*?left:\s*calc\(50% \+ var\(--sp-1\)\);[\s\S]*?right:\s*var\(--sp-1\);[\s\S]*?background:\s*var\(--surface2\);/);
 
-// Item B — historical source layers remain intact, while the final owner layer
-// supersedes every mobile multi-select toolbar to one two-column geometry system.
+// Item B — final owner layer uses one shared button geometry while preserving
+// station-specific equal-column layouts: copy = 3 peers, image/ready = 2 columns.
 assert.doesNotMatch(releaseCss, /grid-template-columns:\s*\.82fr 1\.12fr 1\.16fr/);
 assert.match(releaseCss, /\.rc-batch-strip--copy\s*\{\s*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);\s*\}/);
 assert.match(finalCss, /\.rc-batch-strip--copy\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/);
-assert.match(ownerCss, /\.rc-batch-strip--copy,[\s\S]*?\.rc-batch-strip--image,[\s\S]*?\.rc-batch-strip--ready\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);[\s\S]*?align-items:\s*stretch;/);
+assert.match(ownerCss, /\.rc-batch-strip--copy\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[\s\S]*?align-items:\s*stretch;/);
+assert.match(ownerCss, /\.rc-batch-strip--image,[\s\S]*?\.rc-batch-strip--ready\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);[\s\S]*?align-items:\s*stretch;/);
+assert.match(ownerCss, /\.rc-batch-strip--copy \.batch-remove-action,[\s\S]*?\.rc-batch-strip--image \.batch-remove-action:last-child\s*\{[\s\S]*?grid-column:\s*auto;/);
 assert.match(ownerCss, /\.rc-batch-strip--copy \.rc-batch-count,[\s\S]*?\.rc-batch-strip--ready \.rc-batch-count\s*\{[\s\S]*?grid-column:\s*1 \/ -1;/);
 assert.match(ownerCss, /\.rc-batch-strip--copy \.rc-batch-actions,[\s\S]*?\.rc-batch-strip--ready \.rc-batch-actions\s*\{[\s\S]*?display:\s*contents;/);
 assert.match(ownerCss, /\.rc-batch-strip--copy \.rc-batch-cancel\.nb-btn,[\s\S]*?\.rc-batch-strip--copy \.rc-batch-actions > \.nb-btn,[\s\S]*?\.rc-batch-strip--image \.rc-batch-cancel\.nb-btn,[\s\S]*?\.rc-batch-strip--image \.rc-batch-actions > \.nb-btn,[\s\S]*?\.rc-batch-strip--ready \.rc-batch-cancel\.nb-btn,[\s\S]*?\.rc-batch-strip--ready \.rc-batch-actions > \.nb-btn\s*\{[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*none;[\s\S]*?min-height:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?margin:\s*0;[\s\S]*?padding:\s*0 var\(--sp-2\);[\s\S]*?border-width:\s*1px;[\s\S]*?border-style:\s*solid;[\s\S]*?border-radius:\s*var\(--radius-s\);[\s\S]*?box-sizing:\s*border-box;[\s\S]*?align-self:\s*stretch;[\s\S]*?font-size:\s*11px;[\s\S]*?font-weight:\s*800;[\s\S]*?line-height:\s*1;[\s\S]*?white-space:\s*nowrap;/);
@@ -64,4 +66,4 @@ assert.match(panel, /className="batch-detail-action"[\s\S]*?onClick=\{\(\) => vo
 assert.match(panel, /className="batch-remove-action"[\s\S]*?onClick=\{\(\) => void batchArchiveOrUnarchive\("archive"\)\}/);
 assert.match(panel, /className="batch-primary-action"[\s\S]*?onClick=\{\(\) => openStation3Modal\(\)\}/);
 
-console.log("D3.6 mobile selection controls and all-station batch geometry source contract passed");
+console.log("D3.6 mobile selection controls and station-specific equal batch geometry passed");

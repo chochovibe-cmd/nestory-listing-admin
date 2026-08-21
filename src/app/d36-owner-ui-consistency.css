@@ -18,11 +18,14 @@
     border-radius: var(--stage-control-radius);
   }
 
-  /* Owner runtime QA: every action exposed by the same long-press multi-select
-   * toolbar must use one button geometry across copy, image and ready stations.
-   * Stage-specific action counts may produce additional rows, but every cell is
-   * equal-width and every button shares the same 44px touch height/radius. */
-  .rc-batch-strip--copy,
+  /* Multi-select toolbars share one button geometry, but each station keeps the
+   * column count that fits its actual action set. Do not force every station into
+   * one grid: copy stays three equal peers; image/ready use equal two-column cells. */
+  .rc-batch-strip--copy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
   .rc-batch-strip--image,
   .rc-batch-strip--ready {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -39,6 +42,13 @@
   .rc-batch-strip--image .rc-batch-actions,
   .rc-batch-strip--ready .rc-batch-actions {
     display: contents;
+  }
+
+  /* Reset historical placement rules that can create implicit narrow columns or
+   * make the final image action span both columns. Source order now decides cells. */
+  .rc-batch-strip--copy .batch-remove-action,
+  .rc-batch-strip--image .batch-remove-action:last-child {
+    grid-column: auto;
   }
 
   .rc-batch-strip--copy .rc-batch-cancel.nb-btn,

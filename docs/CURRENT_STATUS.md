@@ -3,10 +3,49 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-08-20
+更新基準：2026-08-21
 正式 app 基準分支：`codex/nestory-v0.1-safety-skeleton`
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
+
+## Latest release-branch package — D3.4B owner corrective pass 2
+
+D3.4A / D3.4A.1 曾被 owner 否決，並由 `3b270b368ac5362e5cfc0048791942fd2f08798a`
+以正常 revert 完整退回 D3.3 source state。本次最新包是重新設計的 **D3.4B**，
+不要把被 revert 的 D3.4A 實作當成目前基準。
+
+D3.4B 最新真實狀態：
+
+- A：mobile `全選` 文字整合進 toggle 本體，移除 D3.3 外層框；仍與 `只看我的 / 排序` 維持 38px 同高三欄幾何。
+- B：mobile 操作提示列恢復可關閉 `X`；關閉只隱藏提示列，既有資料／ResultCard 行為不受影響。
+- C：維度 / 規格值定義區改用 ResultCard Tags 的 chip 設計語言；`新增維度`、`新增值` 都改成按下後才出現的 modal / bottom-sheet 流程；**mobile + desktop 同步**。
+- D：variant 結果列 **只改 mobile**；使用六點 Pointer Events drag、圖示複製、小 badge、縮圖、readonly 完整規格名 + 鉛筆、readonly 售價／定價 + 鉛筆、窄成本、無限庫存 toggle、最右垃圾桶。D3.3 的 mobile `×` 已明確改回垃圾桶。
+- E：mobile 固定同排 `批次手動覆蓋價格 / ＋ 新增 Variant`，兩者都走 modal / bottom sheet，不會因「建立規格」收合而消失；長按 variant row 進入多選。批次成本只作用於被選取列，且不論該列原成本是空白、商品成本繼承值或既有手填值，都會覆寫成這次輸入的新成本；未選取列完全不動。覆寫後呼叫既有 `recalculateUnlockedVariantPrices`：未手動鎖定價格的列依既有公式重算售價與定價，`priceLocked`（✎ 手動鎖定）列則由既有 helper 直接保留原售價／定價，不修改任何 pricing formula。
+- F：ResultCard 價格列改成底部對齊，較大價格文字向上延伸；**mobile + desktop 同步**。
+- Desktop variant 結果卡片 D/E 本包不改，保留原本 desktop render path；下一輪若做視覺優化應獨立成 D3.5 類 package。
+
+H 段已確認：
+
+- 新增 variant 已會繼承正的商品層級成本；
+- 舊 `套用成本` 只填空白 / 非正成本列，不覆蓋已填正數；
+- per-variant 實際成本本來就存在，`costIsInherited` 只是 UI-only marker，沒有獨立 DB override flag；
+- 因此 D3.4B 可安全完成批次手動成本覆蓋，不需 schema migration，也沒有修改 `rate / costMultiplier / marginMultiplier / compareAtMultiplier / minPrice` 等價格公式。
+- Final-commit guard：mobile 成本欄視覺寬度固定約五位數字空間（88px）；mobile 複製使用雙重疊方框 icon、仍精確複製並插入下一列；操作提示實際文案為「長按卡片進入多選；向左滑可核准／重送，向右滑可移除。」；`＋ 新增 Variant` 與批次覆蓋按鈕固定同排且都只開 modal，不做 inline 展開。
+- 傳輸環境備註：D3.4B 候選中的 `VariantEditor.tsx` 因本次 ChatGPT→GitHub connector 對單一工具參數約 32K 字元開始出現截斷，而 GitHub Git Blob API 官方上限遠高於此，因此採**純機械式 render 抽出**：runtime state / handlers / pricing / duplicate / inventory / touch-drag 邏輯全部仍留在 `VariantEditor.tsx`，只把原 JSX 搬到 `VariantEditorRender.tsx` 的普通 render functions。這是傳輸 workaround，不是設計或架構重構；拆分前後 moved JSX 與非 render runtime logic 已做 byte-for-byte 等價驗證。
+
+Dedicated audit：
+
+- `docs/audits/RESULTCARD-VARIANT-UIUX-D3-4B-2026-08-21.md`
+
+Git / release gate：
+
+- D3.4B start commit：`3b270b368ac5362e5cfc0048791942fd2f08798a`
+- end commit：本 `ONE FINAL COMMIT` 所在 commit；實際 SHA 以 PR #8 push 後 HEAD 為準（commit 無法在自身內容預先嵌入自身 SHA）。
+- PR #8 必須維持 Draft / Open / 未 merge。
+- final automated gate 仍是 `verify:all → typecheck → build`；Supabase Local Reconcile / Vercel Preview 狀態需跟 final HEAD 一起驗。
+- Pointer Events touch reorder 是 real pointer-capture implementation，但 Work runtime 沒有實體 iPhone；final Preview 仍需 owner mobile runtime QA。
+
+> 以下章節保留 D3.4B 之前的 release / production / security 歷史脈絡。若舊段落與上方 D3.4B 最新包描述衝突，以本節與 D3.4B audit 為準；不要把舊 scope guard 當成新的施工限制。
 
 ## UIUX Batch D3 follow-up
 

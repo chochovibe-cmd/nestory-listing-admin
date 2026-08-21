@@ -14,8 +14,8 @@ function functionBody(source, name, nextName) {
 
 const autoExpand = functionBody(editor, "tryAutoExpandFromDimensions", "addAxisValue");
 const addAxis = functionBody(editor, "addAxisValue", "dropAxisValue");
-const dropAxis = functionBody(editor, "dropAxisValue", "expandFromAxisValues");
-const confirmExpand = functionBody(editor, "expandFromAxisValues", "duplicateRow");
+const dropAxis = functionBody(editor, "dropAxisValue", "renameAxisValue");
+const confirmExpand = functionBody(editor, "confirmPendingAxisChange", "duplicateRow");
 
 assert.match(planner, /wouldDiscardHandFilled\.length\s*>\s*0/);
 assert.match(planner, /kind:\s*"confirm"/);
@@ -32,9 +32,13 @@ assert.doesNotMatch(dropAxis, /onDimensionsChange\(nextDims\)/);
 assert.match(dropAxis, /tryAutoExpandFromDimensions\(nextDims, rows\)/);
 
 assert.match(editor, /nextDimensions\?:\s*VariantDimension\[\]/);
-assert.match(confirmExpand, /pendingDimensions/);
+assert.match(confirmExpand, /confirmArm\.nextDimensions \?\? dimensions/);
 assert.match(confirmExpand, /targetDimensions/);
 assert.match(confirmExpand, /onDimensionsChange\(targetDimensions\)/);
-assert.match(editor, /const canExpand = expandArmed \|\| canExpandFromDimensions\(dimensions\)/);
+// D3.4B removes the ordinary manual expand control. The only visible expand
+// action is the pre-existing destructive-change confirmation.
+assert.match(editor, /const expandArmed = confirmArm\?\.kind === "expand"/);
+assert.match(editor, /expandArmed \? \([\s\S]*確認更新款式/);
+assert.doesNotMatch(editor, />重新展開</);
 
-console.log("Variant axis atomic-confirm checks passed");
+console.log("Variant axis atomic-confirm checks passed (D3.4B auto-expand UI acknowledged)");

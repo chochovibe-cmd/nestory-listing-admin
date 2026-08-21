@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 const panel = fs.readFileSync("src/components/listing/DraftResultsPanel.tsx", "utf8");
 const card = fs.readFileSync("src/components/listing/ResultCard.tsx", "utf8");
-const variants = fs.readFileSync("src/components/listing/VariantEditor.tsx", "utf8");
+const variants = fs.readFileSync("src/components/listing/VariantEditor.tsx", "utf8") + "\n" + fs.readFileSync("src/components/listing/VariantEditorRender.tsx", "utf8");
 const login = fs.readFileSync("src/app/login/page.tsx", "utf8");
 const css = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
 
@@ -17,8 +17,11 @@ assert.match(card, /<span className="schip rc-variant-count">\{variantCount\} �
 assert.match(card, /collectSellPricesForCard[\s\S]*formatPriceRangeLabel/);
 assert.doesNotMatch(variants, />重新展開</);
 assert.match(variants, /expandArmed \? \([\s\S]*確認更新款式/);
-assert.match(variants, /軸值變更後會自動更新款式列/);
+// D3.4B removes the always-visible D2 helper row but preserves the same
+// auto-expand behavior and destructive-change confirmation contract.
+assert.match(variants, /加入規格值後會自動建立款式列/);
+assert.match(variants, /tryAutoExpandFromDimensions\(nextDims, rows\)/);
 assert.doesNotMatch(login, /mock-safe 骨架模式|潮巢 商品上架助手/);
 assert.match(login, /<h1 className="login-brand-title">團隊登入<\/h1>/);
 
-console.log("ResultCard UIUX D2 source checks passed");
+console.log("ResultCard UIUX D2 source checks passed (D3.4B auto-expand copy supersession acknowledged)");

@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 const panel = fs.readFileSync("src/components/listing/DraftResultsPanel.tsx", "utf8");
 const card = fs.readFileSync("src/components/listing/ResultCard.tsx", "utf8");
-const variants = fs.readFileSync("src/components/listing/VariantEditor.tsx", "utf8");
+const variants = fs.readFileSync("src/components/listing/VariantEditor.tsx", "utf8") + "\n" + fs.readFileSync("src/components/listing/VariantEditorRender.tsx", "utf8");
 const layout = fs.readFileSync("src/app/layout.tsx", "utf8");
 const shell = fs.readFileSync("src/components/AppShell.tsx", "utf8");
 const css = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
@@ -16,10 +16,13 @@ assert.match(card, /!isImageStation && priceRangeLabel/);
 assert.equal((card.match(/className="rc-swipe-remove"/g) ?? []).length, 3);
 assert.equal((card.match(/archiveOne\(\)/g) ?? []).length >= 4, true);
 assert.match(variants, /const \[builderOpen, setBuilderOpen\][\s\S]*<details[\s\S]*className="vh-builder"[\s\S]*open=\{builderOpen\}[\s\S]*onToggle=/);
-assert.match(variants, /vh-add-dim-wrap[\s\S]*v-pop-dim vh-inline-pop/);
+// D3.4B supersedes D3's in-flow dimension popover with one shared modal.
+assert.match(variants, /variant-editor-modal-backdrop[\s\S]*editorModal\.kind === "add-dimension"/);
 assert.doesNotMatch(variants, /moreOpen|vh-more-btn|更多規格操作|更多操作/);
-assert.match(variants, /套用成本[\s\S]*依角色建立/);
-assert.match(variants, /vdrag--mobile/);
+// Desktop still retains the legacy safe blank-cost action and role builder.
+assert.match(variants, /依角色建立[\s\S]*套用成本/);
+// D3.4B supersedes the mobile arrow fallback with a real Pointer Events handle.
+assert.match(variants, /vdrag vdrag--touch/);
 assert.match(layout, /<AppShell>\{children\}<\/AppShell>/);
 assert.match(shell, /pathname === "\/login"/);
 assert.match(shell, /!isLogin \? <AppSidebar \/>/);
@@ -27,4 +30,4 @@ assert.match(shell, /!isLogin \? \([\s\S]*<MobileTabbar/);
 assert.match(css, /results-sort-label:focus-within[\s\S]*box-shadow: none/);
 assert.match(css, /rc-head-chips[\s\S]*flex-wrap: wrap/);
 
-console.log("ResultCard UIUX D3 source checks passed");
+console.log("ResultCard UIUX D3 source checks passed (D3.4B supersessions acknowledged)");

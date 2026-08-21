@@ -1,8 +1,8 @@
 /*
  * Owner UI consistency corrective — 2026-08-21.
- * Controls that sit in the same mobile filter row should share one geometry.
- * D3.6 already matches the 38px height/border rhythm; this final layer aligns
- * the select-all pill radius with the adjacent scope/sort controls only.
+ * Controls that sit together at the same hierarchy should share one geometry.
+ * This final presentation layer fixes owner-observed cascade mismatches without
+ * changing ResultCard selection, review, archive, long-press or swipe behavior.
  */
 
 @media (max-width: 959px) {
@@ -16,5 +16,30 @@
   .stage-filter-row .results-sort-label,
   .stage-filter-row .results-sort-label .sort-sel {
     border-radius: var(--stage-control-radius);
+  }
+
+  /* Owner runtime QA: the global mobile Button rule has a more-specific
+   * `.batch-primary-action.nb-btn` selector, so D3.6's 40px middle-button
+   * override lost while the two peers stayed at 40px. Normalize the full copy
+   * action trio at the final cascade layer and keep the >=44px touch contract. */
+  .rc-batch-strip--copy .rc-batch-cancel.nb-btn,
+  .rc-batch-strip--copy .batch-primary-action.nb-btn,
+  .rc-batch-strip--copy .batch-remove-action.nb-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0 var(--sp-2);
+    border-width: 1px;
+    border-style: solid;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    align-self: stretch;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
   }
 }

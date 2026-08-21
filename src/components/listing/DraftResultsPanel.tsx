@@ -1477,10 +1477,8 @@ export function DraftResultsPanel({
                 type="checkbox"
                 aria-label="全選目前列表"
               />
-              <span className="rc-toggle-track rc-toggle-track--labeled" aria-hidden>
-                <span />
-                <b className="rc-toggle-copy">全選</b>
-              </span>
+              <span className="rc-toggle-track" aria-hidden><span /></span>
+              <span>全選</span>
             </label>
           ) : null}
           <StageFilterPills
@@ -1521,19 +1519,27 @@ export function DraftResultsPanel({
           </div>
         </div>
 
-        {showToolbar && showGestureHint ? (
+        {showToolbar ? (
           <div className="rc-selection-guide-row">
-            <p className="rc-gesture-hint" role="note">
-              <span>長按多選；左滑可核准、重生或移出佇列</span>
-              <button
-                aria-label="關閉提示"
-                className="rc-gesture-hint-dismiss"
-                onClick={dismissGestureHint}
-                type="button"
-              >
-                ×
-              </button>
-            </p>
+            <label className="rc-header-select-all rc-header-select-all--mobile">
+              <input
+                checked={allSelected}
+                onChange={toggleAll}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected;
+                }}
+                type="checkbox"
+                aria-label="全選目前列表"
+              />
+              <span className="rc-toggle-track" aria-hidden><span /></span>
+              <span>全選</span>
+            </label>
+            {showGestureHint ? (
+              <p className="rc-gesture-hint" role="note">
+                <span>長按卡片可多選；左滑顯示「移出佇列」</span>
+                <button aria-label="關閉提示" className="rc-gesture-hint-dismiss" onClick={dismissGestureHint} type="button">×</button>
+              </p>
+            ) : null}
           </div>
         ) : null}
 

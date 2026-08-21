@@ -138,8 +138,9 @@
     display: contents;
   }
 
-  /* D3.4A restores the existing real DOM helper/dismiss state. D3.2 keeps only
-   * the neutral guide-row geometry; generated pseudo-content was removed. */
+  /* Mobile hierarchy: select-all first, then a persistent helper hint. The old
+   * dismissible hint is suppressed so prior localStorage dismissal cannot make
+   * the guidance disappear and there is no close button in the visible UI. */
   .rc-selection-guide-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -152,6 +153,28 @@
     justify-self: start;
     min-height: 34px;
     padding: 0 4px;
+  }
+  .rc-selection-guide-row .rc-gesture-hint {
+    display: none;
+  }
+  .rc-selection-guide-row::after {
+    content: "長按卡片可多選；左滑顯示『移出佇列』";
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 0;
+    border-left: 4px solid var(--accent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    color: color-mix(in srgb, var(--accent) 76%, var(--text));
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    box-sizing: border-box;
+  }
+  .rc-gesture-hint-dismiss {
+    display: none;
   }
 
   /* Batch actions: copy-review keeps three peers; image-review may wrap because
@@ -231,8 +254,9 @@
     touch-action: manipulation;
   }
 
-  /* Character selection remains an in-flow existing tool; D3.4A moves only
-   * add-dimension / add-value / option-edit interactions into mobile sheets. */
+  /* On mobile, the dimension/character panels expand in-flow next to the
+   * trigger instead of floating over buttons or being clipped off-screen. */
+  .variant-box .vh-add-dim-wrap .v-pop-dim.vh-inline-pop,
   .variant-box .v-pop-char.vh-inline-pop {
     position: static;
     inset: auto;
@@ -245,8 +269,9 @@
     box-sizing: border-box;
   }
 
-  /* Result rows retain a flat mobile boundary. D3.4A supersedes this block's
-   * old arrow / hidden-drag presentation later in d33-mobile-uiux.css. */
+  /* Result rows return to compact, finished cards: one restrained boundary,
+   * tighter internals, and a de-emphasized handle. Existing up/down, duplicate
+   * and delete controls remain available. */
   .variant-box .vgrid-block {
     margin: 0 0 8px;
     padding: 0 7px;
@@ -279,6 +304,9 @@
     grid-column: 4 / 5;
     padding-inline: 5px;
     font-size: 10px;
+  }
+  .rc-selection-guide-row::after {
+    font-size: 11.5px;
   }
   .rc-batch-strip--copy .rc-batch-cancel,
   .rc-batch-strip--copy .batch-primary-action,

@@ -17,7 +17,7 @@ const panel = read("src/components/listing/DraftResultsPanel.tsx");
 const variant = read("src/components/listing/VariantEditor.tsx");
 
 if (css.includes("!important")) {
-  throw new Error("D3.3 verifier: presentation layer must not add !important");
+  throw new Error("D3.3 verifier: new presentation layer must not add !important");
 }
 
 requireText(layout, 'import "./d33-mobile-uiux.css";', "D3.3 stylesheet import");
@@ -26,12 +26,17 @@ if (layout.indexOf('import "./d33-mobile-uiux.css";') < layout.indexOf('import "
 }
 
 requireText(css, ".stage-filter-row > .rc-header-select-all--desktop", "mobile select-all control row");
-requireText(css, "grid-template-columns: repeat(3, minmax(0, 1fr));", "three-control geometry");
+requireText(css, ".rc-selection-guide-row .rc-header-select-all--mobile", "old mobile select-all suppression");
+requireText(css, "grid-template-columns: repeat(3, minmax(0, 1fr));", "equal three-control geometry");
 requireText(css, ".result-card .rc-sale-badge,", "sale/variant shared chip geometry");
 requireText(css, ".result-card .rc-variant-count", "variant chip geometry");
-requireText(css, "overflow-x: auto;", "horizontal row touch scroll");
-requireText(css, ".variant-box .vh-dim-values", "dimension presentation hook");
+requireText(css, "overflow-x: auto;", "horizontal touch scroll");
+requireText(css, ".variant-box .vh-dim-values", "dimension value rail");
 requireText(css, ".variant-box .vgrid-block", "variant row viewport");
+requireText(css, ".variant-box .variant-del::before", "mobile delete x affordance");
+requireText(css, 'content: "×";', "mobile delete x glyph");
+requireText(css, ".variant-box .vdrag--mobile", "mobile drag fallback selector");
+requireText(css, "display: none;", "touch drag is not falsely exposed");
 
 const salePos = resultCard.indexOf('className="rc-sale-badge"');
 const variantPos = resultCard.indexOf('className="schip rc-variant-count"');
@@ -47,9 +52,10 @@ if (selectAllPos < 0 || tabsPos < 0 || controlsPos < 0 || !(selectAllPos < tabsP
 }
 
 requireText(variant, "...rows.slice(0, index + 1),", "copy inserts after source row");
-requireText(variant, "draggable={!isNarrow}", "desktop-only native HTML drag contract");
+requireText(variant, "draggable={!isNarrow}", "desktop-only native drag contract");
+requireText(variant, "onClick={() => moveRow(index, -1)}", "reliable mobile up reorder");
+requireText(variant, "onClick={() => moveRow(index, 1)}", "reliable mobile down reorder");
+requireText(variant, "🗑", "underlying delete button kept presentation-only");
 requireText(variant, "applyCostToAllVariants", "apply-cost behavior remains present");
 
-// D3.4A intentionally supersedes D3.3 mobile ▲/▼ fallback, hidden mobile drag,
-// and delete-X presentation. Those contracts are asserted by the D3.4A verifier.
-console.log("D3.3 mobile UIUX source contract passed (D3.4A supersedes mobile reorder/delete affordances)");
+console.log("D3.3 mobile UIUX source contract passed");

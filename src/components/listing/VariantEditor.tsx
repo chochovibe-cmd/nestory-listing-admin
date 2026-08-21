@@ -5,7 +5,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type TouchEvent as ReactTouchEvent
 } from "react";
@@ -63,15 +62,12 @@ type Props = {
 };
 
 const QUICK_DIMS = ["尺寸", "顏色"] as const;
-const MOBILE_QUICK_DIMS = ["尺寸", "顏色", "款式"] as const;
 
 /** UX-AB T104: inline double-confirm arm (3s auto-reset; no window.confirm). */
 const ARM_MS = 3000;
 /** UX-B3-P06: mobile pick-grid long-press zoom (slightly under P04 500ms). */
 const PICK_LONG_PRESS_MS = 450;
 const PICK_MOVE_PX = 10;
-/** D3.4A: mobile handle activation threshold before vertical reorder begins. */
-const ROW_DRAG_ACTIVATION_PX = 8;
 
 type ConfirmArm =
   | null
@@ -82,26 +78,6 @@ type ConfirmArm =
       /** P0-1: candidate axis change stays pending until the second confirm click. */
       nextDimensions?: VariantDimension[];
     };
-
-type AxisValueModal = {
-  dimIndex: number;
-  dimName: string;
-};
-
-type OptionEditModal = {
-  rowIndex: number;
-  dimIndex: number;
-  label: string;
-};
-
-type MobilePointerDrag = {
-  pointerId: number;
-  fromKey: string;
-  startX: number;
-  startY: number;
-  active: boolean;
-  handle: HTMLButtonElement;
-};
 
 /** Reorder rows by index-key string; updates sortOrder. */
 function reorderVariantRows(
@@ -154,16 +130,12 @@ export function VariantEditor({
   const [charLoading, setCharLoading] = useState(false);
   /** Per-dimension draft for adding an axis value (pkg2b). */
   const [axisValueDraft, setAxisValueDraft] = useState<Record<number, string>>({});
-  const [axisValueModal, setAxisValueModal] = useState<AxisValueModal | null>(null);
-  const [optionEdit, setOptionEdit] = useState<OptionEditModal | null>(null);
-  const [optionEditDraft, setOptionEditDraft] = useState("");
   /** UX-AB T104: first click arms destructive remove/expand; second executes. */
   const [confirmArm, setConfirmArm] = useState<ConfirmArm>(null);
-  /** UX-B3-P06 / D3.4A: desktop HTML drag + mobile Pointer Events. */
+  /** UX-B3-P06: desktop row drag / mobile ▲▼; keys = index strings. */
   const [isNarrow, setIsNarrow] = useState(false);
   const [reorderDragKey, setReorderDragKey] = useState<string | null>(null);
   const [reorderOverKey, setReorderOverKey] = useState<string | null>(null);
-  const [reorderDragOffsetY, setReorderDragOffsetY] = useState(0);
   /** Mobile long-press full-screen pick preview (portal). */
   const [zoomPreview, setZoomPreview] = useState<{
     url: string;
@@ -176,7 +148,6 @@ export function VariantEditor({
   const pickLpTimerRef = useRef<number | null>(null);
   const pickLpTriggeredRef = useRef(false);
   const pickTouchStartRef = useRef({ x: 0, y: 0 });
-  const pointerDragRef = useRef<MobilePointerDrag | null>(null);
 
   function clearArmTimer() {
     if (armTimerRef.current != null) {
@@ -227,12 +198,10 @@ export function VariantEditor({
   const lockedCount = countLockedVariants(rows);
   const costLabel = currency === "CNY" ? "成本 ¥" : "成本 NT$";
 
-  // Close desktop/in-flow popovers on outside click. Portal sheets own their backdrop.
+  // Close popovers on outside click
   useEffect(() => {
     function onDoc(e: MouseEvent) {
-      const target = e.target;
-      if (target instanceof Element && target.closest(".v-mobile-sheet")) return;
-      if (!rootRef.current?.contains(target as Node)) {
+      if (!rootRef.current?.contains(e.target as Node)) {
         setCharOpen(false);
         setDimOpen(false);
         setPickIndex(null);
@@ -357,6 +326,10 @@ export function VariantEditor({
     const next = reorderVariantRows(rows, fromKey, toKey);
     if (!next) return;
     setRowsSafe(next);
+  }
+
+  function moveRow(index: number, delta: number) {
+    applyRowReorder(String(index), String(index + delta));
   }
 
   function addDimension(name: string) {
@@ -567,51 +540,6 @@ export function VariantEditor({
     setCharOpen(false);
     setDimOpen(false);
     setPickIndex(null);
-    setAxisValueModal(null);
-    setOptionEdit(null);
-  }
-
-  function openDimensionModal() {
-    setAxisValueModal(null);
-    setOptionEdit(null);
-    setCharOpen(false);
-    setPickIndex(null);
-    setCustomDim("");
-    setDimOpen(true);
-  }
-
-  function openAxisValueEditor(dimIndex: number, dimName: string) {
-    setDimOpen(false);
-    setOptionEdit(null);
-    setCharOpen(false);
-    setPickIndex(null);
-    setAxisValueDraft((cur) => ({ ...cur, [dimIndex]: "" }));
-    setAxisValueModal({ dimIndex, dimName });
-  }
-
-  function confirmAxisValueEditor() {
-    if (!axisValueModal) return;
-    if (!(axisValueDraft[axisValueModal.dimIndex] ?? "").trim()) return;
-    addAxisValue(axisValueModal.dimIndex);
-    setAxisValueModal(null);
-  }
-
-  function openOptionEditor(rowIndex: number, dimIndex: number, label: string) {
-    setDimOpen(false);
-    setAxisValueModal(null);
-    setCharOpen(false);
-    setPickIndex(null);
-    setOptionEdit({ rowIndex, dimIndex, label });
-    setOptionEditDraft(rows[rowIndex]?.optionValues[dimIndex] ?? "");
-  }
-
-  function confirmOptionEditor() {
-    if (!optionEdit) return;
-    if (dimensions.length === 0 && optionEdit.dimIndex === 0) {
-      onDimensionsChange([{ name: "款式" }]);
-    }
-    updateOption(optionEdit.rowIndex, optionEdit.dimIndex, optionEditDraft);
-    setOptionEdit(null);
   }
 
   function startPickLongPress(im: VariantImageOption, touch: { clientX: number; clientY: number }) {
@@ -647,80 +575,6 @@ export function VariantEditor({
     }
     updateRow(rowIndex, { imageId });
     setPickIndex(null);
-  }
-
-  function rowKeyAtPoint(clientX: number, clientY: number): string | null {
-    const hit = document.elementFromPoint(clientX, clientY);
-    const row = hit?.closest<HTMLElement>("[data-variant-row-key]");
-    return row?.dataset.variantRowKey ?? null;
-  }
-
-  function releasePointerCapture(handle: HTMLButtonElement, pointerId: number) {
-    try {
-      if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
-    } catch {
-      /* pointer may already be released by the browser */
-    }
-  }
-
-  function resetMobilePointerDrag(drag: MobilePointerDrag | null) {
-    if (drag) releasePointerCapture(drag.handle, drag.pointerId);
-    pointerDragRef.current = null;
-    setReorderDragKey(null);
-    setReorderOverKey(null);
-    setReorderDragOffsetY(0);
-  }
-
-  function onMobileDragPointerDown(event: ReactPointerEvent<HTMLButtonElement>, rowKey: string) {
-    if (!isNarrow || event.button !== 0) return;
-    pointerDragRef.current = {
-      pointerId: event.pointerId,
-      fromKey: rowKey,
-      startX: event.clientX,
-      startY: event.clientY,
-      active: false,
-      handle: event.currentTarget
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function onMobileDragPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
-    const drag = pointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
-    const absX = Math.abs(dx);
-    const absY = Math.abs(dy);
-
-    if (!drag.active) {
-      if (Math.max(absX, absY) < ROW_DRAG_ACTIVATION_PX) return;
-      if (absX > absY) {
-        // Horizontal intent belongs to the row viewport; never activate reorder.
-        resetMobilePointerDrag(drag);
-        return;
-      }
-      drag.active = true;
-      setReorderDragKey(drag.fromKey);
-      closeAllPops();
-    }
-
-    if (!drag.active) return;
-    event.preventDefault();
-    setReorderDragOffsetY(dy);
-    const overKey = rowKeyAtPoint(event.clientX, event.clientY);
-    setReorderOverKey(overKey && overKey !== drag.fromKey ? overKey : null);
-  }
-
-  function finishMobileDrag(event: ReactPointerEvent<HTMLButtonElement>, cancelled = false) {
-    const drag = pointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const toKey = drag.active && !cancelled
-      ? rowKeyAtPoint(event.clientX, event.clientY) ?? reorderOverKey
-      : null;
-    resetMobilePointerDrag(drag);
-    if (drag.active && toKey && toKey !== drag.fromKey) {
-      applyRowReorder(drag.fromKey, toKey);
-    }
   }
 
   const dimHeaders = dimensions.length > 0 ? dimensions : [];
@@ -770,152 +624,6 @@ export function VariantEditor({
         )
       : null;
 
-  const mobileSheets =
-    portalReady && isNarrow && (dimOpen || axisValueModal || optionEdit)
-      ? createPortal(
-          <>
-            {dimOpen ? (
-              <div
-                className="v-mobile-sheet-backdrop"
-                onClick={() => setDimOpen(false)}
-                role="presentation"
-              >
-                <div
-                  aria-label="新增維度"
-                  aria-modal="true"
-                  className="v-mobile-sheet v-mobile-sheet--dimension"
-                  onClick={(event) => event.stopPropagation()}
-                  role="dialog"
-                >
-                  <div className="v-mobile-sheet-title">新增維度</div>
-                  <div className="v-mobile-sheet-options">
-                    {MOBILE_QUICK_DIMS.map((name) => (
-                      <button
-                        className="v-mobile-sheet-option"
-                        disabled={dimensions.some((d) => d.name === name)}
-                        key={name}
-                        onClick={() => addDimension(name)}
-                        type="button"
-                      >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="v-mobile-sheet-field">
-                    <span>自訂維度</span>
-                    <input
-                      autoFocus
-                      onChange={(event) => setCustomDim(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          addDimension(customDim);
-                        }
-                      }}
-                      placeholder="例如：材質"
-                      value={customDim}
-                    />
-                  </label>
-                  <div className="v-mobile-sheet-actions">
-                    <button className="v-mobile-sheet-cancel" onClick={() => setDimOpen(false)} type="button">
-                      取消
-                    </button>
-                    <button className="v-mobile-sheet-confirm" onClick={() => addDimension(customDim)} type="button">
-                      確認
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-            {axisValueModal ? (
-              <div
-                className="v-mobile-sheet-backdrop"
-                onClick={() => setAxisValueModal(null)}
-                role="presentation"
-              >
-                <div
-                  aria-label={`新增${axisValueModal.dimName}值`}
-                  aria-modal="true"
-                  className="v-mobile-sheet v-mobile-sheet--axis-value"
-                  onClick={(event) => event.stopPropagation()}
-                  role="dialog"
-                >
-                  <div className="v-mobile-sheet-title">新增「{axisValueModal.dimName}」</div>
-                  <label className="v-mobile-sheet-field">
-                    <span>規格值</span>
-                    <input
-                      autoFocus
-                      onChange={(event) =>
-                        setAxisValueDraft((cur) => ({
-                          ...cur,
-                          [axisValueModal.dimIndex]: event.target.value
-                        }))
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          confirmAxisValueEditor();
-                        }
-                      }}
-                      placeholder={`輸入${axisValueModal.dimName}值`}
-                      value={axisValueDraft[axisValueModal.dimIndex] ?? ""}
-                    />
-                  </label>
-                  <div className="v-mobile-sheet-actions">
-                    <button className="v-mobile-sheet-cancel" onClick={() => setAxisValueModal(null)} type="button">
-                      取消
-                    </button>
-                    <button className="v-mobile-sheet-confirm" onClick={confirmAxisValueEditor} type="button">
-                      確認
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-            {optionEdit ? (
-              <div
-                className="v-mobile-sheet-backdrop"
-                onClick={() => setOptionEdit(null)}
-                role="presentation"
-              >
-                <div
-                  aria-label={`編輯${optionEdit.label}`}
-                  aria-modal="true"
-                  className="v-mobile-sheet v-mobile-sheet--option-edit"
-                  onClick={(event) => event.stopPropagation()}
-                  role="dialog"
-                >
-                  <div className="v-mobile-sheet-title">編輯「{optionEdit.label}」</div>
-                  <label className="v-mobile-sheet-field">
-                    <span>{optionEdit.label}</span>
-                    <input
-                      autoFocus
-                      onChange={(event) => setOptionEditDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          confirmOptionEditor();
-                        }
-                      }}
-                      value={optionEditDraft}
-                    />
-                  </label>
-                  <div className="v-mobile-sheet-actions">
-                    <button className="v-mobile-sheet-cancel" onClick={() => setOptionEdit(null)} type="button">
-                      取消
-                    </button>
-                    <button className="v-mobile-sheet-confirm" onClick={confirmOptionEditor} type="button">
-                      確認
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </>,
-          document.body
-        )
-      : null;
-
   return (
     <div className="variant-box" ref={rootRef}>
       <div className="variant-head">
@@ -932,274 +640,201 @@ export function VariantEditor({
           <span className="muted">{dimensions.length ? `${dimensions.length} 個類型` : "尚未建立"}</span>
         </summary>
         <div className="vh-dims">
-          {isNarrow ? (
-            <div className="vh-mobile-add-dim-row">
-              {dimensions.length < MAX_VARIANT_DIMENSIONS ? (
-                <button
-                  aria-haspopup="dialog"
-                  className="vh-add-dim-ghost vh-add-dim-ghost--mobile"
-                  onClick={openDimensionModal}
+        {dimensions.length === 0 ? (
+          <div className="vh-dims-empty">
+            <span className="vh-dims-empty-text">尚無規格類型，可一鍵加入常用維度（軸值請自行填）</span>
+            <div className="vh-dims-quick">
+              {QUICK_DIMS.map((name) => (
+                <Button
+                  key={name}
+                  size="sm"
+                  variant="ghost"
                   type="button"
+                  onClick={() => addDimension(name)}
                 >
-                  ＋ 新增維度
-                </button>
-              ) : (
-                <span className="vh-add-dim-ghost vh-add-dim-ghost--mobile is-disabled" aria-disabled>
-                  維度已滿（{MAX_VARIANT_DIMENSIONS}）
-                </span>
-              )}
+                  ＋ {name}
+                </Button>
+              ))}
             </div>
-          ) : null}
-
-          {dimensions.length === 0 ? (
-            <div className="vh-dims-empty">
-              <span className="vh-dims-empty-text">
-                {isNarrow
-                  ? "尚無規格維度，使用上方「＋ 新增維度」建立。"
-                  : "尚無規格類型，可一鍵加入常用維度（軸值請自行填）"}
-              </span>
-              {!isNarrow ? (
-                <div className="vh-dims-quick">
-                  {QUICK_DIMS.map((name) => (
-                    <Button
-                      key={name}
-                      size="sm"
-                      variant="ghost"
+          </div>
+        ) : (
+          dimensions.map((d, i) => {
+            const dimArmed =
+              confirmArm?.kind === "remove-dim" && confirmArm.dimIndex === i;
+            const armCount = dimArmed ? confirmArm.count : 0;
+            return (
+              <div className="vh-dim-row" key={`${d.name}-${i}`}>
+                {/* UX-B4-P03 ②: type on its own row (heavier chip); values below */}
+                <div className="vh-dim-label">
+                  <span className="v-dim-chip vh-dim-type">
+                    {d.name}
+                    <button
+                      aria-label={
+                        dimArmed
+                          ? `再點確認移除維度 ${d.name}（${armCount} 筆會丟失）`
+                          : `移除維度 ${d.name}`
+                      }
+                      className={`v-dim-x${dimArmed ? " v-arm-confirm" : ""}`}
+                      onClick={() => removeDimension(i)}
+                      title={
+                        dimArmed
+                          ? `再點一次確認移除（${armCount} 筆手填會丟失）`
+                          : "移除整個規格類型"
+                      }
                       type="button"
-                      onClick={() => addDimension(name)}
                     >
-                      ＋ {name}
-                    </Button>
-                  ))}
+                      {dimArmed ? `確定移除？${armCount}筆會丟失` : "×"}
+                    </button>
+                  </span>
                 </div>
-              ) : null}
-            </div>
-          ) : (
-            dimensions.map((d, i) => {
-              const dimArmed =
-                confirmArm?.kind === "remove-dim" && confirmArm.dimIndex === i;
-              const armCount = dimArmed ? confirmArm.count : 0;
-              return (
-                <div className="vh-dim-row" key={`${d.name}-${i}`}>
-                  <div className="vh-dim-label">
-                    <span className="v-dim-chip vh-dim-type">
-                      {d.name}
+                <div className="vh-dim-values v-dim-values">
+                  {(d.values ?? []).map((val) => (
+                    <span className="v-axis-val" key={`${d.name}-${val}`}>
+                      {val}
                       <button
-                        aria-label={
-                          dimArmed
-                            ? `再點確認移除維度 ${d.name}（${armCount} 筆會丟失）`
-                            : `移除維度 ${d.name}`
-                        }
-                        className={`v-dim-x${dimArmed ? " v-arm-confirm" : ""}`}
-                        onClick={() => removeDimension(i)}
-                        title={
-                          dimArmed
-                            ? `再點一次確認移除（${armCount} 筆手填會丟失）`
-                            : "移除整個規格類型"
-                        }
+                        aria-label={`移除軸值 ${val}`}
+                        className="v-dim-x"
+                        onClick={() => dropAxisValue(i, val)}
                         type="button"
                       >
-                        {dimArmed ? `確定移除？${armCount}筆會丟失` : "×"}
+                        ×
                       </button>
                     </span>
-                  </div>
-                  <div className="vh-dim-values v-dim-values">
-                    {(d.values ?? []).map((val) => (
-                      <span className="v-axis-val" key={`${d.name}-${val}`}>
-                        {val}
-                        <button
-                          aria-label={`移除軸值 ${val}`}
-                          className="v-dim-x"
-                          onClick={() => dropAxisValue(i, val)}
-                          type="button"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                    {isNarrow ? (
-                      <button
-                        aria-haspopup="dialog"
-                        aria-label={`新增${d.name}值`}
-                        className="v-axis-add-chip"
-                        onClick={() => openAxisValueEditor(i, d.name)}
-                        type="button"
-                      >
-                        ＋
-                      </button>
-                    ) : (
-                      <span className="v-axis-add vh-dim-add-input">
-                        <input
-                          aria-label={`${d.name} 軸值`}
-                          onChange={(e) =>
-                            setAxisValueDraft((cur) => ({ ...cur, [i]: e.target.value }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              addAxisValue(i);
-                            }
-                          }}
-                          placeholder="加軸值…"
-                          value={axisValueDraft[i] ?? ""}
-                        />
-                        <Button size="sm" onClick={() => addAxisValue(i)} type="button">
-                          加入
-                        </Button>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-
-          <div className="vh-dim-toolbar">
-            {!isNarrow ? (
-              <div className="vh-add-dim-wrap">
-                {dimensions.length < MAX_VARIANT_DIMENSIONS ? (
-                  <button
-                    type="button"
-                    className="vh-add-dim-ghost"
-                    aria-expanded={dimOpen}
-                    onClick={() => {
-                      setDimOpen((o) => !o);
-                      setCharOpen(false);
-                      setPickIndex(null);
-                    }}
-                  >
-                    ＋ 新增規格類型
-                  </button>
-                ) : (
-                  <span className="vh-add-dim-ghost is-disabled" aria-disabled>
-                    規格類型已滿（{MAX_VARIANT_DIMENSIONS}）
-                  </span>
-                )}
-                {dimOpen ? (
-                  <div className="pop-menu open v-pop-dim vh-inline-pop">
-                    <div className="pm-title">新增規格維度</div>
-                    {QUICK_DIMS.map((name) => (
-                      <label key={name}>
-                        <input
-                          checked={dimensions.some((d) => d.name === name)}
-                          onChange={(e) => {
-                            if (e.target.checked) addDimension(name);
-                            else {
-                              const idx = dimensions.findIndex((d) => d.name === name);
-                              if (idx >= 0) removeDimension(idx);
-                            }
-                          }}
-                          type="checkbox"
-                        />
-                        {name}（常用）
-                      </label>
-                    ))}
-                    <label className="v-custom-dim">
-                      <input
-                        onChange={(e) => setCustomDim(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addDimension(customDim);
-                          }
-                        }}
-                        placeholder="自訂維度名稱"
-                        value={customDim}
-                      />
-                    </label>
-                    <Button size="sm" className="v-pop-full" onClick={() => addDimension(customDim)} type="button">
+                  ))}
+                  <span className="v-axis-add vh-dim-add-input">
+                    <input
+                      aria-label={`${d.name} 軸值`}
+                      onChange={(e) =>
+                        setAxisValueDraft((cur) => ({ ...cur, [i]: e.target.value }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addAxisValue(i);
+                        }
+                      }}
+                      placeholder="加軸值…"
+                      value={axisValueDraft[i] ?? ""}
+                    />
+                    <Button size="sm" onClick={() => addAxisValue(i)} type="button">
                       加入
                     </Button>
-                  </div>
-                ) : null}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        <div className="vh-dim-toolbar">
+          <div className="vh-add-dim-wrap">
+            {dimensions.length < MAX_VARIANT_DIMENSIONS ? (
+              <button type="button" className="vh-add-dim-ghost" aria-expanded={dimOpen}
+                onClick={() => { setDimOpen((o) => !o); setCharOpen(false); setPickIndex(null); }}>
+                ＋ 新增規格類型
+              </button>
+            ) : (
+              <span className="vh-add-dim-ghost is-disabled" aria-disabled>規格類型已滿（{MAX_VARIANT_DIMENSIONS}）</span>
+            )}
+            {dimOpen ? (
+              <div className="pop-menu open v-pop-dim vh-inline-pop">
+                <div className="pm-title">新增規格維度</div>
+                {QUICK_DIMS.map((name) => (
+                  <label key={name}>
+                    <input checked={dimensions.some((d) => d.name === name)}
+                      onChange={(e) => {
+                        if (e.target.checked) addDimension(name);
+                        else {
+                          const idx = dimensions.findIndex((d) => d.name === name);
+                          if (idx >= 0) removeDimension(idx);
+                        }
+                      }} type="checkbox" />
+                    {name}（常用）
+                  </label>
+                ))}
+                <label className="v-custom-dim">
+                  <input onChange={(e) => setCustomDim(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addDimension(customDim); } }}
+                    placeholder="自訂維度名稱" value={customDim} />
+                </label>
+                <Button size="sm" className="v-pop-full" onClick={() => addDimension(customDim)} type="button">加入</Button>
               </div>
             ) : null}
-            <button
-              type="button"
-              className="vh-toolbar-action"
-              disabled={!canApplyProductCost}
-              title={canApplyProductCost ? "只填空白成本列，已填不覆蓋" : rows.length === 0 ? "請先新增款式列" : "請先填商品成本"}
-              onClick={applyCostToAllVariants}
-            >
-              套用成本
-            </button>
-            <button
-              type="button"
-              className="vh-toolbar-action"
-              onClick={() => {
-                setCharOpen(true);
-                setDimOpen(false);
-                setPickIndex(null);
-              }}
-            >
-              依角色建立
-            </button>
           </div>
+          <button type="button" className="vh-toolbar-action" disabled={!canApplyProductCost}
+            title={canApplyProductCost ? "只填空白成本列，已填不覆蓋" : rows.length === 0 ? "請先新增款式列" : "請先填商品成本"}
+            onClick={applyCostToAllVariants}>套用成本</button>
+          <button type="button" className="vh-toolbar-action"
+            onClick={() => { setCharOpen(true); setDimOpen(false); setPickIndex(null); }}>依角色建立</button>
+        </div>
 
-          {charOpen ? (
-            <div className="pop-menu open v-pop-char vh-inline-pop">
-              <div className="pm-title">勾選這款有出的角色（可多選）</div>
-              <input
-                className="v-char-search"
-                onChange={(e) => setCharQuery(e.target.value)}
-                placeholder="搜尋角色／IP…"
-                value={charQuery}
-              />
-              {charLoading ? (
-                <div className="variant-empty">載入角色字典…</div>
-              ) : filteredChars.length === 0 ? (
-                <div className="variant-empty">沒有符合的角色，可手動加入一列後填寫。</div>
-              ) : (
-                <div className="v-char-list">
-                  {filteredChars.map((c) => (
-                    <label key={c.id}>
-                      <input
-                        checked={Boolean(charSelected[c.name])}
-                        onChange={(e) =>
-                          setCharSelected((cur) => ({
-                            ...cur,
-                            [c.name]: e.target.checked
-                          }))
-                        }
-                        type="checkbox"
-                      />
-                      <span>
-                        {c.name}
-                        {c.ip ? <span className="v-char-ip"> · {c.ip}</span> : null}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              <Button
-                size="sm"
-                className="v-pop-full"
-                onClick={applyCharacters}
-                type="button"
-              >
-                建立所選角色列
-              </Button>
-            </div>
-          ) : null}
-
-          {/* Normal axis edits auto-expand. Destructive changes keep the existing confirmation. */}
-          {expandArmed ? (
+        {charOpen ? (
+          <div className="pop-menu open v-pop-char vh-inline-pop">
+            <div className="pm-title">勾選這款有出的角色（可多選）</div>
+            <input
+              className="v-char-search"
+              onChange={(e) => setCharQuery(e.target.value)}
+              placeholder="搜尋角色／IP…"
+              value={charQuery}
+            />
+            {charLoading ? (
+              <div className="variant-empty">載入角色字典…</div>
+            ) : filteredChars.length === 0 ? (
+              <div className="variant-empty">沒有符合的角色，可手動加入一列後填寫。</div>
+            ) : (
+              <div className="v-char-list">
+                {filteredChars.map((c) => (
+                  <label key={c.id}>
+                    <input
+                      checked={Boolean(charSelected[c.name])}
+                      onChange={(e) =>
+                        setCharSelected((cur) => ({
+                          ...cur,
+                          [c.name]: e.target.checked
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    <span>
+                      {c.name}
+                      {c.ip ? (
+                        <span className="v-char-ip"> · {c.ip}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
             <Button
-              size="md"
-              fullWidth
-              variant="danger"
-              className="vh-expand-primary v-arm-confirm"
-              onClick={expandFromAxisValues}
-              title={`再點一次確認更新款式（${expandArmCount} 筆手填會丟失）`}
+              size="sm"
+              className="v-pop-full"
+              onClick={applyCharacters}
               type="button"
             >
-              確認更新款式（{expandArmCount} 筆手填會丟失）
+              建立所選角色列
             </Button>
-          ) : !isNarrow ? (
-            <p className="vh-auto-expand-note" role="status">
-              {canExpand ? "軸值變更後會自動更新款式列" : "加入軸值後會自動建立款式列"}
-            </p>
-          ) : null}
+          </div>
+        ) : null}
+
+        {/* Normal axis edits auto-expand. A button appears only when preserving
+            hand-entered data requires an explicit destructive confirmation. */}
+        {expandArmed ? (
+          <Button
+            size="md"
+            fullWidth
+            variant="danger"
+            className="vh-expand-primary v-arm-confirm"
+            onClick={expandFromAxisValues}
+            title={`再點一次確認更新款式（${expandArmCount} 筆手填會丟失）`}
+            type="button"
+          >
+            確認更新款式（{expandArmCount} 筆手填會丟失）
+          </Button>
+        ) : (
+          <p className="vh-auto-expand-note" role="status">
+            {canExpand ? "軸值變更後會自動更新款式列" : "加入軸值後會自動建立款式列"}
+          </p>
+        )}
         </div>
       </details>
 
@@ -1234,16 +869,7 @@ export function VariantEditor({
             const isOver =
               reorderOverKey === rowKey && reorderDragKey != null && reorderDragKey !== rowKey;
             return (
-              <div
-                className={`vgrid-block${isDragging && isNarrow ? " is-touch-dragging" : ""}${isOver && isNarrow ? " is-drop-target" : ""}`}
-                data-variant-row-key={rowKey}
-                key={index}
-                style={
-                  isDragging && isNarrow
-                    ? { transform: `translate3d(0, ${reorderDragOffsetY}px, 0)` }
-                    : undefined
-                }
-              >
+              <div key={index} className="vgrid-block">
                 <div
                   className={`vgrid-row${isDragging ? " is-dragging" : ""}${isOver ? " is-drag-over" : ""}`}
                   style={gridCols ? { gridTemplateColumns: gridCols } : undefined}
@@ -1266,49 +892,29 @@ export function VariantEditor({
                     applyRowReorder(fromKey, rowKey);
                   }}
                 >
-                  <button
-                    className={`vdrag${isNarrow ? " vdrag--mobile" : ""}`}
-                    title="拖曳排序"
-                    draggable={!isNarrow}
-                    aria-label={`拖曳排序第 ${index + 1} 列`}
-                    onDragStart={(event) => {
-                      if (isNarrow) return;
-                      event.stopPropagation();
-                      event.dataTransfer.effectAllowed = "move";
-                      try {
-                        event.dataTransfer.setData("text/plain", rowKey);
-                      } catch {
-                        /* ignore */
-                      }
-                      setReorderDragKey(rowKey);
-                      closeAllPops();
-                    }}
-                    onDragEnd={() => {
-                      setReorderDragKey(null);
-                      setReorderOverKey(null);
-                    }}
-                    onPointerDown={(event) => onMobileDragPointerDown(event, rowKey)}
-                    onPointerMove={onMobileDragPointerMove}
-                    onPointerUp={(event) => finishMobileDrag(event)}
-                    onPointerCancel={(event) => finishMobileDrag(event, true)}
-                    type="button"
-                  >
-                    <span className="vdrag-dots" aria-hidden>
-                      <svg viewBox="0 0 18 24" focusable="false">
-                        <circle cx="6" cy="6" r="1.7" />
-                        <circle cx="12" cy="6" r="1.7" />
-                        <circle cx="6" cy="12" r="1.7" />
-                        <circle cx="12" cy="12" r="1.7" />
-                        <circle cx="6" cy="18" r="1.7" />
-                        <circle cx="12" cy="18" r="1.7" />
-                      </svg>
+                  <span
+                      className={`vdrag${isNarrow ? " vdrag--mobile" : ""}`}
+                      title={isNarrow ? "使用上下按鈕排序" : "拖曳排序"}
+                      draggable={!isNarrow}
+                      aria-label={isNarrow ? `第 ${index + 1} 列排序把手；使用上下按鈕移動` : `拖曳排序第 ${index + 1} 列`}
+                      onDragStart={(event) => {
+                        event.stopPropagation();
+                        event.dataTransfer.effectAllowed = "move";
+                        try {
+                          event.dataTransfer.setData("text/plain", rowKey);
+                        } catch {
+                          /* ignore */
+                        }
+                        setReorderDragKey(rowKey);
+                        closeAllPops();
+                      }}
+                      onDragEnd={() => {
+                        setReorderDragKey(null);
+                        setReorderOverKey(null);
+                      }}
+                    >
+                      ⠿
                     </span>
-                  </button>
-                  {isNarrow ? (
-                    <span className="v-sequence-badge" aria-label={`第 ${index + 1} 款`}>
-                      {index + 1}
-                    </span>
-                  ) : null}
                   <span className="vthumb-wrap">
                     <button
                       className="vthumb"
@@ -1389,42 +995,20 @@ export function VariantEditor({
                   </span>
                   {(dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }]).map((_, di) => {
                     const dimLabel = dimHeaders[di]?.name ?? "選項";
-                    const optionValue = row.optionValues[di] ?? "";
                     return (
-                      <span className={`v-cell${isNarrow ? " v-option-cell" : ""}`} data-label={dimLabel} key={di}>
-                        {isNarrow ? (
-                          <span className="v-option-readonly">
-                            <span className="v-option-dim-label">{dimLabel}</span>
-                            <span className="v-option-display-row">
-                              <span className="v-option-value">{optionValue || "未填"}</span>
-                              <button
-                                aria-haspopup="dialog"
-                                aria-label={`編輯${dimLabel}`}
-                                className="v-option-edit"
-                                onClick={() => openOptionEditor(index, di, dimLabel)}
-                                type="button"
-                              >
-                                <svg aria-hidden viewBox="0 0 24 24" fill="none" focusable="false">
-                                  <path d="M4 20l4.2-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                                  <path d="m14 7 3 3" strokeWidth="1.8" strokeLinecap="round" />
-                                </svg>
-                              </button>
-                            </span>
-                          </span>
-                        ) : (
-                          <input
-                            aria-label={dimLabel}
-                            onChange={(e) => {
-                              // ensure dim exists when typing into default
-                              if (dimensions.length === 0 && di === 0) {
-                                onDimensionsChange([{ name: "款式" }]);
-                              }
-                              updateOption(index, di, e.target.value);
-                            }}
-                            placeholder={dimHeaders[di]?.name ?? "選項值"}
-                            value={optionValue}
-                          />
-                        )}
+                      <span className="v-cell" data-label={dimLabel} key={di}>
+                        <input
+                          aria-label={dimLabel}
+                          onChange={(e) => {
+                            // ensure dim exists when typing into default
+                            if (dimensions.length === 0 && di === 0) {
+                              onDimensionsChange([{ name: "款式" }]);
+                            }
+                            updateOption(index, di, e.target.value);
+                          }}
+                          placeholder={dimHeaders[di]?.name ?? "選項值"}
+                          value={row.optionValues[di] ?? ""}
+                        />
                       </span>
                     );
                   })}
@@ -1442,10 +1026,36 @@ export function VariantEditor({
                     ) : null}
                   </span>
                   <span className="v-row-actions">
+                    {isNarrow ? (
+                      <span className="v-row-move">
+                        <button
+                          type="button"
+                          className="v-row-move-btn"
+                          aria-label="上移此列"
+                          disabled={index === 0}
+                          onClick={() => moveRow(index, -1)}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          className="v-row-move-btn"
+                          aria-label="下移此列"
+                          disabled={index >= rows.length - 1}
+                          onClick={() => moveRow(index, 1)}
+                        >
+                          ▼
+                        </button>
+                      </span>
+                    ) : null}
                     <button
                       type="button"
                       className="v-row-dup"
-                      aria-label="複製規格"
+                      aria-label={
+                        rowsAtMax
+                          ? `款式列已達上限 ${MAX_VARIANT_ROWS}，無法複製`
+                          : "複製此列再編輯"
+                      }
                       title={
                         rowsAtMax
                           ? `已達上限 ${MAX_VARIANT_ROWS} 列，無法再複製`
@@ -1454,20 +1064,15 @@ export function VariantEditor({
                       disabled={rowsAtMax}
                       onClick={() => duplicateRow(index)}
                     >
-                      <svg className="v-icon-copy" aria-hidden viewBox="0 0 24 24" fill="none" focusable="false">
-                        <rect x="9" y="9" width="10" height="10" rx="2" strokeWidth="1.8" />
-                        <path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
+                      複製
                     </button>
                     <button
-                      aria-label="刪除規格"
+                      aria-label="刪除此列"
                       className="variant-del"
                       onClick={() => removeRow(index)}
                       type="button"
                     >
-                      <svg className="v-icon-trash" aria-hidden viewBox="0 0 24 24" fill="none" focusable="false">
-                        <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      🗑
                     </button>
                     {row.priceLocked ? (
                       <span className="v-manual" title="已手動調整，公式重算不覆蓋">
@@ -1547,7 +1152,6 @@ export function VariantEditor({
 
       {footer}
       {zoomModal}
-      {mobileSheets}
     </div>
   );
 }

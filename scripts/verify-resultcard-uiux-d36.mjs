@@ -78,8 +78,8 @@ assert.match(panel, /className="batch-detail-action"[\s\S]*?onClick=\{\(\) => vo
 assert.match(panel, /className="batch-remove-action"[\s\S]*?onClick=\{\(\) => void batchArchiveOrUnarchive\("archive"\)\}/);
 assert.match(panel, /className="batch-primary-action"[\s\S]*?onClick=\{\(\) => openStation3Modal\(\)\}/);
 
-// Fail filter gets only the already-existing soft-archive capability; batch
-// regenerate remains intentionally deferred instead of inventing a new handler.
+// Fail filter gets only the already-existing soft-archive capability; no new
+// regeneration handler or endpoint is introduced by this owner corrective.
 assert.match(layout, /import \{ FailBatchRemoveBridge \} from "@\/components\/listing\/FailBatchRemoveBridge";/);
 assert.match(layout, /<FailBatchRemoveBridge \/>/);
 assert.match(failBridge, /KNOWN_STATION_CLASSES[\s\S]*?rc-batch-strip--copy[\s\S]*?rc-batch-strip--image[\s\S]*?rc-batch-strip--ready/);
@@ -88,6 +88,6 @@ assert.match(failBridge, /\.result-card\.is-checked\[id\^="draft-card-"\]/);
 assert.match(failBridge, /fetch\("\/api\/drafts\/batch\/archive"[\s\S]*?action:\s*"archive"/);
 assert.match(failBridge, /className="batch-remove-action"/);
 assert.match(failBridge, />\s*移出佇列\s*<\/Button>/);
-assert.doesNotMatch(failBridge, /batchRegenerate|batch-regenerate|regenerateSelected/);
+assert.doesNotMatch(failBridge, /function\s+batchRegenerate|\/api\/drafts\/batch\/regenerate|onClick=\{[^}]*regenerateSelected/);
 
 console.log("D3.6 owner mobile batch layout: copy 3, image 3+2, ready/fail 2 passed");

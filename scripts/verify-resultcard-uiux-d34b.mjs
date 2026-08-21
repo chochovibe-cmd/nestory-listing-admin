@@ -16,12 +16,16 @@ const d33ImportPos = layout.indexOf('import "./d33-mobile-uiux.css";');
 const iphoneCorrectiveImportPos = layout.indexOf('import "./d34b-iphone-corrective.css";');
 assert.ok(d33ImportPos >= 0 && iphoneCorrectiveImportPos > d33ImportPos);
 
-// A — D3.5 supersedes D3.4B's switch presentation. The actual checkbox and
-// indeterminate semantics stay in source; the old track is hidden in the final layer.
+// A — D3.6 supersedes D3.5 mobile presentation only. The semantic checkbox and
+// indeterminate contract stay intact; desktop remains native while mobile reuses
+// the historical track as the final two-segment control.
 assert.match(panel, /type="checkbox"[\s\S]*aria-label="全選目前列表"/);
 assert.match(panel, /el\.indeterminate\s*=\s*someSelected/);
-assert.match(correctiveCss, /rc-header-select-all \.rc-toggle-track\s*\{[\s\S]*display:\s*none;/);
-assert.match(correctiveCss, /input\[type="checkbox"\][\s\S]*accent-color:\s*var\(--accent\)/);
+assert.match(correctiveCss, /@media \(min-width:\s*960px\)[\s\S]*?\.rc-header-select-all \.rc-toggle-track\s*\{[\s\S]*?display:\s*none;/);
+assert.match(correctiveCss, /@media \(min-width:\s*960px\)[\s\S]*?input\[type="checkbox"\][\s\S]*?position:\s*static;[\s\S]*?opacity:\s*1;[\s\S]*?accent-color:\s*var\(--accent\)/);
+assert.match(correctiveCss, /@media \(max-width:\s*959px\)[\s\S]*?input\[type="checkbox"\][\s\S]*?position:\s*absolute;[\s\S]*?clip-path:\s*inset\(50%\);[\s\S]*?opacity:\s*0;/);
+assert.match(correctiveCss, /@media \(max-width:\s*959px\)[\s\S]*?\.rc-toggle-track\s*\{[\s\S]*?display:\s*block;[\s\S]*?height:\s*38px;/);
+assert.match(correctiveCss, /input:indeterminate \+ \.rc-toggle-track > span\s*\{[\s\S]*?left:\s*calc\(50% \+ var\(--sp-1\)\);[\s\S]*?background:\s*var\(--surface2\);/);
 
 // B — the existing dismiss handler remains data-free; D3.4B restores the real X node.
 assert.match(panel, /function dismissGestureHint\(\)[\s\S]*setShowGestureHint\(false\)/);
@@ -86,4 +90,4 @@ assert.match(correctiveCss, /rc-price-mini-label,[\s\S]*rc-price-mini-profit\s*\
 assert.match(correctiveCss, /rc-price-mini-value\s*\{[\s\S]*line-height:\s*1\.05;/);
 assert.doesNotMatch(correctiveCss, /align-items:\s*flex-end/);
 
-console.log("D3.4B ResultCard/Variant source contract passed with D3.5 supersessions");
+console.log("D3.4B ResultCard/Variant source contract passed with D3.6 mobile supersession");

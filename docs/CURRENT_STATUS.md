@@ -8,6 +8,17 @@
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
 
+## Latest release-branch package — D3.6 mobile selection controls corrective
+
+D3.6 只做 owner 授權的兩項 mobile presentation corrective；start guard parent 為
+`0c8df49bdfc5e08ed76f6cba040b22b5da22daea`，沿用 PR #8，不 merge、不進 Shopify。
+
+- Mobile `<=959px`：`全選` 重用既有 semantic checkbox / `toggleAll` / checked / indeterminate DOM，final presentation 改為兩段 sliding control。OFF 與 partial 都讓 neutral segment 留在右側空白區；ON 才把 accent segment 滑到左側「全選」。partial 只用 accent border 提示，避免冒充全選。Desktop `>=960px` 完全保留 D3.5 native checkbox。
+- Mobile copy-review long-press batch：`取消 / ✓ 批次核准 / 移出佇列` 改為 `repeat(3, minmax(0, 1fr))` 等寬；三顆統一 `40px` 高、`var(--radius-s)`、11px / 800 / line-height 1 / 相同 padding，只保留 semantic color 差異。既有 clear / approve / soft-archive handlers 不變。
+- Verifier：D3.4B / D3.5 presentation assertions 已承認 D3.6 mobile-only supersession；新增 `scripts/verify-resultcard-uiux-d36.mjs` 並納入 `verify-all`。
+
+> 以下 D3.5 與更早章節保留作歷史脈絡。D3.6 只 supersede mobile select-all presentation 與 copy-review batch geometry。
+
 ## Latest release-branch package — D3.5 final pre-Shopify UI freeze
 
 D3.5 是 ResultCard / Variant UI 的最後 corrective polish。Start guard 以

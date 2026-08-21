@@ -10,13 +10,15 @@ const login = fs.readFileSync("src/app/login/page.tsx", "utf8");
 
 assert.doesNotMatch(css, /!important/);
 
-// Shared select-all: semantic checkbox + indeterminate remain, switch visuals do not.
+// D3.6 supersedes D3.5 mobile select-all presentation only. Semantic checkbox,
+// checked/indeterminate/toggleAll stay shared; desktop remains the D3.5 native checkbox.
 assert.match(panel, /aria-label="全選目前列表"/);
 assert.match(panel, /type="checkbox"/);
 assert.match(panel, /el\.indeterminate\s*=\s*someSelected/);
 assert.match(panel, /onChange=\{toggleAll\}/);
-assert.match(css, /\.rc-header-select-all \.rc-toggle-track\s*\{\s*display:\s*none;/);
-assert.match(css, /input\[type="checkbox"\][\s\S]*accent-color:\s*var\(--accent\)/);
+assert.match(css, /@media \(min-width:\s*960px\)[\s\S]*?\.rc-header-select-all \.rc-toggle-track\s*\{[\s\S]*?display:\s*none;/);
+assert.match(css, /@media \(min-width:\s*960px\)[\s\S]*?input\[type="checkbox"\][\s\S]*?position:\s*static;[\s\S]*?opacity:\s*1;[\s\S]*?accent-color:\s*var\(--accent\)/);
+assert.match(css, /@media \(max-width:\s*959px\)[\s\S]*?\.rc-toggle-track\s*\{[\s\S]*?display:\s*block;/);
 
 // Desktop result controls: filter/scope/sort share one row; select-all is lifted
 // out of the filter flow and positioned against results-panel itself so progress
@@ -81,4 +83,4 @@ assert.match(css, /\.v-mobile-cost input\s*\{[\s\S]*inline-size:\s*88px;/);
 assert.match(variantRender, /\) : isNarrow \? \([\s\S]*v-mobile-results[\s\S]*\) : \([\s\S]*vgrid-hdr/);
 assert.match(variantRender, /className="vdrag"[\s\S]*draggable/);
 
-console.log("D3.5 final pre-Shopify responsive UI source contract passed");
+console.log("D3.5 final pre-Shopify responsive UI source contract passed with D3.6 mobile select-all supersession");

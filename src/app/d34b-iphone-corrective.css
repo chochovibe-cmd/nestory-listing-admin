@@ -28,30 +28,29 @@
   align-items: baseline;
 }
 
-/* D3.5 final owner contract: select-all is a real checkbox presentation on
- * every viewport. Historical rc-toggle-track markup is intentionally hidden;
- * the native checkbox remains the semantic/indeterminate control. */
-.rc-header-select-all .rc-toggle-track {
-  display: none;
-}
-.rc-header-select-all > input[type="checkbox"] {
-  position: static;
-  inline-size: 18px;
-  block-size: 18px;
-  min-inline-size: 18px;
-  margin: 0;
-  opacity: 1;
-  pointer-events: auto;
-  accent-color: var(--accent);
-  box-shadow: none;
-}
-.rc-header-select-all > span:last-child {
-  display: inline;
-}
-
 /* D3.5 login: desktop gets a comfortable form width without changing the
  * compact mobile contract or any auth/session behavior. */
 @media (min-width: 960px) {
+  /* D3.6 freezes the D3.5 desktop presentation: native checkbox remains visible
+   * and the historical segmented track stays hidden at desktop widths. */
+  .rc-header-select-all .rc-toggle-track {
+    display: none;
+  }
+  .rc-header-select-all > input[type="checkbox"] {
+    position: static;
+    inline-size: 18px;
+    block-size: 18px;
+    min-inline-size: 18px;
+    margin: 0;
+    opacity: 1;
+    pointer-events: auto;
+    accent-color: var(--accent);
+    box-shadow: none;
+  }
+  .rc-header-select-all > span:last-child {
+    display: inline;
+  }
+
   .login-panel {
     width: min(640px, calc(100% - 64px));
     max-width: 640px;
@@ -146,32 +145,144 @@
     line-height: 1.05;
   }
 
-  /* D3.5 select-all: override D3.4B's visually-hidden switch input and expose
-   * the actual checkbox beside the existing label copy. */
+  /* D3.6 mobile select-all: the semantic checkbox stays in the DOM, while its
+   * presentation becomes a two-segment slider. OFF/partial keep the thumb on
+   * the empty right half; only a true checked state fills the left half. */
   .stage-filter-row > .rc-header-select-all--desktop {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--sp-2);
-    padding: 0 var(--sp-2);
-    border: 1px solid var(--border);
-    background: var(--surface);
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 0;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-sizing: border-box;
   }
   .stage-filter-row > .rc-header-select-all--desktop > input[type="checkbox"] {
-    position: static;
-    inline-size: 18px;
-    block-size: 18px;
-    min-inline-size: 18px;
-    opacity: 1;
-    pointer-events: auto;
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    opacity: 0;
+    pointer-events: none;
   }
   .stage-filter-row > .rc-header-select-all--desktop > span:last-child {
-    display: inline;
-    font-size: 11px;
-    font-weight: 800;
+    display: none;
   }
   .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track {
-    display: none;
+    position: relative;
+    display: block;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    box-sizing: border-box;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track::before {
+    content: "全選";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    z-index: 2;
+    display: grid;
+    width: 50%;
+    place-items: center;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track::after {
+    content: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track > span {
+    position: absolute;
+    top: var(--sp-1);
+    right: var(--sp-1);
+    bottom: var(--sp-1);
+    left: calc(50% + var(--sp-1));
+    z-index: 1;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface2);
+    transform: none;
+    transition: left .16s ease, right .16s ease, background .16s ease, border-color .16s ease;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track {
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track::before {
+    color: var(--accent-fg);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track > span {
+    left: var(--sp-1);
+    right: calc(50% + var(--sp-1));
+    margin: 0;
+    border-color: var(--accent);
+    background: var(--accent);
+    transform: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track {
+    border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+    background: var(--surface);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track::before {
+    color: var(--text);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track > span {
+    left: calc(50% + var(--sp-1));
+    right: var(--sp-1);
+    margin: 0;
+    border-color: var(--border);
+    background: var(--surface2);
+    transform: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:focus-visible + .rc-toggle-track {
+    outline: 2px solid color-mix(in srgb, var(--accent) 42%, transparent);
+    outline-offset: 2px;
+  }
+
+  /* D3.6 copy-review batch actions: equal columns and one geometry. Semantic
+   * button colors remain supplied by their existing neutral/primary/danger classes. */
+  .rc-batch-strip--copy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .rc-batch-strip--copy .rc-batch-cancel,
+  .rc-batch-strip--copy .batch-primary-action,
+  .rc-batch-strip--copy .batch-remove-action {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 var(--sp-2);
+    border-width: 1px;
+    border-style: solid;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
   }
 
   /* D3.5 mobile Variant primary actions: all three live outside the collapsible

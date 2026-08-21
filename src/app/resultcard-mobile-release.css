@@ -513,7 +513,7 @@
     width: 100%;
   }
   .rc-batch-strip--copy {
-    grid-template-columns: .82fr 1.12fr 1.16fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .rc-batch-strip--copy .batch-remove-action {
     grid-column: 3;

@@ -18,7 +18,12 @@ assert.match(panel, /el\.indeterminate\s*=\s*someSelected/);
 assert.match(finalCss, /rc-header-select-all \.rc-toggle-track\s*\{[\s\S]*display:\s*none;/);
 assert.match(card, /rc-sale-badge[\s\S]*rc-variant-count/);
 assert.match(card, /!isImageStation && priceRangeLabel/);
-assert.equal((card.match(/className="rc-swipe-remove"/g) ?? []).length, 3);
+// D3.7 supersedes D3's three duplicated per-station remove buttons with one
+// shared left-swipe remove action. Preserve archive semantics, not DOM count.
+assert.match(
+  card,
+  /const removeSwipeAction =[\s\S]*className="rc-swipe-remove"[\s\S]*archiveOne\(\)/
+);
 assert.equal((card.match(/archiveOne\(\)/g) ?? []).length >= 4, true);
 assert.match(variants, /const \[builderOpen, setBuilderOpen\][\s\S]*<details[\s\S]*className="vh-builder"[\s\S]*open=\{builderOpen\}[\s\S]*onToggle=/);
 // D3.4B supersedes D3's in-flow dimension popover with one shared modal.

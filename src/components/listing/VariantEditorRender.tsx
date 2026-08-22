@@ -345,6 +345,21 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
       ) : isNarrow ? (
         <div className="v-mobile-results">
           {mobileSelected.size > 0 ? <div className="vh-mobile-selected-count">已選 {mobileSelected.size} 列；點其他列可繼續多選。</div> : null}
+          <div className="v-mobile-results-header-scroll" aria-label="款式結果欄位">
+            <div className="v-mobile-results-header">
+              <span className="v-mobile-header-cell v-mobile-header-cell--drag">排序</span>
+              <span className="v-mobile-header-cell v-mobile-header-cell--seq">序列</span>
+              <span className="v-mobile-header-cell v-mobile-header-cell--thumb">縮圖</span>
+              {(dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }]).map((dimension, dimIndex) => (
+                <span className="v-mobile-header-cell v-mobile-header-cell--option" key={`${dimension.name}-${dimIndex}`}>{dimension.name}</span>
+              ))}
+              <span className="v-mobile-header-cell v-mobile-header-cell--price">價格</span>
+              <span className="v-mobile-header-cell v-mobile-header-cell--cost">成本</span>
+              <span className="v-mobile-header-cell v-mobile-header-cell--inventory">庫存</span>
+              <span className="v-mobile-header-cell v-mobile-header-cell--copy">複製</span>
+              <span className="v-mobile-header-cell v-mobile-header-cell--delete">刪除</span>
+            </div>
+          </div>
           {rows.map((row, index) => {
             const selected = mobileSelected.has(index);
             const hasPositiveProductCost = productCost != null && Number.isFinite(productCost) && productCost > 0;
@@ -387,7 +402,12 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
                   <div className="v-mobile-price-result">
                     <span className="v-mobile-price-copy">
                       <span>售價 NT${row.sellPrice || "—"}</span>
-                      {priceMode === "sale" ? <span>定價 NT${row.compareAt || "—"}</span> : null}
+                      {priceMode === "sale" ? (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span>定價 NT${row.compareAt || "—"}</span>
+                        </>
+                      ) : null}
                     </span>
                     <button type="button" className="v-mobile-edit-icon" aria-label="編輯售價定價" onClick={() => openEditorModal({ kind: "edit-price", rowIndex: index })}>✎</button>
                     {manuallyOverridden ? <span className="rc-tag v-manual-cost-tag">已手動覆蓋</span> : null}

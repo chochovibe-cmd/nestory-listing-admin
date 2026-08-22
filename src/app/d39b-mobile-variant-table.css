@@ -1,0 +1,280 @@
+/*
+ * D3.9B mobile Variant table visual refinement — 2026-08-22.
+ * Presentation-only final layer. D3.8 row-local horizontal interaction stays intact;
+ * D3.9A review hint/swipe presentation and desktop >=960px stay untouched.
+ */
+
+@media (max-width: 959px) {
+  .variant-box .v-mobile-results {
+    --vm-drag-w: 44px;
+    --vm-seq-w: 28px;
+    --vm-thumb-w: 52px;
+    --vm-option-w: 136px;
+    --vm-price-w: 154px;
+    --vm-cost-w: 92px;
+    --vm-inventory-w: 156px;
+    --vm-action-w: 44px;
+  }
+
+  /* Column guide only: transparent, lightweight, independently scrollable. */
+  .variant-box .v-mobile-results-header-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .variant-box .v-mobile-results-header-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .variant-box .v-mobile-results-header {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    width: max-content;
+    min-width: 100%;
+    padding-block: var(--sp-2);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-header-cell {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-width: 0;
+  }
+  .variant-box .v-mobile-header-cell--drag {
+    flex-basis: var(--vm-drag-w);
+    width: var(--vm-drag-w);
+    margin-right: var(--sp-1);
+  }
+  .variant-box .v-mobile-header-cell--seq {
+    flex-basis: var(--vm-seq-w);
+    width: var(--vm-seq-w);
+    margin-right: var(--sp-1);
+  }
+  .variant-box .v-mobile-header-cell--thumb {
+    flex-basis: var(--vm-thumb-w);
+    width: var(--vm-thumb-w);
+    margin-right: var(--sp-2);
+  }
+  .variant-box .v-mobile-header-cell--option {
+    flex-basis: var(--vm-option-w);
+    min-width: var(--vm-option-w);
+    margin-right: var(--sp-2);
+    padding-inline: var(--sp-1);
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-header-cell--price {
+    flex-basis: var(--vm-price-w);
+    min-width: var(--vm-price-w);
+    margin-right: var(--sp-2);
+    padding-inline: var(--sp-1);
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-header-cell--cost {
+    flex-basis: var(--vm-cost-w);
+    width: var(--vm-cost-w);
+    margin-right: var(--sp-2);
+  }
+  .variant-box .v-mobile-header-cell--inventory {
+    flex-basis: var(--vm-inventory-w);
+    width: var(--vm-inventory-w);
+    margin-right: var(--sp-2);
+  }
+  .variant-box .v-mobile-header-cell--copy,
+  .variant-box .v-mobile-header-cell--delete {
+    flex-basis: var(--vm-action-w);
+    width: var(--vm-action-w);
+    justify-content: center;
+  }
+  .variant-box .v-mobile-header-cell--copy {
+    margin-right: var(--sp-1);
+  }
+
+  /* D3.8 horizontal row stays flex/nowrap/max-content. Tighten only spacing. */
+  .variant-box .v-mobile-row-core {
+    gap: 0;
+  }
+  .variant-box .vdrag--touch {
+    flex: 0 0 var(--vm-drag-w);
+    inline-size: var(--vm-drag-w);
+    min-width: var(--vm-drag-w);
+    margin-right: var(--sp-1);
+    align-self: center;
+  }
+  .variant-box .v-row-badge {
+    flex: 0 0 var(--vm-seq-w);
+    inline-size: var(--vm-seq-w);
+    min-width: var(--vm-seq-w);
+    margin-right: var(--sp-1);
+    align-self: center;
+  }
+  .variant-box .vthumb-wrap {
+    flex: 0 0 var(--vm-thumb-w);
+    min-width: var(--vm-thumb-w);
+    margin-right: var(--sp-2);
+    align-self: center;
+  }
+
+  /* Frameless readonly dimensions. Long values stay on one natural-width line. */
+  .variant-box .v-mobile-options {
+    gap: var(--sp-2);
+    margin-right: var(--sp-2);
+  }
+  .variant-box .v-mobile-option {
+    display: flex;
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: var(--vm-option-w);
+    max-width: none;
+    min-height: 52px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0 var(--sp-1);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-option-label {
+    display: none;
+  }
+  .variant-box .v-mobile-option-line {
+    display: inline-flex;
+    width: max-content;
+    min-width: 0;
+    align-items: center;
+    gap: var(--sp-1);
+    white-space: nowrap;
+  }
+  .variant-box .v-mobile-option-value {
+    display: inline-block;
+    width: max-content;
+    min-width: 0;
+    overflow: visible;
+    -webkit-box-orient: initial;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    white-space: nowrap;
+    text-overflow: clip;
+    overflow-wrap: normal;
+    word-break: normal;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+  .variant-box .v-mobile-option .v-mobile-edit-icon {
+    flex: 0 0 44px;
+    margin-left: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--accent);
+    align-self: center;
+  }
+
+  /* Frameless price result; keep existing wording/values and prefer one row. */
+  .variant-box .v-mobile-price-result {
+    display: flex;
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: var(--vm-price-w);
+    min-height: 52px;
+    align-items: center;
+    gap: var(--sp-1);
+    margin-right: var(--sp-2);
+    padding: 0 var(--sp-1);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    white-space: nowrap;
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-price-copy {
+    display: inline-flex;
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: 0;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-1);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+  .variant-box .v-mobile-price-result .v-mobile-edit-icon {
+    flex: 0 0 44px;
+    margin-left: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--accent);
+    align-self: center;
+  }
+  .variant-box .v-mobile-price-result .v-manual-cost-tag {
+    grid-column: auto;
+    justify-self: auto;
+    flex: 0 0 auto;
+  }
+
+  .variant-box .v-mobile-cost {
+    flex: 0 0 var(--vm-cost-w);
+    width: var(--vm-cost-w);
+    min-width: var(--vm-cost-w);
+    margin-right: var(--sp-2);
+  }
+  .variant-box .v-mobile-inventory {
+    flex: 0 0 var(--vm-inventory-w);
+    width: var(--vm-inventory-w);
+    min-width: var(--vm-inventory-w);
+    margin-right: var(--sp-2);
+  }
+
+  /* Copy/delete keep 44px touch targets but lose visible button frames. */
+  .variant-box .v-row-dup--icon {
+    flex: 0 0 var(--vm-action-w);
+    inline-size: var(--vm-action-w);
+    block-size: 44px;
+    min-width: var(--vm-action-w);
+    min-height: 44px;
+    margin-right: var(--sp-1);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    align-self: center;
+  }
+  .variant-box .v-row-dup--icon:active,
+  .variant-box .v-row-dup--icon:focus-visible {
+    color: var(--accent);
+  }
+  .variant-box .variant-del--trash {
+    flex: 0 0 var(--vm-action-w);
+    inline-size: var(--vm-action-w);
+    block-size: 44px;
+    min-width: var(--vm-action-w);
+    min-height: 44px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--danger);
+    align-self: center;
+  }
+}

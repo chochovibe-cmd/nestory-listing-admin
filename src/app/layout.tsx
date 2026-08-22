@@ -13,6 +13,7 @@ import "./d33-mobile-uiux.css";
 import "./d34b-iphone-corrective.css";
 import "./d36-owner-ui-consistency.css";
 import "./d38-mobile-variant-horizontal.css";
+import "./d39a-mobile-review-polish.css";
 
 /* UX-K T50: self-host via next/font (replaces Google Fonts @import in globals.css). */
 const notoSansTC = Noto_Sans_TC({

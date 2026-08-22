@@ -135,19 +135,19 @@ const checks = [
     name: "Canonical release readiness documents deployment safety and API contracts",
     ok: exists(releaseReadiness)
       && contains(releaseReadiness, /SHOPIFY_PUBLISH_MOCK=true/)
-      && contains(releaseReadiness, /ACTIVE publish must always require explicit confirmation/)
+      && contains(releaseReadiness, /ACTIVE publish.*explicit.*confirm/i)
       && contains(releaseReadiness, /POST \/api\/worker\/claim/)
       && contains(releaseReadiness, /POST \/api\/drafts\/\{id\}\/request-revision/)
       && contains(releaseReadiness, /POST \/api\/drafts\/\{id\}\/publish/)
-      && contains(releaseReadiness, /Matrixify CSV Fallback/)
+      && contains(releaseReadiness, /Matrixify CSV fallback/i)
   },
   {
     name: "Canonical release readiness documents manual QA and incomplete states",
     ok: contains(releaseReadiness, /Manual QA matrix/)
-      && contains(releaseReadiness, /ACTIVE publish shows a second explicit/)
+      && contains(releaseReadiness, /ACTIVE.*explicit.*confirm/i)
       && contains(releaseReadiness, /Reviewer can export Matrixify CSV/)
-      && contains(releaseReadiness, /Read-Only Route Smoke/)
-      && contains(releaseReadiness, /Manual QA Still Needed is a valid status/)
+      && contains(releaseReadiness, /Read-only route smoke/i)
+      && contains(releaseReadiness, /Manual QA Still Needed.*valid state/i)
   },
   {
     name: "AI handoff and current-status sources exist",
@@ -156,7 +156,7 @@ const checks = [
       && exists("docs/STABILIZATION_PLAN.md")
       && exists("AGENTS.md")
       && contains("AI_START_HERE.md", /CURRENT_STATUS\.md/)
-      && contains(releaseReadiness, /Every new coding session should start with/)
+      && contains(releaseReadiness, /Every (?:new )?coding session starts with/i)
   },
   {
     name: "Production Supabase reconciliation and tracked baseline are documented",

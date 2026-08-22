@@ -146,8 +146,9 @@ import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCa
 /** UX-B3-P04: align with MobileTabbar FAB long-press */
 export const LONG_PRESS_MS = 500;
 const GESTURE_MOVE_PX = 10;
-const SWIPE_ACTION_W = 140;
-const SWIPE_ACTION_W_SINGLE = 80;
+const SWIPE_WORKFLOW_W = 156;
+const SWIPE_WORKFLOW_W_SINGLE = 108;
+const SWIPE_REMOVE_W = 96;
 
 /** UX-M T64: full-enough row for dbRowsToForm (price range still uses twd_price). */
 type ResultCardVariantRow = {
@@ -433,6 +434,14 @@ export function ResultCard({
     });
     return formatPriceRangeLabel(prices);
   }, [draft.twd_price, variantPrices, variantsDirty, variantRows]);
+
+  const variantCount = useMemo(
+    () =>
+      variantsDirty
+        ? variantRows.filter(isVariantRowFilled).length
+        : variantPrices.length,
+    [variantPrices, variantsDirty, variantRows]
+  );
 
   const variantImageOptions = useMemo(
     () =>
@@ -1874,10 +1883,10 @@ export function ResultCard({
     !isArchived &&
     (isCopyStation || isImageStation || isReadyStation);
 
-  const swipeActionWidth =
+  const workflowWidth =
     isReadyStation && !isCopyStation && !isImageStation
-      ? SWIPE_ACTION_W_SINGLE
-      : SWIPE_ACTION_W;
+      ? SWIPE_WORKFLOW_W_SINGLE
+      : SWIPE_WORKFLOW_W;
 
   function handleHeaderTouchStart(event: ReactTouchEvent) {
     if (!isNarrow || sequentialMode) return;
@@ -1935,8 +1944,9 @@ export function ResultCard({
     }
 
     if (swipeAxisRef.current === "h") {
-      // Left swipe only
-      const next = Math.max(Math.min(dx, 0), -swipeActionWidth);
+      const next = dx > 0
+        ? Math.min(dx, workflowWidth)
+        : Math.max(dx, -SWIPE_REMOVE_W);
       setSwipeX(next);
     }
   }
@@ -1952,9 +1962,12 @@ export function ResultCard({
     if (swipeAxisRef.current === "h" && swipeEnabled) {
       setSwipeDragging(false);
       setSwipeX((current) => {
-        const open = current < -swipeActionWidth / 2;
-        const next = open ? -swipeActionWidth : 0;
-        onSwipeOpenChange?.(open);
+        const next = current > workflowWidth / 2
+          ? workflowWidth
+          : current < -SWIPE_REMOVE_W / 2
+            ? -SWIPE_REMOVE_W
+            : 0;
+        onSwipeOpenChange?.(next !== 0);
         return next;
       });
     }
@@ -1994,13 +2007,45 @@ export function ResultCard({
     setRegenOpen(true);
   }
 
+  const mobileCardPrimary = stationFlowPrimaryLabel(draft);
+  const mobileCardSecondary = secondaryStatusForResultCard(draft);
+  const mobileCardTimeLabel = formatRelativeTime(draft.created_at);
+  const mobileCardTimeTitle = formatAbsoluteLocalTime(draft.created_at);
+
   const titleRowEl = (
     <span className="rc-title-row">
-      <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+      <span className="rc-title-flow">
+        <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+        {isNarrow ? (
+          <span
+            className={
+              mobileCardPrimary.kind === "fail"
+                ? "schip schip--error rc-title-inline-station"
+                : "schip schip--run rc-title-inline-station"
+            }
+          >
+            {mobileCardPrimary.label}
+          </span>
+        ) : null}
+        {isNarrow && mobileCardSecondary ? (
+          <StatusBadge status={mobileCardSecondary} />
+        ) : null}
+        {isNarrow && mobileCardTimeLabel ? (
+          <span
+            className="rc-title-inline-time muted"
+            title={mobileCardTimeTitle || undefined}
+          >
+            {mobileCardTimeLabel}
+          </span>
+        ) : null}
+      </span>
       {saleStatusBadge ? (
         <span className="rc-sale-badge" title={`銷售狀態：${saleStatusBadge}`}>
           {saleStatusBadge}
         </span>
+      ) : null}
+      {variantCount > 0 ? (
+        <span className="schip rc-variant-count">{variantCount} 個規格</span>
       ) : null}
       {failReasonSummary ? (
         <span className="rc-fail-reason" role="status" title={failReasonSummary}>
@@ -2139,7 +2184,7 @@ export function ResultCard({
           </div>
         ) : null}
       </div>
-    ) : isReadyStation && priceRangeLabel ? (
+    ) : !isImageStation && priceRangeLabel ? (
       <div className="rc-price-mini">
         <div className="rc-price-mini-main">
           <span className="rc-price-mini-label">售價</span>
@@ -2148,7 +2193,7 @@ export function ResultCard({
       </div>
     ) : null;
 
-  const swipeActions =
+  const workflowSwipeActions =
     !isArchived && isCopyStation ? (
       <>
         <button
@@ -2204,15 +2249,33 @@ export function ResultCard({
       </button>
     ) : null;
 
+  const removeSwipeAction = !isArchived ? (
+    <button
+      className="rc-swipe-remove"
+      disabled={archiveBusy}
+      onClick={() => runSwipeAction(() => void archiveOne())}
+      type="button"
+    >
+      移出佇列
+    </button>
+  ) : null;
+
   return (
     <div className={`rc-swipe-wrap${swipeX !== 0 || swipeDragging ? " is-swiping" : ""}`}>
-      {isNarrow && swipeActions ? (
+      {isNarrow && swipeX > 0 && workflowSwipeActions ? (
         <div
-          aria-hidden={swipeX === 0}
-          className="rc-swipe-actions"
-          style={{ width: swipeActionWidth }}
+          className="rc-swipe-actions rc-swipe-actions--workflow"
+          style={{ width: workflowWidth }}
         >
-          {swipeActions}
+          {workflowSwipeActions}
+        </div>
+      ) : null}
+      {isNarrow && swipeX < 0 && removeSwipeAction ? (
+        <div
+          className="rc-swipe-actions rc-swipe-actions--remove"
+          style={{ width: SWIPE_REMOVE_W }}
+        >
+          {removeSwipeAction}
         </div>
       ) : null}
       <div
@@ -2269,6 +2332,13 @@ export function ResultCard({
             {detectTagsEl}
             {detectWarnsEl}
           </span>
+        </span>
+        <span className="rc-card-summary-row">
+          {isImageStation ? (
+            <span className="rc-card-mark-summary muted">
+              {formatMarkSummaryLine(markSummary)}
+            </span>
+          ) : null}
         </span>
         {/* UX-B4-P04: mobile row3 left regen (desktop hidden via CSS); price shares contents row */}
         <span className="rc-m-row3">

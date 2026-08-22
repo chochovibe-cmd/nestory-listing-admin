@@ -1,0 +1,111 @@
+/*
+ * D3.9A mobile review hint + swipe action polish.
+ * Final presentation-only layer: no gesture math, handlers, panel widths, Variant,
+ * or desktop UI changes. Loaded after the prior mobile corrective layers.
+ */
+
+@media (max-width: 959px) {
+  /* ITEM A: keep the D3.7 teaching copy/semantics, but make it a compact text row. */
+  .rc-selection-guide-row {
+    margin: var(--sp-1) 0 var(--sp-2);
+    padding: 0;
+  }
+  .rc-selection-guide-row .rc-gesture-hint {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: var(--sp-1);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+  .rc-selection-guide-row .rc-gesture-hint-mark {
+    flex: 0 0 auto;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+  .rc-selection-guide-row .rc-gesture-hint-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  /* ITEM B: preserve D3.7 reveal widths/directions; normalize only panel placement. */
+  .rc-swipe-actions--workflow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-1);
+    padding: 0 var(--sp-2);
+  }
+  .rc-swipe-actions--remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--sp-2);
+  }
+
+  /* Shared action geometry follows the same rounded-control language as mobile filters. */
+  .rc-swipe-actions--workflow .rc-swipe-approve,
+  .rc-swipe-actions--workflow .rc-swipe-secondary,
+  .rc-swipe-actions--remove .rc-swipe-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 var(--sp-2);
+    border-width: 1px;
+    border-style: solid;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .rc-swipe-actions--workflow .rc-swipe-approve,
+  .rc-swipe-actions--workflow .rc-swipe-secondary {
+    flex: 1 1 0;
+  }
+  .rc-swipe-actions--remove .rc-swipe-remove {
+    width: 100%;
+    flex: 0 1 auto;
+  }
+
+  /* Approve = primary accent fill. */
+  .rc-swipe-actions--workflow .rc-swipe-approve {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+
+  /* Regenerate / other workflow secondary action = neutral outline. */
+  .rc-swipe-actions--workflow .rc-swipe-secondary {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  /* Remove = danger outline, same geometry and centered inside the existing reveal width. */
+  .rc-swipe-actions--remove .rc-swipe-remove {
+    border-color: color-mix(in srgb, var(--danger) 48%, var(--border));
+    background: var(--surface);
+    color: var(--danger);
+  }
+}

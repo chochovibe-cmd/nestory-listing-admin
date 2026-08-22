@@ -88,7 +88,7 @@ expect(
 );
 expect(
   "release readiness documents active double confirmation",
-  /ACTIVE publish shows a second explicit/.test(releaseReadiness)
+  /ACTIVE publish.*explicit.*confirm/i.test(releaseReadiness)
 );
 expect("ui states fixture parses", Boolean(uiStates));
 

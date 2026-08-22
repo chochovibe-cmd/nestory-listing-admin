@@ -44,6 +44,10 @@ verify_rollback_state() {
   assert_scalar "$(query_local -c "select has_function_privilege('anon','public.guard_sensitive_product_draft_fields()','EXECUTE')::int;")" 1 "rollback sensitive guard anon EXECUTE"
 }
 
+verify_d310a_columns() {
+  assert_scalar "$(query_local -c "select count(*) from information_schema.columns where table_schema='public' and table_name='product_variants' and column_name in ('cost_is_inherited','sell_price_locked','compare_at_locked');")" 3 "D3.10A split override column count"
+}
+
 before_counts="$(snapshot_counts)"
 
 echo "==> Package cycle: return local DB to audited production pre-state"
@@ -70,10 +74,22 @@ echo "==> Package cycle: re-apply and postcheck to prove repeatable recovery pat
 psql_local < supabase/reconcile/2026-08-18_production_apply.sql >/dev/null
 psql_local < supabase/reconcile/2026-08-18_production_postcheck.sql >/dev/null
 
+echo "==> D3.10A: apply additive split-override migration"
+psql_local < /tmp/nestory-forward-migrations/20260822223100_variant_split_override_semantics.sql >/dev/null
+verify_d310a_columns
+
+echo "==> D3.10A: rollback split-override columns and verify reversibility"
+psql_local -c "alter table public.product_variants drop column if exists cost_is_inherited, drop column if exists sell_price_locked, drop column if exists compare_at_locked;" >/dev/null
+assert_scalar "$(query_local -c "select count(*) from information_schema.columns where table_schema='public' and table_name='product_variants' and column_name in ('cost_is_inherited','sell_price_locked','compare_at_locked');")" 0 "D3.10A rollback column count"
+
+echo "==> D3.10A: re-apply forward migration"
+psql_local < /tmp/nestory-forward-migrations/20260822223100_variant_split_override_semantics.sql >/dev/null
+verify_d310a_columns
+
 after_counts="$(snapshot_counts)"
 if [[ "$after_counts" != "$before_counts" ]]; then
   echo "ERROR: production package changed protected business-row counts: before=$before_counts after=$after_counts" >&2
   exit 1
 fi
 
-echo "PASS: production precheck/apply/postcheck/rollback/re-apply package is locally reversible and data-preserving."
+echo "PASS: production package and D3.10A migration are locally reversible and data-preserving."

@@ -1,0 +1,135 @@
+/*
+ * Owner UI consistency corrective — 2026-08-21.
+ * Controls that sit together at the same hierarchy should share one geometry.
+ * This final presentation layer fixes owner-observed cascade mismatches without
+ * changing ResultCard selection, review, archive, long-press or swipe behavior.
+ */
+
+@media (max-width: 959px) {
+  .stage-filter-row {
+    --stage-control-radius: 999px;
+  }
+
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track,
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track > span,
+  .stage-filter-row .results-scope-label .ir-scope-select,
+  .stage-filter-row .results-sort-label,
+  .stage-filter-row .results-sort-label .sort-sel {
+    border-radius: var(--stage-control-radius);
+  }
+
+  /* Owner runtime QA: multi-select toolbars share one button geometry, while
+   * each station keeps the row structure that matches its actual action set. */
+  .rc-batch-strip--copy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  /* Six equal tracks let row 1 form three equal thirds and row 2 form two equal
+   * halves without nested wrappers or implicit browser-created columns. */
+  .rc-batch-strip--image {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .rc-batch-strip--ready,
+  .rc-batch-strip--fail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .rc-batch-strip--copy .rc-batch-count,
+  .rc-batch-strip--image .rc-batch-count,
+  .rc-batch-strip--ready .rc-batch-count,
+  .rc-batch-strip--fail .rc-batch-count {
+    grid-column: 1 / -1;
+  }
+
+  .rc-batch-strip--copy .rc-batch-actions,
+  .rc-batch-strip--image .rc-batch-actions,
+  .rc-batch-strip--ready .rc-batch-actions,
+  .rc-batch-strip--fail .rc-batch-actions {
+    display: contents;
+  }
+
+  /* Copy review: one row, three equal peers. */
+  .rc-batch-strip--copy .rc-batch-cancel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .rc-batch-strip--copy .batch-primary-action {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .rc-batch-strip--copy .batch-remove-action {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  /* Image review: owner-specified 3 + 2 hierarchy.
+   * Row 1 = cancel / review / remove. Row 2 = detail on / detail off. */
+  .rc-batch-strip--image .rc-batch-cancel {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+  .rc-batch-strip--image .batch-primary-action {
+    grid-column: 3 / 5;
+    grid-row: 2;
+  }
+  .rc-batch-strip--image .batch-remove-action:last-child {
+    grid-column: 5 / 7;
+    grid-row: 2;
+    width: 100%;
+    border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
+    background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 72%, var(--text));
+  }
+  .rc-batch-strip--image .rc-batch-actions > .batch-detail-action:nth-child(2) {
+    grid-column: 1 / 4;
+    grid-row: 3;
+  }
+  .rc-batch-strip--image .rc-batch-actions > .batch-detail-action:nth-child(3) {
+    grid-column: 4 / 7;
+    grid-row: 3;
+  }
+
+  /* Ready and fail each expose two equal peers. Fail's remove action is mounted
+   * by FailBatchRemoveBridge using the existing soft-archive endpoint only. */
+  .rc-batch-strip--ready .rc-batch-cancel,
+  .rc-batch-strip--fail .rc-batch-cancel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .rc-batch-strip--ready .batch-primary-action,
+  .rc-batch-strip--fail .batch-remove-action {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .rc-batch-strip--copy .rc-batch-cancel.nb-btn,
+  .rc-batch-strip--copy .rc-batch-actions > .nb-btn,
+  .rc-batch-strip--image .rc-batch-cancel.nb-btn,
+  .rc-batch-strip--image .rc-batch-actions > .nb-btn,
+  .rc-batch-strip--ready .rc-batch-cancel.nb-btn,
+  .rc-batch-strip--ready .rc-batch-actions > .nb-btn,
+  .rc-batch-strip--fail .rc-batch-cancel.nb-btn,
+  .rc-batch-strip--fail .rc-batch-actions > .nb-btn {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0 var(--sp-2);
+    border-width: 1px;
+    border-style: solid;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    align-self: stretch;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+}

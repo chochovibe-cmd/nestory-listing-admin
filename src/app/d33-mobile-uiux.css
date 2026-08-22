@@ -1,0 +1,891 @@
+/*
+ * D3.4B owner corrective presentation layer.
+ * Historical filename retained so existing import order stays stable after D3.3.
+ * D3.4A / D3.4A.1 were reverted and are not a design baseline.
+ */
+
+/* ResultCard sale-status + variant-count chips keep the D3.3 density on all viewports. */
+.result-card .rc-sale-badge,
+.result-card .rc-variant-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  height: 22px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--radius-s);
+  font-size: 11px;
+  line-height: 1;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+/* D3.4B-F: price row shares one bottom edge on mobile + desktop. Larger numbers
+ * grow upward instead of increasing the row below the label baseline. */
+.result-card .rc-price-mini,
+.result-card .rc-price-mini-main,
+.result-card .rc-price-mini-sub {
+  align-items: flex-end;
+}
+.result-card .rc-price-mini-main,
+.result-card .rc-price-mini-sub {
+  align-self: end;
+}
+.result-card .rc-price-mini-label,
+.result-card .rc-price-mini-value,
+.result-card .rc-price-mini-strike,
+.result-card .rc-price-mini-profit {
+  align-self: end;
+}
+.result-card .rc-price-mini-value {
+  line-height: 1;
+}
+
+/* D3.4B-C: dimension-definition editor uses the same chip vocabulary as the
+ * ResultCard Tags page. No frame-in-frame; each dimension is a label + chips. */
+.variant-box,
+.variant-box .vh-builder,
+.variant-box .vh-dims,
+.variant-box .vh-dim-row,
+.variant-box .vh-dim-values {
+  min-width: 0;
+  max-width: 100%;
+}
+.variant-box .vh-builder {
+  border: 0;
+}
+.variant-box .vh-builder-summary {
+  min-height: 40px;
+  padding: var(--sp-1) 0;
+}
+.variant-box .vh-dims {
+  padding: var(--sp-2) 0 var(--sp-3);
+}
+.variant-box .vh-dim-toolbar--top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0 0 var(--sp-3);
+}
+.variant-box .vh-add-dim-ghost {
+  min-height: 40px;
+  padding: 0 var(--sp-3);
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text);
+  font-weight: 800;
+}
+.variant-box .vh-add-dim-ghost:not(.is-disabled):hover,
+.variant-box .vh-add-dim-ghost:not(.is-disabled):focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.variant-box .vh-add-dim-ghost.is-disabled {
+  opacity: .5;
+}
+.variant-box .vh-dims-empty {
+  padding: var(--sp-2) 0 var(--sp-3);
+}
+.variant-box .vh-dim-row {
+  display: block;
+  margin: 0;
+  padding: var(--sp-3) 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.variant-box .vh-dim-row:last-of-type {
+  border-bottom: 0;
+}
+.variant-box .vh-dim-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.variant-box .vh-dim-heading {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: .02em;
+}
+.variant-box .vh-dim-remove {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.variant-box .vh-dim-remove:hover,
+.variant-box .vh-dim-remove:focus-visible,
+.variant-box .vh-dim-remove.v-arm-confirm {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.variant-box .vh-dim-values,
+.variant-box .vh-dim-values.rc-tag-group-chips {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  overflow: visible;
+  padding: 0;
+}
+.variant-box .vh-dim-values .rc-tag {
+  max-width: 100%;
+}
+.variant-box .vh-dim-values .rc-tag > :first-child:not(.rc-tag-remove) {
+  min-width: 0;
+}
+.variant-box .vh-add-value-chip {
+  border-style: dashed;
+}
+.variant-box .vh-secondary-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.variant-box .vh-auto-confirm-only {
+  margin-top: var(--sp-2);
+}
+.variant-box .vh-results-heading {
+  min-height: 36px;
+  padding: var(--sp-2) 0 var(--sp-1);
+  border-top: 1px solid var(--border);
+}
+
+/* Shared D3.4B editor modal. Mobile becomes a bottom sheet below. */
+.variant-editor-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: rgb(0 0 0 / .55);
+}
+.variant-editor-modal {
+  width: min(420px, 100%);
+  max-height: min(76vh, 640px);
+  overflow: auto;
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-m);
+}
+.variant-editor-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.variant-editor-modal-head > strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+.variant-editor-modal-head > button {
+  inline-size: 44px;
+  block-size: 44px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 20px;
+}
+.variant-editor-modal-grid {
+  display: grid;
+  gap: var(--sp-3);
+}
+.variant-editor-modal-field input {
+  width: 100%;
+  min-height: 44px;
+}
+.variant-editor-modal-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.variant-batch-preview {
+  display: grid;
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.variant-editor-modal-field {
+  display: grid;
+  gap: var(--sp-1);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.variant-editor-modal-copy {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.variant-batch-preview {
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+}
+
+.variant-editor-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+/* Source node exists on desktop too, but the D3.4B mobile action pair is mobile-only. */
+.variant-box .vh-mobile-batch-actions,
+.variant-box .v-mobile-results {
+  display: none;
+}
+
+/* D3.7 teaching note is a mobile-only affordance. */
+@media (min-width: 960px) {
+  .rc-selection-guide-row .rc-gesture-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 959px) {
+  /* D3.4B-A: [全選][只看我的][排序]. The label wrapper has no card/frame.
+   * The visible "全選" copy is inside the toggle track itself. */
+  .stage-filter-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: var(--sp-2);
+  }
+  .stage-filter-row:not(:has(.results-scope-label)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stage-filter-row .stage-filter-pills {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    order: initial;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop {
+    position: relative;
+    display: flex;
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    margin: 0;
+    padding: 0;
+    align-items: stretch;
+    border: 0;
+    border-radius: var(--radius-s);
+    background: transparent;
+    box-sizing: border-box;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > span:last-child {
+    display: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--sp-2) 0 var(--sp-5);
+    border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--border));
+    border-radius: var(--radius-s);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    box-sizing: border-box;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track::after {
+    content: "全選";
+    color: var(--text);
+    font-weight: 800;
+    line-height: 1;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track > span {
+    position: absolute;
+    left: var(--sp-2);
+    top: 50%;
+    inline-size: 14px;
+    block-size: 14px;
+    margin: 0;
+    border-radius: 999px;
+    transform: translateY(-50%);
+    background: color-mix(in srgb, var(--accent) 72%, var(--text-muted));
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track,
+  .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 34%, var(--surface));
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track > span,
+  .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track > span {
+    left: var(--sp-3);
+    transform: translateY(-50%);
+    background: var(--accent);
+  }
+  .stage-filter-row .stage-filter-end {
+    display: contents;
+    width: auto;
+    margin: 0;
+  }
+  .stage-filter-row .results-scope-label,
+  .stage-filter-row .results-sort-label {
+    min-width: 0;
+    width: 100%;
+    min-height: 38px;
+    height: 38px;
+    margin: 0;
+    padding: 0;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+  }
+  .stage-filter-row .results-scope-label {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .stage-filter-row .results-sort-label {
+    grid-column: 3;
+    grid-row: 2;
+    padding: 0 var(--sp-2);
+  }
+  .stage-filter-row:not(:has(.results-scope-label)) .results-sort-label {
+    grid-column: 2;
+  }
+  .stage-filter-row .results-scope-label .ir-scope-select,
+  .stage-filter-row .results-sort-label,
+  .stage-filter-row .results-sort-label .sort-sel {
+    min-height: 38px;
+    height: 38px;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+  }
+  .stage-filter-row .results-scope-label .ir-scope-select {
+    width: 100%;
+    padding: 0 var(--sp-2);
+    text-align: center;
+  }
+  .stage-filter-row .results-sort-label .sort-sel {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    text-align: center;
+  }
+
+  /* Reuse the existing desktop select-all node; keep the legacy mobile duplicate hidden. */
+  .rc-selection-guide-row .rc-header-select-all--mobile {
+    display: none;
+  }
+
+  /* D3.7: low-emphasis teaching note. JSX is the only copy source. */
+  .rc-selection-guide-row {
+    display: block;
+    margin: var(--sp-2) 0;
+    padding: 0;
+  }
+  .rc-selection-guide-row .rc-gesture-hint {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: var(--sp-2);
+    min-width: 0;
+    margin: var(--sp-2) 0;
+    padding: 0 var(--sp-1);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+  .rc-selection-guide-row .rc-gesture-hint-mark {
+    flex: 0 0 auto;
+    color: var(--accent);
+    font-size: 10px;
+    line-height: 1.6;
+  }
+  .rc-selection-guide-row .rc-gesture-hint-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+
+  /* D3.7 signed swipe: workflow lives behind the left edge, remove behind the right. */
+  .rc-swipe-actions--workflow {
+    inset: 0 auto 0 0;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--sp-2);
+    padding: 0 var(--sp-2);
+  }
+  .rc-swipe-actions--remove {
+    inset: 0 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 var(--sp-2);
+  }
+  .rc-swipe-actions--workflow .rc-swipe-approve,
+  .rc-swipe-actions--workflow .rc-swipe-secondary,
+  .rc-swipe-actions--remove .rc-swipe-remove {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .rc-swipe-actions--workflow .rc-swipe-secondary {
+    border-left: 0;
+    border: 1px solid var(--border);
+  }
+  .rc-swipe-actions--remove .rc-swipe-remove {
+    border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--border));
+    background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 72%, var(--text));
+  }
+  .rc-swipe-actions--remove .rc-swipe-remove:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+  }
+
+  /* ResultCard: sale status and variant count remain adjacent peers. */
+  .result-card > .rc-header {
+    grid-template-columns: 94px max-content max-content minmax(0, 1fr);
+  }
+  .result-card > .rc-header .rc-sale-badge {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+  }
+  .result-card > .rc-header .rc-variant-count {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+  }
+  .result-card > .rc-header .rc-detect-chips--tags,
+  .result-card > .rc-header .rc-detect-chips--warns {
+    grid-column: 2 / 5;
+  }
+
+  /* Existing selected-card batch actions keep one geometry. */
+  .rc-batch-strip .rc-batch-cancel,
+  .rc-batch-strip .batch-primary-action,
+  .rc-batch-strip .batch-detail-action,
+  .rc-batch-strip .batch-remove-action,
+  .rc-batch-strip details.batch-more > summary,
+  .rc-batch-strip details.batch-more > .batch-more-menu > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    line-height: 1.15;
+  }
+  .rc-batch-strip--copy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* C stays the same design language on mobile, only sheet placement changes. */
+  .variant-box .vh-dim-values,
+  .variant-box .vh-dim-values.rc-tag-group-chips {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .variant-box .vh-secondary-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .variant-editor-modal-backdrop {
+    place-items: end center;
+    padding: 0;
+  }
+  .variant-editor-modal {
+    width: 100%;
+    max-height: 82vh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: var(--radius-l) var(--radius-l) 0 0;
+    padding: var(--sp-4) var(--sp-3) calc(var(--sp-4) + env(safe-area-inset-bottom));
+  }
+
+  /* D3.4B-E: fixed mobile action pair stays outside builder collapse. */
+  .variant-box .vh-mobile-batch-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-2);
+    margin: var(--sp-3) 0;
+  }
+  .variant-box .vh-mobile-batch-actions .vh-mobile-batch-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--radius-s);
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  .variant-box .vh-mobile-selected-count {
+    grid-column: 1 / -1;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  /* D3.4B-D: mobile result rows are explicitly separate from desktop markup.
+   * Each row scrolls horizontally; no truncation is used for option names. */
+  .variant-box .v-mobile-results {
+    display: block;
+  }
+  .variant-box .vgrid-hdr,
+  .variant-box > .vgrid-block:not(.vgrid-block--mobile) {
+    display: none;
+  }
+  .variant-box .vgrid-block--mobile {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: var(--sp-2) 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    transition: transform 100ms ease, background 100ms ease;
+  }
+  .variant-box .vgrid-block--mobile::-webkit-scrollbar {
+    display: none;
+  }
+  .variant-box .vgrid-block--mobile:has(.v-pop-pick.open) {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+  .variant-box .vgrid-block--mobile.is-selected {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .variant-box .vgrid-block--mobile.is-touch-dragging {
+    z-index: 10;
+    overflow: visible;
+    background: var(--surface);
+    box-shadow: var(--shadow-m);
+    transition: none;
+  }
+  .variant-box .v-mobile-row-core {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-2);
+    width: max-content;
+    min-width: 100%;
+  }
+  .variant-box .vdrag--touch,
+  .variant-box .v-row-dup--icon,
+  .variant-box .variant-del--trash,
+  .variant-box .v-mobile-edit-icon {
+    flex: 0 0 44px;
+    inline-size: 44px;
+    block-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+  }
+  .variant-box .vdrag--touch {
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: grab;
+    touch-action: pan-x;
+  }
+  .variant-box .vdrag--touch:active {
+    cursor: grabbing;
+    color: var(--accent);
+  }
+  .variant-box .v-row-dup--icon {
+    position: relative;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 0;
+  }
+  .variant-box .v-copy-icon,
+  .variant-box .v-copy-icon::after {
+    position: absolute;
+    inline-size: 14px;
+    block-size: 14px;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+    content: "";
+  }
+  .variant-box .v-copy-icon {
+    left: 13px;
+    top: 12px;
+  }
+  .variant-box .v-copy-icon::after {
+    left: 4px;
+    top: 4px;
+    background: var(--surface);
+  }
+  .variant-box .v-row-badge {
+    display: inline-grid;
+    flex: 0 0 30px;
+    inline-size: 30px;
+    block-size: 30px;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 900;
+  }
+  .variant-box .vthumb-wrap {
+    flex: 0 0 52px;
+    min-width: 52px;
+  }
+  .variant-box .vthumb {
+    inline-size: 52px;
+    block-size: 52px;
+    min-width: 52px;
+    min-height: 52px;
+  }
+  .variant-box .v-mobile-options {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: stretch;
+    gap: var(--sp-2);
+  }
+  .variant-box .v-mobile-option {
+    display: flex;
+    flex: 0 0 136px;
+    min-width: 136px;
+    max-width: 168px;
+    min-height: 52px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--sp-1);
+    padding: var(--sp-1) var(--sp-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+  }
+  .variant-box .v-mobile-option-label {
+    flex: 0 0 auto;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  .variant-box .v-mobile-option-line {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-mobile-option-value {
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+  .variant-box .v-mobile-edit-icon {
+    display: inline-grid;
+    place-items: center;
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font-size: 17px;
+  }
+  .variant-box .v-mobile-price-result {
+    display: grid;
+    flex: 0 0 154px;
+    min-width: 154px;
+    min-height: 52px;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: var(--sp-1) var(--sp-2);
+    border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+    border-radius: var(--radius-s);
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  }
+  .variant-box .v-mobile-price-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.25;
+  }
+  .variant-box .v-mobile-price-result .v-mobile-edit-icon {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+  .variant-box .v-manual-cost-tag {
+    grid-column: 1 / -1;
+    justify-self: start;
+    min-height: 22px;
+    height: 22px;
+    padding: 0 var(--sp-2);
+    border: 1px solid color-mix(in srgb, var(--accent2) 55%, var(--border));
+    border-radius: 999px;
+    color: var(--accent2);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .variant-box .v-mobile-cost {
+    display: grid;
+    flex: 0 0 92px;
+    min-width: 92px;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-mobile-cost .muted {
+    font-size: 10px;
+  }
+  .variant-box .v-mobile-cost input {
+    inline-size: 88px;
+    min-height: 44px;
+    padding-inline: var(--sp-2);
+    font-size: 16px;
+  }
+  .variant-box .v-mobile-inventory {
+    display: grid;
+    flex: 0 0 156px;
+    min-width: 156px;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-inventory-toggle {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .variant-box .v-inventory-toggle > input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+  }
+  .variant-box .v-inventory-toggle-track {
+    position: relative;
+    flex: 0 0 34px;
+    inline-size: 34px;
+    block-size: 20px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface2);
+  }
+  .variant-box .v-inventory-toggle-track > span {
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    inline-size: 14px;
+    block-size: 14px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transform: translateY(-50%);
+    transition: left 120ms ease;
+  }
+  .variant-box .v-inventory-toggle > input:checked + .v-inventory-toggle-track {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 30%, var(--surface));
+  }
+  .variant-box .v-inventory-toggle > input:checked + .v-inventory-toggle-track > span {
+    left: 16px;
+    background: var(--accent);
+  }
+  .variant-box .v-mobile-inventory .v-qty {
+    inline-size: 88px;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .variant-box .variant-del--trash {
+    border: 1px solid color-mix(in srgb, var(--danger) 48%, var(--border));
+    background: transparent;
+    color: var(--danger);
+    font-size: 18px;
+  }
+  .variant-box .variant-del--trash::before {
+    content: none;
+  }
+  .variant-box .vt-addrow {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .result-card > .rc-header .rc-sale-badge,
+  .result-card > .rc-header .rc-variant-count {
+    padding-inline: var(--sp-1);
+    font-size: 10px;
+  }
+  .variant-box .vh-mobile-batch-actions .vh-mobile-batch-btn {
+    font-size: 11px;
+  }
+}

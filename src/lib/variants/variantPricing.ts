@@ -9,6 +9,11 @@ import type { VariantFormRow } from "./types";
 import { isVariantRowFilled } from "./types";
 import { findDuplicateVariantMergeKeyRows } from "./variantCrossExpand";
 
+type LegacyCompatibleVariantRow = Omit<
+  VariantFormRow,
+  "costIsInherited" | "sellPriceLocked" | "compareAtLocked"
+> & Partial<Pick<VariantFormRow, "costIsInherited" | "sellPriceLocked" | "compareAtLocked">>;
+
 /**
  * Effective cost for a variant row (P1-5 / 回饋 8):
  * - row cost filled → use it
@@ -26,10 +31,32 @@ export function effectiveVariantCost(
   return null;
 }
 
+function normalizeOverrideState(row: LegacyCompatibleVariantRow): VariantFormRow {
+  const legacyLocked = Boolean(row.priceLocked);
+  const sellPriceLocked =
+    typeof row.sellPriceLocked === "boolean" ? row.sellPriceLocked : legacyLocked;
+  const compareAtLocked =
+    typeof row.compareAtLocked === "boolean" ? row.compareAtLocked : legacyLocked;
+  return {
+    ...row,
+    costIsInherited: Boolean(row.costIsInherited),
+    sellPriceLocked,
+    compareAtLocked,
+    priceLocked: sellPriceLocked || compareAtLocked
+  };
+}
+
+function sellLocked(row: LegacyCompatibleVariantRow): boolean {
+  return typeof row.sellPriceLocked === "boolean" ? row.sellPriceLocked : Boolean(row.priceLocked);
+}
+
+function compareLocked(row: LegacyCompatibleVariantRow): boolean {
+  return typeof row.compareAtLocked === "boolean" ? row.compareAtLocked : Boolean(row.priceLocked);
+}
+
 /**
- * Recompute sell/compare for unlocked rows from each row's cost.
- * P1-5: blank row cost inherits productCost when provided.
- * Locked rows (✎) are left unchanged.
+ * D3.10A: recompute sell and compare independently.
+ * Legacy rows may still fall back to priceLocked until they are written once with split fields.
  */
 export function recalculateUnlockedVariantPrices(
   rows: VariantFormRow[],
@@ -43,14 +70,22 @@ export function recalculateUnlockedVariantPrices(
 ): VariantFormRow[] {
   const settings = options.settings ?? defaultPricingSettings;
   const productCost = options.productCost ?? null;
-  return rows.map((row) => {
-    if (row.priceLocked) return row;
+  return rows.map((sourceRow) => {
+    const row = normalizeOverrideState(sourceRow);
+    const keepSell = sellLocked(row);
+    const keepCompare = compareLocked(row);
     const costNum = effectiveVariantCost(row.cost, productCost);
     if (costNum == null) {
       return {
         ...row,
-        sellPrice: "",
-        compareAt: options.priceMode === "single" ? "" : ""
+        sellPrice: keepSell ? row.sellPrice : "",
+        compareAt:
+          options.priceMode === "single"
+            ? keepCompare ? row.compareAt : ""
+            : keepCompare ? row.compareAt : "",
+        sellPriceLocked: keepSell,
+        compareAtLocked: keepCompare,
+        priceLocked: keepSell || keepCompare
       };
     }
     const result = calculatePrice(costNum, {
@@ -58,28 +93,51 @@ export function recalculateUnlockedVariantPrices(
       priceMode: options.priceMode,
       settings
     });
+    const nextSell = String(result.sellPrice);
+    const nextCompare =
+      options.priceMode === "single" || result.compareAtPrice == null
+        ? ""
+        : String(result.compareAtPrice);
     return {
       ...row,
-      sellPrice: String(result.sellPrice),
+      sellPrice: keepSell ? row.sellPrice : nextSell,
       compareAt:
-        options.priceMode === "single" || result.compareAtPrice == null
-          ? ""
-          : String(result.compareAtPrice)
+        options.priceMode === "single"
+          ? keepCompare ? row.compareAt : ""
+          : keepCompare ? row.compareAt : nextCompare,
+      sellPriceLocked: keepSell,
+      compareAtLocked: keepCompare,
+      priceLocked: keepSell || keepCompare
     };
   });
 }
 
-/** Mark row as manually edited (✎). */
-export function lockVariantPrice(row: VariantFormRow, patch: Partial<Pick<VariantFormRow, "sellPrice" | "compareAt">>): VariantFormRow {
+/** D3.10A: only fields whose values actually changed become locked. */
+export function lockVariantPrice(
+  row: VariantFormRow,
+  patch: Partial<Pick<VariantFormRow, "sellPrice" | "compareAt">>
+): VariantFormRow {
+  const previousSellLocked = sellLocked(row);
+  const previousCompareLocked = compareLocked(row);
+  const sellChanged =
+    Object.prototype.hasOwnProperty.call(patch, "sellPrice") &&
+    patch.sellPrice !== row.sellPrice;
+  const compareChanged =
+    Object.prototype.hasOwnProperty.call(patch, "compareAt") &&
+    patch.compareAt !== row.compareAt;
+  const nextSellLocked = previousSellLocked || sellChanged;
+  const nextCompareLocked = previousCompareLocked || compareChanged;
   return {
     ...row,
     ...patch,
-    priceLocked: true
+    sellPriceLocked: nextSellLocked,
+    compareAtLocked: nextCompareLocked,
+    priceLocked: nextSellLocked || nextCompareLocked
   };
 }
 
 export function countLockedVariants(rows: VariantFormRow[]): number {
-  return rows.filter((r) => r.priceLocked).length;
+  return rows.filter((row) => sellLocked(row) || compareLocked(row)).length;
 }
 
 export function formatVariantPriceLine(
@@ -92,20 +150,20 @@ export function formatVariantPriceLine(
   const inherited = !rowHasCost && productCost != null && productCost > 0;
   const sell = row.sellPrice.trim() ? `NT$ ${row.sellPrice}` : "售價未算";
   const inheritHint = inherited ? `（同商品成本）` : "";
+  const manual = sellLocked(row) || compareLocked(row) ? "（✎ 手動）" : "";
   if (priceMode === "single") {
-    return `→ ${sell}${inheritHint}${row.priceLocked ? "（✎ 手動）" : ""}`;
+    return `→ ${sell}${inheritHint}${manual}`;
   }
   const cmp = row.compareAt.trim() ? `／定價 ${row.compareAt}` : "";
-  return `→ ${sell}${cmp}${inheritHint}${row.priceLocked ? "（✎ 手動）" : ""}`;
+  return `→ ${sell}${cmp}${inheritHint}${manual}`;
 }
 
 /**
- * UX-B2-P04: when product-level cost changes, push into rows still marked inherited
- * (or still blank / never manually edited). Does not overwrite costIsInherited === false.
- * Then recalculates unlocked sell prices.
+ * UX-B2-P04: when product-level cost changes, push into rows still marked inherited.
+ * D3.10A normalizes legacy/form-helper rows into explicit split state before repricing.
  */
 export function syncInheritedVariantCosts(
-  rows: VariantFormRow[],
+  rows: LegacyCompatibleVariantRow[],
   productCost: number | null | undefined,
   priceOpts: {
     currency: CostCurrency;
@@ -116,15 +174,15 @@ export function syncInheritedVariantCosts(
   const has =
     productCost != null && Number.isFinite(productCost) && productCost > 0;
   const costStr = has ? String(productCost) : "";
-  const next = rows.map((row) => {
+  const next = rows.map((sourceRow) => {
+    const row = normalizeOverrideState(sourceRow);
     if (row.costIsInherited) {
       return {
         ...row,
         cost: costStr,
-        costIsInherited: has ? true : false
+        costIsInherited: has
       };
     }
-    // Empty cost and never manually detached → first-time inherit
     if (has && !row.cost.trim()) {
       return { ...row, cost: costStr, costIsInherited: true };
     }
@@ -140,7 +198,6 @@ export function syncInheritedVariantCosts(
  * UX-S T72 / R87: write product-level cost into blank variant cost cells only.
  * Already-filled costs are never overwritten. After fill, recalculate unlocked prices.
  * Marks filled rows as costIsInherited so later product-cost changes can keep syncing.
- * Returns { rows, filledCount } so UI can toast when nothing changed.
  */
 export function applyProductCostToBlankRows(
   rows: VariantFormRow[],
@@ -159,7 +216,6 @@ export function applyProductCostToBlankRows(
   let filledCount = 0;
   const withCost = rows.map((row) => {
     const n = Number(row.cost);
-    // Only fill blank / non-positive; never overwrite a filled positive cost.
     if (Number.isFinite(n) && n > 0) return row;
     filledCount += 1;
     return { ...row, cost: costStr, costIsInherited: true };
@@ -210,4 +266,3 @@ export function validateCostRequirement(input: {
   }
   return "請輸入商品成本，或在每一款式列填寫成本";
 }
-

@@ -71,22 +71,19 @@ assert.match(variantMain, /TOUCH_DRAG_PX = 8/);
 assert.match(variantMain, /recalculateUnlockedVariantPrices\(next,/);
 assert.match(variantMain, /costIsInherited:\s*false/);
 
-// D3.8 supersedes only D3.5's compact mobile Variant row presentation. The new
-// final layer must load later and restore row-local horizontal scrolling plus
-// framed readonly option/price fields; editable cost remains an input.
+// D3.10A supersedes D3.8's row-local scroll/framed-combined-price presentation.
+// D3.5 historical responsibility is limited to the preserved mobile row interaction
+// shape and final source path; shared scrolling/split-price details are verified by D3.10A.
 const d35ImportPos = layout.indexOf('import "./d34b-iphone-corrective.css";');
 const d38ImportPos = layout.indexOf('import "./d38-mobile-variant-horizontal.css";');
 assert.ok(d35ImportPos >= 0 && d38ImportPos > d35ImportPos);
-assert.match(d38Css, /@media \(max-width:\s*959px\)[\s\S]*\.vgrid-block--mobile\s*\{[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;/);
 assert.match(d38Css, /\.v-mobile-row-core\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-flow:\s*row nowrap;[\s\S]*width:\s*max-content;[\s\S]*min-width:\s*100%;/);
-assert.match(d38Css, /\.v-mobile-option\s*\{[\s\S]*min-width:\s*136px;[\s\S]*max-width:\s*168px;[\s\S]*border:\s*1px solid var\(--border\);[\s\S]*background:\s*var\(--surface\);/);
-assert.match(d38Css, /\.v-mobile-option-value\s*\{[\s\S]*overflow:\s*visible;[\s\S]*-webkit-line-clamp:\s*unset;/);
-assert.doesNotMatch(d38Css, /-webkit-line-clamp:\s*2/);
-assert.match(d38Css, /\.v-mobile-price-result\s*\{[\s\S]*width:\s*154px;[\s\S]*min-height:\s*52px;[\s\S]*border:\s*1px solid color-mix/);
-assert.match(d38Css, /\.v-mobile-cost input\s*\{[\s\S]*inline-size:\s*88px;[\s\S]*min-height:\s*44px;/);
+assert.match(variantRender, /v-mobile-price-cell--sell/);
+assert.match(variantRender, /v-mobile-price-cell--compare/);
+assert.doesNotMatch(variantRender, /v-mobile-price-result/);
 
 // Desktop Variant result path remains a separate native grid/drag path.
 assert.match(variantRender, /\) : isNarrow \? \([\s\S]*v-mobile-results[\s\S]*\) : \([\s\S]*vgrid-hdr/);
 assert.match(variantRender, /className="vdrag"[\s\S]*draggable/);
 
-console.log("D3.5 final UI source contract passed with D3.6 select-all and D3.8 mobile Variant row supersession");
+console.log("D3.5 final UI source contract passed with D3.10A mobile Variant presentation supersession");

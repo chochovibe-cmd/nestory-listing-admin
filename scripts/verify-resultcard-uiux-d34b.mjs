@@ -50,8 +50,9 @@ assert.match(variant, /openEditorModal\(\{ kind: "add-value", dimIndex: i \}\)/)
 assert.match(variant, /variant-editor-modal-backdrop/);
 assert.doesNotMatch(variant, /vh-dim-add-input/);
 
-// D — D3.8 supersedes D3.5 source order while preserving D3.4B interactions:
-// drag → badge → thumbnail → options → price → cost → inventory → copy → trash.
+// D — D3.10A supersedes the old D3.8/D3.9B combined price container while
+// preserving the historical D3.4B interaction/source-order contract:
+// drag → badge → thumbnail → options → sell → compare(sale mode) → cost → inventory → copy → trash.
 assert.match(variant, /vdrag vdrag--touch/);
 assert.match(variant, /onPointerDown=.*onTouchDragPointerDown/);
 assert.match(variant, /onPointerMove=\{onTouchDragPointerMove\}/);
@@ -66,7 +67,8 @@ const dragPos = variant.indexOf('className="vdrag vdrag--touch"', mobileRowStart
 const badgePos = variant.indexOf('className="v-row-badge"', mobileRowStart);
 const thumbPos = variant.indexOf('renderImagePicker(ctx, row, index)', mobileRowStart);
 const optionsPos = variant.indexOf('className="v-mobile-options"', mobileRowStart);
-const pricePos = variant.indexOf('className="v-mobile-price-result"', mobileRowStart);
+const sellPricePos = variant.indexOf('className="v-mobile-price-cell v-mobile-price-cell--sell"', mobileRowStart);
+const compareAtPos = variant.indexOf('className="v-mobile-price-cell v-mobile-price-cell--compare"', mobileRowStart);
 const costPos = variant.indexOf('className="v-mobile-cost"', mobileRowStart);
 const inventoryPos = variant.indexOf('className="v-mobile-inventory"', mobileRowStart);
 const copyPos = variant.indexOf('className="v-row-dup--icon"', mobileRowStart);
@@ -77,12 +79,16 @@ assert.ok(
   badgePos > dragPos &&
   thumbPos > badgePos &&
   optionsPos > thumbPos &&
-  pricePos > optionsPos &&
-  costPos > pricePos &&
+  sellPricePos > optionsPos &&
+  costPos > sellPricePos &&
   inventoryPos > costPos &&
   copyPos > inventoryPos &&
   trashPos > copyPos
 );
+if (compareAtPos >= 0) {
+  assert.ok(compareAtPos > sellPricePos && compareAtPos < costPos);
+}
+assert.doesNotMatch(variant, /className="v-mobile-price-result"/);
 assert.match(variant, /v-row-dup--icon[\s\S]*onClick=\{\(\) => duplicateRow\(index\)\}/);
 assert.match(variant, /variant-del variant-del--trash[\s\S]*onClick=\{\(\) => removeRow\(index\)\}/);
 assert.match(variant, /checked=\{!row\.qty\.trim\(\)\}/);
@@ -109,4 +115,4 @@ assert.match(correctiveCss, /rc-price-mini-label,[\s\S]*rc-price-mini-profit\s*\
 assert.match(correctiveCss, /rc-price-mini-value\s*\{[\s\S]*line-height:\s*1\.05;/);
 assert.doesNotMatch(correctiveCss, /align-items:\s*flex-end/);
 
-console.log("D3.4B ResultCard/Variant source contract passed with D3.7 gesture and D3.8 mobile row supersession");
+console.log("D3.4B ResultCard/Variant source contract passed with D3.10A split-price supersession");

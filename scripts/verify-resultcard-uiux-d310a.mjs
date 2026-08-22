@@ -34,25 +34,28 @@ assert.match(css, /\.v-mobile-table-scroll\s*\{[\s\S]*overflow-x:\s*auto;[\s\S]*
 assert.doesNotMatch(d38Css, /\.vgrid-block--mobile\s*\{[^}]*overflow-x:\s*auto;/);
 assert.match(d38Css, /\.v-mobile-row-core\s*\{[\s\S]*flex-flow:\s*row nowrap;[\s\S]*width:\s*max-content;[\s\S]*min-width:\s*100%;/);
 
+// D3.10B supersedes only the sell/compare presentation widths; the shared column contract remains.
 for (const token of [
   '--vm-drag-w: 44px;',
   '--vm-seq-w: 28px;',
   '--vm-thumb-w: 52px;',
   '--vm-option-w: 168px;',
-  '--vm-sell-w: 148px;',
-  '--vm-compare-w: 148px;',
   '--vm-cost-w: 112px;',
   '--vm-inventory-w: 152px;',
   '--vm-action-w: 44px;'
 ]) assert.ok(css.includes(token), `missing D3.10A column token ${token}`);
+for (const token of ['--vm-sell-w:', '--vm-compare-w:']) {
+  assert.ok(css.includes(token), `missing shared price column token ${token}`);
+}
 
-// Complete header: dynamic dimensions; compare column is sale-only.
+// Complete header: dynamic dimensions; compare column is sale-only. D3.10B renders costLabel with currency.
 assert.match(render, /const mobileHeaders = dimHeaders\.length > 0 \? dimHeaders : \[\{ name: "款式" \}\];/);
 const header = mobile.slice(headerPos, bodyPos);
-for (const label of ["排序", "序列", "縮圖", "售價", "成本", "庫存", "複製", "刪除"]) {
+for (const label of ["排序", "序列", "縮圖", "售價", "庫存", "複製", "刪除"]) {
   assert.ok(header.includes(`>${label}</span>`), `missing mobile header ${label}`);
 }
 assert.match(header, /priceMode === "sale" \? <span className="v-mobile-header-cell v-mobile-header-cell--compare">定價<\/span> : null/);
+assert.match(header, /className="v-mobile-header-cell v-mobile-header-cell--cost">\{costLabel\}<\/span>/);
 assert.doesNotMatch(render, /款式1/);
 
 // Data rows contain values only; mobile option/cost labels are not repeated.
@@ -152,4 +155,4 @@ assert.match(main, /function duplicateRow\(index: number\)/);
 assert.match(render, /onClick=\{\(\) => duplicateRow\(index\)\}/);
 assert.match(render, /onClick=\{\(\) => removeRow\(index\)\}/);
 
-console.log("D3.10A shared mobile table + persistent split overrides + stepper contract passed");
+console.log("D3.10A shared mobile table + persistent split overrides + stepper contract passed with D3.10B presentation supersession");

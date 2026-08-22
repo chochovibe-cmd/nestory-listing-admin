@@ -412,7 +412,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
               ))}
               <span className="v-mobile-header-cell v-mobile-header-cell--sell">售價</span>
               {priceMode === "sale" ? <span className="v-mobile-header-cell v-mobile-header-cell--compare">定價</span> : null}
-              <span className="v-mobile-header-cell v-mobile-header-cell--cost">成本</span>
+              <span className="v-mobile-header-cell v-mobile-header-cell--cost">{costLabel}</span>
               <span className="v-mobile-header-cell v-mobile-header-cell--inventory">庫存</span>
               <span className="v-mobile-header-cell v-mobile-header-cell--copy">複製</span>
               <span className="v-mobile-header-cell v-mobile-header-cell--delete">刪除</span>
@@ -456,13 +456,12 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
                       </div>
                       <div className="v-mobile-price-cell v-mobile-price-cell--sell">
                         <span className="v-mobile-price-value">NT${row.sellPrice || "—"}</span>
-                        <button type="button" className="v-mobile-edit-icon" aria-label="編輯售價" onClick={() => openEditorModal({ kind: "edit-price", rowIndex: index })}>✎</button>
                         {row.sellPriceLocked ? <span className="rc-tag v-manual-override-tag">已手動覆蓋</span> : null}
                       </div>
                       {priceMode === "sale" ? (
                         <div className="v-mobile-price-cell v-mobile-price-cell--compare">
                           <span className="v-mobile-price-value">NT${row.compareAt || "—"}</span>
-                          <button type="button" className="v-mobile-edit-icon" aria-label="編輯定價" onClick={() => openEditorModal({ kind: "edit-price", rowIndex: index })}>✎</button>
+                          <button type="button" className="v-mobile-edit-icon" aria-label="編輯售價與定價" onClick={() => openEditorModal({ kind: "edit-price", rowIndex: index })}>✎</button>
                           {row.compareAtLocked ? <span className="rc-tag v-manual-override-tag">已手動覆蓋</span> : null}
                         </div>
                       ) : null}

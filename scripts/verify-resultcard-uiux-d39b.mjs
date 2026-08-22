@@ -30,17 +30,19 @@ assert.doesNotMatch(mobileBranch, /v-mobile-results-header-scroll/);
 assert.match(css, /\.v-mobile-table-scroll\s*\{[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;/);
 assert.doesNotMatch(d38Css, /\.vgrid-block--mobile\s*\{[^}]*overflow-x:\s*auto;/);
 
+// D3.10B supersedes only sell/compare presentation width and cost header copy.
 for (const token of [
   '--vm-drag-w: 44px;',
   '--vm-seq-w: 28px;',
   '--vm-thumb-w: 52px;',
   '--vm-option-w: 168px;',
-  '--vm-sell-w: 148px;',
-  '--vm-compare-w: 148px;',
   '--vm-cost-w: 112px;',
   '--vm-inventory-w: 152px;',
   '--vm-action-w: 44px;'
 ]) assert.ok(css.includes(token), `missing shared token ${token}`);
+for (const token of ['--vm-sell-w:', '--vm-compare-w:']) {
+  assert.ok(css.includes(token), `missing shared price token ${token}`);
+}
 
 // D3.9B presentation freeze remains: readonly options/prices and copy/trash are frameless.
 assert.match(css, /\.v-mobile-option\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
@@ -49,11 +51,11 @@ assert.match(css, /\.v-mobile-price-cell\s*\{[\s\S]*border:\s*0;[\s\S]*backgroun
 assert.match(css, /\.v-row-dup--icon\s*\{[\s\S]*block-size:\s*44px;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
 assert.match(css, /\.variant-del--trash\s*\{[\s\S]*block-size:\s*44px;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--danger\);/);
 
-// Complete mobile header now splits sell/compare while continuing to use dynamic dimensions.
+// Complete mobile header splits sell/compare and uses the live cost currency label.
 assert.match(render, /const mobileHeaders = dimHeaders\.length > 0 \? dimHeaders : \[\{ name: "款式" \}\];/);
 assert.match(mobileBranch, />售價<\/span>/);
 assert.match(mobileBranch, /priceMode === "sale" \? <span className="v-mobile-header-cell v-mobile-header-cell--compare">定價<\/span> : null/);
-assert.match(mobileBranch, />成本<\/span>/);
+assert.match(mobileBranch, /v-mobile-header-cell--cost">\{costLabel\}<\/span>/);
 assert.match(mobileBranch, />庫存<\/span>/);
 assert.doesNotMatch(render, /款式1/);
 
@@ -83,4 +85,4 @@ assert.match(main, /const TOUCH_DRAG_PX = 8;/);
 assert.match(render, /className="vdrag"[\s\S]*draggable/);
 assert.match(render, /className="v-cell"[\s\S]*<input/);
 
-console.log("D3.9B presentation contract passed with D3.10A shared-table supersession");
+console.log("D3.9B presentation contract passed with D3.10A shared-table and D3.10B pricing-row supersession");

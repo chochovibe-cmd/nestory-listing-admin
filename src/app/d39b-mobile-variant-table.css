@@ -1,5 +1,5 @@
 /*
- * D3.10A mobile Variant shared-table refinement — 2026-08-22.
+ * D3.10A mobile Variant shared-table foundation + D3.10B pricing-row polish.
  * One horizontal track owns header + every row. Desktop >=960px is untouched.
  */
 
@@ -9,11 +9,15 @@
     --vm-seq-w: 28px;
     --vm-thumb-w: 52px;
     --vm-option-w: 168px;
-    --vm-sell-w: 148px;
-    --vm-compare-w: 148px;
+    --vm-sell-w: 116px;
+    --vm-compare-w: 140px;
     --vm-cost-w: 112px;
     --vm-inventory-w: 152px;
     --vm-action-w: 44px;
+    --vm-cell-h: 52px;
+    --vm-control-h: 44px;
+    --vm-cell-pad: var(--sp-1);
+    --vm-cell-gap: var(--sp-1);
   }
 
   .variant-box .v-mobile-table-scroll {
@@ -74,7 +78,7 @@
     flex: 0 0 auto;
     align-items: center;
     min-width: 0;
-    padding-inline: var(--sp-1);
+    padding-inline: var(--vm-cell-pad);
     box-sizing: border-box;
   }
   .variant-box .v-mobile-header-cell--drag {
@@ -98,18 +102,22 @@
   .variant-box .v-mobile-header-cell--sell {
     flex-basis: var(--vm-sell-w);
     width: var(--vm-sell-w);
+    justify-content: center;
   }
   .variant-box .v-mobile-header-cell--compare {
     flex-basis: var(--vm-compare-w);
     width: var(--vm-compare-w);
+    justify-content: center;
   }
   .variant-box .v-mobile-header-cell--cost {
     flex-basis: var(--vm-cost-w);
     width: var(--vm-cost-w);
+    justify-content: center;
   }
   .variant-box .v-mobile-header-cell--inventory {
     flex-basis: var(--vm-inventory-w);
     width: var(--vm-inventory-w);
+    justify-content: center;
   }
   .variant-box .v-mobile-header-cell--copy,
   .variant-box .v-mobile-header-cell--delete {
@@ -152,12 +160,12 @@
     width: var(--vm-option-w);
     min-width: var(--vm-option-w);
     max-width: var(--vm-option-w);
-    min-height: 52px;
+    min-height: var(--vm-cell-h);
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
     gap: 0;
-    padding: 0 var(--sp-1);
+    padding: 0 var(--vm-cell-pad);
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -190,8 +198,8 @@
     flex: 0 0 32px;
     inline-size: 32px;
     min-width: 32px;
-    block-size: 44px;
-    min-height: 44px;
+    block-size: var(--vm-control-h);
+    min-height: var(--vm-control-h);
     margin: 0;
     border: 0;
     background: transparent;
@@ -201,16 +209,18 @@
 
   .variant-box .v-mobile-price-cell {
     display: grid;
-    min-height: 52px;
-    grid-template-columns: minmax(0, 1fr) 32px;
+    min-height: var(--vm-cell-h);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto;
     align-content: center;
     align-items: center;
-    gap: 2px;
-    padding: 0 var(--sp-1);
+    justify-items: center;
+    row-gap: var(--vm-cell-gap);
+    padding-inline: var(--vm-cell-pad);
     border: 0;
     background: transparent;
     box-sizing: border-box;
+    text-align: center;
   }
   .variant-box .v-mobile-price-cell--sell {
     flex: 0 0 var(--vm-sell-w);
@@ -219,26 +229,39 @@
   .variant-box .v-mobile-price-cell--compare {
     flex: 0 0 var(--vm-compare-w);
     width: var(--vm-compare-w);
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
   }
   .variant-box .v-mobile-price-value {
+    grid-row: 1;
     min-width: 0;
+    justify-self: center;
     color: var(--accent);
     font-size: 12px;
     font-weight: 900;
     line-height: 1.25;
+    text-align: center;
     white-space: nowrap;
   }
-  .variant-box .v-mobile-price-cell .v-mobile-edit-icon {
+  .variant-box .v-mobile-price-cell--sell .v-mobile-price-value {
+    grid-column: 1;
+  }
+  .variant-box .v-mobile-price-cell--compare .v-mobile-price-value {
     grid-column: 2;
+  }
+  .variant-box .v-mobile-price-cell .v-mobile-edit-icon {
+    grid-column: 3;
     grid-row: 1 / span 2;
     inline-size: 32px;
     min-width: 32px;
-    block-size: 44px;
-    min-height: 44px;
+    block-size: var(--vm-control-h);
+    min-height: var(--vm-control-h);
     margin: 0;
     border: 0;
     background: transparent;
     color: var(--accent);
+  }
+  .variant-box .v-mobile-price-cell .v-manual-override-tag {
+    grid-row: 2;
   }
   .variant-box .v-manual-override-tag {
     grid-column: 1 / -1;
@@ -247,10 +270,13 @@
     align-items: center;
     min-height: 18px;
     height: 18px;
-    padding: 0 5px;
-    border-radius: 999px;
+    padding-inline: var(--sp-1);
+    border: 1px solid color-mix(in srgb, var(--danger) 60%, var(--border));
+    border-radius: var(--radius-s);
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 82%, var(--text));
     font-size: 9px;
-    font-weight: 700;
+    font-weight: 800;
     line-height: 1;
     white-space: nowrap;
   }
@@ -260,10 +286,10 @@
     flex: 0 0 var(--vm-cost-w);
     width: var(--vm-cost-w);
     min-width: var(--vm-cost-w);
-    min-height: 52px;
+    min-height: var(--vm-cell-h);
     align-content: center;
-    gap: 2px;
-    padding-inline: var(--sp-1);
+    row-gap: var(--vm-cell-gap);
+    padding-inline: var(--vm-cell-pad);
     box-sizing: border-box;
   }
 
@@ -271,7 +297,7 @@
     display: flex;
     width: 100%;
     min-width: 0;
-    height: 44px;
+    height: var(--vm-control-h);
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: var(--radius-s);
@@ -282,8 +308,8 @@
     flex: 1 1 auto;
     width: 0;
     min-width: 0;
-    height: 42px;
-    padding: 0 6px;
+    height: 100%;
+    padding-inline: var(--sp-1);
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -327,17 +353,17 @@
     flex: 0 0 var(--vm-inventory-w);
     width: var(--vm-inventory-w);
     min-width: var(--vm-inventory-w);
-    min-height: 52px;
+    min-height: var(--vm-cell-h);
     align-items: center;
-    gap: 5px;
-    padding-inline: var(--sp-1);
+    gap: var(--vm-cell-gap);
+    padding-inline: var(--vm-cell-pad);
     box-sizing: border-box;
   }
   .variant-box .v-inventory-toggle {
     display: inline-flex;
     flex: 0 0 auto;
     min-width: 0;
-    min-height: 44px;
+    min-height: var(--vm-control-h);
     align-items: center;
     gap: 0;
   }
@@ -352,6 +378,7 @@
   .variant-box .v-mobile-inventory .v-number-stepper {
     flex: 1 1 auto;
     width: auto;
+    align-self: center;
   }
 
   .variant-box .v-row-dup--icon {

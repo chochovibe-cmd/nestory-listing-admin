@@ -146,8 +146,9 @@ import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCa
 /** UX-B3-P04: align with MobileTabbar FAB long-press */
 export const LONG_PRESS_MS = 500;
 const GESTURE_MOVE_PX = 10;
-const SWIPE_ACTION_W = 210;
-const SWIPE_ACTION_W_SINGLE = 140;
+const SWIPE_WORKFLOW_W = 156;
+const SWIPE_WORKFLOW_W_SINGLE = 108;
+const SWIPE_REMOVE_W = 96;
 
 /** UX-M T64: full-enough row for dbRowsToForm (price range still uses twd_price). */
 type ResultCardVariantRow = {
@@ -1882,10 +1883,10 @@ export function ResultCard({
     !isArchived &&
     (isCopyStation || isImageStation || isReadyStation);
 
-  const swipeActionWidth =
+  const workflowWidth =
     isReadyStation && !isCopyStation && !isImageStation
-      ? SWIPE_ACTION_W_SINGLE
-      : SWIPE_ACTION_W;
+      ? SWIPE_WORKFLOW_W_SINGLE
+      : SWIPE_WORKFLOW_W;
 
   function handleHeaderTouchStart(event: ReactTouchEvent) {
     if (!isNarrow || sequentialMode) return;
@@ -1943,8 +1944,9 @@ export function ResultCard({
     }
 
     if (swipeAxisRef.current === "h") {
-      // Left swipe only
-      const next = Math.max(Math.min(dx, 0), -swipeActionWidth);
+      const next = dx > 0
+        ? Math.min(dx, workflowWidth)
+        : Math.max(dx, -SWIPE_REMOVE_W);
       setSwipeX(next);
     }
   }
@@ -1960,9 +1962,12 @@ export function ResultCard({
     if (swipeAxisRef.current === "h" && swipeEnabled) {
       setSwipeDragging(false);
       setSwipeX((current) => {
-        const open = current < -swipeActionWidth / 2;
-        const next = open ? -swipeActionWidth : 0;
-        onSwipeOpenChange?.(open);
+        const next = current > workflowWidth / 2
+          ? workflowWidth
+          : current < -SWIPE_REMOVE_W / 2
+            ? -SWIPE_REMOVE_W
+            : 0;
+        onSwipeOpenChange?.(next !== 0);
         return next;
       });
     }
@@ -2188,7 +2193,7 @@ export function ResultCard({
       </div>
     ) : null;
 
-  const swipeActions =
+  const workflowSwipeActions =
     !isArchived && isCopyStation ? (
       <>
         <button
@@ -2213,14 +2218,6 @@ export function ResultCard({
         >
           ↻ 重生
         </button>
-        <button
-          className="rc-swipe-remove"
-          disabled={archiveBusy}
-          onClick={() => runSwipeAction(() => void archiveOne())}
-          type="button"
-        >
-          移出佇列
-        </button>
       </>
     ) : !isArchived && isImageStation ? (
       <>
@@ -2240,45 +2237,45 @@ export function ResultCard({
         >
           {actionArm === "revision" ? "⚠ 確認退回" : "↩ 退回"}
         </button>
-        <button
-          className="rc-swipe-remove"
-          disabled={archiveBusy}
-          onClick={() => runSwipeAction(() => void archiveOne())}
-          type="button"
-        >
-          移出佇列
-        </button>
       </>
     ) : !isArchived && isReadyStation ? (
-      <>
-        <button
-          className="rc-swipe-approve"
-          disabled={approveSummaryBusy || comboSaving || station3Busy}
-          onClick={() => runSwipeAction(() => setStation3Open(true))}
-          type="button"
-        >
-          發布／匯出
-        </button>
-        <button
-          className="rc-swipe-remove"
-          disabled={archiveBusy}
-          onClick={() => runSwipeAction(() => void archiveOne())}
-          type="button"
-        >
-          移出佇列
-        </button>
-      </>
+      <button
+        className="rc-swipe-approve"
+        disabled={approveSummaryBusy || comboSaving || station3Busy}
+        onClick={() => runSwipeAction(() => setStation3Open(true))}
+        type="button"
+      >
+        發布／匯出
+      </button>
     ) : null;
+
+  const removeSwipeAction = !isArchived ? (
+    <button
+      className="rc-swipe-remove"
+      disabled={archiveBusy}
+      onClick={() => runSwipeAction(() => void archiveOne())}
+      type="button"
+    >
+      移出佇列
+    </button>
+  ) : null;
 
   return (
     <div className={`rc-swipe-wrap${swipeX !== 0 || swipeDragging ? " is-swiping" : ""}`}>
-      {isNarrow && swipeActions ? (
+      {isNarrow && swipeX > 0 && workflowSwipeActions ? (
         <div
-          aria-hidden={swipeX === 0}
-          className="rc-swipe-actions"
-          style={{ width: swipeActionWidth }}
+          className="rc-swipe-actions rc-swipe-actions--workflow"
+          style={{ width: workflowWidth }}
         >
-          {swipeActions}
+          {workflowSwipeActions}
+        </div>
+      ) : null}
+      {isNarrow && swipeX < 0 && removeSwipeAction ? (
+        <div
+          className="rc-swipe-actions rc-swipe-actions--remove"
+          style={{ width: SWIPE_REMOVE_W }}
+        >
+          {removeSwipeAction}
         </div>
       ) : null}
       <div

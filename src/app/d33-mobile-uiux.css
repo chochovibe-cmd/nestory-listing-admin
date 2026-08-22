@@ -258,6 +258,13 @@
   display: none;
 }
 
+/* D3.7 teaching note is a mobile-only affordance. */
+@media (min-width: 960px) {
+  .rc-selection-guide-row .rc-gesture-hint {
+    display: none;
+  }
+}
+
 @media (max-width: 959px) {
   /* D3.4B-A: [全選][只看我的][排序]. The label wrapper has no card/frame.
    * The visible "全選" copy is inside the toggle track itself. */
@@ -401,52 +408,84 @@
     display: none;
   }
 
-  /* D3.4B-B: restore the real dismissible hint node and suppress D3.2's pseudo copy. */
+  /* D3.7: low-emphasis teaching note. JSX is the only copy source. */
   .rc-selection-guide-row {
     display: block;
     margin: var(--sp-2) 0;
     padding: 0;
   }
-  .rc-selection-guide-row::after {
-    content: none;
-    display: none;
-  }
   .rc-selection-guide-row .rc-gesture-hint {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    align-items: flex-start;
+    justify-content: flex-start;
     gap: var(--sp-2);
-    min-height: 44px;
-    margin: 0;
-    padding: 0 0 0 var(--sp-3);
-    border: 0;
-    border-left: 4px solid var(--accent);
-    border-radius: var(--radius-s);
-    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
-    color: color-mix(in srgb, var(--accent) 76%, var(--text));
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1.35;
-  }
-  .rc-selection-guide-row .rc-gesture-hint > span {
     min-width: 0;
-    font-size: 0;
-  }
-  .rc-selection-guide-row .rc-gesture-hint > span::before {
-    content: "長按卡片進入多選；向左滑可核准／重送；向右滑可移除";
-    font-size: 12px;
-  }
-  .rc-selection-guide-row .rc-gesture-hint-dismiss {
-    display: inline-grid;
-    flex: 0 0 44px;
-    inline-size: 44px;
-    block-size: 44px;
-    place-items: center;
-    padding: 0;
+    margin: var(--sp-2) 0;
+    padding: 0 var(--sp-1);
     border: 0;
+    border-radius: 0;
     background: transparent;
-    color: inherit;
-    font-size: 18px;
+    box-shadow: none;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+  .rc-selection-guide-row .rc-gesture-hint-mark {
+    flex: 0 0 auto;
+    color: var(--accent);
+    font-size: 10px;
+    line-height: 1.6;
+  }
+  .rc-selection-guide-row .rc-gesture-hint-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+
+  /* D3.7 signed swipe: workflow lives behind the left edge, remove behind the right. */
+  .rc-swipe-actions--workflow {
+    inset: 0 auto 0 0;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--sp-2);
+    padding: 0 var(--sp-2);
+  }
+  .rc-swipe-actions--remove {
+    inset: 0 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 var(--sp-2);
+  }
+  .rc-swipe-actions--workflow .rc-swipe-approve,
+  .rc-swipe-actions--workflow .rc-swipe-secondary,
+  .rc-swipe-actions--remove .rc-swipe-remove {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .rc-swipe-actions--workflow .rc-swipe-secondary {
+    border-left: 0;
+    border: 1px solid var(--border);
+  }
+  .rc-swipe-actions--remove .rc-swipe-remove {
+    border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--border));
+    background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 72%, var(--text));
+  }
+  .rc-swipe-actions--remove .rc-swipe-remove:disabled {
+    opacity: .45;
+    cursor: not-allowed;
   }
 
   /* ResultCard: sale status and variant count remain adjacent peers. */
@@ -845,9 +884,6 @@
   .result-card > .rc-header .rc-variant-count {
     padding-inline: var(--sp-1);
     font-size: 10px;
-  }
-  .rc-selection-guide-row .rc-gesture-hint > span::before {
-    font-size: 11px;
   }
   .variant-box .vh-mobile-batch-actions .vh-mobile-batch-btn {
     font-size: 11px;

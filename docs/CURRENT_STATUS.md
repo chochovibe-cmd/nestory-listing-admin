@@ -3,10 +3,21 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-08-21
+更新基準：2026-08-22
 正式 app 基準分支：`codex/nestory-v0.1-safety-skeleton`
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
+
+## Latest release-branch package — D3.7 mobile gesture guidance + bidirectional swipe
+
+D3.7 只做 Commander 授權的兩項 mobile gesture corrective；start guard parent 為
+`cea4babfb4a3aab7acddc1a3f22e055265ac744f`，沿用 PR #8，不 merge、不進 Shopify。
+
+- Mobile `<=959px`：gesture teaching note 改為永久顯示的低強度 accent `△ + text`，final copy 由 JSX 單一來源提供；舊 dismiss state / localStorage / X 與 historical pseudo copy 移除。Desktop `>=960px` 不顯示此 mobile 教學。
+- ResultCard mobile swipe 改為 signed bidirectional model：右滑露出左側 workflow panel（copy=`核准 / 重生`、image=既有 primary / `退回`、ready=`發布／匯出`）；左滑露出右側 `移出佇列`。workflow 寬 156px、ready single 108px、remove 96px，依各自半寬 snap；一次只顯示一側。
+- `LONG_PRESS_MS=500`、`GESTURE_MOVE_PX=10`、axis/interactive/select/expanded/sequential/one-open-card guards 與所有 business handlers / API semantics 不變。新增 `scripts/verify-resultcard-uiux-d37.mjs` 並更新 historical verifier contract。
+
+> 以下 D3.6 與更早章節保留作歷史脈絡；D3.7 只 supersede mobile gesture teaching note 與 swipe direction/reveal presentation。
 
 ## Latest release-branch package — D3.6 mobile selection controls corrective
 

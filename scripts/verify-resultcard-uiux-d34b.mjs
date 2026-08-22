@@ -27,11 +27,12 @@ assert.match(correctiveCss, /@media \(max-width:\s*959px\)[\s\S]*?input\[type="c
 assert.match(correctiveCss, /@media \(max-width:\s*959px\)[\s\S]*?\.rc-toggle-track\s*\{[\s\S]*?display:\s*block;[\s\S]*?height:\s*38px;/);
 assert.match(correctiveCss, /input:indeterminate \+ \.rc-toggle-track > span\s*\{[\s\S]*?left:\s*calc\(50% \+ var\(--sp-1\)\);[\s\S]*?background:\s*var\(--surface2\);/);
 
-// B — the existing dismiss handler remains data-free; D3.4B restores the real X node.
-assert.match(panel, /function dismissGestureHint\(\)[\s\S]*setShowGestureHint\(false\)/);
-assert.match(panel, /className="rc-gesture-hint-dismiss"/);
-assert.match(css, /向左滑可核准／重送；向右滑可移除/);
-assert.match(css, /rc-gesture-hint-dismiss[\s\S]*display:\s*inline-grid/);
+// B — D3.7 supersedes the dismissible notification-card hint with persistent JSX copy.
+assert.match(panel, /className="rc-gesture-hint-mark">△<\/span>[\s\S]*className="rc-gesture-hint-text">長按可多選，進行批次核准／送審；右滑開啟核准／重生等快速操作，左滑移出佇列。<\/span>/);
+assert.doesNotMatch(panel, /RC_GESTURE_HINT_KEY|showGestureHint|dismissGestureHint|rc-gesture-hint-dismiss/);
+assert.doesNotMatch(css, /rc-gesture-hint-dismiss|rc-gesture-hint > span::before|向左滑可核准／重送|向右滑可移除/);
+assert.match(css, /@media \(min-width:\s*960px\)[\s\S]*\.rc-gesture-hint\s*\{[\s\S]*display:\s*none;/);
+assert.match(css, /\.rc-selection-guide-row \.rc-gesture-hint\s*\{[\s\S]*align-items:\s*flex-start;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;[\s\S]*color:\s*var\(--accent\);/);
 
 // D3.3 owner contract — sale status stays immediately before a positive variant-count chip.
 const salePos = resultCard.indexOf('className="rc-sale-badge"');
@@ -90,4 +91,4 @@ assert.match(correctiveCss, /rc-price-mini-label,[\s\S]*rc-price-mini-profit\s*\
 assert.match(correctiveCss, /rc-price-mini-value\s*\{[\s\S]*line-height:\s*1\.05;/);
 assert.doesNotMatch(correctiveCss, /align-items:\s*flex-end/);
 
-console.log("D3.4B ResultCard/Variant source contract passed with D3.6 mobile supersession");
+console.log("D3.4B ResultCard/Variant source contract passed with D3.7 mobile gesture supersession");

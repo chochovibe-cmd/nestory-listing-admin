@@ -10,6 +10,7 @@ function expect(source, pattern, message) {
 
 const stabilization = fs.readFileSync("src/app/stabilization.css", "utf8");
 const releaseCss = fs.readFileSync("src/app/resultcard-mobile-release.css", "utf8");
+const d33Css = fs.readFileSync("src/app/d33-mobile-uiux.css", "utf8");
 const globals = fs.readFileSync("src/app/globals.css", "utf8");
 const layout = fs.readFileSync("src/app/layout.tsx", "utf8");
 const uploader = fs.readFileSync("src/components/listing/ImageUploader.tsx", "utf8");
@@ -82,8 +83,12 @@ expect(releaseCss, /\.stage-filter-row\s+\.stage-filter-end\s*\{[^}]*display:\s*
 expect(releaseCss, /\.results-scope-label,[\s\S]*\.results-sort-label\s*\{[^}]*flex:\s*1\s+1\s+0;[^}]*height:\s*38px;/s, "scope and sort must have equal flex weight and 38px height");
 expect(releaseCss, /\.ir-scope-select,[\s\S]*\.sort-sel\s*\{[^}]*height:\s*38px;/s, "scope and sort selects must share 38px height");
 
-// Accent hint + direct single-action batch remove.
-expect(releaseCss, /\.rc-gesture-hint\s*\{[^}]*border-left:\s*4px solid var\(--accent\);[^}]*background:\s*color-mix\([^;]*var\(--accent\)/s, "gesture hint must use theme accent");
+// D3.7 teaching note is plain accent copy, not a notification card.
+expect(resultsPanel, /className="rc-gesture-hint-mark">△<\/span>[\s\S]*右滑開啟核准／重生等快速操作，左滑移出佇列。/, "D3.7 mobile gesture teaching copy must match the real interaction");
+expect(d33Css, /\.rc-selection-guide-row \.rc-gesture-hint\s*\{[\s\S]*align-items:\s*flex-start;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;[\s\S]*color:\s*var\(--accent\);/, "D3.7 teaching note must be transparent accent text");
+if (/rc-gesture-hint-dismiss|向左滑可核准／重送|向右滑可移除|rc-gesture-hint > span::before/.test(resultsPanel + d33Css)) {
+  fail("dismissible/pseudo D3.4B gesture hint contract must not return");
+}
 expect(resultsPanel, /rc-batch-strip--copy/, "copy-review batch strip must have an explicit R3 class");
 expect(resultsPanel, /className="batch-remove-action"[\s\S]*batchArchiveOrUnarchive\("archive"\)/, "copy-review must expose direct soft remove");
 expect(resultsPanel, /onClick=\{\(\) => void batchArchiveOrUnarchive\("archive"\)\}/, "batch soft-remove handler must remain");
@@ -100,4 +105,4 @@ expect(resultCard, /className="rc-swipe-approve"/, "swipe approve action must re
 expect(resultCard, /className="rc-swipe-secondary"/, "swipe secondary action must remain");
 expect(resultCard, /selectMode/, "multi-select behavior must remain");
 
-console.log("PASS: owner-corrected mobile ResultCard hierarchy preserves upload, gestures and existing soft-action logic.");
+console.log("PASS: owner-corrected mobile ResultCard hierarchy preserves upload, gestures and existing soft-action logic with D3.7 hint supersession.");

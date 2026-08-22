@@ -123,9 +123,6 @@ export type VariantPriceRow = Pick<
 /** Stable empty ref so ResultCard hydrate effect does not thrash on every render. */
 const EMPTY_VARIANT_PRICES: VariantPriceRow[] = [];
 
-/** UX-B4-P04: dismissible mobile gesture tip (long-press / swipe). */
-const RC_GESTURE_HINT_KEY = "nestory-rc-gesture-hint-v1";
-
 export function DraftResultsPanel({
   drafts,
   images,
@@ -143,8 +140,6 @@ export function DraftResultsPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   /** UX-B3-P04: only one card may keep swipe-open actions */
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
-  /** UX-B4-P04: list-top hint; CSS hides on desktop */
-  const [showGestureHint, setShowGestureHint] = useState(false);
   const [busy, setBusy] = useState(false);
   /** UX-B2-P14: default「只看我的」；admin 可切「全部成員」 */
   const [scope, setScope] = useState<ResultsScopeMode>("mine");
@@ -189,26 +184,6 @@ export function DraftResultsPanel({
   }
 
   useEffect(() => () => clearArchiveUndoTimer(), []);
-
-  // UX-B4-P04: show gesture tip until dismissed (localStorage)
-  useEffect(() => {
-    try {
-      if (typeof window !== "undefined" && window.localStorage.getItem(RC_GESTURE_HINT_KEY) !== "1") {
-        setShowGestureHint(true);
-      }
-    } catch {
-      setShowGestureHint(true);
-    }
-  }, []);
-
-  function dismissGestureHint() {
-    try {
-      window.localStorage.setItem(RC_GESTURE_HINT_KEY, "1");
-    } catch {
-      /* ignore quota / private mode */
-    }
-    setShowGestureHint(false);
-  }
 
   // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
@@ -1534,12 +1509,10 @@ export function DraftResultsPanel({
               <span className="rc-toggle-track" aria-hidden><span /></span>
               <span>全選</span>
             </label>
-            {showGestureHint ? (
-              <p className="rc-gesture-hint" role="note">
-                <span>長按卡片可多選；左滑顯示「移出佇列」</span>
-                <button aria-label="關閉提示" className="rc-gesture-hint-dismiss" onClick={dismissGestureHint} type="button">×</button>
-              </p>
-            ) : null}
+            <p className="rc-gesture-hint" role="note">
+              <span aria-hidden="true" className="rc-gesture-hint-mark">△</span>
+              <span className="rc-gesture-hint-text">長按可多選，進行批次核准／送審；右滑開啟核准／重生等快速操作，左滑移出佇列。</span>
+            </p>
           </div>
         ) : null}
 

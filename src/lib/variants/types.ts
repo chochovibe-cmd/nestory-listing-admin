@@ -16,17 +16,16 @@ export type VariantFormRow = {
   optionValues: [string, string, string];
   /** Cost in the same currency as the product-level cost field. */
   cost: string;
-  /**
-   * UI only: true = cost came from product-level cost; product cost changes may update this row.
-   * false / undefined = user-edited or loaded from DB; product cost must not overwrite.
-   * Not persisted — form state only.
-   */
-  costIsInherited?: boolean;
+  /** D3.10A: true while this row explicitly follows product-level cost. */
+  costIsInherited: boolean;
   /** NT$ sell price (formula or manual). */
   sellPrice: string;
   /** NT$ compare-at; empty when single mode. */
   compareAt: string;
-  /** ✎ manual lock — formula recalc skips this row. */
+  /** D3.10A: manual locks are persisted independently. */
+  sellPriceLocked: boolean;
+  compareAtLocked: boolean;
+  /** Legacy compatibility mirror: sellPriceLocked || compareAtLocked. */
   priceLocked: boolean;
   /** Blank = unlimited (continue). */
   qty: string;
@@ -46,6 +45,9 @@ export type VariantDbInsert = {
   cny_price: number | null;
   twd_price: number | null;
   compare_at_price: number | null;
+  cost_is_inherited: boolean;
+  sell_price_locked: boolean;
+  compare_at_locked: boolean;
   price_locked: boolean;
   sort_order: number;
   inventory_quantity: number;
@@ -85,9 +87,11 @@ export function emptyVariantRow(
   return {
     optionValues: ["", "", ""],
     cost: has ? String(productCost) : "",
-    costIsInherited: has ? true : undefined,
+    costIsInherited: has,
     sellPrice: "",
     compareAt: "",
+    sellPriceLocked: false,
+    compareAtLocked: false,
     priceLocked: false,
     qty: "",
     sku: "",

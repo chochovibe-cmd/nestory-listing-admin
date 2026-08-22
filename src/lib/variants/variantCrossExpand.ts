@@ -67,7 +67,7 @@ export function optionValuesMergeKey(
 
 /** True when the row has hand-filled data worth protecting. */
 export function isVariantRowHandFilled(row: VariantFormRow): boolean {
-  if (row.priceLocked) return true;
+  if (row.sellPriceLocked || row.compareAtLocked || row.priceLocked) return true;
   if (row.imageId) return true;
   if (row.sku.trim()) return true;
   if (row.qty.trim()) return true;
@@ -84,6 +84,8 @@ function preservedHandFields(row: VariantFormRow): Pick<
   | "costIsInherited"
   | "sellPrice"
   | "compareAt"
+  | "sellPriceLocked"
+  | "compareAtLocked"
   | "priceLocked"
   | "qty"
   | "sku"
@@ -94,6 +96,8 @@ function preservedHandFields(row: VariantFormRow): Pick<
     costIsInherited: row.costIsInherited,
     sellPrice: row.sellPrice,
     compareAt: row.compareAt,
+    sellPriceLocked: row.sellPriceLocked,
+    compareAtLocked: row.compareAtLocked,
     priceLocked: row.priceLocked,
     qty: row.qty,
     sku: row.sku,
@@ -335,7 +339,6 @@ export function removeDimensionMergingRows(
       winners.set(key, row);
       continue;
     }
-    // prev already has smaller sortOrder (we iterate sorted ascending)
     if (isVariantRowHandFilled(row)) {
       wouldDiscardHandFilled.push(row);
     }

@@ -1,7 +1,6 @@
 /*
- * D3.8 mobile Variant horizontal-row restore — 2026-08-22.
- * Final mobile-only layer. Restores the D3.4B row-local horizontal contract
- * without rolling back unrelated D3.5/D3.6/D3.7 presentation work.
+ * D3.8 mobile Variant horizontal-row base — superseded by D3.10A shared track.
+ * Mobile-only geometry remains here, but rows no longer own horizontal scrolling.
  */
 
 @media (max-width: 959px) {
@@ -12,34 +11,21 @@
     min-width: 0;
   }
 
-  /* Each Variant row owns its horizontal scroll. The page itself stays bounded. */
+  /* D3.10A: rows are table members; the shared parent owns horizontal scrolling. */
   .variant-box .vgrid-block--mobile {
     position: relative;
     display: block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
     margin: 0;
     padding: var(--sp-2) 0;
     border: 0;
     border-bottom: 1px solid var(--border);
     border-radius: 0;
     background: transparent;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-inline: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    overflow: visible;
     box-sizing: border-box;
-  }
-  .variant-box .vgrid-block--mobile::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* Preserve the historical picker escape hatch so its popover is operable. */
-  .variant-box .vgrid-block--mobile:has(.v-pop-pick.open) {
-    overflow-x: clip;
-    overflow-y: visible;
   }
 
   .variant-box .v-mobile-row-core {
@@ -110,7 +96,6 @@
     background: var(--surface);
   }
 
-  /* Sequence is information, not an action. */
   .variant-box .v-row-badge {
     display: inline-grid;
     flex: 0 0 28px;
@@ -229,19 +214,6 @@
     grid-column: 2;
     grid-row: 1 / span 2;
   }
-  .variant-box .v-manual-cost-tag {
-    grid-column: 1 / -1;
-    justify-self: start;
-    min-height: 22px;
-    height: 22px;
-    padding: 0 var(--sp-2);
-    border: 1px solid color-mix(in srgb, var(--accent2) 55%, var(--border));
-    border-radius: 999px;
-    color: var(--accent2);
-    font-size: 10px;
-    font-weight: 800;
-    line-height: 1;
-  }
 
   .variant-box .v-mobile-cost {
     display: grid;
@@ -252,23 +224,17 @@
     align-content: center;
     gap: var(--sp-1);
   }
-  .variant-box .v-mobile-cost .muted {
-    font-size: 10px;
-  }
   .variant-box .v-mobile-cost input {
-    inline-size: 88px;
     min-height: 44px;
-    padding-inline: var(--sp-2);
     font-size: 16px;
   }
 
   .variant-box .v-mobile-inventory {
-    display: grid;
+    display: flex;
     flex: 0 0 156px;
     width: 156px;
     min-width: 156px;
-    grid-template-columns: 1fr;
-    align-content: center;
+    align-items: center;
     justify-content: stretch;
     gap: var(--sp-1);
   }
@@ -283,7 +249,6 @@
     white-space: nowrap;
   }
   .variant-box .v-mobile-inventory .v-qty {
-    inline-size: 88px;
     min-height: 44px;
     font-size: 16px;
   }

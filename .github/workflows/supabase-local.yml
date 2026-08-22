@@ -45,8 +45,9 @@ jobs:
       - name: Stage pre-tracking historical SQL outside active migration queue
         shell: bash
         run: |
-          mkdir -p /tmp/nestory-migrations
+          mkdir -p /tmp/nestory-migrations /tmp/nestory-forward-migrations
           cp supabase/history/pre_tracking_migrations/*.sql /tmp/nestory-migrations/
+          cp supabase/migrations/20260822223100_variant_split_override_semantics.sql /tmp/nestory-forward-migrations/
 
           # Migration 032 relies on pg_temp objects declared ON COMMIT DROP.
           # The hosted migration runner executes a migration transactionally;
@@ -61,9 +62,10 @@ jobs:
 
           # Active tracked migrations are state assertions / forward changes from
           # the 2026-08-18 baseline, not a blank-database bootstrap chain.
-          # Remove them only from this ephemeral CI checkout before db start.
+          # D3.10A's single forward migration is staged separately above for an
+          # explicit apply/rollback/re-apply gate before this queue is removed.
           rm supabase/migrations/*.sql
-          echo "Pre-tracking SQL staged for controlled production-like replay."
+          echo "Pre-tracking SQL and D3.10A forward migration staged for controlled local replay."
 
       - name: Start isolated local database
         run: supabase db start

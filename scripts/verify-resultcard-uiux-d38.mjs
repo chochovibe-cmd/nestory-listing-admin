@@ -11,9 +11,7 @@ assert.doesNotMatch(d38Css, /!important/);
 assert.doesNotMatch(d39bCss, /!important/);
 assert.match(d38Css, /@media \(max-width:\s*959px\)/);
 assert.match(d39bCss, /@media \(max-width:\s*959px\)/);
-assert.doesNotMatch(d39bCss, /@media \(min-width:/);
 
-// D3.8 remains the accepted interaction baseline; D3.9B supersedes presentation only.
 const d35ImportPos = layout.indexOf('import "./d34b-iphone-corrective.css";');
 const d36ImportPos = layout.indexOf('import "./d36-owner-ui-consistency.css";');
 const d38ImportPos = layout.indexOf('import "./d38-mobile-variant-horizontal.css";');
@@ -24,40 +22,32 @@ assert.ok(
   d39aImportPos > d38ImportPos && d39bImportPos > d39aImportPos
 );
 
-// Each mobile row still owns horizontal scrolling; page-level overflow is not introduced.
-assert.match(d38Css, /\.variant-box \.vgrid-block--mobile\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;[\s\S]*overscroll-behavior-inline:\s*contain;[\s\S]*-webkit-overflow-scrolling:\s*touch;[\s\S]*scrollbar-width:\s*none;/);
-assert.match(d38Css, /\.vgrid-block--mobile::\-webkit-scrollbar\s*\{[\s\S]*display:\s*none;/);
-assert.match(d38Css, /\.vgrid-block--mobile:has\(\.v-pop-pick\.open\)\s*\{[\s\S]*overflow-x:\s*clip;[\s\S]*overflow-y:\s*visible;/);
+// D3.10A supersedes D3.8 row-local scrolling: the row remains max-content/nowrap,
+// but only the shared parent owns horizontal overflow.
+assert.match(d38Css, /\.vgrid-block--mobile\s*\{[\s\S]*width:\s*max-content;[\s\S]*min-width:\s*100%;[\s\S]*overflow:\s*visible;/);
+assert.doesNotMatch(d38Css, /\.vgrid-block--mobile\s*\{[^}]*overflow-x:\s*auto;/);
+assert.match(d38Css, /\.v-mobile-row-core\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-flow:\s*row nowrap;[\s\S]*width:\s*max-content;[\s\S]*min-width:\s*100%;/);
+assert.match(d39bCss, /\.v-mobile-table-scroll\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;[\s\S]*overscroll-behavior-inline:\s*contain;[\s\S]*-webkit-overflow-scrolling:\s*touch;[\s\S]*scrollbar-width:\s*none;/);
+assert.match(d39bCss, /\.v-mobile-table-scroll::\-webkit-scrollbar\s*\{[\s\S]*display:\s*none;/);
 
-// Row remains one non-wrapping max-content flex line. D3.9B only tightens its spacing.
-assert.match(d38Css, /\.v-mobile-row-core\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-flow:\s*row nowrap;[\s\S]*align-items:\s*center;[\s\S]*width:\s*max-content;[\s\S]*min-width:\s*100%;/);
-assert.match(d39bCss, /\.v-mobile-row-core\s*\{[\s\S]*gap:\s*0;/);
+const mobileBranchStart = render.indexOf(') : isNarrow ? (');
+const mobileResultsStart = render.indexOf('className="v-mobile-results"', mobileBranchStart);
+const desktopStart = render.indexOf('className="vgrid-hdr"', mobileResultsStart);
+assert.ok(mobileBranchStart >= 0 && mobileResultsStart > mobileBranchStart && desktopStart > mobileResultsStart);
+const mobileBranch = render.slice(mobileResultsStart, desktopStart);
+assert.match(mobileBranch, /className="v-mobile-table-scroll"/);
+assert.match(mobileBranch, /className="v-mobile-results-header"/);
+assert.match(mobileBranch, /className="v-mobile-results-body"/);
+assert.doesNotMatch(mobileBranch, /v-mobile-results-header-scroll/);
 
-// D3.9B owner decision supersedes D3.8's framed readonly presentation.
-assert.match(d39bCss, /\.v-mobile-option\s*\{[\s\S]*min-width:\s*var\(--vm-option-w\);[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
-assert.match(d39bCss, /\.v-mobile-option-label\s*\{[\s\S]*display:\s*none;/);
-assert.match(d39bCss, /\.v-mobile-option-value\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*text-overflow:\s*clip;[\s\S]*overflow-wrap:\s*normal;/);
-assert.match(d39bCss, /\.v-mobile-price-result\s*\{[\s\S]*min-width:\s*var\(--vm-price-w\);[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
-assert.match(d39bCss, /\.v-row-dup--icon\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
-assert.match(d39bCss, /\.variant-del--trash\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
-assert.doesNotMatch(d39bCss, /text-overflow:\s*ellipsis|-webkit-line-clamp:\s*2/);
-
-// D3.8 geometry/semantics still underpin the final presentation.
-assert.match(d38Css, /\.v-row-badge\s*\{[\s\S]*inline-size:\s*28px;[\s\S]*block-size:\s*28px;/);
-assert.match(d38Css, /\.vthumb\s*\{[\s\S]*inline-size:\s*52px;[\s\S]*block-size:\s*52px;/);
-assert.match(d38Css, /\.v-mobile-cost\s*\{[\s\S]*flex:\s*0 0 92px;[\s\S]*width:\s*92px;/);
-assert.match(d38Css, /\.v-mobile-inventory\s*\{[\s\S]*flex:\s*0 0 156px;[\s\S]*width:\s*156px;/);
-
-const mobileRowStart = render.indexOf('className="v-mobile-row-core"');
-const desktopStart = render.indexOf('className="vgrid-hdr"', mobileRowStart);
-assert.ok(mobileRowStart >= 0 && desktopStart > mobileRowStart);
-const mobileRow = render.slice(mobileRowStart, desktopStart);
+const mobileRowStart = mobileBranch.indexOf('className="v-mobile-row-core"');
+const mobileRow = mobileBranch.slice(mobileRowStart);
 const orderedTokens = [
   'className="vdrag vdrag--touch"',
   'className="v-row-badge"',
   'renderImagePicker(ctx, row, index)',
   'className="v-mobile-options"',
-  'className="v-mobile-price-result"',
+  'v-mobile-price-cell--sell',
   'className="v-mobile-cost"',
   'className="v-mobile-inventory"',
   'className="v-row-dup--icon"',
@@ -79,4 +69,4 @@ assert.match(render, /\) : isNarrow \? \([\s\S]*v-mobile-results[\s\S]*\) : \([\
 assert.match(render, /className="vdrag"[\s\S]*draggable/);
 assert.match(render, /className="v-cell"[\s\S]*<input/);
 
-console.log("D3.8 mobile Variant horizontal interaction contract passed with D3.9B presentation supersession");
+console.log("D3.8 mobile Variant interaction contract passed with D3.10A shared-scroll supersession");

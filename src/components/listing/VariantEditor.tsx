@@ -488,6 +488,8 @@ export function VariantEditor({
       costIsInherited: source.costIsInherited,
       sellPrice: source.sellPrice,
       compareAt: source.compareAt,
+      sellPriceLocked: source.sellPriceLocked,
+      compareAtLocked: source.compareAtLocked,
       priceLocked: source.priceLocked,
       qty: source.qty,
       sku: source.sku,

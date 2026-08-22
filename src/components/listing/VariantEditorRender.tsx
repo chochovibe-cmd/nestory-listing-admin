@@ -97,6 +97,62 @@ type VariantEditorRenderContext = {
 
 const QUICK_DIMS = ["尺寸", "顏色"] as const;
 
+type NumericStepperProps = {
+  value: string;
+  ariaLabel: string;
+  integer?: boolean;
+  onChange: (value: string) => void;
+};
+
+function sanitizeNonNegativeNumeric(raw: string, integer: boolean): string | null {
+  if (raw === "") return "";
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  if (integer && !Number.isInteger(parsed)) return String(Math.max(0, Math.floor(parsed)));
+  return raw;
+}
+
+function stepNonNegativeNumeric(value: string, delta: number, integer: boolean): string {
+  const parsed = Number(value);
+  const base = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  const next = Math.max(0, base + delta);
+  if (integer) return String(Math.floor(next));
+  return String(Math.round(next * 1000) / 1000);
+}
+
+function NumericStepper({ value, ariaLabel, integer = false, onChange }: NumericStepperProps) {
+  return (
+    <span className="v-number-stepper">
+      <input
+        type="number"
+        min="0"
+        step="1"
+        inputMode={integer ? "numeric" : "decimal"}
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => {
+          const next = sanitizeNonNegativeNumeric(event.target.value, integer);
+          if (next != null) onChange(next);
+        }}
+      />
+      <span className="v-number-step-rail" aria-hidden="false">
+        <button
+          className="v-number-step-button"
+          type="button"
+          aria-label={`${ariaLabel}增加 1`}
+          onClick={() => onChange(stepNonNegativeNumeric(value, 1, integer))}
+        >▲</button>
+        <button
+          className="v-number-step-button"
+          type="button"
+          aria-label={`${ariaLabel}減少 1`}
+          onClick={() => onChange(stepNonNegativeNumeric(value, -1, integer))}
+        >▼</button>
+      </span>
+    </span>
+  );
+}
+
 function renderImagePicker(ctx: VariantEditorRenderContext, row: VariantFormRow, index: number) {
   const { clearPickLpTimer, images, onPickTouchMove, pickIndex, selectPickImage, setPickIndex, startPickLongPress } = ctx;
   return (
@@ -257,7 +313,7 @@ export function renderVariantEditorModal(ctx: VariantEditorRenderContext): React
                 {priceMode === "sale" ? (
                   <label className="variant-editor-modal-field"><span>定價 NT$</span><input type="number" value={modalCompareAt} onChange={(event) => setModalCompareAt(event.target.value)} /></label>
                 ) : null}
-                <div className="variant-editor-modal-note">儲存後此列維持既有 ✎ 手動鎖定語意。</div>
+                <div className="variant-editor-modal-note">儲存後只鎖定實際手動變更的價格欄位。</div>
                 <div className="variant-editor-modal-actions">
                   <Button variant="ghost" type="button" onClick={closeEditorModal}>取消</Button>
                   <Button type="button" onClick={() => {
@@ -277,7 +333,7 @@ export function renderVariantEditorModal(ctx: VariantEditorRenderContext): React
                     {priceMode === "sale" && batchPreview.compareAtPrice != null ? <span>定價 NT${batchPreview.compareAtPrice.toLocaleString()}</span> : null}
                   </div>
                 ) : null}
-                <div className="variant-editor-modal-note">未鎖定列依既有公式重算售價／定價；已手動鎖定 ✎ 的列保留原售價／定價。</div>
+                <div className="variant-editor-modal-note">未鎖定價格欄位依既有公式重算；已手動鎖定的售價／定價各自保留。</div>
                 <div className="variant-editor-modal-actions">
                   <Button variant="ghost" type="button" onClick={closeEditorModal}>取消</Button>
                   <Button type="button" disabled={mobileSelected.size === 0} onClick={applyBatchCost}>確認覆蓋</Button>
@@ -333,6 +389,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
     reorderOverKey, rows, rowsAtMax, setReorderDragKey, setReorderOverKey, showGrid, startRowLongPress,
     updateRow
   } = ctx;
+  const mobileHeaders = dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }];
   return (
     <>
       <div className="vh-results-heading">
@@ -345,96 +402,103 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
       ) : isNarrow ? (
         <div className="v-mobile-results">
           {mobileSelected.size > 0 ? <div className="vh-mobile-selected-count">已選 {mobileSelected.size} 列；點其他列可繼續多選。</div> : null}
-          <div className="v-mobile-results-header-scroll" aria-label="款式結果欄位">
-            <div className="v-mobile-results-header">
+          <div className="v-mobile-table-scroll" aria-label="款式結果表格">
+            <div className="v-mobile-results-header" aria-label="款式結果欄位">
               <span className="v-mobile-header-cell v-mobile-header-cell--drag">排序</span>
               <span className="v-mobile-header-cell v-mobile-header-cell--seq">序列</span>
               <span className="v-mobile-header-cell v-mobile-header-cell--thumb">縮圖</span>
-              {(dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }]).map((dimension, dimIndex) => (
+              {mobileHeaders.map((dimension, dimIndex) => (
                 <span className="v-mobile-header-cell v-mobile-header-cell--option" key={`${dimension.name}-${dimIndex}`}>{dimension.name}</span>
               ))}
-              <span className="v-mobile-header-cell v-mobile-header-cell--price">價格</span>
+              <span className="v-mobile-header-cell v-mobile-header-cell--sell">售價</span>
+              {priceMode === "sale" ? <span className="v-mobile-header-cell v-mobile-header-cell--compare">定價</span> : null}
               <span className="v-mobile-header-cell v-mobile-header-cell--cost">成本</span>
               <span className="v-mobile-header-cell v-mobile-header-cell--inventory">庫存</span>
               <span className="v-mobile-header-cell v-mobile-header-cell--copy">複製</span>
               <span className="v-mobile-header-cell v-mobile-header-cell--delete">刪除</span>
             </div>
-          </div>
-          {rows.map((row, index) => {
-            const selected = mobileSelected.has(index);
-            const hasPositiveProductCost = productCost != null && Number.isFinite(productCost) && productCost > 0;
-            const actualCost = Number(row.cost);
-            const manuallyOverridden = hasPositiveProductCost && Number.isFinite(actualCost) && actualCost > 0 && actualCost !== productCost;
-            return (
-              <div
-                key={index}
-                data-variant-row-index={index}
-                className={`vgrid-block vgrid-block--mobile${selected ? " is-selected" : ""}`}
-                onPointerDown={(event) => startRowLongPress(index, event)}
-                onPointerMove={cancelRowLongPress}
-                onPointerUp={cancelRowLongPress}
-                onPointerCancel={cancelRowLongPress}
-                onClick={(event) => onMobileRowClick(index, event)}
-              >
-                <div className="v-mobile-row-core">
-                  <button
-                    type="button"
-                    className="vdrag vdrag--touch"
-                    aria-label={`拖曳排序第 ${index + 1} 列`}
-                    onPointerDown={(event) => onTouchDragPointerDown(index, event)}
-                    onPointerMove={onTouchDragPointerMove}
-                    onPointerUp={finishTouchDrag}
-                    onPointerCancel={finishTouchDrag}
-                  >⠿</button>
-                  <span className="v-row-badge">{index + 1}</span>
-                  {renderImagePicker(ctx, row, index)}
-                  <div className="v-mobile-options">
-                    {(dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }]).map((dimension, dimIndex) => (
-                      <div className="v-mobile-option" key={`${dimension.name}-${dimIndex}`}>
-                        <span className="v-mobile-option-label">{dimension.name}</span>
-                        <span className="v-mobile-option-line">
-                          <span className="v-mobile-option-value">{row.optionValues[dimIndex] || "—"}</span>
-                          <button type="button" className="v-mobile-edit-icon" aria-label={`編輯${dimension.name}`} onClick={() => openEditorModal({ kind: "edit-option", rowIndex: index, dimIndex })}>✎</button>
-                        </span>
+            <div className="v-mobile-results-body">
+              {rows.map((row, index) => {
+                const selected = mobileSelected.has(index);
+                const costOverridden = row.costIsInherited === false && row.cost.trim().length > 0;
+                return (
+                  <div
+                    key={index}
+                    data-variant-row-index={index}
+                    className={`vgrid-block vgrid-block--mobile${selected ? " is-selected" : ""}`}
+                    onPointerDown={(event) => startRowLongPress(index, event)}
+                    onPointerMove={cancelRowLongPress}
+                    onPointerUp={cancelRowLongPress}
+                    onPointerCancel={cancelRowLongPress}
+                    onClick={(event) => onMobileRowClick(index, event)}
+                  >
+                    <div className="v-mobile-row-core">
+                      <button
+                        type="button"
+                        className="vdrag vdrag--touch"
+                        aria-label={`拖曳排序第 ${index + 1} 列`}
+                        onPointerDown={(event) => onTouchDragPointerDown(index, event)}
+                        onPointerMove={onTouchDragPointerMove}
+                        onPointerUp={finishTouchDrag}
+                        onPointerCancel={finishTouchDrag}
+                      >⠿</button>
+                      <span className="v-row-badge">{index + 1}</span>
+                      {renderImagePicker(ctx, row, index)}
+                      <div className="v-mobile-options">
+                        {mobileHeaders.map((dimension, dimIndex) => (
+                          <div className="v-mobile-option" key={`${dimension.name}-${dimIndex}`}>
+                            <span className="v-mobile-option-line">
+                              <span className="v-mobile-option-value">{row.optionValues[dimIndex] || "—"}</span>
+                              <button type="button" className="v-mobile-edit-icon" aria-label={`編輯${dimension.name}`} onClick={() => openEditorModal({ kind: "edit-option", rowIndex: index, dimIndex })}>✎</button>
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <div className="v-mobile-price-result">
-                    <span className="v-mobile-price-copy">
-                      <span>售價 NT${row.sellPrice || "—"}</span>
+                      <div className="v-mobile-price-cell v-mobile-price-cell--sell">
+                        <span className="v-mobile-price-value">NT${row.sellPrice || "—"}</span>
+                        <button type="button" className="v-mobile-edit-icon" aria-label="編輯售價" onClick={() => openEditorModal({ kind: "edit-price", rowIndex: index })}>✎</button>
+                        {row.sellPriceLocked ? <span className="rc-tag v-manual-override-tag">已手動覆蓋</span> : null}
+                      </div>
                       {priceMode === "sale" ? (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span>定價 NT${row.compareAt || "—"}</span>
-                        </>
+                        <div className="v-mobile-price-cell v-mobile-price-cell--compare">
+                          <span className="v-mobile-price-value">NT${row.compareAt || "—"}</span>
+                          <button type="button" className="v-mobile-edit-icon" aria-label="編輯定價" onClick={() => openEditorModal({ kind: "edit-price", rowIndex: index })}>✎</button>
+                          {row.compareAtLocked ? <span className="rc-tag v-manual-override-tag">已手動覆蓋</span> : null}
+                        </div>
                       ) : null}
-                    </span>
-                    <button type="button" className="v-mobile-edit-icon" aria-label="編輯售價定價" onClick={() => openEditorModal({ kind: "edit-price", rowIndex: index })}>✎</button>
-                    {manuallyOverridden ? <span className="rc-tag v-manual-cost-tag">已手動覆蓋</span> : null}
+                      <div className="v-mobile-cost">
+                        <NumericStepper value={row.cost} ariaLabel={costLabel} onChange={(value) => onCostChange(index, value)} />
+                        {costOverridden ? <span className="rc-tag v-manual-override-tag">已手動覆蓋</span> : null}
+                      </div>
+                      <div className="v-mobile-inventory">
+                        <label className="v-inventory-toggle">
+                          <input
+                            type="checkbox"
+                            checked={!row.qty.trim()}
+                            aria-label="庫存視為無限"
+                            onChange={(event) => updateRow(index, { qty: event.target.checked ? "" : row.qty.trim() || "0" })}
+                          />
+                          <span className="v-inventory-toggle-track" aria-hidden><span /></span>
+                        </label>
+                        {row.qty.trim() ? (
+                          <NumericStepper
+                            value={row.qty}
+                            ariaLabel="庫存數量"
+                            integer
+                            onChange={(value) => updateRow(index, { qty: value })}
+                          />
+                        ) : (
+                          <span className="v-inventory-inline-label">庫存視為無限</span>
+                        )}
+                      </div>
+                      <button type="button" className="v-row-dup--icon" disabled={rowsAtMax} aria-label="複製此列並插入下一列" onClick={() => duplicateRow(index)}><span className="v-copy-icon" aria-hidden /></button>
+                      <button type="button" aria-label="刪除此列" className="variant-del variant-del--trash" onClick={() => removeRow(index)}>🗑</button>
+                    </div>
                   </div>
-                  <label className="v-mobile-cost">
-                    <span className="muted">{costLabel}</span>
-                    <input type="number" aria-label={costLabel} value={row.cost} onChange={(event) => onCostChange(index, event.target.value)} />
-                  </label>
-                  <div className="v-mobile-inventory">
-                    <label className="v-inventory-toggle">
-                      <input
-                        type="checkbox"
-                        checked={!row.qty.trim()}
-                        aria-label="庫存視為無限"
-                        onChange={(event) => updateRow(index, { qty: event.target.checked ? "" : row.qty.trim() || "0" })}
-                      />
-                      <span className="v-inventory-toggle-track" aria-hidden><span /></span>
-                      <span>庫存視為無限</span>
-                    </label>
-                    {row.qty.trim() ? <input className="v-qty" type="number" aria-label="庫存數量" value={row.qty} onChange={(event) => updateRow(index, { qty: event.target.value })} /> : null}
-                  </div>
-                  <button type="button" className="v-row-dup--icon" disabled={rowsAtMax} aria-label="複製此列並插入下一列" onClick={() => duplicateRow(index)}><span className="v-copy-icon" aria-hidden /></button>
-                  <button type="button" aria-label="刪除此列" className="variant-del variant-del--trash" onClick={() => removeRow(index)}>🗑</button>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </div>
         </div>
       ) : (
         <>

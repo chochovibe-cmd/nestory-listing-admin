@@ -6,9 +6,12 @@ const variantMain = fs.readFileSync("src/components/listing/VariantEditor.tsx", 
 const variantRender = fs.readFileSync("src/components/listing/VariantEditorRender.tsx", "utf8");
 const variant = `${variantMain}\n${variantRender}`;
 const css = fs.readFileSync("src/app/d34b-iphone-corrective.css", "utf8");
+const d38Css = fs.readFileSync("src/app/d38-mobile-variant-horizontal.css", "utf8");
+const layout = fs.readFileSync("src/app/layout.tsx", "utf8");
 const login = fs.readFileSync("src/app/login/page.tsx", "utf8");
 
 assert.doesNotMatch(css, /!important/);
+assert.doesNotMatch(d38Css, /!important/);
 
 // D3.6 supersedes D3.5 mobile select-all presentation only. Semantic checkbox,
 // checked/indeterminate/toggleAll stay shared; desktop remains the D3.5 native checkbox.
@@ -68,19 +71,22 @@ assert.match(variantMain, /TOUCH_DRAG_PX = 8/);
 assert.match(variantMain, /recalculateUnlockedVariantPrices\(next,/);
 assert.match(variantMain, /costIsInherited:\s*false/);
 
-// Mobile row polish: bounded grid, compact chrome, max two readonly lines, and
-// readonly option/price surfaces have no input-like frame. Editable cost remains input.
-assert.match(css, /\.v-mobile-row-core\s*\{[\s\S]*display:\s*grid;[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/);
-assert.match(css, /\.vdrag--touch\s*\{[\s\S]*font-size:\s*14px;/);
-assert.match(css, /\.v-row-badge\s*\{[\s\S]*inline-size:\s*22px;/);
-assert.match(css, /\.v-row-dup--icon\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
-assert.match(css, /\.v-mobile-option\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
-assert.match(css, /\.v-mobile-option-value\s*\{[\s\S]*-webkit-line-clamp:\s*2;[\s\S]*overflow-wrap:\s*anywhere;/);
-assert.match(css, /\.v-mobile-price-result\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
-assert.match(css, /\.v-mobile-cost input\s*\{[\s\S]*inline-size:\s*88px;/);
+// D3.8 supersedes only D3.5's compact mobile Variant row presentation. The new
+// final layer must load later and restore row-local horizontal scrolling plus
+// framed readonly option/price fields; editable cost remains an input.
+const d35ImportPos = layout.indexOf('import "./d34b-iphone-corrective.css";');
+const d38ImportPos = layout.indexOf('import "./d38-mobile-variant-horizontal.css";');
+assert.ok(d35ImportPos >= 0 && d38ImportPos > d35ImportPos);
+assert.match(d38Css, /@media \(max-width:\s*959px\)[\s\S]*\.vgrid-block--mobile\s*\{[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;/);
+assert.match(d38Css, /\.v-mobile-row-core\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-flow:\s*row nowrap;[\s\S]*width:\s*max-content;[\s\S]*min-width:\s*100%;/);
+assert.match(d38Css, /\.v-mobile-option\s*\{[\s\S]*min-width:\s*136px;[\s\S]*max-width:\s*168px;[\s\S]*border:\s*1px solid var\(--border\);[\s\S]*background:\s*var\(--surface\);/);
+assert.match(d38Css, /\.v-mobile-option-value\s*\{[\s\S]*overflow:\s*visible;[\s\S]*-webkit-line-clamp:\s*unset;/);
+assert.doesNotMatch(d38Css, /-webkit-line-clamp:\s*2/);
+assert.match(d38Css, /\.v-mobile-price-result\s*\{[\s\S]*width:\s*154px;[\s\S]*min-height:\s*52px;[\s\S]*border:\s*1px solid color-mix/);
+assert.match(d38Css, /\.v-mobile-cost input\s*\{[\s\S]*inline-size:\s*88px;[\s\S]*min-height:\s*44px;/);
 
 // Desktop Variant result path remains a separate native grid/drag path.
 assert.match(variantRender, /\) : isNarrow \? \([\s\S]*v-mobile-results[\s\S]*\) : \([\s\S]*vgrid-hdr/);
 assert.match(variantRender, /className="vdrag"[\s\S]*draggable/);
 
-console.log("D3.5 final pre-Shopify responsive UI source contract passed with D3.6 mobile select-all supersession");
+console.log("D3.5 final UI source contract passed with D3.6 select-all and D3.8 mobile Variant row supersession");

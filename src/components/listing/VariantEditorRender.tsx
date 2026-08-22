@@ -371,7 +371,6 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
                     onPointerUp={finishTouchDrag}
                     onPointerCancel={finishTouchDrag}
                   >⠿</button>
-                  <button type="button" className="v-row-dup--icon" disabled={rowsAtMax} aria-label="複製此列並插入下一列" onClick={() => duplicateRow(index)}><span className="v-copy-icon" aria-hidden /></button>
                   <span className="v-row-badge">{index + 1}</span>
                   {renderImagePicker(ctx, row, index)}
                   <div className="v-mobile-options">
@@ -410,6 +409,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
                     </label>
                     {row.qty.trim() ? <input className="v-qty" type="number" aria-label="庫存數量" value={row.qty} onChange={(event) => updateRow(index, { qty: event.target.value })} /> : null}
                   </div>
+                  <button type="button" className="v-row-dup--icon" disabled={rowsAtMax} aria-label="複製此列並插入下一列" onClick={() => duplicateRow(index)}><span className="v-copy-icon" aria-hidden /></button>
                   <button type="button" aria-label="刪除此列" className="variant-del variant-del--trash" onClick={() => removeRow(index)}>🗑</button>
                 </div>
               </div>

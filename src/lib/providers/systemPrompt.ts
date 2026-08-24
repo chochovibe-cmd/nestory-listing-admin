@@ -1,20 +1,23 @@
 import { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
 import { DEFAULT_IP_TONE_MAP, lookupIpTone } from "./ipToneMap";
 
-// A9 item 2: 中二熱血宣言／小編聊天口吻 are real voices the model writes in;
+const CHAOCHAO_SALES_TONE: CopyTone = "潮巢導購版";
+
+// A9 item 2 + COPY C1: real manual voices are written by the model;
 // 依IP自動匹配 is a meta-tone that never reaches the model as-is (see
-// resolveCopyTone below) -- its description/example exist only for type
-// completeness (Record<CopyTone,...> must be exhaustive).
+// resolveCopyTone below). Record<CopyTone,...> stays exhaustive.
 const TONE_DESCRIPTIONS: Record<CopyTone, string> = {
   黑膠文藝收藏感: "像懂收藏的選物店，沉穩、有故事感",
   日系選物店溫柔感: "溫柔清楚，適合同事快速審稿",
   可愛周邊輕鬆感: "可愛但不浮誇，適合小物與周邊",
   中二熱血宣言: "熱血中二、宣言式語氣，適合戰鬥/熱血番周邊，語句有氣勢但不失品牌質感",
   小編聊天口吻: "像小編在限動聊天，輕鬆口語、有梗，適合日常小物快速導購",
+  潮巢導購版: "痛點導購、資訊完整，像真的懂商品與使用情境的潮巢小編，具體但不叫賣",
   依IP自動匹配: "（系統內部用途，模型不會實際收到這個值——見 resolveCopyTone）",
 };
 
-// A9 item 2a + P1-76: 2–3 demo sentences per tone so registers diverge clearly.
+// A9 item 2a + P1-76: 2–3 demo sentences per legacy tone so registers diverge clearly.
+// COPY C1 deliberately has no competitor/few-shot copy: it borrows layout rhythm only.
 // 小編語氣另附老闆點讚的 Hello Kitty 保溫杯靜態錨點（開發期一次撈庫寫死，非 runtime 查詢）。
 const TONE_EXAMPLES: Partial<Record<CopyTone, string[]>> = {
   黑膠文藝收藏感: [
@@ -56,11 +59,12 @@ const XIAOBIAN_STYLE_ANCHOR = {
   why: "這款保溫杯不僅功能強大，還蘊含獨特的Hello Kitty設計，極具收藏價值與實用性，是品味與愛好的完美結合。",
 };
 
-// 文案呈現包（2026-07-18）＋P1-76 Fable 收斂：
+// 文案呈現包（2026-07-18）＋P1-76＋COPY C1：
 // - 小編聊天口吻：描述／FAQ **必須**自然使用 1–2 個 emoji
 // - 可愛周邊輕鬆感：鼓勵使用（不強制）
+// - 潮巢導購版：描述 0–2、FAQ 0–1（都不強制）
 // - 其他語氣：禁用；標題／SEO 全面禁 emoji
-export const EMOJI_TONES: ReadonlyArray<CopyTone> = ["小編聊天口吻", "可愛周邊輕鬆感"];
+export const EMOJI_TONES: ReadonlyArray<CopyTone> = ["小編聊天口吻", "可愛周邊輕鬆感", CHAOCHAO_SALES_TONE];
 
 function toneEmojiRule(tone: CopyTone): string {
   if (tone === "小編聊天口吻") {
@@ -77,10 +81,17 @@ function toneEmojiRule(tone: CopyTone): string {
       "標題與 SEO 欄位禁用 emoji。"
     );
   }
+  if (tone === CHAOCHAO_SALES_TONE) {
+    return (
+      "潮巢導購版的 generated_description_html 可自然使用 0–2 個 emoji，generated_faq_html 可 0–1 個；" +
+      "都不強制，只有自然時才放，不要一排 emoji，section heading 不放 emoji；" +
+      "enriched_title、seo_title、meta_description、spec 一律禁止 emoji。"
+    );
+  }
   return "所有欄位一律不使用 emoji。";
 }
 
-/** P1-76 fix: field-level emoji rules repeated at description / FAQ sections. */
+/** P1-76 + COPY C1: field-level emoji rules repeated at description / FAQ sections. */
 function descriptionFieldEmojiRule(tone: CopyTone): string {
   if (tone === "小編聊天口吻") {
     return `
@@ -96,6 +107,13 @@ function descriptionFieldEmojiRule(tone: CopyTone): string {
 
 【欄位建議｜generated_description_html｜可愛周邊輕鬆感】
 - 鼓勵在開頭或亮點段自然加最多 1–2 個 emoji（不強制）`;
+  }
+  if (tone === CHAOCHAO_SALES_TONE) {
+    return `
+
+【欄位建議｜generated_description_html｜潮巢導購版】
+- 可自然使用 0–2 個 emoji，不強制；只有真的讓語氣更自然時才放
+- section heading 不放 emoji，不要一排 emoji`;
   }
   return "";
 }
@@ -116,6 +134,12 @@ function faqFieldEmojiRule(tone: CopyTone): string {
 【欄位建議｜generated_faq_html｜可愛周邊輕鬆感】
 - 鼓勵在回答裡自然加 emoji（不強制）`;
   }
+  if (tone === CHAOCHAO_SALES_TONE) {
+    return `
+
+【欄位建議｜generated_faq_html｜潮巢導購版】
+- 可使用 0–1 個 emoji，不強制；問題文字（h3）不要放 emoji`;
+  }
   return "";
 }
 
@@ -127,6 +151,14 @@ function emojiOutputChecklist(tone: CopyTone): string {
 2. generated_faq_html 的回答裡是否至少有 1 個 emoji（或描述已有 2 個且 FAQ 口吻夠輕鬆）？描述+FAQ 合計為 0 → 不合格，必補
 3. enriched_title／seo_title／meta_description 是否完全沒有 emoji？有 → 刪掉
 4. 全文 emoji 是否過多（>3）？過多 → 刪到 1–2 個`;
+  }
+  if (tone === CHAOCHAO_SALES_TONE) {
+    return `
+【輸出前自檢清單（潮巢導購版）】
+1. generated_description_html 是否維持 0–2 個 emoji、generated_faq_html 0–1 個，且都不是硬塞？
+2. ◈ section heading 是否完全沒有 emoji？
+3. enriched_title／seo_title／meta_description 是否完全沒有 emoji？
+4. 商品事實、精確數字與功能 claim 是否都能回到 evidence pool？`;
   }
   return `
 【輸出前自檢清單】
@@ -178,6 +210,83 @@ const LENGTH_INSTRUCTIONS: Record<CopyLength, string> = {
   標準: "描述與 FAQ 維持一般篇幅，每段 2-3 句話。",
   詳細: "描述與 FAQ 可以更完整，每段 3-4 句話，但不要灌水湊字數。",
 };
+
+function descriptionFormatInstruction(tone: CopyTone): string {
+  if (tone === CHAOCHAO_SALES_TONE) {
+    return `【描述格式 — 潮巢導購版專屬 layout，純文字（不要用 HTML 標籤），段落之間空一行】
+這個 layout 只借商品頁的閱讀節奏，不保存、不模仿、不照抄任何競品文字，也不要把競品句子當 few-shot example。
+整體思考順序：商品事實 → 消費者得到什麼 → 為什麼值得放進生活 → 再補完整資訊。
+不要把每件商品寫成同一篇模板；要先找這件商品真正成立的購買動機。
+${descriptionFieldEmojiRule(tone)}
+
+第一段｜痛點破題（無標題）
+- 1–2 句，不要先報商品名稱。
+- 從本商品真的相關的慾望／小不滿足切入，例如穿搭少一個辨識點、桌面功能齊了但少氣氛、每天會用的東西想換成喜歡角色、想把角色放進日常而不只收藏。
+- 上述只是思考方向，不得每篇照抄；禁止捏造與商品無關的問題。
+
+第二段｜商品介紹（無標題）
+- 2–4 句，自然帶入有 evidence 的 IP／角色／商品類型／款式造型／材質／功能／容量／尺寸／配件／使用方式。
+- 至少做到「商品事實 → 對消費者的意義」。這是 feature → benefit 規則：不要只說有什麼，也要回答「所以呢？」。
+- Benefit 必須是該 feature 合理帶來的使用感、擺放情境或選擇價值，不能把普通特徵吹成不存在的功能。
+
+◈ 收藏亮點
+・3–4 點為主，每點用「短重點詞：具體說明」。
+・每點盡量同時包含具體商品事實＋消費者感受到的好處／價值／使用情境；不要只列規格，也不要只堆形容詞。
+・若不是收藏型商品，把「收藏亮點」理解成值得注意的商品亮點，以實用性為主，不要硬講收藏價值。
+
+◈ 為什麼會想帶回家
+用 1–2 個短段落回答：誰會喜歡、什麼情境會用、它解決了哪個小小的不滿足、為什麼比普通同類商品更有吸引力。
+這裡不要再重複規格；不要永遠寫送禮、收藏或「療癒」。
+
+◈ 商品資訊
+・依真正掌握到的資訊列 3–6 點，可包含品牌、IP、角色、商品類型、款式、材質、尺寸、容量、功能、配件、包裝、使用方式。
+・只寫有 evidence 的項目；資訊少就少寫。如果真的沒有具體資訊，允許整段省略。
+・evidence safety：尺寸／容量／重量／數量／規格數字只可使用原始商品資料、Variant／款式文字、規格文字、詳情圖 OCR／明確圖上文字、已有可信 web research summary。
+・禁止靠圖片目測猜精確數字；禁止把不確定資訊寫成肯定句；禁止自行發明材質、功能、防水、食品安全、保溫時數、電池續航等 claim。
+・不要寫售價、定價或其他價格數字。
+
+◈ 購買提醒
+・1–3 點，依商品本身客製，不要每件複製同一段。
+・絨毛：可提醒運送／收納可能有輕微壓痕、拍鬆恢復；壓克力：避免碰撞／刮傷；金屬：避免長期潮濕；杯壺／日用品：只能寫有 evidence 或安全常識支持的提醒。
+
+【潮巢導購版反模板化／品牌語氣】
+- 台灣繁中、台灣語感；幽默可有小吐槽、小共鳴、小編感；可愛要自然，不幼稚、不一直尖叫。
+- 導購靠真正購買理由，不用強迫式 CTA；能寫具體就不要寫空話。
+- 若 evidence pool 足夠，描述正文＋收藏亮點合計至少使用 3 個「只有這件商品才成立」的具體資訊（角色、特定造型、材質、尺寸、功能、配件、燈效、容量、款式、包裝等）。
+- 若 evidence pool 不足 3 點，不強迫湊 3 點，安全優先。
+- 禁止罐頭 AI／叫賣語言：完美選擇、最佳選擇、絕對值得考慮、多重收藏價值、傳遞祝福的最佳選擇、熱賣、爆款、必買、錯過可惜、來襲、登場（正式商品名稱原文除外）。
+- 若是二手商品，仍使用本 layout 的「◈ 收藏亮點」，不要被其他二手提示帶回「◈ 商品亮點」。`;
+  }
+
+  return `【描述格式 — 開頭段＋四個「◈ 標題」段，純文字（不要用 HTML 標籤），段落之間空一行】
+段落標題行固定寫成「◈ 標題」（例：◈ 商品亮點）；開頭段沒有標題、直接寫內文。
+禁止使用「A｜」「B｜」這類字母前綴（舊格式已淘汰）。
+${descriptionFieldEmojiRule(tone)}
+開頭段（無標題）：一句話破題，文青語氣、有畫面感，帶出這個商品的情感價值或使用情境。1-2 句，40 字以內。
+範例語感（不要照抄字句，只是抓語氣）：「把日常的空氣換得更柔軟一點。這款米菲毛絨鑰匙圈掛件，以輕巧的體積留住絨毛玩偶的療癒感……」
+禁止重複開場句式：不要每次都用同一套切入角度（例如每篇都寫「把日常的○○換得更△△」）。
+每次自己換一個不同角度破題，例如：情境帶入／角色性格梗／材質觸感／收藏視角／生活小幽默／畫面感描寫，
+挑一個跟這件商品最搭的角度，不要收斂成固定公式。
+
+◈ 商品亮點
+・列 3 條左右，每條用「重點詞：具體說明」的節奏，講觸感／功能／設計上的具體亮點，不要空泛形容詞堆疊
+
+◈ 適合誰
+・列 2-3 條，具體描繪什麼樣的人、什麼情境會想要這個商品
+
+◈ 商品資訊（只寫你實際掌握到的資訊，來源是輸入資料裡的原標題關鍵字、款式選項、圖片辨識描述、規格文字等）
+・依實際可得資訊列，例如：品名、類型、材質、尺寸——只列有依據的項目
+・數字紅線（重要）：尺寸／重量等精確數字，只能寫「證據池裡賣家自己標出來的」——
+  來源包括：款式／Variant 選項文字、原始標題、詳情圖上印出來被轉錄的規格文字。
+  絕對禁止寫「證據池裡不存在、只靠你看圖目測估計」的數字（「商品外觀描述」的目測屬性不算數字依據）。
+  沒有可靠尺寸來源時，這一項就不要寫，寧可少寫也不要用目測數字充數
+・如果除了商品名稱以外完全沒有其他可寫的具體資訊，就整段刪除、不要輸出「◈ 商品資訊」這個標題，不要為了湊格式硬寫或編造
+・絕對不要在這裡寫入售價、定價或任何價格數字——價格由 Shopify 商品頁自己的價格欄位顯示，文案裡重複價格是多餘的
+
+◈ 購買提醒
+・依商品材質類型客製化提醒內容，不要每次套用同一段固定罐頭文字：絨毛類提醒運送/收納可能有輕微壓痕、拍鬆即可恢復；壓克力/壓克力立牌類提醒避免碰撞刮傷；金屬類（鑰匙圈、徽章等）提醒避免長期潮濕以防氧化；其他類型依常識合理判斷提醒重點
+・可以加一句「因螢幕顯示或拍攝光線，顏色可能略有差異，請以實品為準」`;
+}
 
 // A9 item 4: secondhand facts the model needs to know to write honest 二手
 // copy. Previously CopyProviderInput carried none of this -- the model had
@@ -305,34 +414,7 @@ enriched_title 最長 80 字；不要加入輸入資訊沒有提到的規格數�
 13. product_highlights（3-5 點條列式賣點，優先從提供的商品外觀描述/規格文字裡抓具體細節，不要空泛）
 14. spec（自動整理的商品規格，見下方【spec 商品規格產生規則】；沒有可寫的就留「（無）」）
 
-【描述格式 — 開頭段＋四個「◈ 標題」段，純文字（不要用 HTML 標籤），段落之間空一行】
-段落標題行固定寫成「◈ 標題」（例：◈ 商品亮點）；開頭段沒有標題、直接寫內文。
-禁止使用「A｜」「B｜」這類字母前綴（舊格式已淘汰）。
-${descriptionFieldEmojiRule(tone)}
-開頭段（無標題）：一句話破題，文青語氣、有畫面感，帶出這個商品的情感價值或使用情境。1-2 句，40 字以內。
-範例語感（不要照抄字句，只是抓語氣）：「把日常的空氣換得更柔軟一點。這款米菲毛絨鑰匙圈掛件，以輕巧的體積留住絨毛玩偶的療癒感……」
-禁止重複開場句式：不要每次都用同一套切入角度（例如每篇都寫「把日常的○○換得更△△」）。
-每次自己換一個不同角度破題，例如：情境帶入／角色性格梗／材質觸感／收藏視角／生活小幽默／畫面感描寫，
-挑一個跟這件商品最搭的角度，不要收斂成固定公式。
-
-◈ 商品亮點
-・列 3 條左右，每條用「重點詞：具體說明」的節奏，講觸感／功能／設計上的具體亮點，不要空泛形容詞堆疊
-
-◈ 適合誰
-・列 2-3 條，具體描繪什麼樣的人、什麼情境會想要這個商品
-
-◈ 商品資訊（只寫你實際掌握到的資訊，來源是輸入資料裡的原標題關鍵字、款式選項、圖片辨識描述、規格文字等）
-・依實際可得資訊列，例如：品名、類型、材質、尺寸——只列有依據的項目
-・數字紅線（重要）：尺寸／重量等精確數字，只能寫「證據池裡賣家自己標出來的」——
-  來源包括：款式／Variant 選項文字、原始標題、詳情圖上印出來被轉錄的規格文字。
-  絕對禁止寫「證據池裡不存在、只靠你看圖目測估計」的數字（「商品外觀描述」的目測屬性不算數字依據）。
-  沒有可靠尺寸來源時，這一項就不要寫，寧可少寫也不要用目測數字充數
-・如果除了商品名稱以外完全沒有其他可寫的具體資訊，就整段刪除、不要輸出「◈ 商品資訊」這個標題，不要為了湊格式硬寫或編造
-・絕對不要在這裡寫入售價、定價或任何價格數字——價格由 Shopify 商品頁自己的價格欄位顯示，文案裡重複價格是多餘的
-
-◈ 購買提醒
-・依商品材質類型客製化提醒內容，不要每次套用同一段固定罐頭文字：絨毛類提醒運送/收納可能有輕微壓痕、拍鬆即可恢復；壓克力/壓克力立牌類提醒避免碰撞刮傷；金屬類（鑰匙圈、徽章等）提醒避免長期潮濕以防氧化；其他類型依常識合理判斷提醒重點
-・可以加一句「因螢幕顯示或拍攝光線，顏色可能略有差異，請以實品為準」
+${descriptionFormatInstruction(tone)}
 
 【預購商品（軟性提示，非強制驗證）】
 如果輸入資料的銷售狀態是預購中，建議在開頭段提及到貨需等待，語句可自行調整語氣，不需要逐字照搬固定句子。
@@ -424,9 +506,9 @@ CHO-...-...-...-001
 [[enriched_title]]
 （商品標題，見【標題】骨架）
 [[generated_description_html]]
-（開頭段＋「◈ 標題」四段純文字描述，段落之間空一行${tone === "小編聊天口吻" ? "；正文必須含 1–2 個 emoji" : ""}）
+（${tone === CHAOCHAO_SALES_TONE ? "痛點／慾望破題＋商品介紹＋◈ 收藏亮點＋◈ 為什麼會想帶回家＋◈ 商品資訊＋◈ 購買提醒" : "開頭段＋「◈ 標題」四段純文字描述"}，段落之間空一行${tone === "小編聊天口吻" ? "；正文必須含 1–2 個 emoji" : tone === CHAOCHAO_SALES_TONE ? "；emoji 0–2 個、不強制" : ""}）
 [[generated_faq_html]]
-（FAQ，每題 <h3><strong>問題</strong></h3><p>回答</p>${tone === "小編聊天口吻" ? "；至少一題回答含 emoji" : ""}）
+（FAQ，每題 <h3><strong>問題</strong></h3><p>回答</p>${tone === "小編聊天口吻" ? "；至少一題回答含 emoji" : tone === CHAOCHAO_SALES_TONE ? "；emoji 0–1 個、不強制" : ""}）
 [[seo_title]]
 （SEO 標題，禁止 emoji）
 [[meta_description]]
@@ -574,13 +656,20 @@ export function buildFieldRegenSystemPrompt(
   copyLength: CopyLength,
   secondhandInfo?: SecondhandInfo | null,
 ): string {
+  const fieldRule =
+    field === "generated_description_html"
+      ? descriptionFormatInstruction(tone)
+      : field === "generated_faq_html"
+        ? `${REGEN_FIELD_RULES[field]}${faqFieldEmojiRule(tone)}`
+        : REGEN_FIELD_RULES[field];
+
   return `你是潮巢玩居（CHOCHONEST）商品文案專家，台灣日系動漫 IP 選物店品牌「潮巢 Nestory」。
 語氣：親切有品味、SEO 友善、文青可愛、一點點幽默、不浮誇、不淘寶叫賣感。本次風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${LENGTH_INSTRUCTIONS[copyLength]}
 ${buildSecondhandSection(secondhandInfo)}
 
 【本次任務：只重新生成一個欄位】
 你要重寫的欄位是「${REGEN_FIELD_LABELS[field]}」。其他欄位「已經定稿」，只提供給你當上下文以保持整體一致——請「不要」重寫或輸出其他欄位。
-重寫規則：${REGEN_FIELD_RULES[field]}
+重寫規則：${fieldRule}
 換一個角度、換一種說法，讓這個版本與上一版有真實差異，不要只是換幾個字。
 
 【輸出格式】

@@ -8,6 +8,17 @@
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
 
+## COPY C1 — 潮巢導購版 AI Copy Tone（2026-08-25）
+
+COPY C1 從 production/default merge HEAD `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 開新 branch `agent/copy-chaocao-sales-tone`，只新增第 7 種 **manual** 文案 tone「潮巢導購版」；既有 `DEFAULT_TONE` 與 IP auto-match map 不變。
+
+- UI：在「小編聊天口吻」後、「依IP自動匹配」前新增 `🛍️ 潮巢導購版 / 痛點導購・資訊完整`，沿用原 tone-card responsive/selected behavior。
+- Description：只有潮巢導購版使用「痛點／慾望破題 → 商品介紹 → ◈ 收藏亮點 → ◈ 為什麼會想帶回家 → ◈ 商品資訊 → ◈ 購買提醒」；原 6 tone 保持原格式。
+- Parser：共用 `sectionHeaders.ts` single source of truth；新增 `收藏亮點 → B`、`為什麼會想帶回家 → C` aliases，舊 `商品亮點 → B`、`適合誰 → C` 繼續相容。
+- Safety：feature → benefit 不能越過 evidence hierarchy；數字／材質／功能 claim 無依據就少寫或不寫；single-field description regen 也必須保留選定 tone layout。
+- Docs / verifier：`docs/文案排版規範-2026-07-18.md`、`docs/audits/COPY-C1-CHAONEST-SALES-TONE-2026-08-25.md`、`scripts/verify-copy-c1-chaonest-sales-tone.mjs`。
+- Scope freeze：本包沒有修改 title formula / SEO title formula / Shopify lifecycle / Supabase schema / Variant / ResultCard layout，也沒有 production Shopify write。
+
 ## Latest release-branch package — D3.7 mobile gesture guidance + bidirectional swipe
 
 D3.7 只做 Commander 授權的兩項 mobile gesture corrective；start guard parent 為

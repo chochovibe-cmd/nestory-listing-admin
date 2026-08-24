@@ -34,14 +34,14 @@ assert.match(css, /\.v-mobile-table-scroll\s*\{[\s\S]*overflow-x:\s*auto;[\s\S]*
 assert.doesNotMatch(d38Css, /\.vgrid-block--mobile\s*\{[^}]*overflow-x:\s*auto;/);
 assert.match(d38Css, /\.v-mobile-row-core\s*\{[\s\S]*flex-flow:\s*row nowrap;[\s\S]*width:\s*max-content;[\s\S]*min-width:\s*100%;/);
 
-// D3.10B supersedes only the sell/compare presentation widths; the shared column contract remains.
+// D3.10B supersedes the mobile cost/inventory presentation widths; the shared column contract remains.
 for (const token of [
   '--vm-drag-w: 44px;',
   '--vm-seq-w: 28px;',
   '--vm-thumb-w: 52px;',
   '--vm-option-w: 168px;',
-  '--vm-cost-w: 112px;',
-  '--vm-inventory-w: 152px;',
+  '--vm-cost-w: 116px;',
+  '--vm-inventory-w: 160px;',
   '--vm-action-w: 44px;'
 ]) assert.ok(css.includes(token), `missing D3.10A column token ${token}`);
 for (const token of ['--vm-sell-w:', '--vm-compare-w:']) {

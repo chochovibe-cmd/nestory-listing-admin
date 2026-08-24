@@ -30,14 +30,14 @@ assert.doesNotMatch(mobileBranch, /v-mobile-results-header-scroll/);
 assert.match(css, /\.v-mobile-table-scroll\s*\{[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;/);
 assert.doesNotMatch(d38Css, /\.vgrid-block--mobile\s*\{[^}]*overflow-x:\s*auto;/);
 
-// D3.10B supersedes only sell/compare presentation width and cost header copy.
+// D3.10B supersedes the mobile cost/inventory presentation widths while the shared-table contract remains.
 for (const token of [
   '--vm-drag-w: 44px;',
   '--vm-seq-w: 28px;',
   '--vm-thumb-w: 52px;',
   '--vm-option-w: 168px;',
-  '--vm-cost-w: 112px;',
-  '--vm-inventory-w: 152px;',
+  '--vm-cost-w: 116px;',
+  '--vm-inventory-w: 160px;',
   '--vm-action-w: 44px;'
 ]) assert.ok(css.includes(token), `missing shared token ${token}`);
 for (const token of ['--vm-sell-w:', '--vm-compare-w:']) {

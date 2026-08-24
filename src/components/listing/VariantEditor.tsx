@@ -789,7 +789,7 @@ export function VariantEditor({
         <div className="vh-mobile-primary-actions" role="toolbar" aria-label="規格操作">
           <button type="button" className="vh-add-dim-ghost" disabled={dimensions.length >= MAX_VARIANT_DIMENSIONS} onClick={() => openEditorModal({ kind: "add-dimension" })}>＋新增維度</button>
           <button type="button" className="vh-toolbar-action" onClick={() => openEditorModal({ kind: "character" })}>依角色建立</button>
-          <button type="button" className="vh-mobile-batch-btn" disabled={mobileSelected.size === 0} onClick={() => openEditorModal({ kind: "batch-cost" })}>批次手動覆蓋價格{mobileSelected.size ? `（${mobileSelected.size}）` : ""}</button>
+          <button type="button" className="vh-mobile-batch-btn" disabled={mobileSelected.size === 0} onClick={() => openEditorModal({ kind: "batch-cost" })}>長按多選規格以批次覆蓋價格</button>
         </div>
       ) : null}
 

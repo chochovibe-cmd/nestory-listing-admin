@@ -1,0 +1,135 @@
+/*
+ * D3.10C mobile Variant toolbar + centered dialog presentation.
+ * Mobile-only corrective layer. Desktop >=960px and D3.10B table/pricing geometry stay frozen.
+ */
+
+@media (max-width: 959px) {
+  .variant-box .vh-mobile-primary-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: var(--sp-2);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: var(--sp-2) 0 var(--sp-3);
+    overflow: visible;
+    box-sizing: border-box;
+  }
+
+  .variant-box .vh-mobile-primary-actions > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 var(--sp-3);
+    border-width: 1px;
+    border-style: solid;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .variant-box .vh-mobile-primary-actions .vh-add-dim-ghost {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    color: var(--text);
+  }
+
+  .variant-box .vh-mobile-primary-actions .vh-toolbar-action {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .variant-box .vh-mobile-primary-actions .vh-mobile-batch-btn {
+    grid-column: 1 / -1;
+    border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    color: var(--accent);
+  }
+
+  .variant-box .vh-mobile-primary-actions .vh-mobile-batch-btn:disabled {
+    opacity: .72;
+    border-color: var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+  }
+
+  .variant-editor-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: grid;
+    place-items: center;
+    padding-top: max(var(--sp-4), env(safe-area-inset-top));
+    padding-right: max(var(--sp-4), env(safe-area-inset-right));
+    padding-bottom: max(var(--sp-4), env(safe-area-inset-bottom));
+    padding-left: max(var(--sp-4), env(safe-area-inset-left));
+    overflow: hidden;
+    overscroll-behavior: contain;
+    touch-action: none;
+    box-sizing: border-box;
+  }
+
+  .variant-editor-modal {
+    width: min(calc(100vw - 32px), 420px);
+    max-width: 100%;
+    min-width: 0;
+    max-height: min(76dvh, 640px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    scroll-padding-block: var(--sp-4);
+    padding: var(--sp-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    box-shadow: var(--shadow-m);
+    box-sizing: border-box;
+  }
+
+  .variant-editor-modal > * {
+    min-width: 0;
+  }
+
+  .variant-editor-modal-title {
+    margin: 0 0 var(--sp-4);
+  }
+
+  .variant-editor-modal > .variant-editor-modal-field + .variant-editor-modal-field,
+  .variant-editor-modal > .variant-editor-modal-note,
+  .variant-editor-modal > .variant-batch-preview,
+  .variant-editor-modal > .v-char-list--modal {
+    margin-top: var(--sp-3);
+  }
+
+  .variant-editor-modal > .variant-editor-modal-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-2);
+    margin-top: var(--sp-4);
+  }
+
+  .variant-editor-modal-actions > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 var(--sp-3);
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+  }
+
+  .variant-editor-modal-actions > button:last-child {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+}

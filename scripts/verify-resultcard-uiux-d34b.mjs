@@ -97,10 +97,11 @@ assert.match(css, /variant-del--trash::before\s*\{[\s\S]*content:\s*none;/);
 assert.doesNotMatch(css, /content:\s*"×";/);
 
 // E/H — long-press selection + batch override still use existing pricing logic.
-// D3.5 only relocates the mobile batch entry into the primary action toolbar.
+// D3.5 relocates the mobile batch entry into the primary action toolbar; D3.10C
+// supersedes only that toolbar's owner-facing copy.
 assert.match(variant, /ROW_LONG_PRESS_MS = 500/);
 assert.match(variant, /toggleMobileRowSelection/);
-assert.match(variant, /vh-mobile-primary-actions[\s\S]*批次手動覆蓋價格/);
+assert.match(variant, /vh-mobile-primary-actions[\s\S]*長按多選規格以批次覆蓋價格/);
 assert.match(variant, /calculatePrice\(cost,/);
 assert.match(variant, /costIsInherited:\s*false/);
 assert.match(variant, /recalculateUnlockedVariantPrices\(next,/);

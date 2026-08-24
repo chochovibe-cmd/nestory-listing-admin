@@ -38,7 +38,7 @@ assert.match(css, /@media \(min-width:\s*960px\)[\s\S]*\.login-panel\s*\{[\s\S]*
 assert.match(login, /supabase\.auth\.signInWithPassword/);
 assert.doesNotMatch(login, /mock-safe 骨架模式|潮巢 商品上架助手/);
 
-// Mobile character picker uses the shared portal modal/bottom sheet. Desktop may
+// Mobile character picker uses the shared portal modal / dialog. Desktop may
 // still use charOpen inline; mobile action explicitly opens kind=character.
 assert.match(variantMain, /vh-mobile-primary-actions[\s\S]*openEditorModal\(\{ kind: "character" \}\)/);
 assert.match(variantRender, /\{ kind: "character" \}/);
@@ -51,14 +51,14 @@ assert.match(variantMain, /characterPickerOpen = charOpen \|\| editorModal\?\.ki
 assert.match(variantMain, /\.from\("ip_characters"\)/);
 assert.match(variantMain, /appendCharacterRows\(dimensions, rows, names\)/);
 
-// Mobile top actions are exactly the final owner group. The old mobile-only add
+// Mobile top actions are exactly the D3.10C owner group. The old mobile-only add
 // Variant entry is gone, while the underlying addRow/add-variant capability remains.
 const mobileToolbar = variantMain.match(/<div className="vh-mobile-primary-actions"[\s\S]*?<\/div>/)?.[0] ?? "";
 assert.match(mobileToolbar, /＋新增維度/);
 assert.match(mobileToolbar, /依角色建立/);
-assert.match(mobileToolbar, /批次手動覆蓋價格/);
+assert.match(mobileToolbar, /長按多選規格以批次覆蓋價格/);
 assert.ok(mobileToolbar.indexOf("＋新增維度") < mobileToolbar.indexOf("依角色建立"));
-assert.ok(mobileToolbar.indexOf("依角色建立") < mobileToolbar.indexOf("批次手動覆蓋價格"));
+assert.ok(mobileToolbar.indexOf("依角色建立") < mobileToolbar.indexOf("長按多選規格以批次覆蓋價格"));
 assert.doesNotMatch(variantRender, /vh-mobile-batch-actions/);
 assert.doesNotMatch(variantRender, /vh-mobile-batch-btn[\s\S]{0,180}新增 Variant/);
 assert.match(variantMain, /function addRow\(/);

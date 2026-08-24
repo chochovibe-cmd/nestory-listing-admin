@@ -65,7 +65,13 @@ const checks = [
   },
   {
     name: "Shopify publish API is mock-safe and requires active confirmation",
-    ok: contains("src/lib/shopify/publishDraft.ts", /SHOPIFY_PUBLISH_MOCK/)
+    ok: exists("src/lib/shopify/publishDraft.ts")
+      && contains(
+        "src/lib/shopify/publishDraft.ts",
+        /export\s*\{\s*publishDraft\s*\}\s*from\s*["']@\/lib\/shopify\/publishDraftSafe["']/
+      )
+      && exists("src/lib/shopify/publishDraftSafe.ts")
+      && contains("src/lib/shopify/publishDraftSafe.ts", /SHOPIFY_PUBLISH_MOCK/)
       && contains("src/app/api/drafts/[id]/publish/route.ts", /confirmActive/)
       && contains("src/app/api/drafts/batch/publish/route.ts", /confirmActive/)
   },

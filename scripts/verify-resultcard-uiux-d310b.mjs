@@ -62,27 +62,46 @@ assert.match(variantPricing, /calculatePrice\(costNum, \{[\s\S]*currency: option
 // TWD uses the raw TWD cost as base; only CNY multiplies by the FX rate.
 assert.match(pricingCore, /const base = currency === "TWD" \? costInput : costInput \* settings\.rate;/);
 
-// C. Shared geometry fixes the loose price pair and aligns cost/inventory controls.
+// C. Owner corrective: visual order is cost → sell → compare → inventory in BOTH header and row.
+for (const [selector, order] of [
+  ["v-mobile-header-cell--cost", 4],
+  ["v-mobile-header-cell--sell", 5],
+  ["v-mobile-header-cell--compare", 6],
+  ["v-mobile-header-cell--inventory", 7],
+  ["v-mobile-cost", 4],
+  ["v-mobile-price-cell--sell", 5],
+  ["v-mobile-price-cell--compare", 6],
+  ["v-mobile-inventory", 7]
+]) {
+  assert.match(css, new RegExp(`\\.${selector}\\s*\\{[\\s\\S]*?order:\\s*${order};`), `missing mobile order ${selector}=${order}`);
+}
+
+// C. Shared geometry gives cost/inventory the same numeric box and the same status row.
 for (const token of [
   '--vm-sell-w: 116px;',
   '--vm-compare-w: 140px;',
-  '--vm-cost-w: 112px;',
-  '--vm-inventory-w: 152px;',
+  '--vm-cost-w: 116px;',
+  '--vm-inventory-w: 160px;',
   '--vm-cell-h: 52px;',
   '--vm-control-h: 44px;',
+  '--vm-number-w: 108px;',
+  '--vm-toggle-w: 40px;',
+  '--vm-status-h: 18px;',
+  '--vm-stack-h: 66px;',
   '--vm-cell-pad: var(--sp-1);',
   '--vm-cell-gap: var(--sp-1);'
 ]) assert.ok(css.includes(token), `missing D3.10B geometry token ${token}`);
 
 assert.match(css, /\.v-mobile-price-cell\s*\{[\s\S]*min-height:\s*var\(--vm-cell-h\);[\s\S]*justify-items:\s*center;[\s\S]*row-gap:\s*var\(--vm-cell-gap\);[\s\S]*padding-inline:\s*var\(--vm-cell-pad\);[\s\S]*text-align:\s*center;/);
-assert.match(css, /\.v-mobile-price-cell--compare\s*\{[\s\S]*grid-template-columns:\s*32px minmax\(0, 1fr\) 32px;/);
-assert.match(css, /\.v-mobile-price-cell--sell \.v-mobile-price-value\s*\{[\s\S]*grid-column:\s*1;/);
-assert.match(css, /\.v-mobile-price-cell--compare \.v-mobile-price-value\s*\{[\s\S]*grid-column:\s*2;/);
-assert.match(css, /\.v-mobile-price-cell \.v-mobile-edit-icon\s*\{[\s\S]*grid-column:\s*3;[\s\S]*block-size:\s*var\(--vm-control-h\);/);
-assert.match(css, /\.v-mobile-cost\s*\{[\s\S]*min-height:\s*var\(--vm-cell-h\);[\s\S]*row-gap:\s*var\(--vm-cell-gap\);[\s\S]*padding-inline:\s*var\(--vm-cell-pad\);/);
-assert.match(css, /\.v-mobile-inventory\s*\{[\s\S]*min-height:\s*var\(--vm-cell-h\);[\s\S]*gap:\s*var\(--vm-cell-gap\);[\s\S]*padding-inline:\s*var\(--vm-cell-pad\);/);
+assert.match(css, /\.v-mobile-price-cell--compare\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 32px;/);
+assert.match(css, /\.v-mobile-price-cell--compare \.v-mobile-price-value\s*\{[\s\S]*grid-column:\s*1 \/ -1;/);
+assert.match(css, /\.v-mobile-price-cell \.v-mobile-edit-icon\s*\{[\s\S]*grid-column:\s*2;[\s\S]*block-size:\s*var\(--vm-control-h\);/);
+assert.match(css, /\.v-mobile-cost\s*\{[\s\S]*min-height:\s*var\(--vm-stack-h\);[\s\S]*grid-template-columns:\s*var\(--vm-number-w\);[\s\S]*grid-template-rows:\s*var\(--vm-control-h\) var\(--vm-status-h\);/);
+assert.match(css, /\.v-mobile-cost > \.v-number-stepper\s*\{[\s\S]*width:\s*var\(--vm-number-w\);/);
+assert.match(css, /\.v-mobile-inventory\s*\{[\s\S]*display:\s*grid;[\s\S]*min-height:\s*var\(--vm-stack-h\);[\s\S]*grid-template-columns:\s*var\(--vm-toggle-w\) var\(--vm-number-w\);[\s\S]*grid-template-rows:\s*var\(--vm-control-h\) var\(--vm-status-h\);/);
+assert.match(css, /\.v-mobile-inventory \.v-number-stepper\s*\{[\s\S]*width:\s*var\(--vm-number-w\);[\s\S]*min-width:\s*var\(--vm-number-w\);/);
+assert.match(css, /\.v-inventory-toggle\s*\{[\s\S]*width:\s*var\(--vm-toggle-w\);[\s\S]*min-height:\s*var\(--vm-control-h\);/);
 assert.match(css, /\.v-number-stepper\s*\{[\s\S]*height:\s*var\(--vm-control-h\);/);
-assert.match(css, /\.v-inventory-toggle\s*\{[\s\S]*min-height:\s*var\(--vm-control-h\);/);
 
 // Shared horizontal owner and desktop branch remain frozen.
 assert.equal(count(mobile, 'className="v-mobile-table-scroll"'), 1);
@@ -93,4 +112,4 @@ assert.doesNotMatch(css, /!important/);
 const desktop = render.slice(desktopStart);
 assert.match(desktop, /className="v-inline-edit"[\s\S]*kind: "edit-price"/);
 
-console.log("D3.10B mobile Variant price/cost row polish contract passed");
+console.log("D3.10B mobile Variant owner corrective contract passed");

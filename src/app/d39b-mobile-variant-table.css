@@ -11,11 +11,15 @@
     --vm-option-w: 168px;
     --vm-sell-w: 116px;
     --vm-compare-w: 140px;
-    --vm-cost-w: 112px;
-    --vm-inventory-w: 152px;
+    --vm-cost-w: 116px;
+    --vm-inventory-w: 160px;
     --vm-action-w: 44px;
     --vm-cell-h: 52px;
     --vm-control-h: 44px;
+    --vm-number-w: 108px;
+    --vm-toggle-w: 40px;
+    --vm-status-h: 18px;
+    --vm-stack-h: 66px;
     --vm-cell-pad: var(--sp-1);
     --vm-cell-gap: var(--sp-1);
   }
@@ -82,42 +86,56 @@
     box-sizing: border-box;
   }
   .variant-box .v-mobile-header-cell--drag {
+    order: 0;
     flex-basis: var(--vm-drag-w);
     width: var(--vm-drag-w);
   }
   .variant-box .v-mobile-header-cell--seq {
+    order: 1;
     flex-basis: var(--vm-seq-w);
     width: var(--vm-seq-w);
     justify-content: center;
     padding-inline: 0;
   }
   .variant-box .v-mobile-header-cell--thumb {
+    order: 2;
     flex-basis: var(--vm-thumb-w);
     width: var(--vm-thumb-w);
   }
   .variant-box .v-mobile-header-cell--option {
+    order: 3;
     flex-basis: var(--vm-option-w);
     width: var(--vm-option-w);
   }
+  .variant-box .v-mobile-header-cell--cost {
+    order: 4;
+    flex-basis: var(--vm-cost-w);
+    width: var(--vm-cost-w);
+    justify-content: center;
+  }
   .variant-box .v-mobile-header-cell--sell {
+    order: 5;
     flex-basis: var(--vm-sell-w);
     width: var(--vm-sell-w);
     justify-content: center;
   }
   .variant-box .v-mobile-header-cell--compare {
+    order: 6;
     flex-basis: var(--vm-compare-w);
     width: var(--vm-compare-w);
     justify-content: center;
   }
-  .variant-box .v-mobile-header-cell--cost {
-    flex-basis: var(--vm-cost-w);
-    width: var(--vm-cost-w);
-    justify-content: center;
-  }
   .variant-box .v-mobile-header-cell--inventory {
+    order: 7;
     flex-basis: var(--vm-inventory-w);
     width: var(--vm-inventory-w);
     justify-content: center;
+  }
+  .variant-box .v-mobile-header-cell--copy {
+    order: 8;
+  }
+  .variant-box .v-mobile-header-cell--delete {
+    order: 9;
   }
   .variant-box .v-mobile-header-cell--copy,
   .variant-box .v-mobile-header-cell--delete {
@@ -128,18 +146,21 @@
   }
 
   .variant-box .vdrag--touch {
+    order: 0;
     flex: 0 0 var(--vm-drag-w);
     inline-size: var(--vm-drag-w);
     min-width: var(--vm-drag-w);
     margin: 0;
   }
   .variant-box .v-row-badge {
+    order: 1;
     flex: 0 0 var(--vm-seq-w);
     inline-size: var(--vm-seq-w);
     min-width: var(--vm-seq-w);
     margin: 0;
   }
   .variant-box .vthumb-wrap {
+    order: 2;
     flex: 0 0 var(--vm-thumb-w);
     width: var(--vm-thumb-w);
     min-width: var(--vm-thumb-w);
@@ -147,6 +168,7 @@
   }
 
   .variant-box .v-mobile-options {
+    order: 3;
     display: flex;
     flex-flow: row nowrap;
     align-items: center;
@@ -223,13 +245,15 @@
     text-align: center;
   }
   .variant-box .v-mobile-price-cell--sell {
+    order: 5;
     flex: 0 0 var(--vm-sell-w);
     width: var(--vm-sell-w);
   }
   .variant-box .v-mobile-price-cell--compare {
+    order: 6;
     flex: 0 0 var(--vm-compare-w);
     width: var(--vm-compare-w);
-    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    grid-template-columns: minmax(0, 1fr) 32px;
   }
   .variant-box .v-mobile-price-value {
     grid-row: 1;
@@ -246,10 +270,10 @@
     grid-column: 1;
   }
   .variant-box .v-mobile-price-cell--compare .v-mobile-price-value {
-    grid-column: 2;
+    grid-column: 1 / -1;
   }
   .variant-box .v-mobile-price-cell .v-mobile-edit-icon {
-    grid-column: 3;
+    grid-column: 2;
     grid-row: 1 / span 2;
     inline-size: 32px;
     min-width: 32px;
@@ -282,15 +306,26 @@
   }
 
   .variant-box .v-mobile-cost {
+    order: 4;
     display: grid;
     flex: 0 0 var(--vm-cost-w);
     width: var(--vm-cost-w);
     min-width: var(--vm-cost-w);
-    min-height: var(--vm-cell-h);
+    min-height: var(--vm-stack-h);
+    grid-template-columns: var(--vm-number-w);
+    grid-template-rows: var(--vm-control-h) var(--vm-status-h);
     align-content: center;
+    justify-content: center;
     row-gap: var(--vm-cell-gap);
     padding-inline: var(--vm-cell-pad);
     box-sizing: border-box;
+  }
+  .variant-box .v-mobile-cost > .v-number-stepper {
+    grid-row: 1;
+    width: var(--vm-number-w);
+  }
+  .variant-box .v-mobile-cost > .v-manual-override-tag {
+    grid-row: 2;
   }
 
   .variant-box .v-number-stepper {
@@ -349,26 +384,40 @@
   }
 
   .variant-box .v-mobile-inventory {
-    display: flex;
+    order: 7;
+    display: grid;
     flex: 0 0 var(--vm-inventory-w);
     width: var(--vm-inventory-w);
     min-width: var(--vm-inventory-w);
-    min-height: var(--vm-cell-h);
+    min-height: var(--vm-stack-h);
+    grid-template-columns: var(--vm-toggle-w) var(--vm-number-w);
+    grid-template-rows: var(--vm-control-h) var(--vm-status-h);
+    align-content: center;
     align-items: center;
-    gap: var(--vm-cell-gap);
+    column-gap: var(--vm-cell-gap);
+    row-gap: var(--vm-cell-gap);
     padding-inline: var(--vm-cell-pad);
     box-sizing: border-box;
   }
   .variant-box .v-inventory-toggle {
     display: inline-flex;
-    flex: 0 0 auto;
-    min-width: 0;
+    grid-column: 1;
+    grid-row: 1;
+    width: var(--vm-toggle-w);
+    min-width: var(--vm-toggle-w);
     min-height: var(--vm-control-h);
     align-items: center;
     gap: 0;
   }
+  .variant-box .v-mobile-inventory .v-inventory-toggle-track {
+    width: var(--vm-toggle-w);
+    min-width: var(--vm-toggle-w);
+  }
   .variant-box .v-inventory-inline-label {
+    grid-column: 2;
+    grid-row: 1;
     min-width: 0;
+    align-self: center;
     color: var(--text-muted);
     font-size: 10px;
     font-weight: 800;
@@ -376,12 +425,16 @@
     white-space: normal;
   }
   .variant-box .v-mobile-inventory .v-number-stepper {
-    flex: 1 1 auto;
-    width: auto;
+    grid-column: 2;
+    grid-row: 1;
+    flex: none;
+    width: var(--vm-number-w);
+    min-width: var(--vm-number-w);
     align-self: center;
   }
 
   .variant-box .v-row-dup--icon {
+    order: 8;
     flex: 0 0 var(--vm-action-w);
     inline-size: var(--vm-action-w);
     block-size: 44px;
@@ -399,6 +452,7 @@
     color: var(--accent);
   }
   .variant-box .variant-del--trash {
+    order: 9;
     flex: 0 0 var(--vm-action-w);
     inline-size: var(--vm-action-w);
     block-size: 44px;

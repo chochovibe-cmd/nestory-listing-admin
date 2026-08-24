@@ -1,15 +1,11 @@
 /*
  * D3.10D.1 Character Picker runtime geometry corrective.
  * Character-only mobile layer; all other Variant modal kinds remain frozen at D3.10D.
+ * D3.10D.2 keeps VisualViewport as height measurement only and never positions the backdrop.
  */
 
 @media (max-width: 959px) {
   .variant-editor-modal-backdrop[data-modal-kind="character"] {
-    top: var(--ve-visual-top, 0px);
-    right: 0;
-    bottom: auto;
-    left: 0;
-    height: var(--ve-visual-height, 100dvh);
     place-items: center;
   }
 
@@ -65,5 +61,23 @@
   .variant-editor-modal[data-modal-kind="character"] .variant-editor-character-empty {
     min-height: 48px;
     height: auto;
+  }
+
+  .variant-editor-modal-backdrop[data-modal-kind="character"][data-keyboard-open="true"] {
+    place-items: start center;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .variant-editor-modal-backdrop[data-modal-kind="character"][data-keyboard-open="true"]
+    .variant-editor-modal[data-modal-kind="character"] {
+    height: auto;
+    max-height: calc(var(--ve-visual-height, 100dvh) - 20px);
+    overflow-y: auto;
+  }
+
+  .variant-editor-modal-backdrop[data-modal-kind="character"][data-keyboard-open="true"]
+    .variant-editor-modal[data-modal-kind="character"] .v-char-list--modal {
+    max-height: var(--ve-char-list-max, 112px);
   }
 }

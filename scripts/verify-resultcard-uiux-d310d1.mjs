@@ -42,7 +42,7 @@ assert.match(text, /font-size:\s*12px;/);
 assert.match(text, /line-height:\s*1\.35;/);
 assert.match(text, /overflow-wrap:\s*anywhere;/);
 
-// B. Character alone is narrower and list height is capped to roughly four rows.
+// B. Character alone is narrower and list height is capped to roughly four rows in normal state.
 const characterModal = ruleBody(css, '.variant-editor-modal[data-modal-kind="character"]');
 assert.match(characterModal, /width:\s*min\(calc\(100vw - 40px\), 360px\);/);
 assert.match(characterModal, /height:\s*auto;/);
@@ -61,26 +61,26 @@ assert.match(bridge, /document\.addEventListener\("focusin", onFocusIn, true\)/)
 assert.match(bridge, /performance\.now\(\) > allowSearchFocusUntil[\s\S]*event\.target\.blur\(\)/);
 assert.match(render, /className="v-char-search"[\s\S]*autoFocus/);
 
-// D. Character uses the actual iPhone VisualViewport and cleans listeners/CSS variables on close/unmount.
+// D. D3.10D.2 supersedes Character viewport positioning: VisualViewport is height measurement only.
 assert.match(bridge, /window\.visualViewport/);
 assert.match(bridge, /viewport\.height/);
-assert.match(bridge, /viewport\.offsetTop/);
+assert.doesNotMatch(bridge, /viewport\.offsetTop/);
 assert.match(bridge, /viewport\.addEventListener\("resize", syncVisualViewport\)/);
-assert.match(bridge, /viewport\.addEventListener\("scroll", syncVisualViewport\)/);
 assert.match(bridge, /viewport\.removeEventListener\("resize", syncVisualViewport\)/);
-assert.match(bridge, /viewport\.removeEventListener\("scroll", syncVisualViewport\)/);
+assert.doesNotMatch(bridge, /viewport\.addEventListener\("scroll"|viewport\.removeEventListener\("scroll"/);
 assert.match(bridge, /removeProperty\("--ve-visual-height"\)/);
-assert.match(bridge, /removeProperty\("--ve-visual-top"\)/);
 assert.match(bridge, /removeProperty\("--ve-char-list-max"\)/);
+assert.doesNotMatch(bridge, /--ve-visual-top/);
 assert.match(bridge, /activeBackdrop\.dataset\.modalKind = "character"/);
+assert.match(bridge, /activeBackdrop\.removeAttribute\("data-keyboard-open"\)/);
 const characterBackdropRule = ruleBody(css, '.variant-editor-modal-backdrop[data-modal-kind="character"]');
-assert.match(characterBackdropRule, /top:\s*var\(--ve-visual-top, 0px\);/);
-assert.match(characterBackdropRule, /height:\s*var\(--ve-visual-height, 100dvh\);/);
-assert.match(characterBackdropRule, /bottom:\s*auto;/);
 assert.match(characterBackdropRule, /place-items:\s*center;/);
-assert.match(bridge, /Math\.max\(96, Math\.min\(192, Math\.round\(visualHeight \* 0\.26\)\)\)/);
+assert.doesNotMatch(characterBackdropRule, /\btop\s*:|\bbottom\s*:|\bheight\s*:/);
+assert.doesNotMatch(bridge, /activeBackdrop\.style\.(?:top|bottom|height)\s*=/);
+assert.match(bridge, /keyboardInsetFor/);
+assert.match(bridge, /KEYBOARD_THRESHOLD_PX = 120/);
 
-// E. Corrective isolation: D3.10D.1 selectors/source mention Character only; the other six D3.10D geometries stay untouched.
+// E. Corrective isolation: D3.10D.1/D3.10D.2 selectors/source mention Character only; the other six D3.10D geometries stay untouched.
 for (const kind of ["add-dimension", "add-value", "edit-option", "edit-price", "add-variant", "batch-cost"]) {
   assert.doesNotMatch(css, new RegExp(`data-modal-kind=["']${kind}["']`));
   assert.doesNotMatch(bridge, new RegExp(`data-modal-kind=[\\\\"']${kind}[\\\\"']`));
@@ -114,4 +114,4 @@ const d310d1Import = layout.indexOf('import "./d310d1-mobile-character-picker.cs
 assert.ok(d310dImport >= 0 && d310d1Import > d310dImport);
 assert.match(layout, /VariantCharacterViewportBridge/);
 
-console.log("D3.10D.1 mobile Character Picker geometry + VisualViewport contract passed");
+console.log("D3.10D.1 mobile Character Picker geometry contract passed with D3.10D.2 height-only viewport supersession");

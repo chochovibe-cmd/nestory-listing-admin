@@ -240,10 +240,15 @@ await check("payload merges video media + videoWarnings", () => {
   assert.match(src, /videoWarnings/);
 });
 
-await check("publishDraft merges videoWarnings into draft.warnings", () => {
-  const src = read("src/lib/shopify/publishDraft.ts");
-  assert.match(src, /videoWarnings/);
-  assert.match(src, /draft\.warnings/);
+await check("publishDraft facade delegates; safe implementation merges videoWarnings into draft.warnings", () => {
+  const facade = read("src/lib/shopify/publishDraft.ts");
+  const safe = read("src/lib/shopify/publishDraftSafe.ts");
+  assert.match(
+    facade,
+    /export\s+\{\s*publishDraft\s*\}\s+from\s+["']@\/lib\/shopify\/publishDraftSafe["']/
+  );
+  assert.match(safe, /videoWarnings/);
+  assert.match(safe, /draft\.warnings/);
 });
 
 await check("showmore appends video links; matrixify does not", () => {

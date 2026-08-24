@@ -41,7 +41,9 @@ const scripts = [
   "scripts/verify-cap25.mjs",
   // SYN-1 detail compose + to_trad + P4 regression
   "scripts/verify-syn1.mjs",
-  "scripts/verify-p4-source-and-seller.mjs"
+  "scripts/verify-p4-source-and-seller.mjs",
+  // Shopify Lifecycle Safety A1 — mock/injected only, never real network.
+  "scripts/verify-shopify-lifecycle-safety.mjs"
 ];
 
 for (const script of scripts) {

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { PublishRecordsPanel } from "@/components/records/PublishRecordsPanel";
+import { PublishLifecycleActionsBridge } from "@/components/records/PublishLifecycleActionsBridge";
 import { SetupNotice } from "@/components/listing/SetupNotice";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 
@@ -25,6 +26,7 @@ export default async function RecordsPage() {
     <main className="container">
       <Suspense fallback={<p className="muted">載入發布紀錄…</p>}>
         <PublishRecordsPanel />
+        <PublishLifecycleActionsBridge />
       </Suspense>
     </main>
   );

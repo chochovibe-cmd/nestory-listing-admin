@@ -16,6 +16,7 @@ import "./d38-mobile-variant-horizontal.css";
 import "./d39a-mobile-review-polish.css";
 import "./d39b-mobile-variant-table.css";
 import "./d310c-mobile-variant-dialog.css";
+import "./d310d-mobile-variant-dialog.css";
 
 /* UX-K T50: self-host via next/font (replaces Google Fonts @import in globals.css). */
 const notoSansTC = Noto_Sans_TC({

@@ -228,7 +228,13 @@ export function renderVariantEditorModal(ctx: VariantEditorRenderContext): React
             if (event.target === event.currentTarget) closeEditorModal();
           }}
         >
-          <div className="variant-editor-modal" role="dialog" aria-modal="true">
+          <div
+            className="variant-editor-modal"
+            key={editorModal.kind}
+            data-modal-kind={editorModal.kind}
+            role="dialog"
+            aria-modal="true"
+          >
             {editorModal.kind === "character" ? (
               <>
                 <div className="variant-editor-modal-title">依角色建立</div>
@@ -238,7 +244,9 @@ export function renderVariantEditorModal(ctx: VariantEditorRenderContext): React
                 </label>
                 {charLoading ? <div className="variant-empty">載入角色字典…</div> : (
                   <div className="v-char-list v-char-list--modal">
-                    {filteredChars.map((character) => (
+                    {filteredChars.length === 0 ? (
+                      <div className="variant-editor-character-empty">沒有符合的角色</div>
+                    ) : filteredChars.map((character) => (
                       <label key={character.id}>
                         <input type="checkbox" checked={Boolean(charSelected[character.name])} onChange={(event) => setCharSelected((current) => ({ ...current, [character.name]: event.target.checked }))} />
                         <span>{character.name}{character.ip ? <span className="v-char-ip"> · {character.ip}</span> : null}</span>

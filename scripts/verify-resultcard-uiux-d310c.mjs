@@ -5,6 +5,7 @@ const main = fs.readFileSync("src/components/listing/VariantEditor.tsx", "utf8")
 const render = fs.readFileSync("src/components/listing/VariantEditorRender.tsx", "utf8");
 const tableCss = fs.readFileSync("src/app/d39b-mobile-variant-table.css", "utf8");
 const css = fs.readFileSync("src/app/d310c-mobile-variant-dialog.css", "utf8");
+const d310dCss = fs.readFileSync("src/app/d310d-mobile-variant-dialog.css", "utf8");
 const layout = fs.readFileSync("src/app/layout.tsx", "utf8");
 const d39bVerifier = fs.readFileSync("scripts/verify-resultcard-uiux-d39b.mjs", "utf8");
 const d310aVerifier = fs.readFileSync("scripts/verify-resultcard-uiux-d310a.mjs", "utf8");
@@ -23,13 +24,16 @@ assert.doesNotMatch(d310aVerifier, /--vm-cost-w:\s*112px;/);
 assert.doesNotMatch(d39bVerifier, /--vm-inventory-w:\s*152px;/);
 assert.doesNotMatch(d310aVerifier, /--vm-inventory-w:\s*152px;/);
 
-// D3.10C is a final mobile-only presentation layer loaded after the frozen table layer.
+// D3.10C remains the mobile toolbar + centered-dialog layer. D3.10D loads after
+// it and supersedes only the historical one-size-fits-all dialog proportions.
 const d39bImport = layout.indexOf('import "./d39b-mobile-variant-table.css";');
 const d310cImport = layout.indexOf('import "./d310c-mobile-variant-dialog.css";');
-assert.ok(d39bImport >= 0 && d310cImport > d39bImport);
+const d310dImport = layout.indexOf('import "./d310d-mobile-variant-dialog.css";');
+assert.ok(d39bImport >= 0 && d310cImport > d39bImport && d310dImport > d310cImport);
 assert.match(css, /@media \(max-width:\s*959px\)/);
 assert.doesNotMatch(css, /@media \(min-width:/);
 assert.doesNotMatch(css, /!important/);
+assert.match(d310dCss, /@media \(max-width:\s*959px\)/);
 
 // B. Mobile toolbar: two equal first-row actions plus one full-width batch action.
 const toolbarStart = main.indexOf('className="vh-mobile-primary-actions"');
@@ -62,13 +66,15 @@ for (const kind of [
 assert.equal(count(render, 'className="variant-editor-modal-backdrop"'), 1);
 assert.equal(count(render, 'className="variant-editor-modal"'), 1);
 assert.match(render, /createPortal\([\s\S]*className="variant-editor-modal-backdrop"[\s\S]*className="variant-editor-modal"[\s\S]*document\.body/);
+assert.match(render, /data-modal-kind=\{editorModal\.kind\}/);
 assert.match(css, /\.variant-editor-modal-backdrop\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*display:\s*grid;[\s\S]*place-items:\s*center;[\s\S]*safe-area-inset-top[\s\S]*safe-area-inset-bottom/);
-assert.match(css, /\.variant-editor-modal\s*\{[\s\S]*width:\s*min\(calc\(100vw - 32px\), 420px\);[\s\S]*max-height:\s*min\(76dvh, 640px\);[\s\S]*overflow-y:\s*auto;[\s\S]*border-radius:\s*var\(--radius-m\);/);
+assert.match(css, /\.variant-editor-modal\s*\{[\s\S]*overflow-y:\s*auto;[\s\S]*border-radius:\s*var\(--radius-m\);/);
 assert.match(css, /\.variant-editor-modal-title\s*\{[\s\S]*margin:\s*0 0 var\(--sp-4\);/);
 assert.match(css, /\.variant-editor-modal > \.variant-editor-modal-actions\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);[\s\S]*margin-top:\s*var\(--sp-4\);/);
 assert.match(css, /\.variant-editor-modal-actions > button\s*\{[\s\S]*height:\s*44px;[\s\S]*border-radius:\s*var\(--radius-s\);/);
 assert.match(css, /\.variant-editor-modal-actions > button:last-child\s*\{[\s\S]*background:\s*var\(--accent\);[\s\S]*color:\s*var\(--accent-fg\);/);
 assert.doesNotMatch(css, /place-items:\s*end center|bottom:\s*0|width:\s*100vw|border-radius:\s*var\(--radius-l\) var\(--radius-l\) 0 0/);
+assert.doesNotMatch(d310dCss, /place-items:\s*end center|bottom:\s*0|border-radius:\s*var\(--radius-l\) var\(--radius-l\) 0 0/);
 
 // D. Frozen interaction/shared-scroll/split-override guards remain intact.
 assert.match(main, /const ROW_LONG_PRESS_MS = 500;/);

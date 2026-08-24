@@ -34,7 +34,8 @@ const uiStates = json("fixtures/ui-states.json");
 const seed = read("supabase/seeds/001_mock_draft.sql");
 const productForm = read("src/components/listing/WorkspaceInputPanel.tsx");
 const publishRoute = read("src/app/api/drafts/[id]/publish/route.ts");
-const publishDraftLib = read("src/lib/shopify/publishDraft.ts");
+const publishDraftFacade = read("src/lib/shopify/publishDraft.ts");
+const publishDraftSafe = read("src/lib/shopify/publishDraftSafe.ts");
 const matrixifySource = read("src/lib/csv/matrixify.ts");
 const releaseReadiness = read("docs/RELEASE_READINESS.md");
 
@@ -55,7 +56,13 @@ expect("worker complete image alt id", complete?.output?.image_alt_texts?.[0]?.i
 expect("publish active mode", publish?.publishMode === "active");
 expect("publish active confirmation", publish?.confirmActive === true);
 expect("publish route requires active confirmation", /confirmActive !== true/.test(publishRoute));
-expect("publish route mock safe", /SHOPIFY_PUBLISH_MOCK/.test(publishDraftLib));
+expect(
+  "publish facade delegates to lifecycle-safe implementation",
+  /export\s*\{\s*publishDraft\s*\}\s*from\s*["']@\/lib\/shopify\/publishDraftSafe["']/.test(
+    publishDraftFacade
+  )
+);
+expect("publish route mock safe", /SHOPIFY_PUBLISH_MOCK/.test(publishDraftSafe));
 
 expect("matrixify draft id", matrixify?.draftIds?.[0] === draftId);
 expect("matrixify option title", /"Option1 Name": "Title"/.test(matrixifySource));
@@ -88,7 +95,7 @@ expect(
 );
 expect(
   "release readiness documents active double confirmation",
-  /ACTIVE publish shows a second explicit/.test(releaseReadiness)
+  /ACTIVE publish.*explicit.*confirm/i.test(releaseReadiness)
 );
 expect("ui states fixture parses", Boolean(uiStates));
 

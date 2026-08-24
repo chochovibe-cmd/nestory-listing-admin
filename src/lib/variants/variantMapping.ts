@@ -71,6 +71,8 @@ export function formRowsToDbInserts(
       const qtyNum = qtyTrim === "" ? null : Number(qtyTrim);
       const hasFiniteQty =
         qtyNum != null && Number.isInteger(qtyNum) && qtyNum >= 0 && qtyTrim !== "";
+      const sellPriceLocked = Boolean(row.sellPriceLocked);
+      const compareAtLocked = Boolean(row.compareAtLocked);
 
       return {
         option1_name: names[0],
@@ -84,7 +86,10 @@ export function formRowsToDbInserts(
         twd_price: Number.isFinite(sellNum) && sellNum > 0 ? Math.round(sellNum) : null,
         compare_at_price:
           Number.isFinite(cmpNum) && cmpNum > 0 ? Math.round(cmpNum) : null,
-        price_locked: row.priceLocked,
+        cost_is_inherited: Boolean(row.costIsInherited),
+        sell_price_locked: sellPriceLocked,
+        compare_at_locked: compareAtLocked,
+        price_locked: sellPriceLocked || compareAtLocked,
         sort_order: index,
         inventory_quantity: hasFiniteQty ? (qtyNum as number) : 0,
         inventory_policy: hasFiniteQty ? ("deny" as const) : ("continue" as const),
@@ -119,7 +124,6 @@ export function buildShopifyProductOptions(
       seen.add(val);
       ordered.push(val);
     }
-    // Shopify requires at least one value per option.
     if (ordered.length === 0) ordered.push("Default");
     return {
       name: dim.name,
@@ -179,13 +183,17 @@ export function dbRowsToForm(
     cny_price?: number | null;
     twd_price?: number | null;
     compare_at_price?: number | null;
+    cost_is_inherited?: boolean | null;
+    sell_price_locked?: boolean | null;
+    compare_at_locked?: boolean | null;
     price_locked?: boolean | null;
     sort_order?: number | null;
     inventory_quantity?: number | null;
     inventory_policy?: string | null;
     sku?: string | null;
     image_id?: string | null;
-  }>
+  }>,
+  options?: { productCost?: number | null }
 ): { dimensions: VariantDimension[]; rows: VariantFormRow[] } {
   let dims = clampDimensions(dimensions);
   if (dims.length === 0 && dbRows.length > 0) {
@@ -197,32 +205,47 @@ export function dbRowsToForm(
     dims = clampDimensions(inferred.length ? inferred : [{ name: "款式" }]);
   }
 
+  const productCost = options?.productCost ?? null;
+  const hasProductCost =
+    productCost != null && Number.isFinite(productCost) && productCost > 0;
   const sorted = [...dbRows].sort(
     (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
   );
 
-  const rows: VariantFormRow[] = sorted.map((r, i) => ({
-    optionValues: [
-      r.option1_value ?? "",
-      r.option2_value ?? "",
-      r.option3_value ?? ""
-    ],
-    cost: r.cny_price != null ? String(r.cny_price) : "",
-    sellPrice: r.twd_price != null ? String(r.twd_price) : "",
-    compareAt: r.compare_at_price != null ? String(r.compare_at_price) : "",
-    priceLocked: Boolean(r.price_locked),
-    qty:
-      r.inventory_policy === "deny" && r.inventory_quantity != null
-        ? String(r.inventory_quantity)
-        : "",
-    sku: r.sku ?? "",
-    imageId: r.image_id ?? null,
-    sortOrder: r.sort_order ?? i
-  }));
+  const rows: VariantFormRow[] = sorted.map((r, i) => {
+    const legacyLocked = Boolean(r.price_locked);
+    const sellPriceLocked =
+      typeof r.sell_price_locked === "boolean" ? r.sell_price_locked : legacyLocked;
+    const compareAtLocked =
+      typeof r.compare_at_locked === "boolean" ? r.compare_at_locked : legacyLocked;
+    const rowCost = r.cny_price != null ? Number(r.cny_price) : null;
+    const inferredInherited =
+      hasProductCost && rowCost != null && Number.isFinite(rowCost) && rowCost > 0 && rowCost === productCost;
+    const costIsInherited =
+      typeof r.cost_is_inherited === "boolean" ? r.cost_is_inherited : inferredInherited;
+    return {
+      optionValues: [
+        r.option1_value ?? "",
+        r.option2_value ?? "",
+        r.option3_value ?? ""
+      ],
+      cost: r.cny_price != null ? String(r.cny_price) : "",
+      costIsInherited,
+      sellPrice: r.twd_price != null ? String(r.twd_price) : "",
+      compareAt: r.compare_at_price != null ? String(r.compare_at_price) : "",
+      sellPriceLocked,
+      compareAtLocked,
+      priceLocked: sellPriceLocked || compareAtLocked,
+      qty:
+        r.inventory_policy === "deny" && r.inventory_quantity != null
+          ? String(r.inventory_quantity)
+          : "",
+      sku: r.sku ?? "",
+      imageId: r.image_id ?? null,
+      sortOrder: r.sort_order ?? i
+    };
+  });
 
-  // pkg2b Fable: product_variants rows = combo truth.
-  // When rows exist, rebuild dimensions.values from rows (never invent from values alone).
-  // When no rows, keep stored values as UI assist seed.
   const dimsOut = rows.some(isVariantRowFilled)
     ? rebuildDimensionValuesFromRows(dims, rows)
     : dims.map((d) => {
@@ -270,7 +293,6 @@ export function appendCharacterRows(
   for (const name of characterNames) {
     const trimmed = name.trim();
     if (!trimmed) continue;
-    // Always record on axis values (UI assist) even if row already exists.
     if (!axis0Values.some((v) => v.trim() === trimmed)) {
       axis0Values.push(trimmed);
     }

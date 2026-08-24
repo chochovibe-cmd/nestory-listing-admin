@@ -1,13 +1,24 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_TC, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
-import { Suspense } from "react";
-import { AppSidebar } from "@/components/AppSidebar";
+import { AppShell } from "@/components/AppShell";
 import { HeaderControls } from "@/components/HeaderControls";
-import { MobileTabbar } from "@/components/MobileTabbar";
 import { ToastHost } from "@/components/Toast";
+import { FailBatchRemoveBridge } from "@/components/listing/FailBatchRemoveBridge";
+import { VariantCharacterViewportBridge } from "@/components/listing/VariantCharacterViewportBridge";
 import "./globals.css";
 import "./stabilization.css";
+import "./resultcard-mobile-release.css";
+import "./d32-corrective.css";
+import "./d33-mobile-uiux.css";
+import "./d34b-iphone-corrective.css";
+import "./d36-owner-ui-consistency.css";
+import "./d38-mobile-variant-horizontal.css";
+import "./d39a-mobile-review-polish.css";
+import "./d39b-mobile-variant-table.css";
+import "./d310c-mobile-variant-dialog.css";
+import "./d310d-mobile-variant-dialog.css";
+import "./d310d1-mobile-character-picker.css";
 
 /* UX-K T50: self-host via next/font (replaces Google Fonts @import in globals.css). */
 const notoSansTC = Noto_Sans_TC({
@@ -74,6 +85,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         suppressHydrationWarning
       >
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <VariantCharacterViewportBridge />
         <div className="app-root">
           <header className="topbar">
             <Link className="brand" href="/">
@@ -85,13 +97,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </Link>
             <HeaderControls />
           </header>
-          <div className="shell" id="app-shell">
-            <AppSidebar />
-            <div className="shell-main">{children}</div>
-          </div>
-          <Suspense fallback={null}>
-            <MobileTabbar />
-          </Suspense>
+          <AppShell>{children}</AppShell>
+          <FailBatchRemoveBridge />
           <ToastHost />
         </div>
         <script dangerouslySetInnerHTML={{ __html: navInitScript }} />

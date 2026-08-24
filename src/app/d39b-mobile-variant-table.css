@@ -1,0 +1,468 @@
+/*
+ * D3.10A mobile Variant shared-table foundation + D3.10B pricing-row polish.
+ * One horizontal track owns header + every row. Desktop >=960px is untouched.
+ */
+
+@media (max-width: 959px) {
+  .variant-box .v-mobile-results {
+    --vm-drag-w: 44px;
+    --vm-seq-w: 28px;
+    --vm-thumb-w: 52px;
+    --vm-option-w: 168px;
+    --vm-sell-w: 116px;
+    --vm-compare-w: 140px;
+    --vm-cost-w: 116px;
+    --vm-inventory-w: 160px;
+    --vm-action-w: 44px;
+    --vm-cell-h: 52px;
+    --vm-control-h: 44px;
+    --vm-number-w: 108px;
+    --vm-toggle-w: 40px;
+    --vm-status-h: 18px;
+    --vm-stack-h: 66px;
+    --vm-cell-pad: var(--sp-1);
+    --vm-cell-gap: var(--sp-1);
+  }
+
+  .variant-box .v-mobile-table-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .variant-box .v-mobile-table-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .variant-box .v-mobile-table-scroll:has(.v-pop-pick.open) {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  .variant-box .v-mobile-results-header,
+  .variant-box .v-mobile-results-body,
+  .variant-box .vgrid-block--mobile,
+  .variant-box .v-mobile-row-core {
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+  }
+
+  .variant-box .v-mobile-results-header {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    padding-block: var(--sp-2);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .variant-box .v-mobile-results-body {
+    display: block;
+  }
+  .variant-box .vgrid-block--mobile {
+    overflow: visible;
+  }
+  .variant-box .v-mobile-row-core {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: 0;
+  }
+
+  .variant-box .v-mobile-header-cell {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-width: 0;
+    padding-inline: var(--vm-cell-pad);
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-header-cell--drag {
+    order: 0;
+    flex-basis: var(--vm-drag-w);
+    width: var(--vm-drag-w);
+  }
+  .variant-box .v-mobile-header-cell--seq {
+    order: 1;
+    flex-basis: var(--vm-seq-w);
+    width: var(--vm-seq-w);
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .variant-box .v-mobile-header-cell--thumb {
+    order: 2;
+    flex-basis: var(--vm-thumb-w);
+    width: var(--vm-thumb-w);
+  }
+  .variant-box .v-mobile-header-cell--option {
+    order: 3;
+    flex-basis: var(--vm-option-w);
+    width: var(--vm-option-w);
+  }
+  .variant-box .v-mobile-header-cell--cost {
+    order: 4;
+    flex-basis: var(--vm-cost-w);
+    width: var(--vm-cost-w);
+    justify-content: center;
+  }
+  .variant-box .v-mobile-header-cell--sell {
+    order: 5;
+    flex-basis: var(--vm-sell-w);
+    width: var(--vm-sell-w);
+    justify-content: center;
+  }
+  .variant-box .v-mobile-header-cell--compare {
+    order: 6;
+    flex-basis: var(--vm-compare-w);
+    width: var(--vm-compare-w);
+    justify-content: center;
+  }
+  .variant-box .v-mobile-header-cell--inventory {
+    order: 7;
+    flex-basis: var(--vm-inventory-w);
+    width: var(--vm-inventory-w);
+    justify-content: center;
+  }
+  .variant-box .v-mobile-header-cell--copy {
+    order: 8;
+  }
+  .variant-box .v-mobile-header-cell--delete {
+    order: 9;
+  }
+  .variant-box .v-mobile-header-cell--copy,
+  .variant-box .v-mobile-header-cell--delete {
+    flex-basis: var(--vm-action-w);
+    width: var(--vm-action-w);
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .variant-box .vdrag--touch {
+    order: 0;
+    flex: 0 0 var(--vm-drag-w);
+    inline-size: var(--vm-drag-w);
+    min-width: var(--vm-drag-w);
+    margin: 0;
+  }
+  .variant-box .v-row-badge {
+    order: 1;
+    flex: 0 0 var(--vm-seq-w);
+    inline-size: var(--vm-seq-w);
+    min-width: var(--vm-seq-w);
+    margin: 0;
+  }
+  .variant-box .vthumb-wrap {
+    order: 2;
+    flex: 0 0 var(--vm-thumb-w);
+    width: var(--vm-thumb-w);
+    min-width: var(--vm-thumb-w);
+    margin: 0;
+  }
+
+  .variant-box .v-mobile-options {
+    order: 3;
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: 0;
+    margin: 0;
+    min-width: 0;
+  }
+  .variant-box .v-mobile-option {
+    display: flex;
+    flex: 0 0 var(--vm-option-w);
+    width: var(--vm-option-w);
+    min-width: var(--vm-option-w);
+    max-width: var(--vm-option-w);
+    min-height: var(--vm-cell-h);
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0 var(--vm-cell-pad);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-option-label {
+    display: none;
+  }
+  .variant-box .v-mobile-option-line {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-mobile-option-value {
+    display: block;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    white-space: normal;
+    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+  .variant-box .v-mobile-option .v-mobile-edit-icon {
+    flex: 0 0 32px;
+    inline-size: 32px;
+    min-width: 32px;
+    block-size: var(--vm-control-h);
+    min-height: var(--vm-control-h);
+    margin: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--accent);
+  }
+
+  .variant-box .v-mobile-price-cell {
+    display: grid;
+    min-height: var(--vm-cell-h);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: center;
+    align-items: center;
+    justify-items: center;
+    row-gap: var(--vm-cell-gap);
+    padding-inline: var(--vm-cell-pad);
+    border: 0;
+    background: transparent;
+    box-sizing: border-box;
+    text-align: center;
+  }
+  .variant-box .v-mobile-price-cell--sell {
+    order: 5;
+    flex: 0 0 var(--vm-sell-w);
+    width: var(--vm-sell-w);
+  }
+  .variant-box .v-mobile-price-cell--compare {
+    order: 6;
+    flex: 0 0 var(--vm-compare-w);
+    width: var(--vm-compare-w);
+    grid-template-columns: minmax(0, 1fr) 32px;
+  }
+  .variant-box .v-mobile-price-value {
+    grid-row: 1;
+    min-width: 0;
+    justify-self: center;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .variant-box .v-mobile-price-cell--sell .v-mobile-price-value {
+    grid-column: 1;
+  }
+  .variant-box .v-mobile-price-cell--compare .v-mobile-price-value {
+    grid-column: 1 / -1;
+  }
+  .variant-box .v-mobile-price-cell .v-mobile-edit-icon {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    inline-size: 32px;
+    min-width: 32px;
+    block-size: var(--vm-control-h);
+    min-height: var(--vm-control-h);
+    margin: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+  }
+  .variant-box .v-mobile-price-cell .v-manual-override-tag {
+    grid-row: 2;
+  }
+  .variant-box .v-manual-override-tag {
+    grid-column: 1 / -1;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    height: 18px;
+    padding-inline: var(--sp-1);
+    border: 1px solid color-mix(in srgb, var(--danger) 60%, var(--border));
+    border-radius: var(--radius-s);
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 82%, var(--text));
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .variant-box .v-mobile-cost {
+    order: 4;
+    display: grid;
+    flex: 0 0 var(--vm-cost-w);
+    width: var(--vm-cost-w);
+    min-width: var(--vm-cost-w);
+    min-height: var(--vm-stack-h);
+    grid-template-columns: var(--vm-number-w);
+    grid-template-rows: var(--vm-control-h) var(--vm-status-h);
+    align-content: center;
+    justify-content: center;
+    row-gap: var(--vm-cell-gap);
+    padding-inline: var(--vm-cell-pad);
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-cost > .v-number-stepper {
+    grid-row: 1;
+    width: var(--vm-number-w);
+  }
+  .variant-box .v-mobile-cost > .v-manual-override-tag {
+    grid-row: 2;
+  }
+
+  .variant-box .v-number-stepper {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    height: var(--vm-control-h);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    box-sizing: border-box;
+  }
+  .variant-box .v-number-stepper input {
+    flex: 1 1 auto;
+    width: 0;
+    min-width: 0;
+    height: 100%;
+    padding-inline: var(--sp-1);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 15px;
+    box-shadow: none;
+    box-sizing: border-box;
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  .variant-box .v-number-stepper input::-webkit-inner-spin-button,
+  .variant-box .v-number-stepper input::-webkit-outer-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+  }
+  .variant-box .v-number-step-rail {
+    display: grid;
+    flex: 0 0 28px;
+    width: 28px;
+    grid-template-rows: 1fr 1fr;
+    border-inline-start: 1px solid var(--border);
+  }
+  .variant-box .v-number-step-button {
+    display: grid;
+    min-width: 28px;
+    min-height: 21px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 9px;
+    line-height: 1;
+  }
+  .variant-box .v-number-step-button + .v-number-step-button {
+    border-top: 1px solid var(--border);
+  }
+
+  .variant-box .v-mobile-inventory {
+    order: 7;
+    display: grid;
+    flex: 0 0 var(--vm-inventory-w);
+    width: var(--vm-inventory-w);
+    min-width: var(--vm-inventory-w);
+    min-height: var(--vm-stack-h);
+    grid-template-columns: var(--vm-toggle-w) var(--vm-number-w);
+    grid-template-rows: var(--vm-control-h) var(--vm-status-h);
+    align-content: center;
+    align-items: center;
+    column-gap: var(--vm-cell-gap);
+    row-gap: var(--vm-cell-gap);
+    padding-inline: var(--vm-cell-pad);
+    box-sizing: border-box;
+  }
+  .variant-box .v-inventory-toggle {
+    display: inline-flex;
+    grid-column: 1;
+    grid-row: 1;
+    width: var(--vm-toggle-w);
+    min-width: var(--vm-toggle-w);
+    min-height: var(--vm-control-h);
+    align-items: center;
+    gap: 0;
+  }
+  .variant-box .v-mobile-inventory .v-inventory-toggle-track {
+    width: var(--vm-toggle-w);
+    min-width: var(--vm-toggle-w);
+  }
+  .variant-box .v-inventory-inline-label {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    align-self: center;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: normal;
+  }
+  .variant-box .v-mobile-inventory .v-number-stepper {
+    grid-column: 2;
+    grid-row: 1;
+    flex: none;
+    width: var(--vm-number-w);
+    min-width: var(--vm-number-w);
+    align-self: center;
+  }
+
+  .variant-box .v-row-dup--icon {
+    order: 8;
+    flex: 0 0 var(--vm-action-w);
+    inline-size: var(--vm-action-w);
+    block-size: 44px;
+    min-width: var(--vm-action-w);
+    min-height: 44px;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+  }
+  .variant-box .v-row-dup--icon:active,
+  .variant-box .v-row-dup--icon:focus-visible {
+    color: var(--accent);
+  }
+  .variant-box .variant-del--trash {
+    order: 9;
+    flex: 0 0 var(--vm-action-w);
+    inline-size: var(--vm-action-w);
+    block-size: 44px;
+    min-width: var(--vm-action-w);
+    min-height: 44px;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--danger);
+  }
+}

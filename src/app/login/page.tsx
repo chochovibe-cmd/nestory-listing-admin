@@ -53,19 +53,9 @@ export default function LoginPage() {
     <main className="container">
       <form className="panel login-panel" onSubmit={signIn}>
         <div className="panel-header login-panel-header">
-          <div className="login-brand">
-            <span className="brand-dot" aria-hidden="true" />
-            <h1 className="login-brand-title">潮巢 商品上架助手</h1>
-            <p className="login-brand-sub">團隊登入</p>
-          </div>
+          <h1 className="login-brand-title">團隊登入</h1>
         </div>
         <div className="panel-body">
-          {!supabaseReady ? (
-            <div className="notice">
-              目前是 mock-safe 骨架模式，尚未設定 `NEXT_PUBLIC_SUPABASE_URL` 與
-              `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
-            </div>
-          ) : null}
           <div className="field">
             <label htmlFor="login-email">Email</label>
             <input

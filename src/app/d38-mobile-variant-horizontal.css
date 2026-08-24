@@ -1,0 +1,268 @@
+/*
+ * D3.8 mobile Variant horizontal-row base — superseded by D3.10A shared track.
+ * Mobile-only geometry remains here, but rows no longer own horizontal scrolling.
+ */
+
+@media (max-width: 959px) {
+  .variant-box .v-mobile-results {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* D3.10A: rows are table members; the shared parent owns horizontal scrolling. */
+  .variant-box .vgrid-block--mobile {
+    position: relative;
+    display: block;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: var(--sp-2) 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+    box-sizing: border-box;
+  }
+
+  .variant-box .v-mobile-row-core {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-2);
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+  }
+
+  /* Action geometry: 44px touch targets, with semantic visual hierarchy. */
+  .variant-box .vdrag--touch,
+  .variant-box .v-row-dup--icon,
+  .variant-box .variant-del--trash,
+  .variant-box .v-mobile-edit-icon {
+    flex: 0 0 44px;
+    inline-size: 44px;
+    block-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    align-self: center;
+  }
+
+  .variant-box .vdrag--touch {
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: grab;
+    touch-action: pan-x;
+  }
+  .variant-box .vdrag--touch:active {
+    cursor: grabbing;
+    color: var(--accent);
+  }
+
+  .variant-box .v-row-dup--icon {
+    position: relative;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 0;
+  }
+  .variant-box .v-copy-icon,
+  .variant-box .v-copy-icon::after {
+    position: absolute;
+    inline-size: 14px;
+    block-size: 14px;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+    content: "";
+  }
+  .variant-box .v-copy-icon {
+    left: 13px;
+    top: 12px;
+  }
+  .variant-box .v-copy-icon::after {
+    left: 4px;
+    top: 4px;
+    background: var(--surface);
+  }
+
+  .variant-box .v-row-badge {
+    display: inline-grid;
+    flex: 0 0 28px;
+    inline-size: 28px;
+    block-size: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    place-items: center;
+    border: 0;
+    border-radius: 999px;
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+    align-self: center;
+  }
+
+  .variant-box .vthumb-wrap {
+    flex: 0 0 52px;
+    min-width: 52px;
+    align-self: center;
+  }
+  .variant-box .vthumb {
+    inline-size: 52px;
+    block-size: 52px;
+    min-width: 52px;
+    min-height: 52px;
+  }
+
+  .variant-box .v-mobile-options {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-2);
+    width: auto;
+    min-width: 0;
+  }
+  .variant-box .v-mobile-option {
+    display: flex;
+    flex: 0 0 136px;
+    min-width: 136px;
+    max-width: 168px;
+    min-height: 52px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--sp-1);
+    padding: var(--sp-1) var(--sp-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-option-label {
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  .variant-box .v-mobile-option-line {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-mobile-option-value {
+    display: block;
+    min-width: 0;
+    overflow: visible;
+    -webkit-box-orient: initial;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    white-space: normal;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+  .variant-box .v-mobile-edit-icon {
+    display: inline-grid;
+    place-items: center;
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .variant-box .v-mobile-price-result {
+    display: grid;
+    flex: 0 0 154px;
+    width: 154px;
+    min-width: 154px;
+    min-height: 52px;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: var(--sp-1) var(--sp-2);
+    border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+    border-radius: var(--radius-s);
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    box-sizing: border-box;
+  }
+  .variant-box .v-mobile-price-copy {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.25;
+  }
+  .variant-box .v-mobile-price-result .v-mobile-edit-icon {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .variant-box .v-mobile-cost {
+    display: grid;
+    flex: 0 0 92px;
+    width: 92px;
+    min-width: 92px;
+    grid-template-columns: 1fr;
+    align-content: center;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-mobile-cost input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .variant-box .v-mobile-inventory {
+    display: flex;
+    flex: 0 0 156px;
+    width: 156px;
+    min-width: 156px;
+    align-items: center;
+    justify-content: stretch;
+    gap: var(--sp-1);
+  }
+  .variant-box .v-inventory-toggle {
+    display: flex;
+    min-width: 0;
+    min-height: 44px;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .variant-box .v-mobile-inventory .v-qty {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .variant-box .variant-del--trash {
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--danger) 48%, var(--border));
+    background: transparent;
+    color: var(--danger);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .variant-box .variant-del--trash::before {
+    content: none;
+  }
+}

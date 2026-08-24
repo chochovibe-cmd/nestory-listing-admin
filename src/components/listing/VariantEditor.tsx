@@ -5,26 +5,35 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type TouchEvent as ReactTouchEvent
 } from "react";
-import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
-import type { CostCurrency, PriceMode, PricingSettings } from "@/lib/pricing";
+import {
+  renderVariantEditorModal,
+  renderVariantEditorResults,
+  renderVariantEditorZoomModal,
+  type EditorModal
+} from "./VariantEditorRender";
+import {
+  calculatePrice,
+  type CostCurrency,
+  type PriceMode,
+  type PricingSettings
+} from "@/lib/pricing";
 import {
   MAX_VARIANT_DIMENSIONS,
   MAX_VARIANT_ROWS,
   appendCharacterRows,
   appendDimensionValue,
   applyProductCostToBlankRows,
-  canExpandFromDimensions,
   clampDimensions,
   clampVariantRows,
   countLockedVariants,
   emptyVariantRow,
   expandAndMergeVariantRows,
-  formatVariantPriceLine,
-  isVariantRowFilled,
   lockVariantPrice,
   planVariantAxisChange,
   recalculateUnlockedVariantPrices,
@@ -50,36 +59,24 @@ type Props = {
   currency: CostCurrency;
   priceMode: PriceMode;
   pricingSettings: PricingSettings;
-  /** P1-5: product-level cost; blank variant cost inherits this. */
   productCost?: number | null;
-  /** Product images for picker (main preferred). */
   images: VariantImageOption[];
-  /** Optional: draft id for loading characters — not required. */
   warning: string | null;
   onWarning: (w: string | null) => void;
-  /** B3 spec-shot slot rendered by parent below the grid. */
   footer?: ReactNode;
 };
 
-const QUICK_DIMS = ["尺寸", "顏色"] as const;
-
-/** UX-AB T104: inline double-confirm arm (3s auto-reset; no window.confirm). */
 const ARM_MS = 3000;
-/** UX-B3-P06: mobile pick-grid long-press zoom (slightly under P04 500ms). */
 const PICK_LONG_PRESS_MS = 450;
 const PICK_MOVE_PX = 10;
+const ROW_LONG_PRESS_MS = 500;
+const TOUCH_DRAG_PX = 8;
 
 type ConfirmArm =
   | null
   | { kind: "remove-dim"; dimIndex: number; count: number }
-  | {
-      kind: "expand";
-      count: number;
-      /** P0-1: candidate axis change stays pending until the second confirm click. */
-      nextDimensions?: VariantDimension[];
-    };
+  | { kind: "expand"; count: number; nextDimensions?: VariantDimension[] };
 
-/** Reorder rows by index-key string; updates sortOrder. */
 function reorderVariantRows(
   list: VariantFormRow[],
   fromKey: string,
@@ -102,7 +99,11 @@ function reorderVariantRows(
   const [item] = next.splice(from, 1);
   if (!item) return null;
   next.splice(to, 0, item);
-  return next.map((r, i) => ({ ...r, sortOrder: i }));
+  return next.map((row, index) => ({ ...row, sortOrder: index }));
+}
+
+function isInteractiveTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest("button,input,select,textarea,a,label"));
 }
 
 export function VariantEditor({
@@ -120,34 +121,40 @@ export function VariantEditor({
   footer
 }: Props) {
   const [charOpen, setCharOpen] = useState(false);
-  const [dimOpen, setDimOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [customDim, setCustomDim] = useState("");
+  const [builderOpen, setBuilderOpen] = useState(() => dimensions.length === 0);
   const [pickIndex, setPickIndex] = useState<number | null>(null);
   const [charQuery, setCharQuery] = useState("");
   const [charList, setCharList] = useState<{ id: string; name: string; ip: string }[]>([]);
   const [charSelected, setCharSelected] = useState<Record<string, boolean>>({});
   const [charLoading, setCharLoading] = useState(false);
-  /** Per-dimension draft for adding an axis value (pkg2b). */
-  const [axisValueDraft, setAxisValueDraft] = useState<Record<number, string>>({});
-  /** UX-AB T104: first click arms destructive remove/expand; second executes. */
   const [confirmArm, setConfirmArm] = useState<ConfirmArm>(null);
-  /** UX-B3-P06: desktop row drag / mobile ▲▼; keys = index strings. */
   const [isNarrow, setIsNarrow] = useState(false);
   const [reorderDragKey, setReorderDragKey] = useState<string | null>(null);
   const [reorderOverKey, setReorderOverKey] = useState<string | null>(null);
-  /** Mobile long-press full-screen pick preview (portal). */
-  const [zoomPreview, setZoomPreview] = useState<{
-    url: string;
-    label: string;
-  } | null>(null);
+  const [zoomPreview, setZoomPreview] = useState<{ url: string; label: string } | null>(null);
   const [portalReady, setPortalReady] = useState(false);
+  const [editorModal, setEditorModal] = useState<EditorModal>(null);
+  const [modalValue, setModalValue] = useState("");
+  const [modalCompareAt, setModalCompareAt] = useState("");
+  const [variantDraft, setVariantDraft] = useState<string[]>([]);
+  const [mobileSelected, setMobileSelected] = useState<Set<number>>(() => new Set());
+  const characterPickerOpen = charOpen || editorModal?.kind === "character";
 
   const armTimerRef = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const pickLpTimerRef = useRef<number | null>(null);
   const pickLpTriggeredRef = useRef(false);
   const pickTouchStartRef = useRef({ x: 0, y: 0 });
+  const rowLpTimerRef = useRef<number | null>(null);
+  const rowLpTriggeredRef = useRef(false);
+  const touchDragRef = useRef<{
+    pointerId: number;
+    fromIndex: number;
+    overIndex: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
 
   function clearArmTimer() {
     if (armTimerRef.current != null) {
@@ -177,9 +184,17 @@ export function VariantEditor({
     }
   }
 
+  function clearRowLpTimer() {
+    if (rowLpTimerRef.current != null) {
+      window.clearTimeout(rowLpTimerRef.current);
+      rowLpTimerRef.current = null;
+    }
+  }
+
   useEffect(() => () => {
     clearArmTimer();
     clearPickLpTimer();
+    clearRowLpTimer();
   }, []);
 
   useEffect(() => {
@@ -195,16 +210,24 @@ export function VariantEditor({
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  useEffect(() => {
+    if (mobileSelected.size === 0) return;
+    setMobileSelected((current) => {
+      const next = new Set([...current].filter((index) => index < rows.length));
+      return next.size === current.size ? current : next;
+    });
+  }, [rows.length, mobileSelected.size]);
+
   const lockedCount = countLockedVariants(rows);
   const costLabel = currency === "CNY" ? "成本 ¥" : "成本 NT$";
+  const rowsAtMax = rows.length >= MAX_VARIANT_ROWS;
+  const expandArmed = confirmArm?.kind === "expand";
+  const expandArmCount = expandArmed ? confirmArm.count : 0;
 
-  // Close popovers on outside click
   useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) {
+    function onDoc(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
         setCharOpen(false);
-        setDimOpen(false);
-        setMoreOpen(false);
         setPickIndex(null);
       }
     }
@@ -212,9 +235,8 @@ export function VariantEditor({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  // Load characters when panel opens
   useEffect(() => {
-    if (!charOpen) return;
+    if (!characterPickerOpen) return;
     let cancelled = false;
     setCharLoading(true);
     const supabase = createClient();
@@ -232,25 +254,24 @@ export function VariantEditor({
         return;
       }
       setCharList(
-        data.map((r) => ({
-          id: r.id as string,
-          name: String(r.character_name ?? ""),
-          ip: String(r.ip_name ?? "")
+        data.map((row) => ({
+          id: row.id as string,
+          name: String(row.character_name ?? ""),
+          ip: String(row.ip_name ?? "")
         }))
       );
     })();
     return () => {
       cancelled = true;
     };
-  }, [charOpen]);
+  }, [characterPickerOpen]);
 
   const filteredChars = useMemo(() => {
-    const q = charQuery.trim().toLowerCase();
-    if (!q) return charList.slice(0, 80);
+    const query = charQuery.trim().toLowerCase();
+    if (!query) return charList.slice(0, 80);
     return charList
-      .filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) || c.ip.toLowerCase().includes(q)
+      .filter((item) =>
+        item.name.toLowerCase().includes(query) || item.ip.toLowerCase().includes(query)
       )
       .slice(0, 80);
   }, [charList, charQuery]);
@@ -262,24 +283,12 @@ export function VariantEditor({
   }
 
   function updateRow(index: number, patch: Partial<VariantFormRow>) {
-    const next = rows.map((row, i) => (i === index ? { ...row, ...patch } : row));
-    setRowsSafe(next);
-  }
-
-  function updateOption(index: number, dimIndex: number, value: string) {
-    const row = rows[index];
-    if (!row) return;
-    const optionValues = [...row.optionValues] as [string, string, string];
-    optionValues[dimIndex] = value;
-    updateRow(index, { optionValues });
+    setRowsSafe(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
   }
 
   function onCostChange(index: number, cost: string) {
-    const row = rows[index];
-    if (!row) return;
-    // Manual edit detaches from product-cost inheritance.
-    let next = rows.map((r, i) =>
-      i === index ? { ...r, cost, costIsInherited: false } : r
+    let next = rows.map((row, rowIndex) =>
+      rowIndex === index ? { ...row, cost, costIsInherited: false } : row
     );
     next = recalculateUnlockedVariantPrices(next, {
       currency,
@@ -290,8 +299,7 @@ export function VariantEditor({
     setRowsSafe(next);
   }
 
-  /** Prefill blank / newly created rows from product cost, then price. */
-  function withInheritedProductCost(nextRows: VariantFormRow[]): VariantFormRow[] {
+  function withInheritedProductCost(nextRows: VariantFormRow[]) {
     return syncInheritedVariantCosts(nextRows, productCost, {
       currency,
       priceMode,
@@ -299,66 +307,88 @@ export function VariantEditor({
     });
   }
 
-  function onManualPrice(index: number, field: "sellPrice" | "compareAt", value: string) {
+  function onManualPrice(index: number, sellPrice: string, compareAt: string) {
     const row = rows[index];
     if (!row) return;
-    updateRow(index, lockVariantPrice(row, { [field]: value }));
+    setRowsSafe(
+      rows.map((item, rowIndex) =>
+        rowIndex === index
+          ? lockVariantPrice(row, {
+              sellPrice,
+              ...(priceMode === "sale" ? { compareAt } : {})
+            })
+          : item
+      )
+    );
   }
 
-  function addRow() {
-    if (rows.length >= MAX_VARIANT_ROWS) {
+  function addRow(optionValues?: string[]) {
+    if (rowsAtMax) {
       onWarning(`款式列已達上限 ${MAX_VARIANT_ROWS} 列，無法再新增。`);
-      return;
+      return false;
     }
-    let dims = dimensions;
-    if (dims.length === 0) {
-      dims = [{ name: "款式" }];
-      onDimensionsChange(dims);
+    let nextDimensions = dimensions;
+    if (nextDimensions.length === 0) {
+      nextDimensions = [{ name: "款式", values: [] }];
+      onDimensionsChange(nextDimensions);
     }
-    const next = [...rows, emptyVariantRow(rows.length, productCost)];
-    setRowsSafe(withInheritedProductCost(next));
+    const row = emptyVariantRow(rows.length, productCost);
+    if (optionValues) {
+      row.optionValues = [
+        optionValues[0] ?? "",
+        optionValues[1] ?? "",
+        optionValues[2] ?? ""
+      ];
+    }
+    const duplicate = rows.some((existing) =>
+      existing.optionValues.every((value, index) => value === row.optionValues[index])
+    );
+    if (optionValues && duplicate) {
+      onWarning("此 Variant 規格組合已存在，請改用不同規格值。");
+      return false;
+    }
+    setRowsSafe(withInheritedProductCost([...rows, row]));
+    onWarning(null);
+    return true;
   }
 
   function removeRow(index: number) {
-    setRowsSafe(rows.filter((_, i) => i !== index).map((r, i) => ({ ...r, sortOrder: i })));
+    setRowsSafe(
+      rows
+        .filter((_, rowIndex) => rowIndex !== index)
+        .map((row, rowIndex) => ({ ...row, sortOrder: rowIndex }))
+    );
+    setMobileSelected(new Set());
   }
 
   function applyRowReorder(fromKey: string, toKey: string) {
     const next = reorderVariantRows(rows, fromKey, toKey);
     if (!next) return;
     setRowsSafe(next);
-  }
-
-  function moveRow(index: number, delta: number) {
-    applyRowReorder(String(index), String(index + delta));
+    setMobileSelected(new Set());
   }
 
   function addDimension(name: string) {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
     if (dimensions.length >= MAX_VARIANT_DIMENSIONS) {
       onWarning(`維度最多 ${MAX_VARIANT_DIMENSIONS} 個。`);
-      return;
+      return false;
     }
-    if (dimensions.some((d) => d.name === trimmed)) {
-      setDimOpen(false);
-      return;
+    if (dimensions.some((dimension) => dimension.name === trimmed)) {
+      onWarning("這個規格維度已存在。");
+      return false;
     }
-    // New axis starts empty — no new combos until values are added.
-    onDimensionsChange(
-      clampDimensions([...dimensions, { name: trimmed, values: [] }])
-    );
-    setCustomDim("");
-    setDimOpen(false);
+    onDimensionsChange(clampDimensions([...dimensions, { name: trimmed, values: [] }]));
+    onWarning(null);
+    return true;
   }
 
   function removeDimension(dimIndex: number) {
     const result = removeDimensionMergingRows(dimensions, rows, dimIndex);
     if (result.wouldDiscardHandFilled.length > 0) {
-      // UX-AB T104: inline double-confirm (ResultCard / UX-L T61 pattern)
       const count = result.wouldDiscardHandFilled.length;
-      const armed =
-        confirmArm?.kind === "remove-dim" && confirmArm.dimIndex === dimIndex;
+      const armed = confirmArm?.kind === "remove-dim" && confirmArm.dimIndex === dimIndex;
       if (!armed) {
         armConfirm({ kind: "remove-dim", dimIndex, count });
         return;
@@ -370,15 +400,7 @@ export function VariantEditor({
     onWarning(null);
   }
 
-  /**
-   * P0-1 / UX-B4-P03: plan axis-value changes before mutating either state surface.
-   * dimensions + rows must apply together; destructive changes stay pending until
-   * the existing double-confirm CTA is clicked a second time.
-   */
-  function tryAutoExpandFromDimensions(
-    nextDims: VariantDimension[],
-    currentRows: VariantFormRow[]
-  ): boolean {
+  function tryAutoExpandFromDimensions(nextDims: VariantDimension[], currentRows: VariantFormRow[]) {
     const plan = planVariantAxisChange(nextDims, currentRows);
     if (plan.kind === "confirm") {
       armConfirm({
@@ -386,26 +408,26 @@ export function VariantEditor({
         count: plan.affectedCount,
         nextDimensions: plan.dimensions
       });
-      onWarning(
-        `軸值已變更，重新展開會影響 ${plan.affectedCount} 筆手填 — 請按下方確認`
-      );
+      onWarning(`軸值已變更，更新會影響 ${plan.affectedCount} 筆手填 — 請按下方確認`);
       return false;
     }
-
     clearConfirmArm();
     onDimensionsChange(plan.dimensions);
     setRowsSafe(withInheritedProductCost(plan.rows));
-    if (plan.warning) onWarning(plan.warning);
-    else onWarning(null);
+    onWarning(plan.warning ?? null);
     return true;
   }
 
-  function addAxisValue(dimIndex: number) {
-    const draft = (axisValueDraft[dimIndex] ?? "").trim();
-    if (!draft) return;
+  function addAxisValue(dimIndex: number, value: string) {
+    const draft = value.trim();
+    if (!draft) return false;
+    const dimension = dimensions[dimIndex];
+    if (dimension?.values?.includes(draft)) {
+      onWarning("這個規格值已存在。");
+      return false;
+    }
     const nextDims = appendDimensionValue(dimensions, dimIndex, draft);
-    setAxisValueDraft((cur) => ({ ...cur, [dimIndex]: "" }));
-    tryAutoExpandFromDimensions(nextDims, rows);
+    return tryAutoExpandFromDimensions(nextDims, rows);
   }
 
   function dropAxisValue(dimIndex: number, value: string) {
@@ -413,56 +435,44 @@ export function VariantEditor({
     tryAutoExpandFromDimensions(nextDims, rows);
   }
 
-  /**
-   * UX-B4-P03: manual re-expand (secondary CTA).
-   * P0-1: if an axis change is pending, this second click commits the pending
-   * dimensions and rows atomically instead of expanding the old dimensions.
-   */
-  function expandFromAxisValues() {
-    const pendingDimensions =
-      confirmArm?.kind === "expand" ? confirmArm.nextDimensions : undefined;
-    const targetDimensions = pendingDimensions ?? dimensions;
-
-    if (!pendingDimensions && !canExpandFromDimensions(targetDimensions)) {
-      onWarning("請先在各維度加上軸值。");
-      return;
+  function renameAxisValue(dimIndex: number, oldValue: string, nextValue: string) {
+    const trimmed = nextValue.trim();
+    if (!trimmed || trimmed === oldValue) return trimmed === oldValue;
+    const dimension = dimensions[dimIndex];
+    if (!dimension) return false;
+    if ((dimension.values ?? []).some((value) => value === trimmed && value !== oldValue)) {
+      onWarning("這個規格值已存在，請使用不同名稱。");
+      return false;
     }
-
-    const result = expandAndMergeVariantRows(targetDimensions, rows);
-    if (result.comboCount === 0) {
-      if (pendingDimensions && confirmArm?.kind === "expand") {
-        clearConfirmArm();
-        onDimensionsChange(targetDimensions);
-        setRowsSafe([]);
-        onWarning(null);
-        return;
-      }
-      onWarning("沒有可展開的軸值組合。");
-      return;
-    }
-    if (result.wouldDiscardHandFilled.length > 0) {
-      // UX-AB T104: inline double-confirm (ResultCard / UX-L T61 pattern)
-      const count = result.wouldDiscardHandFilled.length;
-      const armed = confirmArm?.kind === "expand";
-      if (!armed) {
-        armConfirm({ kind: "expand", count });
-        onWarning(
-          `軸值已變更，重新展開會影響 ${count} 筆手填 — 確認`
-        );
-        return;
-      }
-    }
-    clearConfirmArm();
-    if (pendingDimensions) onDimensionsChange(targetDimensions);
-    // New expand base rows start blank; write product cost into value when applicable.
-    setRowsSafe(withInheritedProductCost(result.rows));
-    if (result.warning) onWarning(result.warning);
-    else onWarning(null);
+    const nextDimensions = dimensions.map((item, index) =>
+      index === dimIndex
+        ? { ...item, values: (item.values ?? []).map((value) => value === oldValue ? trimmed : value) }
+        : item
+    );
+    const nextRows = rows.map((row) => {
+      if ((row.optionValues[dimIndex] ?? "") !== oldValue) return row;
+      const optionValues = [...row.optionValues] as [string, string, string];
+      optionValues[dimIndex] = trimmed;
+      return { ...row, optionValues };
+    });
+    onDimensionsChange(nextDimensions);
+    setRowsSafe(nextRows);
+    onWarning(null);
+    return true;
   }
 
-  /** UX-B4-P03 ③: deep-copy form fields; insert at index+1 as a new editable row. */
+  function confirmPendingAxisChange() {
+    if (confirmArm?.kind !== "expand") return;
+    const targetDimensions = confirmArm.nextDimensions ?? dimensions;
+    const result = expandAndMergeVariantRows(targetDimensions, rows);
+    clearConfirmArm();
+    onDimensionsChange(targetDimensions);
+    setRowsSafe(withInheritedProductCost(result.rows));
+    onWarning(result.warning ?? null);
+  }
+
   function duplicateRow(index: number) {
-    if (rows.length >= MAX_VARIANT_ROWS) {
+    if (rowsAtMax) {
       onWarning(`款式列已達上限 ${MAX_VARIANT_ROWS} 列，無法再複製。`);
       return;
     }
@@ -478,6 +488,8 @@ export function VariantEditor({
       costIsInherited: source.costIsInherited,
       sellPrice: source.sellPrice,
       compareAt: source.compareAt,
+      sellPriceLocked: source.sellPriceLocked,
+      compareAtLocked: source.compareAtLocked,
       priceLocked: source.priceLocked,
       qty: source.qty,
       sku: source.sku,
@@ -488,33 +500,12 @@ export function VariantEditor({
       ...rows.slice(0, index + 1),
       copy,
       ...rows.slice(index + 1)
-    ].map((r, i) => ({ ...r, sortOrder: i }));
+    ].map((row, rowIndex) => ({ ...row, sortOrder: rowIndex }));
     setRowsSafe(next);
+    setMobileSelected(new Set());
     onWarning(null);
   }
 
-  const expandArmed = confirmArm?.kind === "expand";
-  const expandArmCount = expandArmed ? confirmArm.count : 0;
-  const canExpand = expandArmed || canExpandFromDimensions(dimensions);
-  const rowsAtMax = rows.length >= MAX_VARIANT_ROWS;
-
-  function applyCharacters() {
-    const names = Object.entries(charSelected)
-      .filter(([, on]) => on)
-      .map(([name]) => name);
-    if (names.length === 0) {
-      setCharOpen(false);
-      return;
-    }
-    const result = appendCharacterRows(dimensions, rows, names);
-    onDimensionsChange(result.dimensions);
-    setRowsSafe(withInheritedProductCost(result.rows));
-    if (result.warning) onWarning(result.warning);
-    setCharSelected({});
-    setCharOpen(false);
-  }
-
-  /** UX-S T72: only fill blank cost cells; never overwrite filled. */
   const canApplyProductCost =
     productCost != null && Number.isFinite(productCost) && productCost > 0 && rows.length > 0;
 
@@ -535,43 +526,173 @@ export function VariantEditor({
     }
     setRowsSafe(result.rows);
     onWarning(null);
-    setMoreOpen(false);
   }
 
-  function closeAllPops() {
+  function applyCharacters() {
+    const names = Object.entries(charSelected)
+      .filter(([, checked]) => checked)
+      .map(([name]) => name);
+    if (names.length === 0) {
+      setCharOpen(false);
+      if (editorModal?.kind === "character") closeEditorModal();
+      return;
+    }
+    const result = appendCharacterRows(dimensions, rows, names);
+    onDimensionsChange(result.dimensions);
+    setRowsSafe(withInheritedProductCost(result.rows));
+    onWarning(result.warning ?? null);
+    setCharSelected({});
     setCharOpen(false);
-    setDimOpen(false);
-    setMoreOpen(false);
+    if (editorModal?.kind === "character") closeEditorModal();
+  }
+
+  function openEditorModal(next: Exclude<EditorModal, null>) {
+    setModalValue("");
+    setModalCompareAt("");
+    if (next.kind === "edit-option") {
+      setModalValue(rows[next.rowIndex]?.optionValues[next.dimIndex] ?? "");
+    } else if (next.kind === "edit-price") {
+      setModalValue(rows[next.rowIndex]?.sellPrice ?? "");
+      setModalCompareAt(rows[next.rowIndex]?.compareAt ?? "");
+    } else if (next.kind === "add-variant") {
+      setVariantDraft(
+        (dimensions.length > 0 ? dimensions : [{ name: "款式", values: [] }]).map(
+          (dimension) => dimension.values?.[0] ?? ""
+        )
+      );
+    }
+    setEditorModal(next);
+    setCharOpen(false);
     setPickIndex(null);
   }
 
-  function startPickLongPress(im: VariantImageOption, touch: { clientX: number; clientY: number }) {
+  function closeEditorModal() {
+    setEditorModal(null);
+    setModalValue("");
+    setModalCompareAt("");
+  }
+
+  function toggleMobileRowSelection(index: number) {
+    setMobileSelected((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  function startRowLongPress(index: number, event: ReactPointerEvent<HTMLDivElement>) {
+    if (isInteractiveTarget(event.target)) return;
+    rowLpTriggeredRef.current = false;
+    clearRowLpTimer();
+    rowLpTimerRef.current = window.setTimeout(() => {
+      rowLpTriggeredRef.current = true;
+      rowLpTimerRef.current = null;
+      toggleMobileRowSelection(index);
+    }, ROW_LONG_PRESS_MS);
+  }
+
+  function cancelRowLongPress() {
+    clearRowLpTimer();
+  }
+
+  function onMobileRowClick(index: number, event: ReactMouseEvent<HTMLDivElement>) {
+    if (rowLpTriggeredRef.current) {
+      rowLpTriggeredRef.current = false;
+      event.preventDefault();
+      return;
+    }
+    if (mobileSelected.size > 0 && !isInteractiveTarget(event.target)) {
+      toggleMobileRowSelection(index);
+    }
+  }
+
+  function onTouchDragPointerDown(index: number, event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "mouse") return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    touchDragRef.current = {
+      pointerId: event.pointerId,
+      fromIndex: index,
+      overIndex: index,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: false
+    };
+  }
+
+  function onTouchDragPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = touchDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.active) {
+      if (Math.hypot(dx, dy) < TOUCH_DRAG_PX) return;
+      drag.active = true;
+    }
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const rowElement = hit?.closest<HTMLElement>("[data-variant-row-index]");
+    if (!rowElement) return;
+    const overIndex = Number(rowElement.dataset.variantRowIndex);
+    if (Number.isInteger(overIndex)) drag.overIndex = overIndex;
+  }
+
+  function finishTouchDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = touchDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    touchDragRef.current = null;
+    if (drag.active && drag.fromIndex !== drag.overIndex) {
+      applyRowReorder(String(drag.fromIndex), String(drag.overIndex));
+    }
+  }
+
+  function applyBatchCost() {
+    const cost = Number(modalValue);
+    if (!Number.isFinite(cost) || cost < 0) {
+      onWarning("請輸入有效成本。");
+      return;
+    }
+    if (mobileSelected.size === 0) {
+      onWarning("請先長按並選取至少一列 Variant。");
+      return;
+    }
+    const selected = mobileSelected;
+    let next = rows.map((row, index) =>
+      selected.has(index)
+        ? { ...row, cost: String(cost), costIsInherited: false }
+        : row
+    );
+    next = recalculateUnlockedVariantPrices(next, {
+      currency,
+      priceMode,
+      settings: pricingSettings,
+      productCost
+    });
+    setRowsSafe(next);
+    setMobileSelected(new Set());
+    closeEditorModal();
+    onWarning(null);
+  }
+
+  function startPickLongPress(image: VariantImageOption, touch: { clientX: number; clientY: number }) {
     pickTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
     pickLpTriggeredRef.current = false;
     clearPickLpTimer();
     pickLpTimerRef.current = window.setTimeout(() => {
       pickLpTriggeredRef.current = true;
       pickLpTimerRef.current = null;
-      setZoomPreview({ url: im.url, label: im.label });
+      setZoomPreview({ url: image.url, label: image.label });
     }, PICK_LONG_PRESS_MS);
   }
 
-  function onPickTouchMove(e: ReactTouchEvent) {
-    const touch = e.touches[0];
+  function onPickTouchMove(event: ReactTouchEvent) {
+    const touch = event.touches[0];
     if (!touch) return;
     const dx = touch.clientX - pickTouchStartRef.current.x;
     const dy = touch.clientY - pickTouchStartRef.current.y;
-    if (Math.abs(dx) > PICK_MOVE_PX || Math.abs(dy) > PICK_MOVE_PX) {
-      clearPickLpTimer();
-    }
-  }
-
-  function onPickTouchEnd() {
-    clearPickLpTimer();
+    if (Math.abs(dx) > PICK_MOVE_PX || Math.abs(dy) > PICK_MOVE_PX) clearPickLpTimer();
   }
 
   function selectPickImage(rowIndex: number, imageId: string | null) {
-    // Swallow click after successful long-press zoom (P04 pattern).
     if (pickLpTriggeredRef.current) {
       pickLpTriggeredRef.current = false;
       return;
@@ -582,653 +703,168 @@ export function VariantEditor({
 
   const dimHeaders = dimensions.length > 0 ? dimensions : [];
   const showGrid = rows.length > 0 || dimensions.length > 0;
-  const gridCols = !isNarrow
-    ? `28px 42px ${dimHeaders.map(() => "1fr").join(" ") || "1fr"} 72px 26px`
-    : undefined;
+  const gridCols = `28px 42px ${dimHeaders.map(() => "1fr").join(" ") || "1fr"} 72px 26px`;
 
-  function closeZoomPreview() {
-    setZoomPreview(null);
-    // Residual synthetic click after long-press may arrive late; keep swallow briefly.
-    window.setTimeout(() => {
-      pickLpTriggeredRef.current = false;
-    }, 400);
-  }
+  const batchPreview = useMemo(() => {
+    const cost = Number(modalValue);
+    if (editorModal?.kind !== "batch-cost" || !Number.isFinite(cost) || cost < 0) return null;
+    return calculatePrice(cost, {
+      currency,
+      priceMode,
+      settings: pricingSettings
+    });
+  }, [currency, editorModal, modalValue, priceMode, pricingSettings]);
 
-  const zoomModal =
-    portalReady && zoomPreview
-      ? createPortal(
-          <div
-            className="pk-zoom-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={zoomPreview.label || "圖片預覽"}
-            onClick={closeZoomPreview}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") closeZoomPreview();
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              alt={zoomPreview.label}
-              className="pk-zoom-modal-img"
-              src={zoomPreview.url}
-              onClick={(e) => e.stopPropagation()}
-            />
-            <button
-              type="button"
-              className="pk-zoom-modal-close"
-              aria-label="關閉預覽"
-              onClick={closeZoomPreview}
-            >
-              關閉
-            </button>
-          </div>,
-          document.body
-        )
-      : null;
+  const renderContext = {
+    addAxisValue,
+    addDimension,
+    addRow,
+    applyBatchCost,
+    applyCharacters,
+    applyRowReorder,
+    batchPreview,
+    cancelRowLongPress,
+    charLoading,
+    charQuery,
+    charSelected,
+    clearPickLpTimer,
+    closeEditorModal,
+    costLabel,
+    dimensions,
+    dimHeaders,
+    duplicateRow,
+    editorModal,
+    filteredChars,
+    finishTouchDrag,
+    gridCols,
+    images,
+    isNarrow,
+    mobileSelected,
+    modalCompareAt,
+    modalValue,
+    onCostChange,
+    onManualPrice,
+    onMobileRowClick,
+    onPickTouchMove,
+    onTouchDragPointerDown,
+    onTouchDragPointerMove,
+    openEditorModal,
+    pickIndex,
+    portalReady,
+    priceMode,
+    productCost,
+    removeRow,
+    renameAxisValue,
+    reorderDragKey,
+    reorderOverKey,
+    rows,
+    rowsAtMax,
+    selectPickImage,
+    setCharQuery,
+    setCharSelected,
+    setModalCompareAt,
+    setModalValue,
+    setPickIndex,
+    setReorderDragKey,
+    setReorderOverKey,
+    setVariantDraft,
+    setZoomPreview,
+    showGrid,
+    startPickLongPress,
+    startRowLongPress,
+    updateRow,
+    variantDraft,
+    zoomPreview
+  };
+
+  const modal = renderVariantEditorModal(renderContext);
+
+  const zoomModal = renderVariantEditorZoomModal(renderContext);
 
   return (
     <div className="variant-box" ref={rootRef}>
-      <div className="variant-head">
-        <span>款式規格</span>
-      </div>
+      <div className="variant-head"><span>款式規格</span></div>
 
-      {/* UX-B3-P06 ①: B 方案 — 維度列常駐 + 主 CTA 展開 + ⋯ 次要 */}
-      <div className="vh-dims">
-        {dimensions.length === 0 ? (
-          <div className="vh-dims-empty">
-            <span className="vh-dims-empty-text">尚無規格類型，可一鍵加入常用維度（軸值請自行填）</span>
-            <div className="vh-dims-quick">
-              {QUICK_DIMS.map((name) => (
-                <Button
-                  key={name}
-                  size="sm"
-                  variant="ghost"
-                  type="button"
-                  onClick={() => addDimension(name)}
-                >
-                  ＋ {name}
-                </Button>
-              ))}
+      {isNarrow ? (
+        <div className="vh-mobile-primary-actions" role="toolbar" aria-label="規格操作">
+          <button type="button" className="vh-add-dim-ghost" disabled={dimensions.length >= MAX_VARIANT_DIMENSIONS} onClick={() => openEditorModal({ kind: "add-dimension" })}>＋新增維度</button>
+          <button type="button" className="vh-toolbar-action" onClick={() => openEditorModal({ kind: "character" })}>依角色建立</button>
+          <button type="button" className="vh-mobile-batch-btn" disabled={mobileSelected.size === 0} onClick={() => openEditorModal({ kind: "batch-cost" })}>長按多選規格以批次覆蓋價格</button>
+        </div>
+      ) : null}
+
+      <details className="vh-builder" open={builderOpen} onToggle={(event) => setBuilderOpen(event.currentTarget.open)}>
+        <summary className="vh-builder-summary">
+          <span>建立規格</span>
+          <span className="muted">{dimensions.length ? `${dimensions.length} 個類型` : "尚未建立"}</span>
+        </summary>
+        <div className="vh-dims">
+          {!isNarrow ? (
+            <div className="vh-dim-toolbar--top">
+              <button type="button" className="vh-add-dim-ghost" disabled={dimensions.length >= MAX_VARIANT_DIMENSIONS} onClick={() => openEditorModal({ kind: "add-dimension" })}>＋ 新增維度</button>
+              <button type="button" className="vh-toolbar-action" onClick={() => setCharOpen(true)}>依角色建立</button>
+              <button type="button" className="vh-toolbar-action" disabled={!canApplyProductCost} title="只填空白成本列，已填不覆蓋" onClick={applyCostToAllVariants}>套用成本</button>
             </div>
-          </div>
-        ) : (
-          dimensions.map((d, i) => {
-            const dimArmed =
-              confirmArm?.kind === "remove-dim" && confirmArm.dimIndex === i;
-            const armCount = dimArmed ? confirmArm.count : 0;
+          ) : null}
+
+          {dimensions.length === 0 ? (
+            <div className="vh-dims-empty"><span className="vh-dims-empty-text">尚無規格類型，請新增尺寸、顏色或自訂維度。</span></div>
+          ) : dimensions.map((dimension, i) => {
+            const dimArmed = confirmArm?.kind === "remove-dim" && confirmArm.dimIndex === i;
             return (
-              <div className="vh-dim-row" key={`${d.name}-${i}`}>
-                {/* UX-B4-P03 ②: type on its own row (heavier chip); values below */}
-                <div className="vh-dim-label">
-                  <span className="v-dim-chip vh-dim-type">
-                    {d.name}
-                    <button
-                      aria-label={
-                        dimArmed
-                          ? `再點確認移除維度 ${d.name}（${armCount} 筆會丟失）`
-                          : `移除維度 ${d.name}`
-                      }
-                      className={`v-dim-x${dimArmed ? " v-arm-confirm" : ""}`}
-                      onClick={() => removeDimension(i)}
-                      title={
-                        dimArmed
-                          ? `再點一次確認移除（${armCount} 筆手填會丟失）`
-                          : "移除整個規格類型"
-                      }
-                      type="button"
-                    >
-                      {dimArmed ? `確定移除？${armCount}筆會丟失` : "×"}
-                    </button>
-                  </span>
+              <div className="vh-dim-row" key={`${dimension.name}-${i}`}>
+                <div className="vh-dim-heading-row">
+                  <span className="vh-dim-heading">{dimension.name}</span>
+                  <button type="button" className={`vh-dim-remove${dimArmed ? " v-arm-confirm" : ""}`} onClick={() => removeDimension(i)}>{dimArmed ? `確定移除？${confirmArm.count}筆會丟失` : "移除維度"}</button>
                 </div>
-                <div className="vh-dim-values v-dim-values">
-                  {(d.values ?? []).map((val) => (
-                    <span className="v-axis-val" key={`${d.name}-${val}`}>
-                      {val}
-                      <button
-                        aria-label={`移除軸值 ${val}`}
-                        className="v-dim-x"
-                        onClick={() => dropAxisValue(i, val)}
-                        type="button"
-                      >
-                        ×
-                      </button>
+                <div className="vh-dim-values rc-tag-group-chips">
+                  {(dimension.values ?? []).map((value) => (
+                    <span className="rc-tag vh-axis-tag" key={`${dimension.name}-${value}`}>
+                      {value}
+                      <button type="button" className="rc-tag-remove" aria-label={`移除軸值 ${value}`} onClick={() => dropAxisValue(i, value)}>×</button>
                     </span>
                   ))}
-                  <span className="v-axis-add vh-dim-add-input">
-                    <input
-                      aria-label={`${d.name} 軸值`}
-                      onChange={(e) =>
-                        setAxisValueDraft((cur) => ({ ...cur, [i]: e.target.value }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addAxisValue(i);
-                        }
-                      }}
-                      placeholder="加軸值…"
-                      value={axisValueDraft[i] ?? ""}
-                    />
-                    <Button size="sm" onClick={() => addAxisValue(i)} type="button">
-                      加入
-                    </Button>
-                  </span>
-                </div>
-              </div>
-            );
-          })
-        )}
-
-        <div className="vh-dim-toolbar">
-          {dimensions.length < MAX_VARIANT_DIMENSIONS ? (
-            <button
-              type="button"
-              className="vh-add-dim-ghost"
-              onClick={() => {
-                setDimOpen((o) => !o);
-                setCharOpen(false);
-                setMoreOpen(false);
-                setPickIndex(null);
-              }}
-            >
-              ＋ 新增一個規格類型
-            </button>
-          ) : (
-            <span className="vh-add-dim-ghost is-disabled" aria-disabled>
-              規格類型已滿（{MAX_VARIANT_DIMENSIONS}）
-            </span>
-          )}
-
-          <div className="vh-more">
-            <button
-              type="button"
-              className="vh-more-btn"
-              aria-expanded={moreOpen}
-              aria-label="更多規格操作"
-              onClick={() => {
-                setMoreOpen((o) => !o);
-                setDimOpen(false);
-                setCharOpen(false);
-                setPickIndex(null);
-              }}
-            >
-              ⋯
-            </button>
-            {moreOpen ? (
-              <div className="pop-menu open vh-more-menu">
-                <div className="pm-title">更多操作</div>
-                <button
-                  type="button"
-                  className="vh-more-item"
-                  disabled={!canApplyProductCost}
-                  title={
-                    canApplyProductCost
-                      ? "只填空白成本列，已填不覆蓋"
-                      : rows.length === 0
-                        ? "請先新增款式列"
-                        : "請先填商品成本"
-                  }
-                  onClick={applyCostToAllVariants}
-                >
-                  套用成本到全部款式
-                </button>
-                <button
-                  type="button"
-                  className="vh-more-item"
-                  onClick={() => {
-                    setCharOpen(true);
-                    setMoreOpen(false);
-                    setDimOpen(false);
-                    setPickIndex(null);
-                  }}
-                >
-                  依角色建立
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {dimOpen ? (
-          <div className="pop-menu open v-pop-dim vh-inline-pop">
-            <div className="pm-title">新增規格維度</div>
-            {QUICK_DIMS.map((name) => (
-              <label key={name}>
-                <input
-                  checked={dimensions.some((d) => d.name === name)}
-                  onChange={(e) => {
-                    if (e.target.checked) addDimension(name);
-                    else {
-                      const idx = dimensions.findIndex((d) => d.name === name);
-                      if (idx >= 0) removeDimension(idx);
-                    }
-                  }}
-                  type="checkbox"
-                />
-                {name}（常用）
-              </label>
-            ))}
-            <label className="v-custom-dim">
-              <input
-                onChange={(e) => setCustomDim(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addDimension(customDim);
-                  }
-                }}
-                placeholder="自訂維度名稱"
-                value={customDim}
-              />
-            </label>
-            <Button
-              size="sm"
-              className="v-pop-full"
-              onClick={() => addDimension(customDim)}
-              type="button"
-            >
-              加入
-            </Button>
-          </div>
-        ) : null}
-
-        {charOpen ? (
-          <div className="pop-menu open v-pop-char vh-inline-pop">
-            <div className="pm-title">勾選這款有出的角色（可多選）</div>
-            <input
-              className="v-char-search"
-              onChange={(e) => setCharQuery(e.target.value)}
-              placeholder="搜尋角色／IP…"
-              value={charQuery}
-            />
-            {charLoading ? (
-              <div className="variant-empty">載入角色字典…</div>
-            ) : filteredChars.length === 0 ? (
-              <div className="variant-empty">沒有符合的角色，可手動加入一列後填寫。</div>
-            ) : (
-              <div className="v-char-list">
-                {filteredChars.map((c) => (
-                  <label key={c.id}>
-                    <input
-                      checked={Boolean(charSelected[c.name])}
-                      onChange={(e) =>
-                        setCharSelected((cur) => ({
-                          ...cur,
-                          [c.name]: e.target.checked
-                        }))
-                      }
-                      type="checkbox"
-                    />
-                    <span>
-                      {c.name}
-                      {c.ip ? (
-                        <span className="v-char-ip"> · {c.ip}</span>
-                      ) : null}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-            <Button
-              size="sm"
-              className="v-pop-full"
-              onClick={applyCharacters}
-              type="button"
-            >
-              建立所選角色列
-            </Button>
-          </div>
-        ) : null}
-
-        {/* UX-B4-P03 ①: auto-expand is main path; CTA = re-expand / discard confirm */}
-        <Button
-          size="md"
-          fullWidth
-          variant={expandArmed ? "danger" : canExpand ? "secondary" : "ghost"}
-          className={`vh-expand-primary${expandArmed ? " v-arm-confirm" : ""}${
-            canExpand && !expandArmed ? " vh-expand-re" : ""
-          }`}
-          disabled={!canExpand}
-          onClick={expandFromAxisValues}
-          title={
-            expandArmed
-              ? `再點一次確認展開（${expandArmCount} 筆手填會丟失）`
-              : canExpand
-                ? "加軸值後會自動展開；需要時可手動重新展開"
-                : "請先在維度上加入軸值"
-          }
-          type="button"
-        >
-          {expandArmed
-            ? `確定展開？${expandArmCount}筆會丟失`
-            : canExpand
-              ? "重新展開"
-              : "加入軸值後自動展開"}
-        </Button>
-      </div>
-
-      {!showGrid || rows.length === 0 ? (
-        <div className="variant-empty">
-          單一款式可留空，或按下方「＋ 加入一列」。有軸值時會自動展開款式列。
-        </div>
-      ) : (
-        <>
-          <div
-            className="vgrid-hdr"
-            style={gridCols ? { gridTemplateColumns: gridCols } : undefined}
-          >
-            {!isNarrow ? <span aria-hidden /> : null}
-            <span>圖</span>
-            {dimHeaders.length > 0 ? (
-              dimHeaders.map((d, i) => <span key={i}>{d.name}</span>)
-            ) : (
-              <span>選項</span>
-            )}
-            <span>{costLabel}</span>
-            <span />
-          </div>
-          {rows.map((row, index) => {
-            const rowKey = String(index);
-            const isDragging = reorderDragKey === rowKey;
-            const isOver =
-              reorderOverKey === rowKey && reorderDragKey != null && reorderDragKey !== rowKey;
-            return (
-              <div key={index} className="vgrid-block">
-                <div
-                  className={`vgrid-row${isDragging ? " is-dragging" : ""}${isOver ? " is-drag-over" : ""}`}
-                  style={gridCols ? { gridTemplateColumns: gridCols } : undefined}
-                  onDragOver={(event) => {
-                    if (isNarrow || reorderDragKey == null) return;
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                    setReorderOverKey(rowKey);
-                  }}
-                  onDragLeave={() => {
-                    setReorderOverKey((cur) => (cur === rowKey ? null : cur));
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const fromKey = reorderDragKey;
-                    setReorderDragKey(null);
-                    setReorderOverKey(null);
-                    if (fromKey == null || fromKey === rowKey) return;
-                    applyRowReorder(fromKey, rowKey);
-                  }}
-                >
-                  {!isNarrow ? (
-                    <span
-                      className="vdrag"
-                      title="拖曳排序"
-                      draggable
-                      aria-label={`拖曳排序第 ${index + 1} 列`}
-                      onDragStart={(event) => {
-                        event.stopPropagation();
-                        event.dataTransfer.effectAllowed = "move";
-                        try {
-                          event.dataTransfer.setData("text/plain", rowKey);
-                        } catch {
-                          /* ignore */
-                        }
-                        setReorderDragKey(rowKey);
-                        closeAllPops();
-                      }}
-                      onDragEnd={() => {
-                        setReorderDragKey(null);
-                        setReorderOverKey(null);
-                      }}
-                    >
-                      ⠿
-                    </span>
-                  ) : null}
-                  <span className="vthumb-wrap">
-                    <button
-                      className="vthumb"
-                      onClick={() => {
-                        setPickIndex(pickIndex === index ? null : index);
-                        setCharOpen(false);
-                        setDimOpen(false);
-                        setMoreOpen(false);
-                      }}
-                      type="button"
-                    >
-                      {row.imageId ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          alt={
-                            images.find((im) => im.id === row.imageId)?.label ??
-                            "規格圖"
-                          }
-                          src={images.find((im) => im.id === row.imageId)?.url ?? ""}
-                        />
-                      ) : (
-                        <span className="vthumb-ph">＋</span>
-                      )}
-                    </button>
-                    {pickIndex === index ? (
-                      <div className="pop-menu open v-pop-pick">
-                        <div className="pm-title">選擇對應圖片</div>
-                        {images.length === 0 ? (
-                          <div className="variant-empty">請先在上方上傳商品圖</div>
-                        ) : (
-                          <div className="pick-grid">
-                            {images.map((im) => (
-                              <button
-                                className={`pk${row.imageId === im.id ? " sel" : ""}`}
-                                key={im.id}
-                                onClick={() => selectPickImage(index, im.id)}
-                                onTouchStart={(e) => {
-                                  const t = e.touches[0];
-                                  if (!t) return;
-                                  startPickLongPress(im, t);
-                                }}
-                                onTouchMove={onPickTouchMove}
-                                onTouchEnd={onPickTouchEnd}
-                                onTouchCancel={onPickTouchEnd}
-                                onContextMenu={(e) => {
-                                  // avoid OS callout while long-pressing
-                                  if (isNarrow) e.preventDefault();
-                                }}
-                                title={im.label}
-                                type="button"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img alt={im.label} src={im.url} />
-                                {/* Desktop hover zoom (CSS); hidden on coarse pointers */}
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  alt=""
-                                  aria-hidden
-                                  className="pk-zoom-preview"
-                                  src={im.url}
-                                />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        <Button
-                          size="sm"
-                          className="v-pop-full"
-                          onClick={() => {
-                            updateRow(index, { imageId: null });
-                            setPickIndex(null);
-                          }}
-                          type="button"
-                        >
-                          移除目前圖片
-                        </Button>
-                      </div>
-                    ) : null}
-                  </span>
-                  {(dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }]).map((_, di) => {
-                    const dimLabel = dimHeaders[di]?.name ?? "選項";
-                    return (
-                      <span className="v-cell" data-label={dimLabel} key={di}>
-                        <input
-                          aria-label={dimLabel}
-                          onChange={(e) => {
-                            // ensure dim exists when typing into default
-                            if (dimensions.length === 0 && di === 0) {
-                              onDimensionsChange([{ name: "款式" }]);
-                            }
-                            updateOption(index, di, e.target.value);
-                          }}
-                          placeholder={dimHeaders[di]?.name ?? "選項值"}
-                          value={row.optionValues[di] ?? ""}
-                        />
-                      </span>
-                    );
-                  })}
-                  <span className="v-cell" data-label={costLabel}>
-                    <input
-                      aria-label={costLabel}
-                      className={row.costIsInherited ? "v-cost-inherited" : undefined}
-                      onChange={(e) => onCostChange(index, e.target.value)}
-                      placeholder="成本"
-                      type="number"
-                      value={row.cost}
-                    />
-                    {row.costIsInherited ? (
-                      <span className="v-cost-badge muted">已套用商品成本，可覆蓋</span>
-                    ) : null}
-                  </span>
-                  <span className="v-row-actions">
-                    {isNarrow ? (
-                      <span className="v-row-move">
-                        <button
-                          type="button"
-                          className="v-row-move-btn"
-                          aria-label="上移此列"
-                          disabled={index === 0}
-                          onClick={() => moveRow(index, -1)}
-                        >
-                          ▲
-                        </button>
-                        <button
-                          type="button"
-                          className="v-row-move-btn"
-                          aria-label="下移此列"
-                          disabled={index >= rows.length - 1}
-                          onClick={() => moveRow(index, 1)}
-                        >
-                          ▼
-                        </button>
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="v-row-dup"
-                      aria-label={
-                        rowsAtMax
-                          ? `款式列已達上限 ${MAX_VARIANT_ROWS}，無法複製`
-                          : "複製此列再編輯"
-                      }
-                      title={
-                        rowsAtMax
-                          ? `已達上限 ${MAX_VARIANT_ROWS} 列，無法再複製`
-                          : "複製此列（可再改軸值／成本）"
-                      }
-                      disabled={rowsAtMax}
-                      onClick={() => duplicateRow(index)}
-                    >
-                      複製
-                    </button>
-                    <button
-                      aria-label="刪除此列"
-                      className="variant-del"
-                      onClick={() => removeRow(index)}
-                      type="button"
-                    >
-                      🗑
-                    </button>
-                    {row.priceLocked ? (
-                      <span className="v-manual" title="已手動調整，公式重算不覆蓋">
-                        ✎
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-                <div className="vgrid-sub">
-                  <span className="twd">
-                    {formatVariantPriceLine(row, priceMode, { productCost })}
-                    {isVariantRowFilled(row) ? (
-                      <>
-                        {" · "}
-                        <button
-                          className="v-inline-edit"
-                          onClick={() => {
-                            const sell = window.prompt("售價 NT$（手動後會鎖定 ✎）", row.sellPrice);
-                            if (sell != null) onManualPrice(index, "sellPrice", sell);
-                          }}
-                          type="button"
-                        >
-                          改售價
-                        </button>
-                        {priceMode === "sale" ? (
-                          <>
-                            {" · "}
-                            <button
-                              className="v-inline-edit"
-                              onClick={() => {
-                                const cmp = window.prompt(
-                                  "定價 NT$（手動後會鎖定 ✎）",
-                                  row.compareAt
-                                );
-                                if (cmp != null) onManualPrice(index, "compareAt", cmp);
-                              }}
-                              type="button"
-                            >
-                              改定價
-                            </button>
-                          </>
-                        ) : null}
-                        {" · "}
-                        <span className="v-cell v-cell--qty" data-label="庫存">
-                          <input
-                            aria-label="庫存"
-                            className="v-qty"
-                            onChange={(e) => updateRow(index, { qty: e.target.value })}
-                            placeholder="庫存空白=無上限"
-                            type="number"
-                            value={row.qty}
-                          />
-                        </span>
-                      </>
-                    ) : null}
-                  </span>
+                  <button type="button" className="rc-tag add vh-add-value-chip" onClick={() => openEditorModal({ kind: "add-value", dimIndex: i })}>＋ 新增值</button>
                 </div>
               </div>
             );
           })}
-        </>
-      )}
 
-      <button className="vt-addrow" onClick={addRow} type="button">
-        ＋ 加入一列
-        {rows.length > 0 ? `（${rows.length}/${MAX_VARIANT_ROWS}）` : ""}
-      </button>
+          {charOpen ? (
+            <div className="pop-menu open v-pop-char vh-inline-pop">
+              <div className="pm-title">勾選這款有出的角色（可多選）</div>
+              <input className="v-char-search" onChange={(event) => setCharQuery(event.target.value)} placeholder="搜尋角色／IP…" value={charQuery} />
+              {charLoading ? <div className="variant-empty">載入角色字典…</div> : (
+                <div className="v-char-list">
+                  {filteredChars.map((character) => (
+                    <label key={character.id}>
+                      <input type="checkbox" checked={Boolean(charSelected[character.name])} onChange={(event) => setCharSelected((current) => ({ ...current, [character.name]: event.target.checked }))} />
+                      <span>{character.name}{character.ip ? <span className="v-char-ip"> · {character.ip}</span> : null}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <Button size="sm" className="v-pop-full" onClick={applyCharacters} type="button">建立所選角色列</Button>
+            </div>
+          ) : null}
 
-      {lockedCount > 0 ? (
-        <div className="v-sync-warn">
-          ⚠ {lockedCount} 筆規格因手動修改未同步公式重算，請確認
+          {expandArmed ? (
+            <Button size="md" fullWidth variant="danger" className="vh-expand-primary v-arm-confirm" onClick={confirmPendingAxisChange} type="button">確認更新款式（{expandArmCount} 筆手填會丟失）</Button>
+          ) : null}
         </div>
-      ) : null}
+      </details>
+
+      {renderVariantEditorResults(renderContext)}
+
+      {lockedCount > 0 ? <div className="v-sync-warn">⚠ {lockedCount} 筆規格因手動修改未同步公式重算，請確認</div> : null}
       {warning ? <div className="v-sync-warn">{warning}</div> : null}
-
-      {/* B17: foot note moved off permanent chrome — see FieldHelp on parent if needed */}
-
       {footer}
       {zoomModal}
+      {modal}
     </div>
   );
 }
 
-/**
- * Parent can call when currency/settings/priceMode/productCost change.
- * UX-B2-P04: also syncs cost into rows still marked costIsInherited (or still blank).
- */
 export function repriceVariants(
   rows: VariantFormRow[],
   opts: {

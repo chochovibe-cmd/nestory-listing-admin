@@ -1,0 +1,549 @@
+/*
+ * D3.4B iPhone runtime corrective — 2026-08-21.
+ * Loaded after d33-mobile-uiux.css so owner device findings can be fixed without
+ * changing ResultCard data/pricing semantics or reopening the D3.4B variant work.
+ */
+
+/* D3.3 contract: when ResultCard has a positive persisted variant count, the
+ * count chip is a visible peer immediately after the sale-status chip. */
+.result-card .rc-variant-count {
+  display: inline-flex;
+  visibility: visible;
+  opacity: 1;
+  min-width: max-content;
+}
+
+/* Undo D3.4B's global line-box-bottom override. Desktop keeps its existing
+ * column layout; its label/value pair already owns baseline alignment. */
+.result-card .rc-price-mini-main,
+.result-card .rc-price-mini-sub,
+.result-card .rc-price-mini-label,
+.result-card .rc-price-mini-value,
+.result-card .rc-price-mini-strike,
+.result-card .rc-price-mini-profit {
+  align-self: auto;
+}
+.result-card .rc-price-mini-main,
+.result-card .rc-price-mini-sub {
+  align-items: baseline;
+}
+
+/* D3.5 login: desktop gets a comfortable form width without changing the
+ * compact mobile contract or any auth/session behavior. */
+@media (min-width: 960px) {
+  /* D3.6 freezes the D3.5 desktop presentation: native checkbox remains visible
+   * and the historical segmented track stays hidden at desktop widths. */
+  .rc-header-select-all .rc-toggle-track {
+    display: none;
+  }
+  .rc-header-select-all > input[type="checkbox"] {
+    position: static;
+    inline-size: 18px;
+    block-size: 18px;
+    min-inline-size: 18px;
+    margin: 0;
+    opacity: 1;
+    pointer-events: auto;
+    accent-color: var(--accent);
+    box-shadow: none;
+  }
+  .rc-header-select-all > span:last-child {
+    display: inline;
+  }
+
+  .login-panel {
+    width: min(640px, calc(100% - 64px));
+    max-width: 640px;
+  }
+
+  /* Desktop filter IA: pills + scope + sort occupy one row. Select-all is
+   * removed from this flow and visually joins the sequential-review control in
+   * the panel header above it. Position against results-panel itself so an
+   * optional generation-progress card cannot shift the review group. */
+  .results-panel {
+    position: relative;
+  }
+  .stage-filter-row {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+  }
+  .stage-filter-row .stage-filter-pills {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .stage-filter-row .stage-filter-end {
+    display: inline-flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-left: auto;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop {
+    position: absolute;
+    top: 5px;
+    right: 16px;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: auto;
+    min-width: 0;
+    min-height: 34px;
+    height: 34px;
+    margin: 0;
+    padding: 0 var(--sp-2);
+    border: 0;
+    background: transparent;
+    white-space: nowrap;
+  }
+  .results-panel:has(.rc-header-seq-btn) .stage-filter-row > .rc-header-select-all--desktop {
+    right: 120px;
+  }
+  .rc-panel-header {
+    position: relative;
+  }
+  .rc-panel-header .rc-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 959px) {
+  /* Keep the D3.3 owner geometry explicit at the final cascade layer. */
+  .result-card > .rc-header .rc-sale-badge {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .result-card > .rc-header .rc-variant-count {
+    display: inline-flex;
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+    visibility: visible;
+    opacity: 1;
+  }
+
+  /* F corrective: align the actual text baselines, not the bottoms of unlike
+   * line boxes. The large price therefore grows upward instead of hanging low. */
+  .result-card > .rc-header .rc-price-mini {
+    align-items: baseline;
+  }
+  .result-card > .rc-header .rc-price-mini-label,
+  .result-card > .rc-header .rc-price-mini-value,
+  .result-card > .rc-header .rc-price-mini-strike,
+  .result-card > .rc-header .rc-price-mini-profit {
+    align-self: baseline;
+  }
+  .result-card > .rc-header .rc-price-mini-value {
+    line-height: 1.05;
+  }
+
+  /* D3.6 mobile select-all: the semantic checkbox stays in the DOM, while its
+   * presentation becomes a two-segment slider. OFF/partial keep the thumb on
+   * the empty right half; only a true checked state fills the left half. */
+  .stage-filter-row > .rc-header-select-all--desktop {
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 0;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-sizing: border-box;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input[type="checkbox"] {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > span:last-child {
+    display: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track {
+    position: relative;
+    display: block;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    box-sizing: border-box;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track::before {
+    content: "全選";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    z-index: 2;
+    display: grid;
+    width: 50%;
+    place-items: center;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track::after {
+    content: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track > span {
+    position: absolute;
+    top: var(--sp-1);
+    right: var(--sp-1);
+    bottom: var(--sp-1);
+    left: calc(50% + var(--sp-1));
+    z-index: 1;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface2);
+    transform: none;
+    transition: left .16s ease, right .16s ease, background .16s ease, border-color .16s ease;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track {
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track::before {
+    color: var(--accent-fg);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track > span {
+    left: var(--sp-1);
+    right: calc(50% + var(--sp-1));
+    margin: 0;
+    border-color: var(--accent);
+    background: var(--accent);
+    transform: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track {
+    border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+    background: var(--surface);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track::before {
+    color: var(--text);
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track > span {
+    left: calc(50% + var(--sp-1));
+    right: var(--sp-1);
+    margin: 0;
+    border-color: var(--border);
+    background: var(--surface2);
+    transform: none;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop > input:focus-visible + .rc-toggle-track {
+    outline: 2px solid color-mix(in srgb, var(--accent) 42%, transparent);
+    outline-offset: 2px;
+  }
+
+  /* D3.6 copy-review batch actions: equal columns and one geometry. Semantic
+   * button colors remain supplied by their existing neutral/primary/danger classes. */
+  .rc-batch-strip--copy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .rc-batch-strip--copy .rc-batch-cancel,
+  .rc-batch-strip--copy .batch-primary-action,
+  .rc-batch-strip--copy .batch-remove-action {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 var(--sp-2);
+    border-width: 1px;
+    border-style: solid;
+    border-radius: var(--radius-s);
+    box-sizing: border-box;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  /* D3.5 mobile Variant primary actions: all three live outside the collapsible
+   * builder and share one compact toolbar. */
+  .variant-box .vh-mobile-primary-actions {
+    display: grid;
+    grid-template-columns: .82fr .92fr 1.6fr;
+    align-items: stretch;
+    gap: var(--sp-1);
+    width: 100%;
+    min-width: 0;
+    margin: var(--sp-2) 0 var(--sp-3);
+  }
+  .variant-box .vh-mobile-primary-actions > button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 var(--sp-1);
+    border-radius: var(--radius-s);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.15;
+    white-space: normal;
+  }
+  .variant-box .vh-mobile-primary-actions .vh-add-dim-ghost {
+    border-style: dashed;
+  }
+  .variant-box .vh-mobile-primary-actions .vh-mobile-batch-btn {
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  }
+
+  /* Character picker reuses the existing shared modal/bottom-sheet system. */
+  .variant-editor-modal .v-char-list--modal {
+    display: grid;
+    gap: var(--sp-1);
+    max-height: min(46vh, 360px);
+    overflow-y: auto;
+    margin-top: var(--sp-2);
+    padding-right: var(--sp-1);
+  }
+  .variant-editor-modal .v-char-list--modal > label {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 44px;
+    padding: var(--sp-1) var(--sp-2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* D3.5 compact row geometry. The entire row is bounded to the phone width;
+   * readonly option/price are typography rather than nested input-like cards. */
+  .variant-box .vgrid-block--mobile {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    padding: var(--sp-2) 0 var(--sp-3);
+  }
+  .variant-box .v-mobile-row-core {
+    display: grid;
+    grid-template-columns: 44px 44px 24px 48px minmax(0, 1fr) 44px;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "drag copy badge thumb options delete"
+      ". . . thumb price price"
+      "cost cost cost cost inventory inventory";
+    align-items: center;
+    gap: var(--sp-1);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .variant-box .vdrag--touch {
+    grid-area: drag;
+    inline-size: 44px;
+    block-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    font-size: 14px;
+  }
+  .variant-box .v-row-dup--icon {
+    grid-area: copy;
+    inline-size: 44px;
+    block-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+  }
+  .variant-box .v-copy-icon,
+  .variant-box .v-copy-icon::after {
+    inline-size: 12px;
+    block-size: 12px;
+  }
+  .variant-box .v-copy-icon {
+    left: 13px;
+    top: 12px;
+  }
+  .variant-box .v-row-badge {
+    grid-area: badge;
+    inline-size: 22px;
+    block-size: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    border: 0;
+    background: var(--surface2);
+    font-size: 10px;
+  }
+  .variant-box .vthumb-wrap {
+    grid-area: thumb;
+    min-width: 0;
+    align-self: start;
+  }
+  .variant-box .vthumb {
+    inline-size: 48px;
+    block-size: 48px;
+    min-width: 48px;
+    min-height: 48px;
+  }
+  .variant-box .v-mobile-options {
+    grid-area: options;
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    width: 100%;
+  }
+  .variant-box .v-mobile-option {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-rows: auto auto;
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 0;
+    gap: 0 var(--sp-1);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .variant-box .v-mobile-option-label {
+    grid-column: 1;
+    grid-row: 1;
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  .variant-box .v-mobile-option-line {
+    display: contents;
+  }
+  .variant-box .v-mobile-option-value {
+    display: -webkit-box;
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+  .variant-box .v-mobile-option .v-mobile-edit-icon {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+  .variant-box .v-mobile-price-result {
+    grid-area: price;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: var(--sp-1);
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .variant-box .v-mobile-price-copy {
+    min-width: 0;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.25;
+  }
+  .variant-box .v-mobile-price-result .v-mobile-edit-icon {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .variant-box .v-manual-cost-tag {
+    grid-column: 1;
+    min-height: 20px;
+    height: 20px;
+    padding-inline: var(--sp-1);
+    border-radius: 999px;
+    font-size: 9px;
+  }
+  .variant-box .v-mobile-cost {
+    grid-area: cost;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 88px);
+    align-items: center;
+    gap: var(--sp-2);
+    min-width: 0;
+    width: auto;
+  }
+  .variant-box .v-mobile-cost .muted,
+  .variant-box .v-mobile-inventory,
+  .variant-box .v-inventory-toggle {
+    font-size: 10px;
+  }
+  .variant-box .v-mobile-cost input {
+    inline-size: 88px;
+    min-height: 44px;
+  }
+  .variant-box .v-mobile-inventory {
+    grid-area: inventory;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--sp-1);
+    min-width: 0;
+    width: auto;
+  }
+  .variant-box .v-inventory-toggle {
+    min-width: 0;
+    min-height: 44px;
+  }
+  .variant-box .v-mobile-inventory .v-qty {
+    inline-size: 80px;
+    min-height: 44px;
+  }
+  .variant-box .variant-del--trash {
+    grid-area: delete;
+    inline-size: 44px;
+    block-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+  }
+}
+
+@media (max-width: 359px) {
+  .variant-box .vh-mobile-primary-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .variant-box .vh-mobile-primary-actions .vh-mobile-batch-btn {
+    grid-column: 1 / -1;
+  }
+  .variant-box .v-mobile-row-core {
+    grid-template-columns: 44px 44px 22px 44px minmax(0, 1fr) 44px;
+  }
+}

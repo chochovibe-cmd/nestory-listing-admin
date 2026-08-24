@@ -7,7 +7,8 @@ const archiveDir = path.join(root, "supabase", "history", "pre_tracking_migratio
 
 const expectedActive = [
   "20260818142712_baseline_existing_schema_20260818.sql",
-  "20260818142919_production_reconcile_20260818.sql"
+  "20260818142919_production_reconcile_20260818.sql",
+  "20260822223100_variant_split_override_semantics.sql"
 ];
 
 function fail(message) {
@@ -24,7 +25,7 @@ function files(dir) {
 
 const active = files(activeDir);
 if (JSON.stringify(active) !== JSON.stringify(expectedActive)) {
-  fail(`active Supabase migration queue must match production ledger exactly; found ${active.join(", ")}`);
+  fail(`active Supabase migration queue must match the tracked production ledger; found ${active.join(", ")}`);
 }
 
 const archived = files(archiveDir);
@@ -80,12 +81,43 @@ if (/alter function public\.rls_auto_enable|revoke execute on function public\.r
   fail("hosted-only rls_auto_enable must stay outside the minimal tracked reconcile");
 }
 
+const splitOverrides = fs.readFileSync(path.join(activeDir, expectedActive[2]), "utf8");
+for (const fragment of [
+  "alter table public.product_variants",
+  "add column if not exists cost_is_inherited boolean",
+  "add column if not exists sell_price_locked boolean",
+  "add column if not exists compare_at_locked boolean",
+  "NULL means the row predates D3.10A"
+]) {
+  if (!splitOverrides.includes(fragment)) {
+    fail(`D3.10A additive variant migration is missing: ${fragment}`);
+  }
+}
+if (/drop\s+column|alter\s+column[^;]+set\s+not\s+null|update\s+public\.product_variants/i.test(splitOverrides)) {
+  fail("D3.10A variant migration must stay additive/null-preserving for legacy fallback");
+}
+
 const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "supabase-local.yml"), "utf8");
 if (!workflow.includes("cp supabase/history/pre_tracking_migrations/*.sql /tmp/nestory-migrations/")) {
   fail("free local DB gate must bootstrap from the pre-tracking archive");
 }
 if (workflow.includes("cp supabase/migrations/*.sql /tmp/nestory-migrations/")) {
   fail("free local DB gate must not replay the active tracked migration queue as historical bootstrap SQL");
+}
+if (!workflow.includes("cp supabase/migrations/20260822223100_variant_split_override_semantics.sql /tmp/nestory-forward-migrations/")) {
+  fail("D3.10A forward migration must be staged explicitly for the local reversible gate");
+}
+
+const productionPackageTest = fs.readFileSync(path.join(root, "scripts", "test-supabase-production-package-local.sh"), "utf8");
+for (const fragment of [
+  "D3.10A: apply additive split-override migration",
+  "verify_d310a_columns",
+  "drop column if exists cost_is_inherited",
+  "D3.10A: re-apply forward migration"
+]) {
+  if (!productionPackageTest.includes(fragment)) {
+    fail(`D3.10A local migration apply/rollback gate is missing: ${fragment}`);
+  }
 }
 
 console.log("PASS: Supabase migration baseline/archive contract is intact.");

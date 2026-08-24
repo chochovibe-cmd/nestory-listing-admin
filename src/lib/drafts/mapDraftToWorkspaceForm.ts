@@ -53,6 +53,9 @@ export type DraftVariantDbRow = {
   cny_price?: number | null;
   twd_price?: number | null;
   compare_at_price?: number | null;
+  cost_is_inherited?: boolean | null;
+  sell_price_locked?: boolean | null;
+  compare_at_locked?: boolean | null;
   price_locked?: boolean | null;
   sort_order?: number | null;
   inventory_quantity?: number | null;
@@ -154,7 +157,6 @@ export function resolveNonPendingInputRedirect(status: string | null | undefined
       message: "此草稿已不在待輸入佇列，請到發布紀錄查看。"
     };
   }
-  // copy_review + leftover input-stage non-pending_input (e.g. pending_copy)
   return {
     href: "/drafts/new",
     message: "此草稿已離開「待輸入」，不能再當擷取表單開啟。請到下方審核區繼續。"
@@ -207,7 +209,9 @@ export function mapDraftToWorkspaceForm(
   const dimsRaw = Array.isArray(draft.variant_dimensions)
     ? (draft.variant_dimensions as VariantDimension[])
     : [];
-  const { dimensions, rows } = dbRowsToForm(dimsRaw, variants);
+  const { dimensions, rows } = dbRowsToForm(dimsRaw, variants, {
+    productCost: draft.cny_price ?? null
+  });
 
   const invUnlimited =
     draft.inventory_policy !== "deny" || draft.inventory_quantity == null;

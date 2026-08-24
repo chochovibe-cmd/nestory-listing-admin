@@ -1,0 +1,896 @@
+/*
+ * ResultCard mobile release contract — owner R3 2026-08-20.
+ * Loaded after stabilization.css so this stays a narrow, auditable layer.
+ *
+ * Scope: ResultCard/results presentation only. Do not move business,
+ * review, archive, publish, upload, Variant, Shopify or Supabase logic here.
+ */
+
+/* D1 desktop card: title owns row one; image and all supporting information
+ * share a vertically centred second row. The card itself remains the expand
+ * target, so hiding the old triangle does not change the click handler. */
+@media (min-width: 960px) {
+  .result-card > .rc-header {
+    position: relative;
+    display: grid;
+    grid-template-columns: 20px 72px minmax(0, 1fr) auto auto;
+    grid-template-rows: auto minmax(72px, auto);
+    align-items: center;
+    gap: 8px 10px;
+    overflow: visible;
+  }
+  .result-card > .rc-header > .rc-checkbox { grid-column: 1; grid-row: 1 / 3; }
+  .result-card > .rc-header > .rc-thumb { grid-column: 2; grid-row: 2; }
+  .result-card > .rc-header > .rc-headmain { display: contents; }
+  .result-card > .rc-header .rc-title-row {
+    grid-column: 2 / -1;
+    grid-row: 1;
+    padding-right: 26px;
+  }
+  .result-card > .rc-header .rc-head-chips {
+    grid-column: 3;
+    grid-row: 2;
+    align-self: start;
+  }
+  .result-card > .rc-header .rc-card-summary-row {
+    grid-column: 3;
+    grid-row: 2;
+    align-self: end;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .result-card > .rc-header .rc-card-mark-summary { font-size: 11px; }
+  .result-card > .rc-header .rc-m-row3 {
+    grid-column: 4;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+  }
+  .result-card > .rc-header > .rc-quick-row {
+    grid-column: 5;
+    grid-row: 2;
+    align-self: center;
+    margin-left: 0;
+  }
+  .rc-header-select-all--mobile { display: none; }
+  .stage-filter-row .stage-filter-end {
+    align-items: center;
+  }
+  .stage-filter-row .rc-header-select-all--desktop {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    white-space: nowrap;
+  }
+  .stage-filter-row .rc-header-select-all--desktop input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    box-shadow: none;
+    outline: none;
+  }
+  .rc-panel-header .rc-header-seq-btn {
+    min-height: 34px;
+    height: 34px;
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+  .stage-filter-row .ir-scope-select,
+  .stage-filter-row .sort-sel {
+    min-height: 36px;
+    height: 36px;
+    padding-block: 0;
+  }
+}
+
+/* The X is the existing soft-archive action, consistently seated on the card's
+ * top rule. The former expand triangle is visually retired on every viewport. */
+.result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--danger) 46%, var(--border));
+  background: var(--surface);
+  color: color-mix(in srgb, var(--danger) 70%, var(--text));
+  box-shadow: var(--shadow-s);
+  opacity: 1;
+  transform: none;
+  z-index: 8;
+}
+.result-card > .rc-header > .rc-quick-row > .rc-toggle { display: none; }
+
+/* Selection hierarchy is identical on desktop and mobile: select-all above,
+ * selected count/actions below. */
+.rc-selection-guide-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 6px;
+}
+.rc-selection-guide-row .rc-header-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.rc-batch-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+.rc-batch-strip .rc-batch-count { grid-column: 1 / -1; }
+.rc-batch-strip .rc-batch-actions {
+  display: contents;
+}
+.rc-batch-strip .rc-batch-cancel,
+.rc-batch-strip .batch-primary-action,
+.rc-batch-strip .batch-detail-action,
+.rc-batch-strip .batch-remove-action {
+  min-width: 0;
+  min-height: 38px;
+  height: 38px;
+  padding-inline: 10px;
+  white-space: nowrap;
+  width: 100%;
+}
+.rc-batch-strip--image { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.rc-batch-strip--ready { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 959px) {
+  /* Card: title occupies the main line; station/date visually follow its last line.
+   * Summary: image left, sale/tags/warnings right. Price is one compact row. */
+  .result-card > .rc-header {
+    position: relative;
+    grid-template-areas: none;
+    grid-template-columns: 94px minmax(0, 1fr) max-content max-content;
+    grid-auto-rows: auto;
+    column-gap: 8px;
+    row-gap: 6px;
+    align-items: start;
+    overflow: visible;
+  }
+
+  .result-card > .rc-header > .rc-headmain,
+  .result-card > .rc-header .rc-title-row,
+  .result-card > .rc-header .rc-head-chips,
+  .result-card > .rc-header .rc-head-meta,
+  .result-card > .rc-header > .rc-quick-row {
+    display: contents;
+  }
+
+  /* OWNER-R3-2026-08-20: title -> station -> date in one natural flow. */
+  .result-card > .rc-header .rc-title-flow {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 7px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding-right: 0;
+    box-sizing: border-box;
+  }
+
+  .result-card > .rc-header .rc-title-flow > .rc-title {
+    position: static;
+    display: inline;
+    flex: 0 0 auto;
+    width: fit-content;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0;
+    font-weight: 800;
+    line-height: 1.34;
+    overflow-wrap: anywhere;
+  }
+
+  .result-card > .rc-header .rc-title-inline-station,
+  .result-card > .rc-header .rc-title-flow > .status,
+  .result-card > .rc-header .rc-title-inline-time {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .result-card > .rc-header .rc-title-inline-station { font-size: 11px; }
+  .result-card > .rc-header .rc-title-flow > .status { font-size: 11px; }
+  .result-card > .rc-header .rc-title-inline-time { font-size: 11px; }
+
+  .result-card > .rc-header .rc-head-meta .rc-station-chip,
+  .result-card > .rc-header .rc-head-meta > .status,
+  .result-card > .rc-header .rc-head-meta .rc-time-ago {
+    display: none;
+  }
+
+  /* Existing archiveOne() control: soft remove + undo. Put it on the card border. */
+  .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn {
+    display: none;
+  }
+
+  .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn:active {
+    transform: scale(.92);
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  }
+
+  /* Whole-card tap remains the normal mobile expand affordance. */
+  .result-card > .rc-header > .rc-quick-row > .rc-toggle {
+    display: none;
+  }
+
+  .result-card > .rc-header > .rc-thumb {
+    grid-column: 1;
+    grid-row: 2 / 6;
+    width: 94px;
+    height: 94px;
+    min-width: 94px;
+    min-height: 94px;
+    align-self: start;
+  }
+
+  .result-card > .rc-header .rc-sale-badge {
+    grid-column: 2 / 5;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+  }
+
+  .result-card > .rc-header .rc-detect-chips--tags {
+    grid-column: 2 / 5;
+    grid-row: 3;
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 5px;
+  }
+
+  .result-card > .rc-header .rc-detect-chips--warns {
+    grid-column: 2 / 5;
+    grid-row: 4;
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 5px;
+  }
+
+  .result-card > .rc-header .rc-head-meta > .status,
+  .result-card > .rc-header .rc-owner-chip {
+    grid-row: 5;
+    align-self: start;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .result-card > .rc-header .rc-head-meta > .status { grid-column: 3 / 4; }
+  .result-card > .rc-header .rc-owner-chip { grid-column: 4 / 5; }
+  .result-card > .rc-header .rc-head-meta .rc-meta-marks { display: none; }
+
+  .result-card > .rc-header .rc-card-summary-row {
+    grid-column: 1 / 5;
+    grid-row: 6;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    padding-top: 2px;
+  }
+  .result-card > .rc-header .rc-card-mark-summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .result-card > .rc-header .rc-variant-count {
+    flex: 0 0 auto;
+    min-height: 24px;
+    padding: 3px 7px;
+    font-size: 11px;
+  }
+
+  .result-card > .rc-header .rc-fail-reason {
+    grid-column: 1 / 5;
+    grid-row: 7;
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* Price / compare-at / profit = one visual row. */
+  .result-card > .rc-header .rc-m-row3 {
+    grid-area: auto;
+    grid-column: 1 / 5;
+    grid-row: 8;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin: 5px 0 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  .result-card > .rc-header .rc-m-regen-slot {
+    display: none;
+  }
+
+  .result-card > .rc-header .rc-price-mini {
+    display: grid;
+    grid-template-columns: max-content max-content max-content minmax(0, 1fr);
+    align-items: baseline;
+    gap: 4px 7px;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    white-space: nowrap;
+  }
+
+  .result-card > .rc-header .rc-price-mini-main,
+  .result-card > .rc-header .rc-price-mini-sub {
+    display: contents;
+  }
+
+  .result-card > .rc-header .rc-price-mini-label {
+    font-size: 10px;
+    line-height: 1.1;
+  }
+  .result-card > .rc-header .rc-price-mini-value {
+    font-size: clamp(17px, 4.8vw, 21px);
+    line-height: 1.05;
+  }
+  .result-card > .rc-header .rc-price-mini-strike,
+  .result-card > .rc-header .rc-price-mini-profit {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: clamp(9px, 2.55vw, 11px);
+    line-height: 1.1;
+    letter-spacing: -.1px;
+    white-space: nowrap;
+  }
+
+  /* Long-press feedback only; gesture timing/math stays in TSX. */
+  .result-card > .rc-header {
+    transition: transform 110ms ease, background 110ms ease;
+    transform-origin: center;
+  }
+  .result-card > .rc-header:active {
+    transform: scale(.988);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .result-card.is-checked {
+    border-color: color-mix(in srgb, var(--accent) 78%, var(--border));
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent), var(--shadow-s);
+  }
+  .result-card.is-checked > .rc-header {
+    background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  }
+
+  /* Results header: title + compact sequential-review controls on one line. */
+  .rc-panel-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+  }
+  .rc-panel-header > h2 {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.25;
+  }
+  .rc-panel-header .rc-header-actions {
+    display: contents;
+  }
+  .rc-selection-guide-row {
+    min-height: 34px;
+    margin: 6px 0;
+    padding-inline: 2px;
+  }
+  .rc-header-select-all--desktop { display: none; }
+  .rc-selection-guide-row .rc-header-select-all {
+    min-height: 30px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .rc-selection-guide-row .rc-header-select-all input {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+  }
+  .rc-panel-header .rc-header-seq-btn {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    min-width: 0;
+    min-height: 34px;
+    height: 34px;
+    padding: 0 9px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  /* Scope and sort keep equal width, but return to the shorter control height. */
+  .stage-filter-row .stage-filter-end {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+  }
+  .stage-filter-row .results-scope-label,
+  .stage-filter-row .results-sort-label {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    max-width: none;
+    height: 38px;
+    margin: 0;
+    box-sizing: border-box;
+  }
+  .stage-filter-row .results-scope-label:only-child,
+  .stage-filter-row .results-sort-label:only-child {
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .stage-filter-row .ir-scope-select,
+  .stage-filter-row .sort-sel {
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    min-height: 38px;
+    box-sizing: border-box;
+    font-size: 13px;
+  }
+
+  .result-card > .rc-header .rc-title-flow > .status,
+  .result-card > .rc-header .rc-title-inline-station {
+    min-height: 22px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  /* Batch strip: count on top; Cancel / primary / direct remove on one row. */
+  .rc-batch-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 7px;
+    padding: 10px;
+  }
+  .rc-batch-strip .rc-batch-count {
+    grid-column: 1 / -1;
+    margin: 0 0 1px;
+    align-self: center;
+  }
+  .rc-batch-strip .rc-batch-cancel,
+  .rc-batch-strip .batch-primary-action,
+  .rc-batch-strip .batch-remove-action,
+  .rc-batch-strip details.batch-more > summary,
+  .rc-batch-strip details.batch-more > .batch-more-menu > button {
+    min-width: 0;
+    min-height: 38px;
+    height: 38px;
+    padding-inline: 8px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .rc-batch-strip .rc-batch-cancel {
+    grid-column: 1;
+    width: 100%;
+  }
+  .rc-batch-strip .rc-batch-actions {
+    display: contents;
+  }
+  .rc-batch-strip .batch-primary-action {
+    grid-column: 2;
+    width: 100%;
+  }
+  .rc-batch-strip--copy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .rc-batch-strip--copy .batch-remove-action {
+    grid-column: 3;
+    width: 100%;
+    border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
+    background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 72%, var(--text));
+  }
+
+  .rc-batch-strip--image {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rc-batch-strip--image .rc-batch-count { grid-column: 1 / -1; }
+  .rc-batch-strip--image .rc-batch-cancel,
+  .rc-batch-strip--image .batch-primary-action,
+  .rc-batch-strip--image .batch-detail-action,
+  .rc-batch-strip--image .batch-remove-action {
+    grid-column: auto;
+    width: 100%;
+  }
+  .rc-batch-strip--image .batch-remove-action:last-child {
+    grid-column: 1 / -1;
+  }
+  .rc-batch-strip .rc-batch-actions > details.batch-more {
+    grid-column: 3;
+    min-width: 0;
+  }
+  .rc-batch-strip .rc-batch-actions > details.batch-more > summary {
+    width: 100%;
+  }
+
+  /* Shortcut hint = compact theme-accent note. */
+  .rc-gesture-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin: 2px 2px 10px;
+    padding: 6px 8px 6px 10px;
+    min-height: 30px;
+    border: 0;
+    border-left: 4px solid var(--accent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    color: color-mix(in srgb, var(--accent) 74%, var(--text));
+    box-shadow: none;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+  .rc-gesture-hint-dismiss {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    color: inherit;
+  }
+
+  /* Compact, theme-aware swipe actions; handlers and thresholds unchanged. */
+  .rc-swipe-actions {
+    align-items: center;
+    gap: 6px;
+    padding: 8px 5px;
+    background: color-mix(in srgb, var(--surface2) 55%, transparent);
+  }
+  .rc-swipe-actions .rc-swipe-approve,
+  .rc-swipe-actions .rc-swipe-secondary {
+    min-height: 46px;
+    max-height: 54px;
+    padding: 7px 5px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: var(--shadow-s);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .rc-swipe-actions .rc-swipe-approve {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  }
+  .rc-swipe-actions .rc-swipe-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+  }
+}
+
+@media (max-width: 420px) {
+  .result-card > .rc-header {
+    grid-template-columns: 88px minmax(0, 1fr) max-content max-content;
+    column-gap: 6px;
+  }
+  .result-card > .rc-header > .rc-thumb {
+    width: 88px;
+    height: 88px;
+    min-width: 88px;
+    min-height: 88px;
+  }
+  .result-card > .rc-header .rc-title-inline-station,
+  .result-card > .rc-header .rc-title-inline-time { font-size: 10px; }
+  .rc-panel-header > h2 {
+    font-size: 12.5px;
+  }
+  .rc-panel-header .rc-header-seq-btn {
+    padding-inline: 7px;
+    font-size: 10.5px;
+  }
+  .rc-batch-strip--copy { gap: 5px; }
+  .rc-batch-strip--copy .rc-batch-cancel,
+  .rc-batch-strip--copy .batch-primary-action,
+  .rc-batch-strip--copy .batch-remove-action {
+    padding-inline: 4px;
+    font-size: 10.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-card > .rc-header,
+  .result-card > .rc-header:active {
+    transition: none;
+    transform: none;
+  }
+  .result-card > .rc-header > .rc-quick-row > .rc-dismiss-btn {
+    transition: none;
+  }
+}
+
+
+/* UIUX Batch D3 — controls, image-review hierarchy, spec editor and swipe reveal. */
+.results-sort-label,
+.results-sort-label:focus-within,
+.results-sort-label .sort-sel,
+.results-sort-label .sort-sel:focus,
+.results-sort-label .sort-sel:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+.results-sort-label .sort-sel:focus-visible {
+  border-color: var(--border);
+}
+
+.rc-header-select-all {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+.rc-header-select-all > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.rc-toggle-track {
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface2);
+  transition: background .16s ease, border-color .16s ease;
+}
+.rc-toggle-track > span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform .16s ease, background .16s ease;
+}
+.rc-header-select-all > input:checked + .rc-toggle-track,
+.rc-header-select-all > input:indeterminate + .rc-toggle-track {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+}
+.rc-header-select-all > input:checked + .rc-toggle-track > span,
+.rc-header-select-all > input:indeterminate + .rc-toggle-track > span {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+.rc-header-select-all > input:focus-visible + .rc-toggle-track {
+  outline: 2px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  outline-offset: 2px;
+}
+
+.result-card > .rc-header .rc-head-chips,
+.result-card > .rc-header .rc-head-meta,
+.result-card > .rc-header .rc-detect-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: 5px 6px;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.3;
+}
+.result-card > .rc-header .rc-head-chips > *,
+.result-card > .rc-header .rc-head-meta > *,
+.result-card > .rc-header .rc-detect-chips > * {
+  position: static;
+  max-width: 100%;
+  margin: 0;
+}
+.result-card > .rc-header .rc-title-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 6px;
+}
+.result-card > .rc-header .rc-variant-count {
+  flex: 0 0 auto;
+}
+
+.variant-box .vh-builder {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+.variant-box .vh-builder-summary,
+.variant-box .vh-results-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  font-weight: 800;
+}
+.variant-box .vh-builder-summary {
+  cursor: pointer;
+  list-style: none;
+}
+.variant-box .vh-builder-summary::-webkit-details-marker { display: none; }
+.variant-box .vh-builder-summary::after {
+  content: "⌄";
+  color: var(--muted);
+  transition: transform .16s ease;
+}
+.variant-box .vh-builder[open] .vh-builder-summary::after { transform: rotate(180deg); }
+.variant-box .vh-add-dim-wrap {
+  position: relative;
+  min-width: 0;
+}
+.variant-box .vh-add-dim-wrap .vh-inline-pop {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  margin: 0;
+  width: min(320px, calc(100vw - 40px));
+}
+.variant-box .vh-dim-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.variant-box .vh-toolbar-action {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+}
+.variant-box .vh-toolbar-action:disabled { opacity: .48; }
+.variant-box .vdrag--mobile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 44px;
+  color: var(--muted);
+}
+
+@media (min-width: 960px) {
+  .stage-filter-row {
+    align-items: center;
+  }
+  .stage-filter-row > .rc-header-select-all--desktop {
+    order: -1;
+    min-height: 36px;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 959px) {
+  .rc-selection-guide-row {
+    align-items: center;
+    gap: 10px;
+  }
+  .rc-selection-guide-row .rc-gesture-hint {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+  }
+  .rc-batch-strip--image {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rc-batch-strip--image .rc-batch-cancel,
+  .rc-batch-strip--image .batch-primary-action,
+  .rc-batch-strip--image .batch-detail-action,
+  .rc-batch-strip--image .batch-remove-action {
+    min-height: 40px;
+    height: 40px;
+    padding-inline: 6px;
+  }
+  .rc-batch-strip--image .batch-remove-action:last-child {
+    grid-column: auto;
+  }
+  .rc-swipe-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .rc-swipe-actions .rc-swipe-remove {
+    min-height: 46px;
+    max-height: 54px;
+    padding: 7px 5px;
+    border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+    color: color-mix(in srgb, var(--danger) 74%, var(--text));
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .variant-box {
+    border-width: 1px 0 0;
+    border-radius: 0;
+  }
+  .variant-box .variant-head {
+    padding-inline: 0;
+  }
+  .variant-box .vh-builder-summary,
+  .variant-box .vh-results-heading {
+    padding-inline: 2px;
+  }
+  .variant-box .vh-dims {
+    padding: 6px 0 12px;
+  }
+  .variant-box .vh-dim-row {
+    padding: 8px 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+  }
+  .variant-box .vh-dim-values {
+    gap: 6px;
+  }
+  .variant-box .vh-dim-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .variant-box .vh-add-dim-ghost,
+  .variant-box .vh-toolbar-action {
+    min-height: 44px;
+  }
+  .variant-box .vgrid-block {
+    margin-bottom: 8px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+  }
+  .variant-box .vgrid-row {
+    padding: 8px 0;
+    gap: 7px;
+  }
+  .variant-box .vgrid-hdr {
+    border: 0;
+    background: transparent;
+  }
+}

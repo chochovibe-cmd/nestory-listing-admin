@@ -312,3 +312,15 @@ Variant 圖片 picker 現況是：
 
 ### Rollback 規則
 reconcile 已成 tracked migration。未來若需回復，不能只手動跑舊 rollback SQL 或改 ledger；必須新增 timestamped tracked revert migration，再 postcheck，避免 schema / ledger 分岔。
+
+## 2026-08-20 — ResultCard mobile owner correction R3
+
+- Mobile ResultCard top flow now follows title → station → date naturally.
+- Card soft-remove X sits on the top border; existing undo path is unchanged.
+- Mobile image/right-info balance and one-line price peers are finalized.
+- Scope/sort controls remain equal and use the owner-preferred 38px height.
+- Generation title and compact sequential-review action share the first header row.
+- Copy-review exposes direct Cancel / Approve / Remove; image-review More remains.
+- Temporary R3 patch-runner workflows were removed after source was verified.
+- No uploader, Variant, Supabase, Shopify, API, role, archive-semantic,
+  long-press timing, or swipe-math changes.

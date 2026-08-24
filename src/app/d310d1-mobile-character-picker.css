@@ -1,0 +1,88 @@
+/*
+ * D3.10D.1 Character Picker runtime geometry corrective.
+ * Character-only mobile layer; all other Variant modal kinds remain frozen at D3.10D.
+ * D3.10D.2 keeps VisualViewport as height measurement only and never positions the backdrop.
+ * D3.10D.3 explicitly locks the Character search value text to 16px to prevent iOS focus zoom.
+ */
+
+@media (max-width: 959px) {
+  .variant-editor-modal-backdrop[data-modal-kind="character"] {
+    place-items: center;
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] {
+    width: min(calc(100vw - 40px), 360px);
+    height: auto;
+    max-height: min(calc(var(--ve-visual-height, 100dvh) - 16px), 580px);
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] .v-char-search {
+    font-size: 16px;
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] .v-char-list--modal {
+    height: auto;
+    max-height: var(--ve-char-list-max, 192px);
+    overflow-y: auto;
+    align-content: start;
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] .v-char-list--modal > label {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: 44px;
+    padding: var(--sp-2);
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] .v-char-list--modal input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    max-width: 20px;
+    max-height: 20px;
+    padding: 0;
+    margin: 0;
+    flex: 0 0 20px;
+    box-sizing: border-box;
+    accent-color: var(--accent);
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] .v-char-list--modal > label > span {
+    min-width: 0;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] .v-char-list--modal .v-char-ip {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] .variant-editor-character-empty {
+    min-height: 48px;
+    height: auto;
+  }
+
+  .variant-editor-modal-backdrop[data-modal-kind="character"][data-keyboard-open="true"] {
+    place-items: start center;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .variant-editor-modal-backdrop[data-modal-kind="character"][data-keyboard-open="true"]
+    .variant-editor-modal[data-modal-kind="character"] {
+    height: auto;
+    max-height: calc(var(--ve-visual-height, 100dvh) - 20px);
+    overflow-y: auto;
+  }
+
+  .variant-editor-modal-backdrop[data-modal-kind="character"][data-keyboard-open="true"]
+    .variant-editor-modal[data-modal-kind="character"] .v-char-list--modal {
+    max-height: var(--ve-char-list-max, 112px);
+  }
+}

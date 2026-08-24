@@ -48,8 +48,12 @@ export type WorkspaceAutosaveSnapshot = {
   variants: Array<{
     optionValues: [string, string, string];
     cost: string;
+    /** D3.10A optional only so pre-D3.10A local snapshots remain readable. */
+    costIsInherited?: boolean;
     sellPrice: string;
     compareAt: string;
+    sellPriceLocked?: boolean;
+    compareAtLocked?: boolean;
     priceLocked: boolean;
     qty: string;
     sku: string;
@@ -183,8 +187,23 @@ export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot):
   profitDriven: boolean;
   targetProfitInput: string;
   variantDimensions: Array<{ name: string; values?: string[] }>;
-  variants: WorkspaceAutosaveSnapshot["variants"];
+  variants: Array<{
+    optionValues: [string, string, string];
+    cost: string;
+    costIsInherited: boolean;
+    sellPrice: string;
+    compareAt: string;
+    sellPriceLocked: boolean;
+    compareAtLocked: boolean;
+    priceLocked: boolean;
+    qty: string;
+    sku: string;
+    imageId: string | null;
+    sortOrder: number;
+  }>;
 } {
+  const productCost = Number(snap.price);
+  const hasProductCost = Number.isFinite(productCost) && productCost > 0;
   return {
     draftId: typeof snap.draftId === "string" && snap.draftId ? snap.draftId : null,
     title: typeof snap.title === "string" ? snap.title : "",
@@ -226,21 +245,36 @@ export function formFieldsFromAutosaveSnapshot(snap: WorkspaceAutosaveSnapshot):
         })
       : [],
     variants: Array.isArray(snap.variants)
-      ? snap.variants.map((row, i) => ({
-          optionValues: [
-            String(row?.optionValues?.[0] ?? ""),
-            String(row?.optionValues?.[1] ?? ""),
-            String(row?.optionValues?.[2] ?? "")
-          ] as [string, string, string],
-          cost: String(row?.cost ?? ""),
-          sellPrice: String(row?.sellPrice ?? ""),
-          compareAt: String(row?.compareAt ?? ""),
-          priceLocked: Boolean(row?.priceLocked),
-          qty: String(row?.qty ?? ""),
-          sku: String(row?.sku ?? ""),
-          imageId: row?.imageId ?? null,
-          sortOrder: typeof row?.sortOrder === "number" ? row.sortOrder : i
-        }))
+      ? snap.variants.map((row, i) => {
+          const legacyLocked = Boolean(row?.priceLocked);
+          const sellPriceLocked =
+            typeof row?.sellPriceLocked === "boolean" ? row.sellPriceLocked : legacyLocked;
+          const compareAtLocked =
+            typeof row?.compareAtLocked === "boolean" ? row.compareAtLocked : legacyLocked;
+          const rowCost = Number(row?.cost);
+          const inferredInherited =
+            hasProductCost && Number.isFinite(rowCost) && rowCost > 0 && rowCost === productCost;
+          const costIsInherited =
+            typeof row?.costIsInherited === "boolean" ? row.costIsInherited : inferredInherited;
+          return {
+            optionValues: [
+              String(row?.optionValues?.[0] ?? ""),
+              String(row?.optionValues?.[1] ?? ""),
+              String(row?.optionValues?.[2] ?? "")
+            ] as [string, string, string],
+            cost: String(row?.cost ?? ""),
+            costIsInherited,
+            sellPrice: String(row?.sellPrice ?? ""),
+            compareAt: String(row?.compareAt ?? ""),
+            sellPriceLocked,
+            compareAtLocked,
+            priceLocked: sellPriceLocked || compareAtLocked,
+            qty: String(row?.qty ?? ""),
+            sku: String(row?.sku ?? ""),
+            imageId: row?.imageId ?? null,
+            sortOrder: typeof row?.sortOrder === "number" ? row.sortOrder : i
+          };
+        })
       : []
   };
 }

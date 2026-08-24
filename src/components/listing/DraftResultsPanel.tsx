@@ -123,9 +123,6 @@ export type VariantPriceRow = Pick<
 /** Stable empty ref so ResultCard hydrate effect does not thrash on every render. */
 const EMPTY_VARIANT_PRICES: VariantPriceRow[] = [];
 
-/** UX-B4-P04: dismissible mobile gesture tip (long-press / swipe). */
-const RC_GESTURE_HINT_KEY = "nestory-rc-gesture-hint-v1";
-
 export function DraftResultsPanel({
   drafts,
   images,
@@ -143,8 +140,6 @@ export function DraftResultsPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   /** UX-B3-P04: only one card may keep swipe-open actions */
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
-  /** UX-B4-P04: list-top hint; CSS hides on desktop */
-  const [showGestureHint, setShowGestureHint] = useState(false);
   const [busy, setBusy] = useState(false);
   /** UX-B2-P14: default「只看我的」；admin 可切「全部成員」 */
   const [scope, setScope] = useState<ResultsScopeMode>("mine");
@@ -189,26 +184,6 @@ export function DraftResultsPanel({
   }
 
   useEffect(() => () => clearArchiveUndoTimer(), []);
-
-  // UX-B4-P04: show gesture tip until dismissed (localStorage)
-  useEffect(() => {
-    try {
-      if (typeof window !== "undefined" && window.localStorage.getItem(RC_GESTURE_HINT_KEY) !== "1") {
-        setShowGestureHint(true);
-      }
-    } catch {
-      setShowGestureHint(true);
-    }
-  }, []);
-
-  function dismissGestureHint() {
-    try {
-      window.localStorage.setItem(RC_GESTURE_HINT_KEY, "1");
-    } catch {
-      /* ignore quota / private mode */
-    }
-    setShowGestureHint(false);
-  }
 
   // B12 fix: hide archived/unarchived rows immediately; refresh only corrects.
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
@@ -1408,22 +1383,8 @@ export function DraftResultsPanel({
     <section className="panel results-panel">
       <div className="panel-header rc-panel-header">
         <h2>◈ 生成結果（三站工作佇列）</h2>
-        {/* UX-B3-P02: header 精簡列＝全選（有佇列）+ 逐件（站①／②） */}
+        {/* Header keeps only the station-specific sequential action. */}
         <div className="rc-header-actions">
-          {showToolbar ? (
-            <label className="rc-header-select-all">
-              <input
-                checked={allSelected}
-                onChange={toggleAll}
-                ref={(el) => {
-                  if (el) el.indeterminate = someSelected;
-                }}
-                type="checkbox"
-                aria-label="全選目前列表"
-              />
-              <span>全選</span>
-            </label>
-          ) : null}
           {isCopyStation || isImageStation ? (
             <Button
               size="sm"
@@ -1479,10 +1440,94 @@ export function DraftResultsPanel({
           </div>
         ) : null}
 
+        {/* D2: controls follow the user's reading order: tabs, filters, select-all,
+            then selected actions. Desktop CSS keeps select-all beside sort. */}
+        <div className="stage-filter-row">
+          {showToolbar ? (
+            <label className="rc-header-select-all rc-header-select-all--desktop">
+              <input
+                checked={allSelected}
+                onChange={toggleAll}
+                ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                type="checkbox"
+                aria-label="全選目前列表"
+              />
+              <span className="rc-toggle-track" aria-hidden><span /></span>
+              <span>全選</span>
+            </label>
+          ) : null}
+          <StageFilterPills
+            counts={stageCounts}
+            onChange={onStageChange}
+            stage={stage}
+            factoryPendingCount={factoryBridgeSummary.pendingReview}
+          />
+          <div className="stage-filter-end">
+            {roleReady && admin ? (
+              <label className="results-scope-label">
+                <span className="sr-only">範圍</span>
+                <select
+                  aria-label="範圍"
+                  className="ir-scope-select"
+                  onChange={(event) => setScope(event.target.value as ResultsScopeMode)}
+                  value={scope}
+                >
+                  <option value="mine">只看我的</option>
+                  <option value="all">全部成員</option>
+                </select>
+              </label>
+            ) : null}
+            <label className="results-sort-label">
+              <span aria-hidden="true" className="results-sort-icon">⇅</span>
+              <span className="sr-only">排序</span>
+              <select
+                aria-label="排序"
+                className="sort-sel"
+                onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
+                value={sortMode}
+              >
+                {RESULT_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {showToolbar ? (
+          <div className="rc-selection-guide-row">
+            <label className="rc-header-select-all rc-header-select-all--mobile">
+              <input
+                checked={allSelected}
+                onChange={toggleAll}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected;
+                }}
+                type="checkbox"
+                aria-label="全選目前列表"
+              />
+              <span className="rc-toggle-track" aria-hidden><span /></span>
+              <span>全選</span>
+            </label>
+            <p className="rc-gesture-hint" role="note">
+              <span aria-hidden="true" className="rc-gesture-hint-mark">△</span>
+              <span className="rc-gesture-hint-text">長按可多選，進行批次核准／送審；右滑開啟核准／重生等快速操作，左滑移出佇列。</span>
+            </p>
+          </div>
+        ) : null}
+
         {/* UX-B3-P02: 有選取才出批次動作條；未選取不渲染空 toolbar */}
         {selectedIds.size > 0 ? (
           <div
-            className="rc-batch-strip"
+            className={`rc-batch-strip${
+              isCopyStation
+                ? " rc-batch-strip--copy"
+                : isImageStation
+                  ? " rc-batch-strip--image"
+                  : isReadyStation
+                    ? " rc-batch-strip--ready"
+                    : ""
+            }`}
             role="toolbar"
             aria-label="批次操作"
           >
@@ -1519,21 +1564,16 @@ export function DraftResultsPanel({
                         ? `⚠ 再點確認核准 ${selectedArray.length} 筆`
                         : "✓ 批次核准"}
                   </Button>
-                  <details className="batch-more">
-                    <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
-                    <div className="batch-more-menu">
-                      <Button
-                        size="sm"
-                        fullWidth
-                        disabled={busy || !selectedArray.length}
-                        onClick={() => void batchArchiveOrUnarchive("archive")}
-                        title="移出工作佇列（軟刪除，可救回）"
-                        type="button"
-                      >
-                        🗄 移出佇列
-                      </Button>
-                    </div>
-                  </details>
+                  <Button
+                    size="sm"
+                    className="batch-remove-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchArchiveOrUnarchive("archive")}
+                    title="移出工作佇列（軟刪除，可救回）"
+                    type="button"
+                  >
+                    移出佇列
+                  </Button>
                 </>
               ) : null}
               {isImageStation ? (
@@ -1558,41 +1598,36 @@ export function DraftResultsPanel({
                         ? `⚠ 再點確認 ${selectedArray.length} 筆`
                         : "✓ 批次標圖通過"}
                   </Button>
-                  <details className="batch-more">
-                    <summary className="nb-btn nb-btn--secondary nb-btn--sm">更多 ▾</summary>
-                    <div className="batch-more-menu">
-                      <Button
-                        size="sm"
-                        fullWidth
-                        disabled={busy || !selectedArray.length}
-                        onClick={() => void batchSetGenerateDetail(true)}
-                        title="勾選商品：開啟合成詳情圖（預設）"
-                        type="button"
-                      >
-                        開·生成詳情圖
-                      </Button>
-                      <Button
-                        size="sm"
-                        fullWidth
-                        disabled={busy || !selectedArray.length}
-                        onClick={() => void batchSetGenerateDetail(false)}
-                        title="勾選商品：關閉合成詳情圖（不進合成佇列）"
-                        type="button"
-                      >
-                        關·生成詳情圖
-                      </Button>
-                      <Button
-                        size="sm"
-                        fullWidth
-                        disabled={busy || !selectedArray.length}
-                        onClick={() => void batchArchiveOrUnarchive("archive")}
-                        title="移出工作佇列（軟刪除，可救回）"
-                        type="button"
-                      >
-                        🗄 移出佇列
-                      </Button>
-                    </div>
-                  </details>
+                  <Button
+                    size="sm"
+                    className="batch-detail-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchSetGenerateDetail(true)}
+                    title="勾選商品：開啟合成詳情圖（預設）"
+                    type="button"
+                  >
+                    開啟詳情圖
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="batch-detail-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchSetGenerateDetail(false)}
+                    title="勾選商品：關閉合成詳情圖（不進合成佇列）"
+                    type="button"
+                  >
+                    關閉詳情圖
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="batch-remove-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => void batchArchiveOrUnarchive("archive")}
+                    title="移出工作佇列（軟刪除，可救回）"
+                    type="button"
+                  >
+                    移出佇列
+                  </Button>
                 </>
               ) : null}
               {isReadyStation ? (
@@ -1611,52 +1646,6 @@ export function DraftResultsPanel({
             </div>
           </div>
         ) : null}
-
-        {/* UX-B2-P02 2-2: 站別 pills 左；只看我的 + 排序靠右 */}
-        <div className="stage-filter-row">
-          <StageFilterPills
-            counts={stageCounts}
-            onChange={onStageChange}
-            stage={stage}
-            factoryPendingCount={factoryBridgeSummary.pendingReview}
-          />
-          <div className="stage-filter-end">
-            {roleReady && admin ? (
-              <label className="results-scope-label">
-                <span className="sr-only">範圍</span>
-                <select
-                  aria-label="範圍"
-                  className="ir-scope-select"
-                  onChange={(event) =>
-                    setScope(event.target.value as ResultsScopeMode)
-                  }
-                  value={scope}
-                >
-                  <option value="mine">只看我的</option>
-                  <option value="all">全部成員</option>
-                </select>
-              </label>
-            ) : null}
-            <label className="results-sort-label">
-              <span aria-hidden="true" className="results-sort-icon">
-                ⇅
-              </span>
-              <span className="sr-only">排序</span>
-              <select
-                aria-label="排序"
-                className="sort-sel"
-                onChange={(event) => onSortChange(event.target.value as ResultSortMode)}
-                value={sortMode}
-              >
-                {RESULT_SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </div>
 
         {/* UX-F T29: 生圖工廠橋接 — 僅「圖片待標示」站顯示 */}
         {stage === "image_review" ? (
@@ -1737,19 +1726,6 @@ export function DraftResultsPanel({
           </div>
         ) : (
           <>
-            {showGestureHint ? (
-              <p className="rc-gesture-hint" role="note">
-                <span>長按卡片可多選；左滑可快捷</span>
-                <button
-                  aria-label="關閉提示"
-                  className="rc-gesture-hint-dismiss"
-                  onClick={dismissGestureHint}
-                  type="button"
-                >
-                  ×
-                </button>
-              </p>
-            ) : null}
             <div className="results-list" id="results-list">
               {visibleDrafts.map((draft) => (
                 <ResultCard

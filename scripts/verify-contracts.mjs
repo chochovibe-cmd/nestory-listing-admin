@@ -89,7 +89,7 @@ const errors = [
     "POST /api/worker/fail",
     "POST /api/drafts/{id}/request-revision",
     "POST /api/drafts/{id}/publish",
-    "Matrixify CSV Fallback",
+    "Matrixify CSV fallback",
     "SHOPIFY_PUBLISH_MOCK=true"
   ])
 ];

@@ -6,6 +6,7 @@ const render = fs.readFileSync("src/components/listing/VariantEditorRender.tsx",
 const tableCss = fs.readFileSync("src/app/d39b-mobile-variant-table.css", "utf8");
 const d310cCss = fs.readFileSync("src/app/d310c-mobile-variant-dialog.css", "utf8");
 const css = fs.readFileSync("src/app/d310d-mobile-variant-dialog.css", "utf8");
+const d310d1Css = fs.readFileSync("src/app/d310d1-mobile-character-picker.css", "utf8");
 const layout = fs.readFileSync("src/app/layout.tsx", "utf8");
 
 function count(source, token) {
@@ -38,17 +39,22 @@ assert.match(render, /className="variant-editor-modal"[\s\S]{0,140}key=\{editorM
 
 const d310cImport = layout.indexOf('import "./d310c-mobile-variant-dialog.css";');
 const d310dImport = layout.indexOf('import "./d310d-mobile-variant-dialog.css";');
+const d310d1Import = layout.indexOf('import "./d310d1-mobile-character-picker.css";');
 assert.ok(d310cImport >= 0 && d310dImport > d310cImport, "D3.10D must load after D3.10C");
+assert.ok(d310d1Import > d310dImport, "D3.10D.1 must load after D3.10D");
 assert.match(css, /@media \(max-width:\s*959px\)/);
 assert.doesNotMatch(css, /@media \(min-width:/);
 assert.doesNotMatch(css, /!important/);
+assert.doesNotMatch(d310d1Css, /@media \(min-width:/);
+assert.doesNotMatch(d310d1Css, /!important/);
 
 const compactRule = css.match(/\.variant-editor-modal:is\([\s\S]*?\)\s*\{[\s\S]*?width:\s*min\(calc\(100vw - 40px\), 360px\);[\s\S]*?max-height:\s*calc\(100dvh - 40px\);[\s\S]*?\}/)?.[0] ?? "";
 for (const kind of compactKinds) {
   assert.ok(compactRule.includes(`[data-modal-kind="${kind}"]`), `compact sizing missing ${kind}`);
 }
 assert.match(css, /\.variant-editor-modal\[data-modal-kind="batch-cost"\]\s*\{[\s\S]*width:\s*min\(calc\(100vw - 32px\), 380px\);[\s\S]*max-height:\s*min\(70dvh, 560px\);/);
-assert.match(css, /\.variant-editor-modal\[data-modal-kind="character"\]\s*\{[\s\S]*width:\s*min\(calc\(100vw - 32px\), 380px\);[\s\S]*max-height:\s*min\(72dvh, 580px\);/);
+// D3.10D.1 supersedes only Character's D3.10D 380px / 32dvh presentation.
+assert.match(d310d1Css, /\.variant-editor-modal\[data-modal-kind="character"\]\s*\{[\s\S]*width:\s*min\(calc\(100vw - 40px\), 360px\);[\s\S]*height:\s*auto;/);
 const modalBody = ruleBody(css, ".variant-editor-modal");
 assert.match(modalBody, /display:\s*block;/);
 assert.match(modalBody, /height:\s*auto;/);
@@ -76,16 +82,16 @@ assert.match(css, /\.variant-editor-modal-actions > button:last-child\s*\{[\s\S]
 assert.match(css, /\.variant-editor-modal > \.variant-editor-modal-note\s*\{[\s\S]*font-size:\s*12px;[\s\S]*line-height:\s*1\.45;/);
 assert.match(css, /\.variant-editor-modal\[data-modal-kind="batch-cost"\] \.variant-batch-preview\s*\{[\s\S]*padding:\s*var\(--sp-2\) var\(--sp-3\);[\s\S]*font-size:\s*12px;/);
 
-// D. Character results own the scroll region; 0/1 results no longer reserve a tall box.
-const characterListBody = ruleBody(css, '.variant-editor-modal[data-modal-kind="character"] .v-char-list--modal');
+// D. Character remains content-height driven; D3.10D.1 owns the tighter list cap.
+const characterListBody = ruleBody(d310d1Css, '.variant-editor-modal[data-modal-kind="character"] .v-char-list--modal');
 assert.match(characterListBody, /height:\s*auto;/);
-assert.match(characterListBody, /max-height:\s*min\(32dvh, 280px\);/);
+assert.match(characterListBody, /max-height:\s*var\(--ve-char-list-max, 192px\);/);
 assert.match(characterListBody, /overflow-y:\s*auto;/);
 assert.doesNotMatch(characterListBody, /min-height:/);
 assert.match(render, /filteredChars\.length === 0[\s\S]*className="variant-editor-character-empty"[\s\S]*沒有符合的角色/);
-assert.match(css, /\.variant-editor-character-empty\s*\{[\s\S]*min-height:\s*48px;[\s\S]*font-size:\s*12px;/);
+assert.match(d310d1Css, /\.variant-editor-character-empty\s*\{[\s\S]*min-height:\s*48px;[\s\S]*height:\s*auto;/);
 
-// E. Keyboard/short viewport stays centered and uses dynamic viewport sizing.
+// E. Generic D3.10D keyboard/short viewport stays centered; D3.10D.1 adds Character VisualViewport correction.
 const backdropBody = ruleBody(css, ".variant-editor-modal-backdrop");
 assert.match(backdropBody, /place-items:\s*center;/);
 assert.match(backdropBody, /overscroll-behavior:\s*none;/);
@@ -93,7 +99,8 @@ assert.match(backdropBody, /touch-action:\s*pan-y;/);
 assert.doesNotMatch(backdropBody, /touch-action:\s*none|bottom:\s*0/);
 assert.match(css, /100dvh/);
 assert.match(css, /@media \(max-width:\s*959px\) and \(max-height:\s*650px\)[\s\S]*max-height:\s*calc\(100dvh - 16px\);/);
-assert.doesNotMatch(css, /place-items:\s*end center|border-radius:\s*var\(--radius-l\) var\(--radius-l\) 0 0/);
+assert.match(d310d1Css, /\.variant-editor-modal-backdrop\[data-modal-kind="character"\]\s*\{[\s\S]*place-items:\s*center;/);
+assert.doesNotMatch(d310d1Css, /place-items:\s*end center|border-radius:\s*var\(--radius-l\) var\(--radius-l\) 0 0/);
 
 // F. D3.10A/B/C freezes: toolbar copy, shared table, split widths and gestures stay intact.
 const toolbarStart = main.indexOf('className="vh-mobile-primary-actions"');
@@ -113,7 +120,7 @@ assert.ok(tableCss.includes("--vm-cost-w: 116px;"));
 assert.ok(tableCss.includes("--vm-inventory-w: 160px;"));
 assert.match(tableCss, /\.v-mobile-table-scroll\s*\{[\s\S]*overflow-x:\s*auto;/);
 
-// D3.10C still owns the toolbar shell; only its one-size dialog geometry is superseded.
+// D3.10C still owns the toolbar shell; only Character presentation is further superseded.
 assert.match(d310cCss, /\.variant-box \.vh-mobile-primary-actions/);
 
-console.log("D3.10D mobile Variant dialog sizing + keyboard-fit contract passed");
+console.log("D3.10D mobile Variant dialog sizing + keyboard-fit contract passed with D3.10D.1 Character supersession");

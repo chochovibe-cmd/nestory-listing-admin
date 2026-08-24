@@ -52,12 +52,9 @@ assert.doesNotMatch(keyboardBackdrop, /(^|\n)\s*(?:top|bottom|height)\s*:/);
 assert.match(css, /data-keyboard-open="true"[\s\S]*\.variant-editor-modal\[data-modal-kind="character"\][\s\S]*max-height:\s*calc\(var\(--ve-visual-height, 100dvh\) - 20px\);[\s\S]*overflow-y:\s*auto;/);
 assert.match(css, /data-keyboard-open="true"[\s\S]*\.v-char-list--modal\s*\{[\s\S]*max-height:\s*var\(--ve-char-list-max, 112px\);/);
 
-// D. Focus stabilization is internal-dialog-only and one-shot; it never invokes browser scrollIntoView.
+// D. D3.10D.3 removes the now-unnecessary focus-position workaround; no browser/page scroll hacks exist.
 assert.doesNotMatch(bridge, /scrollIntoView/);
-assert.match(bridge, /focusStabilizationPending = true/);
-assert.match(bridge, /window\.requestAnimationFrame/);
-assert.match(bridge, /dialog\.scrollTop = 0/);
-assert.match(bridge, /focusStabilizationPending = false/);
+assert.doesNotMatch(bridge, /focusStabilization|requestAnimationFrame|cancelAnimationFrame|dialog\.scrollTop/);
 assert.doesNotMatch(bridge, /window\.scroll|document\.documentElement\.scroll|document\.body\.scroll/);
 
 // E. D3.10D.1 normal geometry and all other modal/table/gesture freezes remain intact.
@@ -85,4 +82,4 @@ assert.match(render, /className="v-mobile-table-scroll"/);
 assert.ok(tableCss.includes("--vm-cost-w: 116px;"));
 assert.ok(tableCss.includes("--vm-inventory-w: 160px;"));
 
-console.log("D3.10D.2 Character keyboard position stability contract passed");
+console.log("D3.10D.2 Character keyboard position stability contract passed with D3.10D.3 focus-workaround cleanup");

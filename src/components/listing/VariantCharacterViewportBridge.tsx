@@ -33,32 +33,10 @@ export function VariantCharacterViewportBridge() {
     let activeBackdrop: HTMLElement | null = null;
     let cleanupViewport: (() => void) | null = null;
     let allowSearchFocusUntil = 0;
-    let focusStabilizationPending = false;
-    let focusStabilizationRaf: number | null = null;
-
-    const cancelFocusStabilization = () => {
-      focusStabilizationPending = false;
-      if (focusStabilizationRaf != null) {
-        window.cancelAnimationFrame(focusStabilizationRaf);
-        focusStabilizationRaf = null;
-      }
-    };
-
-    const scheduleDialogScrollReset = () => {
-      if (!focusStabilizationPending) return;
-      focusStabilizationPending = false;
-      if (focusStabilizationRaf != null) window.cancelAnimationFrame(focusStabilizationRaf);
-      focusStabilizationRaf = window.requestAnimationFrame(() => {
-        focusStabilizationRaf = null;
-        const dialog = activeBackdrop?.querySelector<HTMLElement>(CHARACTER_DIALOG);
-        if (dialog) dialog.scrollTop = 0;
-      });
-    };
 
     const clearActiveBackdrop = () => {
       cleanupViewport?.();
       cleanupViewport = null;
-      cancelFocusStabilization();
       if (activeBackdrop) {
         activeBackdrop.removeAttribute("data-modal-kind");
         activeBackdrop.removeAttribute("data-keyboard-open");
@@ -98,8 +76,6 @@ export function VariantCharacterViewportBridge() {
         activeBackdrop.style.setProperty("--ve-visual-height", `${visualHeight}px`);
         activeBackdrop.style.setProperty("--ve-char-list-max", `${listMax}px`);
         activeBackdrop.dataset.keyboardOpen = keyboardOpen ? "true" : "false";
-
-        if (keyboardOpen && focusStabilizationPending) scheduleDialogScrollReset();
       };
 
       syncVisualViewport();
@@ -118,17 +94,7 @@ export function VariantCharacterViewportBridge() {
     const onFocusIn = (event: FocusEvent) => {
       if (!mobileMq.matches) return;
       if (!(event.target instanceof HTMLInputElement) || !event.target.matches(CHARACTER_SEARCH)) return;
-      if (performance.now() > allowSearchFocusUntil) {
-        cancelFocusStabilization();
-        event.target.blur();
-        return;
-      }
-
-      focusStabilizationPending = true;
-      const viewport = window.visualViewport;
-      if (!viewport || keyboardInsetFor(viewport.height) >= KEYBOARD_THRESHOLD_PX) {
-        scheduleDialogScrollReset();
-      }
+      if (performance.now() > allowSearchFocusUntil) event.target.blur();
     };
 
     const observer = new MutationObserver(syncBackdrop);

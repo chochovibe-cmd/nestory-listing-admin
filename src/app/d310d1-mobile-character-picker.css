@@ -2,6 +2,7 @@
  * D3.10D.1 Character Picker runtime geometry corrective.
  * Character-only mobile layer; all other Variant modal kinds remain frozen at D3.10D.
  * D3.10D.2 keeps VisualViewport as height measurement only and never positions the backdrop.
+ * D3.10D.3 explicitly locks the Character search value text to 16px to prevent iOS focus zoom.
  */
 
 @media (max-width: 959px) {
@@ -13,6 +14,10 @@
     width: min(calc(100vw - 40px), 360px);
     height: auto;
     max-height: min(calc(var(--ve-visual-height, 100dvh) - 16px), 580px);
+  }
+
+  .variant-editor-modal[data-modal-kind="character"] .v-char-search {
+    font-size: 16px;
   }
 
   .variant-editor-modal[data-modal-kind="character"] .v-char-list--modal {

@@ -8,16 +8,19 @@
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
 
-## COPY C1 — 潮巢導購版 AI Copy Tone（2026-08-25）
+## COPY C1 / C1.1 — 潮巢導購版 AI Copy Tone（2026-08-25）
 
-COPY C1 從 production/default merge HEAD `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 開新 branch `agent/copy-chaocao-sales-tone`，只新增第 7 種 **manual** 文案 tone「潮巢導購版」；既有 `DEFAULT_TONE` 與 IP auto-match map 不變。
+COPY C1 從 production/default merge HEAD `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 開 branch `agent/copy-chaocao-sales-tone`，新增第 7 種 **manual** tone「潮巢導購版」；`DEFAULT_TONE` 與 IP auto-match map 不變。初版 HEAD `ac86acbd4ed13e7d658daa6bb216b056f3b25c0b` 經 Owner iPhone／實際生成驗收後未通過，C1.1 在同一 PR #9 做單一 corrective。
 
-- UI：在「小編聊天口吻」後、「依IP自動匹配」前新增 `🛍️ 潮巢導購版 / 痛點導購・資訊完整`，沿用原 tone-card responsive/selected behavior。
-- Description：只有潮巢導購版使用「痛點／慾望破題 → 商品介紹 → ◈ 收藏亮點 → ◈ 為什麼會想帶回家 → ◈ 商品資訊 → ◈ 購買提醒」；原 6 tone 保持原格式。
-- Parser：共用 `sectionHeaders.ts` single source of truth；新增 `收藏亮點 → B`、`為什麼會想帶回家 → C` aliases，舊 `商品亮點 → B`、`適合誰 → C` 繼續相容。
-- Safety：feature → benefit 不能越過 evidence hierarchy；數字／材質／功能 claim 無依據就少寫或不寫；single-field description regen 也必須保留選定 tone layout。
-- Docs / verifier：`docs/文案排版規範-2026-07-18.md`、`docs/audits/COPY-C1-CHAONEST-SALES-TONE-2026-08-25.md`、`scripts/verify-copy-c1-chaonest-sales-tone.mjs`。
-- Scope freeze：本包沒有修改 title formula / SEO title formula / Shopify lifecycle / Supabase schema / Variant / ResultCard layout，也沒有 production Shopify write。
+- UI：`🛍️ 潮巢導購版 / 痛點導購・資訊完整` 仍在「小編聊天口吻」後、「依IP自動匹配」前；沒有新增 tone 或 UI redesign。
+- Title C1.1：第一段仍維持現行 `品牌 × IP`；只修第二段成「角色 + 商品類型」並 deterministic 把 `A|B|C / A｜B｜C / A | B | C` 全部正規化成 `A | B | C`。60/80 clamp 與第三段 blacklist 繼續有效。
+- Description C1.1：潮巢導購版純文字 source 改為 `商品介紹 → 收藏亮點 bullets → 導購小標：動態標題＋正文`；Shopify-boundary / Nestory Preview render 成 `h2 / p / ul / li`。主 description 不再有 `◈`、`商品資訊`、`購買提醒`；原 6 tone 保持既有 `◈` + h3 contract。
+- 到貨提醒：只有潮巢導購版改用四句短資訊型 notice，且放在 `<h2>商品介紹</h2>` 後；原 6 tone 的 tone-specific notices 不改。
+- Voice：新增 anti-AI 公版句規則；優先角色個性、真用途、生活情境、小慾望與實際購買理由；可吐槽、角色梗，戰鬥系 IP 適合時可少量中二，但 evidence safety 不放寬。
+- Taiwan Traditional：生成後 customer-facing title / description / FAQ / SEO / meta / why_we_chose_it / product_highlights / spec 在 persist 前 deterministic 台灣繁中 finalization；`taobao_title`、`original_title`、raw OCR/source cache 保留 evidence 原文。
+- Spec C1.1：full generation 以非空 provider `spec` 為 canonical clean spec；provider spec 空才 fallback 舊 `spec_text`。最終只留顧客有用規格並過濾淘寶後台垃圾欄位；精確數字仍不得猜。single-field regen 沒有 `spec_text` mapping，不會偷洗 Owner 手改規格。
+- Docs / verifier：`docs/文案排版規範-2026-07-18.md`、`docs/audits/COPY-C1-CHAONEST-SALES-TONE-2026-08-25.md`、`scripts/verify-copy-c1-chaonest-sales-tone.mjs` 已 supersede C1 初版 contract。
+- Scope freeze：不改 title 第一段順序、SEO formula、Tags V2、pricing、variants、inventory、Shopify lifecycle / credentials / `SHOPIFY_PUBLISH_MOCK`、Supabase schema；沒有 Shopify production write。
 
 ## Latest release-branch package — D3.7 mobile gesture guidance + bidirectional swipe
 

@@ -22,7 +22,7 @@ import { generateShopifyHandleSlug } from "@/lib/contentGenerator/handleGenerato
 import {
   clampOfficialTitle,
   ENRICHED_TITLE_MAX_LENGTH,
-  scrubEnrichedTitleSegment3,
+  normalizeEnrichedTitleContract,
 } from "@/lib/contentGenerator/titleGenerator";
 import { buildGenerateSuccessStatusPatch } from "@/lib/drafts/generateSuccessStatus";
 import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
@@ -62,8 +62,12 @@ import { buildXiaobianMissingEmojiWarning } from "@/lib/providers/emojiPolicy";
 import { normalizeDetectedProductBrand } from "@/lib/providers/productBrand";
 import {
   stripCustomerSourceMarkers,
-  stripCustomerSourceMarkersList,
 } from "@/lib/providers/stripCustomerSourceMarkers";
+import {
+  finalizeCustomerSpecText,
+  finalizeCustomerText,
+  finalizeCustomerTextList,
+} from "@/lib/providers/customerFacingFinalizer";
 import { resolveCopyTone } from "@/lib/providers/systemPrompt";
 import { resolveCanonicalCharacterName } from "@/lib/characters/resolveCanonicalCharacter";
 import {
@@ -91,9 +95,6 @@ const PROVIDER_TO_GENERATION_PROVIDER: Record<"openai" | "claude", GenerationPro
   claude: "anthropic",
 };
 
-// tag_rules-sourced errors/warnings are meaningless once Tags V2 takes over
-// shopify_tags (B4 1A: also filter warnings so one-click + regen does not leave
-// a ghost「尚未建立 tag_rules」line next to the real V2 dictionary warning).
 function isLegacyTagRuleMappingMessage(message: string): boolean {
   return message.includes("tag_rules") || message.includes("找不到二手商品屬性標籤");
 }
@@ -114,9 +115,6 @@ function parseCachedWebSearchSummary(raw: unknown): string | undefined {
   return typeof summary === "string" && summary.trim() ? summary : undefined;
 }
 
-// The IP/character/type are no longer typed into the form -- the AI detects
-// them from the title/image (Phase 4). `detected` carries those resolved
-// values into the rule engine so tags still come from tag_rules deterministically.
 type DetectedClassification = {
   ip: string;
   character: string;
@@ -125,10 +123,6 @@ type DetectedClassification = {
   sku: string;
 };
 
-/**
- * P1-66: store the concrete resolved tone (never the meta「依IP自動匹配」).
- * Invalid → null, never blocks generation.
- */
 function resolvedGenerationTone(
   tone: CopyTone,
   detectedIpName: string | null | undefined,
@@ -144,7 +138,6 @@ function toListingDraftInput(
   draft: ProductDraft,
   detected: DetectedClassification,
   variantSummary?: string | null,
-  /** P1-75a: brand effective for this pass (detected or existing). */
   productBrand?: string | null,
 ): ListingDraftInput {
   return {
@@ -152,7 +145,6 @@ function toListingDraftInput(
     product_status: draft.is_secondhand ? "secondhand" : "general",
     ip: detected.ip,
     characters: detected.character ? [detected.character] : [],
-    // 夜工包（回饋 27/29）+ P1-75a：聯名品牌與款式文字進標題/SEO 骨架
     product_brand: productBrand ?? draft.product_brand ?? null,
     variant_text: variantSummary ?? null,
     product_types: detected.productType ? [detected.productType] : [],
@@ -202,9 +194,6 @@ function descriptionHasProductInfoSection(description: string | null | undefined
   return body.length >= 4;
 }
 
-// Resolve the AI's detected IP string to a canonical ip_catalog name (matching
-// ip_name or any alias, case-insensitive). Falls back to the raw guess when
-// nothing matches -- the rule engine then flags a missing IP tag downstream.
 function resolveIpName(detected: string, ipCatalog: { ip_name: string; aliases: string[] }[]): string {
   const norm = (value: string) => value.normalize("NFKC").trim().toLowerCase();
   const target = norm(detected);
@@ -225,9 +214,6 @@ function resolveIpName(detected: string, ipCatalog: { ip_name: string; aliases: 
   return detected;
 }
 
-// Mirrors applyTagsV2ToGeneratedContent() from the boss's tool's
-// listingGeneration.ts: Tags V2 (nestoryTagsV2.ts) fully replaces the
-// DB tag_rules-driven shopify_tags/seo output computed by generateListingContent.
 function applyTagsV2(
   generatedContent: GeneratedListingContent,
   payload: ListingDraftInput,
@@ -240,8 +226,6 @@ function applyTagsV2(
     ...generatedContent.validation_errors.filter((message) => !isLegacyTagRuleMappingError(message)),
     ...tagResult.missing,
   ]);
-
-  // B4 1A: drop legacy tag_rules mapping warnings (V2 is authoritative).
   const legacyFilteredWarnings = generatedContent.validation_warnings.filter(
     (message) => !isLegacyTagRuleMappingMessage(message),
   );
@@ -257,11 +241,6 @@ function applyTagsV2(
   };
 }
 
-// Test/DEMO mode: skip the paid LLM copy call entirely and reuse the rule
-// engine's own deterministic output as the "copy". Tags/title skeleton/
-// description/FAQ are all real (the rule engine costs nothing); only the
-// LLM's value-added polish (why_we_chose_it / product_highlights) is absent.
-// This lets an operator dry-run the whole flow with zero API cost and no key.
 function buildTestModeOutput(ruleOutput: GeneratedListingContent, detected: DetectedClassification): CopyProviderOutput {
   return {
     enrichedTitle: ruleOutput.display_title ?? "",
@@ -282,7 +261,6 @@ function buildTestModeOutput(ruleOutput: GeneratedListingContent, detected: Dete
   };
 }
 
-// A7: maps each regenerable field to the product_drafts column it writes back to.
 const REGEN_FIELD_TO_COLUMN: Record<CopyRegenField, string> = {
   enriched_title: "title_zh",
   generated_description_html: "description_html",
@@ -293,9 +271,6 @@ const REGEN_FIELD_TO_COLUMN: Record<CopyRegenField, string> = {
   product_highlights: "product_highlights",
 };
 
-// A7: regenerate a single copy field. Keeps detection/tags untouched, writes
-// only the one column, and appends a generation_history row so the version UI
-// (B10) still sees every rewrite.
 async function handleFieldRegen(params: {
   regenField: CopyRegenField;
   providerKey: "openai" | "claude";
@@ -309,7 +284,6 @@ async function handleFieldRegen(params: {
   copyLength: CopyLength;
   scenarioKeywordMap: Record<string, string[]>;
   ipToneMap: ReturnType<typeof mergeIpToneMap>;
-  /** B10 D4: optional on-screen combination as LLM context (falls back to draft). */
   clientCurrentValues?: unknown;
 }): Promise<Response> {
   const {
@@ -328,15 +302,11 @@ async function handleFieldRegen(params: {
     clientCurrentValues,
   } = params;
   const currentValues = mergeRegenCurrentValues(draft, clientCurrentValues);
-  // A16/A17: same scenario terms the initial generation would have picked for
-  // this draft's already-detected product type, so a single-field regen of
-  // description/seo_title/meta_description stays consistent with the rest.
   const scenarioTerms = pickScenarioKeywords(
     [normalizeProductTypeForDisplay(draft.product_type ?? "")],
     scenarioKeywordMap,
   );
 
-  // P5: field regen uses known draft IP pack (no live re-search). DEFAULT + DB overlay.
   let knowledgePackMap = mergeKnowledgePackMap(null);
   const packQuery = await serviceSupabase
     .from("ip_catalog")
@@ -363,14 +333,10 @@ async function handleFieldRegen(params: {
       note: draft.note,
       imageDescription: draft.image_description ?? undefined,
       specText: draft.spec_text ?? undefined,
-      // A7: single-field regen does not re-search (cost). Reuse cached summary if present.
       webSearchSummary: parseCachedWebSearchSummary(draft.web_search_cache),
       ipKnowledgePromptBlock: regenIpKnowledgePromptBlock,
       tone,
       copyLength,
-      // A9 items 2/4: 依IP自動匹配 resolution and honest 二手 copy both need
-      // these; on a regen the draft's classification/secondhand facts are
-      // already known (unlike the very first generation).
       isSecondhand: draft.is_secondhand,
       secondhandGrade: draft.secondhand_grade,
       secondhandCondition: draft.secondhand_condition,
@@ -396,27 +362,22 @@ async function handleFieldRegen(params: {
   let historyContent: string;
 
   if (regenField === "product_highlights") {
-    const localized = stripCustomerSourceMarkersList(
-      raw.productHighlights.map(localizeToTaiwanTraditionalText).filter((value) => value.trim()),
-    );
+    const localized = finalizeCustomerTextList(raw.productHighlights);
     update.product_highlights = localized;
     responseHighlights = localized;
     historyContent = localized.join("\n");
   } else {
     let value = localizeToTaiwanTraditionalText(getCopyFieldValue(raw, regenField));
-    // Mirror the main flow's display-title term swap.
     if (regenField === "enriched_title") {
-      // P2-80/83: scrub blacklist → history full ≤80; title_zh clamp ≤60
-      const scrubbed = scrubEnrichedTitleSegment3(value.split("包包吊飾").join("包包掛件"));
-      const full =
-        Array.from(scrubbed).length > ENRICHED_TITLE_MAX_LENGTH
-          ? Array.from(scrubbed).slice(0, ENRICHED_TITLE_MAX_LENGTH).join("")
-          : scrubbed;
-      historyContent = full;
-      value = clampOfficialTitle(full);
+      const full = normalizeEnrichedTitleContract(
+        value.split("包包吊飾").join("包包掛件"),
+        localizeToTaiwanTraditionalText(draft.product_type ?? ""),
+        ENRICHED_TITLE_MAX_LENGTH,
+      );
+      historyContent = finalizeCustomerText(full);
+      value = clampOfficialTitle(historyContent);
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
     } else {
-      // A9 item 6: the model no longer writes the brand suffix itself.
       if (regenField === "seo_title") {
         value = appendNestoryBrandSuffix(injectScenarioKeywordsIntoSeoTitle(value, scenarioTerms));
       }
@@ -424,25 +385,17 @@ async function handleFieldRegen(params: {
         value = injectScenarioKeywordsIntoMetaDescription(value, scenarioTerms);
       }
       if (regenField === "generated_description_html") {
-        value = normalizeDescriptionToPlainText(
-          appendScenarioBulletToDescription(value, scenarioTerms),
-        );
+        value = tone === "潮巢導購版"
+          ? normalizeDescriptionToPlainText(value)
+          : normalizeDescriptionToPlainText(appendScenarioBulletToDescription(value, scenarioTerms));
       }
-      // P4: strip residual source markers on customer-facing regen fields
-      if (
-        regenField === "generated_description_html" ||
-        regenField === "generated_faq_html" ||
-        regenField === "meta_description" ||
-        regenField === "why_we_chose_it"
-      ) {
-        value = stripCustomerSourceMarkers(value);
-      }
+      value = finalizeCustomerText(value);
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
       historyContent = value;
     }
   }
 
-  // A13: a regen is extra spend -- accumulate onto the draft's running totals.
+  // COPY C1.1 safety: this single-field path has no spec_text mapping/write.
   if (raw.usage) {
     update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd;
     update.generation_input_tokens = Number(draft.generation_input_tokens ?? 0) + raw.usage.inputTokens;
@@ -458,7 +411,6 @@ async function handleFieldRegen(params: {
     return Response.json({ error: updateError.message }, { status: 500 });
   }
 
-  // P1-66: regen may switch tone — soft write (migration 034).
   await serviceSupabase
     .from("product_drafts")
     .update({ generation_tone: resolvedGenerationTone(tone, draft.ip_name, ipToneMap) })
@@ -487,11 +439,6 @@ async function handleFieldRegen(params: {
   });
 }
 
-// A10: template-assembled ALT text (rule engine, never the LLM -- 文案·三·9),
-// written once per generate call using the just-finalised classification.
-// Always overwrites; there's no manual-edit UI for alt_text yet, so nothing to
-// preserve. Best-effort: a failure here shouldn't fail the whole generate call,
-// so callers should not await-and-throw this without a try/catch.
 async function writeImageAltTexts(
   serviceSupabase: ReturnType<typeof createServiceSupabaseClient>,
   draftId: string,
@@ -541,8 +488,6 @@ export async function POST(request: NextRequest) {
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
   const providerKey: "openai" | "claude" = body.provider === "claude" ? "claude" : "openai";
   const runMode: "test" | "llm" = body.mode === "test" ? "test" : "llm";
-  // B8: default ON when omitted (form default + ResultCard 重新生成 without toggle).
-  // Explicit false still turns it off.
   const useWebSearch = body.useWebSearch !== false;
   const source = typeof body.source === "string" ? body.source : undefined;
   const variantSummary = typeof body.variantSummary === "string" ? body.variantSummary : undefined;
@@ -550,19 +495,13 @@ export async function POST(request: NextRequest) {
     ? body.tone
     : "黑膠文藝收藏感";
   const copyLength: CopyLength = ["精簡", "標準", "詳細"].includes(body.copyLength) ? body.copyLength : "標準";
-  // R2 §4: 重新生成彈窗「修改方向／補充」— prepend into note for this run only
   const regenNotes =
     typeof body.regenNotes === "string" && body.regenNotes.trim()
       ? body.regenNotes.trim().slice(0, 2000)
       : "";
-  // B1: analyze-images runs client-side before generate and must never block it
-  // (requirement: skip image info, still generate). Any image-analysis failures
-  // arrive here as strings so they end up in the draft's warnings (黃字), rather
-  // than being lost when the operator moves on.
   const imageWarnings: string[] = Array.isArray(body.imageWarnings)
     ? body.imageWarnings.filter((value: unknown): value is string => typeof value === "string" && value.trim().length > 0)
     : [];
-  // A7: optional single-field regen. When present, only this field is rewritten.
   const regenField: CopyRegenField | null =
     typeof body.field === "string" && (COPY_REGEN_FIELDS as readonly string[]).includes(body.field)
       ? (body.field as CopyRegenField)
@@ -583,9 +522,6 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Operator role is required" }, { status: 403 });
   }
 
-  // RLS on product_drafts already limits this to rows the user may see
-  // (own drafts, or admin/reviewer). Using the auth-scoped client here is
-  // the authorization check itself, not just a data fetch.
   const { data: draftRow, error: draftError } = await authSupabase
     .from("product_drafts")
     .select("*")
@@ -599,11 +535,6 @@ export async function POST(request: NextRequest) {
   const draft = draftRow as ProductDraft;
   const serviceSupabase = createServiceSupabaseClient();
 
-  // A16: team_settings-editable override of the default scenario keyword
-  // dictionary (scenarioKeywords.ts). Missing row/key just falls back to the
-  // built-in defaults -- no admin UI writes this yet, so it's normal for the
-  // row not to exist until someone edits it directly in Supabase.
-  // B8: same pattern for IP→tone overrides (ip_tone_map_overrides).
   const [scenarioSettingsResult, ipToneSettingsResult] = await Promise.all([
     serviceSupabase
       .from("team_settings")
@@ -623,9 +554,6 @@ export async function POST(request: NextRequest) {
     (ipToneSettingsResult.data?.value as Record<string, string> | null) ?? null,
   );
 
-  // A7: single-field regen path. Rewrites just one copy field using the rest of
-  // the current draft as context; it does NOT re-detect IP/type or recompute
-  // tags (those stay fixed), so it returns early before the full pipeline.
   if (regenField) {
     return handleFieldRegen({
       regenField,
@@ -640,13 +568,10 @@ export async function POST(request: NextRequest) {
       copyLength,
       scenarioKeywordMap,
       ipToneMap,
-      // B10 D4: UI may send the on-screen multi-version combination as context.
       clientCurrentValues: body.currentValues,
     });
   }
 
-  // P5: knowledge_pack on ip_catalog (migration 038). If column missing, fall back
-  // without the column so generate still works on DEFAULT packs in code.
   const ipCatalogWithPack = await serviceSupabase
     .from("ip_catalog")
     .select("id,ip_name,aliases,sort_order,is_active,created_at,updated_at,knowledge_pack")
@@ -700,20 +625,14 @@ export async function POST(request: NextRequest) {
   );
 
   const extraWarnings: string[] = [];
-
-  // B1: carry forward any image-analysis warnings collected client-side so they
-  // land in validation_warnings (黃字) instead of silently vanishing.
   if (imageWarnings.length > 0) extraWarnings.push(...imageWarnings);
 
-  // B8/B19: real web search (Tavily) with draft-level cache. Missing key = honest
-  // warning, never fake results. Single-field regen does not re-search.
   const rawTitleForSearch = draft.taobao_title ?? draft.original_title ?? "";
   let webSearchSummary: string | undefined;
   let productCacheToPersist: WebSearchCache | null = null;
   let ipBackgroundCacheToPersist: WebSearchCache | null = null;
   let ipKnowledgePromptBlock: string | undefined;
 
-  // P5 層2: resolve candidate IP for pack (draft first; else title alias guess).
   const candidateIpForPack =
     (draft.ip_name ?? "").trim() ||
     guessIpNameFromTitle(rawTitleForSearch, ipCatalogEntries) ||
@@ -745,7 +664,6 @@ export async function POST(request: NextRequest) {
       productCacheToPersist = searchOutcome.cacheToPersist;
     }
 
-    // P5 層3: cold IP / no pack → optional IP-background search (shared cache).
     if (!knowledgePack) {
       const ipBg = await resolveIpBackgroundSearchForGenerate({
         useWebSearch,
@@ -774,9 +692,6 @@ export async function POST(request: NextRequest) {
     ipBackground: ipBackgroundCacheToPersist?.ipBackground ?? null,
   });
 
-  // Phase 4: the AI detects IP/character/type from the title+image (form no
-  // longer collects them). Test mode has no LLM, so it falls back to whatever
-  // classification the draft already carries.
   let providerOutput: CopyProviderOutput | null = null;
   let detected: DetectedClassification = {
     ip: draft.ip_name ?? "",
@@ -800,32 +715,20 @@ export async function POST(request: NextRequest) {
         compareAtPrice: draft.compare_at_price,
         note: noteForRun,
         imageDescription: draft.image_description ?? undefined,
-        // A3: spec_text (規格圖 OCR from analyze-images) was never passed to the
-        // copy provider even though CopyProviderInput/buildCopyUserMessage
-        // already support it. Sizes/materials in the copy's D 段 must come from
-        // here (or the spec field), never from Vision's visual guess (風險 #2).
         specText: draft.spec_text ?? undefined,
         webSearchSummary,
         ipKnowledgePromptBlock,
         knownIpNames,
         tone,
         copyLength,
-        // A9 item 4: honest 二手 copy needs these facts, which the model
-        // previously never received at all.
         isSecondhand: draft.is_secondhand,
         secondhandGrade: draft.secondhand_grade,
         secondhandCondition: draft.secondhand_condition,
         secondhandNotes: draft.secondhand_notes,
-        // A9 item 2: 依IP自動匹配 resolution. On this very first pass the IP
-        // isn't known yet (detection happens in this same call), so this is
-        // only non-null on a later full regeneration of an already-classified
-        // draft; the initial pass falls back to the default tone.
-        // Manual tones never consult ipToneMap (resolveCopyTone gate).
         detectedIpName: draft.ip_name ?? candidateIpForPack,
         ipToneMap,
       });
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
-      // P2-79: character → dictionary canonical (Miffy), not surface alias (米飛)
       const resolvedCharacter =
         resolveCanonicalCharacterName(raw.detectedCharacterName, {
           ipName: resolvedIp,
@@ -848,7 +751,6 @@ export async function POST(request: NextRequest) {
         );
       }
     } catch (providerError) {
-      // Q7-A: park failure light on copy_review without changing legacy status.
       await serviceSupabase
         .from("product_drafts")
         .update({
@@ -865,26 +767,17 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // A10: template ALT text, keyed off the classification just finalised above.
-  // Best-effort -- alt_text is supplementary, so a failure here must not fail
-  // the whole generate call.
   try {
     await writeImageAltTexts(serviceSupabase, draftId, detected, displayContext, draft.image_description);
   } catch {
     extraWarnings.push("圖片 ALT 文字寫入失敗，不影響文案結果，可稍後重新生成。");
   }
 
-  // A16: scenario terms picked once off the just-finalised detected product
-  // type, reused for seo_title/meta (both the rule-engine path via
-  // applyTagsV2 and the LLM's own output below) and A17's D段 bullet.
   const scenarioTerms = pickScenarioKeywords(
     [normalizeProductTypeForDisplay(detected.productType)],
     scenarioKeywordMap,
   );
 
-  // A21-1 + P0-73: romanized handle slug off classification, with draft-id
-  // short suffix so two same-IP/character/type drafts never share a Handle
-  // (Matrixify would merge them). Written to shopify_handle for publish + CSV.
   const handleSlug = generateShopifyHandleSlug(
     {
       ip: detected.ip,
@@ -895,13 +788,10 @@ export async function POST(request: NextRequest) {
     displayContext,
   );
 
-  // P1-75a: brand three-piece — normalize LLM brand; empty must not wipe existing.
   const detectedBrand = providerOutput
     ? normalizeDetectedProductBrand(providerOutput.detectedProductBrand)
     : null;
   const effectiveProductBrand = detectedBrand ?? draft.product_brand ?? null;
-
-  // P1-66: concrete resolved tone for this generation (not meta 依IP自動匹配).
   const generationTone = resolvedGenerationTone(tone, detected.ip || draft.ip_name, ipToneMap);
 
   const listingInput = toListingDraftInput(draft, detected, variantSummary, effectiveProductBrand);
@@ -917,35 +807,29 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("測試模式：未呼叫 AI、未自動偵測 IP；文案為規則引擎產出，tags 依草稿現有資料。");
   }
 
-  // P2-80/83: LLM enriched (≤80, scrub 黑名單) → history; clamp → title_zh ≤60
-  const enrichedTitleFull = (() => {
-    const raw = (providerOutput.enrichedTitle || ruleOutput.display_title || "").trim();
-    const scrubbed = scrubEnrichedTitleSegment3(raw.split("包包吊飾").join("包包掛件"));
-    const chars = Array.from(scrubbed);
-    return chars.length > ENRICHED_TITLE_MAX_LENGTH
-      ? chars.slice(0, ENRICHED_TITLE_MAX_LENGTH).join("")
-      : scrubbed;
-  })();
+  // COPY C1.1: deterministic backend title normalization owns separator + segment-2 type.
+  const enrichedTitleFull = normalizeEnrichedTitleContract(
+    localizeToTaiwanTraditionalText(
+      (providerOutput.enrichedTitle || ruleOutput.display_title || "")
+        .trim()
+        .split("包包吊飾")
+        .join("包包掛件"),
+    ),
+    localizeToTaiwanTraditionalText(detected.productType),
+    ENRICHED_TITLE_MAX_LENGTH,
+  );
   const officialTitleZh = clampOfficialTitle(enrichedTitleFull);
+
+  const descriptionSource = providerOutput.generatedDescriptionHtml || ruleOutput.generated_description_html;
+  const descriptionForOutput = generationTone === "潮巢導購版"
+    ? descriptionSource
+    : appendScenarioBulletToDescription(descriptionSource, scenarioTerms);
 
   const localizedOutput = localizeGeneratedListingContent({
     ...ruleOutput,
     display_title: officialTitleZh,
-    // A17: rule-engine-picked scenario terms appended as a deterministic
-    // "➼ 適用情境" bullet inside the model's own D段, never left to the LLM
-    // to invent. No-op when the model omitted D段 (nothing to attach to) or
-    // when falling back to ruleOutput's own (structurally different) HTML.
-    generated_description_html: appendScenarioBulletToDescription(
-      providerOutput.generatedDescriptionHtml || ruleOutput.generated_description_html,
-      scenarioTerms,
-    ),
+    generated_description_html: descriptionForOutput,
     generated_faq_html: providerOutput.generatedFaqHtml || ruleOutput.generated_faq_html,
-    // A9 item 6: the model no longer writes "｜潮巢 Nestory" itself -- appended
-    // here uniformly. ruleOutput.seo_title (the test-mode/fallback path)
-    // already carries the suffix (and scenario terms) via seoGenerator's
-    // buildSeoTitle. A16: scenario terms are injected into the LLM's own
-    // seo_title/meta_description the same way, since that's what actually
-    // ships in real (non-test-mode) generation.
     seo_title: providerOutput.seoTitle
       ? appendNestoryBrandSuffix(injectScenarioKeywordsIntoSeoTitle(providerOutput.seoTitle, scenarioTerms))
       : ruleOutput.seo_title,
@@ -954,24 +838,19 @@ export async function POST(request: NextRequest) {
       : ruleOutput.meta_description,
   });
 
-  // P4: 出處標記退出顧客文案（後製窄剝，冪等；內部 🔍 警告不經此）
-  localizedOutput.generated_description_html = stripCustomerSourceMarkers(
+  localizedOutput.generated_description_html = finalizeCustomerText(
     localizedOutput.generated_description_html,
   );
-  localizedOutput.generated_faq_html = stripCustomerSourceMarkers(
+  localizedOutput.generated_faq_html = finalizeCustomerText(
     localizedOutput.generated_faq_html,
   );
-  localizedOutput.meta_description = stripCustomerSourceMarkers(
+  localizedOutput.seo_title = finalizeCustomerText(localizedOutput.seo_title);
+  localizedOutput.meta_description = finalizeCustomerText(
     localizedOutput.meta_description,
   );
-  const cleanedWhyWeChoseIt = stripCustomerSourceMarkers(providerOutput.whyWeChoseIt);
-  const cleanedProductHighlights = stripCustomerSourceMarkersList(
-    providerOutput.productHighlights,
-  );
+  const cleanedWhyWeChoseIt = finalizeCustomerText(providerOutput.whyWeChoseIt);
+  const cleanedProductHighlights = finalizeCustomerTextList(providerOutput.productHighlights);
 
-  // A11: warn (never block) when generated copy leaks a 叫賣/禁忌詞. The rule
-  // engine's own validation stays authoritative for blocking; this only adds a
-  // yellow flag for the reviewer.
   const forbiddenWarning = buildForbiddenTermWarning([
     localizedOutput.display_title,
     localizedOutput.generated_description_html,
@@ -983,8 +862,6 @@ export async function POST(request: NextRequest) {
   ]);
   if (forbiddenWarning) extraWarnings.push(forbiddenWarning);
 
-  // P1-76 fix: soft-warn when 小編聊天口吻 still has zero emoji after generate
-  // (post-process does not strip emoji — this catches model non-compliance).
   if (generationTone === "小編聊天口吻") {
     const emojiWarn = buildXiaobianMissingEmojiWarning(
       localizedOutput.generated_description_html,
@@ -993,10 +870,6 @@ export async function POST(request: NextRequest) {
     if (emojiWarn) extraWarnings.push(emojiWarn);
   }
 
-  // A21-5: Meta Description uniqueness guard, warn-only (same posture as
-  // A11's forbiddenWarning above). Content-gap check is local; the
-  // cross-product duplicate check needs a DB read of sibling drafts under
-  // the same IP, so it only runs when the IP was actually resolved.
   const metaFeatureTerms = extractFeatureTerms(
     draft.image_description,
     [listingInput.intro, listingInput.product_name].filter(Boolean).join(" "),
@@ -1029,25 +902,19 @@ export async function POST(request: NextRequest) {
     if (metaDuplicateWarning) extraWarnings.push(metaDuplicateWarning);
   }
 
-  // 規格自動化 (Mockup差異備忘 差異2, 老闆 2026-07-11): when the operator left
-  // spec_text empty, adopt the model's [[spec]] synthesis and flag it for a
-  // review glance. A non-empty spec_text (operator 補充/修正) is authoritative and
-  // never overwritten. Empty spec never blocks generation -- it just stays null.
-  const existingSpec = (draft.spec_text ?? "").trim();
-  const autoSpec = localizeToTaiwanTraditionalText(providerOutput.spec ?? "").trim();
-  const autoSpecIsBlank = !autoSpec || autoSpec === "（無）" || autoSpec === "(無)";
-  let finalSpecText: string | null = draft.spec_text ?? null;
-  if (!existingSpec && !autoSpecIsBlank) {
-    // P4: strip residual 「（來源：網路）」 from auto-spec before persist
-    finalSpecText = stripCustomerSourceMarkers(autoSpec);
+  // COPY C1.1: provider clean spec is canonical on full generation; existing OCR/manual text is fallback only.
+  const providerSpecRaw = (providerOutput.spec ?? "").trim();
+  const providerSpecHasContent =
+    Boolean(providerSpecRaw) && providerSpecRaw !== "（無）" && providerSpecRaw !== "(無)";
+  const finalSpecText = finalizeCustomerSpecText(providerOutput.spec, draft.spec_text);
+  if (providerSpecHasContent && finalSpecText) {
     extraWarnings.push(
       webSearchSummary
-        ? "商品規格為系統自動整理（來自款式／標題／圖片文字／網路搜尋），發布前請審核瞄一眼確認無誤、必要時修正。"
-        : "商品規格為系統自動整理（來自款式／標題／圖片文字），發布前請審核瞄一眼確認無誤、必要時修正。",
+        ? "商品規格為系統自動整理（來自款式／標題／圖片文字／網路搜尋），已轉台灣繁中並移除平台後台欄位；發布前請審核確認。"
+        : "商品規格為系統自動整理（來自款式／標題／圖片文字），已轉台灣繁中並移除平台後台欄位；發布前請審核確認。",
     );
   }
 
-  // P2-82 (回饋 26)：只警告不自動抽——規格中繼空但描述「商品資訊」段有內容
   {
     const specEmpty = !(finalSpecText ?? "").trim() || (finalSpecText ?? "").trim() === "（無）";
     if (specEmpty && descriptionHasProductInfoSection(localizedOutput.generated_description_html)) {
@@ -1057,14 +924,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // P0-62: single source for status / pipeline_stage / generation_status so a
-  // previously-failed draft cannot keep showing ✗ after a successful regen.
   const successStatus = buildGenerateSuccessStatusPatch(
     localizedOutput.draft_state,
     localizedOutput.validation_errors ?? [],
   );
 
-  // B4 3A: after detect, three-dimension (IP+角色+類型) duplicate check → yellow only.
   try {
     if (detected.ip && detected.productType) {
       const dup = await queryDuplicateMatches(serviceSupabase, {
@@ -1088,8 +952,6 @@ export async function POST(request: NextRequest) {
 
   const draftUpdate: Record<string, unknown> = {
     title_zh: localizedOutput.display_title,
-    // fix(B10): description_html storage contract = plain text (A23);
-    // rule/test path used to write HTML — normalize at write boundary.
     description_html: normalizeDescriptionToPlainText(localizedOutput.generated_description_html),
     seo_title: localizedOutput.seo_title,
     seo_description: localizedOutput.meta_description,
@@ -1106,15 +968,12 @@ export async function POST(request: NextRequest) {
     detected_category: detected.category || null,
     sku: detected.sku || null,
     warnings: allWarnings,
-    // P0-62: successStatus already maps blocked vs ok for the three queue fields.
     status: successStatus.status,
     pipeline_stage: successStatus.pipeline_stage,
     generation_mode: "api_llm",
     generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
     generation_status: successStatus.generation_status,
     generation_model: providerOutput.model,
-    // A13: per-draft AI spend + raw tokens (null in test mode) and the copy
-    // stage timestamp for the dashboard funnel/budget.
     generation_cost_estimate: providerOutput.usage?.costUsd ?? null,
     generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
     generation_output_tokens: providerOutput.usage?.outputTokens ?? null,
@@ -1122,7 +981,6 @@ export async function POST(request: NextRequest) {
     generation_error: successStatus.generation_error,
   };
 
-  // P1-75a: only overwrite product_brand when detection produced a clean brand.
   if (detectedBrand) {
     draftUpdate.product_brand = detectedBrand;
   }
@@ -1185,8 +1043,6 @@ export async function POST(request: NextRequest) {
       .eq("id", draftId);
   }
 
-  // P1-66: generation_tone (migration 034) — separate write so missing column
-  // never fails the whole generate (soft warn only).
   {
     const { error: toneError } = await serviceSupabase
       .from("product_drafts")
@@ -1194,7 +1050,6 @@ export async function POST(request: NextRequest) {
       .eq("id", draftId);
     if (toneError) {
       extraWarnings.push("generation_tone 寫入略過（請確認已執行 migration 034）。");
-      // Best-effort refresh warnings list (ignore second failure).
       await serviceSupabase
         .from("product_drafts")
         .update({ warnings: uniqueMessages([...allWarnings, ...extraWarnings]) })
@@ -1202,16 +1057,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // B8/B19: persist search cache separately so missing migration 023 never
-  // fails the whole generation (column absent → soft warn only).
   if (webSearchCacheToPersist) {
     const { error: cacheError } = await serviceSupabase
       .from("product_drafts")
       .update({ web_search_cache: webSearchCacheToPersist })
       .eq("id", draftId);
     if (cacheError) {
-      // Re-read warnings already written; append via a second soft update is optional.
-      // Surface in response path by best-effort merge into warnings column.
       await serviceSupabase
         .from("product_drafts")
         .update({
@@ -1224,17 +1075,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // B10: all 7 regenerable fields get a history row (was missing product_highlights).
-  // P4: history stores post-strip customer copy (same as draft columns).
-  const highlightsContent = cleanedProductHighlights
-    .map((line) => localizeToTaiwanTraditionalText(line).trim())
-    .filter(Boolean)
-    .join("\n");
+  const highlightsContent = cleanedProductHighlights.join("\n");
   const historyRows = [
-    // P2-83: history keeps full enriched (≤80); product_drafts.title_zh is clamped 60
     {
       field_name: "enriched_title",
-      content: localizeToTaiwanTraditionalText(enrichedTitleFull) || localizedOutput.display_title,
+      content: enrichedTitleFull || localizedOutput.display_title,
     },
     { field_name: "generated_description_html", content: localizedOutput.generated_description_html },
     { field_name: "generated_faq_html", content: localizedOutput.generated_faq_html },
@@ -1262,7 +1107,6 @@ export async function POST(request: NextRequest) {
     draftState: localizedOutput.draft_state,
     validationErrors: localizedOutput.validation_errors,
     validationWarnings: allWarnings,
-    /** BX10: client tone memory per IP (display only; already written to draft). */
     detectedIpName: detected.ip || draft.ip_name || null,
     result: {
       title: localizedOutput.display_title,

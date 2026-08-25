@@ -415,9 +415,26 @@ function sliceChars(value: string, max: number): string {
   return Array.from(value).slice(0, Math.max(0, max)).join('');
 }
 
+/** COPY C1.1: split every supported pipe spelling and rejoin using the one official separator. */
+function splitTitlePipeSegments(value: string): string[] | null {
+  const normalized = normalizeText(value);
+  if (!/[|｜]/u.test(normalized)) return null;
+  const parts = normalized
+    .split(/\s*[|｜]\s*/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length >= 2 ? parts : null;
+}
+
+export function normalizeTitleSeparators(value: string | null | undefined): string {
+  const normalized = normalizeText(value ?? '');
+  const parts = splitTitlePipeSegments(normalized);
+  return parts ? parts.join(' | ') : normalized;
+}
+
 /**
  * P2-83: skeleton clamp — prefer cutting segment 3, never chop brand×IP (seg1).
- * Separators try " | " first, then fullwidth "｜", then " ".
+ * Official separator is always " | ".
  */
 export function enforceSkeletonTitleLength(
   seg1: string,
@@ -473,31 +490,65 @@ function enforceTitleLength(ip: string, coreName: string, featureText: string): 
 }
 
 /**
+ * COPY C1.1 deterministic enriched-title contract:
+ * - preserve current segment 1 order (brand × IP)
+ * - segment 2 = existing character text + detected product type when missing
+ * - separator always " | "
+ * - segment 3 blacklist stays active; exact duplicate product type is removed from seg3
+ * - caller chooses 60/80 clamp budget.
+ */
+export function normalizeEnrichedTitleContract(
+  title: string | null | undefined,
+  detectedProductType: string | null | undefined,
+  maxLen: number = ENRICHED_TITLE_MAX_LENGTH,
+): string {
+  const normalized = normalizeTitleSeparators(title);
+  if (!normalized) return '';
+
+  const parts = splitTitlePipeSegments(normalized);
+  if (!parts) {
+    return clampOfficialTitle(normalized, maxLen);
+  }
+
+  const seg1 = parts[0] ?? '';
+  let seg2 = parts[1] ?? '';
+  let seg3 = parts.slice(2).join(' | ');
+  const productType = canonicalizeProductType(detectedProductType ?? '');
+
+  if (productType && !typeAlreadyPresentIn(productType, seg2)) {
+    seg2 = dedupeRepeatedTitleTerms([seg2, productType].filter(Boolean).join(' '));
+  }
+
+  if (productType && seg3.includes(productType)) {
+    seg3 = seg3.split(productType).join(' ').replace(/\s{2,}/g, ' ').trim();
+  }
+  seg3 = sanitizeTitleSegment3(seg3);
+  if (!seg3 && parts.length >= 3) seg3 = '標準款';
+
+  return enforceSkeletonTitleLength(seg1, seg2, seg3, maxLen);
+}
+
+/**
  * P2-83: clamp any free-form title (LLM enriched) down to official title_zh ≤60.
- * - With " | " / "｜" separators: skeleton-aware (prefer cut seg3, never cut seg1).
+ * - With any supported pipe separator: skeleton-aware (prefer cut seg3, never cut seg1).
  * - Without separators: safe truncate — do not cut mid-word when possible; keep head.
  */
 export function clampOfficialTitle(
   title: string | null | undefined,
   maxLen: number = OFFICIAL_TITLE_MAX_LENGTH,
 ): string {
-  const raw = normalizeText(title ?? '');
+  const raw = normalizeTitleSeparators(title ?? '');
   if (!raw) return '';
-  if (textLen(raw) <= maxLen) return raw;
 
-  // Prefer pipe separators (ASCII or fullwidth)
-  const pipeSplit = raw.includes(' | ')
-    ? raw.split(' | ').map((p) => p.trim()).filter(Boolean)
-    : raw.includes('｜')
-      ? raw.split('｜').map((p) => p.trim()).filter(Boolean)
-      : null;
-
+  const pipeSplit = splitTitlePipeSegments(raw);
   if (pipeSplit && pipeSplit.length >= 2) {
     const seg1 = pipeSplit[0];
     const seg2 = pipeSplit[1] ?? '';
     const seg3 = pipeSplit.slice(2).join(' | ');
     return enforceSkeletonTitleLength(seg1, seg2, seg3, maxLen);
   }
+
+  if (textLen(raw) <= maxLen) return raw;
 
   // No pipe: try to keep a leading brand×IP-ish head before first multi-space or middle-dot run
   const headMatch = raw.match(/^(.+?(?:×.+?)?)(?:\s{2,}|\s+\/\s+)([\s\S]+)$/);
@@ -509,7 +560,6 @@ export function clampOfficialTitle(
   const chars = Array.from(raw);
   if (chars.length <= maxLen) return raw;
   const window = chars.slice(0, maxLen);
-  const joined = window.join('');
   const breakPoints = [' ', '、', '・', '，', ',', '/', '-', '－'];
   let cut = maxLen;
   for (let i = window.length - 1; i >= Math.floor(maxLen * 0.55); i -= 1) {
@@ -523,31 +573,25 @@ export function clampOfficialTitle(
   return chars.slice(0, cut).join('').trim();
 }
 
-/** P2-80: post-process LLM enriched title third segment (blacklist scrub). */
+/** P2-80 + COPY C1.1: post-process LLM enriched title third segment and normalize all pipes. */
 export function scrubEnrichedTitleSegment3(title: string | null | undefined): string {
-  const raw = normalizeText(title ?? '');
+  const raw = normalizeTitleSeparators(title ?? '');
   if (!raw) return '';
 
-  const parts = raw.includes(' | ')
-    ? raw.split(' | ')
-    : raw.includes('｜')
-      ? raw.split('｜')
-      : null;
-
+  const parts = splitTitlePipeSegments(raw);
   if (!parts || parts.length < 3) {
-    // Flat string: strip blacklist tokens only
+    // Flat/two-segment string: strip blacklist tokens only; pipe spelling is already normalized.
     return sanitizeTitleSegment3(raw) || raw;
   }
 
   const seg1 = parts[0].trim();
   const seg2 = parts[1].trim();
-  let seg3 = parts.slice(2).join(raw.includes('｜') ? '｜' : ' | ').trim();
+  let seg3 = parts.slice(2).join(' | ').trim();
   seg3 = sanitizeTitleSegment3(seg3);
   if (!seg3 || isTitleSegment3Blacklisted(seg3)) {
     seg3 = '標準款';
   }
-  const sep = raw.includes('｜') && !raw.includes(' | ') ? '｜' : ' | ';
-  return [seg1, seg2, seg3].filter(Boolean).join(sep);
+  return [seg1, seg2, seg3].filter(Boolean).join(' | ');
 }
 
 export function generateDisplayTitle(draft: ListingDraftInput, context: DisplayLabelContext = {}): string | null {

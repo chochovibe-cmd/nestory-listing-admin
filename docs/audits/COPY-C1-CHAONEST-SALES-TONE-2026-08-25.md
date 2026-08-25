@@ -1,147 +1,219 @@
-# COPY C1 — Chaochao Sales Copy Tone
+# COPY C1 / C1.1 — Chaochao Sales Copy Tone
 
 Date: 2026-08-25
 
-## Start guard
+## Git authority
 
 - Repo: `chochovibe-cmd/nestory-listing-admin`
-- Start HEAD: `21e9d1c90697797aaa6d982e9454ccd4a6955fd8`
+- COPY C1 base/default HEAD: `21e9d1c90697797aaa6d982e9454ccd4a6955fd8`
 - Branch: `agent/copy-chaocao-sales-tone`
-- Default/base: `codex/nestory-v0.1-safety-skeleton`
-- Final commit: see immutable branch / PR final HEAD
+- Existing PR: `#9 Copy C1: add Chaochao sales copy tone`
+- COPY C1 initial HEAD / C1.1 corrective parent: `ac86acbd4ed13e7d658daa6bb216b056f3b25c0b`
+- C1.1 final commit: see immutable PR #9 final HEAD / Commander final report (do not add a second commit just to self-record its SHA).
 
-## Changed files
+## COPY C1 stable base
 
-- `src/components/listing/WorkspaceInputPanel.tsx`
-- `src/lib/providers/copy.ts`
-- `src/lib/providers/systemPrompt.ts`
-- `src/lib/contentGenerator/sectionHeaders.ts`
-- `docs/文案排版規範-2026-07-18.md`
-- `docs/CURRENT_STATUS.md`
-- `docs/audits/COPY-C1-CHAONEST-SALES-TONE-2026-08-25.md`
-- `scripts/verify-copy-c1-chaonest-sales-tone.mjs`
-- `scripts/verify-all.mjs`
+`潮巢導購版` remains the seventh **manual** tone:
 
-## Tone contract
-
-`潮巢導購版` is the seventh **manual** copy tone. UI metadata:
-
-- emoji: `🛍️`
+- UI: `🛍️ 潮巢導購版`
 - description: `痛點導購・資訊完整`
-- `usesEmoji=true` means emoji is allowed, not mandatory.
-- Placement: after `小編聊天口吻`, before `依IP自動匹配`.
-- `DEFAULT_TONE` remains the original first tone (`黑膠文藝收藏感`).
-- `DEFAULT_IP_TONE_MAP` is unchanged. No IP auto-match maps to `潮巢導購版`.
+- placement: after `小編聊天口吻`, before `依IP自動匹配`
+- `DEFAULT_TONE` unchanged
+- `DEFAULT_IP_TONE_MAP` unchanged; C1 is not an auto-match target
+- original six tones remain supported
 
-## Description layout
+## COPY C1.1 Owner corrective scope
 
-Only `tone === "潮巢導購版"` uses this description rhythm:
+Owner rejected C1 initial runtime output. C1.1 changes exactly three areas:
 
-1. Pain / desire opening, no heading, 1–2 sentences, do not lead with product name.
-2. Product introduction, 2–4 sentences, facts connected to consumer meaning.
-3. `◈ 收藏亮點` — usually 3–4 product-specific feature + benefit bullets.
-4. `◈ 為什麼會想帶回家` — short buying-motive / audience / usage-context paragraphs.
-5. `◈ 商品資訊` — evidence-only facts; may be omitted if evidence is insufficient.
-6. `◈ 購買提醒` — 1–3 product/material-specific reminders.
+1. enriched-title contract bug: segment 2 must include `角色 + 商品類型`, all pipes normalize to ` | `;
+2. `潮巢導購版` description uses the boss-format Shopify semantic hierarchy and a more human Chaochao voice;
+3. all generated customer-facing copy is finalized to Taiwan Traditional, and full-generation `spec_text` becomes a clean Shopify-facing spec rather than raw marketplace/OCR backend fields.
 
-The original six tones keep the existing layout:
+No fourth feature is included.
 
-- opening
-- `◈ 商品亮點`
-- `◈ 適合誰`
-- `◈ 商品資訊`
-- `◈ 購買提醒`
+## 1. Title corrective
 
-The implementation uses one tone-aware description helper rather than duplicating the full system prompt. Shared evidence rules, detection, spec safety, SEO, FAQ and output contract remain shared.
+Current first segment remains **品牌 × IP**. C1.1 does not decide the later Owner question of `IP × 品牌` vs `品牌 × IP`.
 
-## Parser compatibility
+Final three-segment contract:
 
-`sectionHeaders.ts` remains the single source of truth:
+```text
+品牌 × IP | 角色・角色 商品類型 | 特色
+```
 
-- `商品亮點` → B (existing)
-- `收藏亮點` → B (new alias)
-- `適合誰` → C (existing)
-- `為什麼會想帶回家` → C (new alias)
-- `商品資訊` → D
-- `購買提醒` → E
+Deterministic backend normalization now owns:
 
-No alternate parser was introduced.
+- `A|B|C`, `A｜B｜C`, `A | B | C` → `A | B | C`;
+- add detected product type to segment 2 when absent;
+- do not append product type twice;
+- safe removal of an exact repeated product type from segment 3;
+- preserve third-segment blacklist;
+- preserve 80-char enriched and 60-char official clamp behavior.
 
-## Factual safety
+Acceptance fixture:
 
-COPY C1 keeps the existing evidence hierarchy. The richer sales layout does not relax factual safety:
+`MARtube × Pingu|Pingu|迷你相機盲盒創意吊飾` + detected type `盲盒`
 
-- exact dimensions, capacity, weight, count and other numbers require source/variant/spec/detail-image text or a trustworthy research summary;
-- no precision guessing from visual appearance;
-- no invented material, waterproofing, food-safety, thermal-retention, battery-runtime or similar claims;
-- if the evidence pool contains at least three product-specific facts, description + highlights should use at least three; if not, do not invent facts to hit the count;
-- feature → benefit is allowed only when the benefit reasonably follows from the known feature.
+must become a title whose prefix is:
 
-## Emoji
+`MARtube × Pingu | Pingu 盲盒 | ...`
 
-For `潮巢導購版`:
+## 2. Boss-format Chaochao description
 
-- description: 0–2 emoji;
-- FAQ: 0–1 emoji;
-- optional, never mandatory;
-- no emoji in section headings, `enriched_title`, `seo_title`, or `meta_description`.
+`潮巢導購版` plain source contract:
 
-The existing mandatory `小編聊天口吻` emoji contract is not copied to this tone.
+```text
+商品介紹
+（正文）
 
-## Single-field regeneration
+收藏亮點
+・...
+・...
+・...
 
-- Regenerating only `generated_description_html` reuses the tone-aware description helper, so COPY C1 keeps its dedicated layout.
-- Regenerating only `generated_faq_html` stays on FAQ-specific instructions and does not alter the description layout.
-- Workspace autosave/tone restore uses the existing dynamic tone-option validation, so the seventh tone can be restored without a hard-coded six-tone reset.
+導購小標：AI 依商品動態生成
+（導購正文）
+```
 
-## Quality fixtures
+Shopify-bound main HTML:
 
-No production LLM or Shopify call is needed for acceptance. The dedicated verifier carries three no-cost fixtures to confirm distinct buying motives and at least three product-specific evidence points per fixture:
+```html
+<h2>商品介紹</h2>
+<p>短資訊型到貨提醒</p>
+<p>正文...</p>
+<h2>收藏亮點</h2>
+<ul><li>...</li></ul>
+<h2>動態導購小標</h2>
+<p>導購正文...</p>
+```
 
-- plush / charm: bag personality / character-identification angle;
-- cup / daily-use item: bring a favourite character into a repeated daily routine;
-- electronics / desktop function: add character identity and atmosphere to an already-functional desktop setup.
+For this tone only:
 
-The fixtures explicitly avoid collapsing every product into the same `可愛 / 療癒 / 送禮 / 收藏` template.
+- no `◈` in the main description;
+- no main-section `<h3>`;
+- no `商品資訊` / `購買提醒` H2;
+- no inline font-size / typography styles;
+- Nestory Preview recognizes the same C1 source contract and renders h2/p/ul/li;
+- original six tones keep the existing `<h3><strong>◈ ...</strong></h3>` formatter.
 
-## Verification gates
+Short C1 notices:
 
-Dedicated verifier: `scripts/verify-copy-c1-chaonest-sales-tone.mjs`
+- overseas: `此為海外代購商品，預估約 14 天。`
+- preorder: `此為預購商品，到貨時程以頁面說明為準。`
+- Taiwan stock: `此為台灣現貨商品，約 1–3 個工作天出貨。`
+- secondhand: `此為二手現貨商品，品況請見商品資訊，約 1–3 個工作天出貨。`
 
-It checks:
+Legacy tone notices remain unchanged.
 
-- CopyTone / COPY_TONES / seventh UI card / unchanged DEFAULT_TONE;
-- manual-tone pass-through and unchanged auto-map semantics;
-- dedicated description branch + required headings + feature → benefit + evidence safety;
-- optional emoji policy;
-- new and legacy section aliases;
-- single-field regeneration semantics;
-- layout documentation;
-- frozen start-HEAD Git blob SHAs for `titleGenerator.ts` and Shopify lifecycle files;
-- three distinct fixture categories.
+## 3. Human Chaochao voice
 
-The verifier is included in `scripts/verify-all.mjs`.
+C1.1 explicitly rejects AI-commerce boilerplate such as:
 
-Canonical repository gates remain:
+- `總是覺得……嗎？`
+- `是否正在尋找……`
+- `一大力作`
+- `滿載童趣`
+- `最佳選擇` / `完美選擇`
+- `絕對不能錯過`
+- `完美地將……`
+- `帶給你無限……`
+- `陪伴左右`
+- `為生活增添一抹……`
+- `不僅……更……`
+- `療癒指數爆表`
+- `收藏價值滿滿`
+- `送禮自用兩相宜`
+- `值得入手` / `值得考慮`
 
-- dedicated verifier
-- `verify:all`
-- TypeScript typecheck
-- relevant existing tests/verifiers
-- production build
+Desired direction: human, warm, funny, cute, lived-in Taiwanese copy; character jokes and light teasing are allowed; battle IP may use light `裝備 / 覺醒 / 戰力 / 召喚` language when suitable, but never as fake product functionality.
 
-## Scope freeze declaration
+Boss/competitor wording is never used as few-shot material. Only the semantic HTML hierarchy is borrowed.
 
-COPY C1 explicitly does **not** change:
+## 4. Taiwan Traditional customer-facing finalizer
 
-- title formula / `titleGenerator.ts` / enriched-title skeleton;
-- SEO title formula;
-- Shopify publish/unpublish lifecycle;
-- Supabase schema or migrations;
-- pricing;
-- Variant behavior;
-- ResultCard layout;
-- auth;
-- image pipeline.
+Raw evidence stays raw: `taobao_title`, `original_title`, OCR/source cache are not rewritten.
 
-No Shopify production write is part of this package. No competitor copy is stored or used as a few-shot example; only the owner-approved information-order/layout rhythm is borrowed, and all wording is generated under the Chaochao brand voice.
+Before customer-facing persistence, generated text is finalized through Taiwan Traditional localization + source-marker stripping for at least:
+
+- title_zh / enriched history
+- description
+- FAQ
+- SEO title
+- meta description
+- why_we_chose_it
+- product_highlights
+- spec_text
+
+## 5. Full-generation spec canonicalization
+
+C1.1 changes the old authoritative-spec bug:
+
+- provider `spec` non-empty → provider-cleaned evidence spec is canonical for **full generation**;
+- provider `spec` empty → fallback to existing `spec_text`;
+- selected text → Taiwan Traditional → strip source markers → retain only customer-useful spec labels.
+
+Useful customer labels include brand/IP/series/character/product type/material/size/capacity/package/accessories/variants/function/blind-box rule/license and evidence-backed electronic specs.
+
+Raw marketplace backend labels such as `分類 / 貨品分類 / 顏色分類 / 適用人群 / 是否為特殊用途化妝品 / 流行趨勢詞 / 場景類型 / 適用節日 / seller promo / platform campaign` are not persisted verbatim.
+
+If a junk-labeled line contains real purchase semantics, only the useful fact is preserved. Fixture example:
+
+```text
+分类：【盲盒不可指定】
+品牌：MARtube/马克图布
+颜色分类：【随机1个】
+适用人群：女生
+是否为特殊用途化妆品：否
+流行趋势词：可爱
+```
+
+must keep useful facts such as:
+
+```text
+品牌：MARtube/馬克圖布
+盲盒方式：隨機出貨，不可指定款式
+```
+
+without fabricating numeric specifications.
+
+## 6. Regen safety
+
+Single-field regeneration remains limited to the existing seven copy fields. `spec_text` is not in `REGEN_FIELD_TO_COLUMN`, and `handleFieldRegen` does not write it.
+
+Therefore description / FAQ / SEO single-field regen does not overwrite a spec manually edited after full generation.
+
+## 7. Verification
+
+`scripts/verify-copy-c1-chaonest-sales-tone.mjs` is expanded to COPY C1.1 and checks:
+
+- title separator + segment-2 product type fixture;
+- 60/80 length/blacklist semantic source contracts;
+- brand × IP first-segment freeze;
+- boss-format three-H2 fixture and notice ordering;
+- dynamic third H2 / no ◈ / no main H3 / no 商品資訊 or 購買提醒 H2;
+- original six-tone formatter compatibility;
+- Taiwan Traditional + Pingu raw-spec cleanup fixture;
+- why_we_chose_it / product_highlights finalizer wiring;
+- raw source fields not updated;
+- single-field regen cannot write spec_text;
+- P4 source/seller safety remains present;
+- Shopify lifecycle files remain byte-identical.
+
+Canonical CI gates remain `verify:all → typecheck → build`.
+
+## Scope declaration
+
+COPY C1.1 explicitly does **not** change:
+
+- first title segment order (`品牌 × IP` remains current rule);
+- SEO formula design;
+- Tags V2;
+- pricing / inventory / variants;
+- mobile Variant UI;
+- unrelated ResultCard layout;
+- Shopify product publish/unpublish lifecycle;
+- Shopify credentials / `SHOPIFY_PUBLISH_MOCK`;
+- Supabase schema / migrations.
+
+No Shopify production write is part of C1.1. PR #9 must remain unmerged until Owner iPhone + real generation acceptance.

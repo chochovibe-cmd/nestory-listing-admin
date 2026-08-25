@@ -124,7 +124,12 @@ assert.match(htmlFormat, /export function formatChaochaoSalesDescriptionHtml/u);
 assert.match(htmlFormat, /`<h2>商品介紹<\/h2>`[\s\S]*saleStatusNoticeHtml[\s\S]*`<h2>收藏亮點<\/h2>`[\s\S]*`<h2>\$\{escapeHtml\(dynamicHeading\)\}<\/h2>`/u);
 assert.match(htmlFormat, /formatPlainTextAsHtml[\s\S]*<h3><strong>◈/u, "original six-tone formatter must remain h3-based");
 assert.match(htmlFormat, /looksLikeChaochaoSalesSource/u, "Nestory preview must recognize C1 source hierarchy");
-assert.doesNotMatch(htmlFormat.match(/export function formatChaochaoSalesDescriptionHtml[\s\S]*?\n}\n\n\/\*\*/u)?.[0] ?? "", /font-size|style=/u, "C1 main formatter must not hard-code typography");
+const chaochaoFormatterStart = htmlFormat.indexOf("export function formatChaochaoSalesDescriptionHtml");
+assert.ok(chaochaoFormatterStart >= 0, "C1 formatter source start missing");
+const chaochaoFormatterEnd = htmlFormat.indexOf("\nexport function descriptionPreviewHtml", chaochaoFormatterStart);
+assert.ok(chaochaoFormatterEnd > chaochaoFormatterStart, "C1 formatter source end missing");
+const chaochaoFormatterSource = htmlFormat.slice(chaochaoFormatterStart, chaochaoFormatterEnd);
+assert.doesNotMatch(chaochaoFormatterSource, /font-size|style=/u, "C1 main formatter must not hard-code typography");
 assert.match(payload, /generation_tone === CHAOCHAO_SALES_TONE[\s\S]*formatChaochaoSalesDescriptionHtml/u, "Shopify payload must use C1 boundary formatter");
 assert.match(payload, /:\s*saleStatusNoticeHtml\([\s\S]*\+ formatPlainTextAsHtml/u, "original six tones must keep legacy payload formatter");
 

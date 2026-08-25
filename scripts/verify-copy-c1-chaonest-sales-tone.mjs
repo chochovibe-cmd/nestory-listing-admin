@@ -12,6 +12,14 @@ function gitBlobSha(file) {
   return crypto.createHash("sha1").update(header).update(body).digest("hex");
 }
 
+function sliceSourceBlock(source, startMarker, endMarker, label) {
+  const start = source.indexOf(startMarker);
+  assert.notEqual(start, -1, `${label} source start missing`);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  assert.ok(end > start, `${label} source end missing`);
+  return source.slice(start, end);
+}
+
 const copy = read("src/lib/providers/copy.ts");
 const prompt = read("src/lib/providers/systemPrompt.ts");
 const workspace = read("src/components/listing/WorkspaceInputPanel.tsx");
@@ -27,8 +35,13 @@ const ipToneMap = read("src/lib/providers/ipToneMap.ts");
 assert.match(copy, /"潮巢導購版"/u);
 assert.match(workspace, /value:\s*"潮巢導購版"[\s\S]{0,180}emoji:\s*"🛍️"[\s\S]{0,180}desc:\s*"痛點導購・資訊完整"[\s\S]{0,120}usesEmoji:\s*true/u);
 assert.match(workspace, /const DEFAULT_TONE = TONE_OPTIONS\[0\]\.value;/u);
-const defaultMapMatch = ipToneMap.match(/DEFAULT_IP_TONE_MAP[\s\S]*?=\s*\{([\s\S]*?)\n\};/u);
-assert.ok(defaultMapMatch && !defaultMapMatch[1].includes("潮巢導購版"), "manual C1 tone must not become an auto-map target");
+const defaultMapSource = sliceSourceBlock(
+  ipToneMap,
+  "export const DEFAULT_IP_TONE_MAP",
+  "\n/** Concrete tones only",
+  "DEFAULT_IP_TONE_MAP",
+);
+assert.ok(!defaultMapSource.includes("潮巢導購版"), "manual C1 tone must not become an auto-map target");
 
 // ---------------------------------------------------------------------------
 // Fixture 1 — title contract bug: normalize all pipes + force product type into segment 2.
@@ -124,11 +137,12 @@ assert.match(htmlFormat, /export function formatChaochaoSalesDescriptionHtml/u);
 assert.match(htmlFormat, /`<h2>商品介紹<\/h2>`[\s\S]*saleStatusNoticeHtml[\s\S]*`<h2>收藏亮點<\/h2>`[\s\S]*`<h2>\$\{escapeHtml\(dynamicHeading\)\}<\/h2>`/u);
 assert.match(htmlFormat, /formatPlainTextAsHtml[\s\S]*<h3><strong>◈/u, "original six-tone formatter must remain h3-based");
 assert.match(htmlFormat, /looksLikeChaochaoSalesSource/u, "Nestory preview must recognize C1 source hierarchy");
-const chaochaoFormatterStart = htmlFormat.indexOf("export function formatChaochaoSalesDescriptionHtml");
-assert.ok(chaochaoFormatterStart >= 0, "C1 formatter source start missing");
-const chaochaoFormatterEnd = htmlFormat.indexOf("\nexport function descriptionPreviewHtml", chaochaoFormatterStart);
-assert.ok(chaochaoFormatterEnd > chaochaoFormatterStart, "C1 formatter source end missing");
-const chaochaoFormatterSource = htmlFormat.slice(chaochaoFormatterStart, chaochaoFormatterEnd);
+const chaochaoFormatterSource = sliceSourceBlock(
+  htmlFormat,
+  "export function formatChaochaoSalesDescriptionHtml",
+  "\nexport function descriptionPreviewHtml",
+  "C1 formatter",
+);
 assert.doesNotMatch(chaochaoFormatterSource, /font-size|style=/u, "C1 main formatter must not hard-code typography");
 assert.match(payload, /generation_tone === CHAOCHAO_SALES_TONE[\s\S]*formatChaochaoSalesDescriptionHtml/u, "Shopify payload must use C1 boundary formatter");
 assert.match(payload, /:\s*saleStatusNoticeHtml\([\s\S]*\+ formatPlainTextAsHtml/u, "original six tones must keep legacy payload formatter");
@@ -215,15 +229,29 @@ assert.match(route, /localizedOutput\.seo_title = finalizeCustomerText/u);
 assert.match(route, /localizedOutput\.meta_description = finalizeCustomerText/u);
 
 // Raw evidence columns are read-only in this generate update; they may remain Simplified.
-const draftUpdateMatch = route.match(/const draftUpdate:[\s\S]*?\n  };/u);
-assert.ok(draftUpdateMatch, "draftUpdate block missing");
-assert.ok(!/taobao_title\s*:|original_title\s*:/u.test(draftUpdateMatch[0]), "raw source fields must not be overwritten");
+const draftUpdateBlock = sliceSourceBlock(
+  route,
+  "const draftUpdate: Record<string, unknown> = {",
+  "\n\n  if (detectedBrand)",
+  "draftUpdate",
+);
+assert.doesNotMatch(draftUpdateBlock, /taobao_title\s*:|original_title\s*:/u, "raw source fields must not be overwritten");
 
 // Single-field regen must not mutate spec_text.
-const regenMapMatch = route.match(/const REGEN_FIELD_TO_COLUMN[\s\S]*?\n};/u);
-assert.ok(regenMapMatch && !regenMapMatch[0].includes("spec_text"), "single-field map must not contain spec_text");
-const regenBodyMatch = route.match(/async function handleFieldRegen[\s\S]*?\n}\n\nasync function writeImageAltTexts/u);
-assert.ok(regenBodyMatch && !/update\.spec_text|spec_text\s*:/u.test(regenBodyMatch[0]), "single-field regen must not write spec_text");
+const regenMapBlock = sliceSourceBlock(
+  route,
+  "const REGEN_FIELD_TO_COLUMN",
+  "\n\nasync function handleFieldRegen",
+  "REGEN_FIELD_TO_COLUMN",
+);
+assert.ok(!regenMapBlock.includes("spec_text"), "single-field map must not contain spec_text");
+const regenBodyBlock = sliceSourceBlock(
+  route,
+  "async function handleFieldRegen",
+  "\n\nasync function writeImageAltTexts",
+  "handleFieldRegen",
+);
+assert.doesNotMatch(regenBodyBlock, /update\.spec_text|spec_text\s*:/u, "single-field regen must not write spec_text");
 
 // P4 safety remains live after prompt rewrite.
 for (const phrase of ["P4 出處標記禁令", "網路搜尋補充資訊（B19", "不確定就不寫", "P4 賣家服務類排除", "物理事實"]) {

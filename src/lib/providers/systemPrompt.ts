@@ -271,6 +271,29 @@ ${[gradeText, conditionText, notesText].filter(Boolean).join("\n")}
 - 不要使用「全新未拆」「嶄新」等字眼，除非 evidence 明確提供`;
 }
 
+function chaochaoPrewriteInstruction(tone: CopyTone, copyLength: CopyLength): string {
+  if (tone !== CHAOCHAO_SALES_TONE) return "";
+  const coverage = copyLength === "詳細" ? "4–6" : "至少 3";
+  return `
+【COPY C1.2 內部 Prewrite Content Plan｜只供推理，不得輸出到 UI 或顧客文案】
+先把 evidence pool 整理成以下七欄，再依 plan 寫 final copy；不要把欄名或推理過程輸出：
+- product_facts：逐項列出可回溯的商品獨有事實
+- usage_scenarios：商品真正會在哪裡／如何使用
+- consumer_desires：消費者想得到的生活感受或角色陪伴
+- consumer_pain_points：對應的小缺口，不用問卷式硬廣告
+- ip_character_hooks：有 evidence 支持、自然可用的角色／IP 梗
+- purchase_reasons：它與普通同類商品不同的具體理由
+- humor_angles：小吐槽、角色梗、反差、中二或自嘲；不適合可留空
+
+【Evidence pool 與 coverage】
+把原始標題、Variant／款式、規格與 OCR、圖片描述、網路搜尋摘要、IP knowledge 合併成 evidence pool。
+可信網搜的系列正式名稱、官方尺寸、配件、款式數、功能、材質與官方角色名稱，若能確認同款，優先納入 product_facts；來源衝突或不確定就不寫。
+evidence 足夠時，商品介紹＋收藏亮點必須實際使用${coverage} 個商品獨有 facts；可愛、療癒、值得收藏、適合送禮、百搭、有質感、吸睛都不算 coverage。
+final copy 的硬性結構證據：至少一個具體 usage scenario＋對應 consumer desire 或 consumer pain point＋商品具體 facts；適合時再自然使用一個 IP/character/humor hook。
+不要引用來源網站、價格、促銷或賣家話術；搜尋是為了更具體，不是為了灌水。
+`;
+}
+
 export function buildCopySystemPrompt(
   tone: CopyTone,
   copyLength: CopyLength,
@@ -281,8 +304,8 @@ export function buildCopySystemPrompt(
 語氣核心：親切、有品味、SEO 友善、文青可愛、一點幽默、不浮誇、不淘寶感；不要蝦皮叫賣、不要官方客服語氣。
 本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${LENGTH_INSTRUCTIONS[copyLength]}${formatToneExamples(tone)}
 ${buildSecondhandSection(secondhandInfo)}
-
-先從 evidence 判斷 IP／角色／類型／品牌，再從頭生成完整文案。已建檔 IP 若有明確命中，detected_ip_name 必須使用清單中的既有名稱；品牌只在來源明確出現時填，沒把握留空。
+${chaochaoPrewriteInstruction(tone, copyLength)}
+先從 evidence 判斷 IP／角色／類型／品牌，再從頭生成完整文案。已建檔 IP 若有明確命中，detected_ip_name 必須使用清單中的既有名稱；品牌只在來源明確出現時填，沒把握留空。detected_product_brand 與 detected_ip_name 是不同欄位：品牌有值而 IP 未確認時，IP 必須保持空白並保留缺少 IP validation，禁止把品牌複製成 IP。
 
 【標題長度唯一真相表】
 | enriched_title | ≤80 |
@@ -400,7 +423,7 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
   if (note) lines.push(`補充備註：${note}`);
   if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
   if (specText) lines.push(`來源規格／OCR（可能含平台後台欄位；只作 evidence，整理成乾淨顧客規格，不要原封不動複製）：${specText}`);
-  if (webSearchSummary) lines.push(`網路搜尋補充資訊（內部參考；顧客文案禁止標來源或 URL；不確定勿寫）：\n${webSearchSummary}`);
+  if (webSearchSummary) lines.push(`網路搜尋補充資訊（internal evidence pool；可信同款具體資訊優先納入 product_facts；顧客文案禁止標來源或 URL；不確定勿寫）：\n${webSearchSummary}`);
   if (ipKnowledgePromptBlock?.trim()) lines.push(ipKnowledgePromptBlock.trim());
   if (isSecondhand) {
     lines.push(`這是二手／中古商品：${[
@@ -429,7 +452,7 @@ const REGEN_FIELD_LABELS: Record<CopyRegenField, string> = {
 
 const REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
   enriched_title:
-    "骨架：〔品牌 × 〕IP | 角色（多角色・分隔≤3） 商品類型 | 特色。第二段必須含 detected product type；沒有角色只放類型，只有 type 缺失才只剩角色。separator 一律半形『 | 』。第三段維持既有 blacklist；最長 80 字、後端再收 60。禁止 emoji。",
+    "只重生第三段 feature candidate（款式／系列／功能／造型／材質／配件／使用型態）；既有 structured brand／IP／characters／productType 與前兩段不可重猜或改寫。第三段維持 blacklist／去重；後端以既有 structured title 組裝並套 80／60 contracts。禁止 emoji。",
   generated_description_html: "沿用所選 tone 的 descriptionFormatInstruction；不要捏造規格。",
   generated_faq_html: "3-5 題，每題 <h3><strong>問題</strong></h3><p>回答</p>，答案可單獨引用。",
   seo_title: "最長 80 字；沿用既有 SEO formula；不要自己加品牌尾綴。禁止 emoji。",
@@ -486,7 +509,9 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
     `銷售狀態：${input.saleStatus}`,
   ];
   if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
+  if (input.variantSummary) lines.push(`款式／Variant evidence：${input.variantSummary}`);
   if (input.specText) lines.push(`來源規格／OCR（只作 evidence，勿原封不動搬平台欄位）：${input.specText}`);
+  if (input.webSearchSummary) lines.push(`cached 網路搜尋 evidence（可信同款 facts 優先使用；衝突或不確定勿寫）：\n${input.webSearchSummary}`);
   if (input.ipKnowledgePromptBlock?.trim()) lines.push(input.ipKnowledgePromptBlock.trim());
   if (input.isSecondhand) {
     lines.push(`這是二手／中古商品：${[

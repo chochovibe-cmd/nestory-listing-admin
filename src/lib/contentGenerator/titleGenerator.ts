@@ -217,11 +217,10 @@ export function collectCharacterNames(
   return names;
 }
 
-/** 老闆工具骨架：1 個直接放、2 個「・」連接、3 個以上取前三＋「等角色」。 */
+/** COPY C1.2：1–3 個完整列出；超過 3 個才取前三＋「等角色」。 */
 export function formatCharacterText(characters: string[]): string {
   if (characters.length === 0) return '';
-  if (characters.length === 1) return characters[0];
-  if (characters.length === 2) return characters.join('・');
+  if (characters.length <= 3) return characters.join('・');
   return characters.slice(0, 3).join('・') + '等角色';
 }
 
@@ -487,6 +486,60 @@ export function enforceSkeletonTitleLength(
 
 function enforceTitleLength(ip: string, coreName: string, featureText: string): string {
   return enforceSkeletonTitleLength(ip, coreName, featureText, OFFICIAL_TITLE_MAX_LENGTH);
+}
+
+export interface StructuredEnrichedTitleInput {
+  brand?: string | null;
+  ip?: string | null;
+  characters?: readonly string[] | null;
+  productType?: string | null;
+  featureText?: string | null;
+  structuredBaseTitle?: string | null;
+  maxLen?: number;
+}
+
+function featureCandidateFromTitle(value: string | null | undefined): string {
+  const normalized = normalizeTitleSeparators(value ?? '');
+  const parts = splitTitlePipeSegments(normalized);
+  return sanitizeTitleSegment3(parts && parts.length >= 3 ? parts.slice(2).join(' | ') : normalized);
+}
+
+/**
+ * COPY C1.2 structured title assembly. Segments 1–2 come only from structured
+ * classification (or an already-confirmed structured base during field regen);
+ * model text is allowed to supply segment 3 only.
+ */
+export function buildStructuredEnrichedTitle(input: StructuredEnrichedTitleInput): string {
+  const baseParts = splitTitlePipeSegments(input.structuredBaseTitle ?? '');
+  let seg1 = baseParts?.[0] ?? '';
+  let seg2 = baseParts?.[1] ?? '';
+
+  if (!seg1) {
+    const brand = normalizeText(input.brand);
+    const ip = normalizeText(input.ip);
+    seg1 = brand && ip ? `${brand} × ${ip}` : (ip || brand);
+  }
+
+  if (!seg2) {
+    const characters = (input.characters ?? []).map(normalizeText).filter(Boolean);
+    const characterText = formatCharacterText(Array.from(new Set(characters)));
+    const productType = normalizeText(normalizeProductTypeForDisplay(input.productType ?? ''));
+    seg2 = characterText && productType
+      ? dedupeRepeatedTitleTerms(`${characterText} ${productType}`)
+      : (characterText || productType);
+  }
+
+  const productType = normalizeText(normalizeProductTypeForDisplay(input.productType ?? ''));
+  let seg3 = featureCandidateFromTitle(input.featureText);
+  if (productType && seg3.includes(productType)) {
+    seg3 = seg3.split(productType).join(' ').replace(/\s{2,}/g, ' ').trim();
+  }
+  for (const term of seg2.split(/[・\s]+/u).filter((term) => term.length >= 2)) {
+    if (seg3.includes(term)) seg3 = seg3.split(term).join(' ').replace(/\s{2,}/g, ' ').trim();
+  }
+  seg3 = sanitizeTitleSegment3(seg3) || '標準款';
+
+  return enforceSkeletonTitleLength(seg1, seg2, seg3, input.maxLen ?? ENRICHED_TITLE_MAX_LENGTH);
 }
 
 /**

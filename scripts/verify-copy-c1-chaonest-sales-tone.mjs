@@ -79,8 +79,8 @@ assert.match(titleGenerator, /function splitTitlePipeSegments/u, "shared pipe pa
 assert.match(titleGenerator, /split\(\/\\s\*\[\|｜\]\\s\*\/u\)/u, "bare/fullwidth pipe parser missing");
 assert.match(titleGenerator, /export function normalizeEnrichedTitleContract/u, "deterministic title finalizer missing");
 assert.match(titleGenerator, /productBrand \? productBrand \+ ' × ' \+ ipDisplayName : ipDisplayName/u, "first segment brand × IP contract changed");
-assert.match(route, /normalizeEnrichedTitleContract\([\s\S]*detected\.productType/u, "full generate must normalize LLM title with detected product type");
-assert.match(route, /normalizeEnrichedTitleContract\([\s\S]*draft\.product_type/u, "single-field title regen must use existing product type");
+assert.match(route, /buildStructuredEnrichedTitle\([\s\S]*structuredBaseTitle:\s*ruleOutput\.display_title[\s\S]*featureText:/u, "full generate must assemble title from structured base and feature-only AI text");
+assert.match(route, /buildStructuredEnrichedTitle\([\s\S]*structuredBaseTitle:\s*currentValues\.enrichedTitle\s*\|\|\s*draft\.title_zh[\s\S]*productType:/u, "title regen must preserve cached structured segments");
 assert.match(titleGenerator, /TITLE_SEGMENT3_BLACKLIST/u, "third-segment blacklist disappeared");
 
 // ---------------------------------------------------------------------------
@@ -258,6 +258,76 @@ for (const phrase of ["P4 出處標記禁令", "網路搜尋補充資訊（B19",
   assert.ok(prompt.includes(phrase), `P4 prompt contract missing: ${phrase}`);
 }
 
+// ---------------------------------------------------------------------------
+// COPY C1.2 — structured title, classification, prewrite, evidence, anti-AI.
+// ---------------------------------------------------------------------------
+function structuredTitleFixture({ brand, ip, characters, productType, featureText }) {
+  const seg1 = brand && ip ? `${brand} × ${ip}` : (ip || brand || "");
+  const chars = characters.length >= 3
+    ? characters.slice(0, 3).join("・") + (characters.length > 3 ? "等角色" : "")
+    : characters.join("・");
+  const seg2 = [chars, productType].filter(Boolean).join(" ");
+  const seg3 = featureText || "標準款";
+  return [seg1, seg2, seg3].filter(Boolean).join(" | ");
+}
+const pinguC12 = structuredTitleFixture({
+  brand: "MARtube", ip: "Pingu", characters: ["Pingu"],
+  productType: "迷你相機盲盒", featureText: "創意吊飾",
+});
+assert.equal(pinguC12.split(" | ")[0], "MARtube × Pingu");
+assert.equal(pinguC12.split(" | ")[1], "Pingu 迷你相機盲盒");
+
+const kirarunC12 = structuredTitleFixture({
+  brand: "KIRARUN", ip: "吉伊卡哇", characters: ["烏薩奇", "小八", "吉伊"],
+  productType: "絨毛公仔吊飾", featureText: "車伕造型",
+});
+assert.equal(kirarunC12.split(" | ")[0], "KIRARUN × 吉伊卡哇");
+assert.equal(kirarunC12.split(" | ")[1], "烏薩奇・小八・吉伊 絨毛公仔吊飾");
+assert.ok(!kirarunC12.startsWith("KIRARUN |"), "brand must not impersonate IP");
+
+assert.match(titleGenerator, /export function buildStructuredEnrichedTitle/u);
+const structuredTitleBlock = sliceSourceBlock(
+  titleGenerator,
+  "export function buildStructuredEnrichedTitle",
+  "\n\n/**\n * COPY C1.1 deterministic",
+  "structured title helper",
+);
+assert.match(structuredTitleBlock, /brand && ip \? .* × .* : \(ip \|\| brand\)/u);
+assert.match(structuredTitleBlock, /formatCharacterText/u);
+assert.match(structuredTitleBlock, /featureCandidateFromTitle/u);
+assert.match(structuredTitleBlock, /ENRICHED_TITLE_MAX_LENGTH/u);
+assert.match(prompt, /品牌有值而 IP 未確認時，IP 必須保持空白/u);
+assert.match(prompt, /禁止把品牌複製成 IP/u);
+
+for (const field of [
+  "product_facts", "usage_scenarios", "consumer_desires", "consumer_pain_points",
+  "ip_character_hooks", "purchase_reasons", "humor_angles",
+]) assert.ok(prompt.includes(field), `prewrite field missing: ${field}`);
+for (const evidence of ["原始標題", "Variant／款式", "規格與 OCR", "圖片描述", "網路搜尋摘要", "IP knowledge"]) {
+  assert.ok(prompt.includes(evidence), `evidence pool source missing: ${evidence}`);
+}
+assert.match(prompt, /const coverage = copyLength === "詳細" \? "4–6" : "至少 3"/u);
+assert.match(prompt, /商品介紹＋收藏亮點必須實際使用\$\{coverage\} 個商品獨有 facts/u);
+assert.match(titleGenerator, /characters\.length <= 3.*join\('・'\)/u);
+assert.match(prompt, /具體 usage scenario＋對應 consumer desire 或 consumer pain point＋商品具體 facts/u);
+assert.match(prompt, /IP\/character\/humor hook/u);
+assert.match(prompt, /可信同款具體資訊優先納入 product_facts/u);
+assert.match(prompt, /cached 網路搜尋 evidence/u);
+assert.match(prompt, /只重生第三段 feature candidate/u);
+assert.match(prompt, /既有 structured brand／IP／characters／productType.*不可重猜/u);
+
+// Three quality families must be structurally different, not character-name swaps.
+const qualityFixtures = [
+  { kind: "Pingu 相機吊飾", scenario: "掛在每天出門的包包", pain: "包包太安靜", hook: "Pingu 出門值班", facts: ["Pingu", "迷你相機造型", "盲盒"] },
+  { kind: "吉伊卡哇絨毛吊飾", scenario: "角色群一起掛上包包", pain: "想把小劇場帶出門", hook: "三位角色同框", facts: ["烏薩奇", "小八", "吉伊"] },
+  { kind: "電子桌面商品", scenario: "工作桌需要功能也需要氣氛", pain: "桌面功能齊了但少一點存在感", hook: "功能優先，不硬套角色台詞", facts: ["電源", "連線", "燈效"] },
+];
+assert.equal(new Set(qualityFixtures.map((item) => item.scenario)).size, 3);
+assert.equal(new Set(qualityFixtures.map((item) => item.pain)).size, 3);
+for (const fixture of qualityFixtures) {
+  assert.ok(fixture.scenario && fixture.pain && fixture.facts.length >= 3, `quality fixture incomplete: ${fixture.kind}`);
+}
+
 // Lifecycle/safety files remain byte-identical to the pre-C1.1 authority.
 const FROZEN_BLOBS = {
   "src/lib/shopify/productLifecycle.ts": "a7e6b2bbe851aeae12c797be583f0cd64fd1789c",
@@ -269,4 +339,4 @@ for (const [file, expected] of Object.entries(FROZEN_BLOBS)) {
   assert.equal(gitBlobSha(file), expected, `Shopify lifecycle scope freeze violated: ${file}`);
 }
 
-console.log("COPY C1.1 owner corrective verifier passed");
+console.log("COPY C1.2 structured content intelligence verifier passed");

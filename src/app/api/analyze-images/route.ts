@@ -2,7 +2,12 @@ import { NextRequest } from "next/server";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
 import { parseImageFlags, VISION_STATUS_FLAG_KEY } from "@/lib/images/imageReview";
-import { describeProductImages } from "@/lib/providers/visionProvider";
+import {
+  buildVisionSourceFingerprint,
+  describeProductImages,
+  selectRepresentativeVisionImages,
+  type VisionImageCandidate,
+} from "@/lib/providers/visionProvider";
 import type { ImageType } from "@/types/domain";
 
 // A2 (B1 對齊 Mockup差異備忘 差異2)：standalone sync route so Vision's latency
@@ -25,12 +30,14 @@ type ImageRow = {
 };
 
 type VisionStatus = "processing" | "done" | "failed" | "skipped";
+const VISION_SOURCE_FINGERPRINT_FLAG_KEY = "vision_source_fingerprint";
 
 async function mergeVisionStatus(
   serviceSupabase: ReturnType<typeof createServiceSupabaseClient>,
   draftId: string,
   visionStatus: VisionStatus,
-  extra: Record<string, unknown> = {}
+  extra: Record<string, unknown> = {},
+  sourceFingerprint?: string,
 ) {
   const { data: row } = await serviceSupabase
     .from("product_drafts")
@@ -40,7 +47,10 @@ async function mergeVisionStatus(
 
   const flags = {
     ...parseImageFlags(row?.image_flags),
-    [VISION_STATUS_FLAG_KEY]: visionStatus
+    [VISION_STATUS_FLAG_KEY]: visionStatus,
+    ...(sourceFingerprint
+      ? { [VISION_SOURCE_FINGERPRINT_FLAG_KEY]: sourceFingerprint }
+      : {}),
   };
 
   return serviceSupabase
@@ -74,7 +84,7 @@ export async function POST(request: NextRequest) {
   // /api/generate: the query itself fails to find the row if the user can't see it.
   const { data: draftRow, error: draftError } = await authSupabase
     .from("product_drafts")
-    .select("id")
+    .select("id,image_description,image_flags")
     .eq("id", draftId)
     .single();
 
@@ -113,25 +123,60 @@ export async function POST(request: NextRequest) {
     rows = (imageRows ?? []) as ImageRow[];
   }
 
-  const describeUrls = rows
+  const candidates = rows
     .map((row) => {
       if (row.image_type !== "main" && row.image_type !== "detail") return null;
       const mid = typeof row.vision_mid_url === "string" ? row.vision_mid_url.trim() : "";
       const orig = typeof row.original_file_url === "string" ? row.original_file_url.trim() : "";
-      return mid || orig || null;
+      const url = mid || orig;
+      return url
+        ? {
+            imageType: row.image_type,
+            url,
+            sortOrder: Number(row.sort_order ?? 0),
+          } satisfies VisionImageCandidate
+        : null;
     })
-    .filter((url): url is string => Boolean(url));
+    .filter((candidate): candidate is VisionImageCandidate => candidate !== null);
+
+  const sourceFingerprint = buildVisionSourceFingerprint(candidates);
+  const existingFlags = parseImageFlags(draftRow.image_flags);
+  const existingDescription = typeof draftRow.image_description === "string"
+    ? draftRow.image_description.trim()
+    : "";
+  const cacheIsCurrent =
+    existingDescription.length > 0 &&
+    existingFlags[VISION_STATUS_FLAG_KEY] === "done" &&
+    existingFlags[VISION_SOURCE_FINGERPRINT_FLAG_KEY] === sourceFingerprint;
+
+  if (cacheIsCurrent) {
+    return Response.json({
+      ok: true,
+      cached: true,
+      imageDescription: existingDescription,
+      warnings: [],
+    });
+  }
+
+  const describeUrls = selectRepresentativeVisionImages(candidates)
+    .map((candidate) => candidate.url);
 
   const serviceSupabase = createServiceSupabaseClient();
 
   if (describeUrls.length === 0) {
     // Never touch spec_text here (it may hold a hand-filled value).
     // Never touch image_status (pipeline field).
-    await mergeVisionStatus(serviceSupabase, draftId, "skipped");
+    await mergeVisionStatus(
+      serviceSupabase,
+      draftId,
+      "skipped",
+      { image_description: null },
+      sourceFingerprint,
+    );
     return Response.json({ ok: true, skipped: true, imageDescription: null, warnings: [] });
   }
 
-  await mergeVisionStatus(serviceSupabase, draftId, "processing");
+  await mergeVisionStatus(serviceSupabase, draftId, "processing", {}, sourceFingerprint);
 
   const warnings: string[] = [];
   let imageDescription: string | null = null;
@@ -148,7 +193,7 @@ export async function POST(request: NextRequest) {
   // image_status intentionally left alone (P1-3).
   const { error: updateError } = await mergeVisionStatus(serviceSupabase, draftId, visionStatus, {
     image_description: imageDescription
-  });
+  }, sourceFingerprint);
 
   if (updateError) {
     return Response.json({ error: updateError.message }, { status: 500 });

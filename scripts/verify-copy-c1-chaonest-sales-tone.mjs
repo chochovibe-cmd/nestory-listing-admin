@@ -30,6 +30,11 @@ const payload = read("src/lib/shopify/payload.ts");
 const route = read("src/app/api/generate/route.ts");
 const finalizer = read("src/lib/providers/customerFacingFinalizer.ts");
 const ipToneMap = read("src/lib/providers/ipToneMap.ts");
+const resultCard = read("src/components/listing/ResultCard.tsx");
+const analyzeRoute = read("src/app/api/analyze-images/route.ts");
+const visionProvider = read("src/lib/providers/visionProvider.ts");
+const visionBridge = read("src/lib/images/fullGenerateVision.ts");
+const evidencePack = read("src/lib/providers/productEvidencePack.ts");
 
 // COPY C1 base contract still exists.
 assert.match(copy, /"潮巢導購版"/u);
@@ -217,11 +222,11 @@ for (const junk of ["分類：", "貨品分類", "顏色分類", "適用人群",
 }
 assert.ok(!/\d/.test(cleanSpec), "cleanup must not fabricate numeric spec");
 
-assert.match(finalizer, /providerBlank \? \(existingSpec \?\? ""\) : provider/u, "provider spec must win full-generation spec selection");
+assert.match(finalizer, /export function mergeCustomerSpecEvidence/u, "C1.4 evidence merge missing");
 assert.match(finalizer, /localizeToTaiwanTraditionalText/u);
 assert.match(finalizer, /BACKEND_ONLY_SPEC_LABELS/u);
-assert.match(finalizer, /盲盒方式：\$\{rule\}/u);
-assert.match(route, /finalizeCustomerSpecText\(providerOutput\.spec, draft\.spec_text\)/u);
+assert.match(finalizer, /factsByLabel\.set\("盲盒方式", \{ label: "盲盒方式", value: rule/u);
+assert.match(route, /mergeCustomerSpecEvidence\(\{[\s\S]*existingSpec:\s*draft\.spec_text[\s\S]*providerSpec:\s*providerOutput\.spec/u);
 assert.match(route, /cleanedWhyWeChoseIt = finalizeCustomerText\(providerOutput\.whyWeChoseIt\)/u);
 assert.match(route, /cleanedProductHighlights = finalizeCustomerTextList\(providerOutput\.productHighlights\)/u);
 assert.match(route, /localizedOutput\.generated_faq_html = finalizeCustomerText/u);
@@ -392,6 +397,134 @@ assert.match(prompt, /正式 Tags／Collections 一律由 backend rules/u);
 assert.match(prompt, /AI 不擁有 SKU authority/u);
 assert.match(prompt, /全域安全禁詞/u);
 
+// ---------------------------------------------------------------------------
+// COPY C1.4 — Vision bridge, ONE Evidence Pack, and evidence-preserving specs.
+// ---------------------------------------------------------------------------
+const workspaceFullGenerate = sliceSourceBlock(
+  workspace,
+  "async function submit(event",
+  "\n  return (",
+  "Workspace full generate",
+);
+assert.ok(
+  workspaceFullGenerate.indexOf("prepareVisionEvidenceForFullGenerate(id)") <
+    workspaceFullGenerate.indexOf('fetch("/api/generate"'),
+  "new-product full generate must run analyze bridge before copy",
+);
+const resultFullRegenerate = sliceSourceBlock(
+  resultCard,
+  "async function regenerate()",
+  "\n\n  /** R2/R3",
+  "ResultCard full regenerate",
+);
+assert.ok(
+  resultFullRegenerate.indexOf("prepareVisionEvidenceForFullGenerate(draft.id)") <
+    resultFullRegenerate.indexOf('fetch("/api/generate"'),
+  "ResultCard full regenerate must run analyze bridge before copy",
+);
+assert.match(resultFullRegenerate, /imageWarnings/u, "Vision warnings must reach generate");
+assert.ok(
+  !regenBodyBlock.includes("prepareVisionEvidenceForFullGenerate"),
+  "single-field regen must never trigger Vision",
+);
+assert.ok(
+  visionBridge.includes("圖片辨識未成功，本次文案未使用詳情圖資訊"),
+  "Vision failure warning must be honest",
+);
+assert.match(visionBridge, /if \(!response\.ok\) return \[failureWarning\(payload\)\]/u);
+assert.match(visionBridge, /catch \{[\s\S]*return \[VISION_EVIDENCE_MISSING_WARNING\]/u);
+
+const cacheGuard = sliceSourceBlock(
+  analyzeRoute,
+  "const cacheIsCurrent =",
+  "\n\n  const describeUrls",
+  "Vision cache guard",
+);
+assert.match(cacheGuard, /VISION_STATUS_FLAG_KEY.*=== "done"/u);
+assert.match(cacheGuard, /VISION_SOURCE_FINGERPRINT_FLAG_KEY.*=== sourceFingerprint/u);
+assert.match(cacheGuard, /cached: true/u);
+assert.match(analyzeRoute, /selectRepresentativeVisionImages\(candidates\)/u);
+assert.match(analyzeRoute, /image_description: null/u, "removing all images must clear stale aggregate evidence");
+assert.doesNotMatch(analyzeRoute, /spec_text\s*:/u, "Vision route must never write manual spec_text");
+assert.doesNotMatch(analyzeRoute, /image_status\s*:/u, "Vision route must not enter image pipeline");
+
+function evenlySpacedFixture(items, count) {
+  if (items.length <= count) return [...items];
+  if (count === 1) return [items[0]];
+  return Array.from({ length: count }, (_, index) =>
+    items[Math.round((index * (items.length - 1)) / (count - 1))]);
+}
+const sampledDetails = evenlySpacedFixture(
+  Array.from({ length: 12 }, (_, index) => `detail-${index + 1}`),
+  5,
+);
+assert.equal(sampledDetails.length, 5);
+assert.equal(sampledDetails[0], "detail-1");
+assert.equal(sampledDetails.at(-1), "detail-12");
+assert.ok(sampledDetails.some((value) => ["detail-6", "detail-7"].includes(value)));
+assert.match(visionProvider, /export const MAX_DESCRIBE_IMAGES = 6/u);
+assert.match(visionProvider, /export function selectRepresentativeVisionImages/u);
+assert.match(visionProvider, /evenlySpaced\(details/u);
+assert.match(visionProvider, /return selected\.slice\(0, safeCap\)/u);
+
+function chooseImageTextFixture(row) {
+  return row.translated_text?.trim() || row.ocr_text?.trim() || null;
+}
+assert.equal(chooseImageTextFixture({ translated_text: "繁中尺寸：10cm", ocr_text: "简中尺寸：10cm" }), "繁中尺寸：10cm");
+assert.equal(chooseImageTextFixture({ translated_text: "", ocr_text: "材質：塑膠" }), "材質：塑膠");
+assert.equal(chooseImageTextFixture({ translated_text: null, ocr_text: null }), null);
+for (const section of [
+  "classification", "raw_product_text", "variant_facts", "image_facts",
+  "image_visible_text", "existing_specs", "web_product_facts", "ip_context",
+]) assert.ok(evidencePack.includes(section), `Evidence Pack section missing: ${section}`);
+assert.match(evidencePack, /translated_text\?\.trim\(\)[\s\S]*ocr_text\?\.trim\(\)/u);
+assert.match(evidencePack, /IP／角色語境（不可作商品數字來源）/u);
+assert.match(route, /const evidencePack = buildProductEvidencePack\(/u);
+assert.match(route, /evidencePackText,/u, "CopyProvider must receive the built pack");
+assert.match(prompt, /ONE PRODUCT EVIDENCE PACK/u);
+assert.match(prompt, /來源同 key 衝突時不要自行挑值/u);
+
+function mergeSpecFixture(existing, provider) {
+  const aliases = new Map([["商品材質", "材質"], ["主要材質", "材質"]]);
+  const junk = new Set(["適用人群", "特殊用途化妝品", "流行趨勢詞", "店鋪服務", "銷量", "優惠券", "包郵"]);
+  const facts = new Map();
+  for (const [source, text] of [["existing", existing], ["provider", provider]]) {
+    for (const line of text.split("\n")) {
+      const [rawLabel, ...rest] = line.split(/[:：]/u);
+      const label = aliases.get(rawLabel) ?? rawLabel;
+      const value = rest.join("：").trim();
+      if (!label || !value || junk.has(label)) continue;
+      if (source === "existing" || !facts.has(label)) facts.set(label, value);
+    }
+  }
+  return [...facts].map(([label, value]) => `${label}：${value}`).join("\n");
+}
+const mergedSpec = mergeSpecFixture(
+  "尺寸：10cm\n商品材質：塑膠",
+  "品牌：MARtube\n尺寸：約10cm\n內容物：掛鏈",
+);
+for (const line of ["尺寸：10cm", "材質：塑膠", "品牌：MARtube", "內容物：掛鏈"]) {
+  assert.ok(mergedSpec.includes(line), `spec merge lost: ${line}`);
+}
+assert.ok(!mergedSpec.includes("尺寸：約10cm"), "provider must not overwrite clean manual size");
+const junkSpec = mergeSpecFixture(
+  "適用人群：女生\n特殊用途化妝品：否\n流行趨勢詞：可愛\n品牌：MARtube",
+  "",
+);
+assert.equal(junkSpec, "品牌：MARtube");
+const richSpec = mergeSpecFixture(
+  "品牌：MARtube\nIP：Pingu\n系列：生活小劇場\n角色：Pingu\n材質：塑膠\n尺寸：10cm",
+  "內容物：迷你相機吊飾＋掛鏈\n盲盒方式：隨機出貨／不可指定",
+);
+assert.ok(richSpec.split("\n").length >= 8, "rich evidence must not collapse to 3–4 lines");
+assert.match(finalizer, /protectedSources = new Set<SpecSource>\(\["existing", "classification", "variant"\]\)/u);
+assert.match(finalizer, /規格「\$\{fact\.label\}」來源衝突，已略過待人工確認/u);
+assert.match(finalizer, /derivedUsageScenario/u);
+assert.match(finalizer, /商品材質.*材質/u);
+assert.match(finalizer, /主要材質.*材質/u);
+assert.match(finalizer, /使用方式.*使用情境/u);
+assert.match(finalizer, /factsByLabel/u, "spec merge must retain multiple evidence keys");
+
 // Lifecycle/safety files remain byte-identical to the pre-C1.1 authority.
 const FROZEN_BLOBS = {
   "src/lib/shopify/productLifecycle.ts": "a7e6b2bbe851aeae12c797be583f0cd64fd1789c",
@@ -403,4 +536,4 @@ for (const [file, expected] of Object.entries(FROZEN_BLOBS)) {
   assert.equal(gitBlobSha(file), expected, `Shopify lifecycle scope freeze violated: ${file}`);
 }
 
-console.log("COPY C1.3 regression recovery verifier passed");
+console.log("COPY C1.4 evidence + spec foundation verifier passed");

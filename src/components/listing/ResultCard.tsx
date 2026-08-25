@@ -65,6 +65,7 @@ import {
 import { RegenCopyModal } from "@/components/listing/RegenCopyModal";
 import { LockedCopyPreview } from "@/components/listing/LockedCopyPreview";
 import { COPY_TONES, type CopyTone } from "@/lib/providers/copy";
+import { prepareVisionEvidenceForFullGenerate } from "@/lib/images/fullGenerateVision";
 import {
   isResultCardTabId,
   RESULT_CARD_TABS,
@@ -1033,6 +1034,7 @@ export function ResultCard({
         draft.ip_name,
         regenTone
       );
+      const imageWarnings = await prepareVisionEvidenceForFullGenerate(draft.id);
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1041,7 +1043,8 @@ export function ResultCard({
           provider: readStoredAiProvider(),
           mode: readStoredRunMode(),
           tone: regenTone,
-          regenNotes: regenNotes.trim() || undefined
+          regenNotes: regenNotes.trim() || undefined,
+          imageWarnings
         })
       });
       const payload = await response.json();

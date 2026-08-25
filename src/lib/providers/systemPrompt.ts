@@ -344,7 +344,9 @@ Tags、Collections 完全不在 AI 的輸出 authority 內。AI 只負責 classi
 ${descriptionFormatInstruction(tone)}
 
 【spec 商品規格產生規則（COPY C1.1：Shopify 顧客可讀規格）】
-spec 每行「項目：內容」。原始 spec_text／OCR 只是 evidence，不是 authoritative final output；要重新整理。
+spec 每行「項目：內容」。Full Generate 會提供分 section 的 ONE PRODUCT EVIDENCE PACK；必須逐 section 檢查，有 evidence 的顧客有效規格不可因模型只想輸出少數幾行而漏掉。
+既有 clean spec 是最高 authority，Variant／原始商品文字／圖上文字／可信同款網搜／客觀外觀依 Evidence Pack 信任順序使用；IP context 只供角色語境，絕不能作商品數字來源。
+來源同 key 衝突時不要自行挑值：省略衝突值，交給後端 warning；既有人工 clean value 則由後端保護。
 優先保留有 evidence 的：品牌、IP、系列、角色、商品類型、材質、尺寸、容量、包裝、內容物／配件、款式、功能、盲盒規則、授權資訊；電子商品可依 evidence 寫電源／充電／連線／燈效等。
 不要原封不動搬：分類、貨品分類、顏色分類、適用人群、是否為特殊用途化妝品、流行趨勢詞、場景類型、適用節日、賣家促銷欄、平台活動欄、其他無顧客價值分類。
 若後台欄位內容含真正購買規則（例如盲盒不可指定、隨機1個），只保留有用事實並整理成「盲盒方式：隨機出貨，不可指定款式」。
@@ -419,7 +421,7 @@ export function buildKnownIpBlock(knownIpNames?: string[]): string | null {
 export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitKnownIpList?: boolean }): string {
   const {
     rawTitle, saleStatus, source, variantSummary, price, compareAtPrice, note,
-    imageDescription, specText, webSearchSummary, ipKnowledgePromptBlock, knownIpNames,
+    imageDescription, specText, webSearchSummary, ipKnowledgePromptBlock, evidencePackText, knownIpNames,
     isSecondhand, secondhandGrade, secondhandCondition, secondhandNotes,
   } = input;
   const lines = [
@@ -429,15 +431,19 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
   ];
   if (price) lines.push(`台幣售價：NT$${price}`);
   if (compareAtPrice) lines.push(`台幣定價：NT$${compareAtPrice}`);
-  if (variantSummary) {
+  if (!evidencePackText && variantSummary) {
     lines.push(`款式：${variantSummary}`);
     lines.push("（款式列可能含角色名：寫 enriched_title 時一併納入，多角色用「・」分隔≤3；第二段仍要接商品類型。）");
   }
   if (note) lines.push(`補充備註：${note}`);
-  if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
-  if (specText) lines.push(`來源規格／OCR（可能含平台後台欄位；只作 evidence，整理成乾淨顧客規格，不要原封不動複製）：${specText}`);
-  if (webSearchSummary) lines.push(`網路搜尋補充資訊（internal evidence pool；可信同款具體資訊優先納入 product_facts；顧客文案禁止標來源或 URL；不確定勿寫）：\n${webSearchSummary}`);
-  if (ipKnowledgePromptBlock?.trim()) lines.push(ipKnowledgePromptBlock.trim());
+  if (evidencePackText?.trim()) {
+    lines.push("", evidencePackText.trim());
+  } else {
+    if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
+    if (specText) lines.push(`來源規格／OCR（可能含平台後台欄位；只作 evidence，整理成乾淨顧客規格，不要原封不動複製）：${specText}`);
+    if (webSearchSummary) lines.push(`網路搜尋補充資訊（internal evidence pool；可信同款具體資訊優先納入 product_facts；顧客文案禁止標來源或 URL；不確定勿寫）：\n${webSearchSummary}`);
+    if (ipKnowledgePromptBlock?.trim()) lines.push(ipKnowledgePromptBlock.trim());
+  }
   if (isSecondhand) {
     lines.push(`這是二手／中古商品：${[
       secondhandGrade ? `等級 ${secondhandGrade}` : null,

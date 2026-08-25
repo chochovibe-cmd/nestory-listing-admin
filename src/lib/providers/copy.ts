@@ -74,6 +74,9 @@ export interface CopyProviderInput {
   imageDescription?: string;
   specText?: string;
   webSearchSummary?: string;
+  /** COPY C1.4: unified, sectioned facts for full generation. Legacy fields
+   * remain optional for single-field regen and provider compatibility. */
+  evidencePackText?: string;
   /**
    * P5 層2／3：已組好的 IP 背景區塊（含誠實邊界文案），直接進 user 事實區。
    * 來源為 knowledge_pack 或冷門 IP 網搜／中性指示；規格事實仍走 webSearchSummary／spec。

@@ -10,78 +10,8 @@ const DEFAULT_VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
 // Guards against a draft with an unreasonable number of uploaded images
 // blowing up one request's payload/latency/cost.
-export const MAX_DESCRIBE_IMAGES = 6;
+const MAX_DESCRIBE_IMAGES = 6;
 const MAX_OCR_IMAGES = 4;
-
-export type VisionImageCandidate = {
-  imageType: "main" | "detail";
-  url: string;
-  sortOrder: number;
-};
-
-function uniqueVisionCandidates(
-  candidates: readonly VisionImageCandidate[],
-): VisionImageCandidate[] {
-  const seen = new Set<string>();
-  return candidates
-    .filter((candidate) => candidate.url.trim())
-    .slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .filter((candidate) => {
-      const url = candidate.url.trim();
-      if (seen.has(url)) return false;
-      seen.add(url);
-      return true;
-    });
-}
-
-function evenlySpaced<T>(items: readonly T[], count: number): T[] {
-  if (count <= 0 || items.length === 0) return [];
-  if (items.length <= count) return [...items];
-  if (count === 1) return [items[0]!];
-  return Array.from({ length: count }, (_, index) => {
-    const sourceIndex = Math.round((index * (items.length - 1)) / (count - 1));
-    return items[sourceIndex]!;
-  });
-}
-
-/**
- * Keep one hero/main image, then sample detail images across the full ordered
- * set (front/middle/back). Remaining main images only fill unused slots.
- */
-export function selectRepresentativeVisionImages(
-  candidates: readonly VisionImageCandidate[],
-  cap = MAX_DESCRIBE_IMAGES,
-): VisionImageCandidate[] {
-  const safeCap = Math.max(0, Math.min(MAX_DESCRIBE_IMAGES, Math.floor(cap)));
-  if (safeCap === 0) return [];
-  const unique = uniqueVisionCandidates(candidates);
-  const mains = unique.filter((candidate) => candidate.imageType === "main");
-  const details = unique.filter((candidate) => candidate.imageType === "detail");
-  const selected: VisionImageCandidate[] = [];
-  if (mains[0]) selected.push(mains[0]);
-  selected.push(...evenlySpaced(details, safeCap - selected.length));
-  for (const main of mains.slice(1)) {
-    if (selected.length >= safeCap) break;
-    selected.push(main);
-  }
-  return selected.slice(0, safeCap);
-}
-
-/** Non-cryptographic cache key; changes whenever the ordered evidence set changes. */
-export function buildVisionSourceFingerprint(
-  candidates: readonly VisionImageCandidate[],
-): string {
-  const source = uniqueVisionCandidates(candidates)
-    .map((candidate) => `${candidate.imageType}:${candidate.sortOrder}:${candidate.url.trim()}`)
-    .join("\n");
-  let hash = 2166136261;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `v1-${(hash >>> 0).toString(16).padStart(8, "0")}-${source.length}`;
-}
 
 // B1 (Mockup差異備忘 差異2): 規格圖 OCR 廢棄後，詳情圖是圖上文字的主要來源。除了外觀
 // 描述，這支 prompt 現在還要「轉錄詳情圖上實際印出來、看得到的文字」（廣告文案／賣點／

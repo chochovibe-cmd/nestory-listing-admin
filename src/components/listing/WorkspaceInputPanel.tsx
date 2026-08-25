@@ -56,7 +56,6 @@ import { VariantEditor, repriceVariants } from "@/components/listing/VariantEdit
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
 import { parseVideoUrlsFromTextarea } from "@/lib/media/videoUrls";
 import { FieldHelp } from "@/components/listing/FieldHelp";
-import { prepareVisionEvidenceForFullGenerate } from "@/lib/images/fullGenerateVision";
 
 import { showToast } from "@/components/Toast";
 import {
@@ -1349,6 +1348,30 @@ export function WorkspaceInputPanel({
     return id;
   }
 
+  // Requirement 4: analyze-images must NEVER block generation. On any failure we
+  // return a warning string (surfaced as 黃字 via the draft's warnings) and let
+  // generate run without image info, rather than throwing.
+  async function analyzeImages(id: string): Promise<string[]> {
+    try {
+      const response = await fetch("/api/analyze-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId: id })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return [
+          payload.error
+            ? `圖片辨識未完成（已略過圖片資訊繼續生成）：${payload.error}`
+            : "圖片辨識未完成，已略過圖片資訊繼續生成。"
+        ];
+      }
+      return Array.isArray(payload.warnings) ? payload.warnings : [];
+    } catch {
+      return ["圖片辨識連線失敗，已略過圖片資訊繼續生成。"];
+    }
+  }
+
   function stepModel(title: string, statuses: StepStatus[], error?: string): GenerationProgress {
     return { visible: true, title, steps: GENERATION_STEP_LABELS.map((label, i) => ({ label, status: statuses[i] })), error };
   }
@@ -1762,7 +1785,7 @@ export function WorkspaceInputPanel({
     const hasImages = uploadPromisesRef.current.length > 0;
 
     // Step 1 done, step 2 (image analysis) active.
-    emitProgress(stepModel(cardTitle, ["done", "active", "pending", "pending"]));
+    emitProgress(stepModel(cardTitle, ["done", hasImages ? "active" : "done", "pending", "pending"]));
 
     // Wait for any background image uploads to finish before analysis reads them.
     if (hasImages) {
@@ -1772,11 +1795,13 @@ export function WorkspaceInputPanel({
 
     let step2: StepStatus = "done";
     const imageWarnings: string[] = [];
-    setSubmitPhase("analyzing");
-    const warnings = await prepareVisionEvidenceForFullGenerate(id);
-    if (warnings.length > 0) {
-      step2 = "warn";
-      imageWarnings.push(...warnings);
+    if (hasImages) {
+      setSubmitPhase("analyzing");
+      const warnings = await analyzeImages(id);
+      if (warnings.length > 0) {
+        step2 = "warn";
+        imageWarnings.push(...warnings);
+      }
     }
 
     // Step 3 (copy generation) active.

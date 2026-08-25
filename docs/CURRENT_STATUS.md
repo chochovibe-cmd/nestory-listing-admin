@@ -8,18 +8,6 @@
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
 
-## COPY C1.4 — Evidence + Spec Foundation（2026-08-25）
-
-PR #9 分支 `agent/copy-chaocao-sales-tone` 由 `ed52ddc8cd005891886ce2f600965bd3976863e3` 開始 C1.4 corrective；仍未 merge default。
-
-- Full Generate 兩個入口現在都維持 `analyze-images → generate` request boundary；Vision endpoint 以 `image_flags.vision_status + image_description + ordered image fingerprint` 判斷 cache，圖片集合變動會自動失效。失敗不擋文案，warning 明確標示本次沒有使用詳情圖資訊。
-- Vision 仍維持一次最多 6 張：首張 main 優先，detail 從完整排序做 deterministic 前／中／後代表取樣，不新增 OCR provider 或多次 Vision call。
-- 新增 typed ONE Product Evidence Pack，分開 classification、raw product text、variant、既有規格、圖片外觀、圖上文字、可信同款網搜與 IP context；`translated_text` 優先於 `ocr_text`，Full CopyProvider 已實際收到 pack。
-- Full Generate 規格改為 evidence merge：clean existing／confirmed classification／Variant 受保護，其餘非衝突 evidence 按 key 合併；淘寶後台垃圾先清除，數值衝突略過並警告。單欄重生不觸發 Vision、也不寫 `spec_text`。
-- Scope：沒有 migration、沒有 UI redesign、沒有 Writer V2／FAQ／Why／Highlights 改寫、沒有 Shopify production write 或 lifecycle 變動。
-
-Dedicated audit：`docs/audits/COPY-C1.4-EVIDENCE-SPEC-FOUNDATION-2026-08-25.md`。
-
 ## COPY C1 / C1.1 — 潮巢導購版 AI Copy Tone（2026-08-25）
 
 COPY C1 從 production/default merge HEAD `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 開 branch `agent/copy-chaocao-sales-tone`，新增第 7 種 **manual** tone「潮巢導購版」；`DEFAULT_TONE` 與 IP auto-match map 不變。初版 HEAD `ac86acbd4ed13e7d658daa6bb216b056f3b25c0b` 經 Owner iPhone／實際生成驗收後未通過，C1.1 在同一 PR #9 做單一 corrective。

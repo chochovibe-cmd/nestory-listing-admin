@@ -65,16 +65,10 @@ import {
   stripCustomerSourceMarkers,
 } from "@/lib/providers/stripCustomerSourceMarkers";
 import {
+  finalizeCustomerSpecText,
   finalizeCustomerText,
   finalizeCustomerTextList,
-  mergeCustomerSpecEvidence,
 } from "@/lib/providers/customerFacingFinalizer";
-import {
-  buildProductEvidencePack,
-  formatProductEvidencePack,
-  selectProductImageVisibleText,
-  type ProductImageTextEvidence,
-} from "@/lib/providers/productEvidencePack";
 import { resolveCopyTone } from "@/lib/providers/systemPrompt";
 import { resolveCanonicalCharacterName } from "@/lib/characters/resolveCanonicalCharacter";
 import {
@@ -597,15 +591,9 @@ export async function POST(request: NextRequest) {
     : null;
   const ipCatalogResult = ipCatalogFallback ?? ipCatalogWithPack;
 
-  const [tagRulesResult, ipCharactersResult, imageEvidenceResult] = await Promise.allSettled([
+  const [tagRulesResult, ipCharactersResult] = await Promise.allSettled([
     listActiveListingTagRules(serviceSupabase),
     serviceSupabase.from("ip_characters").select("id,ip_name,character_name,aliases,sort_order,is_active,created_at,updated_at").eq("is_active", true),
-    serviceSupabase
-      .from("product_images")
-      .select("translated_text,ocr_text,sort_order")
-      .eq("draft_id", draftId)
-      .in("image_type", ["main", "detail"])
-      .order("sort_order", { ascending: true }),
   ]);
 
   if (tagRulesResult.status === "rejected") {
@@ -647,15 +635,6 @@ export async function POST(request: NextRequest) {
   if (imageWarnings.length > 0) extraWarnings.push(...imageWarnings);
 
   const rawTitleForSearch = draft.taobao_title ?? draft.original_title ?? "";
-  const imageEvidenceError = imageEvidenceResult.status === "rejected"
-    ? imageEvidenceResult.reason
-    : imageEvidenceResult.value.error;
-  const imageTextEvidenceRows = imageEvidenceResult.status === "fulfilled" && !imageEvidenceResult.value.error
-    ? (imageEvidenceResult.value.data ?? []) as ProductImageTextEvidence[]
-    : [];
-  if (imageEvidenceError) {
-    extraWarnings.push("逐圖文字 evidence 讀取失敗，本次仍使用既有規格、圖片摘要與其他來源生成。");
-  }
   let webSearchSummary: string | undefined;
   let productCacheToPersist: WebSearchCache | null = null;
   let ipBackgroundCacheToPersist: WebSearchCache | null = null;
@@ -720,23 +699,6 @@ export async function POST(request: NextRequest) {
     ipBackground: ipBackgroundCacheToPersist?.ipBackground ?? null,
   });
 
-  const evidencePack = buildProductEvidencePack({
-    rawTitle: rawTitleForSearch,
-    classification: {
-      brand: draft.product_brand,
-      ip: draft.ip_name ?? candidateIpForPack,
-      characters: draft.character_name,
-      productType: draft.product_type,
-    },
-    variantSummary,
-    existingSpec: draft.spec_text,
-    imageDescription: draft.image_description,
-    imageTexts: imageTextEvidenceRows,
-    webSearchSummary,
-    ipContext: ipKnowledgePromptBlock,
-  });
-  const evidencePackText = formatProductEvidencePack(evidencePack);
-
   let providerOutput: CopyProviderOutput | null = null;
   let detected: DetectedClassification = {
     ip: draft.ip_name ?? "",
@@ -763,7 +725,6 @@ export async function POST(request: NextRequest) {
         specText: draft.spec_text ?? undefined,
         webSearchSummary,
         ipKnowledgePromptBlock,
-        evidencePackText,
         knownIpNames,
         tone,
         copyLength,
@@ -954,30 +915,11 @@ export async function POST(request: NextRequest) {
     if (metaDuplicateWarning) extraWarnings.push(metaDuplicateWarning);
   }
 
-  // COPY C1.4: merge every non-conflicting evidence source; provider is no longer canonical.
+  // COPY C1.1: provider clean spec is canonical on full generation; existing OCR/manual text is fallback only.
   const providerSpecRaw = (providerOutput.spec ?? "").trim();
   const providerSpecHasContent =
     Boolean(providerSpecRaw) && providerSpecRaw !== "（無）" && providerSpecRaw !== "(無)";
-  const specMerge = mergeCustomerSpecEvidence({
-    existingSpec: draft.spec_text,
-    classification: {
-      brand: effectiveProductBrand,
-      ip: detected.ip,
-      characters: listingInput.characters,
-      productType: normalizeProductTypeForDisplay(detected.productType),
-    },
-    variantFacts: variantSummary,
-    providerSpec: providerOutput.spec,
-    imageEvidence: [
-      draft.image_description ?? "",
-      ...imageTextEvidenceRows
-        .map(selectProductImageVisibleText)
-        .filter((value): value is string => Boolean(value)),
-    ],
-    webEvidence: webSearchSummary,
-  });
-  const finalSpecText = specMerge.specText;
-  if (specMerge.warnings.length > 0) extraWarnings.push(...specMerge.warnings);
+  const finalSpecText = finalizeCustomerSpecText(providerOutput.spec, draft.spec_text);
   if (providerSpecHasContent && finalSpecText) {
     extraWarnings.push(
       webSearchSummary

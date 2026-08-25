@@ -307,6 +307,19 @@ ${buildSecondhandSection(secondhandInfo)}
 ${chaochaoPrewriteInstruction(tone, copyLength)}
 先從 evidence 判斷 IP／角色／類型／品牌，再從頭生成完整文案。已建檔 IP 若有明確命中，detected_ip_name 必須使用清單中的既有名稱；品牌只在來源明確出現時填，沒把握留空。detected_product_brand 與 detected_ip_name 是不同欄位：品牌有值而 IP 未確認時，IP 必須保持空白並保留缺少 IP validation，禁止把品牌複製成 IP。
 
+【SKU authority（COPY C1.3）】
+sku 欄位可解析來源貨號供除錯，但 AI 不擁有 SKU authority。後端會保留既有 Nestory SKU；只有 draft SKU 空白時才以共用 generateSku() 依 product type／IP／character 產生。禁止把淘寶貨號、賣家貨號或模型自由文字當成正式 SKU。
+
+【FAQ GEO standalone-answer contract（base safety restored）】
+每個 FAQ 回答必須是可被搜尋引擎單獨引用、語意完整的一段；讀者不需要看其他欄位也能理解。
+禁止使用「如上所述」「如前面提到」「如圖所示」等依賴上下文的指代。
+
+【Tags / Collections authority boundary（base authority restored）】
+Tags、Collections 完全不在 AI 的輸出 authority 內。AI 只負責 classification 與 copy；正式 Tags／Collections 一律由 backend rules 根據 IP／角色／類型決定，AI 不得自行控制或輸出正式值。
+
+【全域安全禁詞（base safety restored）】
+禁止把來源平台叫賣詞帶進顧客文案：超值、爆款、必買、剁手、秒殺、全網低價、清倉、狂銷、熱賣、CP值、買到賺到、保證升值、限時搶購、錯過可惜、贈品可選、店鋪優惠、親、寶貝。
+
 【標題長度唯一真相表】
 | enriched_title | ≤80 |
 | 官網 title_zh（後端 clamp） | ≤60 |
@@ -454,7 +467,7 @@ const REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
   enriched_title:
     "只重生第三段 feature candidate（款式／系列／功能／造型／材質／配件／使用型態）；既有 structured brand／IP／characters／productType 與前兩段不可重猜或改寫。第三段維持 blacklist／去重；後端以既有 structured title 組裝並套 80／60 contracts。禁止 emoji。",
   generated_description_html: "沿用所選 tone 的 descriptionFormatInstruction；不要捏造規格。",
-  generated_faq_html: "3-5 題，每題 <h3><strong>問題</strong></h3><p>回答</p>，答案可單獨引用。",
+  generated_faq_html: "3-5 題，每題 <h3><strong>問題</strong></h3><p>回答</p>。每個回答必須可單獨引用、語意完整；禁止「如上所述／如前面提到／如圖所示」等上下文指代。",
   seo_title: "最長 80 字；沿用既有 SEO formula；不要自己加品牌尾綴。禁止 emoji。",
   meta_description: "70-80 字為佳、最長 90；具體、有 evidence。禁止 emoji。",
   why_we_chose_it: "1-2 句，說明為什麼這個商品值得在潮巢出現，帶品牌個性，不要只重複功能。",

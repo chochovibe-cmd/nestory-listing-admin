@@ -328,6 +328,70 @@ for (const fixture of qualityFixtures) {
   assert.ok(fixture.scenario && fixture.pain && fixture.facts.length >= 3, `quality fixture incomplete: ${fixture.kind}`);
 }
 
+// ---------------------------------------------------------------------------
+// COPY C1.3 — regression recovery: SKU authority, title recovery, base safety.
+// ---------------------------------------------------------------------------
+function skuAuthorityFixture(draftSku, rawSku, generatedSku) {
+  void rawSku;
+  return draftSku?.trim() || generatedSku;
+}
+assert.equal(
+  skuAuthorityFixture("CHO-BBX-PNG-PNG-001", "Pingu相機盲盒", "CHO-OTH-ABC-DEF-001"),
+  "CHO-BBX-PNG-PNG-001",
+  "existing Nestory SKU must survive full generation",
+);
+assert.equal(
+  skuAuthorityFixture(null, "Pingu相機盲盒", "CHO-BLD-PNG-PNG-001"),
+  "CHO-BLD-PNG-PNG-001",
+  "empty draft SKU must use generateSku result",
+);
+assert.match(route, /import \{ generateSku \} from "@\/lib\/contentGenerator\/sku"/u);
+assert.match(route, /const persistedSku = draft\.sku\?\.trim\(\) \|\| generateSku\(/u);
+assert.match(route, /sku:\s*persistedSku/u);
+assert.doesNotMatch(route, /sku:\s*raw\.sku/u, "provider/raw SKU must not become authority");
+assert.doesNotMatch(regenMapBlock, /sku/u, "single-field regen map must not touch SKU");
+assert.doesNotMatch(regenBodyBlock, /update\.sku|sku\s*:/u, "single-field regen must not write SKU");
+assert.match(payload, /const sku = draft\.sku\?\.trim\(\) \|\| generatedSku/u, "Shopify must share persisted/generateSku authority");
+assert.match(payload, /variantSeed:\s*\{[\s\S]*\.\.\.generatedVariantSeed,\s*sku\s*\}/u, "generated payload must not override authoritative SKU");
+
+assert.doesNotMatch(titleGenerator, /isCharacterRedundantWithIpDisplay/u, "canonical character must survive even when IP display contains it");
+assert.match(titleGenerator, /'吊飾'.*'盲盒'.*'娃娃'.*'公仔'/u, "global title dedupe tokens missing");
+const lengthFinalizerBlock = sliceSourceBlock(
+  titleGenerator,
+  "export function enforceSkeletonTitleLength",
+  "\n\nfunction enforceTitleLength",
+  "title length finalizer",
+);
+assert.match(lengthFinalizerBlock, /dedupeRepeatedTitleTerms\(seg1\)/u);
+assert.match(lengthFinalizerBlock, /dedupeRepeatedTitleTerms\(seg2\)/u);
+assert.match(lengthFinalizerBlock, /dedupeRepeatedTitleTerms\(seg3\)/u);
+assert.match(titleGenerator, /LOW_VALUE_TITLE_FEATURES/u);
+for (const low of ["隨機款", "標準款", "款式可選", "多款可選", "一般款"]) {
+  assert.ok(titleGenerator.includes(`'${low}'`), `low-value title fallback missing: ${low}`);
+}
+assert.match(titleGenerator, /rankTitleFeatureCandidates\(\[/u);
+function rankFeatureFixture(candidates) {
+  const low = new Set(["隨機款", "標準款", "款式可選", "多款可選", "一般款"]);
+  return candidates.find((value) => value && !low.has(value)) ?? candidates.find(Boolean) ?? "";
+}
+assert.equal(rankFeatureFixture(["隨機款", "迷你相機造型"]), "迷你相機造型");
+for (const duplicated of ["吊飾吊飾", "盲盒盲盒", "公仔公仔", "娃娃娃娃"]) {
+  const token = duplicated.slice(0, duplicated.length / 2);
+  assert.equal(duplicated.split(token + token).join(token), token);
+}
+assert.equal(pinguC12.split(" | ")[1], "Pingu 迷你相機盲盒");
+assert.match(titleGenerator, /productBrand \? productBrand \+ ' × ' \+ ipDisplayName : ipDisplayName/u);
+
+assert.match(prompt, /FAQ GEO standalone-answer contract/u);
+for (const phrase of ["如上所述", "如前面提到", "如圖所示"]) {
+  assert.ok(prompt.includes(phrase), `FAQ standalone prohibition missing: ${phrase}`);
+}
+assert.match(prompt, /Tags \/ Collections authority boundary/u);
+assert.match(prompt, /AI 只負責 classification 與 copy/u);
+assert.match(prompt, /正式 Tags／Collections 一律由 backend rules/u);
+assert.match(prompt, /AI 不擁有 SKU authority/u);
+assert.match(prompt, /全域安全禁詞/u);
+
 // Lifecycle/safety files remain byte-identical to the pre-C1.1 authority.
 const FROZEN_BLOBS = {
   "src/lib/shopify/productLifecycle.ts": "a7e6b2bbe851aeae12c797be583f0cd64fd1789c",
@@ -339,4 +403,4 @@ for (const [file, expected] of Object.entries(FROZEN_BLOBS)) {
   assert.equal(gitBlobSha(file), expected, `Shopify lifecycle scope freeze violated: ${file}`);
 }
 
-console.log("COPY C1.2 structured content intelligence verifier passed");
+console.log("COPY C1.3 regression recovery verifier passed");

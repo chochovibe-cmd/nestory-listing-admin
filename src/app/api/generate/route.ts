@@ -19,6 +19,7 @@ import {
 } from "@/lib/contentGenerator/scenarioKeywords";
 import { matchSectionHeader } from "@/lib/contentGenerator/sectionHeaders";
 import { generateShopifyHandleSlug } from "@/lib/contentGenerator/handleGenerator";
+import { generateSku } from "@/lib/contentGenerator/sku";
 import {
   buildStructuredEnrichedTitle,
   clampOfficialTitle,
@@ -746,7 +747,8 @@ export async function POST(request: NextRequest) {
         character: resolvedCharacter,
         productType: raw.detectedProductType,
         category: raw.detectedCategory || (raw.detectedProductType ? `型態_${raw.detectedProductType}` : ""),
-        sku: raw.sku,
+        // COPY C1.3: provider SKU is non-authoritative; preserve the draft until backend resolution.
+        sku: draft.sku ?? "",
       };
       providerOutput = raw;
 
@@ -816,6 +818,7 @@ export async function POST(request: NextRequest) {
   // COPY C1.2: structured classification owns segments 1–2; AI text is feature-only.
   const enrichedTitleFull = buildStructuredEnrichedTitle({
     structuredBaseTitle: ruleOutput.display_title,
+    preserveStructuredBase: true,
     brand: effectiveProductBrand,
     ip: detected.ip,
     characters: listingInput.characters,
@@ -960,6 +963,12 @@ export async function POST(request: NextRequest) {
     ),
   );
 
+  const persistedSku = draft.sku?.trim() || generateSku({
+    productType: detected.productType,
+    ipName: detected.ip,
+    characterName: detected.character || null,
+  }).sku;
+
   const draftUpdate: Record<string, unknown> = {
     title_zh: localizedOutput.display_title,
     description_html: normalizeDescriptionToPlainText(localizedOutput.generated_description_html),
@@ -976,7 +985,7 @@ export async function POST(request: NextRequest) {
     character_name: detected.character || null,
     product_type: detected.productType || null,
     detected_category: detected.category || null,
-    sku: detected.sku || null,
+    sku: persistedSku,
     warnings: allWarnings,
     status: successStatus.status,
     pipeline_stage: successStatus.pipeline_stage,

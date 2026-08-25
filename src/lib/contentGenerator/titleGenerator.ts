@@ -3,7 +3,6 @@ import {
   DisplayLabelContext,
   formatCharacterShortNameFromContext,
   formatListingIpDisplayNameFromContext,
-  isCharacterRedundantWithIpDisplay,
 } from './displayLabels';
 import { ListingDraftInput } from './types';
 import { normalizeProductTypeForDisplay } from '../productTypeLabels';
@@ -182,7 +181,7 @@ export function collectCharacterNames(
   const names: string[] = [];
   for (const character of draft.characters) {
     const formatted = normalizeText(formatCharacterShortNameFromContext(character, draft.ip, context));
-    if (formatted && !isCharacterRedundantWithIpDisplay(formatted, ipDisplayName)) {
+    if (formatted) {
       addUnique(names, formatted);
     }
   }
@@ -204,7 +203,7 @@ export function collectCharacterNames(
         .sort((a, b) => a - b)[0];
       if (index !== undefined) {
         const short = normalizeText(formatCharacterShortNameFromContext(entry.character_name, draft.ip, context));
-        if (short && !isCharacterRedundantWithIpDisplay(short, ipDisplayName)) {
+        if (short) {
           matches.push({ index, name: short });
         }
       }
@@ -227,7 +226,7 @@ export function formatCharacterText(characters: string[]): string {
 // 老闆工具的重複詞收斂（吊飾吊飾→吊飾掛件 這類）；煙霧測試 2026-07-18 抓到後補港。
 const TITLE_DEDUPE_TERMS = [
   '絨毛吊飾', '吊飾掛件', '絨毛娃娃', '桌面小夜燈', '娃娃抱枕',
-  '吊飾', '掛件', '鑰匙圈', '絨毛', '毛絨', '娃娃', '擺件', '抱枕', '公仔',
+  '吊飾', '掛件', '鑰匙圈', '盲盒', '絨毛', '毛絨', '娃娃', '擺件', '抱枕', '公仔',
 ];
 
 function escapeRegExp(value: string): string {
@@ -357,6 +356,19 @@ export function sanitizeTitleSegment3(value: string): string {
   return next.replace(/\s{2,}/g, ' ').trim();
 }
 
+export const LOW_VALUE_TITLE_FEATURES: readonly string[] = [
+  '隨機款', '標準款', '款式可選', '多款可選', '一般款',
+];
+
+/** Prefer evidence-rich feature candidates; generic fallbacks only win when no richer candidate exists. */
+export function rankTitleFeatureCandidates(candidates: readonly (string | null | undefined)[]): string {
+  const cleaned = candidates
+    .map((value) => dedupeRepeatedTitleTerms(sanitizeTitleSegment3(value ?? '')))
+    .filter(Boolean);
+  const rich = cleaned.find((value) => !LOW_VALUE_TITLE_FEATURES.includes(value));
+  return rich ?? cleaned[0] ?? '';
+}
+
 function pickTitleScenarioFallback(draft: ListingDraftInput): string | null {
   const productTypes = inferProductTypes(draft);
   const terms = pickScenarioKeywords(productTypes, undefined, 4).filter(
@@ -441,9 +453,9 @@ export function enforceSkeletonTitleLength(
   seg3: string,
   maxLen: number = OFFICIAL_TITLE_MAX_LENGTH,
 ): string {
-  const s1 = normalizeText(seg1);
-  const s2 = normalizeText(seg2);
-  const s3 = normalizeText(seg3);
+  const s1 = dedupeRepeatedTitleTerms(seg1);
+  const s2 = dedupeRepeatedTitleTerms(seg2);
+  const s3 = dedupeRepeatedTitleTerms(seg3);
   const join3 = (a: string, b: string, c: string) => {
     if (a && b && c) return `${a} | ${b} | ${c}`;
     if (a && b) return `${a} | ${b}`;
@@ -495,6 +507,7 @@ export interface StructuredEnrichedTitleInput {
   productType?: string | null;
   featureText?: string | null;
   structuredBaseTitle?: string | null;
+  preserveStructuredBase?: boolean;
   maxLen?: number;
 }
 
@@ -511,33 +524,34 @@ function featureCandidateFromTitle(value: string | null | undefined): string {
  */
 export function buildStructuredEnrichedTitle(input: StructuredEnrichedTitleInput): string {
   const baseParts = splitTitlePipeSegments(input.structuredBaseTitle ?? '');
-  let seg1 = baseParts?.[0] ?? '';
-  let seg2 = baseParts?.[1] ?? '';
-
-  if (!seg1) {
-    const brand = normalizeText(input.brand);
-    const ip = normalizeText(input.ip);
-    seg1 = brand && ip ? `${brand} × ${ip}` : (ip || brand);
-  }
-
-  if (!seg2) {
-    const characters = (input.characters ?? []).map(normalizeText).filter(Boolean);
-    const characterText = formatCharacterText(Array.from(new Set(characters)));
-    const productType = normalizeText(normalizeProductTypeForDisplay(input.productType ?? ''));
-    seg2 = characterText && productType
-      ? dedupeRepeatedTitleTerms(`${characterText} ${productType}`)
-      : (characterText || productType);
-  }
-
+  const brand = normalizeText(input.brand);
+  const ip = normalizeText(input.ip);
+  const structuredSeg1 = brand && ip ? `${brand} × ${ip}` : (ip || brand);
+  const characters = Array.from(new Set((input.characters ?? []).map(normalizeText).filter(Boolean)));
+  const characterText = formatCharacterText(characters);
   const productType = normalizeText(normalizeProductTypeForDisplay(input.productType ?? ''));
-  let seg3 = featureCandidateFromTitle(input.featureText);
+  const structuredSeg2 = characterText && productType
+    ? dedupeRepeatedTitleTerms(`${characterText} ${productType}`)
+    : (characterText || productType);
+
+  const seg1 = input.preserveStructuredBase
+    ? (baseParts?.[0] ?? structuredSeg1)
+    : (structuredSeg1 || baseParts?.[0] || '');
+  const seg2 = input.preserveStructuredBase
+    ? (baseParts?.[1] ?? structuredSeg2)
+    : (structuredSeg2 || baseParts?.[1] || '');
+
+  let seg3 = rankTitleFeatureCandidates([
+    featureCandidateFromTitle(input.featureText),
+    baseParts?.slice(2).join(' | '),
+  ]);
   if (productType && seg3.includes(productType)) {
     seg3 = seg3.split(productType).join(' ').replace(/\s{2,}/g, ' ').trim();
   }
   for (const term of seg2.split(/[・\s]+/u).filter((term) => term.length >= 2)) {
     if (seg3.includes(term)) seg3 = seg3.split(term).join(' ').replace(/\s{2,}/g, ' ').trim();
   }
-  seg3 = sanitizeTitleSegment3(seg3) || '標準款';
+  seg3 = rankTitleFeatureCandidates([seg3]) || '標準款';
 
   return enforceSkeletonTitleLength(seg1, seg2, seg3, input.maxLen ?? ENRICHED_TITLE_MAX_LENGTH);
 }

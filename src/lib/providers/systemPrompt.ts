@@ -8,6 +8,7 @@ import {
   buildKnownIpBlock,
   resolveCopyTone,
 } from "./systemPromptBase";
+export type { SecondhandInfo } from "./systemPromptBase";
 
 // R0A direct provider context stays delegated unchanged to the Production-derived base:
 // rawTitle, variantSummary, imageDescription, specText, webSearchSummary, ipKnowledgePromptBlock.

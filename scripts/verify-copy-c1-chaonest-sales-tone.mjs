@@ -251,4 +251,48 @@ const providerAdopted = specOutcome("   ", "品牌：Razer\n類型：滑鼠");
 assert.equal(providerAdopted.finalSpec, "品牌：Razer\n類型：滑鼠", "valid provider spec was not adopted when existing is blank");
 assert.equal(providerAdopted.usedProviderSpec, true, "adopted provider spec must trigger auto-organized warning");
 
-console.log("COPY C1.R0B title/SKU/FAQ/spec-warning contract verifier passed");
+// R0B.3: single-field regeneration preserves stored tone and never writes generation_tone.
+const singleFieldDispatch = section(route, "if (regenField) {", "const ipCatalogWithPack");
+assert.match(singleFieldDispatch, /const regenTone: CopyTone =[\s\S]*typeof draft\.generation_tone === "string"[\s\S]*COPY_TONES[\s\S]*includes\(draft\.generation_tone\)[\s\S]*\? \(draft\.generation_tone as CopyTone\)[\s\S]*: tone;/u,
+  "single-field regen does not prefer a valid stored generation_tone");
+assert.match(singleFieldDispatch, /tone: regenTone,/u,
+  "single-field regen does not pass the preserved tone to the provider path");
+
+const fieldRegenFunction = section(route, "async function handleFieldRegen", "async function writeImageAltTexts");
+assert.doesNotMatch(fieldRegenFunction, /generation_tone/u,
+  "single-field regen must not write generation_tone");
+
+function resolveSingleFieldToneFixture(storedTone, fallbackTone) {
+  const approvedStoredTones = new Set(["潮巢導購版", "小編聊天口吻"]);
+  return typeof storedTone === "string" && approvedStoredTones.has(storedTone)
+    ? storedTone
+    : fallbackTone;
+}
+assert.equal(
+  resolveSingleFieldToneFixture("潮巢導購版", "黑膠文藝收藏感"),
+  "潮巢導購版",
+  "Fixture A: Chaochao stored tone was not preserved for enriched_title regen",
+);
+assert.equal(
+  resolveSingleFieldToneFixture("小編聊天口吻", "黑膠文藝收藏感"),
+  "小編聊天口吻",
+  "Fixture B: Xiaobian stored tone was not preserved for description regen",
+);
+assert.equal(
+  resolveSingleFieldToneFixture(null, "黑膠文藝收藏感"),
+  "黑膠文藝收藏感",
+  "Fixture C: null legacy tone must retain existing fallback behavior",
+);
+assert.equal(
+  resolveSingleFieldToneFixture("legacy-invalid-tone", "黑膠文藝收藏感"),
+  "黑膠文藝收藏感",
+  "Fixture C: invalid legacy tone must retain existing fallback behavior",
+);
+
+const fullGenerateToneBlock = section(route, "const generationTone = resolvedGenerationTone", "if (webSearchCacheToPersist)");
+assert.match(fullGenerateToneBlock, /const generationTone = resolvedGenerationTone\(tone, detected\.ip \|\| draft\.ip_name, ipToneMap\);/u,
+  "Full Generate no longer resolves the explicitly selected tone");
+assert.match(fullGenerateToneBlock, /\.update\(\{ generation_tone: generationTone \}\)/u,
+  "Fixture D: Full Generate no longer persists the selected generation_tone");
+
+console.log("COPY C1.R0B title/SKU/FAQ/spec-warning/tone-preservation contract verifier passed");

@@ -411,11 +411,6 @@ async function handleFieldRegen(params: {
     return Response.json({ error: updateError.message }, { status: 500 });
   }
 
-  await serviceSupabase
-    .from("product_drafts")
-    .update({ generation_tone: resolvedGenerationTone(tone, draft.ip_name, ipToneMap) })
-    .eq("id", draftId);
-
   if (historyContent.trim()) {
     await serviceSupabase.from("generation_history").insert({
       draft_id: draftId,
@@ -555,6 +550,11 @@ export async function POST(request: NextRequest) {
   );
 
   if (regenField) {
+    const regenTone: CopyTone =
+      typeof draft.generation_tone === "string" &&
+      (COPY_TONES as readonly string[]).includes(draft.generation_tone)
+        ? (draft.generation_tone as CopyTone)
+        : tone;
     return handleFieldRegen({
       regenField,
       providerKey,
@@ -564,7 +564,7 @@ export async function POST(request: NextRequest) {
       serviceSupabase,
       source,
       variantSummary,
-      tone,
+      tone: regenTone,
       copyLength,
       scenarioKeywordMap,
       ipToneMap,

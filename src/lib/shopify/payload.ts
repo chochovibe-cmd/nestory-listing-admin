@@ -133,13 +133,11 @@ export function buildShopifyProductPayload(
   );
   const mediaWithVideos = [...images, ...videoBuild.media];
 
-  const generatedSku = generateSku({
+  const { sku } = generateSku({
     productType: draft.product_type ?? "",
     ipName: draft.ip_name ?? draft.category ?? "",
     characterName: draft.character_name
-  }).sku;
-  // COPY C1.3: the persisted Nestory SKU and Shopify seed share one authority.
-  const sku = draft.sku?.trim() || generatedSku;
+  });
   const generatedPayload = isRecord(draft.generated_payload_json) ? draft.generated_payload_json : {};
   const generatedProduct = isRecord(generatedPayload.product) ? generatedPayload.product : {};
   const generatedVariantSeed = isRecord(generatedPayload.variantSeed) ? generatedPayload.variantSeed : {};
@@ -197,13 +195,13 @@ export function buildShopifyProductPayload(
     product: productWithOptions,
     media: Array.isArray(generatedPayload.media) ? generatedPayload.media : mediaWithVideos,
     variantSeed: {
+      sku,
       price: draft.twd_price ?? 0,
       cost: draft.twd_cost ?? 0,
       compareAtPrice: draft.compare_at_price ?? null,
       inventoryQuantity: draft.inventory_quantity ?? 0,
       inventoryPolicy: draft.inventory_policy === "deny" ? "DENY" : "CONTINUE",
-      ...generatedVariantSeed,
-      sku
+      ...generatedVariantSeed
     },
     variantPlan,
     shopifyCollections: draft.shopify_collections ?? [],

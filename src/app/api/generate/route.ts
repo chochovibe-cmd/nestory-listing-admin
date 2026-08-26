@@ -19,11 +19,10 @@ import {
 } from "@/lib/contentGenerator/scenarioKeywords";
 import { matchSectionHeader } from "@/lib/contentGenerator/sectionHeaders";
 import { generateShopifyHandleSlug } from "@/lib/contentGenerator/handleGenerator";
-import { generateSku } from "@/lib/contentGenerator/sku";
 import {
-  buildStructuredEnrichedTitle,
   clampOfficialTitle,
   ENRICHED_TITLE_MAX_LENGTH,
+  normalizeEnrichedTitleContract,
 } from "@/lib/contentGenerator/titleGenerator";
 import { buildGenerateSuccessStatusPatch } from "@/lib/drafts/generateSuccessStatus";
 import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
@@ -370,17 +369,11 @@ async function handleFieldRegen(params: {
   } else {
     let value = localizeToTaiwanTraditionalText(getCopyFieldValue(raw, regenField));
     if (regenField === "enriched_title") {
-      const full = buildStructuredEnrichedTitle({
-        structuredBaseTitle: currentValues.enrichedTitle || draft.title_zh || "",
-        brand: draft.product_brand,
-        ip: draft.ip_name,
-        characters: currentValues.detectedCharacterName
-          ? currentValues.detectedCharacterName.split(/[・、,，/]+/u).map((item) => item.trim()).filter(Boolean)
-          : [],
-        productType: localizeToTaiwanTraditionalText(draft.product_type ?? ""),
-        featureText: value.split("包包吊飾").join("包包掛件"),
-        maxLen: ENRICHED_TITLE_MAX_LENGTH,
-      });
+      const full = normalizeEnrichedTitleContract(
+        value.split("包包吊飾").join("包包掛件"),
+        localizeToTaiwanTraditionalText(draft.product_type ?? ""),
+        ENRICHED_TITLE_MAX_LENGTH,
+      );
       historyContent = finalizeCustomerText(full);
       value = clampOfficialTitle(historyContent);
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
@@ -747,8 +740,7 @@ export async function POST(request: NextRequest) {
         character: resolvedCharacter,
         productType: raw.detectedProductType,
         category: raw.detectedCategory || (raw.detectedProductType ? `型態_${raw.detectedProductType}` : ""),
-        // COPY C1.3: provider SKU is non-authoritative; preserve the draft until backend resolution.
-        sku: draft.sku ?? "",
+        sku: raw.sku,
       };
       providerOutput = raw;
 
@@ -815,22 +807,17 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("測試模式：未呼叫 AI、未自動偵測 IP；文案為規則引擎產出，tags 依草稿現有資料。");
   }
 
-  // COPY C1.2: structured classification owns segments 1–2; AI text is feature-only.
-  const enrichedTitleFull = buildStructuredEnrichedTitle({
-    structuredBaseTitle: ruleOutput.display_title,
-    preserveStructuredBase: true,
-    brand: effectiveProductBrand,
-    ip: detected.ip,
-    characters: listingInput.characters,
-    productType: localizeToTaiwanTraditionalText(detected.productType),
-    featureText: localizeToTaiwanTraditionalText(
-      (providerOutput.enrichedTitle || "")
+  // COPY C1.1: deterministic backend title normalization owns separator + segment-2 type.
+  const enrichedTitleFull = normalizeEnrichedTitleContract(
+    localizeToTaiwanTraditionalText(
+      (providerOutput.enrichedTitle || ruleOutput.display_title || "")
         .trim()
         .split("包包吊飾")
         .join("包包掛件"),
     ),
-    maxLen: ENRICHED_TITLE_MAX_LENGTH,
-  });
+    localizeToTaiwanTraditionalText(detected.productType),
+    ENRICHED_TITLE_MAX_LENGTH,
+  );
   const officialTitleZh = clampOfficialTitle(enrichedTitleFull);
 
   const descriptionSource = providerOutput.generatedDescriptionHtml || ruleOutput.generated_description_html;
@@ -915,12 +902,14 @@ export async function POST(request: NextRequest) {
     if (metaDuplicateWarning) extraWarnings.push(metaDuplicateWarning);
   }
 
-  // COPY C1.1: provider clean spec is canonical on full generation; existing OCR/manual text is fallback only.
+  // COPY C1.R0A: existing spec stays authoritative; warn only when provider spec is actually adopted.
+  const existingSpec = (draft.spec_text ?? "").trim();
   const providerSpecRaw = (providerOutput.spec ?? "").trim();
   const providerSpecHasContent =
     Boolean(providerSpecRaw) && providerSpecRaw !== "（無）" && providerSpecRaw !== "(無)";
   const finalSpecText = finalizeCustomerSpecText(providerOutput.spec, draft.spec_text);
-  if (providerSpecHasContent && finalSpecText) {
+  const usedProviderSpec = !existingSpec && providerSpecHasContent && Boolean(finalSpecText);
+  if (usedProviderSpec) {
     extraWarnings.push(
       webSearchSummary
         ? "商品規格為系統自動整理（來自款式／標題／圖片文字／網路搜尋），已轉台灣繁中並移除平台後台欄位；發布前請審核確認。"
@@ -963,12 +952,6 @@ export async function POST(request: NextRequest) {
     ),
   );
 
-  const persistedSku = draft.sku?.trim() || generateSku({
-    productType: detected.productType,
-    ipName: detected.ip,
-    characterName: detected.character || null,
-  }).sku;
-
   const draftUpdate: Record<string, unknown> = {
     title_zh: localizedOutput.display_title,
     description_html: normalizeDescriptionToPlainText(localizedOutput.generated_description_html),
@@ -985,7 +968,7 @@ export async function POST(request: NextRequest) {
     character_name: detected.character || null,
     product_type: detected.productType || null,
     detected_category: detected.category || null,
-    sku: persistedSku,
+    sku: detected.sku || null,
     warnings: allWarnings,
     status: successStatus.status,
     pipeline_stage: successStatus.pipeline_stage,

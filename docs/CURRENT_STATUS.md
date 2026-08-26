@@ -8,19 +8,43 @@
 正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 目前 release 分支：`agent/release-thumbnail-regression-fix`
 
-## COPY C1 / C1.1 — 潮巢導購版 AI Copy Tone（2026-08-25）
+## COPY C1 / R0A / R0B — 潮巢導購版 Owner scope recovery（2026-08-25）
 
-COPY C1 從 production/default merge HEAD `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 開 branch `agent/copy-chaocao-sales-tone`，新增第 7 種 **manual** tone「潮巢導購版」；`DEFAULT_TONE` 與 IP auto-match map 不變。初版 HEAD `ac86acbd4ed13e7d658daa6bb216b056f3b25c0b` 經 Owner iPhone／實際生成驗收後未通過，C1.1 在同一 PR #9 做單一 corrective。
+COPY C1 以 production/default authority `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 為共用功能基準，在 PR #9 / branch `agent/copy-chaocao-sales-tone` 新增第 7 種 manual tone「潮巢導購版」。後續 C1.x 曾把 shared data/title/SKU/FAQ contract 擴張；R0A / R0B 已把越界 shared behavior 收回 Production semantics，同時保留 Owner 明確 allowlist。
 
-- UI：`🛍️ 潮巢導購版 / 痛點導購・資訊完整` 仍在「小編聊天口吻」後、「依IP自動匹配」前；沒有新增 tone 或 UI redesign。
-- Title C1.1：第一段仍維持現行 `品牌 × IP`；只修第二段成「角色 + 商品類型」並 deterministic 把 `A|B|C / A｜B｜C / A | B | C` 全部正規化成 `A | B | C`。60/80 clamp 與第三段 blacklist 繼續有效。
-- Description C1.1：潮巢導購版純文字 source 改為 `商品介紹 → 收藏亮點 bullets → 導購小標：動態標題＋正文`；Shopify-boundary / Nestory Preview render 成 `h2 / p / ul / li`。主 description 不再有 `◈`、`商品資訊`、`購買提醒`；原 6 tone 保持既有 `◈` + h3 contract。
-- 到貨提醒：只有潮巢導購版改用四句短資訊型 notice，且放在 `<h2>商品介紹</h2>` 後；原 6 tone 的 tone-specific notices 不改。
-- Voice：新增 anti-AI 公版句規則；優先角色個性、真用途、生活情境、小慾望與實際購買理由；可吐槽、角色梗，戰鬥系 IP 適合時可少量中二，但 evidence safety 不放寬。
-- Taiwan Traditional：生成後 customer-facing title / description / FAQ / SEO / meta / why_we_chose_it / product_highlights / spec 在 persist 前 deterministic 台灣繁中 finalization；`taobao_title`、`original_title`、raw OCR/source cache 保留 evidence 原文。
-- Spec C1.1：full generation 以非空 provider `spec` 為 canonical clean spec；provider spec 空才 fallback 舊 `spec_text`。最終只留顧客有用規格並過濾淘寶後台垃圾欄位；精確數字仍不得猜。single-field regen 沒有 `spec_text` mapping，不會偷洗 Owner 手改規格。
-- Docs / verifier：`docs/文案排版規範-2026-07-18.md`、`docs/audits/COPY-C1-CHAONEST-SALES-TONE-2026-08-25.md`、`scripts/verify-copy-c1-chaonest-sales-tone.mjs` 已 supersede C1 初版 contract。
-- Scope freeze：不改 title 第一段順序、SEO formula、Tags V2、pricing、variants、inventory、Shopify lifecycle / credentials / `SHOPIFY_PUBLISH_MOCK`、Supabase schema；沒有 Shopify production write。
+R0A 已 supersede：Evidence Pack、Full Generate Vision bridge、Vision fingerprint/representative sampling redesign、deterministic Web Search→spec merge、canonical-key/evidence spec merge。`spec_text` 回到 existing-first：draft 既有非空規格 authoritative，只有 existing 空白時才採 provider spec；Taiwan Traditional customer finalizer 保留。
+
+R0B supersede：
+
+- C1.2 structured title assembly / feature-only title regeneration；
+- C1.3 persisted-SKU authority / backend SKU override；
+- later shared FAQ rewrite / simplification。
+
+R0B final shared allowlist 只剩：
+
+1. enriched title separator 統一為 ASCII ` | `；
+2. 保留 AI 原本完整三段 title，只在現有 segment 2 缺少時 append detected product type；segment 1 / segment 3 不做新 assembly、rerank 或 cross-segment dedupe；
+3. 顧客可見 AI 結果 deterministic 台灣繁中；`taobao_title`、`original_title`、raw OCR / raw web cache 保留原來源文字。
+
+R0B shared recovery：
+
+- Title：Production `titleGenerator.ts` 語意重新成為 authority，原 character redundancy、feature ladder、blacklist、segment-3 scrub、80/60 clamp 全保留；Full Generate 與單欄 title regen 都由 AI 產完整 enriched title，再走相同 minimal separator + segment-2-type finalizer，最後回 Production scrub/clamp。
+- SKU：system prompt 回 Production `CHO-{型態縮寫}-{IP縮寫}-{角色縮寫}-001` contract；Full Generate 回 `raw.sku → detected.sku → draftUpdate.sku`；Shopify payload 回 Production `generateSku()` / `variantSeed` precedence，不保護既有壞 draft SKU。
+- FAQ / GEO：共用 prompt 回 Production 3–5 題、`<h3><strong>問題</strong></h3> + <p>回答</p>`、2–3 句、自由導購/目標客群 creativity、低價值問題 guidance、standalone-answer GEO，以及禁止「如上所述／如前面提到／如圖所示」。本包沒有 FAQ Writer V2 或 FAQ 品質 redesign。
+
+Final tone-specific allowlist：
+
+- 第 7 種 `潮巢導購版`；
+- 潮巢 tone voice：幽默、可愛、有人味、有生活感、可角色梗／小吐槽、適合時少量中二，evidence safety 不放寬；
+- Boss description hierarchy：`商品介紹 → 收藏亮點 bullets → 導購小標：動態標題＋正文`，Shopify boundary 轉 `h2/p/ul/li`；原 6 tones 共用 behavior 不因此改寫；
+- 潮巢 tone-specific emoji allowance 保留，原 6 tones emoji contract 仍依 Production-derived base。
+
+Dedicated audits：
+
+- `docs/audits/COPY-C1-CHAONEST-SALES-TONE-2026-08-25.md`
+- `docs/audits/COPY-C1-R0B-TITLE-SKU-FAQ-RECOVERY-2026-08-25.md`
+
+Scope freeze：沒有 Evidence Pack、Vision bridge、spec/Web Search redesign、title segment-3 redesign、first-segment redesign、new SKU design、FAQ enhancement、Why/Highlights Writer、UI、pricing、variants、inventory、Shopify lifecycle/go-live、DB migration 或 Shopify production write。
 
 ## Latest release-branch package — D3.7 mobile gesture guidance + bidirectional swipe
 

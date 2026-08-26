@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -13,6 +14,7 @@ const payload = read("src/lib/shopify/payload.ts");
 const copy = read("src/lib/providers/copy.ts");
 const promptBase = read("src/lib/providers/systemPromptBase.ts");
 const prompt = read("src/lib/providers/systemPrompt.ts");
+const resultCardCopyPanel = read("src/components/listing/result-card/ResultCardCopyPanel.tsx");
 const finalizer = read("src/lib/providers/customerFacingFinalizer.ts");
 const specAuthority = read("src/lib/providers/specAuthority.ts");
 
@@ -183,7 +185,79 @@ assert.match(finalizer, /stripCustomerSourceMarkers/u, "customer-facing source m
 // Approved seventh tone + Boss description hierarchy retained without changing shared FAQ rules.
 assert.match(copy, /"潮巢導購版"/u, "seventh Chaochao tone disappeared");
 assert.match(prompt, /潮巢導購版 Boss description hierarchy/u, "Boss hierarchy wrapper disappeared");
-assert.match(prompt, /商品介紹[\s\S]*收藏亮點[\s\S]*導購小標/u, "Boss description hierarchy changed");
+const chaochaoContract = section(prompt, "const CHAOCHAO_BOSS_LAYOUT", "function sharedRecoverySuffix");
+assert.match(chaochaoContract, /只適用 tone === "潮巢導購版"/u,
+  "Chaochao contract is not explicitly tone-only");
+assert.match(chaochaoContract, /第一行固定且只能是「商品介紹」/u,
+  "Chaochao description no longer starts exactly with 商品介紹");
+assert.match(chaochaoContract,
+  /商品介紹\n（正文 2–4 個短段落）\n\n收藏亮點\n・亮點一\n・亮點二\n・亮點三\n\n導購小標：依這件商品動態產生/u,
+  "Chaochao exact three-section source contract changed");
+assert.match(chaochaoContract, /「收藏亮點」heading 後立刻使用「・」bullets/u,
+  "Chaochao 收藏亮點 no longer requires direct bullets");
+assert.match(chaochaoContract,
+  /最後一個 bullet 結束後，下一個非空白行必須直接是「導購小標：<動態標題>」/u,
+  "Chaochao bullets no longer flow directly into the dynamic sales heading");
+assert.match(chaochaoContract, /禁止插入無標題正文、總結/u,
+  "Chaochao contract no longer forbids post-bullet unheaded prose");
+assert.match(chaochaoContract, /feature → benefit/u,
+  "Chaochao feature-to-benefit rule disappeared");
+assert.match(chaochaoContract, /evidence 足夠時至少 3 點/u,
+  "Chaochao evidence-rich bullet minimum disappeared");
+assert.match(chaochaoContract, /商品介紹＋收藏亮點合計至少自然使用 3 個本商品專屬 facts/u,
+  "Chaochao product-specific fact minimum disappeared");
+assert.match(chaochaoContract, /精確尺寸、材質、容量、款式數、功能、授權、配件與特殊 claim/u,
+  "Chaochao evidence safety field list disappeared");
+assert.match(chaochaoContract, /evidence 不足時寧可少寫/u,
+  "Chaochao insufficient-evidence fallback disappeared");
+
+for (const boilerplate of [
+  "總是覺得……嗎？",
+  "是否正在尋找……",
+  "每天都在尋找……嗎？",
+  "或許是你的解答",
+  "一大力作",
+  "滿載童趣",
+  "最佳選擇",
+  "完美選擇",
+  "完美良伴",
+  "夢幻逸品",
+  "絕對不能錯過",
+  "完美地將……",
+  "帶給你無限……",
+  "無限的快樂",
+  "陪伴左右",
+  "為生活增添一抹……",
+  "不僅……更……",
+  "療癒指數爆表",
+  "收藏價值滿滿",
+  "送禮自用兩相宜",
+  "值得入手",
+  "值得考慮",
+]) {
+  assert.ok(chaochaoContract.includes(boilerplate), `Chaochao anti-AI rule missing: ${boilerplate}`);
+}
+assert.match(chaochaoContract, /像真的潮巢小編在介紹這件商品，不要像 AI 在寫萬用電商模板/u,
+  "Chaochao human-editor voice requirement disappeared");
+assert.match(chaochaoContract, /【潮巢導購版輸出前自檢】[\s\S]*1\.[\s\S]*2\.[\s\S]*3\.[\s\S]*4\.[\s\S]*5\.[\s\S]*6\.[\s\S]*7\.[\s\S]*8\.[\s\S]*9\.[\s\S]*10\./u,
+  "Chaochao ten-point output self-check disappeared");
+assert.match(chaochaoContract, /禁止 ◈、商品資訊、購買提醒與重複到貨提醒/u,
+  "Chaochao forbidden output sections disappeared");
+assert.match(prompt, /tone === "潮巢導購版" \? CHAOCHAO_BOSS_LAYOUT : ""/u,
+  "Full-generate Chaochao wrapper is no longer tone-gated");
+assert.match(prompt,
+  /field === "generated_description_html" && tone === "潮巢導購版"\) extras\.push\(CHAOCHAO_BOSS_LAYOUT\)/u,
+  "Description regeneration Chaochao wrapper is no longer field-and-tone-gated");
+
+assert.match(resultCardCopyPanel,
+  /descriptionPreviewHtml\(description, draft\.generation_tone, draft\.sale_status\)/u,
+  "ResultCard preview no longer passes stored generation_tone and sale_status");
+
+const promptBaseBlob = createHash("sha1")
+  .update(`blob ${Buffer.byteLength(promptBase)}\0${promptBase}`)
+  .digest("hex");
+assert.equal(promptBaseBlob, "a7ba54d091deb1fefee7252ddb9054bf234203e6",
+  "systemPromptBase.ts changed from the approved immutable blob");
 
 // R0A existing-spec-first; no evidence/vision/spec-merge recovery regressions.
 assert.match(specAuthority, /const existing = existingSpec \?\? "";[\s\S]*if \(existing\.trim\(\)\) return existing;/u,

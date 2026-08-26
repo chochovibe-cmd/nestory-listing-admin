@@ -276,7 +276,9 @@ export function ResultCardCopyPanel({
             </span>
           </div>
           {descriptionView === "preview" ? (
-            <CopyPreviewBlock html={descriptionPreviewHtml(description)} />
+            <CopyPreviewBlock
+              html={descriptionPreviewHtml(description, draft.generation_tone, draft.sale_status)}
+            />
           ) : (
             <textarea
               className="edit-textarea"

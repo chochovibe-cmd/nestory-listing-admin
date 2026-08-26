@@ -26,6 +26,43 @@ function check(name, fn) {
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 const exists = (rel) => fs.existsSync(path.join(root, rel));
 
+function readSystemPromptArchitecture() {
+  const wrapper = read("src/lib/providers/systemPrompt.ts");
+  assert.match(wrapper, /from ["']\.\/systemPromptBase["']/u, "systemPrompt wrapper no longer imports systemPromptBase");
+  assert.match(
+    wrapper,
+    /buildCopySystemPrompt as buildProductionCopySystemPrompt/u,
+    "systemPrompt wrapper no longer aliases Production buildCopySystemPrompt",
+  );
+  assert.match(
+    wrapper,
+    /buildFieldRegenSystemPrompt as buildProductionFieldRegenSystemPrompt/u,
+    "systemPrompt wrapper no longer aliases Production buildFieldRegenSystemPrompt",
+  );
+  assert.match(
+    wrapper,
+    /return `\$\{buildProductionCopySystemPrompt\(tone, copyLength, secondhandInfo\)\}/u,
+    "buildCopySystemPrompt no longer delegates to Production base",
+  );
+  assert.match(
+    wrapper,
+    /return `\$\{buildProductionFieldRegenSystemPrompt\(field, tone, copyLength, secondhandInfo\)\}/u,
+    "buildFieldRegenSystemPrompt no longer delegates to Production base",
+  );
+  return { wrapper, base: read("src/lib/providers/systemPromptBase.ts") };
+}
+
+function readTitleArchitecture() {
+  const wrapper = read("src/lib/contentGenerator/titleGenerator.ts");
+  assert.match(
+    wrapper,
+    /export \* from ["']\.\/titleGeneratorBase["']/u,
+    "titleGenerator wrapper no longer re-exports titleGeneratorBase",
+  );
+  assert.ok(!wrapper.includes("stripCustomerSourceMarkers"), "P4 strip helper leaked into title wrapper");
+  return { wrapper, base: read("src/lib/contentGenerator/titleGeneratorBase.ts") };
+}
+
 // --- Inline mirror of stripCustomerSourceMarkers (keep in sync with .ts) ---
 const PAREN_SOURCE_NETWORK_RE =
   /[（(]\s*來\s*源\s*[:：]\s*網\s*路\s*[）)]|[（(]\s*来\s*源\s*[:：]\s*网\s*络\s*[）)]/gi;
@@ -68,25 +105,26 @@ console.log("verify-p4-source-and-seller:");
 
 // --- Prompt: no longer teach customer-facing source marks ---
 check("prompt: no B19 teach-to-mark 「標『來源：網路』」 positive instruction", () => {
-  const prompt = read("src/lib/providers/systemPrompt.ts");
+  const { wrapper, base } = readSystemPromptArchitecture();
+  const promptSources = `${wrapper}\n${base}`;
   // Old contract phrases that told the model to annotate output
   assert.ok(
-    !prompt.includes("寫入時在該行標「來源：網路」"),
+    !promptSources.includes("審入時在該行標「來源：網路」"),
     "old evidence-pool mark instruction still present",
   );
-  assert.ok(!prompt.includes("必須標來源"), "old 必須標來源 still present");
-  assert.ok(!prompt.includes("規格寫入請標來源"), "old user-message 標來源 still present");
-  assert.ok(!prompt.includes("並標來源"), "old 並標來源 still present");
+  assert.ok(!promptSources.includes("必須標來源"), "old 必須標來源 still present");
+  assert.ok(!promptSources.includes("規格寫入請標來源"), "old user-message 標來源 still present");
+  assert.ok(!promptSources.includes("並標來源"), "old 並標來源 still present");
 });
 
-check("prompt: P4 ban + web search honesty kept", () => {
-  const prompt = read("src/lib/providers/systemPrompt.ts");
-  assert.match(prompt, /P4 出處標記禁令/);
-  assert.match(prompt, /禁止加「（來源：網路）」|禁止標「來源：網路」|顧客文案禁止/);
+check("prompt: wrapper delegates and P4 ban + web search honesty kept in base", () => {
+  const { base } = readSystemPromptArchitecture();
+  assert.match(base, /P4 出處標記禁令/);
+  assert.match(base, /禁止加「（來源：網路）」|禁止標「來源：網路」|顧客文案禁止|顧客可見欄位一律禁止出現/);
   // Honesty: still "不確定就不寫" / evidence pool layer 4
-  assert.match(prompt, /不確定就不寫/);
-  assert.match(prompt, /網路搜尋補充資訊（B19/);
-  assert.match(prompt, /不確定勿寫|不確定就不寫/);
+  assert.match(base, /不確定就不寫/);
+  assert.match(base, /網路搜尋補充資訊（B19|網路搜尋補充（若有提供）/);
+  assert.match(base, /不確定勿寫|不確定就不寫/);
 });
 
 check("tavily: no 須標來源; internal-only framing", () => {
@@ -116,44 +154,24 @@ check("strip helper file + generate wiring", () => {
 });
 
 check("strip: （來源：網路） and bare 來源：網路", () => {
-  assert.equal(
-    stripCustomerSourceMarkers("尺寸：約30cm（來源：網路）"),
-    "尺寸：約30cm",
-  );
-  assert.equal(
-    stripCustomerSourceMarkers("材質：絨毛 來源：網路"),
-    "材質：絨毛",
-  );
-  assert.equal(
-    stripCustomerSourceMarkers("尺寸：30cm(來源:網路)"),
-    "尺寸：30cm",
-  );
+  assert.equal(stripCustomerSourceMarkers("尺寸：約30cm（來源：網路）"), "尺寸：約30cm");
+  assert.equal(stripCustomerSourceMarkers("材質：絨毛 來源：網路"), "材質：絨毛");
+  assert.equal(stripCustomerSourceMarkers("尺寸：30cm(來源:網路)"), "尺寸：30cm");
 });
 
 check("strip: empty parens cleanup after mark removal", () => {
-  // Fable: 「尺寸：30cm（）」→「尺寸：30cm」
   assert.equal(stripCustomerSourceMarkers("尺寸：30cm（）"), "尺寸：30cm");
   assert.equal(stripCustomerSourceMarkers("尺寸：30cm()"), "尺寸：30cm");
-  // After removing marker that leaves empty parens if partially matched
-  assert.equal(
-    stripCustomerSourceMarkers("尺寸：30cm（來源：網路）"),
-    "尺寸：30cm",
-  );
+  assert.equal(stripCustomerSourceMarkers("尺寸：30cm（來源：網路）"), "尺寸：30cm");
 });
 
 check("strip: trailing 來源：URL only; bare URL in prose kept", () => {
-  assert.equal(
-    stripCustomerSourceMarkers("產地：日本 來源：https://example.com/item"),
-    "產地：日本",
-  );
+  assert.equal(stripCustomerSourceMarkers("產地：日本 來源：https://example.com/item"), "產地：日本");
   assert.equal(
     stripCustomerSourceMarkers("詳見官網 https://example.com/official 說明"),
     "詳見官網 https://example.com/official 說明",
   );
-  assert.equal(
-    stripCustomerSourceMarkers("尺寸：10cm（來源：https://a.com/x）"),
-    "尺寸：10cm",
-  );
+  assert.equal(stripCustomerSourceMarkers("尺寸：10cm（來源：https://a.com/x）"), "尺寸：10cm");
 });
 
 check("strip: idempotent", () => {
@@ -186,13 +204,13 @@ check("strip: multi-line description + orphan blank collapse", () => {
 });
 
 // --- Seller service exclusion (prompt-only + Vision both ends) ---
-check("copy prompt: P4 賣家服務類排除", () => {
-  const prompt = read("src/lib/providers/systemPrompt.ts");
-  assert.match(prompt, /P4 賣家服務類排除/);
+check("copy prompt: wrapper delegates and P4 賣家服務類排除 stays in base", () => {
+  const { base } = readSystemPromptArchitecture();
+  assert.match(base, /P4 賣家服務類排除/);
   for (const term of ["保固", "售後", "退換", "贈品", "店鋪活動"]) {
-    assert.ok(prompt.includes(term), `copy prompt missing ${term}`);
+    assert.ok(base.includes(term), `copy prompt base missing ${term}`);
   }
-  assert.match(prompt, /物理事實/);
+  assert.match(base, /物理事實/);
 });
 
 // SYN-1 R2: render-time filter shares the same core service family
@@ -236,10 +254,14 @@ check("vision DESCRIBE + RECOGNIZE both expanded", () => {
 });
 
 // --- titleGenerator / UI untouched (source-level smoke) ---
-check("titleGenerator skeleton not modified by P4 strip import", () => {
-  const title = read("src/lib/contentGenerator/titleGenerator.ts");
-  assert.ok(!title.includes("stripCustomerSourceMarkers"));
-  assert.match(title, /OFFICIAL_TITLE_MAX_LENGTH|buildDisplayTitle|enriched/);
+check("titleGenerator wrapper delegates to Production base; P4 strip stays out", () => {
+  const { base } = readTitleArchitecture();
+  assert.ok(!base.includes("stripCustomerSourceMarkers"), "P4 strip helper leaked into title base");
+  assert.match(base, /export const OFFICIAL_TITLE_MAX_LENGTH = 60/);
+  assert.match(base, /export const ENRICHED_TITLE_MAX_LENGTH = 80/);
+  assert.match(base, /export function generateDisplayTitle/);
+  assert.match(base, /export function clampOfficialTitle/);
+  assert.match(base, /export function scrubEnrichedTitleSegment3/);
 });
 
 if (failures.length) {

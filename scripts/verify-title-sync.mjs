@@ -109,7 +109,10 @@ await check("systemPromptBase: P2-83 unique length table, brand + ・ rule", () 
   assert.match(src, /enriched_title（你輸出）/);
   assert.match(src, /官網 title_zh（後端 clamp）/);
   assert.match(src, /seo_title（你輸出）/);
-  assert.match(src, /\| meta_description \| 70[–-]80(?: 字為)?佳、最長 90 \|/);
+  assert.ok(
+    src.includes("| meta_description | 70–80 佳、最長 90 | 寫滿 Google 行動約 78 字顯示額度 |"),
+    "meta_description truth-table contract changed"
+  );
   assert.match(src, /多角色用「・」/);
   assert.match(src, /品牌 × IP/);
   assert.match(src, /第三段黑名單/);
@@ -189,12 +192,12 @@ await check("visionProvider: promo exclusion + full spec table + 逐字角色名
   assert.match(src, /逐字抄寫/);
 });
 
-await check("migrations 031/032/033 exist (SQL 只產檔)", () => {
-  assert.ok(exists("supabase/migrations/031_product_brand.sql"));
-  assert.ok(exists("supabase/migrations/032_ip_catalog_v3_100_ips.sql"));
-  assert.ok(exists("supabase/migrations/033_tag_rules_sync_boss_tool.sql"));
-  assert.match(read("supabase/migrations/031_product_brand.sql"), /add column if not exists product_brand/);
-  assert.match(read("supabase/migrations/033_tag_rules_sync_boss_tool.sql"), /不移植/);
+await check("historical migrations 031/032/033 remain archived (SQL 只產檔)", () => {
+  assert.ok(exists("supabase/history/pre_tracking_migrations/031_product_brand.sql"));
+  assert.ok(exists("supabase/history/pre_tracking_migrations/032_ip_catalog_v3_100_ips.sql"));
+  assert.ok(exists("supabase/history/pre_tracking_migrations/033_tag_rules_sync_boss_tool.sql"));
+  assert.match(read("supabase/history/pre_tracking_migrations/031_product_brand.sql"), /add column if not exists product_brand/);
+  assert.match(read("supabase/history/pre_tracking_migrations/033_tag_rules_sync_boss_tool.sql"), /不移植/);
 });
 
 if (failures.length > 0) {

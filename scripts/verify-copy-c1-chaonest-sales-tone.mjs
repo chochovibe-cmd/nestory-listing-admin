@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
+import ts from "typescript";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -17,6 +19,40 @@ const prompt = read("src/lib/providers/systemPrompt.ts");
 const resultCardCopyPanel = read("src/components/listing/result-card/ResultCardCopyPanel.tsx");
 const finalizer = read("src/lib/providers/customerFacingFinalizer.ts");
 const specAuthority = read("src/lib/providers/specAuthority.ts");
+const htmlFormat = read("src/lib/contentGenerator/htmlFormat.ts");
+
+function loadHtmlFormatModule() {
+  const output = ts.transpileModule(htmlFormat, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: "src/lib/contentGenerator/htmlFormat.ts",
+  }).outputText;
+  const module = { exports: {} };
+  const localRequire = (specifier) => {
+    if (specifier === "./sectionHeaders") {
+      return {
+        matchSectionHeader(line) {
+          const trimmed = line.trim();
+          if (/^◈\s*.+/u.test(trimmed)) return { title: trimmed.replace(/^◈\s*/u, "") };
+          if (/^[A-E]｜/u.test(trimmed)) return { title: null };
+          return null;
+        },
+      };
+    }
+    if (specifier === "./saleStatusNotice") {
+      return { saleStatusNoticeHtml: () => "" };
+    }
+    throw new Error(`Unexpected htmlFormat dependency: ${specifier}`);
+  };
+  vm.runInNewContext(output, {
+    exports: module.exports,
+    module,
+    require: localRequire,
+  }, { filename: "src/lib/contentGenerator/htmlFormat.ts" });
+  return module.exports;
+}
 
 function section(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -252,6 +288,107 @@ assert.match(prompt,
 assert.match(resultCardCopyPanel,
   /descriptionPreviewHtml\(description, draft\.generation_tone, draft\.sale_status\)/u,
   "ResultCard preview no longer passes stored generation_tone and sale_status");
+
+const {
+  descriptionPreviewHtml,
+  formatChaochaoSalesDescriptionHtml,
+  formatPlainTextAsHtml,
+} = loadHtmlFormatModule();
+
+const pinguMissingHeadingPrefix = `商品介紹
+
+想隨身帶著Pingu去冒險，親手捕捉生活中的可愛瞬間？
+
+收藏亮點
+・Pingu正版授權：享受正版認證帶來的品質保證。
+・多色選擇：紅、黃、黑、白四種顏色。
+・相機+錄影功能：輕鬆捕捉日常生活。
+・優質塑膠材質：耐磨光亮。
+
+獨特的隨身配件
+
+在尋找一個兼具功能性和趣味性的隨身小物嗎？這款迷你相機吊飾……`;
+const pinguFallbackPreview = descriptionPreviewHtml(
+  pinguMissingHeadingPrefix,
+  "潮巢導購版",
+);
+assert.match(pinguFallbackPreview, /^<h2>商品介紹<\/h2><p>想隨身帶著Pingu去冒險/u,
+  "Pingu fallback preview lost the intro heading or paragraph");
+assert.match(pinguFallbackPreview, /<h2>收藏亮點<\/h2><ul>/u,
+  "Pingu fallback preview lost the highlights section");
+assert.equal(
+  [...pinguFallbackPreview.matchAll(/<li>/gu)].length,
+  4,
+  "Pingu fallback preview must contain exactly four highlight items",
+);
+assert.match(pinguFallbackPreview, /<\/ul><h2>獨特的隨身配件<\/h2><p>在尋找一個兼具功能性和趣味性的隨身小物嗎？/u,
+  "missing-prefix sales heading was not recovered before the sales paragraph");
+assert.doesNotMatch(pinguFallbackPreview, /<li>獨特的隨身配件/u,
+  "missing-prefix sales heading was swallowed by highlights");
+assert.doesNotMatch(pinguFallbackPreview, /<li>在尋找一個兼具功能性/u,
+  "sales paragraph was swallowed by highlights");
+assert.doesNotMatch(pinguFallbackPreview, /這件商品為什麼有意思/u,
+  "generic sales-heading fallback appeared for the recoverable Pingu source");
+
+const formalHeadingSource = `商品介紹
+
+想隨身帶著Pingu去冒險？
+
+收藏亮點
+・Pingu正版授權
+・相機與錄影功能
+
+導購小標：獨特的隨身配件
+
+這款迷你相機吊飾兼具功能性和趣味性。`;
+const formalHeadingPreview = descriptionPreviewHtml(formalHeadingSource, "潮巢導購版");
+assert.match(formalHeadingPreview, /<\/ul><h2>獨特的隨身配件<\/h2><p>這款迷你相機吊飾/u,
+  "formal 導購小標 prefix no longer has priority");
+assert.equal([...formalHeadingPreview.matchAll(/<li>/gu)].length, 2,
+  "formal heading source changed its highlight count");
+assert.doesNotMatch(formalHeadingPreview, /這件商品為什麼有意思/u,
+  "formal heading source incorrectly used the generic fallback");
+
+const genuineHighlightContinuation = `商品介紹
+
+這是商品介紹正文。
+
+收藏亮點
+・可愛造型
+材質摸起來柔軟，日常使用也很舒服。
+這段只是對亮點的補充說明。`;
+const conservativePreview = descriptionPreviewHtml(
+  genuineHighlightContinuation,
+  "潮巢導購版",
+);
+assert.match(conservativePreview, /<h2>這件商品為什麼有意思<\/h2>$/u,
+  "ordinary highlight prose was promoted to a sales heading");
+assert.doesNotMatch(conservativePreview, /<h2>材質摸起來柔軟/u,
+  "sentence-like highlight content bypassed the conservative guard");
+
+const shortHighlightBeforeBullet = `商品介紹
+
+這是商品介紹正文。
+
+收藏亮點
+・可愛造型
+補充亮點
+・耐磨材質`;
+const nextBulletPreview = descriptionPreviewHtml(shortHighlightBeforeBullet, "潮巢導購版");
+assert.doesNotMatch(nextBulletPreview, /<h2>補充亮點<\/h2>/u,
+  "a short highlight line followed by another bullet was promoted to a heading");
+
+const otherTonePreview = descriptionPreviewHtml(pinguMissingHeadingPrefix, "小編聊天口吻");
+assert.equal(otherTonePreview, formatPlainTextAsHtml(pinguMissingHeadingPrefix),
+  "missing-prefix tolerance leaked into an existing tone");
+assert.doesNotMatch(otherTonePreview, /<h2>獨特的隨身配件<\/h2>/u,
+  "an existing tone gained the Chaochao fallback heading");
+
+const directFormatterOutput = formatChaochaoSalesDescriptionHtml(pinguMissingHeadingPrefix);
+assert.match(directFormatterOutput, /<h2>這件商品為什麼有意思<\/h2>/u,
+  "preview-only tolerance leaked into the direct Shopify formatter path");
+assert.doesNotMatch(directFormatterOutput, /<h2>獨特的隨身配件<\/h2>/u,
+  "direct formatter unexpectedly enabled the Preview fallback");
 
 const promptBaseBlob = createHash("sha1")
   .update(`blob ${Buffer.byteLength(promptBase)}\0${promptBase}`)

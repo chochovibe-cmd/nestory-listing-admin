@@ -117,6 +117,31 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
 
 type ChaochaoSection = "intro" | "highlights" | "sales";
 
+const CHAOCHAO_KNOWN_SECTION_HEADING =
+  /^(?:商品介紹|收藏亮點|商品亮點|適合誰|為什麼會想帶回家|商品資訊|購買提醒|常見問題|FAQ|導購小標|導購標題)$/iu;
+const CHAOCHAO_SENTENCE_PUNCTUATION = /[。！？!?；;：:]/u;
+
+function isKnownChaochaoSectionHeading(line: string): boolean {
+  return CHAOCHAO_KNOWN_SECTION_HEADING.test(line) || matchSectionHeader(line) !== null;
+}
+
+function isConservativeMissingSalesHeadingCandidate(line: string): boolean {
+  const length = Array.from(line).length;
+  return (
+    length >= 2 &&
+    length <= 24 &&
+    !BULLET_PREFIX.test(line) &&
+    !isKnownChaochaoSectionHeading(line) &&
+    !CHAOCHAO_SENTENCE_PUNCTUATION.test(line)
+  );
+}
+
+function looksLikeChaochaoSalesBody(line: string | undefined): boolean {
+  if (!line || BULLET_PREFIX.test(line) || isKnownChaochaoSectionHeading(line)) return false;
+  if (/^(?:導購小標|導購標題)\s*[：:]/u.test(line)) return false;
+  return Array.from(line).length >= 12 || CHAOCHAO_SENTENCE_PUNCTUATION.test(line);
+}
+
 function looksLikeChaochaoSalesSource(text: string): boolean {
   const normalized = normalizeDescriptionToPlainText(text).replace(/◈/g, "");
   return (
@@ -134,6 +159,7 @@ function looksLikeChaochaoSalesSource(text: string): boolean {
 export function formatChaochaoSalesDescriptionHtml(
   text: string | null | undefined,
   saleStatus?: string | null,
+  tolerateMissingSalesHeading = false,
 ): string {
   const plain = normalizeDescriptionToPlainText(text)
     .replace(/◈/g, "")
@@ -145,6 +171,7 @@ export function formatChaochaoSalesDescriptionHtml(
   let dynamicHeading = "這件商品為什麼有意思";
   let section: ChaochaoSection = "intro";
   let paragraphBuffer: string[] = [];
+  let previousContentWasHighlightBullet = false;
 
   const flushParagraph = () => {
     if (paragraphBuffer.length === 0) return;
@@ -157,7 +184,9 @@ export function formatChaochaoSalesDescriptionHtml(
     paragraphBuffer = [];
   };
 
-  for (const rawLine of plain.split(/\r?\n/u)) {
+  const lines = plain.split(/\r?\n/u);
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
     const line = rawLine.trim();
     if (!line) {
       flushParagraph();
@@ -166,11 +195,13 @@ export function formatChaochaoSalesDescriptionHtml(
     if (/^商品介紹$/u.test(line)) {
       flushParagraph();
       section = "intro";
+      previousContentWasHighlightBullet = false;
       continue;
     }
     if (/^收藏亮點$/u.test(line)) {
       flushParagraph();
       section = "highlights";
+      previousContentWasHighlightBullet = false;
       continue;
     }
     const salesHeading = line.match(/^(?:導購小標|導購標題)\s*[：:]\s*(.+)$/u);
@@ -178,12 +209,36 @@ export function formatChaochaoSalesDescriptionHtml(
       flushParagraph();
       dynamicHeading = salesHeading[1].trim() || dynamicHeading;
       section = "sales";
+      previousContentWasHighlightBullet = false;
       continue;
     }
     if (section === "highlights" && BULLET_PREFIX.test(line)) {
       flushParagraph();
       highlightItems.push(line.replace(BULLET_PREFIX, "").trim());
+      previousContentWasHighlightBullet = true;
       continue;
+    }
+    if (
+      tolerateMissingSalesHeading &&
+      section === "highlights" &&
+      highlightItems.length > 0 &&
+      previousContentWasHighlightBullet &&
+      paragraphBuffer.length === 0 &&
+      isConservativeMissingSalesHeadingCandidate(line)
+    ) {
+      const nextContent = lines
+        .slice(index + 1)
+        .map((nextLine) => nextLine.trim())
+        .find(Boolean);
+      if (looksLikeChaochaoSalesBody(nextContent)) {
+        dynamicHeading = line;
+        section = "sales";
+        previousContentWasHighlightBullet = false;
+        continue;
+      }
+    }
+    if (section === "highlights") {
+      previousContentWasHighlightBullet = false;
     }
     paragraphBuffer.push(line);
   }
@@ -217,7 +272,11 @@ export function descriptionPreviewHtml(
   if (!text) return "<p>尚無內容</p>";
   const isChaochao = tone === CHAOCHAO_SALES_TONE || looksLikeChaochaoSalesSource(text);
   const html = isChaochao
-    ? formatChaochaoSalesDescriptionHtml(text, saleStatus)
+    ? formatChaochaoSalesDescriptionHtml(
+        text,
+        saleStatus,
+        tone === CHAOCHAO_SALES_TONE,
+      )
     : formatPlainTextAsHtml(text);
   return html || "<p>尚無內容</p>";
 }

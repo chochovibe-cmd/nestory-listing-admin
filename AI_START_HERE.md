@@ -1,153 +1,167 @@
 # Nestory — AI Start Here
 
-> 給任何新 Codex / Claude Code / ChatGPT / 其他 AI coding session 的最短入口。
-> 目標：不用掃完整 repo，也能在 1–3 分鐘內知道專案在哪、什麼已上 production、什麼仍只在 branch、下一步是什麼。
+> 新 Project Commander / Codex / GPT Work / Claude / 其他 Agent 的最短接手入口。
+> 更新基準：2026-08-27（Asia/Taipei）。
+> **重要：這份文件是 handoff snapshot，不是 live authority。真正開始工作前，必須重新查 GitHub / Vercel。**
 
 ## 1. 新 session 先讀
 
-1. `AI_START_HERE.md`（本檔）
-2. `docs/CURRENT_STATUS.md`
-3. `AGENTS.md`
-4. 做穩定化再讀 `docs/STABILIZATION_PLAN.md` + 對應 `docs/audits/*.md`
-5. 要判斷 release / deploy：讀 `docs/RELEASE_READINESS.md`
+依序讀：
 
-碰 production Supabase / migration / RLS，**必讀**：
-- `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
-- `docs/audits/SUPABASE-LOCAL-RECONCILE-CI-2026-08-18.md`
-- `docs/audits/SUPABASE-PRODUCTION-PACKAGE-2026-08-18.md`
-- `docs/audits/SUPABASE-MIGRATION-BASELINE-2026-08-18.md`
-- active `supabase/migrations/`
+1. `AI_START_HERE.md` — 現在在哪裡
+2. `docs/AI_WORKING_RULES.md` — 在這個專案怎麼工作
+3. `docs/CURRENT_STATUS.md` — 目前真實狀態摘要
+4. `docs/ACTIVE_TASKS.md` — 正在施工的 package / Agent / reserved files
 
-`supabase/reconcile/2026-08-18_*` 現在是**執行證據 / reference material**；production canonical history 已轉到 tracked `supabase/migrations/`。
+需要歷史與決策時再讀：
+
+- `docs/DECISIONS.md`
+- `docs/WORK_HISTORY.md`
+- `docs/ROADMAP.md`
+- `docs/RELEASE_READINESS.md`
+- `docs/audits/`
 
 ## 2. 專案一句話
 
-Nestory 是潮巢玩居內部 Shopify 商品上架 PWA：商品輸入、圖片/規格、AI 文案、審核、圖片處理、Shopify 發布；Supabase 資料層、Vercel 部署。
+Nestory 是潮巢玩居內部商品上架工具：商品輸入、圖片 / 規格、AI 文案、審核、Shopify 發布、Showmore CSV、Supabase 資料層與 Vercel 部署。
 
-## 3. 重要：現在已經有一部分真正上 production
+## 3. 目前 live snapshot
 
-### Production Supabase reconcile — 已完成
+Repo：`chochovibe-cmd/nestory-listing-admin`
 
-正式專案：`nestory-listing-tool-test` (`tbgtqwvuohmdxnxisrgr`)。
+Production / default branch：`codex/nestory-v0.1-safety-skeleton`
 
-2026-08-18 使用者已明確授權 production DB repair，且已成功執行：
+最近重新驗證的 Production HEAD：
+`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`
 
-- live precheck：`PRECHECK_OK` ✅
-- tracked baseline migration：`20260818142712 baseline_existing_schema_20260818` ✅
-- tracked reconcile migration：`20260818142919 production_reconcile_20260818` ✅
-- live postcheck：`POSTCHECK_OK` ✅
+最近重新驗證的 Production deployment：
+- Vercel deployment：`dpl_ELzL4fEBhxuGLJW5XeLgYUVurbFM`
+- source SHA：`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`
+- target：Production
 
-受保護 row counts 前後完全一致：
-- product drafts 32
-- product images 147
-- product variants 143
-- profiles 1
+COPY feature branch：`agent/copy-chaocao-sales-tone`
 
-正式 reconcile 已：
-- 補回 migration 004 遺失的 8 條 catalog/rule RLS policies；
-- 3 個 timestamp trigger helpers 固定 `search_path=pg_catalog`；
-- `handle_new_user()` / `guard_sensitive_product_draft_fields()` 移除 anon/authenticated direct EXECUTE，保留 service_role；
-- 保留 authenticated RLS helper execution；
-- 不改 `rls_auto_enable()`；
-- 不改商品資料、角色語意、Shopify/Vercel config。
+最近重新驗證的 feature HEAD：
+`5c160942a269574737d6876cf035ce73099a6aa0`
 
-Security Advisor after apply：原本 4-table no-policy 與 3 個本 package 目標 search_path findings 已消失。仍有 SECURITY DEFINER/RLS helper/Auth 類警告，屬**下一個獨立 hardening scope**，不可一刀切 revoke。
+PR：`#9 Copy C1: add Chaochao sales copy tone`
 
-### Migration tracking 已正式開始
+PR 狀態：**OPEN / NOT MERGED**
 
-Production 在這次之前沒有 migration ledger；live DB 卻已包含歷史 `001–039` 的大部分最終狀態。
+Latest CI：
+- CI `#324`
+- SHA：`5c160942a269574737d6876cf035ce73099a6aa0`
+- result：**SUCCESS**
 
-因此正式策略是：**tracking 從 2026-08-18 現有 audited state 開始**，不是假裝 001–039 曾被 Supabase CLI 管理。
+Latest COPY Preview：
+- deployment：`dpl_HjFD8dyxHbs42TkGgGyPiV1aqvJa`
+- source SHA：`5c160942a269574737d6876cf035ce73099a6aa0`
+- state：READY
+- target：Preview（不是 Production）
 
-Active queue：`supabase/migrations/`
-- `20260818142712_baseline_existing_schema_20260818.sql`
-- `20260818142919_production_reconcile_20260818.sql`
-- 未來 tracked migrations 往後 append。
+## 4. COPY C1 現況
 
-Pre-tracking history：
-- `supabase/history/pre_tracking_migrations/001…039`
-- 內容完整保存；是歷史 / local reconstruction input，**不是 production migration queue**。
+已完成並通過目前工程 / Owner 驗收的項目：
 
-鐵則：
-- 不把 `001–039` 搬回 active queue；
-- 不 replay 到 production；
-- 不偽造舊 ledger；
-- tracked migration 上線後若需 rollback，要新增 tracked revert migration，不可只手動跑舊 rollback SQL造成 schema/ledger 不一致。
+1. R0A shared data pipeline recovery
+2. R0B title / SKU / FAQ recovery
+3. R0B.3 single-field tone preservation
+4. Chaochao-only detailed description contract restore
+5. Preview 使用 stored `generation_tone` / `sale_status`
+6. C1.P1 missing-heading-prefix Preview fallback
+7. CI #324 PASS
+8. Owner real-device：COPY C1.P1 Preview layout PASS
 
-## 4. 仍然只在 GitHub branches、尚未 merge/deploy 的程式修復
+目前 **不要 merge PR #9**。
 
-Stabilization stack 包含：
-- P0-1 Variant axis atomic confirm
-- P0-2 duplicate option protection
-- P0-3 mobile ResultCard expand affordance
-- P1-1 mobile gesture isolation
-- P1-2 Variant hover containment
-- P1-3 browser-storage secret policy
-- P0 batch archive authorization
+下一階段不再叫 recovery。Copy quality 要分開處理：
 
-這些 UI / app 程式修復仍在 stabilization branches / Draft PR stack，**不要因為 Supabase production 已修就說前台 app 也已部署。**
+- `COPY C2` — Description Quality
+- `COPY C3` — Title Quality
+- `COPY C4` — Metafield + FAQ Quality
 
-目前沒有 Vercel production deploy。Vercel recent Preview failure target 曾是 `build-rate-limit / upgradeToPro`；GitHub CI 可正常 production build。
+每包最多 1–3 個 adjustment，不得把 description / title / FAQ / shared system 一次大改。
 
-## 5. CI / free DB gate
+## 5. COPY C2 已批准的設計方向
 
-Source CI canonical：`agent/ci-gate` / `b935290` / Draft PR #1。
+C2 只改善「潮巢導購版」description 的內容品質，不再重做 C1 已通過的版型。
 
-Free Supabase runtime branch：`agent/supabase-local-ci` / `f017765` / Draft PR #3。
+三個 adjustment：
 
-Production package branch：`agent/supabase-production-package` / `2d96fce` / Draft PR #4。
+1. 商品專屬購買理由：從 evidence 找出只有本商品才成立的 facts，轉成合理的 feature → benefit / usage reason。
+2. 生活感寫法：減少抽象稱讚與 AI 萬用句，改成有具體使用畫面的潮巢小編語氣。
+3. 三段分工：商品介紹、收藏亮點、導購小標不得重複換句話說同一賣點。
 
-Current migration housekeeping branch：`agent/supabase-migration-baseline`。
+C2 runtime 預設 reserved：
 
-免費 DB gate 使用 GitHub runner + Docker + Supabase CLI + Postgres 17；**不要建立付費 Supabase Development Branch**。
+- `src/lib/providers/systemPrompt.ts`
+- 專用 verifier（只有真的需要時）
 
-已 runtime 驗證：
-- production-like historical reconstruction（含 032 transaction modeling / 033 legacy parent fixture）；
-- 8-policy drift + restore；
-- operator/admin catalog RLS；
-- operator owner boundary、reviewer/admin cross-team；
-- new-user / sensitive-field triggers；
-- batch ownership helpers無 `42P17`；
-- archive authorization scope；
-- timestamp search_path hardening；
-- trigger-only function EXECUTE hardening；
-- production precheck/apply/postcheck/rollback/re-apply cycle。
+禁止把 C2 變成 shared prompt engine 重構。
 
-Migration baseline verifier：`scripts/verify-supabase-migration-baseline.mjs`，已接入 `verify:all`，鎖 active queue / archive / local bootstrap 路徑。
+## 6. 本週 Owner 目標
 
-## 6. Canonical role model
+P0：
 
-- `operator`：建立/操作自己的商品；不審核、不發布。
-- `reviewer`：全隊讀取、審核、發布。
-- `admin`：reviewer + profiles / 成員角色 / 敏感設定。
-- `viewer`：沒有 TS/DB role；目前不要新增。
+- Copy quality
+- Shopify Go-Live audit
+- ONE controlled Shopify smoke（只能在 Owner 明確授權的 Go-Live package）
+- Showmore CSV audit / MVP
 
-不要單獨把 operator 加進 `canPublish()`；權限變更必須 UI/API/helper/RLS/tests 一起對齊。
+P1：
 
-## 7. 下一步順序
+- 卡片區 UIUX：複製、HTML、按鈕
+- 桌機 UIUX
+- 輸入區 UIUX
+- 手機跳轉順序
+- 輸入區卡片
+- 壹加壹螢光綠 Theme
 
-1. 收尾 `agent/supabase-migration-baseline`：CI + free local DB gate全綠、squash、Draft PR；不 merge。
-2. 檢查 production migration list仍精確是 `20260818142712` + `20260818142919`。
-3. 下一個 DB hardening scope才處理 remaining Security Advisor findings；先設計/測試，不直接 revoke RLS helpers或 hosted-only functions。
-4. Vercel production env + Shopify production config audit。
-5. manual mobile/Variant/role UX cases + controlled real-product E2E。
-6. 最後才整合 stabilization branches、決定 merge / production app deploy。
-7. 再進 E6/F/G。
+P2：
 
-## 8. 修改鐵則
+- 新上架商品 GSC / indexing 流程
+- SEO follow-up
 
-- 每次修改要記錄 what / why / affected files / state / remaining risks。
-- 不刪舊文件；歷史只 archive / index。
-- `supabase/migrations/` 現在是正式 tracked history；任何新增都要 timestamped + test + production discipline。
-- `supabase/history/pre_tracking_migrations/` 不可 production replay。
-- `supabase/reconcile/` 是 review/evidence，不是一般 deploy queue。
-- `local-production-baseline.sql` 只允許 local/CI。
-- 不改 hosted-only `rls_auto_enable()` without proof。
-- 不為了 Security Advisor 綠燈而一刀切 SECURITY DEFINER / RLS helper EXECUTE。
-- service-role API 不可信任前端傳來的 IDs。
-- 不 merge / 不 Vercel production deploy，除非使用者明確同意。
-- 使用者要求 Supabase 免費方案；不要建立付費 branch。
+Showmore CSV 目標架構：
 
-## 9. 新 session 開場指令
+Shopify 成功上架 → 使用 Shopify 媒體庫 → 生成 Showmore CSV → 記錄哪些 Shopify 商品已下載過 SM CSV → 導入 SM category mapping。
 
-> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。確認 GitHub branch / Draft PR / CI 與 production migration list。碰 DB 必讀四份 Supabase audits與 active `supabase/migrations/`。不要再把「production DB 尚未修改」當成現況：2026-08-18 reconcile 已正式成功套用，但 app stabilization branches 尚未 merge/deploy。
+## 7. Production / Shopify safety
+
+Production/default 預設 READ-ONLY。
+
+未經 Owner 明確開包，禁止：
+
+- merge PR #9
+- Production deploy
+- Shopify 真實商品 write / publish / unpublish
+- DB migration
+- broad data cleanup
+
+舊 Pingu 有歷史 `spec_text` 污染；目前 existing-first 會保留舊資料。不要在 COPY package 偷做 DB cleanup。
+
+## 8. 多 Agent 協作
+
+Project Commander 管全局、roadmap、release、GitHub、CI、Vercel、copy、Shopify、CSV、GSC、Production safety 與 package coordination。
+
+UIUX Commander 可平行設計 layout / spacing / hierarchy / interaction / mobile / responsive / theme，但不得自行修改 Shopify business logic、DB、copy prompt、SKU、CSV、GSC。
+
+平行施工前必須登記 `docs/ACTIVE_TASKS.md` 的 Reserved files。兩包碰同一檔案時不可同時施工。
+
+## 9. 最重要的 authority 規則
+
+**文件告訴 Agent「應該去哪裡查」；GitHub / Vercel 告訴 Agent「現在真的在哪裡」。**
+
+任何 branch、SHA、PR、deployment、CI、package status，只要要拿來當施工 gate，都必須 live re-check。不要因為聊天記憶或本文件寫過就直接相信。
+
+## 10. Commander 回覆格式
+
+先用 1–2 句白話講：
+
+- 現在發生什麼
+- 有沒有問題
+- 下一步做什麼
+
+之後再補：狀態 → 風險 → 下一步 → 技術證據。
+
+沒有 Owner 明確說「可以合併」，就不 merge。

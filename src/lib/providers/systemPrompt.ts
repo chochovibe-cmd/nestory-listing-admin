@@ -78,6 +78,39 @@ const CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY = `【COPY C4A 潮巢導購版 product
 
 const CHAOCHAO_METAFIELD_QUALITY = `${CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY}\n\n${CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY}`;
 
+const CHAOCHAO_FAQ_QUALITY = `【COPY C4B 潮巢導購版 FAQ Quality｜只適用 tone === "潮巢導購版" 的 generated_faq_html】
+這段只改善潮巢導購版 generated_faq_html 的問題品質、回答品質與 Full Generate / single-field regen parity。不得改寫 shared FAQ engine，也不得把這些要求套到其他 tone 或其他 regen field。
+
+【輸出 contract】
+- 維持 3–5 題。
+- 每題 exact structure：<h3><strong>問題</strong></h3><p>回答</p>。
+- 每個回答約 2–3 句，直接回答問題；每題 standalone，單獨拿出來也能理解。
+- 禁止使用「如上所述」「如前面提到」「如圖所示」「前面有提到」「可以參考上方資訊」等依賴上下文的指代。
+- 使用自然台灣繁中與潮巢口吻，可以有一點生活感、小編觀察或自然角色梗，但資訊優先，不要寫成客服罐頭。
+- FAQ 可以與 Description 使用同一組 evidence，但不要逐句複製或只把 Description 原句改成問答。
+
+【Product-specific questions｜先綁定這件商品】
+- 生成問題前先從現有 evidence/context 找真正屬於本商品、可核實的資訊；優先商品類型、特殊造型、系列／款式、容量、尺寸、材質、結構、配件、功能、使用方式、收藏差異、角色設計、多款式差異與已知真實購買疑慮。
+- 問題應盡量讓人一看就知道是在問「這一件商品」，不是換成另一件完全不同商品也能原封不動成立。
+- evidence 明確有 900ml 才能問 900ml 容量的使用情境；明確是多款式角色吊飾，才可問款式差異、角色選擇、尺寸、掛法或收藏搭配中 evidence 能支持的角度。
+- 不得為了讓 FAQ 看起來專業而自行補材質、尺寸、功能、防水、耐熱、清洗方式、授權、產地、款式數、包裝內容、保固或任何未知資訊。
+
+【Low-value generic question guard】
+- 不要優先產出「這款商品值得購買嗎？」「這款商品有什麼特色？」「為什麼推薦這款商品？」「適合送禮嗎？」「值得收藏嗎？」「適合誰購買？」「品質好嗎？」這類所有商品都能套的公版問題。
+- 這些語意不是絕對 forbidden phrase；只有當問題被本商品已知 evidence 具體化、能提供實際決策資訊時才可使用。
+- 自檢：若把商品換成另一件完全不同商品，這題仍可原封不動成立，通常就太 generic；優先改成有商品-specific context 的問題。
+
+【Decision-support mix】
+- 3–5 題不要只是把產品介紹重講一次；在 evidence 能支持的前提下，題目用途要有差異。
+- 至少盡量包含一題真正的購前疑慮 angle，例如尺寸／容量是否符合需求、款式怎麼選、使用限制、配件／結構、實際使用情境或收藏差異。
+- 至少盡量包含一題 decision-support angle，例如哪種使用者最有感、不同款式怎麼選、某個具體 feature 對使用有什麼差、怎麼收藏／搭配，或放在哪種日常情境最合理。
+- 如果 evidence 不支持某類問題，就換成另一個有 evidence 的實用角度；不要硬湊防水、清洗、耐熱、保固等不存在資訊。
+
+【Evidence safety】
+- 所有精確數字、尺寸、材質、容量、功能、款式數、授權、配件、包裝、耐熱、防水、清洗、保固與特殊 claim 都必須來自現有 evidence/context；不確定就不要寫成肯定答案。
+- evidence 少時可以降低問題的具體程度，但不能幻想新規格來湊 3–5 題；優先使用已知商品類型、造型、系列、角色、使用方式或其他可靠 context 做有決策價值的問題。
+- 回答只能使用問題本身與 evidence 支持的資訊做合理解釋；若某個 consumer meaning 無法由已知 fact 合理推出，就只寫已知 fact，不要硬加效果。`;
+
 const CHAOCHAO_BOSS_LAYOUT = `【潮巢導購版 Boss description hierarchy｜只適用 tone === "潮巢導購版"，且優先於前文任何舊潮巢 description layout】
 generated_description_html 只輸出純文字，不輸出 HTML；第一行固定且只能是「商品介紹」，前面不得加任何開場標題、符號或正文。
 整篇只能使用以下三個 section heading，段落之間正常空一行；括號內是寫作規則，不要照抄到輸出：
@@ -166,6 +199,7 @@ function sharedRecoverySuffix(tone: CopyTone): string {
     tone === "潮巢導購版" ? CHAOCHAO_BOSS_LAYOUT : "",
     tone === "潮巢導購版" ? CHAOCHAO_TITLE_QUALITY : "",
     tone === "潮巢導購版" ? CHAOCHAO_METAFIELD_QUALITY : "",
+    tone === "潮巢導購版" ? CHAOCHAO_FAQ_QUALITY : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -189,6 +223,7 @@ export function buildFieldRegenSystemPrompt(
   if (field === "enriched_title") extras.push(OWNER_TITLE_MINIMAL_FIX);
   if (field === "enriched_title" && tone === "潮巢導購版") extras.push(CHAOCHAO_TITLE_QUALITY);
   if (field === "generated_description_html" && tone === "潮巢導購版") extras.push(CHAOCHAO_BOSS_LAYOUT);
+  if (field === "generated_faq_html" && tone === "潮巢導購版") extras.push(CHAOCHAO_FAQ_QUALITY);
   if (field === "why_we_chose_it" && tone === "潮巢導購版") extras.push(CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY);
   if (field === "product_highlights" && tone === "潮巢導購版") extras.push(CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY);
   return `${buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo)}\n\n${extras.join("\n\n")}`;

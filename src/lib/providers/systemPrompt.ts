@@ -56,6 +56,28 @@ const CHAOCHAO_TITLE_QUALITY = `【COPY C3 潮巢導購版 Title Quality｜只�
 - 第三段禁止把「熱賣、爆款、必買、超值、限時、最佳選擇、完美選擇、送禮首選、夢幻逸品、人氣推薦、值得收藏」當主要 differentiator。
 - 品牌、IP、角色、聯名、系列、款式、尺寸、容量、材質、功能、款式數、授權、配件都必須有 evidence；不確定就不要補。`;
 
+const CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY = `【COPY C4A 潮巢導購版 why_we_chose_it Quality｜只適用 tone === "潮巢導購版" 的 why_we_chose_it】
+- 保留 shared Production contract：why_we_chose_it 維持 1–2 句，說明為什麼商品值得在潮巢出現，帶品牌個性，但不要只重複商品功能。
+- 這 1–2 句必須回答「為什麼潮巢會挑這一件？」而不是「為什麼一般人會喜歡任何動漫商品？」。
+- 生成前先從現有 evidence/context 選至少 1 個真正屬於這件商品、可以核實的具體理由；優先特殊造型、系列／款式、具體功能、結構、材質、容量／尺寸、配件、使用方式、有辨識度的角色設計、收藏差異或真實使用情境。
+- 優先寫法：具體 feature → 為什麼值得挑 → 對使用者／收藏者的實際意義。若 evidence 明確有 900ml 與豹紋 Hello Kitty，可用這類具體組合說明挑選理由；不要只留下抽象稱讚。
+- 「值得入手、值得收藏、推薦給喜歡角色的你、很有收藏價值、可愛又實用、送禮自用都適合、粉絲一定會喜歡、不容錯過」不得單獨構成完整理由。
+- 若使用「可愛、實用、有質感、療癒、有收藏價值」等判斷，必須緊接一個已知商品 feature、使用動作或收藏差異，讓判斷有具體依據。
+- 可以與 Description 使用相同 evidence，但不要逐句複製 Description；why_we_chose_it 要把 evidence 轉成「潮巢為什麼選它」的選品判斷。
+- evidence 不足時寧可保守；不得幻想材質、尺寸、功能、正版授權、限量、稀有度、收藏升值或特殊配件。`;
+
+const CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY = `【COPY C4A 潮巢導購版 product_highlights Quality｜只適用 tone === "潮巢導購版" 的 product_highlights】
+- 保留 shared Production contract：product_highlights 維持 3–5 點，優先商品外觀／規格的具體資訊，不要空泛。
+- 每一點都必須具體、可核實，而且要增加資訊；先從現有 evidence/context 選可靠 facts，再決定怎麼表達。
+- 每點優先使用不同 fact；不要把同一個 feature 換三種形容詞重複，也不要用 3–5 個同義銷售句湊數。
+- 能合理做到時使用「具體 feature → consumer meaning」。例如 evidence 明確有 900ml，才可寫「900ml 大容量，放辦公桌或長時間外出不用一直補水」，不要退化成「容量實用又方便」。
+- 禁止用「可愛造型很療癒、精緻設計很有質感、角色元素值得收藏、粉絲不能錯過」這類 generic 句子取代真正商品資訊。
+- 若 evidence 只有 3 個可靠 facts，就寫 3 點；不要為了湊滿 5 點幻想新規格、功能、材質、尺寸、授權、配件或其他不存在資訊。
+- 可以與 Description 使用相同 evidence，但不要逐句複製 Description；product_highlights 應是一眼掃完就知道本商品幾個真正重點的資訊摘要。
+- 若 consumer meaning 無法從已知 feature 合理推出，就只寫已知 fact；不要硬加效果、情境或收藏價值。`;
+
+const CHAOCHAO_METAFIELD_QUALITY = `${CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY}\n\n${CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY}`;
+
 const CHAOCHAO_BOSS_LAYOUT = `【潮巢導購版 Boss description hierarchy｜只適用 tone === "潮巢導購版"，且優先於前文任何舊潮巢 description layout】
 generated_description_html 只輸出純文字，不輸出 HTML；第一行固定且只能是「商品介紹」，前面不得加任何開場標題、符號或正文。
 整篇只能使用以下三個 section heading，段落之間正常空一行；括號內是寫作規則，不要照抄到輸出：
@@ -143,6 +165,7 @@ function sharedRecoverySuffix(tone: CopyTone): string {
     TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT,
     tone === "潮巢導購版" ? CHAOCHAO_BOSS_LAYOUT : "",
     tone === "潮巢導購版" ? CHAOCHAO_TITLE_QUALITY : "",
+    tone === "潮巢導購版" ? CHAOCHAO_METAFIELD_QUALITY : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -166,5 +189,7 @@ export function buildFieldRegenSystemPrompt(
   if (field === "enriched_title") extras.push(OWNER_TITLE_MINIMAL_FIX);
   if (field === "enriched_title" && tone === "潮巢導購版") extras.push(CHAOCHAO_TITLE_QUALITY);
   if (field === "generated_description_html" && tone === "潮巢導購版") extras.push(CHAOCHAO_BOSS_LAYOUT);
+  if (field === "why_we_chose_it" && tone === "潮巢導購版") extras.push(CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY);
+  if (field === "product_highlights" && tone === "潮巢導購版") extras.push(CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY);
   return `${buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo)}\n\n${extras.join("\n\n")}`;
 }

@@ -24,7 +24,7 @@ async function check(name, fn) {
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 const exists = (rel) => fs.existsSync(path.join(root, rel));
 
-// Mirror of formatCharacterText (titleGenerator.ts) — keep in sync
+// Mirror of formatCharacterText (titleGeneratorBase.ts) — keep in sync
 function mirrorFormatCharacterText(characters) {
   if (characters.length === 0) return "";
   if (characters.length === 1) return characters[0];
@@ -34,8 +34,8 @@ function mirrorFormatCharacterText(characters) {
 
 console.log("verify-title-sync:");
 
-await check("titleGenerator: P2-83 60/80 dual cap, brand × IP, ladder, replacements", () => {
-  const src = read("src/lib/contentGenerator/titleGenerator.ts");
+await check("titleGeneratorBase: P2-83 60/80 dual cap, brand × IP, ladder, replacements", () => {
+  const src = read("src/lib/contentGenerator/titleGeneratorBase.ts");
   assert.match(src, /OFFICIAL_TITLE_MAX_LENGTH = 60/);
   assert.match(src, /ENRICHED_TITLE_MAX_LENGTH = 80/);
   assert.match(src, /clampOfficialTitle/);
@@ -50,6 +50,40 @@ await check("titleGenerator: P2-83 60/80 dual cap, brand × IP, ladder, replacem
   assert.match(src, /台灯/);
   // Night-work unified 80 on official title must be gone
   assert.doesNotMatch(src, /const TITLE_MAX_LENGTH = 80/);
+});
+
+await check("titleGenerator wrapper + C1 titleFinalizer composition", () => {
+  const wrapper = read("src/lib/contentGenerator/titleGenerator.ts");
+  const finalizer = read("src/lib/contentGenerator/titleFinalizer.ts");
+
+  assert.ok(
+    wrapper.includes('export * from "./titleGeneratorBase";'),
+    "titleGenerator.ts no longer re-exports Production base behavior"
+  );
+  for (const helper of [
+    "appendProductTypeToSecondSegment",
+    "normalizeEnrichedTitleContract",
+    "normalizeTitleSeparators",
+  ]) {
+    assert.ok(wrapper.includes(helper), `titleGenerator.ts lost public finalizer helper: ${helper}`);
+  }
+  assert.doesNotMatch(
+    wrapper,
+    /OFFICIAL_TITLE_MAX_LENGTH\s*=|ENRICHED_TITLE_MAX_LENGTH\s*=|function getShortFeatureText|const TITLE_SEGMENT3_BLACKLIST/,
+    "shared title implementation was duplicated back into titleGenerator.ts"
+  );
+
+  assert.match(finalizer, /split\(\/\\s\*\[\|｜\]\\s\*\/u\)/, "titleFinalizer separator parser changed");
+  assert.match(finalizer, /join\(" \| "\)/, "titleFinalizer separator output is not ASCII ' | '");
+  assert.match(
+    finalizer,
+    /segments\[1\] = \[secondSegment, productType\]\.filter\(Boolean\)\.join\(" "\)/,
+    "titleFinalizer no longer appends detected type to segment 2"
+  );
+  assert.doesNotMatch(finalizer, /segments\[0\]\s*=/, "titleFinalizer rewrites segment 1");
+  assert.doesNotMatch(finalizer, /segments\[2\]\s*=/, "titleFinalizer rewrites segment 3");
+  assert.match(finalizer, /normalizeEnrichedTitleContract/, "shared enriched-title finalization entrypoint missing");
+  assert.match(finalizer, /scrubEnrichedTitleSegment3/, "Production segment-3 scrub delegation missing");
 });
 
 await check("mirror: character list formatting (1/2/3+)", () => {
@@ -69,15 +103,16 @@ await check("seoGenerator: 80 caps, brand, multi-character ・", () => {
   assert.match(src, /productBrand \? productBrand \+ ' × '/);
 });
 
-await check("systemPrompt: P2-83 unique length table, brand + ・ rule", () => {
-  const src = read("src/lib/providers/systemPrompt.ts");
+await check("systemPromptBase: P2-83 unique length table, brand + ・ rule", () => {
+  const src = read("src/lib/providers/systemPromptBase.ts");
   assert.match(src, /標題長度唯一真相表/);
   assert.match(src, /enriched_title（你輸出）/);
   assert.match(src, /官網 title_zh（後端 clamp）/);
   assert.match(src, /seo_title（你輸出）/);
-  assert.match(src, /70-80 字為佳/);
+  assert.match(src, /\| meta_description \| 70[–-]80(?: 字為)?佳、最長 90 \|/);
   assert.match(src, /多角色用「・」/);
   assert.match(src, /品牌 × IP/);
+  assert.match(src, /第三段黑名單/);
   assert.doesNotMatch(src, /70-110 字/);
   // Old conflicting numbers must be gone
   assert.doesNotMatch(src, /最長不超過 60 字（後端規則引擎另有 80/);
@@ -85,6 +120,43 @@ await check("systemPrompt: P2-83 unique length table, brand + ・ rule", () => {
   assert.doesNotMatch(src, /建議 45 字、最長 60 字/);
   // Positive 送禮首選 example removed (blacklist context only)
   assert.doesNotMatch(src, /例如「包包吊飾」「桌面擺件」「送禮首選」/);
+});
+
+await check("systemPrompt wrapper: Production delegation + Owner title suffix composition", () => {
+  const wrapper = read("src/lib/providers/systemPrompt.ts");
+
+  assert.ok(
+    wrapper.includes("buildCopySystemPrompt as buildProductionCopySystemPrompt"),
+    "Full Generate no longer imports Production base prompt under recovery alias"
+  );
+  assert.ok(
+    wrapper.includes("buildFieldRegenSystemPrompt as buildProductionFieldRegenSystemPrompt"),
+    "field regen no longer imports Production base prompt under recovery alias"
+  );
+  assert.ok(
+    wrapper.includes("buildProductionCopySystemPrompt(tone, copyLength, secondhandInfo)"),
+    "Full Generate no longer delegates to Production base prompt"
+  );
+  assert.ok(
+    wrapper.includes("sharedRecoverySuffix(tone)"),
+    "Full Generate no longer composes the recovery suffix"
+  );
+  assert.ok(
+    wrapper.includes('if (field === "enriched_title") extras.push(OWNER_TITLE_MINIMAL_FIX);'),
+    "enriched_title single-field regen lost OWNER_TITLE_MINIMAL_FIX"
+  );
+  assert.ok(
+    wrapper.includes("buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo)"),
+    "single-field regen no longer delegates to Production base prompt"
+  );
+  assert.match(wrapper, /COPY C1 Owner 標題最小修正/, "Owner title minimal-fix contract missing");
+  assert.match(wrapper, /detected_product_type/, "Owner segment-2 detected product type rule missing");
+  assert.match(wrapper, /ASCII pipe/, "Owner ASCII separator rule missing");
+  assert.doesNotMatch(
+    wrapper,
+    /標題長度唯一真相表|骨架規則（P1-75b＋P2-80/,
+    "shared Production title prompt was duplicated back into systemPrompt.ts"
+  );
 });
 
 await check("payload types + generate route carry product_brand / variant_text", () => {

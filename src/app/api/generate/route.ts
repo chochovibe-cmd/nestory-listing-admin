@@ -115,6 +115,26 @@ function parseCachedWebSearchSummary(raw: unknown): string | undefined {
   return typeof summary === "string" && summary.trim() ? summary : undefined;
 }
 
+type StoredVariantEvidenceRow = {
+  option1_value: string | null;
+  option2_value: string | null;
+  option3_value: string | null;
+};
+
+/** COPY C5A: reuse normalized stored variant values as the existing variantSummary evidence shape. */
+function buildStoredVariantSummary(rows: StoredVariantEvidenceRow[]): string | undefined {
+  const summary = rows
+    .map((row) =>
+      [row.option1_value, row.option2_value, row.option3_value]
+        .map((value) => (value ?? "").trim())
+        .filter(Boolean)
+        .join(" / "),
+    )
+    .filter(Boolean)
+    .join("、");
+  return summary ? summary.slice(0, 2000) : undefined;
+}
+
 type DetectedClassification = {
   ip: string;
   character: string;
@@ -485,7 +505,7 @@ export async function POST(request: NextRequest) {
   const runMode: "test" | "llm" = body.mode === "test" ? "test" : "llm";
   const useWebSearch = body.useWebSearch !== false;
   const source = typeof body.source === "string" ? body.source : undefined;
-  const variantSummary = typeof body.variantSummary === "string" ? body.variantSummary : undefined;
+  const requestVariantSummary = typeof body.variantSummary === "string" ? body.variantSummary : undefined;
   const tone: CopyTone = (COPY_TONES as readonly string[]).includes(body.tone)
     ? body.tone
     : "黑膠文藝收藏感";
@@ -529,6 +549,20 @@ export async function POST(request: NextRequest) {
 
   const draft = draftRow as ProductDraft;
   const serviceSupabase = createServiceSupabaseClient();
+
+  // COPY C5A: ResultCard whole regen / single-field regen do not send form variants.
+  // Reuse existing normalized product_variants as the same variantSummary evidence when absent.
+  let variantSummary = requestVariantSummary;
+  if (!variantSummary) {
+    const { data: storedVariantRows, error: storedVariantError } = await serviceSupabase
+      .from("product_variants")
+      .select("option1_value,option2_value,option3_value,sort_order")
+      .eq("draft_id", draftId)
+      .order("sort_order", { ascending: true });
+    if (!storedVariantError && storedVariantRows) {
+      variantSummary = buildStoredVariantSummary(storedVariantRows as StoredVariantEvidenceRow[]);
+    }
+  }
 
   const [scenarioSettingsResult, ipToneSettingsResult] = await Promise.all([
     serviceSupabase
@@ -807,7 +841,7 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("測試模式：未呼叫 AI、未自動偵測 IP；文案為規則引擎產出，tags 依草稿現有資料。");
   }
 
-  // COPY C1.1: deterministic backend title normalization owns separator + segment-2 type.
+  // COPY C5A: backend title finalization owns separator/safe scrub/length only.
   const enrichedTitleFull = normalizeEnrichedTitleContract(
     localizeToTaiwanTraditionalText(
       (providerOutput.enrichedTitle || ruleOutput.display_title || "")

@@ -94,9 +94,6 @@ export function ResultCardCopyPanel({
     !copyDirty.generated_description_html &&
     descriptionVersions.length > 0 &&
     descriptionVersionIndex < descriptionVersions.length - 1;
-  const descriptionPreviewTone = isBrowsingHistoricalDescription
-    ? undefined
-    : draft.generation_tone;
 
   return (
     <div className="rc-tabpanel rc-tabpanel--copy" role="tabpanel">
@@ -286,7 +283,11 @@ export function ResultCardCopyPanel({
           </div>
           {descriptionView === "preview" ? (
             <CopyPreviewBlock
-              html={descriptionPreviewHtml(description, descriptionPreviewTone, draft.sale_status)}
+              html={
+                isBrowsingHistoricalDescription
+                  ? descriptionPreviewHtml(description, undefined, draft.sale_status)
+                  : descriptionPreviewHtml(description, draft.generation_tone, draft.sale_status)
+              }
             />
           ) : (
             <textarea

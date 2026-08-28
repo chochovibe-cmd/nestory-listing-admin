@@ -29,32 +29,25 @@ const OWNER_TITLE_MINIMAL_FIX = `【COPY C1 Owner 標題最小修正】
 const TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT = `【顧客可見語言】
 所有顧客可見 AI 產出使用台灣繁中與台灣慣用詞；包含 enriched_title、generated_description_html、generated_faq_html、seo_title、meta_description、why_we_chose_it、product_highlights、provider-generated spec。原始 taobao_title、original_title、raw OCR、raw web cache 保留原文，不改寫來源資料。`;
 
-const CHAOCHAO_TITLE_QUALITY = `【COPY C3 潮巢導購版 Title Quality｜只適用 tone === "潮巢導購版" 的 enriched_title】
-這段只改善模型生成 enriched_title 時「第三段要選哪個已知特色」與「如何避免沒有新增資訊的重複」。不修改 shared Title engine，不要求 backend 重建、排序、去重或後處理任何 segment；若與前文 C1 的「第三段照原本輸出」描述衝突，以這段對潮巢導購版的第三段選材 guidance 為準，其餘 C1 contract 全部保留。
+const CHAOCHAO_TITLE_QUALITY = `【COPY C5A 潮巢導購版 Title Writer｜只適用 tone === "潮巢導購版" 的 enriched_title】
+這段是潮巢導購版最新 Title authority。只對本 tone 取代前文 C1「第二段必須附加 detected_product_type 原字串」的舊規則；其他 tone 維持既有 Production / C1 行為。
 
-【既有標題 contract 必須保留】
-- enriched_title 仍由 AI 一次產生完整標題，維持三段結構與既有第一段／第二段 architecture。
-- separator 固定使用 ASCII spaced pipe：「 | 」；禁止「｜」、無空格 pipe 與 emoji。
-- 第二段仍保留 AI 原本角色／聯名資訊，並自然包含 detected_product_type；不要為了第三段品質去刪、改、重排第二段。
-- enriched_title 維持最長 80 字。
+【先理解商品，再寫標題】
+你是一位懂商品的台灣電商編輯。先讀完目前可用 evidence/context：原始 title、variants / variantSummary、spec、Vision / image description、Web Search、notes，再決定三段標題；不要先套粗分類再補資料。
 
-【第三段先選真正能辨認本款的 differentiator】
-- 生成前先從現有 evidence/context 找「哪個已知 fact 最能讓消費者分辨這是哪一款商品？」第三段優先使用這個具體 differentiator。
-- 優先候選：系列名、款式、造型、特殊設計、主要功能、有辨識度的規格、材質、容量／尺寸、配件、使用方式、款式數、燈效／結構等具體 feature。
-- evidence 若明確有例如 900ml、豹紋設計、飛行員造型、RGB 燈效、8 款、雨衣造型，優先使用這類資訊，不要退化成「可愛造型」「療癒小物」「精緻設計」「人氣推薦」「值得收藏」「送禮首選」。
-- 如果沒有可靠 differentiator，使用既有 neutral fallback：「標準款」或「款式可選」；不可為了標題好看幻想 feature。
+【三段 architecture】
+- 第一段：維持既有品牌 × IP authority，不 redesign。
+- separator：固定使用 ASCII spaced pipe「 | 」；enriched_title 維持最長 80 字。
+- 第二段：角色／聯名文字＋最精準、自然、消費者一眼看得懂的商品類型。可以使用 evidence 支持的重要類型修飾詞，例如「米菲 矽膠臺燈」「Hello Kitty 無線藍牙鍵盤」「Pingu 迷你CCD相機吊飾」。
+- detected_product_type 只當 fallback / semantic reference，不是 mandatory exact substring。若第二段已經用更精準、同語意的商品類型，不需要再把 raw detected_product_type 補上。
+- 第三段：只放第二段還沒有的新資訊，回答「這件和其他同 IP / 同商品類型相比，真正有什麼不同？」。
 
-【Meaningful repetition guard｜只改善模型選材，不是 backend dedupe】
-- 第二段負責角色／聯名資訊＋detected_product_type；第三段應盡量增加第二段沒有提供的新辨識資訊。
-- 如果第三段候選主要只是把第二段的商品類型再講一次，而且 evidence 還有其他可靠差異，優先改選那個差異。
-- 如果正式系列名、官方品名或唯一可靠 evidence 本身就和第二段部分重疊，允許保留；不要為了去重刪正式名稱、改角色名、刪商品類型或猜不存在的 feature。
-- 禁止建立 cross-segment backend dedupe，也不要要求後端重新組裝任何 segment。
+【第三段 editorial selection】
+先比較目前可靠 evidence，再選一個最值得進標題的 differentiator。優先考慮特殊系列／周年／聯名／官方款式名稱、真正重要功能、有辨識度的 variant / design、影響購買決策的使用方式或結構，以及真的有區辨價值的容量／尺寸／材質等規格。這不是固定排序；購買辨識價值高的 evidence 優先。
+如果某個第三段候選只是把第二段的商品類型講得更細，而 evidence 還有其他可靠差異，就改選那個新的差異。若沒有可靠 differentiator，使用既有 neutral fallback，不為了標題好看幻想 feature。
 
-【台灣電商一眼可讀】
-- 讓台灣消費者一眼回答：哪個品牌／IP？哪個角色？這是什麼商品？這款最值得辨認的差異是什麼？
-- 使用台灣繁中與自然台灣電商閱讀順序；不要寫成淘寶關鍵字堆疊、SEO keyword stuffing 或 AI 行銷句。
-- 第三段禁止把「熱賣、爆款、必買、超值、限時、最佳選擇、完美選擇、送禮首選、夢幻逸品、人氣推薦、值得收藏」當主要 differentiator。
-- 品牌、IP、角色、聯名、系列、款式、尺寸、容量、材質、功能、款式數、授權、配件都必須有 evidence；不確定就不要補。`;
+【Evidence safety】
+品牌、IP、角色、聯名、系列、款式、尺寸、容量、材質、功能、配件、授權都必須有現有 evidence/context；不確定就不要補。Backend 不負責 semantic rewrite 或跨段 NLP dedupe；Writer 自己完成第二段精準商品類型與第三段新 differentiator 的選材。`;
 
 const CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY = `【COPY C4A 潮巢導購版 why_we_chose_it Quality｜只適用 tone === "潮巢導購版" 的 why_we_chose_it】
 - 保留 shared Production contract：why_we_chose_it 維持 1–2 句，說明為什麼商品值得在潮巢出現，帶品牌個性，但不要只重複商品功能。
@@ -77,7 +70,6 @@ const CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY = `【COPY C4A 潮巢導購版 product
 - 若 consumer meaning 無法從已知 feature 合理推出，就只寫已知 fact；不要硬加效果、情境或收藏價值。`;
 
 const CHAOCHAO_METAFIELD_QUALITY = `${CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY}\n\n${CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY}`;
-
 const CHAOCHAO_FAQ_QUALITY = `【COPY C4B 潮巢導購版 FAQ Quality｜只適用 tone === "潮巢導購版" 的 generated_faq_html】
 這段只改善潮巢導購版 generated_faq_html 的問題品質、回答品質與 Full Generate / single-field regen parity。不得改寫 shared FAQ engine，也不得把這些要求套到其他 tone 或其他 regen field。
 

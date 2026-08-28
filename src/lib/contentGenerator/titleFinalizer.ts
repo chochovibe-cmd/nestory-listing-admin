@@ -3,10 +3,6 @@ import {
   scrubEnrichedTitleSegment3,
 } from "./titleGeneratorBase";
 
-function normalizeDetectedProductType(value: string | null | undefined): string {
-  return (value ?? "").trim();
-}
-
 /** COPY C1 owner fix #1: normalize pipe spelling only; segment text is otherwise preserved. */
 export function normalizeTitleSeparators(value: string | null | undefined): string {
   const raw = (value ?? "").trim();
@@ -17,39 +13,32 @@ export function normalizeTitleSeparators(value: string | null | undefined): stri
     .join(" | ");
 }
 
-/** COPY C1 owner fix #2: append detected product type to the existing second segment only. */
+/**
+ * @deprecated COPY C5A: detected_product_type is a fallback/reference for the Writer,
+ * not a backend append authority. Kept as a public compatibility helper so existing
+ * imports do not break; it now performs separator normalization only.
+ */
 export function appendProductTypeToSecondSegment(
   value: string | null | undefined,
-  detectedProductType: string | null | undefined,
+  _detectedProductType: string | null | undefined,
 ): string {
-  const normalized = normalizeTitleSeparators(value);
-  const segments = normalized.split(" | ");
-  if (segments.length < 2) return normalized;
-
-  const productType = normalizeDetectedProductType(detectedProductType);
-  if (!productType) return normalized;
-
-  const secondSegment = segments[1]?.trim() ?? "";
-  if (!secondSegment.includes(productType)) {
-    segments[1] = [secondSegment, productType].filter(Boolean).join(" ");
-  }
-
-  return segments.join(" | ");
+  return normalizeTitleSeparators(value);
 }
 
 /**
  * Shared enriched-title boundary for Full Generate and single-field title regen.
- * After the two Owner fixes, delegate segment-3 scrub to the exact Production
- * helper and preserve Production's original Array.from(...).slice 80-char clamp.
- * The caller then applies the normal 60-char official-title clamp.
+ * COPY C5A keeps the backend as a finalizer only: normalize separators, delegate
+ * the existing Production segment-3 safety scrub, then preserve the 80-char clamp.
+ * The Writer owns segment-2 product specificity and segment-3 editorial selection;
+ * the caller still applies the normal 60-char official-title clamp.
  */
 export function normalizeEnrichedTitleContract(
   value: string | null | undefined,
-  detectedProductType: string | null | undefined,
+  _detectedProductType: string | null | undefined,
   maxLen: number = ENRICHED_TITLE_MAX_LENGTH,
 ): string {
-  const withType = appendProductTypeToSecondSegment(value, detectedProductType);
-  const scrubbed = scrubEnrichedTitleSegment3(withType);
+  const normalized = normalizeTitleSeparators(value);
+  const scrubbed = scrubEnrichedTitleSegment3(normalized);
   return Array.from(scrubbed).length > maxLen
     ? Array.from(scrubbed).slice(0, maxLen).join("")
     : scrubbed;

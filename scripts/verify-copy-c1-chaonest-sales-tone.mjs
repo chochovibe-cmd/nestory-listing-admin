@@ -71,17 +71,8 @@ function normalizeSeparators(value) {
     .join(" | ");
 }
 
-function appendDetectedType(value, detectedProductType) {
-  const normalized = normalizeSeparators(value);
-  const segments = normalized.split(" | ");
-  if (segments.length < 2) return normalized;
-  const productType = (detectedProductType ?? "").trim();
-  if (!productType) return normalized;
-  const secondSegment = segments[1]?.trim() ?? "";
-  if (!secondSegment.includes(productType)) {
-    segments[1] = [secondSegment, productType].filter(Boolean).join(" ");
-  }
-  return segments.join(" | ");
+function finalizeWithoutDetectedTypeAppend(value) {
+  return normalizeSeparators(value);
 }
 
 // Title: exact Production generator remains the semantic base. No stale getVariantText assumption.
@@ -118,7 +109,7 @@ for (const marker of ladderMarkers) {
 const separatorHelper = section(
   titleFinalizer,
   "export function normalizeTitleSeparators",
-  "/** COPY C1 owner fix #2",
+  "export function appendProductTypeToSecondSegment",
 );
 assert.match(separatorHelper, /split\(\/\\s\*\[\|｜\]\\s\*\/u\)/u, "separator parser changed");
 assert.match(separatorHelper, /join\(" \| "\)/u, "separator output is not ASCII ' | '");
@@ -127,35 +118,40 @@ assert.equal(normalizeSeparators("A||C"), "A |  | C", "ASCII empty segment was d
 assert.equal(normalizeSeparators("A｜｜C"), "A |  | C", "fullwidth empty segment was dropped");
 assert.equal(normalizeSeparators("A |B｜ C"), "A | B | C", "mixed separator normalization changed");
 
-// Owner title fix #2: second segment only, detected type is trim-only, third segment untouched by this fix.
-assert.match(titleFinalizer, /return \(value \?\? ""\)\.trim\(\);/u, "detected product type is not trim-only");
-assert.doesNotMatch(titleFinalizer, /normalizeProductTypeForDisplay|canonicalizeProductType|\.normalize\(/u,
-  "title finalizer must not canonicalize detected product type");
-assert.match(titleFinalizer, /segments\[1\] = \[secondSegment, productType\]\.filter\(Boolean\)\.join\(" "\);/u,
-  "segment 2 append contract changed");
-assert.doesNotMatch(titleFinalizer, /segments\[0\]\s*=/u, "owner fix rewrites segment 1");
-assert.doesNotMatch(titleFinalizer, /segments\[2\]\s*=/u, "owner fix rewrites segment 3");
+// COPY C5A: detected product type is Writer evidence, not a mandatory backend append.
+assert.match(
+  titleFinalizer,
+  /export function appendProductTypeToSecondSegment[\s\S]*?return normalizeTitleSeparators\(value\);/u,
+  "legacy append helper no longer preserves C5A no-append behavior",
+);
+assert.doesNotMatch(
+  titleFinalizer,
+  /segments\[1\]\s*=\s*\[secondSegment,\s*productType\]/u,
+  "detected product type append returned",
+);
+assert.doesNotMatch(titleFinalizer, /segments\[0\]\s*=/u, "title finalizer rewrites segment 1");
+assert.doesNotMatch(titleFinalizer, /segments\[2\]\s*=/u, "title finalizer rewrites segment 3");
 
 const titleFixtures = [
   [
-    "YOSIDA × 可可貓 | 可可貓 | 吐司麵包頭套吊飾",
-    "鑰匙圈",
-    "YOSIDA × 可可貓 | 可可貓 鑰匙圈 | 吐司麵包頭套吊飾",
+    "馬克圖布 × Miffy | 米菲 矽膠臺燈 | 70週年蘋果樹典藏款",
+    "燈具小物",
+    "馬克圖布 × Miffy | 米菲 矽膠臺燈 | 70週年蘋果樹典藏款",
   ],
   [
-    "Razer × 寶可夢|皮卡丘聯名|毒蝰V3專業版SE無線遊戲滑鼠",
-    "無線滑鼠",
-    "Razer × 寶可夢 | 皮卡丘聯名 無線滑鼠 | 毒蝰V3專業版SE無線遊戲滑鼠",
+    "Razer × 寶可夢|皮卡丘 無線藍牙鍵盤|RGB燈效",
+    "3C小物",
+    "Razer × 寶可夢 | 皮卡丘 無線藍牙鍵盤 | RGB燈效",
   ],
   [
-    "MARtube × Pingu|Pingu|迷你相機盲盒創意吊飾",
-    "迷你相機盲盒",
-    "MARtube × Pingu | Pingu 迷你相機盲盒 | 迷你相機盲盒創意吊飾",
+    "MARtube × Pingu|Pingu 迷你CCD相機吊飾|可拍照錄影盲盒",
+    "吊飾",
+    "MARtube × Pingu | Pingu 迷你CCD相機吊飾 | 可拍照錄影盲盒",
   ],
 ];
 for (const [input, productType, expected] of titleFixtures) {
-  const actual = appendDetectedType(input, productType);
-  assert.equal(actual, expected, `title fixture failed: ${input}`);
+  const actual = finalizeWithoutDetectedTypeAppend(input);
+  assert.equal(actual, expected, `detected type unexpectedly changed title (${productType}): ${input}`);
   assert.equal(
     actual.split(" | ").slice(2).join(" | "),
     normalizeSeparators(input).split(" | ").slice(2).join(" | "),
@@ -164,7 +160,9 @@ for (const [input, productType, expected] of titleFixtures) {
 }
 
 // Production enriched-title boundary: Production scrub, then raw Array.from(...).slice(0,80).
-assert.match(titleFinalizer, /const scrubbed = scrubEnrichedTitleSegment3\(withType\);/u,
+assert.match(titleFinalizer, /const normalized = normalizeTitleSeparators\(value\);/u,
+  "title finalizer no longer normalizes separators before scrub");
+assert.match(titleFinalizer, /const scrubbed = scrubEnrichedTitleSegment3\(normalized\);/u,
   "Production segment-3 scrub is not applied before enriched clamp");
 assert.match(titleFinalizer, /Array\.from\(scrubbed\)\.slice\(0, maxLen\)\.join\(""\)/u,
   "Production raw Array.from(...).slice enriched clamp missing");

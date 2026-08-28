@@ -82,38 +82,48 @@ product_highlights 的唯一工作是讓消費者 5 秒掃完就知道：「這�
 語氣以資訊優先，可以自然、有一點潮巢感，但不要每個 bullet 都硬講笑話。`;
 
 const CHAOCHAO_METAFIELD_QUALITY = `${CHAOCHAO_METAFIELD_EDITORIAL_CORE}\n\n${CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY}\n\n${CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY}`;
-const CHAOCHAO_FAQ_QUALITY = `【COPY C4B 潮巢導購版 FAQ Quality｜只適用 tone === "潮巢導購版" 的 generated_faq_html】
-這段只改善潮巢導購版 generated_faq_html 的問題品質、回答品質與 Full Generate / single-field regen parity。不得改寫 shared FAQ engine，也不得把這些要求套到其他 tone 或其他 regen field。
+const CHAOCHAO_FAQ_QUALITY = `【COPY C5D 潮巢導購版 FAQ Question Discovery + Conversational Answer Writer｜只適用 tone === "潮巢導購版" 的 generated_faq_html】
+這段是潮巢導購版最新 FAQ authority。FAQ 的工作不是重講 Description、把 Highlights 改成問句，或套所有商品都能問的模板；先替消費者找到「原本可能沒想到，但真的會影響購買、選款或使用」的問題，再回答。
+
+【先讀 evidence，再找問題｜只思考、不輸出】
+先讀完目前可靠 evidence/context：raw title、variants / variantSummary、spec、Vision / image description、cached Web Search、notes、IP、character、product type、sale status、secondhand context。
+從 evidence 找出 3–5 個最值得問的購前問題。優先考慮：
+- 功能與第一眼外觀之間的落差，例如看起來只是吊飾但其實有真正功能。
+- 重要使用條件或額外需求，例如是否需要記憶卡、配件、電源或其他前置條件。
+- 尺寸／容量在真實情境中的感受，只有 evidence 能支持時才問。
+- variant／款式選擇，例如能不能指定、不同版本差在哪。
+- 使用方式與限制，例如能不能離線、能不能單獨拆開，前提是 evidence 能回答。
+- 收藏、攜帶、擺放上的實際差異，例如比較適合掛包還是桌面收藏，前提是 evidence 足夠。
+
+【Question value test】
+每題先在內部檢查兩件事：
+1. 如果沒看 FAQ，一般人是不是本來就知道答案？如果是，這題通常太普通。
+2. 這題的答案會不會真的改變「要不要買、怎麼用、選哪款、怎麼擺、怎麼帶、需不需要額外配件」？會的優先。
+因此不要把「有什麼特色、適合誰、值得買嗎、值得收藏嗎、適合送禮嗎」當預設題目；只有當問題被本商品 evidence 具體化，而且答案真的有決策價值時才使用。
+
+【Question mix】
+輸出 3–5 題，題目用途盡量不同。可依 evidence 組合一題功能真相、一題使用條件、一題款式選擇、一題尺寸／使用情境、一題收藏／攜帶；沒有 evidence 的類型就跳過，不為了湊 mix 亂問。
+
+【Pingu 問題方向示例｜只有 evidence 支持才可使用】
+若 evidence 真實支持迷你 CCD 相機吊飾、可拍照、可錄影、需要記憶卡、盲盒、掛鏈，合理方向包含：「它是只有相機造型，還是真的能拍？」「沒裝記憶卡可以直接拍嗎？」「盲盒款式可以指定嗎？」以及 evidence 足夠時才問「平常比較適合當吊飾，還是真的能拿來記錄日常？」。
+
+【Miffy 問題方向示例｜只有 evidence 支持才可使用】
+若 evidence 真實支持矽膠臺燈、約 30cm、USB、定時、70 週年、蘋果樹款、典藏版，合理方向包含：「30cm 放床頭會不會太大？」以及只有 evidence 能回答供電方式時才問「USB 是充電後可以離線用，還是需要插著？」。若只知道『有定時』但不知道操作方式，就不要問「定時功能怎麼用？」後再假裝知道。
+
+【Answer writer】
+你是潮巢商品小編，像朋友在回答一個真的購前疑問。先直接回答，不先鋪情境、不先稱讚商品、不寫成客服作文。
+- 回答預設 1–2 句；真的需要補必要條件時才到 3 句。
+- 台灣繁中、自然、口語、友善，有一點潮巢感即可；資訊優先，不需要每題硬講笑話。
+- 每題 standalone，單獨拿出來也能理解；不要用「如上所述」「如前面提到」「如圖所示」等依賴上下文指代。
+- FAQ 可以和其他欄位使用同一 evidence，但不要複製 Description，也不要把亮點換成問句後重講一次。
+
+【Evidence safety】
+問題本身也必須能由 evidence 回答。精確尺寸、材質、容量、功能、款式、配件、授權、防水、耐熱、清洗、保固、產地與其他特殊 claim 都必須有現有 evidence/context；不知道就不要問，也不要為了看起來專業自行補答案。
 
 【輸出 contract】
 - 維持 3–5 題。
 - 每題 exact structure：<h3><strong>問題</strong></h3><p>回答</p>。
-- 每個回答約 2–3 句，直接回答問題；每題 standalone，單獨拿出來也能理解。
-- 禁止使用「如上所述」「如前面提到」「如圖所示」「前面有提到」「可以參考上方資訊」等依賴上下文的指代。
-- 使用自然台灣繁中與潮巢口吻，可以有一點生活感、小編觀察或自然角色梗，但資訊優先，不要寫成客服罐頭。
-- FAQ 可以與 Description 使用同一組 evidence，但不要逐句複製或只把 Description 原句改成問答。
-
-【Product-specific questions｜先綁定這件商品】
-- 生成問題前先從現有 evidence/context 找真正屬於本商品、可核實的資訊；優先商品類型、特殊造型、系列／款式、容量、尺寸、材質、結構、配件、功能、使用方式、收藏差異、角色設計、多款式差異與已知真實購買疑慮。
-- 問題應盡量讓人一看就知道是在問「這一件商品」，不是換成另一件完全不同商品也能原封不動成立。
-- evidence 明確有 900ml 才能問 900ml 容量的使用情境；明確是多款式角色吊飾，才可問款式差異、角色選擇、尺寸、掛法或收藏搭配中 evidence 能支持的角度。
-- 不得為了讓 FAQ 看起來專業而自行補材質、尺寸、功能、防水、耐熱、清洗方式、授權、產地、款式數、包裝內容、保固或任何未知資訊。
-
-【Low-value generic question guard】
-- 不要優先產出「這款商品值得購買嗎？」「這款商品有什麼特色？」「為什麼推薦這款商品？」「適合送禮嗎？」「值得收藏嗎？」「適合誰購買？」「品質好嗎？」這類所有商品都能套的公版問題。
-- 這些語意不是絕對 forbidden phrase；只有當問題被本商品已知 evidence 具體化、能提供實際決策資訊時才可使用。
-- 自檢：若把商品換成另一件完全不同商品，這題仍可原封不動成立，通常就太 generic；優先改成有商品-specific context 的問題。
-
-【Decision-support mix】
-- 3–5 題不要只是把產品介紹重講一次；在 evidence 能支持的前提下，題目用途要有差異。
-- 至少盡量包含一題真正的購前疑慮 angle，例如尺寸／容量是否符合需求、款式怎麼選、使用限制、配件／結構、實際使用情境或收藏差異。
-- 至少盡量包含一題 decision-support angle，例如哪種使用者最有感、不同款式怎麼選、某個具體 feature 對使用有什麼差、怎麼收藏／搭配，或放在哪種日常情境最合理。
-- 如果 evidence 不支持某類問題，就換成另一個有 evidence 的實用角度；不要硬湊防水、清洗、耐熱、保固等不存在資訊。
-
-【Evidence safety】
-- 所有精確數字、尺寸、材質、容量、功能、款式數、授權、配件、包裝、耐熱、防水、清洗、保固與特殊 claim 都必須來自現有 evidence/context；不確定就不要寫成肯定答案。
-- evidence 少時可以降低問題的具體程度，但不能幻想新規格來湊 3–5 題；優先使用已知商品類型、造型、系列、角色、使用方式或其他可靠 context 做有決策價值的問題。
-- 回答只能使用問題本身與 evidence 支持的資訊做合理解釋；若某個 consumer meaning 無法由已知 fact 合理推出，就只寫已知 fact，不要硬加效果。`;
+- 不 redesign renderer，不改 HTML contract。`;
 
 const CHAOCHAO_BOSS_LAYOUT = `【COPY C5B 潮巢導購版 Description Writer + 潮巢導購版 Boss description hierarchy｜只適用 tone === "潮巢導購版"，且優先於前文任何舊潮巢 description layout】
 這段是潮巢 Description 最新 Writer authority。目標不是把規則越疊越多，而是先理解商品、挑出最值得講的資訊，再用最少的字寫成真的潮巢小編介紹。

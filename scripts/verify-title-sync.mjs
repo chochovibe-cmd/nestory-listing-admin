@@ -52,7 +52,7 @@ await check("titleGeneratorBase: P2-83 60/80 dual cap, brand × IP, ladder, repl
   assert.doesNotMatch(src, /const TITLE_MAX_LENGTH = 80/);
 });
 
-await check("titleGenerator wrapper + C1 titleFinalizer composition", () => {
+await check("titleGenerator wrapper + C5A titleFinalizer composition", () => {
   const wrapper = read("src/lib/contentGenerator/titleGenerator.ts");
   const finalizer = read("src/lib/contentGenerator/titleFinalizer.ts");
 
@@ -75,15 +75,37 @@ await check("titleGenerator wrapper + C1 titleFinalizer composition", () => {
 
   assert.match(finalizer, /split\(\/\\s\*\[\|｜\]\\s\*\/u\)/, "titleFinalizer separator parser changed");
   assert.match(finalizer, /join\(" \| "\)/, "titleFinalizer separator output is not ASCII ' | '");
+  assert.doesNotMatch(
+    finalizer,
+    /segments\[1\]\s*=\s*\[secondSegment,\s*productType\]/,
+    "titleFinalizer still appends detected type to segment 2"
+  );
   assert.match(
     finalizer,
-    /segments\[1\] = \[secondSegment, productType\]\.filter\(Boolean\)\.join\(" "\)/,
-    "titleFinalizer no longer appends detected type to segment 2"
+    /return normalizeTitleSeparators\(value\);/,
+    "legacy append helper no longer preserves the C5A no-append behavior"
   );
   assert.doesNotMatch(finalizer, /segments\[0\]\s*=/, "titleFinalizer rewrites segment 1");
   assert.doesNotMatch(finalizer, /segments\[2\]\s*=/, "titleFinalizer rewrites segment 3");
   assert.match(finalizer, /normalizeEnrichedTitleContract/, "shared enriched-title finalization entrypoint missing");
   assert.match(finalizer, /scrubEnrichedTitleSegment3/, "Production segment-3 scrub delegation missing");
+
+  const route = read("src/app/api/generate/route.ts");
+  const finalizationCalls = route.match(/normalizeEnrichedTitleContract\(/g) ?? [];
+  assert.ok(
+    finalizationCalls.length >= 2,
+    "Full Generate + single-field title regen no longer share normalizeEnrichedTitleContract"
+  );
+  assert.match(
+    route,
+    /historyContent = finalizeCustomerText\(full\);\s*value = clampOfficialTitle\(historyContent\);/s,
+    "single-field title regen lost the official 60-char clamp"
+  );
+  assert.match(
+    route,
+    /const officialTitleZh = clampOfficialTitle\(enrichedTitleFull\);/,
+    "Full Generate lost the official 60-char clamp"
+  );
 });
 
 await check("mirror: character list formatting (1/2/3+)", () => {
@@ -125,7 +147,7 @@ await check("systemPromptBase: P2-83 unique length table, brand + ・ rule", () 
   assert.doesNotMatch(src, /例如「包包吊飾」「桌面擺件」「送禮首選」/);
 });
 
-await check("systemPrompt wrapper: Production delegation + Owner title suffix composition", () => {
+await check("systemPrompt wrapper: Production delegation + C5A Chaochao title authority", () => {
   const wrapper = read("src/lib/providers/systemPrompt.ts");
 
   assert.ok(
@@ -149,11 +171,21 @@ await check("systemPrompt wrapper: Production delegation + Owner title suffix co
     "enriched_title single-field regen lost OWNER_TITLE_MINIMAL_FIX"
   );
   assert.ok(
+    wrapper.includes('if (field === "enriched_title" && tone === "潮巢導購版") extras.push(CHAOCHAO_TITLE_QUALITY);'),
+    "Chaochao enriched_title single-field regen lost C5A title authority"
+  );
+  assert.ok(
     wrapper.includes("buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo)"),
     "single-field regen no longer delegates to Production base prompt"
   );
-  assert.match(wrapper, /COPY C1 Owner 標題最小修正/, "Owner title minimal-fix contract missing");
-  assert.match(wrapper, /detected_product_type/, "Owner segment-2 detected product type rule missing");
+  assert.match(wrapper, /COPY C1 Owner 標題最小修正/, "shared Owner title minimal-fix contract missing");
+  assert.match(wrapper, /COPY C5A 潮巢導購版 Title Writer/, "C5A Chaochao Title Writer contract missing");
+  assert.match(
+    wrapper,
+    /detected_product_type 只當 fallback \/ semantic reference，不是 mandatory exact substring/,
+    "Chaochao detected_product_type fallback/reference authority missing"
+  );
+  assert.match(wrapper, /第三段：只放第二段還沒有的新資訊/, "Chaochao third-segment new-information rule missing");
   assert.match(wrapper, /ASCII pipe/, "Owner ASCII separator rule missing");
   assert.doesNotMatch(
     wrapper,

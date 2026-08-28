@@ -1,10 +1,10 @@
-import { CopyLength, CopyRegenField, CopyTone } from "./copy";
+import { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
 import {
   EMOJI_TONES,
   buildCopySystemPrompt as buildProductionCopySystemPrompt,
   buildCopyUserMessage,
   buildFieldRegenSystemPrompt as buildProductionFieldRegenSystemPrompt,
-  buildFieldRegenUserMessage,
+  buildFieldRegenUserMessage as buildProductionFieldRegenUserMessage,
   buildKnownIpBlock,
   resolveCopyTone,
 } from "./systemPromptBase";
@@ -15,7 +15,6 @@ export type { SecondhandInfo } from "./systemPromptBase";
 export {
   EMOJI_TONES,
   buildCopyUserMessage,
-  buildFieldRegenUserMessage,
   buildKnownIpBlock,
   resolveCopyTone,
 };
@@ -82,6 +81,34 @@ product_highlights 的唯一工作是讓消費者 5 秒掃完就知道：「這�
 語氣以資訊優先，可以自然、有一點潮巢感，但不要每個 bullet 都硬講笑話。`;
 
 const CHAOCHAO_METAFIELD_QUALITY = `${CHAOCHAO_METAFIELD_EDITORIAL_CORE}\n\n${CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY}\n\n${CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY}`;
+
+const CHAOCHAO_SEO_EDITORIAL_CORE = `【COPY C5E 潮巢導購版 SEO Editorial Core｜只適用 tone === "潮巢導購版" 的 seo_title / meta_description】
+這段是潮巢導購版最新 SEO authority，優先於前文 shared SEO 對本 tone 的舊寫法；shared Production 的 factual safety、長度 authority 與 backend SEO engine 仍照舊。
+
+寫 SEO 前先讀目前可靠 evidence/context：raw title、variants / variantSummary、spec、Vision / image description、cached Web Search、notes、IP、character、product type、sale status、secondhand context。
+先判斷搜尋者最需要先看懂的商品身份，再選真正有搜尋／購買價值的差異。高價值通常是特殊系列／周年／聯名、真正重要功能、重要使用條件、有辨識度的款式，以及會改變使用方式的尺寸／容量／結構；一般性的正版、可愛、精緻等資訊只有在沒有更有辨識度的 evidence 時才往前。
+
+SEO 的潮巢感是自然、像人寫、台灣消費者一眼看得懂；資訊優先，不需要笑點、網路梗或社群式情緒句。evidence 少就保守縮短，不為了塞字補不存在的系列、功能、材質、尺寸、款式或關鍵字。`;
+
+const CHAOCHAO_SEO_TITLE_QUALITY = `【COPY C5E 潮巢導購版 SEO Title Writer｜seo_title】
+SEO Title 的工作是讓搜尋者一眼知道「誰／什麼商品／哪個差異」。先選：
+1. 搜尋者最可能辨認的品牌／IP／角色名稱；
+2. 最精準、自然的商品類型；
+3. 一個最高價值 differentiator。
+
+自然可搜尋名稱優先，不把所有音譯變體與商品同義詞一起塞進標題。若同一概念已有清楚寫法，就用最自然、最有辨識度的一種；維持既有 seo_title 長度 authority，後端品牌尾綴與 SEO engine 不 redesign。
+
+若 Miffy evidence 支持 70 週年蘋果樹款矽膠臺燈，方向可像「馬克圖布 Miffy 米菲矽膠臺燈｜70週年蘋果樹典藏款」；若 Pingu evidence 支持迷你 CCD 相機吊飾且可拍照錄影，方向可像「MARtube Pingu 迷你CCD相機吊飾｜可拍照錄影盲盒」。示例只在 evidence 支持時成立，不要求逐字照寫。`;
+
+const CHAOCHAO_META_DESCRIPTION_QUALITY = `【COPY C5E 潮巢導購版 Meta Description Writer｜meta_description】
+Meta Description 不是 Description 縮短版。先選 2–4 個最有搜尋／購買價值的 facts，再自然寫成一小段：先讓人知道這是什麼，再帶真正差異與重要功能／使用條件。
+
+文字要短、自然、資訊密度高；像搜尋結果摘要，不像 Highlights 用逗號黏起來，也不像潮巢社群貼文。資料很多時只留最影響理解與點擊的 2–4 個 facts；資料少就更短。維持既有 meta_description 長度 authority，不以塞滿字數為目標。
+
+Miffy 若 evidence 支持 70 週年蘋果樹設計、矽膠臺燈、USB、定時，可自然交代商品身份＋周年款差異＋重要功能；Pingu 若 evidence 支持迷你 CCD 相機吊飾、可拍照錄影、需要記憶卡、盲盒，可優先把拍照錄影與記憶卡使用條件講清楚。`;
+
+const CHAOCHAO_SEO_QUALITY = `${CHAOCHAO_SEO_EDITORIAL_CORE}\n\n${CHAOCHAO_SEO_TITLE_QUALITY}\n\n${CHAOCHAO_META_DESCRIPTION_QUALITY}`;
+
 const CHAOCHAO_FAQ_QUALITY = `【COPY C5D 潮巢導購版 FAQ Question Discovery + Conversational Answer Writer｜只適用 tone === "潮巢導購版" 的 generated_faq_html】
 這段是潮巢導購版最新 FAQ authority。FAQ 的工作不是重講 Description、把 Highlights 改成問句，或套所有商品都能問的模板；先替消費者找到「原本可能沒想到，但真的會影響購買、選款或使用」的問題，再回答。
 
@@ -212,6 +239,7 @@ function sharedRecoverySuffix(tone: CopyTone): string {
     tone === "潮巢導購版" ? CHAOCHAO_TITLE_QUALITY : "",
     tone === "潮巢導購版" ? CHAOCHAO_METAFIELD_QUALITY : "",
     tone === "潮巢導購版" ? CHAOCHAO_FAQ_QUALITY : "",
+    tone === "潮巢導購版" ? CHAOCHAO_SEO_QUALITY : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -242,5 +270,31 @@ export function buildFieldRegenSystemPrompt(
   if (field === "product_highlights" && tone === "潮巢導購版") {
     extras.push(CHAOCHAO_METAFIELD_EDITORIAL_CORE, CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY);
   }
+  if (field === "seo_title" && tone === "潮巢導購版") {
+    extras.push(CHAOCHAO_SEO_EDITORIAL_CORE, CHAOCHAO_SEO_TITLE_QUALITY);
+  }
+  if (field === "meta_description" && tone === "潮巢導購版") {
+    extras.push(CHAOCHAO_SEO_EDITORIAL_CORE, CHAOCHAO_META_DESCRIPTION_QUALITY);
+  }
   return `${buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo)}\n\n${extras.join("\n\n")}`;
+}
+
+export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
+  const base = buildProductionFieldRegenUserMessage(input);
+  const field = input.regenerateField;
+  const isChaochaoSeoField =
+    input.tone === "潮巢導購版" && (field === "seo_title" || field === "meta_description");
+  if (!isChaochaoSeoField) return base;
+
+  const evidence: string[] = [];
+  if (input.variantSummary?.trim()) evidence.push(`款式／Variant：${input.variantSummary.trim()}`);
+  if (input.note?.trim()) evidence.push(`補充備註：${input.note.trim()}`);
+  if (input.webSearchSummary?.trim()) {
+    evidence.push(
+      `cached Web Search（內部參考，沿用 shared factual safety；不要輸出來源標記或 URL）：\n${input.webSearchSummary.trim()}`,
+    );
+  }
+  if (evidence.length === 0) return base;
+
+  return `${base}\n\n【COPY C5E SEO field-regen evidence parity】\n${evidence.join("\n")}\n以上補充只作為本次 SEO 欄位的 evidence；仍只輸出指定欄位。`;
 }

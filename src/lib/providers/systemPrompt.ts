@@ -48,6 +48,10 @@ const CHAOCHAO_TITLE_QUALITY = `【COPY C5A 潮巢導購版 Title Writer｜只�
 【Evidence safety】
 品牌、IP、角色、聯名、系列、款式、尺寸、容量、材質、功能、配件、授權都必須有現有 evidence/context；不確定就不要補。Backend 不負責 semantic rewrite 或跨段 NLP dedupe；Writer 自己完成第二段精準商品類型與第三段新 differentiator 的選材。`;
 
+const CHAOCHAO_EVIDENCE_RANKING_EXAMPLE = `【Pingu／Miffy evidence ranking 範例｜只有 evidence 支持才可使用】
+Pingu 若真實支持迷你 CCD 相機吊飾、可拍照、可錄影、需要記憶卡、盲盒、掛鏈，拍照／錄影與記憶卡等實際使用條件應優先於正版、印刷或扣環等普通資訊；選品理由可著重它第一眼像有趣周邊、第二眼才發現真的能玩。
+Miffy 若真實支持 70 週年蘋果樹款、典藏版、矽膠臺燈、USB、定時與尺寸，先讓人看到有辨識度的紀念設計與真正能用的功能，再依購買價值補其他可靠資訊；不要退化成可愛造型／高品質材質／實用功能等空泛描述。`;
+
 const CHAOCHAO_METAFIELD_EDITORIAL_CORE = `【COPY C5C 潮巢導購版 Editorial Core｜只適用 tone === "潮巢導購版" 的 why_we_chose_it / product_highlights】
 這段是 C5C 最新 editorial authority。寫任何一欄前，先讀完目前可靠 evidence/context：raw title、variants / variantSummary、spec、Vision / image description、cached Web Search、notes、IP、character、product type、sale status、secondhand context。
 
@@ -55,7 +59,9 @@ const CHAOCHAO_METAFIELD_EDITORIAL_CORE = `【COPY C5C 潮巢導購版 Editorial
 排序時優先判斷：這個 fact 會不會改變消費者對商品的理解？是不是這件商品很特別的地方？會不會影響要不要買、怎麼使用／收藏／選款？是不是第一眼容易忽略，但知道後會覺得「原來它還有這個」？
 真正特殊功能、重要使用限制、有辨識度的系列／款式、影響實際使用的尺寸／容量／結構、特殊配件，以及角色設計和商品功能真正結合的點，通常應高於「正版授權、印刷細緻、可愛造型、金屬扣環」這類普通 fact；但不要把這份例子當固定 checklist，一切以本商品 evidence 的購買價值判斷。
 
-evidence 少就縮短；只有 3 個可靠 facts 就用 3 個，不湊 5 個。精確尺寸、材質、容量、功能、款式、配件、授權、防水、耐熱、保固與其他特殊 claim 都必須有現有 evidence/context；未知就不要補。`;
+evidence 少就縮短；只有 3 個可靠 facts 就用 3 個，不湊 5 個。精確尺寸、材質、容量、功能、款式、配件、授權、防水、耐熱、保固與其他特殊 claim 都必須有現有 evidence/context；未知就不要補。
+
+${CHAOCHAO_EVIDENCE_RANKING_EXAMPLE}`;
 
 const CHAOCHAO_WHY_WE_CHOSE_IT_QUALITY = `【COPY C5C 潮巢導購版 Why Writer｜只適用 tone === "潮巢導購版" 的 why_we_chose_it】
 why_we_chose_it 的唯一工作是回答：「為什麼潮巢會想把這件商品放進店裡？」
@@ -66,8 +72,7 @@ why_we_chose_it 的唯一工作是回答：「為什麼潮巢會想把這件商�
 輸出目標 1–2 句；一句已經把選品理由講清楚就停，不要因為欄位存在硬寫兩句。
 
 同一個 evidence 可以和 Highlights 共用，但角色不同：Highlights 說「有哪些重要事情」，Why 要說「其中哪一件事情讓潮巢覺得它值得選」。
-如果 Pingu evidence 真實支持「外觀看起來像相機吊飾，但真的能拍照／錄影」，合理的選品觀點是：我們在意的是它第一眼像有趣周邊、第二眼才發現真的能玩，而不是只稱讚 Pingu 可愛。
-如果 Miffy evidence 真實支持 70 週年、蘋果樹場景與可日常使用的燈具功能，合理的選品觀點是：它把有辨識度的紀念設計和真正能用的周邊放在一起，而不是只重述矽膠、USB、定時等規格清單。`;
+Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；本欄只把最高排序的 fact 轉成選品觀點，不重複列舉。`;
 
 const CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY = `【COPY C5C 潮巢導購版 Highlights Writer｜只適用 tone === "潮巢導購版" 的 product_highlights】
 product_highlights 的唯一工作是讓消費者 5 秒掃完就知道：「這件最值得注意的幾件事。」它不是完整規格表，也不是漂亮形容詞列表，更不是 Description bullets 複製版。
@@ -75,8 +80,7 @@ product_highlights 的唯一工作是讓消費者 5 秒掃完就知道：「這�
 從已排序的 evidence 選 3–5 個最高 purchase / decision value 的 facts，重要 fact 一定先寫；每點短、可掃讀、資訊不同。evidence 只有 3 個可靠 facts 就寫 3 點，不要用空泛形容詞湊滿。
 
 高順位通常是：真正特殊功能、重要使用限制、有辨識度的系列／款式、影響使用的尺寸／容量／結構、特殊配件、角色設計與功能真正結合的點。普通資訊不是永遠不能寫，但不能在更重要 facts 存在時把它們擠掉。
-如果 Pingu evidence 支持可拍照、可錄影、需要記憶卡、迷你 CCD、盲盒、掛鏈，拍照／錄影必須非常前面；需要記憶卡若是實際使用條件，也應優先於正版、印刷或扣環等普通資訊。
-如果 Miffy evidence 支持 70 週年蘋果樹款、典藏版、定時、USB、矽膠與尺寸，先讓人看到真正有差異的系列／設計／功能，再依購買價值補其他可靠資訊；不要退化成「可愛米菲造型／高品質材質／實用功能」。
+Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；本欄依同一原則把最高價值 facts 放在前面，不重複列舉。
 
 語氣以資訊優先，可以自然、有一點潮巢感，但不要每個 bullet 都硬講笑話。`;
 
@@ -98,14 +102,14 @@ SEO Title 的工作是讓搜尋者一眼知道「誰／什麼商品／哪個差�
 
 自然可搜尋名稱優先，不把所有音譯變體與商品同義詞一起塞進標題。若同一概念已有清楚寫法，就用最自然、最有辨識度的一種；維持既有 seo_title 長度 authority，後端品牌尾綴與 SEO engine 不 redesign。
 
-若 Miffy evidence 支持 70 週年蘋果樹款矽膠臺燈，方向可像「馬克圖布 Miffy 米菲矽膠臺燈｜70週年蘋果樹典藏款」；若 Pingu evidence 支持迷你 CCD 相機吊飾且可拍照錄影，方向可像「MARtube Pingu 迷你CCD相機吊飾｜可拍照錄影盲盒」。示例只在 evidence 支持時成立，不要求逐字照寫。`;
+Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；SEO Title 同樣只選最高價值、且 evidence 支持的一個 differentiator，不重複列舉。`;
 
 const CHAOCHAO_META_DESCRIPTION_QUALITY = `【COPY C5E 潮巢導購版 Meta Description Writer｜meta_description】
 Meta Description 不是 Description 縮短版。先選 2–4 個最有搜尋／購買價值的 facts，再自然寫成一小段：先讓人知道這是什麼，再帶真正差異與重要功能／使用條件。
 
 文字要短、自然、資訊密度高；像搜尋結果摘要，不像 Highlights 用逗號黏起來，也不像潮巢社群貼文。資料很多時只留最影響理解與點擊的 2–4 個 facts；資料少就更短。維持既有 meta_description 長度 authority，不以塞滿字數為目標。
 
-Miffy 若 evidence 支持 70 週年蘋果樹設計、矽膠臺燈、USB、定時，可自然交代商品身份＋周年款差異＋重要功能；Pingu 若 evidence 支持迷你 CCD 相機吊飾、可拍照錄影、需要記憶卡、盲盒，可優先把拍照錄影與記憶卡使用條件講清楚。`;
+Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；Meta Description 同樣先交代商品身份，再帶最高價值差異與重要使用條件，不重複列舉。`;
 
 const CHAOCHAO_SEO_QUALITY = `${CHAOCHAO_SEO_EDITORIAL_CORE}\n\n${CHAOCHAO_SEO_TITLE_QUALITY}\n\n${CHAOCHAO_META_DESCRIPTION_QUALITY}`;
 
@@ -131,11 +135,7 @@ const CHAOCHAO_FAQ_QUALITY = `【COPY C5D 潮巢導購版 FAQ Question Discovery
 【Question mix】
 輸出 3–5 題，題目用途盡量不同。可依 evidence 組合一題功能真相、一題使用條件、一題款式選擇、一題尺寸／使用情境、一題收藏／攜帶；沒有 evidence 的類型就跳過，不為了湊 mix 亂問。
 
-【Pingu 問題方向示例｜只有 evidence 支持才可使用】
-若 evidence 真實支持迷你 CCD 相機吊飾、可拍照、可錄影、需要記憶卡、盲盒、掛鏈，合理方向包含：「它是只有相機造型，還是真的能拍？」「沒裝記憶卡可以直接拍嗎？」「盲盒款式可以指定嗎？」以及 evidence 足夠時才問「平常比較適合當吊飾，還是真的能拿來記錄日常？」。
-
-【Miffy 問題方向示例｜只有 evidence 支持才可使用】
-若 evidence 真實支持矽膠臺燈、約 30cm、USB、定時、70 週年、蘋果樹款、典藏版，合理方向包含：「30cm 放床頭會不會太大？」以及只有 evidence 能回答供電方式時才問「USB 是充電後可以離線用，還是需要插著？」。若只知道『有定時』但不知道操作方式，就不要問「定時功能怎麼用？」後再假裝知道。
+Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；FAQ 只依同一原則把可由 evidence 直接回答、真正影響購買或使用的問題排在前面，不重複列舉。
 
 【Answer writer】
 你是潮巢商品小編，像朋友在回答一個真的購前疑問。先直接回答，不先鋪情境、不先稱讚商品、不寫成客服作文。
@@ -221,15 +221,8 @@ generated_description_html 只輸出純文字，不輸出 HTML；第一行固定
 
 【潮巢導購版輸出前自檢】
 1. 第一行是不是「商品介紹」？
-2. 最前面是否已經放了這件商品最值得知道的 1–2 個 facts？
-3. 是否先選 3–5 個高價值 evidence，再按購買價值排序，而不是照 source 順序抄？
-4. 「收藏亮點」下方是不是直接使用「・」bullets，而且每點短、資訊不同？
-5. bullets 後是否直接進「導購小標：」，中間沒有正文？
-6. 每一段是否都增加新資訊，能用一句講完的地方有沒有被寫成三句？
-7. 導購正文是否增加一個新的生活／使用／收藏角度，而不是總結全文？
-8. 語氣是否像真的潮巢小編，幽默是否來自商品 fact 而不是硬裝年輕？
-9. evidence 少時是否主動縮短，而不是用空泛形容詞補篇幅？
-10. 所有商品 facts、精確數字與功能 claim 是否都有 evidence，且三段 layout contract 完整保留？`;
+2. bullets 後是否直接進「導購小標：」，中間沒有正文？
+3. 所有商品 facts、精確數字與功能 claim 是否都有 evidence？`;
 
 function sharedRecoverySuffix(tone: CopyTone): string {
   return [

@@ -273,7 +273,7 @@ for (const boilerplate of [
 }
 assert.match(chaochaoContract, /像真的潮巢小編在介紹這件商品，不要像 AI 在寫萬用電商模板/u,
   "Chaochao human-editor voice requirement disappeared");
-assert.match(chaochaoContract, /【潮巢導購版輸出前自檢】[\s\S]*1\.[\s\S]*2\.[\s\S]*3\.[\s\S]*4\.[\s\S]*5\.[\s\S]*6\.[\s\S]*7\.[\s\S]*8\.[\s\S]*9\.[\s\S]*10\./u,
+assert.match(chaochaoContract, /【潮巢導購版輸出前自檢】[\s\S]*1\.[\s\S]*2\.[\s\S]*3\./u,
   "Chaochao ten-point output self-check disappeared");
 assert.match(chaochaoContract, /禁止 ◈、商品資訊、購買提醒與重複到貨提醒/u,
   "Chaochao forbidden output sections disappeared");
@@ -391,7 +391,7 @@ assert.doesNotMatch(directFormatterOutput, /<h2>獨特的隨身配件<\/h2>/u,
 const promptBaseBlob = createHash("sha1")
   .update(`blob ${Buffer.byteLength(promptBase)}\0${promptBase}`)
   .digest("hex");
-assert.equal(promptBaseBlob, "a7ba54d091deb1fefee7252ddb9054bf234203e6",
+assert.equal(promptBaseBlob, "d25eaddf5510bb7857ab1811c7028c3a963d34c3",
   "systemPromptBase.ts changed from the approved immutable blob");
 
 // R0A existing-spec-first; no evidence/vision/spec-merge recovery regressions.

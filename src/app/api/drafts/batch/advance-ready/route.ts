@@ -2,9 +2,11 @@
  * R3: station② all-keep → pipeline_stage=ready only (no sharp/finalize/Shopify).
  */
 import { NextRequest } from "next/server";
-import { canOperate } from "@/lib/auth/roles";
-import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/domain";
+import {
+  loadAuthorizedDraftIds,
+  resolveRequestPrincipal
+} from "@/lib/api/requestPrincipal";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -18,22 +20,23 @@ export async function POST(request: NextRequest) {
 
   const uniqueIds = [...new Set(draftIds as string[])];
 
-  const authSupabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await authSupabase.auth.getUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await authSupabase.from("profiles").select("role").eq("id", user.id).single();
-  if (!canOperate(profile?.role as UserRole | undefined)) {
-    return Response.json({ error: "Operator role is required" }, { status: 403 });
+  const principalResult = await resolveRequestPrincipal(request);
+  if (!principalResult.ok) return principalResult.response;
+  if (principalResult.principal.kind !== "session") {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const authorizedIdsResult = await loadAuthorizedDraftIds(principalResult.principal, uniqueIds);
+  if (!authorizedIdsResult.ok) return authorizedIdsResult.response;
+  const authorizedDraftIds = authorizedIdsResult.ids;
+
   const serviceSupabase = createServiceSupabaseClient();
-  const { data: rows, error: loadError } = await serviceSupabase
-    .from("product_drafts")
-    .select("id, title_zh, taobao_title, original_title, status, pipeline_stage")
-    .in("id", uniqueIds);
+  const { data: rows, error: loadError } = authorizedDraftIds.length
+    ? await serviceSupabase
+        .from("product_drafts")
+        .select("id, title_zh, taobao_title, original_title, status, pipeline_stage")
+        .in("id", authorizedDraftIds)
+    : { data: [], error: null };
 
   if (loadError) {
     return Response.json({ error: loadError.message }, { status: 500 });

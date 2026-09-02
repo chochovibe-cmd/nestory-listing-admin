@@ -10,6 +10,7 @@ import {
   storagePathFromProductImagesPublicUrl,
   type ProcessedImageStorage
 } from "@/lib/images/imagePipeline";
+import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import { SHARP_BATCH_MAX_IMAGES } from "@/lib/images/sharpProcess";
 import {
   isFinalizeUploadImageType,
@@ -84,26 +85,9 @@ export type RunFinalizeForDraftResult =
     };
 
 async function fetchImageBuffer(url: string): Promise<Buffer> {
-  const response = await fetch(url, {
-    method: "GET",
-    redirect: "follow",
-    headers: { Accept: "image/*,*/*" }
-  });
-  if (!response.ok) {
-    throw new Error(`fetch source failed: HTTP ${response.status}`);
-  }
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType && !contentType.startsWith("image/") && !contentType.includes("octet-stream")) {
-    throw new Error(`unexpected content-type: ${contentType}`);
-  }
-  const ab = await response.arrayBuffer();
-  if (!ab.byteLength) {
-    throw new Error("empty image body");
-  }
-  if (ab.byteLength > 25 * 1024 * 1024) {
-    throw new Error(`image too large: ${ab.byteLength} bytes`);
-  }
-  return Buffer.from(ab);
+  const fetched = await fetchServerImage(url, { maxBytes: 25 * 1024 * 1024 });
+  if (!fetched.ok) throw new Error(fetched.message);
+  return fetched.bytes;
 }
 
 function guessMimeAndFilename(

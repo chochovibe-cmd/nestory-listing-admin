@@ -4,7 +4,18 @@
 > A documented check is not a pass until it has actually been executed.
 > For day-to-day truth read `AI_START_HERE.md` and `docs/CURRENT_STATUS.md` first.
 
-Updated: 2026-08-20
+Updated: 2026-09-02 (release truth reconcile + local security hardening)
+
+## 0. Current source and runtime truth
+
+- Known Vercel production baseline: `6ff020dd1d68152b6688c9695f8f96188b7862be`.
+- PR #8 merged into the default branch on 2026-08-25 as `21e9d1c90697797aaa6d982e9454ccd4a6955fd8`.
+- Current source HEAD: `6960a0cd257590abb6c1ccb7c97a2c3e772714d3`.
+- This document refresh did **not** inspect Vercel. Whether `6960a0c` is deployed to Vercel Production is therefore **unverified external state**, not a pass or a failure. Verify the deployment commit SHA in Vercel before releasing.
+- `20260822223100_variant_split_override_semantics.sql` is present in the tracked source queue, but its production-apply status is also **unverified external state**. Check the Supabase migration ledger; do not replay historical migrations.
+- Local working tree also contains P0 server-side image-fetch SSRF hardening, P1 request authorization hardening for service-role routes, and new migration `20260902090000_guard_current_image_batch_pointer.sql`. All are **uncommitted and not deployed**; source verification is recorded in `docs/audits/SECURITY-HARDENING-2026-09-02.md`.
+
+Historical references below that call PR #8 "Draft", "unmerged" or "not production" are superseded by this section.
 
 ## 1. Release policy
 
@@ -62,7 +73,7 @@ Before a production deploy:
 - Batch publish preserves the same publisher-role / ACTIVE-confirmation rule.
 - Shopify mock mode must never create a real product.
 - Duplicate variant combinations are rejected before publish.
-- A partial Shopify create failure must not be blindly retried into duplicate product creation; see `docs/audits/RELEASE-HEALTH-AUDIT-2026-08-20.md`.
+- Partial-create retry source guard: `publishDraftSafe.ts` stages new products as `DRAFT`, persists the product ID before follow-up sync, and reconciles a failed draft with a real product ID before another create. It blocks unsafe `ACTIVE` recovery and deletes a remote `DRAFT` before clearing local linkage and creating again. `scripts/verify-shopify-lifecycle-safety.mjs` covers the source/injected model; it is not a Shopify runtime test. See `docs/audits/RELEASE-TRUTH-RECONCILE-2026-09-01.md`.
 
 ### Matrixify CSV fallback
 
@@ -159,25 +170,26 @@ Source currently expects:
 - `SHOPIFY_PUBLISH_MOCK=false` only for a deliberate live environment
 - current documented API version `2026-04`
 
-Important P0:
+Important P0 gate:
 
-`publishDraft` creates the Shopify product before later variant/price/inventory sync. If later sync fails, the app records `api_failed` and the created product ID. Before broad live publishing, add/confirm an idempotent recovery rule so retry does not create a duplicate product.
+The source idempotency recovery rule was added in `7de14a5`, but it still needs runtime proof. Before broad live publishing, execute and record a Shopify mock partial-create/retry check, then complete one owner-approved controlled real-product E2E. A source verifier alone is insufficient.
 
 ## 7. Current completion state
 
-Production baseline `6ff020dd` is already deployed. The latest owner-corrected mobile UI remains on `agent/release-thumbnail-regression-fix` and is not yet production.
+`6ff020dd` is the known deployed production baseline. PR #8 is now merged into the default branch; source HEAD is `6960a0c`.
 
-Vercel production runtime error query for the last 7 days reported no runtime error clusters as of 2026-08-20.
+The current Vercel Production commit is **not established by repository evidence**. The prior 2026-08-20 runtime-error query is historical and must not be treated as a check of the current source head.
 
 Current release still requires:
 
-1. latest iPhone ResultCard runtime check;
-2. full GitHub CI;
-3. Shopify production env/config preflight;
-4. decision/fix for partial product-create retry idempotency;
-5. Shopify mock check;
-6. explicitly approved controlled real-product E2E;
-7. explicit owner approval before merge/production deployment of this release.
+1. review and commit the local security hardening package;
+2. full GitHub CI, including a network-capable production build;
+3. latest iPhone ResultCard runtime check;
+4. Vercel deployment SHA check plus Shopify production env/config preflight;
+5. Supabase migration ledger check for `20260822223100_variant_split_override_semantics`, then a planned apply of `20260902090000_guard_current_image_batch_pointer`;
+6. Shopify mock partial-create/retry check;
+7. explicitly approved controlled real-product E2E;
+8. explicit owner approval before a production deployment or any live Shopify write.
 
 ## 8. Team / AI handoff evidence
 

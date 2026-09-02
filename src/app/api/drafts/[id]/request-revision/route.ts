@@ -4,8 +4,12 @@
  * Operator allowed (誰上架誰審到底); UI prompt remains UX-C.
  */
 import { NextRequest } from "next/server";
+import {
+  loadAuthorizedDraft,
+  resolveRequestPrincipal
+} from "@/lib/api/requestPrincipal";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
-import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 /** P0-63: accept missing / empty / whitespace-only; treat as no reason.
  *  Must NOT be exported — Next.js Route modules only allow HTTP method exports. */
@@ -18,21 +22,15 @@ function normalizeOptionalRevisionComment(raw: unknown): string | null {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
-  const authSupabase = await createServerSupabaseClient();
-  const { data: { user } } = await authSupabase.auth.getUser();
-
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await authSupabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  // P0-63: operator + admin + reviewer (was admin/reviewer only → operator 403).
-  if (!profile || !["admin", "reviewer", "operator"].includes(profile.role)) {
-    return Response.json({ error: "Operator role is required" }, { status: 403 });
+  const principalResult = await resolveRequestPrincipal(request);
+  if (!principalResult.ok) return principalResult.response;
+  if (principalResult.principal.kind !== "session") {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const authorizedDraft = await loadAuthorizedDraft(principalResult.principal, id);
+  if (!authorizedDraft.ok) return authorizedDraft.response;
+  const canonicalDraftId = authorizedDraft.id;
 
   const comment = normalizeOptionalRevisionComment(body.comment ?? body.reason);
   const serviceSupabase = createServiceSupabaseClient();
@@ -41,17 +39,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .update({
       status: "needs_revision",
       pipeline_stage: mapStatusToPipelineStage("needs_revision"),
-      reviewed_by: user.id,
+      reviewed_by: principalResult.principal.userId,
       error_message: comment
     })
-    .eq("id", id);
+    .eq("id", canonicalDraftId);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   await serviceSupabase.from("review_logs").insert({
-    draft_id: id,
+    draft_id: canonicalDraftId,
     action: "needs_revision",
-    reviewer: user.id,
+    reviewer: principalResult.principal.userId,
     comment: comment ?? "站②退回文案"
   });
 

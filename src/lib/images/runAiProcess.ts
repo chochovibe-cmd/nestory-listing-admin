@@ -250,6 +250,17 @@ export async function updateBatchStatusAfterAiProcess(
     const batchId = draft?.current_image_batch_id as string | null | undefined;
     if (!batchId) return false;
 
+    // The draft pointer is only a convenience pointer. Confirm membership before
+    // changing the shared batch header so a stale or tampered pointer can never
+    // make this draft alter another batch's status/counts.
+    const { data: membership, error: membershipError } = await serviceSupabase
+      .from("image_batch_items")
+      .select("batch_id")
+      .eq("batch_id", batchId)
+      .eq("draft_id", draftId)
+      .maybeSingle();
+    if (membershipError || !membership) return false;
+
     const { data: images } = await serviceSupabase
       .from("product_images")
       .select("id, image_type, process_intent, processing_status, processed_file_url, generated_file_url")

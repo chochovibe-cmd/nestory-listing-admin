@@ -18,6 +18,7 @@ import {
   ownerSegmentFromOriginalPath,
   storagePathFromProductImagesPublicUrl
 } from "@/lib/images/imagePipeline";
+import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import {
   createOpenAiImageProvider,
   estimateImageCostUsd,
@@ -91,17 +92,9 @@ function baseModeFromEnv(): "original" | "edits" {
 
 async function fetchAsDataUri(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      headers: { Accept: "image/*,*/*" }
-    });
-    if (!res.ok) return null;
-    const ct = (res.headers.get("content-type") || "image/png").split(";")[0];
-    const ab = await res.arrayBuffer();
-    if (!ab.byteLength || ab.byteLength > 12 * 1024 * 1024) return null;
-    const b64 = Buffer.from(ab).toString("base64");
-    const mime = ct.startsWith("image/") ? ct : "image/png";
-    return `data:${mime};base64,${b64}`;
+    const fetched = await fetchServerImage(url, { maxBytes: 12 * 1024 * 1024 });
+    if (!fetched.ok) return null;
+    return `data:${fetched.contentType};base64,${fetched.bytes.toString("base64")}`;
   } catch {
     return null;
   }

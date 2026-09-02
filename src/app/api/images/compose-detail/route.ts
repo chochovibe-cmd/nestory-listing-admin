@@ -8,45 +8,16 @@
  */
 
 import { NextRequest } from "next/server";
-import { requireWorkerToken, jsonError } from "@/lib/api/auth";
-import { canOperate } from "@/lib/auth/roles";
+import {
+  resolveAuthorizedDraftId,
+  resolveRequestPrincipal
+} from "@/lib/api/requestPrincipal";
+import { jsonError } from "@/lib/api/auth";
 import { runComposeDetailForDraft } from "@/lib/images/detailCompose/runComposeDetail";
-import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/domain";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-async function authorize(request: NextRequest): Promise<
-  { ok: true; via: "worker" | "session" } | { ok: false; response: Response }
-> {
-  const worker = requireWorkerToken(request);
-  if (worker.ok) return { ok: true, via: "worker" };
-
-  const authHeader = request.headers.get("authorization");
-  if (authHeader?.toLowerCase().startsWith("bearer ")) {
-    const status = worker.error.includes("configured") ? 500 : 401;
-    return { ok: false, response: jsonError(worker.error, status) };
-  }
-
-  try {
-    const authSupabase = await createServerSupabaseClient();
-    const {
-      data: { user }
-    } = await authSupabase.auth.getUser();
-    if (!user) {
-      return { ok: false, response: jsonError("Unauthorized", 401) };
-    }
-    const { data: profile } = await authSupabase.from("profiles").select("role").eq("id", user.id).single();
-    if (!canOperate(profile?.role as UserRole | undefined)) {
-      return { ok: false, response: jsonError("Operator role is required", 403) };
-    }
-    return { ok: true, via: "session" };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Auth failed";
-    return { ok: false, response: jsonError(message, 500) };
-  }
-}
 
 function parseBool(value: unknown, defaultValue: boolean): boolean {
   if (value === undefined || value === null) return defaultValue;
@@ -57,8 +28,9 @@ function parseBool(value: unknown, defaultValue: boolean): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authorize(request);
-  if (!auth.ok) return auth.response;
+  const principalResult = await resolveRequestPrincipal(request, { allowWorker: true });
+  if (!principalResult.ok) return principalResult.response;
+  const principal = principalResult.principal;
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
@@ -73,6 +45,10 @@ export async function POST(request: NextRequest) {
     return jsonError("draftId is required", 400);
   }
 
+  const authorizedDraft = await resolveAuthorizedDraftId(principal, draftId);
+  if (!authorizedDraft.ok) return authorizedDraft.response;
+  const canonicalDraftId = authorizedDraft.id;
+
   const force = parseBool((body as { force?: unknown }).force, false);
 
   let serviceSupabase: ReturnType<typeof createServiceSupabaseClient>;
@@ -85,7 +61,7 @@ export async function POST(request: NextRequest) {
 
   const result = await runComposeDetailForDraft({
     serviceSupabase,
-    draftId,
+    draftId: canonicalDraftId,
     force
   });
 
@@ -93,5 +69,5 @@ export async function POST(request: NextRequest) {
     return Response.json(result, { status: result.httpStatus || 500 });
   }
 
-  return Response.json({ ...result, via: auth.via });
+  return Response.json({ ...result, via: principal.via });
 }

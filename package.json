@@ -17,6 +17,8 @@
     "verify:no-secrets": "node scripts/verify-no-secrets.mjs",
     "verify:browser-storage-secrets": "node scripts/verify-browser-storage-secret-policy.mjs",
     "verify:client-secret-refs": "node scripts/verify-client-secret-reference-policy.mjs",
+    "verify:secure-image-fetch": "node scripts/verify-secure-server-image-fetch.mjs",
+    "verify:service-role-auth": "node scripts/verify-service-role-request-authorization.mjs",
     "verify:batch-archive-auth": "node scripts/verify-batch-archive-authorization.mjs",
     "verify:supabase-migration-baseline": "node scripts/verify-supabase-migration-baseline.mjs",
     "verify:d3-sharp": "node scripts/verify-d3-sharp.mjs",

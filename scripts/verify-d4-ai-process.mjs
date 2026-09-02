@@ -141,8 +141,8 @@ await check("core modules exist", () => {
 
 await check("ai-process route: dual auth + thin shell + no self HTTP", () => {
   const src = read("src/app/api/images/ai-process/route.ts");
-  assert.match(src, /requireWorkerToken/);
-  assert.match(src, /canOperate/);
+  assert.match(src, /resolveRequestPrincipal/);
+  assert.match(src, /resolveAuthorizedDraftId/);
   assert.match(src, /runAiProcessForDraft/);
   assert.match(src, /maxDuration\s*=\s*60/);
   assert.match(src, /autoSharp/);

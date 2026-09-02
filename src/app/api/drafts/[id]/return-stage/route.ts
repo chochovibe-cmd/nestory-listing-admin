@@ -2,8 +2,12 @@
  * R3 station③: 退回改文案 → copy_review；退回改圖 → image_review.
  */
 import { NextRequest } from "next/server";
+import {
+  loadAuthorizedDraft,
+  resolveRequestPrincipal
+} from "@/lib/api/requestPrincipal";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
-import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,21 +21,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  const authSupabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await authSupabase.auth.getUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await authSupabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["admin", "reviewer", "operator"].includes(profile.role)) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  const principalResult = await resolveRequestPrincipal(request);
+  if (!principalResult.ok) return principalResult.response;
+  if (principalResult.principal.kind !== "session") {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const authorizedDraft = await loadAuthorizedDraft(principalResult.principal, id);
+  if (!authorizedDraft.ok) return authorizedDraft.response;
+  const canonicalDraftId = authorizedDraft.id;
 
   const serviceSupabase = createServiceSupabaseClient();
   const comment = typeof body.comment === "string" ? body.comment : null;
@@ -42,17 +40,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .update({
         status: "needs_revision",
         pipeline_stage: mapStatusToPipelineStage("needs_revision"),
-        reviewed_by: user.id,
+        reviewed_by: principalResult.principal.userId,
         error_message: comment
       })
-      .eq("id", id);
+      .eq("id", canonicalDraftId);
 
     if (error) return Response.json({ error: error.message }, { status: 500 });
 
     await serviceSupabase.from("review_logs").insert({
-      draft_id: id,
+      draft_id: canonicalDraftId,
       action: "needs_revision",
-      reviewer: user.id,
+      reviewer: principalResult.principal.userId,
       comment: comment ?? "站③退回改文案"
     });
 
@@ -72,14 +70,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       status: "approved",
       updated_at: new Date().toISOString()
     })
-    .eq("id", id);
+    .eq("id", canonicalDraftId);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   await serviceSupabase.from("review_logs").insert({
-    draft_id: id,
+    draft_id: canonicalDraftId,
     action: "return_image_review",
-    reviewer: user.id,
+    reviewer: principalResult.principal.userId,
     comment: comment ?? "站③退回改圖"
   });
 

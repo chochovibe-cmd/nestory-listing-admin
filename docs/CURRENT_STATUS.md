@@ -3,13 +3,13 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-01（release truth reconcile）
+更新基準：2026-09-02（CI／Preview／production ledger read-only verification）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source 目前 HEAD：`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`
 已知 Vercel production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
 
-> **先分清楚再工作：**`6ff020d` 是有既有 deployment evidence 的 production baseline；`6960a0c` 是目前 source HEAD，但本次文件校正**沒有**讀取 Vercel dashboard，因此它是否已進 Production 為「待外部查證」。同理，migration 檔案存在、source verifier 存在，都不是正式 DB 套用、Shopify mock 或真實 E2E 的通過證明。
+> **2026-09-02 外部查證結果：**Vercel production alias 的 `READY` deployment 是 `6960a0c`；不是本輪 `f0a6bfa`。Supabase 正式專案狀態為 `ACTIVE_HEALTHY`，migration ledger 僅有 baseline/reconcile 兩筆；`20260822223100` 與 `20260902090000` 都還未套用。同理，source verifier／CI pass 仍不是 Shopify mock 或真實 E2E 的通過證明。
 >
 > 下方 D3.4–D3.7 中關於「PR #8 Draft／未 merge／尚未 production deploy」的敘述，是當時 package 的歷史條件；現況一律以上方 release truth 與 `docs/audits/RELEASE-TRUTH-RECONCILE-2026-09-01.md` 為準。
 
@@ -163,10 +163,10 @@ Temporary R3 patch-runner workflows have been removed. See
 
 ### App production baseline / source head / runtime verification
 
-- 已知 production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`（`release: merge Nestory stabilization and tracked Supabase baseline (#6)`）。
+- 舊 production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`（`release: merge Nestory stabilization and tracked Supabase baseline (#6)`）。
 - PR #8 已合入 default branch：`21e9d1c90697797aaa6d982e9454ccd4a6955fd8`。
-- Source 現在的 HEAD：`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`；它只在 PR #8 merge 後移除了意外的空檔案，沒有新的 app feature diff。
-- **待外部查證：**本 repo 沒有 Vercel deployment record，不能判定 `6960a0c` 是否、何時已被部署到 Vercel Production。請用 Vercel dashboard 的 deployment commit SHA 查證；查證前不得說「最新 UI 已 production」。
+- 正式 Vercel deployment 已於 2026-09-02 只讀核對：`READY`、target=`production`、commit=`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`。可明確說「目前 default source head 已 production」；不能把此事推論成 Shopify E2E 或未套用 migration 已完成。
+- 本輪 security hardening commit `f0a6bfa` 位於 `codex/security-hardening-20260902`／Draft PR #10，CI 與 Preview 都已通過，但**尚未 merge／production deploy**。
 
 ### Production Supabase reconciliation — COMPLETE
 
@@ -422,8 +422,8 @@ Batch archive authorization已修：operator own-only；reviewer/admin依RLS tea
 
 Source active queue 另有：
 
-3. `20260822223100_variant_split_override_semantics`（**正式套用狀態待外部查 Supabase migration ledger**；不可因 source 檔案存在而打勾）
-4. `20260902090000_guard_current_image_batch_pointer`（2026-09-02 本機 security hardening 新增；尚未 commit／部署／套用 production）
+3. `20260822223100_variant_split_override_semantics`（2026-09-02 已從正式 migration ledger 核對：**尚未套用**）
+4. `20260902090000_guard_current_image_batch_pointer`（PR #10 security hardening 新增；**尚未套用**）
 
 Active queue：`supabase/migrations/` 只放正式 tracked migrations + future migrations。
 
@@ -454,13 +454,12 @@ Owner iPhone 驗最新 Preview：
 
 1. 本輪 owner-refined ResultCard Preview通過 iPhone runtime。
 2. **停止 mobile UI施工**。
-3. final GitHub CI：`verify:all → typecheck → build`。
+3. Draft PR #10 的 Preview 登入／iPhone runtime QA。
 4. Production Shopify env/config preflight（不曝露secret）。
-5. 在 Supabase migration ledger 確認／正式處理 `20260822223100_variant_split_override_semantics`；不可重跑歷史 migration。
-6. 規劃並套用新的 `20260902090000_guard_current_image_batch_pointer`；本機 P0 SSRF-safe image fetch 與 P1 service-role request authorization hardening 的完整證據見 `docs/audits/SECURITY-HARDENING-2026-09-02.md`。這些改動尚未 commit／部署，不能宣稱 production 已修。
-7. Shopify mock publish（含 partial-create retry 行為）並留下 runtime 結果。
-8. owner明確批准後才做一筆 controlled real-product E2E。
-9. E2E正確後，owner明確批准才以 Vercel deployment record 核對／執行目前 source 的 production deploy；PR #8 已合併，**不要再把「merge PR #8」當成尚未做的 gate**。
+5. 規劃 active migrations `20260822223100` + `20260902090000` 的套用與驗證；不可重跑歷史 migration。
+6. Shopify mock publish（含 partial-create retry 行為）並留下 runtime 結果。
+7. owner明確批准後才做一筆 controlled real-product E2E。
+8. E2E正確後，owner明確批准才 merge PR #10；正式 Vercel 目前是 `6960a0c`，merge 後才會產生下一個 production deployment。
 
 不要因為 Preview可開就跳過 CI / Shopify preflight / owner production approval。
 

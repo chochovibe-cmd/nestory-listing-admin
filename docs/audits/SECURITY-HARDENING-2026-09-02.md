@@ -46,16 +46,16 @@
 
 ## 3. 未完成且不得誤標為完成的事項
 
-- 本包尚未 commit、push、部署，也沒有更動 production Supabase；
+- 本包已 commit 為 `f0a6bfa`，位於 `codex/security-hardening-20260902`／Draft PR #10；尚未 merge／部署 production，也沒有更動 production Supabase；
 - `20260902090000_guard_current_image_batch_pointer.sql` 尚未套用到 production，必須與既有 active migrations 一起依 ledger 狀態規劃，不能重跑 `001–039` 歷史檔；
-- `20260822223100_variant_split_override_semantics.sql` 的 production 套用狀態仍待到 Supabase migration ledger 外部核對；
-- `next build` 無法在本機完成，原因是 `next/font/google` 下載 Noto Sans TC 與 Space Grotesk 時遭本機網路／權限環境阻擋；這不是 source build success 的證據。需要 GitHub CI 或可連網的正式環境重新確認；
-- Vercel Production 的 commit SHA、Shopify mock publish、以及 owner 明確批准後的一筆 controlled real-product E2E 都仍未執行。
+- `20260822223100_variant_split_override_semantics.sql` 已由正式 migration ledger 外部核對為**尚未套用**；
+- `next build` 雖無法在本機完成（Google Fonts 網路／權限阻擋），GitHub CI #372 已在可連網 runner 成功跑完 frozen install、`verify:all`、typecheck、build；
+- 2026-09-02 Vercel read-only verification：production alias 是 `READY` 的 `6960a0c`；本包 `f0a6bfa` 僅有 `READY` Preview，沒有 production deployment；
+- Shopify mock publish 與 owner 明確批准後的一筆 controlled real-product E2E 都仍未執行。
 
 ## 4. 後續建議順序
 
-1. 先 review、commit 這個 source hardening package（不等於 push/deploy）；
-2. 在 GitHub CI 對該 commit 跑 frozen install、`verify:all`、typecheck、build；
-3. 由有權限的人在 Vercel 與 Supabase dashboard 核對 production SHA 與 migration ledger；
-4. 確認 migration plan 後才套用新的 guard migration；
-5. 完成 Shopify mock，再由 owner 明確批准 controlled real-product E2E。
+1. Review Draft PR #10 的 Preview runtime 行為；
+2. 規劃並在明確批准後套用 active migrations（先 `20260822223100`，再依相依性處理 `20260902090000`）；
+3. 完成 Shopify mock，再由 owner 明確批准 controlled real-product E2E；
+4. 以獨立 hardening scope 設計 14 個 existing Supabase Security Advisor warnings 的修補，不直接 revoke 已在用的 RLS helpers。

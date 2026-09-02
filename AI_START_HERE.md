@@ -62,8 +62,8 @@ Production 在這次之前沒有 migration ledger；live DB 卻已包含歷史 `
 Active queue：`supabase/migrations/`
 - `20260818142712_baseline_existing_schema_20260818.sql`
 - `20260818142919_production_reconcile_20260818.sql`
-- `20260822223100_variant_split_override_semantics.sql`（已在 Git source tracked；production 是否已套用，須外部查 migration ledger）
-- `20260902090000_guard_current_image_batch_pointer.sql`（本機 source hardening 新增；尚未套用 production，須依 ledger 規劃）
+- `20260822223100_variant_split_override_semantics.sql`（2026-09-02 已由正式 migration ledger 核對為**尚未套用**）
+- `20260902090000_guard_current_image_batch_pointer.sql`（PR #10 source hardening 新增；尚未套用 production，須依 ledger 規劃）
 - 未來 tracked migrations 往後 append。
 
 Pre-tracking history：
@@ -80,18 +80,18 @@ Pre-tracking history：
 
 以下三件事必須分開看，不能互相推論：
 
-- `6ff020dd1d68152b6688c9695f8f96188b7862be` 是**已知的 Vercel production baseline**（歷史 deployment evidence 對應的 commit）。
+- `6ff020dd1d68152b6688c9695f8f96188b7862be` 是先前文件中的 production baseline。
 - PR #8 已在 2026-08-25 以 merge commit `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支 `codex/nestory-v0.1-safety-skeleton`；舊文件中「PR #8 Draft／未 merge」都是合併前的歷史敘述，不可當現況。
-- 本機／GitHub source 目前 HEAD 是 `6960a0cd257590abb6c1ccb7c97a2c3e772714d3`。**repository 無法證明這個 SHA 是否已被 Vercel Production 部署**；要到 Vercel deployment record 以 commit SHA 核對，查到前一律標為「待外部查證」。
+- 2026-09-02 已從 Vercel production alias 只讀核對：正式站 `READY`，commit 是 `6960a0cd257590abb6c1ccb7c97a2c3e772714d3`。這是現行 production 事實，不再只是 repository 推測。
 
 同樣地，Git commit、Preview、GitHub CI、Vercel Production 和 Shopify 都是不同的證據來源。不得把任一項的成功推成另一項已通過。
 
-### 2026-09-02 security hardening（本機 source，尚未部署）
+### 2026-09-02 security hardening（Draft PR #10，尚未部署 production）
 
 - P0：所有 server-side 外部圖片下載已統一經過 SSRF-safe fetch（每個 redirect 重新驗證、封鎖 private／metadata 網段、大小／逾時／圖片內容驗證）。
 - P1：8 個會以 service-role 寫入的草稿／圖片路由，已先以 session RLS 確認 draft ownership／team scope；worker 走明確 token 例外，不接受無效 Bearer token 降級為 session。
-- 本機 typecheck 與相關 source verifiers 已通過；詳細證據及未完成 external gates 見 `docs/audits/SECURITY-HARDENING-2026-09-02.md`。
-- 此包未 commit、未 push、未 deploy，也未套用新的 Supabase migration；不能據此宣稱 production 已修。
+- GitHub CI #372（frozen install、`verify:all`、typecheck、build）與 Supabase Local Reconcile #83 已通過；對應 Vercel Preview 為 `READY`。
+- source 在 `codex/security-hardening-20260902`，Draft PR #10；尚未 merge、未部署 production，也未套用新的 Supabase migration。詳細證據及 remaining gates 見 `docs/audits/SECURITY-HARDENING-2026-09-02.md`。
 
 ## 5. CI / free DB gate
 
@@ -130,12 +130,11 @@ Migration baseline verifier：`scripts/verify-supabase-migration-baseline.mjs`�
 
 ## 7. 下一步順序
 
-1. Review、commit 本機 security hardening package；在該 commit 的 GitHub CI 跑 frozen install、`verify:all`、typecheck、build。
-2. 在 Vercel dashboard 以 SHA 核對 `6ff020d` baseline 與新 commit 是否／何時進入 Production；未查到前不宣稱最新 source 已上線。
-3. 在 Supabase migration ledger 核對 `20260822223100_variant_split_override_semantics` 是否已正式套用，並規劃新的 `20260902090000_guard_current_image_batch_pointer`；不可因檔案存在就標為已套用，也不可重跑 `001–039`。
-4. 做不洩密的 Vercel Shopify env/config preflight，保持 Preview mock-safe，並記錄必要 Preview／iPhone runtime QA。
-5. 先做 Shopify mock publish；再由 owner 明確批准一筆 controlled real-product E2E。partial-create retry 的**source guard 已修**，但兩種 runtime 證據仍不能省略。
-6. 下一個 DB hardening scope才處理 remaining Security Advisor findings；先設計/測試，不直接 revoke RLS helpers或 hosted-only functions。
+1. 審閱 Draft PR #10，並以 Preview 做必要的登入／手機 runtime QA；未經 owner 同意不得 merge。
+2. 規劃 active migrations：ledger 已確認第三筆未套用；新的 `20260902090000_guard_current_image_batch_pointer` 也未套用。不可重跑 `001–039`。
+3. 做不洩密的 Vercel Shopify env/config preflight，保持 Preview mock-safe。
+4. 先做 Shopify mock publish；再由 owner 明確批准一筆 controlled real-product E2E。partial-create retry 的**source guard 已修**，但兩種 runtime 證據仍不能省略。
+5. 下一個 DB hardening scope才處理 14 個 remaining Security Advisor warnings；先設計/測試，不直接 revoke RLS helpers或 hosted-only functions。
 
 ## 8. 修改鐵則
 
@@ -153,4 +152,4 @@ Migration baseline verifier：`scripts/verify-supabase-migration-baseline.mjs`�
 
 ## 9. 新 session 開場指令
 
-> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。確認 default-branch HEAD、PR #8 merge commit、GitHub CI、Vercel deployment SHA 與 production migration ledger；不要用 Git source 猜 Vercel／Supabase 現況。碰 DB 必讀四份 Supabase audits與 active `supabase/migrations/`。2026-08-18 reconcile 已正式成功套用；第三個 tracked migration 的正式套用狀態則待外部查證。
+> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。確認 PR #10 的 CI／Preview、Vercel production SHA 與 production migration ledger；不要用 Git source 猜 Vercel／Supabase 現況。碰 DB 必讀四份 Supabase audits與 active `supabase/migrations/`。2026-08-18 reconcile 已正式成功套用；第三及第四個 tracked migration 尚未套用。

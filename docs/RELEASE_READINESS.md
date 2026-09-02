@@ -4,16 +4,15 @@
 > A documented check is not a pass until it has actually been executed.
 > For day-to-day truth read `AI_START_HERE.md` and `docs/CURRENT_STATUS.md` first.
 
-Updated: 2026-09-02 (release truth reconcile + local security hardening)
+Updated: 2026-09-02 (CI / Preview / production read-only verification)
 
 ## 0. Current source and runtime truth
 
-- Known Vercel production baseline: `6ff020dd1d68152b6688c9695f8f96188b7862be`.
+- Previous documented Vercel production baseline: `6ff020dd1d68152b6688c9695f8f96188b7862be`.
 - PR #8 merged into the default branch on 2026-08-25 as `21e9d1c90697797aaa6d982e9454ccd4a6955fd8`.
-- Current source HEAD: `6960a0cd257590abb6c1ccb7c97a2c3e772714d3`.
-- This document refresh did **not** inspect Vercel. Whether `6960a0c` is deployed to Vercel Production is therefore **unverified external state**, not a pass or a failure. Verify the deployment commit SHA in Vercel before releasing.
-- `20260822223100_variant_split_override_semantics.sql` is present in the tracked source queue, but its production-apply status is also **unverified external state**. Check the Supabase migration ledger; do not replay historical migrations.
-- Local working tree also contains P0 server-side image-fetch SSRF hardening, P1 request authorization hardening for service-role routes, and new migration `20260902090000_guard_current_image_batch_pointer.sql`. All are **uncommitted and not deployed**; source verification is recorded in `docs/audits/SECURITY-HARDENING-2026-09-02.md`.
+- Vercel production alias was read-only verified on 2026-09-02: `READY`, target `production`, commit `6960a0cd257590abb6c1ccb7c97a2c3e772714d3`.
+- Production Supabase migration ledger was read-only verified on 2026-09-02: only `20260818142712` and `20260818142919` are applied. `20260822223100_variant_split_override_semantics.sql` is not applied; do not replay historical migrations.
+- P0 server-side image-fetch SSRF hardening, P1 request authorization hardening, and `20260902090000_guard_current_image_batch_pointer.sql` are committed as `f0a6bfa` on Draft PR #10. CI #372, Supabase Local Reconcile #83 and the Vercel Preview all passed; none of these source changes is deployed to production.
 
 Historical references below that call PR #8 "Draft", "unmerged" or "not production" are superseded by this section.
 
@@ -176,20 +175,16 @@ The source idempotency recovery rule was added in `7de14a5`, but it still needs 
 
 ## 7. Current completion state
 
-`6ff020dd` is the known deployed production baseline. PR #8 is now merged into the default branch; source HEAD is `6960a0c`.
-
-The current Vercel Production commit is **not established by repository evidence**. The prior 2026-08-20 runtime-error query is historical and must not be treated as a check of the current source head.
+`6960a0cd` is the confirmed Vercel Production commit. PR #8 is merged into the default branch. `f0a6bfa` is isolated in Draft PR #10 and only its Preview deployment is READY.
 
 Current release still requires:
 
-1. review and commit the local security hardening package;
-2. full GitHub CI, including a network-capable production build;
-3. latest iPhone ResultCard runtime check;
-4. Vercel deployment SHA check plus Shopify production env/config preflight;
-5. Supabase migration ledger check for `20260822223100_variant_split_override_semantics`, then a planned apply of `20260902090000_guard_current_image_batch_pointer`;
-6. Shopify mock partial-create/retry check;
-7. explicitly approved controlled real-product E2E;
-8. explicit owner approval before a production deployment or any live Shopify write.
+1. latest Preview/iPhone runtime check for Draft PR #10;
+2. Shopify production env/config preflight;
+3. a planned, separately approved apply and verification of `20260822223100_variant_split_override_semantics` and `20260902090000_guard_current_image_batch_pointer`;
+4. Shopify mock partial-create/retry check;
+5. explicitly approved controlled real-product E2E;
+6. explicit owner approval before merging PR #10, producing its production deployment, or any live Shopify write.
 
 ## 8. Team / AI handoff evidence
 

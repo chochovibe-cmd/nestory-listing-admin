@@ -3,15 +3,20 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-08-22
-正式 app 基準分支：`codex/nestory-v0.1-safety-skeleton`
-正式 app 基準 HEAD：`6ff020dd1d68152b6688c9695f8f96188b7862be`
-目前 release 分支：`agent/release-thumbnail-regression-fix`
+更新基準：2026-09-02（CI／Preview／production ledger read-only verification）
+預設分支：`codex/nestory-v0.1-safety-skeleton`
+Git source 目前 HEAD：`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`
+已知 Vercel production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`
+PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
+
+> **2026-09-02 外部查證結果：**Vercel production alias 的 `READY` deployment 是 `6960a0c`；不是本輪 `f0a6bfa`。Supabase 正式專案狀態為 `ACTIVE_HEALTHY`，migration ledger 僅有 baseline/reconcile 兩筆；`20260822223100` 與 `20260902090000` 都還未套用。同理，source verifier／CI pass 仍不是 Shopify mock 或真實 E2E 的通過證明。
+>
+> 下方 D3.4–D3.7 中關於「PR #8 Draft／未 merge／尚未 production deploy」的敘述，是當時 package 的歷史條件；現況一律以上方 release truth 與 `docs/audits/RELEASE-TRUTH-RECONCILE-2026-09-01.md` 為準。
 
 ## Latest release-branch package — D3.7 mobile gesture guidance + bidirectional swipe
 
 D3.7 只做 Commander 授權的兩項 mobile gesture corrective；start guard parent 為
-`cea4babfb4a3aab7acddc1a3f22e055265ac744f`，沿用 PR #8，不 merge、不進 Shopify。
+`cea4babfb4a3aab7acddc1a3f22e055265ac744f`；「不 merge」是合併前 package guard，PR #8 的目前 merge 狀態以上方為準；本包沒有 Shopify write。
 
 - Mobile `<=959px`：gesture teaching note 改為永久顯示的低強度 accent `△ + text`，final copy 由 JSX 單一來源提供；舊 dismiss state / localStorage / X 與 historical pseudo copy 移除。Desktop `>=960px` 不顯示此 mobile 教學。
 - ResultCard mobile swipe 改為 signed bidirectional model：右滑露出左側 workflow panel（copy=`核准 / 重生`、image=既有 primary / `退回`、ready=`發布／匯出`）；左滑露出右側 `移出佇列`。workflow 寬 156px、ready single 108px、remove 96px，依各自半寬 snap；一次只顯示一側。
@@ -22,7 +27,7 @@ D3.7 只做 Commander 授權的兩項 mobile gesture corrective；start guard pa
 ## Latest release-branch package — D3.6 mobile selection controls corrective
 
 D3.6 只做 owner 授權的兩項 mobile presentation corrective；start guard parent 為
-`0c8df49bdfc5e08ed76f6cba040b22b5da22daea`，沿用 PR #8，不 merge、不進 Shopify。
+`0c8df49bdfc5e08ed76f6cba040b22b5da22daea`；「不 merge」是合併前 package guard，PR #8 的目前 merge 狀態以上方為準；本包沒有 Shopify write。
 
 - Mobile `<=959px`：`全選` 重用既有 semantic checkbox / `toggleAll` / checked / indeterminate DOM，final presentation 改為兩段 sliding control。OFF 與 partial 都讓 neutral segment 留在右側空白區；ON 才把 accent segment 滑到左側「全選」。partial 只用 accent border 提示，避免冒充全選。Desktop `>=960px` 完全保留 D3.5 native checkbox。
 - Mobile copy-review long-press batch：`取消 / ✓ 批次核准 / 移出佇列` 改為 `repeat(3, minmax(0, 1fr))` 等寬；三顆統一 `40px` 高、`var(--radius-s)`、11px / 800 / line-height 1 / 相同 padding，只保留 semantic color 差異。既有 clear / approve / soft-archive handlers 不變。
@@ -60,7 +65,7 @@ Git / release gate：
 
 - D3.5 start commit：`3ef8ab0e942aaffba5b9ca0af39ac38897d42b25`
 - final commit：本 `ONE FINAL COMMIT` 所在 commit；commit 無法在自身內容中預先嵌入自身 SHA，immutable SHA 以 PR #8 final head 與 Commander final report 為準。
-- PR #8 必須維持 Draft / Open / 未 merge。
+- 「PR #8 必須維持 Draft / Open / 未 merge」為合併前的 historical guard；現已由 2026-09-01 release truth 取代。
 - Work runtime 若無法執行本地 dependency/build，GitHub CI 是 final remote authority；Vercel Preview 與 CI 結果以同一 final HEAD 驗證。
 - 本包明確 **沒有 Shopify production write**；不要建商品、上架、下架、更換 token 或修改 store configuration。
 
@@ -99,7 +104,7 @@ Git / release gate：
 
 - D3.4B start commit：`3b270b368ac5362e5cfc0048791942fd2f08798a`
 - end commit：本 `ONE FINAL COMMIT` 所在 commit；實際 SHA 以 PR #8 push 後 HEAD 為準（commit 無法在自身內容預先嵌入自身 SHA）。
-- PR #8 必須維持 Draft / Open / 未 merge。
+- 「PR #8 必須維持 Draft / Open / 未 merge」為合併前的 historical guard；現已由 2026-09-01 release truth 取代。
 - final automated gate 仍是 `verify:all → typecheck → build`；Supabase Local Reconcile / Vercel Preview 狀態需跟 final HEAD 一起驗。
 - Pointer Events touch reorder 是 real pointer-capture implementation，但 Work runtime 沒有實體 iPhone；final Preview 仍需 owner mobile runtime QA。
 
@@ -156,15 +161,12 @@ Temporary R3 patch-runner workflows have been removed. See
 
 ## 1. Production 現況
 
-### App production baseline
+### App production baseline / source head / runtime verification
 
-Vercel 已有 production deployment：
-
-- branch：`codex/nestory-v0.1-safety-skeleton`
-- commit：`6ff020dd1d68152b6688c9695f8f96188b7862be`
-- message：`release: merge Nestory stabilization and tracked Supabase baseline (#6)`
-
-目前 2026-08-20 的 ImageUploader / ResultCard 手機修復仍在 release branch，**尚未 merge / 尚未 production deploy**。
+- 舊 production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`（`release: merge Nestory stabilization and tracked Supabase baseline (#6)`）。
+- PR #8 已合入 default branch：`21e9d1c90697797aaa6d982e9454ccd4a6955fd8`。
+- 正式 Vercel deployment 已於 2026-09-02 只讀核對：`READY`、target=`production`、commit=`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`。可明確說「目前 default source head 已 production」；不能把此事推論成 Shopify E2E 或未套用 migration 已完成。
+- 本輪 security hardening commit `f0a6bfa` 位於 `codex/security-hardening-20260902`／Draft PR #10，CI 與 Preview 都已通過，但**尚未 merge／production deploy**。
 
 ### Production Supabase reconciliation — COMPLETE
 
@@ -370,19 +372,16 @@ Shopify credential/token：
 
 建議後續 UI 加一個不洩密的 `模擬發布 / 正式 Shopify` indicator。
 
-#### P0-B：partial Shopify create retry idempotency
+#### P0-B：partial Shopify create retry idempotency — source 已修，runtime 未驗
 
-目前 `publishDraft` 是先 `productCreate`，再同步 variant/price/inventory。
+`7de14a564e1e96501918c78fd3f6c4401cd137de` 已把 publish lifecycle 改為 `publishDraftSafe.ts`：
 
-若 Shopify product已建立，但後續 variant sync失敗：
+- `productCreate` 一律先建成 Shopify `DRAFT`；
+- 先保存 `shopify_product_id`，再做 variant／price／inventory follow-up；
+- `api_failed + real shopify_product_id` 的 retry 會先查遠端：`ACTIVE` 一律停住人工處理；`DRAFT` 先刪除再清掉本機 linkage，之後才允許新的 `productCreate`；
+- linkage 保存失敗會嘗試 compensating delete，避免靜默孤兒商品；重複 publish 與直接對既有 real ID `productCreate` 均會被擋住。
 
-- app會記 `api_failed`；
-- 也會存已建立的 `shopify_product_id` 供診斷；
-- 但目前 source沒有明顯看到下一次 retry 在 `productCreate` 前對既有 `shopify_product_id` 做 resume/idempotency guard。
-
-因此廣泛 live publish 前應做獨立修復/防呆，避免 partial failure retry 可能建立重複 Shopify product。
-
-這是 **P0 release risk**，但不要混進 ResultCard UI commit。
+`scripts/verify-shopify-lifecycle-safety.mjs` 有 source/injected-model contract，但它禁止網路，**不是 Shopify mock 或真實 E2E**。廣泛 live publish 前仍必須實際執行並記錄 mock partial-failure/retry；一筆受 owner 批准的 controlled real-product E2E 仍是 release gate。
 
 ### Shopify P1
 
@@ -416,10 +415,15 @@ Batch archive authorization已修：operator own-only；reviewer/admin依RLS tea
 
 ## 7. Migration tracking canonical
 
-Production migration list：
+已證實 production 套用的 migration：
 
 1. `20260818142712 baseline_existing_schema_20260818`
 2. `20260818142919 production_reconcile_20260818`
+
+Source active queue 另有：
+
+3. `20260822223100_variant_split_override_semantics`（2026-09-02 已從正式 migration ledger 核對：**尚未套用**）
+4. `20260902090000_guard_current_image_batch_pointer`（PR #10 security hardening 新增；**尚未套用**）
 
 Active queue：`supabase/migrations/` 只放正式 tracked migrations + future migrations。
 
@@ -450,12 +454,12 @@ Owner iPhone 驗最新 Preview：
 
 1. 本輪 owner-refined ResultCard Preview通過 iPhone runtime。
 2. **停止 mobile UI施工**。
-3. final GitHub CI：`verify:all → typecheck → build`。
+3. Draft PR #10 的 Preview 登入／iPhone runtime QA。
 4. Production Shopify env/config preflight（不曝露secret）。
-5. 解決或明確 gate `partial productCreate retry idempotency` P0。
-6. Shopify mock publish。
+5. 規劃 active migrations `20260822223100` + `20260902090000` 的套用與驗證；不可重跑歷史 migration。
+6. Shopify mock publish（含 partial-create retry 行為）並留下 runtime 結果。
 7. owner明確批准後才做一筆 controlled real-product E2E。
-8. E2E正確後，owner明確批准才 merge/deploy本輪 release到 production。
+8. E2E正確後，owner明確批准才 merge PR #10；正式 Vercel 目前是 `6960a0c`，merge 後才會產生下一個 production deployment。
 
 不要因為 Preview可開就跳過 CI / Shopify preflight / owner production approval。
 
@@ -479,6 +483,7 @@ UI / regression：
 - `docs/audits/RESULTCARD-MOBILE-REFINE-2026-08-20.md`（latest）
 - `docs/audits/RELEASE-HEALTH-AUDIT-2026-08-20.md`
 - `docs/audits/PRE-SHOPIFY-UI-FINAL-2026-08-21.md`（D3.5 latest UI freeze）
+- `docs/audits/RELEASE-TRUTH-RECONCILE-2026-09-01.md`（本輪 canonical release truth）
 
 DB / security：
 

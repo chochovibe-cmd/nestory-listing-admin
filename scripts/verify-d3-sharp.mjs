@@ -168,8 +168,8 @@ await check("sharp-batch route: dual auth markers + limits + supabase_temp", () 
   const src = read("src/app/api/images/sharp-batch/route.ts");
   const lib = read("src/lib/images/runSharpBatch.ts");
   assert.match(src, /export const runtime\s*=\s*["']nodejs["']/);
-  assert.match(src, /requireWorkerToken/);
-  assert.match(src, /canOperate/);
+  assert.match(src, /resolveRequestPrincipal/);
+  assert.match(src, /resolveAuthorizedDraftId/);
   assert.match(src, /runSharpBatchForDraft/);
   assert.match(src, /SHARP_BATCH_MAX_IMAGES|max.*12/);
   assert.match(src, /supabase_temp/);

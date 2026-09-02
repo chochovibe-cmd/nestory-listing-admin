@@ -317,7 +317,7 @@ check("source: image fetch 10s timeout + referer + limits + variant", () => {
   assert.match(src, /IMAGE_FETCH_TIMEOUT_MS|10_000|10000/);
   assert.match(src, /Referer/);
   assert.match(src, /MAX_MAIN_IMAGES|MAX_DETAIL_IMAGES|MAX_VARIANT_IMAGES/);
-  assert.match(src, /gateSourceUrl/);
+  assert.match(src, /fetchServerImage/);
   assert.match(src, /image_type:\s*["']variant["']|["']variant["']/);
   assert.match(src, /applyVariantImageIds/);
   assert.match(src, /urlToImageId/);

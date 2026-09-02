@@ -8,7 +8,8 @@ const archiveDir = path.join(root, "supabase", "history", "pre_tracking_migratio
 const expectedActive = [
   "20260818142712_baseline_existing_schema_20260818.sql",
   "20260818142919_production_reconcile_20260818.sql",
-  "20260822223100_variant_split_override_semantics.sql"
+  "20260822223100_variant_split_override_semantics.sql",
+  "20260902090000_guard_current_image_batch_pointer.sql"
 ];
 
 function fail(message) {
@@ -95,6 +96,21 @@ for (const fragment of [
 }
 if (/drop\s+column|alter\s+column[^;]+set\s+not\s+null|update\s+public\.product_variants/i.test(splitOverrides)) {
   fail("D3.10A variant migration must stay additive/null-preserving for legacy fallback");
+}
+
+const batchPointerGuard = fs.readFileSync(path.join(activeDir, expectedActive[3]), "utf8");
+for (const fragment of [
+  "create or replace function public.guard_sensitive_product_draft_fields()",
+  "new.current_image_batch_id is distinct from old.current_image_batch_id",
+  "role in ('admin', 'reviewer')",
+  "coalesce(auth.jwt() ->> 'role', '') = 'service_role'"
+]) {
+  if (!batchPointerGuard.includes(fragment)) {
+    fail(`P1-AUTH batch-pointer guard migration is missing: ${fragment}`);
+  }
+}
+if (/drop\s+column|delete\s+from|update\s+public\.product_drafts/i.test(batchPointerGuard)) {
+  fail("P1-AUTH batch-pointer migration must only replace the guard function, never mutate draft rows");
 }
 
 const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "supabase-local.yml"), "utf8");

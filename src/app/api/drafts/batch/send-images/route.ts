@@ -7,7 +7,10 @@
  * - Does not invent fake CDN URLs
  */
 import { NextRequest } from "next/server";
-import { canOperate } from "@/lib/auth/roles";
+import {
+  loadAuthorizedDraftIds,
+  resolveRequestPrincipal
+} from "@/lib/api/requestPrincipal";
 import {
   evaluateCreateImageBatch,
   type ImageBatchItemInput
@@ -18,8 +21,7 @@ import {
   runSendImagesAutoChain
 } from "@/lib/images/sendImagesAutoChain";
 import { notifyMake } from "@/lib/notifications/make";
-import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/domain";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -34,33 +36,36 @@ export async function POST(request: NextRequest) {
 
   const uniqueIds = [...new Set(draftIds as string[])];
 
-  const authSupabase = await createServerSupabaseClient();
-  const {
-    data: { user }
-  } = await authSupabase.auth.getUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await authSupabase.from("profiles").select("role").eq("id", user.id).single();
-  if (!canOperate(profile?.role as UserRole | undefined)) {
-    return Response.json({ error: "Operator role is required" }, { status: 403 });
+  const principalResult = await resolveRequestPrincipal(request);
+  if (!principalResult.ok) return principalResult.response;
+  if (principalResult.principal.kind !== "session") {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const authorizedIdsResult = await loadAuthorizedDraftIds(principalResult.principal, uniqueIds);
+  if (!authorizedIdsResult.ok) return authorizedIdsResult.response;
+  const authorizedDraftIds = authorizedIdsResult.ids;
 
   const serviceSupabase = createServiceSupabaseClient();
 
-  const { data: drafts, error: draftError } = await serviceSupabase
-    .from("product_drafts")
-    .select("id, title_zh, taobao_title, original_title, image_flags")
-    .in("id", uniqueIds);
+  const { data: drafts, error: draftError } = authorizedDraftIds.length
+    ? await serviceSupabase
+        .from("product_drafts")
+        .select("id, title_zh, taobao_title, original_title, image_flags")
+        .in("id", authorizedDraftIds)
+    : { data: [], error: null };
 
   if (draftError) {
     return Response.json({ error: draftError.message }, { status: 500 });
   }
 
-  const { data: images, error: imageError } = await serviceSupabase
-    .from("product_images")
-    .select("id, draft_id, image_type, process_intent, is_spec_process, sort_order, created_at")
-    .in("draft_id", uniqueIds)
-    .order("sort_order", { ascending: true });
+  const { data: images, error: imageError } = authorizedDraftIds.length
+    ? await serviceSupabase
+        .from("product_images")
+        .select("id, draft_id, image_type, process_intent, is_spec_process, sort_order, created_at")
+        .in("draft_id", authorizedDraftIds)
+        .order("sort_order", { ascending: true })
+    : { data: [], error: null };
 
   if (imageError) {
     return Response.json(
@@ -75,10 +80,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const imagesByDraft = new Map<string, NonNullable<typeof images>>();
+  type BatchImageInput = ImageBatchItemInput["images"][number];
+  const imagesByDraft = new Map<string, BatchImageInput[]>();
   for (const row of images ?? []) {
+    const image: BatchImageInput = {
+      id: row.id,
+      image_type: row.image_type,
+      process_intent: row.process_intent,
+      is_spec_process: row.is_spec_process ?? false,
+      sort_order: row.sort_order ?? 0,
+      created_at: row.created_at ?? ""
+    };
     const list = imagesByDraft.get(row.draft_id) ?? [];
-    list.push(row);
+    list.push(image);
     imagesByDraft.set(row.draft_id, list);
   }
 
@@ -95,14 +109,7 @@ export async function POST(request: NextRequest) {
       draftId: id,
       title,
       imageFlags: draft?.image_flags ?? null,
-      images: (imagesByDraft.get(id) ?? []).map((img) => ({
-        id: img.id,
-        image_type: img.image_type,
-        process_intent: img.process_intent,
-        is_spec_process: img.is_spec_process ?? false,
-        sort_order: img.sort_order ?? 0,
-        created_at: img.created_at ?? ""
-      }))
+      images: imagesByDraft.get(id) ?? []
     };
   });
 
@@ -146,7 +153,7 @@ export async function POST(request: NextRequest) {
       done_count: 0,
       failed_count: 0,
       regenerate_item_count: evaluated.regenerateItemCount,
-      created_by: user.id,
+      created_by: principalResult.principal.userId,
       created_at: now,
       updated_at: now,
       snapshot_json: evaluated.snapshot

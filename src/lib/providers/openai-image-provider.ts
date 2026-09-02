@@ -14,6 +14,7 @@
  * Never invents fake image bytes/URLs.
  */
 
+import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import type { ImageProvider, ImageProviderInput, ImageProviderOutput } from "@/lib/providers/image";
 
 const DEFAULT_MODEL = "gpt-image-1";
@@ -115,25 +116,9 @@ export function estimateImageCostUsd(model: string, quality: string): number {
 }
 
 async function fetchSourceImage(url: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  const response = await fetch(url, {
-    method: "GET",
-    redirect: "follow",
-    headers: { Accept: "image/*,*/*" }
-  });
-  if (!response.ok) {
-    throw new Error(`fetch source image failed: HTTP ${response.status}`);
-  }
-  const contentType = response.headers.get("content-type") ?? "image/png";
-  const mimeType = contentType.split(";")[0]?.trim() || "image/png";
-  if (!mimeType.startsWith("image/") && !mimeType.includes("octet-stream")) {
-    throw new Error(`unexpected content-type: ${mimeType}`);
-  }
-  const ab = await response.arrayBuffer();
-  if (!ab.byteLength) throw new Error("empty source image body");
-  if (ab.byteLength > 25 * 1024 * 1024) {
-    throw new Error(`source image too large: ${ab.byteLength} bytes`);
-  }
-  return { buffer: Buffer.from(ab), mimeType: mimeType.includes("octet-stream") ? "image/png" : mimeType };
+  const fetched = await fetchServerImage(url, { maxBytes: 25 * 1024 * 1024 });
+  if (!fetched.ok) throw new Error(fetched.message);
+  return { buffer: fetched.bytes, mimeType: fetched.contentType };
 }
 
 function pickExtension(mimeType: string): string {

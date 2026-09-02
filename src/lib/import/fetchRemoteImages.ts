@@ -1,8 +1,8 @@
 /**
- * CAP-1: server-side image fetch → Supabase Storage product-images.
+ * CAP-1: server-side image fetch ??Supabase Storage product-images.
  * Failures become warnings; never block draft creation.
  */
-import { gateSourceUrl } from "@/lib/sourceFetch/ssrf";
+import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import {
   IMAGE_FETCH_TIMEOUT_MS,
   MAX_DETAIL_IMAGES,
@@ -28,7 +28,7 @@ export type FetchRemoteImagesResult = {
   warnings: string[];
   /** Updated raw_capture.server.image_fetch entries */
   imageFetchLog: ImageFetchItemResult[];
-  /** CAP-2.6: source URL → product_images.id for successful fetches (incl. variant). */
+  /** CAP-2.6: source URL ??product_images.id for successful fetches (incl. variant). */
   urlToImageId: Record<string, string>;
 };
 
@@ -46,6 +46,11 @@ function extFromContentTypeAndUrl(contentType: string | null, url: string): stri
   if (ct.includes("png")) return "png";
   if (ct.includes("webp")) return "webp";
   if (ct.includes("gif")) return "gif";
+  if (ct.includes("avif")) return "avif";
+  if (ct.includes("heic") || ct.includes("heif")) return "heic";
+  if (ct.includes("tiff")) return "tiff";
+  if (ct.includes("bmp")) return "bmp";
+  if (ct.includes("icon")) return "ico";
   if (ct.includes("jpeg") || ct.includes("jpg")) return "jpg";
   const path = url.split("?")[0] ?? "";
   const m = path.match(/\.([a-zA-Z0-9]{2,5})$/);
@@ -53,24 +58,10 @@ function extFromContentTypeAndUrl(contentType: string | null, url: string): stri
   return "jpg";
 }
 
-function isImageContentType(contentType: string | null): boolean {
-  if (!contentType) return true; // some CDNs omit; allow by magic later
-  const ct = contentType.toLowerCase();
-  if (ct.startsWith("image/")) return true;
-  // alicdn sometimes returns octet-stream
-  if (ct.includes("octet-stream") || ct.includes("binary")) return true;
-  return false;
-}
-
 async function fetchOneImageBuffer(
   url: string,
   sourceUrl: string
 ): Promise<{ ok: true; buffer: Buffer; contentType: string | null } | { ok: false; error: string }> {
-  const gated = gateSourceUrl(url);
-  if (!gated.ok) {
-    return { ok: false, error: `URL 不安全或無效（${gated.reason}）` };
-  }
-
   const referer = refererFromSourceUrl(sourceUrl);
   const headers: Record<string, string> = {
     "User-Agent":
@@ -79,55 +70,17 @@ async function fetchOneImageBuffer(
   };
   if (referer) headers.Referer = referer;
 
-  let response: Response;
-  try {
-    response = await fetch(gated.url.toString(), {
-      method: "GET",
-      headers,
-      redirect: "follow",
-      signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS)
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/aborted|timeout/i.test(msg)) {
-      return { ok: false, error: `逾時（>${IMAGE_FETCH_TIMEOUT_MS / 1000}s）` };
-    }
-    return { ok: false, error: `抓取失敗：${msg}` };
+  const fetched = await fetchServerImage(url, {
+    headers,
+    timeoutMs: IMAGE_FETCH_TIMEOUT_MS,
+    maxBytes: MAX_IMAGE_BYTES
+  });
+  if (!fetched.ok) {
+    return { ok: false, error: fetched.message };
   }
 
-  if (!response.ok) {
-    return { ok: false, error: `HTTP ${response.status}` };
-  }
-
-  const contentType = response.headers.get("content-type");
-  if (!isImageContentType(contentType)) {
-    return { ok: false, error: `非圖片 Content-Type：${contentType ?? "unknown"}` };
-  }
-
-  const contentLength = response.headers.get("content-length");
-  if (contentLength && Number(contentLength) > MAX_IMAGE_BYTES) {
-    return { ok: false, error: `超過 ${MAX_IMAGE_BYTES} bytes` };
-  }
-
-  let buffer: Buffer;
-  try {
-    const ab = await response.arrayBuffer();
-    buffer = Buffer.from(ab);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: `讀取 body 失敗：${msg}` };
-  }
-
-  if (buffer.byteLength > MAX_IMAGE_BYTES) {
-    return { ok: false, error: `超過 ${MAX_IMAGE_BYTES} bytes` };
-  }
-  if (buffer.byteLength < 32) {
-    return { ok: false, error: "檔案過小，不像圖片" };
-  }
-
-  return { ok: true, buffer, contentType };
+  return { ok: true, buffer: fetched.bytes, contentType: fetched.contentType };
 }
-
 type ServiceStorageClient = {
   storage: {
     from: (bucket: string) => {
@@ -153,8 +106,8 @@ type ServiceStorageClient = {
 
 /**
  * Fetch main + detail + variant image URLs into Storage and product_images rows.
- * CAP-2.6: variant thumbs use image_type='variant'; url→id map for product_variants.image_id.
- * Failures never throw — caller still persists variants with null image_id.
+ * CAP-2.6: variant thumbs use image_type='variant'; url?d map for product_variants.image_id.
+ * Failures never throw ??caller still persists variants with null image_id.
  */
 export async function fetchAndStoreCaptureImages(input: {
   serviceSupabase: ServiceStorageClient;
@@ -177,21 +130,21 @@ export async function fetchAndStoreCaptureImages(input: {
 
   if (input.mainImageUrls.length > MAX_MAIN_IMAGES) {
     warnings.push(
-      `主圖超過上限 ${MAX_MAIN_IMAGES} 張，已截斷（來源 ${input.mainImageUrls.length} 張）`
+      `銝餃?頞?銝? ${MAX_MAIN_IMAGES} 撘蛛?撌脫?瘀?靘? ${input.mainImageUrls.length} 撘蛛?`
     );
   }
   if (input.detailImageUrls.length > MAX_DETAIL_IMAGES) {
     warnings.push(
-      `詳情圖超過上限 ${MAX_DETAIL_IMAGES} 張，已截斷（來源 ${input.detailImageUrls.length} 張）`
+      `閰單???????${MAX_DETAIL_IMAGES} 撘蛛?撌脫?瘀?靘? ${input.detailImageUrls.length} 撘蛛?`
     );
   }
   if (variantSrc.length > MAX_VARIANT_IMAGES) {
     warnings.push(
-      `款式縮圖超過上限 ${MAX_VARIANT_IMAGES} 張，已截斷（來源 ${variantSrc.length} 張）`
+      `甈曉?蝮桀?頞?銝? ${MAX_VARIANT_IMAGES} 撘蛛?撌脫?瘀?靘? ${variantSrc.length} 撘蛛?`
     );
   }
 
-  // Deduplicate jobs by URL (G1: one fetch → shared image_id across variants)
+  // Deduplicate jobs by URL (G1: one fetch ??shared image_id across variants)
   const jobs: Array<{ url: string; image_type: CaptureImageType; sort_order: number }> = [];
   const scheduled = new Set<string>();
   function schedule(url: string, image_type: CaptureImageType, sort_order: number) {
@@ -215,7 +168,7 @@ export async function fetchAndStoreCaptureImages(input: {
       };
       results.push(item);
       warnings.push(
-        `圖片代抓失敗（${job.image_type}）：${fetched.error} · ${truncateUrl(job.url)}`
+        `??隞??憭望?嚗?{job.image_type}嚗?${fetched.error} 繚 ${truncateUrl(job.url)}`
       );
       continue;
     }
@@ -240,7 +193,7 @@ export async function fetchAndStoreCaptureImages(input: {
       };
       results.push(item);
       warnings.push(
-        `圖片上傳 Storage 失敗（${job.image_type}）：${uploadError.message} · ${truncateUrl(job.url)}`
+        `??銝 Storage 憭望?嚗?{job.image_type}嚗?${uploadError.message} 繚 ${truncateUrl(job.url)}`
       );
       continue;
     }
@@ -271,7 +224,7 @@ export async function fetchAndStoreCaptureImages(input: {
       };
       results.push(item);
       warnings.push(
-        `圖片寫入 product_images 失敗（${job.image_type}）：${errMsg} · ${truncateUrl(job.url)}`
+        `??撖怠 product_images 憭望?嚗?{job.image_type}嚗?${errMsg} 繚 ${truncateUrl(job.url)}`
       );
       continue;
     }
@@ -299,8 +252,8 @@ export async function fetchAndStoreCaptureImages(input: {
 }
 
 /**
- * Pure helper: apply url→image_id map onto variant rows; strip temporary image_url.
- * Used by createCaptureDraft + verify-cap1 (fetch-all-fail → all image_id null).
+ * Pure helper: apply url?mage_id map onto variant rows; strip temporary image_url.
+ * Used by createCaptureDraft + verify-cap1 (fetch-all-fail ??all image_id null).
  */
 export function applyVariantImageIds(
   variantRows: Array<Record<string, unknown>>,

@@ -203,8 +203,8 @@ await check("to_trad wired (no honest skip)", () => {
 
 await check("compose-detail route: dual auth + only HTTP export + no self-fetch", () => {
   const src = read("src/app/api/images/compose-detail/route.ts");
-  assert.match(src, /requireWorkerToken/);
-  assert.match(src, /canOperate/);
+  assert.match(src, /resolveRequestPrincipal/);
+  assert.match(src, /resolveAuthorizedDraftId/);
   assert.match(src, /runComposeDetailForDraft/);
   assert.match(src, /export async function POST/);
   assert.doesNotMatch(src, /export (async )?function (?!POST)/);

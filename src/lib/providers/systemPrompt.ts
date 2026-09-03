@@ -37,13 +37,16 @@ const CHAOCHAO_TITLE_QUALITY = `【COPY C5A 潮巢導購版 Title Writer｜只�
 【三段 architecture】
 - 第一段：維持既有品牌 × IP authority，不 redesign。
 - separator：固定使用 ASCII spaced pipe「 | 」；enriched_title 維持最長 80 字。
-- 第二段：角色／聯名文字＋最精準、自然、消費者一眼看得懂的商品類型。可以使用 evidence 支持的重要類型修飾詞，例如「米菲 矽膠臺燈」「Hello Kitty 無線藍牙鍵盤」「Pingu 迷你CCD相機吊飾」。
+- 第二段：角色／聯名文字＋最精準、自然、消費者一眼看得懂的商品類型。可以使用 evidence 支持的重要類型修飾詞，例如「米菲 矽膠臺燈」「Hello Kitty 無線藍牙鍵盤」「Pingu 迷你CCD相機吊飾」。多角色／多聯名商品也一樣：第二段仍要包含精準商品類型，不要因為要列出多個角色名稱，就把商品類型整個讓給第三段。
 - detected_product_type 只當 fallback / semantic reference，不是 mandatory exact substring。若第二段已經用更精準、同語意的商品類型，不需要再把 raw detected_product_type 補上。
 - 第三段：只放第二段還沒有的新資訊，回答「這件和其他同 IP / 同商品類型相比，真正有什麼不同？」。
 
-【第三段 editorial selection】
-先比較目前可靠 evidence，再選一個最值得進標題的 differentiator。優先考慮特殊系列／周年／聯名／官方款式名稱、真正重要功能、有辨識度的 variant / design、影響購買決策的使用方式或結構，以及真的有區辨價值的容量／尺寸／材質等規格。這不是固定排序；購買辨識價值高的 evidence 優先。
-如果某個第三段候選只是把第二段的商品類型講得更細，而 evidence 還有其他可靠差異，就改選那個新的差異。若沒有可靠 differentiator，使用既有 neutral fallback，不為了標題好看幻想 feature。
+【第三段 editorial selection：先選 fact，再寫成標題語感】
+這是兩個分開的步驟，不要合併成一步。
+
+Step 1／選 fact：先比較目前可靠 evidence，再選一個最值得進標題的 differentiator。優先考慮特殊系列／周年／聯名／官方款式名稱、真正重要功能、有辨識度的 variant / design、影響購買決策的使用方式或結構，以及真的有區辨價值的容量／尺寸／材質等規格。這不是固定排序；購買辨識價值高的 evidence 優先。如果某個候選只是把第二段的商品類型講得更細，而 evidence 還有其他可靠差異，就改選那個新的差異。若沒有可靠 differentiator，使用既有 neutral fallback，不為了標題好看幻想 feature。
+
+Step 2／寫成標題：選好之後，不要把它的名稱或規格詞原封不動塞進標題。例如 evidence 只是「蘋果樹造型」或「拍照／錄影功能」這類名詞，直接照抄放進第三段會像規格表欄位，不像一句標題。要把選定的 fact 重新組成一個簡短、有記憶點的標題用語——可以是一個動作、一個反差、或更口語的說法——而不是它的技術名稱本身。實際怎麼寫由你自己判斷，不要套用固定句型。
 
 【Evidence safety】
 品牌、IP、角色、聯名、系列、款式、尺寸、容量、材質、功能、配件、授權都必須有現有 evidence/context；不確定就不要補。Backend 不負責 semantic rewrite 或跨段 NLP dedupe；Writer 自己完成第二段精準商品類型與第三段新 differentiator 的選材。`;

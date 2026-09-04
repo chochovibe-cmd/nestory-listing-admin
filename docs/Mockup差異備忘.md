@@ -18,6 +18,18 @@
 
 ## 差異清單
 
+### 差異 46：Shopify 已建立商品改為「本機儲存／遠端同步」雙軌操作
+
+- **差在哪**：
+  1. Mockup 只畫「已同步 Shopify」結果狀態；正式版把狀態拆為尚未建立、待首次同步、未同步修改、同步中、已同步、部分同步、外部衝突、失敗、遠端已刪除。
+  2. 已有真實 Shopify product ID 時，卡片把 **「只儲存工具」** 與 **「儲存並同步 Shopify」** 分成兩顆明確按鈕；尚未建立者仍走原本「發布／匯出」。
+  3. read-before-write 發現後台較新時先停止，不靜默覆蓋；款式／媒體移除與 ACTIVE 更新都用既有 Modal／手機 bottom sheet 再確認。
+  4. 工具內軟封存與 Shopify 遠端封存／恢復／永久刪除分開；永久刪除須輸入完整商品名稱，工具保留稽核紀錄。
+  5. 發布紀錄頁沿用原卡片版面，只追加 Shopify 封存／恢復入口；恢復一律回 DRAFT，不直接 ACTIVE。
+- **為什麼**：老闆要確認工具修改、刪除、款式、圖片都能同步，但仍要一眼分辨「只存工具」與「已送進 Shopify」，避免把本機成功誤認成遠端成功。
+- **誰拍板**：老闆＋Codex 專案指揮，2026-09-03～2026-09-04（批准 G4 準備；真店只允許 1 筆 DRAFT、不得 ACTIVE；UX 方案回覆「好」）。
+- **現況**：✅ **G4-D 本機 source 與 browser QA 已完成**（2026-09-04）；mobile + desktop、dark/kitty/nordic、永久刪除精確標題確認、disabled/enabled 行為均通過，fresh tab hydration error 0。typecheck、`verify:all` 已通過。尚未 push Preview、套用 dirty-trigger migration，亦尚未做真實 Shopify E2E／寫入；真店仍只允許唯一 1 筆 `DRAFT`、不得 `ACTIVE`。
+
 ### 差異 45：B4 失敗卡「需修改」同大＋紅字上標題列
 
 - **差在哪**：
@@ -808,6 +820,8 @@
 ---
 
 ## 修訂紀錄
+
+- 2026-09-04（Codex）：差異 46 **G4-D Shopify full-sync UX**——同步狀態、雙軌儲存、衝突／移除／ACTIVE 確認、遠端封存／恢復／永久刪除；正式真店仍只允許唯一 DRAFT。
 
 - 2026-07-14（Grok）：差異 39 **E5-open**——儀表板健康指標（E4 下）；
   生成熱圖 8 週／文案重做率（欄≥2）／Tag 提醒率（warnings 白名單）；零 SQL。

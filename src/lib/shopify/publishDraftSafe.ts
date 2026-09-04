@@ -11,6 +11,7 @@ import {
   setShopifyProductStatus,
   type ShopifyAdminGraphQLCaller
 } from "@/lib/shopify/productLifecycle";
+import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import {
   findDuplicateProductVariantRows,
@@ -295,6 +296,9 @@ export async function publishDraft(
     return { ok: false, status: 404, error: error?.message ?? "Draft not found" };
   }
 
+  const guardError = checkLiveTestGuard({ draftIds: [id], publishMode });
+  if (guardError) return { ok: false, status: 403, error: guardError };
+
   if (draft.status === "publishing" || draft.publish_status === "publishing") {
     return { ok: false, status: 409, error: "Draft is already publishing; duplicate publish request blocked" };
   }
@@ -324,7 +328,7 @@ export async function publishDraft(
 
   // Retry idempotency: a failed draft with a real ID must reconcile that remote product first.
   if (!mockMode && draft.status === "api_failed" && isRealShopifyProductId(existingProductId)) {
-    let remote: { id: string; status: "ACTIVE" | "DRAFT" } | null;
+    let remote: Awaited<ReturnType<typeof getShopifyProductStatus>>;
     try {
       remote = await getShopifyProductStatus(existingProductId, caller);
     } catch (queryError) {
@@ -340,6 +344,14 @@ export async function publishDraft(
         ok: false,
         status: 409,
         error: `Existing Shopify product ${existingProductId} is ACTIVE while local state is api_failed; automatic delete/create is blocked. Manual reconciliation required.`
+      };
+    }
+
+    if (remote && remote.status !== "DRAFT") {
+      return {
+        ok: false,
+        status: 409,
+        error: `Existing Shopify product ${existingProductId} is ${remote.status}; automatic delete/create is blocked. Manual reconciliation required.`
       };
     }
 

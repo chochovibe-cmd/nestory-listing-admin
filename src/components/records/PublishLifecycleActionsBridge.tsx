@@ -13,6 +13,8 @@ type LifecycleRow = {
   shopify_product_id: string | null;
 };
 
+type LifecycleAction = "archive" | "restore";
+
 type TargetMap = Record<string, HTMLElement>;
 
 function isRealProductId(value: string | null): value is string {
@@ -27,7 +29,7 @@ export function PublishLifecycleActionsBridge() {
   const [rows, setRows] = useState<LifecycleRow[]>([]);
   const [targets, setTargets] = useState<TargetMap>({});
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [confirmRow, setConfirmRow] = useState<LifecycleRow | null>(null);
+  const [confirm, setConfirm] = useState<{ row: LifecycleRow; action: LifecycleAction } | null>(null);
 
   const byId = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows]);
 
@@ -37,9 +39,15 @@ export function PublishLifecycleActionsBridge() {
     const { data, error } = await supabase
       .from("product_drafts")
       .select("id, status, publish_status, shopify_product_id")
-      .in("status", ["active_published", "draft_created"])
+      .in("status", ["active_published", "draft_created", "archived"])
       .limit(200);
-    if (error) return;
+    // New status values are additive; fall back for an older preview schema.
+    if (error) {
+      const fallback = await supabase.from("product_drafts").select("id, status, publish_status, shopify_product_id").in("status", ["active_published", "draft_created"]).limit(200);
+      if (fallback.error) return;
+      setRows((fallback.data ?? []) as LifecycleRow[]);
+      return;
+    }
     setRows((data ?? []) as LifecycleRow[]);
   }, []);
 
@@ -75,49 +83,26 @@ export function PublishLifecycleActionsBridge() {
     };
   }, [loadRows, refreshTargets]);
 
-  async function republish(row: LifecycleRow) {
-    if (!isRealProductId(row.shopify_product_id)) return;
+  async function runLifecycle() {
+    if (!confirm || !isRealProductId(confirm.row.shopify_product_id)) return;
+    const { row, action } = confirm;
     setBusyId(row.id);
     try {
-      const response = await fetch(`/api/drafts/${row.id}/publish`, {
+      const response = await fetch(`/api/drafts/${row.id}/shopify-lifecycle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ publishMode: "active", confirmActive: true })
+        body: JSON.stringify({ action, confirmAction: true })
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        showToast(payload.error ?? "重新上架失敗", "error");
+        showToast(payload.error ?? "Shopify 操作失敗", "error");
         return;
       }
-      showToast("已重新上架，同一個 Shopify 商品已恢復 ACTIVE", "success");
+      setConfirm(null);
+      showToast(action === "archive" ? "已封存 Shopify 商品" : "已恢復 Shopify 商品為草稿", "success");
       window.location.assign("/records?tab=published");
     } catch {
-      showToast("重新上架連線失敗", "error");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function confirmUnpublish() {
-    const row = confirmRow;
-    if (!row || !isRealProductId(row.shopify_product_id)) return;
-    setBusyId(row.id);
-    try {
-      const response = await fetch(`/api/drafts/${row.id}/unpublish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmUnpublish: true })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        showToast(payload.error ?? "下架失敗", "error");
-        return;
-      }
-      setConfirmRow(null);
-      showToast("已下架；Shopify 商品保留為草稿", "success");
-      window.location.assign("/records?tab=shopify_drafts");
-    } catch {
-      showToast("下架連線失敗", "error");
+      showToast("Shopify 操作連線失敗", "error");
     } finally {
       setBusyId(null);
     }
@@ -128,7 +113,7 @@ export function PublishLifecycleActionsBridge() {
       {Object.entries(targets).map(([id, target]) => {
         const row = byId.get(id);
         if (!row || !isRealProductId(row.shopify_product_id)) return null;
-        const lifecycleStatus = row.publish_status || row.status;
+        const lifecycleStatus = row.status === "archived" ? "archived" : row.publish_status || row.status;
         if (lifecycleStatus === "active_published") {
           return createPortal(
             <Button
@@ -138,16 +123,16 @@ export function PublishLifecycleActionsBridge() {
               type="button"
               disabled={busyId !== null}
               loading={busyId === id}
-              onClick={() => setConfirmRow(row)}
-              aria-label="下架 Shopify 商品"
+              onClick={() => setConfirm({ row, action: "archive" })}
+              aria-label="封存 Shopify 商品"
             >
-              下架
+              Shopify 封存
             </Button>,
             target,
             `unpublish-${id}`
           );
         }
-        if (lifecycleStatus === "draft_created") {
+        if (lifecycleStatus === "archived") {
           return createPortal(
             <Button
               key={`republish-${id}`}
@@ -156,9 +141,9 @@ export function PublishLifecycleActionsBridge() {
               type="button"
               disabled={busyId !== null}
               loading={busyId === id}
-              onClick={() => void republish(row)}
+              onClick={() => setConfirm({ row, action: "restore" })}
             >
-              重新上架
+              恢復 Shopify
             </Button>,
             target,
             `republish-${id}`
@@ -167,54 +152,38 @@ export function PublishLifecycleActionsBridge() {
         return null;
       })}
 
-      {confirmRow ? (
-        <div
-          role="presentation"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
-            background: "rgba(0,0,0,.28)"
-          }}
+      {confirm ? (
+        <div className="modal-overlay open" role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && busyId === null) setConfirmRow(null);
+            if (event.target === event.currentTarget && busyId === null) setConfirm(null);
           }}
         >
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="shopify-unpublish-title"
-            className="notice"
-            style={{ width: "min(420px, 100%)", padding: 20 }}
+            aria-labelledby="shopify-lifecycle-title"
+            className="modal-box"
           >
-            <p id="shopify-unpublish-title" style={{ margin: 0, fontWeight: 700 }}>
-              確認將此商品下架？
-            </p>
-            <p className="muted" style={{ margin: "8px 0 16px" }}>
-              Shopify 商品會保留，但顧客端將不可購買。
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <div className="modal-hdr"><h3 id="shopify-lifecycle-title">{confirm.action === "archive" ? "確認封存 Shopify 商品" : "確認恢復 Shopify 商品"}</h3><button className="modal-close" type="button" onClick={() => setConfirm(null)} disabled={busyId !== null} aria-label="關閉">×</button></div>
+            <div className="modal-body"><p>{confirm.action === "archive" ? "商品會從顧客端移除，但仍保留在 Shopify 後台，可稍後恢復。" : "商品會恢復為 Shopify 草稿，不會直接公開販售。"}</p><div className="approve-sum-actions">
               <Button
                 size="sm"
                 type="button"
                 disabled={busyId !== null}
-                onClick={() => setConfirmRow(null)}
+                onClick={() => setConfirm(null)}
               >
                 取消
               </Button>
               <Button
-                variant="secondary"
+                variant={confirm.action === "archive" ? "secondary" : "primary"}
                 size="sm"
                 type="button"
-                loading={busyId === confirmRow.id}
-                onClick={() => void confirmUnpublish()}
+                loading={busyId === confirm.row.id}
+                onClick={() => void runLifecycle()}
               >
-                確認下架
+                {confirm.action === "archive" ? "確認封存" : "確認恢復"}
               </Button>
-            </div>
+            </div></div>
           </div>
         </div>
       ) : null}

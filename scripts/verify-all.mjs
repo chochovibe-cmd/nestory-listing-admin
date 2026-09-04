@@ -45,7 +45,11 @@ const scripts = [
   "scripts/verify-syn1.mjs",
   "scripts/verify-p4-source-and-seller.mjs",
   // Shopify Lifecycle Safety A1 — mock/injected only, never real network.
-  "scripts/verify-shopify-lifecycle-safety.mjs"
+  "scripts/verify-shopify-lifecycle-safety.mjs",
+  // G4 live-test allowlist + full-sync source/contract guards.
+  "scripts/verify-shopify-live-test-guard.mjs",
+  "scripts/verify-shopify-full-sync.mjs",
+  "scripts/verify-shopify-sync-ux.mjs"
 ];
 
 for (const script of scripts) {

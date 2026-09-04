@@ -142,6 +142,10 @@ import { ResultCardPricingPanel } from "@/components/listing/result-card/ResultC
 import { ResultCardTagsPanel } from "@/components/listing/result-card/ResultCardTagsPanel";
 import { ResultCardSeoPanel } from "@/components/listing/result-card/ResultCardSeoPanel";
 import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCardImagesPanel";
+import {
+  ShopifySyncControls,
+  ShopifySyncStatusChip
+} from "@/components/listing/ShopifySyncControls";
 
 /** UX-B3-P04: align with MobileTabbar FAB long-press */
 export const LONG_PRESS_MS = 500;
@@ -294,6 +298,12 @@ export function ResultCard({
   // UX-PKG5: editable mid-field spec_text (local state; not CopyVersionField)
   const [specText, setSpecText] = useState(draft.spec_text ?? "");
   const [publishMode, setPublishMode] = useState(draft.publish_mode);
+  const [shopifySyncStatus, setShopifySyncStatus] = useState(
+    draft.shopify_sync_status ?? null
+  );
+  const [shopifySyncError, setShopifySyncError] = useState(
+    draft.shopify_sync_error ?? null
+  );
   // UX-M T64: specs tab local state (hydrate from draft.variant_dimensions + variants)
   const [variantDimensions, setVariantDimensions] = useState<VariantDimension[]>([]);
   const [variantRows, setVariantRows] = useState<VariantFormRow[]>([]);
@@ -517,6 +527,9 @@ export function ResultCard({
       : "";
   const thumbUrl = mainThumbUrl(imageMarks);
   const isArchived = draft.status === "archived";
+  const hasRealShopifyProduct = Boolean(
+    draft.shopify_product_id && draft.shopify_product_id !== "mock-product-id"
+  );
   const canQuickApprove =
     !isArchived &&
     draft.generation_status !== "processing" &&
@@ -724,6 +737,8 @@ export function ResultCard({
     setSku(draft.sku ?? "");
     setSpecText(draft.spec_text ?? "");
     setPublishMode(draft.publish_mode);
+    setShopifySyncStatus(draft.shopify_sync_status ?? null);
+    setShopifySyncError(draft.shopify_sync_error ?? null);
     setCopyDirty(emptyDirtyMap());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.updated_at]);
@@ -852,6 +867,7 @@ export function ResultCard({
       }
       // UX-A T2 / UX-L T62: transient success → toast only
       const okMsg = result.didCommitCopy ? "已定案此文案組合" : "文案組合無變更";
+      if (result.didCommitCopy) await markShopifyDirty();
       setMessage("");
       showToast(okMsg, result.didCommitCopy ? "success" : "info");
       router.refresh();
@@ -860,27 +876,44 @@ export function ResultCard({
     }
   }
 
-  async function save() {
+  async function markShopifyDirty() {
+    if (!hasRealShopifyProduct) return;
+    setShopifySyncStatus("dirty");
+    setShopifySyncError(null);
+    const { error } = await supabase
+      .from("product_drafts")
+      .update({ shopify_sync_status: "dirty", shopify_sync_error: null })
+      .eq("id", draft.id);
+    if (error) {
+      // The Preview may intentionally run before the G4 migration. Local saves
+      // must still work; the sync endpoint will show the migration gate clearly.
+      setShopifySyncError(`Shopify 同步狀態尚未啟用：${error.message}`);
+    }
+  }
+
+  async function save(): Promise<boolean> {
     // D2: any save button should persist on-screen copy too (informative, not blocking).
     // UX-M T64: also writes variant_dimensions + product_variants (persistVariantsSafe).
     setDiscardArm(null);
-    const copyWasDirty =
-      anyCopyDirty(copyDirty) || copyDisplayDiffersFromDb(displayByField, dbSnapshot);
-    let comboNote = "";
-    if (copyWasDirty) {
-      const combo = await commitCopyCombination();
-      if (!combo.ok) {
-        showToast(combo.error ?? "文案組合儲存失敗", "error");
-        setMessage("");
-        return;
+    setComboSaving(true);
+    try {
+      const copyWasDirty =
+        anyCopyDirty(copyDirty) || copyDisplayDiffersFromDb(displayByField, dbSnapshot);
+      let comboNote = "";
+      if (copyWasDirty) {
+        const combo = await commitCopyCombination();
+        if (!combo.ok) {
+          showToast(combo.error ?? "文案組合儲存失敗", "error");
+          setMessage("");
+          return false;
+        }
+        if (combo.didCommitCopy) comboNote = "已一併定案文案組合";
       }
-      if (combo.didCommitCopy) comboNote = "已一併定案文案組合";
-    }
 
-    const dimsForSave = clampDimensions(variantDimensions);
-    const { error } = await supabase
-      .from("product_drafts")
-      .update({
+      const dimsForSave = clampDimensions(variantDimensions);
+      const { error } = await supabase
+        .from("product_drafts")
+        .update({
         // Copy columns may already be written by commitCopyCombination; re-write is idempotent.
         title_zh: title || null,
         description_html: normalizeDescriptionToPlainText(description) || null,
@@ -906,35 +939,40 @@ export function ResultCard({
         publish_mode: publishMode,
         // UX-M T64: axis defs on draft (same column as WorkspaceInputPanel)
         variant_dimensions: dimsForSave
-      })
-      .eq("id", draft.id);
+        })
+        .eq("id", draft.id);
 
-    if (error) {
-      showToast(error.message || "儲存失敗", "error");
-      setMessage("");
-      return;
-    }
+      if (error) {
+        showToast(error.message || "儲存失敗", "error");
+        setMessage("");
+        return false;
+      }
 
     // UX-M T64: insert-first overwrite via shared lib (no new API)
     // Cast: browser client matches SupabaseLike; avoid TS2589 on full generic client.
-    const inserts = formRowsToDbInserts(dimsForSave, variantRows.filter(isVariantRowFilled));
-    const persistResult = await persistVariantsSafe(
-      supabase as unknown as SupabaseLike,
-      draft.id,
-      inserts.map((row) => ({ ...row, draft_id: draft.id }))
-    );
-    if (!persistResult.ok) {
-      showToast(persistResult.error || "款式儲存失敗", "error");
-      setMessage("");
-      return;
-    }
+      const inserts = formRowsToDbInserts(dimsForSave, variantRows.filter(isVariantRowFilled));
+      const persistResult = await persistVariantsSafe(
+        supabase as unknown as SupabaseLike,
+        draft.id,
+        inserts.map((row) => ({ ...row, draft_id: draft.id }))
+      );
+      if (!persistResult.ok) {
+        showToast(persistResult.error || "款式儲存失敗", "error");
+        setMessage("");
+        return false;
+      }
 
-    setVariantsDirty(false);
-    // UX-A T2 / UX-L T62: transient success → toast only
-    const okMsg = comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改";
-    setMessage("");
-    showToast(okMsg, "success");
-    router.refresh();
+      setVariantsDirty(false);
+      await markShopifyDirty();
+      // UX-A T2 / UX-L T62: transient success → toast only
+      const okMsg = comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改";
+      setMessage("");
+      showToast(okMsg, "success");
+      router.refresh();
+      return true;
+    } finally {
+      setComboSaving(false);
+    }
   }
 
   async function regenerateField(field: CopyVersionField) {
@@ -1013,6 +1051,7 @@ export function ResultCard({
       setMessage("");
       showToast(`「${COPY_VERSION_FIELD_LABELS[field]}」已重生`, "success");
       await loadHistory({ [field]: nextText });
+      await markShopifyDirty();
       router.refresh();
     } catch {
       showToast("單欄重生連線失敗", "error");
@@ -1051,6 +1090,7 @@ export function ResultCard({
         setCopyDirty(emptyDirtyMap());
         setRegenOpen(false);
         setRegenNotes("");
+        await markShopifyDirty();
       } else {
         setMessage("");
         showToast(payload.error ?? "重新生成失敗", "error");
@@ -1563,6 +1603,7 @@ export function ResultCard({
       showToast(`刪除圖片失敗：${error.message}`, "error");
     } else {
       showToast("已刪除圖片", "success");
+      await markShopifyDirty();
     }
     if (error) {
       setFadingImageIds((prev) => {
@@ -1606,6 +1647,7 @@ export function ResultCard({
           : row
       )
     );
+    await markShopifyDirty();
     router.refresh();
   }
 
@@ -1632,6 +1674,7 @@ export function ResultCard({
           : row
       )
     );
+    await markShopifyDirty();
     router.refresh();
   }
 
@@ -2078,6 +2121,13 @@ export function ResultCard({
           </span>
         ) : null}
         {secondary ? <StatusBadge status={secondary} /> : null}
+        {isReadyStation || draft.shopify_product_id ? (
+          <ShopifySyncStatusChip
+            error={shopifySyncError}
+            productId={draft.shopify_product_id}
+            status={shopifySyncStatus}
+          />
+        ) : null}
         {timeLabel ? (
           <span className="rc-time-ago muted" title={timeTitle || undefined}>
             {timeLabel}
@@ -2773,10 +2823,35 @@ export function ResultCard({
             </div>
           ) : null}
           <div className="rc-actions">
+            {hasRealShopifyProduct ? (
+              <ShopifySyncControls
+                adminUrl={draft.shopify_admin_url}
+                disabled={
+                  approveSummaryBusy ||
+                  comboSaving ||
+                  station3Busy ||
+                  quickBusy ||
+                  archiveBusy
+                }
+                draftId={draft.id}
+                draftStatus={draft.status}
+                hasLocalChanges={hasUncommittedEdits()}
+                onRefresh={() => router.refresh()}
+                onSaveLocal={save}
+                onStatusChange={(status, error = null) => {
+                  setShopifySyncStatus(status);
+                  setShopifySyncError(error);
+                }}
+                productId={draft.shopify_product_id}
+                syncError={shopifySyncError}
+                syncStatus={shopifySyncStatus}
+                title={draft.title_zh || draft.taobao_title || draft.original_title || "未命名草稿"}
+              />
+            ) : null}
             {isCopyStation ? (
               <>
                 <span className="rc-actions-group">
-                  {hasUncommittedEdits() ? (
+                  {hasUncommittedEdits() && !hasRealShopifyProduct ? (
                     <Button
                       size="sm"
                       disabled={comboSaving || regeneratingField != null}
@@ -2861,7 +2936,7 @@ export function ResultCard({
                 ) : (
                   <>
                     {/* UX-M T64: 站③ 規格／商品級價可編，需有儲存入口 */}
-                    {hasUncommittedEdits() ? (
+                    {hasUncommittedEdits() && !hasRealShopifyProduct ? (
                       <Button
                         size="sm"
                         disabled={station3Busy}

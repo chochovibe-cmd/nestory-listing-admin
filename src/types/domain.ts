@@ -44,6 +44,33 @@ export type PublishStatus =
   | "csv_ready"
   | "failed";
 
+/** G4: local-to-Shopify synchronization state (migration 20260903100000). */
+export type ShopifySyncStatus =
+  | "never"
+  | "synced"
+  | "dirty"
+  | "syncing"
+  | "partial"
+  | "error"
+  | "conflict"
+  | "remote_deleted";
+
+/** G4: auditable Shopify synchronization operation. */
+export type ShopifySyncOperation =
+  | "create"
+  | "update"
+  | "verify"
+  | "archive"
+  | "restore"
+  | "delete";
+
+export type ShopifySyncJobStatus =
+  | "queued"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "skipped";
+
 export type ImageType = "main" | "detail" | "spec" | "generated_detail" | "variant";
 
 export type ImageStatus = "pending" | "processing" | "done" | "failed" | "skipped";
@@ -132,6 +159,12 @@ export interface ProductDraft {
   publish_status: PublishStatus;
   shopify_product_id: string | null;
   shopify_admin_url: string | null;
+  /** G4: optional until the full-sync migration is applied. */
+  shopify_sync_status?: ShopifySyncStatus | null;
+  shopify_synced_at?: string | null;
+  shopify_remote_updated_at?: string | null;
+  shopify_sync_hash?: string | null;
+  shopify_sync_error?: string | null;
   error_message: string | null;
   created_by: string | null;
   reviewed_by: string | null;
@@ -320,6 +353,9 @@ export interface ProductVariantRow {
   inventory_quantity: number;
   inventory_policy: "deny" | "continue";
   image_id: string | null;
+  /** G4: remote identities, optional until migration 20260903100000. */
+  shopify_variant_id?: string | null;
+  shopify_inventory_item_id?: string | null;
   created_at: string;
 }
 
@@ -353,5 +389,29 @@ export interface ProductImage {
    * see docs/Mockup差異備忘.md 差異2. May still be a main product photo.
    */
   is_spec_process: boolean;
+  /** G4: remote identities, optional until migration 20260903100000. */
+  shopify_media_id?: string | null;
+  shopify_file_id?: string | null;
+  /** Hash of the exact source URL last sent to Shopify; detects image replacement. */
+  shopify_source_hash?: string | null;
   created_at: string;
+}
+
+/** G4: one auditable Shopify sync mutation/readback record. */
+export interface ShopifySyncJob {
+  id: string;
+  draft_id: string;
+  operation: ShopifySyncOperation;
+  status: ShopifySyncJobStatus;
+  shopify_product_id: string | null;
+  shopify_remote_id: string | null;
+  request_hash: string | null;
+  request_payload: unknown;
+  response_payload: unknown;
+  error_code: string | null;
+  error_message: string | null;
+  created_by: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
 }

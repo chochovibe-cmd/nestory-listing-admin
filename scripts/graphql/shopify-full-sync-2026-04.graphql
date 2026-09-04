@@ -1,0 +1,200 @@
+query ProductSyncSnapshot($id: ID!) {
+  product(id: $id) {
+    id
+    title
+    handle
+    descriptionHtml
+    vendor
+    productType
+    tags
+    status
+    updatedAt
+    seo {
+      title
+      description
+    }
+    variants(first: 100) {
+      nodes {
+        id
+        title
+        sku
+        price
+        compareAtPrice
+        inventoryPolicy
+        selectedOptions {
+          name
+          value
+        }
+        inventoryItem {
+          id
+          tracked
+          unitCost {
+            amount
+            currencyCode
+          }
+          inventoryLevels(first: 20) {
+            nodes {
+              location {
+                id
+                name
+              }
+              quantities(names: ["available"]) {
+                name
+                quantity
+              }
+            }
+          }
+        }
+      }
+    }
+    media(first: 100) {
+      nodes {
+        id
+        alt
+        mediaContentType
+        status
+        ... on MediaImage {
+          image {
+            url
+          }
+        }
+        ... on ExternalVideo {
+          originUrl
+        }
+      }
+    }
+    metafields(first: 50, namespace: "custom") {
+      nodes {
+        id
+        namespace
+        key
+        type
+        value
+        updatedAt
+      }
+    }
+  }
+}
+
+mutation SyncProductCore($product: ProductUpdateInput!) {
+  productUpdate(product: $product) {
+    product {
+      id
+      status
+      updatedAt
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation SyncProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+    productVariants {
+      id
+      sku
+      price
+      compareAtPrice
+      inventoryPolicy
+      inventoryItem {
+        id
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation CreateProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkCreate(productId: $productId, variants: $variants) {
+    productVariants {
+      id
+      sku
+      price
+      compareAtPrice
+      inventoryItem {
+        id
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation DeleteProductVariants($productId: ID!, $variantsIds: [ID!]!) {
+  productVariantsBulkDelete(productId: $productId, variantsIds: $variantsIds) {
+    product {
+      id
+      updatedAt
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation AddProductMedia($product: ProductUpdateInput!, $media: [CreateMediaInput!]!) {
+  productUpdate(product: $product, media: $media) {
+    product {
+      id
+      updatedAt
+      media(first: 100) {
+        nodes {
+          id
+          alt
+          mediaContentType
+          status
+        }
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation UpdateProductFiles($files: [FileUpdateInput!]!) {
+  fileUpdate(files: $files) {
+    files {
+      id
+      alt
+      fileStatus
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation ChangeProductStatus($product: ProductUpdateInput!) {
+  productUpdate(product: $product) {
+    product {
+      id
+      status
+      updatedAt
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation DeleteProduct($input: ProductDeleteInput!) {
+  productDelete(input: $input) {
+    deletedProductId
+    userErrors {
+      field
+      message
+    }
+  }
+}

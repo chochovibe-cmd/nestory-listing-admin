@@ -15,7 +15,7 @@ assert.match(unpublish, /canPublish\(/, "unpublish must use publish authorizatio
 assert.match(unpublish, /setShopifyProductStatus\(productId,\s*"DRAFT"\)/, "unpublish must use DRAFT status mutation");
 assert.match(unpublish, /published_at intentionally preserved/, "published_at must be preserved");
 assert.match(unpublish, /shopify_product_id \/ shopify_admin_url intentionally preserved/, "same Shopify linkage must be preserved");
-assert.match(lifecycle, /mutation ProductChangeStatus/, "central productChangeStatus helper missing");
+assert.match(lifecycle, /mutation ProductUpdateStatus/, "central non-deprecated productUpdate status helper missing");
 assert.match(lifecycle, /product\.id !== productId/, "status helper must validate returned product id");
 assert.match(lifecycle, /product\.status !== status/, "status helper must validate returned status");
 assert.match(lifecycle, /mutation ProductDelete/, "partial-DRAFT cleanup helper missing");
@@ -43,14 +43,16 @@ assert(variantIndex > persistIndex, "variant sync must happen after productId pe
 assert(activeIndex > variantIndex, "ACTIVE promotion must happen after variant sync");
 
 assert.match(recordsPage, /PublishLifecycleActionsBridge/, "records page must wire lifecycle actions");
-assert.match(actions, />\s*下架\s*</, "active product unpublish action missing");
-assert.match(actions, />\s*重新上架\s*</, "draft product republish action missing");
-assert.match(actions, /確認將此商品下架？/, "unpublish confirmation copy missing");
-assert.match(actions, /Shopify 商品會保留，但顧客端將不可購買。/, "unpublish consequence copy missing");
+assert.match(actions, />\s*Shopify 封存\s*</, "active product archive action missing");
+assert.match(actions, />\s*恢復 Shopify\s*</, "archived product restore action missing");
+assert.match(actions, /確認封存 Shopify 商品/, "archive confirmation copy missing");
+assert.match(actions, /商品會從顧客端移除，但仍保留在 Shopify 後台/, "archive consequence copy missing");
 assert.match(actions, />\s*取消\s*</, "confirmation cancel button missing");
-assert.match(actions, />\s*確認下架\s*</, "confirmation action button missing");
-assert.match(actions, /publishMode: "active", confirmActive: true/, "republish UI must call active publish contract");
-assert.match(actions, /confirmUnpublish: true/, "unpublish UI must send explicit confirmation");
+assert.match(actions, /confirm\.action === "archive" \? "確認封存" : "確認恢復"/, "confirmation action labels missing");
+assert.match(actions, /shopify-lifecycle/, "records lifecycle UI must call the guarded lifecycle endpoint");
+assert.match(actions, /confirmAction: true/, "records lifecycle UI must send explicit confirmation");
+assert.doesNotMatch(actions, /\/api\/drafts\/\$\{row\.id\}\/unpublish/, "records UI must not bypass the lifecycle ledger");
+assert.doesNotMatch(actions, /publishMode: "active"/, "restore must return to DRAFT rather than publish ACTIVE");
 
 // No verifier test is allowed to touch network. Fail loudly if future edits try.
 globalThis.fetch = async () => {

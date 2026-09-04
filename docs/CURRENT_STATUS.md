@@ -3,7 +3,7 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-02（CI／Preview／production ledger read-only verification）
+更新基準：2026-09-04（G4-D browser QA evidence）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source 目前 HEAD：`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`
 已知 Vercel production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`
@@ -12,6 +12,19 @@ PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入�
 > **2026-09-02 外部查證結果：**Vercel production alias 的 `READY` deployment 是 `6960a0c`；不是本輪 `f0a6bfa`。Supabase 正式專案狀態為 `ACTIVE_HEALTHY`，migration ledger 僅有 baseline/reconcile 兩筆；`20260822223100` 與 `20260902090000` 都還未套用。同理，source verifier／CI pass 仍不是 Shopify mock 或真實 E2E 的通過證明。
 >
 > 下方 D3.4–D3.7 中關於「PR #8 Draft／未 merge／尚未 production deploy」的敘述，是當時 package 的歷史條件；現況一律以上方 release truth 與 `docs/audits/RELEASE-TRUTH-RECONCILE-2026-09-01.md` 為準。
+
+## 2026-09-03 Shopify 並行上線準備
+
+- Commander 已把 Shopify 準備與文案修改拆線；目前只允許 mock-safe 證據，不允許 merge、deploy、migration 或真實 Shopify write。
+- G0 source guard 完成：branch `codex/security-hardening-20260902`，HEAD `d02ea9b`，是 `f0a6bfa` 後代並與 origin 同步。
+- G1 六項本機機械驗證全綠：mock flow、Shopify lifecycle injected model（7 tests／network disabled）、variant duplicate、no-secrets、client-secret refs、typecheck。
+- G2 Vercel UI 唯讀盤點已完成：`SHOPIFY_STORE_DOMAIN`、`SHOPIFY_CLIENT_ID`、`SHOPIFY_CLIENT_SECRET`、`SHOPIFY_PUBLISH_MOCK` 名稱存在且標示 `Production and Preview`；`SHOPIFY_LOCATION_ID` 未顯示；沒有 `NEXT_PUBLIC_SHOPIFY_*`。沒有查看任何值，因此 mock-safe 實際狀態與憑證有效性仍未驗證。
+- G3 authenticated mock E2E 已通過：專用草稿 `51f7d7fe-fd02-4954-8a54-299f6e586855` 跑完圖片上傳 → test-mode 必修失敗 → owner 核准一次 LLM 重生 → 文案核准 → 圖片保留 → ACTIVE 模擬發布。`/records` 批次 `#1F0209` 顯示 1 件全部成功；草稿詳情顯示 `api_llm/completed` 與 `active/active_published`。Preview 設定頁全程顯示「模擬中（不會建真實商品）」。
+- G3 額外發現：全新草稿的 test mode 不自動辨識 IP／商品類型，因此不能純零成本走到核准；這是 test fixture／UX 限制，不是 Shopify publish failure。真正的 partial-create/retry runtime 注入情境仍未驗證。
+- G3 內容風險：LLM 測試文案出現材質、尺寸、產地等未由本次測試來源證實的主張；UI 目前只警告核實、不阻擋核准。此草稿不得轉真實商品，G5 前須做來源證據抽查。
+- 仍未放行：G2 `SHOPIFY_LOCATION_ID`／production credentials 有效性、mock partial-create/retry runtime、G4 owner-approved real Shopify `DRAFT`、PR #10 merge／migrations／production deploy、G5 文案定稿後的小批次 `ACTIVE`。
+- Owner 已批准進入 G4 準備，且真實 Shopify 只可建立 1 筆 `DRAFT`、不得 `ACTIVE`。G4-A～D 本機 source 與 browser QA 已完成：mobile + desktop、dark/kitty/nordic、永久刪除精確標題確認與 disabled/enabled 行為均通過，fresh tab hydration error 0。typecheck、`verify:all` 已通過。自動 dirty triggers 已加入 migration source，但尚未套用；尚未 push Preview、部署、真實 Shopify E2E 或寫入。詳見 `docs/audits/SHOPIFY-FULL-CONNECTION-DESIGN-2026-09-03.md`。
+- 詳細邊界與證據：`docs/audits/SHOPIFY-GO-LIVE-PREP-2026-09-03.md`。
 
 ## Latest release-branch package — D3.7 mobile gesture guidance + bidirectional swipe
 
@@ -424,6 +437,7 @@ Source active queue 另有：
 
 3. `20260822223100_variant_split_override_semantics`（2026-09-02 已從正式 migration ledger 核對：**尚未套用**）
 4. `20260902090000_guard_current_image_batch_pointer`（PR #10 security hardening 新增；**尚未套用**）
+5. `20260903100000_shopify_full_sync_state`（G4 full-sync additive schema；**尚未套用**）
 
 Active queue：`supabase/migrations/` 只放正式 tracked migrations + future migrations。
 
@@ -456,10 +470,11 @@ Owner iPhone 驗最新 Preview：
 2. **停止 mobile UI施工**。
 3. Draft PR #10 的 Preview 登入／iPhone runtime QA。
 4. Production Shopify env/config preflight（不曝露secret）。
-5. 規劃 active migrations `20260822223100` + `20260902090000` 的套用與驗證；不可重跑歷史 migration。
-6. Shopify mock publish（含 partial-create retry 行為）並留下 runtime 結果。
-7. owner明確批准後才做一筆 controlled real-product E2E。
-8. E2E正確後，owner明確批准才 merge PR #10；正式 Vercel 目前是 `6960a0c`，merge 後才會產生下一個 production deployment。
+5. 檢視 G4 Preview，之後再進 migration／live gate。
+6. 規劃 active migrations `20260822223100` + `20260902090000` + `20260903100000` 的套用與驗證；不可重跑歷史 migration。
+7. Shopify mock publish（含 partial-create retry／partial-sync 行為）並留下 runtime 結果。
+8. owner明確批准後才做唯一一筆 controlled real Shopify `DRAFT` E2E。
+9. E2E正確後，owner明確批准才 merge/deploy；正式 Vercel 目前是 `6960a0c`。
 
 不要因為 Preview可開就跳過 CI / Shopify preflight / owner production approval。
 

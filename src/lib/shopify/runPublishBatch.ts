@@ -27,6 +27,7 @@ import {
 } from "@/lib/drafts/publishBatch";
 import { notifyMake } from "@/lib/notifications/make";
 import { safeTryNotifyPublishBatchIfComplete } from "@/lib/notifications/tryNotifyPublishBatchIfComplete";
+import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import { publishDraft, type PublishDraftResult } from "@/lib/shopify/publishDraft";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { PublishBatchStatus, PublishMode } from "@/types/domain";
@@ -107,6 +108,13 @@ export async function runPublishBatch(
 
   if (uniqueIds.length === 0) {
     return { ok: false, error: "draftIds must be a non-empty string array", status: 400 };
+  }
+
+  // Defense-in-depth for non-HTTP callers: a configured live-test allowlist
+  // must not be bypassed by invoking the batch runner directly.
+  const liveTestGuardError = checkLiveTestGuard({ draftIds: uniqueIds, publishMode });
+  if (liveTestGuardError) {
+    return { ok: false, error: liveTestGuardError, status: 403 };
   }
 
   const startedAt = now();

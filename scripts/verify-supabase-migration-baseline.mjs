@@ -9,7 +9,8 @@ const expectedActive = [
   "20260818142712_baseline_existing_schema_20260818.sql",
   "20260818142919_production_reconcile_20260818.sql",
   "20260822223100_variant_split_override_semantics.sql",
-  "20260902090000_guard_current_image_batch_pointer.sql"
+  "20260902090000_guard_current_image_batch_pointer.sql",
+  "20260903100000_shopify_full_sync_state.sql"
 ];
 
 function fail(message) {
@@ -22,6 +23,13 @@ function files(dir) {
     .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
     .map((entry) => entry.name)
     .sort();
+}
+
+function withoutDollarQuotedFunctions(sql) {
+  return sql.replace(
+    /create\s+(?:or\s+replace\s+)?function\b[\s\S]*?\bas\s+\$\$[\s\S]*?\$\$\s*;/gi,
+    ""
+  );
 }
 
 const active = files(activeDir);
@@ -113,6 +121,33 @@ if (/drop\s+column|delete\s+from|update\s+public\.product_drafts/i.test(batchPoi
   fail("P1-AUTH batch-pointer migration must only replace the guard function, never mutate draft rows");
 }
 
+const shopifyFullSync = fs.readFileSync(path.join(activeDir, expectedActive[4]), "utf8");
+for (const fragment of [
+  "shopify_sync_status",
+  "product_drafts_shopify_sync_status_check",
+  "shopify_variant_id",
+  "shopify_inventory_item_id",
+  "shopify_media_id",
+  "shopify_file_id",
+  "shopify_source_hash",
+  "create table if not exists public.shopify_sync_jobs",
+  "shopify_sync_jobs_operation_check",
+  "shopify_sync_jobs_status_check",
+  "create or replace function public.mark_linked_product_draft_dirty()",
+  "create or replace function public.mark_linked_product_child_dirty()",
+  "update public.product_drafts",
+  "alter table public.shopify_sync_jobs enable row level security",
+  "grant all privileges on public.shopify_sync_jobs to service_role"
+]) {
+  if (!shopifyFullSync.includes(fragment)) {
+    fail(`G4 full-sync migration is missing: ${fragment}`);
+  }
+}
+const shopifyFullSyncTopLevel = withoutDollarQuotedFunctions(shopifyFullSync);
+if (/drop\s+column|delete\s+from|update\s+public\.(product_drafts|product_variants|product_images)/i.test(shopifyFullSyncTopLevel)) {
+  fail("G4 full-sync migration must stay additive and must not mutate existing rows");
+}
+
 const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "supabase-local.yml"), "utf8");
 if (!workflow.includes("cp supabase/history/pre_tracking_migrations/*.sql /tmp/nestory-migrations/")) {
   fail("free local DB gate must bootstrap from the pre-tracking archive");
@@ -123,13 +158,19 @@ if (workflow.includes("cp supabase/migrations/*.sql /tmp/nestory-migrations/")) 
 if (!workflow.includes("cp supabase/migrations/20260822223100_variant_split_override_semantics.sql /tmp/nestory-forward-migrations/")) {
   fail("D3.10A forward migration must be staged explicitly for the local reversible gate");
 }
+if (!workflow.includes("cp supabase/migrations/20260903100000_shopify_full_sync_state.sql /tmp/nestory-forward-migrations/")) {
+  fail("G4 full-sync migration must be staged explicitly for the local reversible gate");
+}
 
 const productionPackageTest = fs.readFileSync(path.join(root, "scripts", "test-supabase-production-package-local.sh"), "utf8");
 for (const fragment of [
   "D3.10A: apply additive split-override migration",
   "verify_d310a_columns",
   "drop column if exists cost_is_inherited",
-  "D3.10A: re-apply forward migration"
+  "D3.10A: re-apply forward migration",
+  "G4: apply additive Shopify full-sync migration",
+  "verify_shopify_full_sync_columns",
+  "G4: re-apply forward migration"
 ]) {
   if (!productionPackageTest.includes(fragment)) {
     fail(`D3.10A local migration apply/rollback gate is missing: ${fragment}`);

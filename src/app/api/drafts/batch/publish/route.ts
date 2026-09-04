@@ -5,6 +5,7 @@
 import { NextRequest } from "next/server";
 import { canPublish } from "@/lib/auth/roles";
 import { runPublishBatch } from "@/lib/shopify/runPublishBatch";
+import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { PublishMode, UserRole } from "@/types/domain";
 
@@ -39,6 +40,9 @@ export async function POST(request: NextRequest) {
   if (!canPublish(profile?.role as UserRole | undefined)) {
     return Response.json({ error: "Reviewer role is required to publish" }, { status: 403 });
   }
+
+  const guardError = checkLiveTestGuard({ draftIds: draftIds as string[], publishMode });
+  if (guardError) return Response.json({ error: guardError }, { status: 403 });
 
   const serviceSupabase = createServiceSupabaseClient();
   const result = await runPublishBatch({

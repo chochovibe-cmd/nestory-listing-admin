@@ -4,7 +4,7 @@
 > A documented check is not a pass until it has actually been executed.
 > For day-to-day truth read `AI_START_HERE.md` and `docs/CURRENT_STATUS.md` first.
 
-Updated: 2026-09-02 (CI / Preview / production read-only verification)
+Updated: 2026-09-04 (G4-D browser QA evidence)
 
 ## 0. Current source and runtime truth
 
@@ -13,6 +13,10 @@ Updated: 2026-09-02 (CI / Preview / production read-only verification)
 - Vercel production alias was read-only verified on 2026-09-02: `READY`, target `production`, commit `6960a0cd257590abb6c1ccb7c97a2c3e772714d3`.
 - Production Supabase migration ledger was read-only verified on 2026-09-02: only `20260818142712` and `20260818142919` are applied. `20260822223100_variant_split_override_semantics.sql` is not applied; do not replay historical migrations.
 - P0 server-side image-fetch SSRF hardening, P1 request authorization hardening, and `20260902090000_guard_current_image_batch_pointer.sql` are committed as `f0a6bfa` on Draft PR #10. CI #372, Supabase Local Reconcile #83 and the Vercel Preview all passed; none of these source changes is deployed to production.
+- On 2026-09-03, branch `codex/security-hardening-20260902` at `d02ea9b` passed the controlled Shopify G0/G1 local checks: mock flow, lifecycle injected model (7 tests, network disabled), variant duplicate protection, no-secrets, client-secret reference policy and typecheck. This is source/local evidence only, not Vercel env or Shopify runtime evidence.
+- Vercel UI name-only preflight on 2026-09-03 found `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` and `SHOPIFY_PUBLISH_MOCK` scoped to Production and Preview; `SHOPIFY_LOCATION_ID` was not shown and no `NEXT_PUBLIC_SHOPIFY_*` name was present. Values were intentionally not opened, so credentials and the effective mock-safe value remain unverified.
+- Authenticated Preview mock E2E passed on 2026-09-03 for dedicated draft `51f7d7fe-fd02-4954-8a54-299f6e586855`: image upload, generation failure gate, owner-approved LLM retry, copy approval, image retain, ACTIVE confirmation, publish batch and final status all completed. `/records` batch `#1F0209` reported one successful Shopify API ACTIVE publish; the draft ended at `api_llm/completed` and `active/active_published`. The Preview connection indicator explicitly remained mock-safe, so this is runtime mock evidence, not a real Shopify product write.
+- G4-A～D local source is complete on branch `codex/shopify-full-sync-g4-20260903`. Browser QA passed on mobile and desktop across dark/kitty/nordic; exact-title permanent-delete confirmation, disabled/enabled behavior, and fresh-tab hydration error 0 were verified. Typecheck and `verify:all` passed. Automatic dirty triggers are present in migration source, but the migration is not applied; Preview has not been pushed, and no real Shopify E2E or write has been performed.
 
 Historical references below that call PR #8 "Draft", "unmerged" or "not production" are superseded by this section.
 
@@ -107,6 +111,7 @@ The `verify:*` suite is valuable but does not replace real browser layout valida
 - Production live test only after env preflight.
 - Reviewer can export Matrixify CSV.
 - Controlled partial-failure/retry behavior is understood before broad live publishing.
+- Product specifications, dimensions, materials and origin claims are checked against source evidence; the current warning is advisory and does not block approval.
 
 ### Role / RLS
 
@@ -168,6 +173,8 @@ Source currently expects:
 - optional but recommended `SHOPIFY_LOCATION_ID`
 - `SHOPIFY_PUBLISH_MOCK=false` only for a deliberate live environment
 - current documented API version `2026-04`
+- for the G4 Preview only, `SHOPIFY_LIVE_TEST_DRAFT_ID` set to the one owner-approved draft ID; batch and ACTIVE remain blocked
+- token scopes verified for the exact read/write operations used by product, inventory, locations and files; the historical token check only proved `write_products` and `write_files`, so current access-scope readback remains required
 
 Important P0 gate:
 
@@ -181,10 +188,12 @@ Current release still requires:
 
 1. latest Preview/iPhone runtime check for Draft PR #10;
 2. Shopify production env/config preflight;
-3. a planned, separately approved apply and verification of `20260822223100_variant_split_override_semantics` and `20260902090000_guard_current_image_batch_pointer`;
-4. Shopify mock partial-create/retry check;
+3. a planned, separately approved apply and verification of `20260822223100_variant_split_override_semantics`, `20260902090000_guard_current_image_batch_pointer` and `20260903100000_shopify_full_sync_state`;
+4. Shopify mock partial-create/retry check (the normal authenticated mock E2E passed on 2026-09-03, but the injected partial-create/retry case remains open);
 5. explicitly approved controlled real-product E2E;
 6. explicit owner approval before merging PR #10, producing its production deployment, or any live Shopify write.
+
+The 2026-09-03 G0/G1 pass plus authenticated normal-path mock E2E do not close items 1–6 above. See `docs/audits/SHOPIFY-GO-LIVE-PREP-2026-09-03.md`.
 
 ## 8. Team / AI handoff evidence
 

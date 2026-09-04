@@ -11,7 +11,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <div className={`shell${isLogin ? " shell--login" : ""}`} id="app-shell">
+      <div
+        className={`shell${isLogin ? " shell--login" : ""}`}
+        id="app-shell"
+        suppressHydrationWarning
+      >
         {!isLogin ? <AppSidebar /> : null}
         <div className="shell-main">{children}</div>
       </div>

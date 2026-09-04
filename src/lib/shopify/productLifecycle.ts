@@ -1,6 +1,6 @@
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 
-export type ShopifyProductLifecycleStatus = "ACTIVE" | "DRAFT";
+export type ShopifyProductLifecycleStatus = "ACTIVE" | "ARCHIVED" | "DRAFT" | "UNLISTED";
 
 export type ShopifyAdminGraphQLCaller = (
   query: string,
@@ -54,7 +54,7 @@ export async function getShopifyProductStatus(
   if (product.id !== productId) {
     throw new Error(`Shopify product status query returned a different product ID: ${String(product.id)}`);
   }
-  if (product.status !== "ACTIVE" && product.status !== "DRAFT") {
+  if (!["ACTIVE", "ARCHIVED", "DRAFT", "UNLISTED"].includes(product.status)) {
     throw new Error(`Unexpected Shopify product status: ${String(product.status)}`);
   }
   return { id: product.id, status: product.status };
@@ -64,34 +64,34 @@ export async function setShopifyProductStatus(
   productId: string,
   status: ShopifyProductLifecycleStatus,
   caller: ShopifyAdminGraphQLCaller = defaultCaller
-): Promise<{ id: string; status: ShopifyProductLifecycleStatus }> {
+): Promise<{ id: string; status: ShopifyProductLifecycleStatus; updatedAt: string }> {
   assertLiveProductId(productId);
   const mutation = `
-    mutation ProductChangeStatus($productId: ID!, $status: ProductStatus!) {
-      productChangeStatus(productId: $productId, status: $status) {
-        product { id status }
+    mutation ProductUpdateStatus($product: ProductUpdateInput!) {
+      productUpdate(product: $product) {
+        product { id status updatedAt }
         userErrors { field message }
       }
     }
   `;
-  const { response, result } = await caller(mutation, { productId, status });
-  const userErrors = result?.data?.productChangeStatus?.userErrors;
+  const { response, result } = await caller(mutation, { product: { id: productId, status } });
+  const userErrors = result?.data?.productUpdate?.userErrors;
   if (!response.ok) {
-    throw new Error(`Shopify productChangeStatus failed: HTTP ${response.status}`);
+    throw new Error(`Shopify productUpdate status failed: HTTP ${response.status}`);
   }
   if (Array.isArray(result?.errors) && result.errors.length > 0) {
-    throw new Error(`Shopify productChangeStatus failed: ${messages(result.errors)}`);
+    throw new Error(`Shopify productUpdate status failed: ${messages(result.errors)}`);
   }
   if (Array.isArray(userErrors) && userErrors.length > 0) {
-    throw new Error(`Shopify productChangeStatus userErrors: ${messages(userErrors)}`);
+    throw new Error(`Shopify productUpdate status userErrors: ${messages(userErrors)}`);
   }
-  const product = result?.data?.productChangeStatus?.product;
+  const product = result?.data?.productUpdate?.product;
   if (!product || product.id !== productId || product.status !== status) {
     throw new Error(
-      `Shopify productChangeStatus confirmation mismatch: expected ${productId} ${status}, got ${String(product?.id)} ${String(product?.status)}`
+      `Shopify productUpdate status confirmation mismatch: expected ${productId} ${status}, got ${String(product?.id)} ${String(product?.status)}`
     );
   }
-  return { id: product.id, status: product.status };
+  return { id: product.id, status: product.status, updatedAt: product.updatedAt };
 }
 
 export async function deleteShopifyProduct(

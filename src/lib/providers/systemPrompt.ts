@@ -276,11 +276,8 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
   const evidence: string[] = [];
   if (input.variantSummary?.trim()) evidence.push(`款式／Variant：${input.variantSummary.trim()}`);
   if (input.note?.trim()) evidence.push(`補充備註：${input.note.trim()}`);
-  if (input.webSearchSummary?.trim()) {
-    evidence.push(
-      `cached Web Search（內部參考，沿用 shared factual safety；不要輸出來源標記或 URL）：\n${input.webSearchSummary.trim()}`,
-    );
-  }
+  // COPY-FIX-1：cached Web Search 改由 base（systemPromptBase buildFieldRegenUserMessage）
+  // 對所有欄位注入（同款判斷後可正面使用），此處不再重複附一份。
   if (evidence.length === 0) return base;
 
   return `${base}\n\n【COPY C5E SEO field-regen evidence parity】\n${evidence.join("\n")}\n以上補充只作為本次 SEO 欄位的 evidence；仍只輸出指定欄位。`;

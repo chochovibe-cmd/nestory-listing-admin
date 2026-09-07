@@ -391,7 +391,9 @@ assert.doesNotMatch(directFormatterOutput, /<h2>獨特的隨身配件<\/h2>/u,
 const promptBaseBlob = createHash("sha1")
   .update(`blob ${Buffer.byteLength(promptBase)}\0${promptBase}`)
   .digest("hex");
-assert.equal(promptBaseBlob, "d25eaddf5510bb7857ab1811c7028c3a963d34c3",
+// COPY-FIX-1 re-pin: base gained field-regen webSearchSummary injection +
+// search-evidence usage rewording (同款判斷後可正面使用); see docs/audits/COPY-EVIDENCE-SUPPLY-2026-09-07.md.
+assert.equal(promptBaseBlob, "42ee3bdb9aef87a57ccb3c59e85257a66da5d7ab",
   "systemPromptBase.ts changed from the approved immutable blob");
 
 // R0A existing-spec-first; no evidence/vision/spec-merge recovery regressions.

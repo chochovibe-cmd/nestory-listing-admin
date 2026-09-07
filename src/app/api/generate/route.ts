@@ -687,6 +687,10 @@ export async function POST(request: NextRequest) {
       ipName: draft.ip_name ?? candidateIpForPack,
       characterName: draft.character_name,
       productType: draft.product_type,
+      // COPY-FIX-1: form evidence joins the query so sparse titles still search well.
+      specText: draft.spec_text,
+      note: draft.note,
+      imageDescription: draft.image_description,
       existingCache: draft.web_search_cache,
     });
     if (searchOutcome.warnings.length > 0) extraWarnings.push(...searchOutcome.warnings);

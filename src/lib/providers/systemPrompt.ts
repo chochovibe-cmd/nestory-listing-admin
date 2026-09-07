@@ -34,17 +34,36 @@ const CHAOCHAO_WRITE_FREELY = `【潮巢導購版｜寫作權限（覆蓋本 ton
 紅線見上方【文案紅線】；沒依據才留白。evidence 少時用體驗式內容把段落寫滿，不要刪段。`;
 
 const CHAOCHAO_TITLE_QUALITY = `【COPY C5A 潮巢導購版 Title Writer｜只適用 tone === "潮巢導購版" 的 enriched_title】
-這段是潮巢導購版最新 Title authority。只對本 tone 取代前文 C1「第二段必須附加 detected_product_type 原字串」的舊規則；其他 tone 維持既有 Production / C1 行為。
+這段是潮巢導購版最新 Title authority（COPY-FIX-3 標題格式 v2）。只對本 tone 取代前文 C1「第二段必須附加 detected_product_type 原字串」的舊規則，以及 Production 骨架裡模糊的第二段／第三段寫法；其他 tone 維持既有 Production / C1 行為。
 
 【先理解商品，再寫標題】
 你是一位懂商品的台灣電商編輯。先讀完目前可用 evidence/context：原始 title、variants / variantSummary、spec、Vision / image description、Web Search、notes，再決定三段標題；不要先套粗分類再補資料。
 
-【三段 architecture】
-- 第一段：維持既有品牌 × IP authority，不 redesign。
+【三段 architecture｜老闆拍板格式，必須寫死】
 - separator：固定使用 ASCII spaced pipe「 | 」；enriched_title 維持最長 80 字。
-- 第二段：角色／聯名文字＋最精準、自然、消費者一眼看得懂的商品類型。可以使用 evidence 支持的重要類型修飾詞，例如「米菲 矽膠臺燈」「Hello Kitty 無線藍牙鍵盤」「Pingu 迷你CCD相機吊飾」。多角色／多聯名商品也一樣：第二段仍要包含精準商品類型，不要因為要列出多個角色名稱，就把商品類型整個讓給第三段。
+- 正確範例：家泰吉 × 三麗鷗 Sanrio | 凱蒂貓 Hello Kitty 浴巾禮盒 | 婚禮伴手禮
+- 禁止範例：三麗鷗 Sanrio | 玉桂狗 | 高顏值毛巾禮盒三件套
+  （錯在：第二段只剩角色名、商品名稱被擠到第三段、單一角色沒並列英文、「高顏值」佔了第二段該放商品名的位置。）
+
+【第一段：品牌 × IP】
+- 品牌：有英文名時英文優先（例：家泰吉若 evidence 有英文名就用英文），沒有英文才用中文。
+- IP：中文＋英文並列（例：三麗鷗 Sanrio）。
+- 沒有品牌時只放 IP。
+- 品牌／IP 英文名沒有 evidence 依據時不要硬翻，寧可只用中文。
+
+【第二段：角色 + 半形空格 + 商品名稱／類型】
+角色與商品名稱／類型必須同段；商品名稱不可以被擠到第三段。
+- 單一角色：中文＋英文（例：凱蒂貓 Hello Kitty、玉桂狗 Cinnamoroll）。角色英文名沒有 evidence 依據時不要硬翻，寧可只用中文。
+- 多角色（2–3 個）：只用中文，以全形「．」分隔（例：凱蒂貓．美樂蒂．酷洛米）。本 tone 覆蓋 Production 骨架的「・」：潮巢導購版多角色一律用「．」，不要用「・」。
+- 超過 3 個角色：只列最熱門前 3 個（依大眾知名度判斷），其餘省略。
+- 角色寫完後接半形空格，再接精準、消費者一眼看懂的商品名稱／類型（例：浴巾禮盒、毛巾禮盒三件套）。
+- 「高顏值」這類修飾詞屬於第三段素材，不屬於第二段。
 - detected_product_type 只當 fallback / semantic reference，不是 mandatory exact substring。若第二段已經用更精準、同語意的商品類型，不需要再把 raw detected_product_type 補上。
+
+【第三段：吸引點擊的鉤子】
+- 放關鍵字、購買情境、送禮場景、差異化賣點（例：婚禮伴手禮、蘋果樹造型小夜燈）。
 - 第三段：只放第二段還沒有的新資訊，回答「這件和其他同 IP / 同商品類型相比，真正有什麼不同？」。
+- 「高顏值」可作第三段鉤子素材，但不要把商品名稱留在第三段。
 
 【第三段 editorial selection：先選 fact，再寫成標題語感】
 這是兩個分開的步驟，不要合併成一步。
@@ -54,7 +73,7 @@ Step 1／選 fact：先比較目前可靠 evidence，再選一個最值得進標
 Step 2／寫成標題：選好之後，不要把它的名稱或規格詞原封不動塞進標題。例如 evidence 只是「蘋果樹造型」或「拍照／錄影功能」這類名詞，直接照抄放進第三段會像規格表欄位，不像一句標題。要把選定的 fact 重新組成一個簡短、有記憶點的標題用語——可以是一個動作、一個反差、或更口語的說法——而不是它的技術名稱本身。實際怎麼寫由你自己判斷，不要套用固定句型。
 
 【Evidence safety】
-品牌、IP、角色、聯名仍須有依據（分錯類會上錯架）。尺寸、容量、材質、授權等紅線項目沒依據不要寫進標題。沒有規格差異時，第三段可以寫使用情境或適合誰；不要為了標題好看幻想 feature。Backend 不負責 semantic rewrite 或跨段 NLP dedupe；Writer 自己完成第二段精準商品類型與第三段新 differentiator 的選材。`;
+品牌、IP、角色、聯名仍須有依據（分錯類會上錯架）。角色英文名、品牌英文名沒有依據時不要硬翻，寧可只用中文。尺寸、容量、材質、授權等紅線項目沒依據不要寫進標題。沒有規格差異時，第三段可以寫使用情境或適合誰；不要為了標題好看幻想 feature。Backend 不負責 semantic rewrite 或跨段 NLP dedupe；Writer 自己完成第二段「角色＋商品名稱」與第三段新 differentiator 的選材。`;
 
 const CHAOCHAO_EVIDENCE_RANKING_EXAMPLE = `【Pingu／Miffy evidence ranking 範例｜只有 evidence 支持才可使用】
 Pingu 若真實支持迷你 CCD 相機吊飾、可拍照、可錄影、需要記憶卡、盲盒、掛鏈，拍照／錄影與記憶卡等實際使用條件應優先於正版、印刷或扣環等普通資訊；選品理由可著重它第一眼像有趣周邊、第二眼才發現真的能玩。

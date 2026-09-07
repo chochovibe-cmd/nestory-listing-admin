@@ -187,6 +187,16 @@ await check("systemPrompt wrapper: Production delegation + C5A Chaochao title au
   );
   assert.match(wrapper, /第三段：只放第二段還沒有的新資訊/, "Chaochao third-segment new-information rule missing");
   assert.match(wrapper, /ASCII pipe/, "Owner ASCII separator rule missing");
+  // COPY-FIX-3 title format v2: keep C5A fallback/new-info phrases; lock owner format.
+  assert.match(wrapper, /商品名稱不可以被擠到第三段/, "Chaochao title v2: product name must stay in segment 2");
+  assert.match(
+    wrapper,
+    /家泰吉 × 三麗鷗 Sanrio \| 凱蒂貓 Hello Kitty 浴巾禮盒 \| 婚禮伴手禮/,
+    "Chaochao title v2 owner example missing"
+  );
+  assert.match(wrapper, /全形「．」分隔/, "Chaochao title v2 multi-character separator missing");
+  assert.match(wrapper, /角色英文名、品牌英文名沒有依據時不要硬翻/, "Chaochao title v2 evidence-safe English names missing");
+  assert.match(wrapper, /「高顏值」這類修飾詞屬於第三段素材/, "Chaochao title v2 hook-vs-product-name rule missing");
   assert.doesNotMatch(
     wrapper,
     /標題長度唯一真相表|骨架規則（P1-75b＋P2-80/,

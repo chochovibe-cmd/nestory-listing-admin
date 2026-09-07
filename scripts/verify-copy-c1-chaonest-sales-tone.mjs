@@ -159,6 +159,31 @@ for (const [input, productType, expected] of titleFixtures) {
   );
 }
 
+// COPY-FIX-3: Chaochao Title Writer format v2 (prompt-only; backend still no-append).
+assert.match(prompt, /COPY C5A 潮巢導購版 Title Writer/, "C5A Chaochao Title Writer contract missing");
+assert.match(prompt, /商品名稱不可以被擠到第三段/, "title format v2: product name must stay in segment 2");
+assert.match(
+  prompt,
+  /家泰吉 × 三麗鷗 Sanrio \| 凱蒂貓 Hello Kitty 浴巾禮盒 \| 婚禮伴手禮/,
+  "title format v2 owner example missing",
+);
+assert.match(
+  prompt,
+  /三麗鷗 Sanrio \| 玉桂狗 \| 高顏值毛巾禮盒三件套/,
+  "title format v2 bad example missing",
+);
+assert.match(prompt, /全形「．」分隔/, "title format v2 multi-character separator missing");
+assert.match(
+  prompt,
+  /角色英文名、品牌英文名沒有依據時不要硬翻/,
+  "title format v2 evidence-safe English names missing",
+);
+assert.match(
+  prompt,
+  /detected_product_type 只當 fallback \/ semantic reference，不是 mandatory exact substring/,
+  "C5A detected_product_type fallback/reference authority missing",
+);
+
 // Production enriched-title boundary: Production scrub, then raw Array.from(...).slice(0,80).
 assert.match(titleFinalizer, /const normalized = normalizeTitleSeparators\(value\);/u,
   "title finalizer no longer normalizes separators before scrub");

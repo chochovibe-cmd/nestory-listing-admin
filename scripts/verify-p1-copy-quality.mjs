@@ -26,6 +26,11 @@ function check(name, fn) {
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 const exists = (rel) => fs.existsSync(path.join(root, rel));
 
+// COPY-FIX-2: prompt body lives in systemPromptBase.ts; wrapper adds Chaochao writers.
+function readCopyPrompts() {
+  return `${read("src/lib/providers/systemPromptBase.ts")}\n${read("src/lib/providers/systemPrompt.ts")}`;
+}
+
 // --- Inline mirrors of productBrand.normalizeDetectedProductBrand (keep in sync) ---
 function mirrorNormalizeBrand(raw) {
   if (raw == null) return null;
@@ -82,7 +87,7 @@ check("75a: productBrand helper + parse keys + generate write gate", () => {
   assert.match(route, /if \(detectedBrand\)/);
   assert.match(route, /product_brand/);
 
-  const prompt = read("src/lib/providers/systemPrompt.ts");
+  const prompt = readCopyPrompts();
   assert.match(prompt, /detected_product_brand/);
   assert.match(prompt, /沒把握就留空/);
 });
@@ -109,13 +114,15 @@ check("C1: 臺燈系 alias → 燈具小物 in nestoryTagsV2", () => {
 });
 
 check("C1: 033 has no 燈具 seed (alias-only; no extra migration)", () => {
-  const m033 = read("supabase/migrations/033_tag_rules_sync_boss_tool.sql");
+  // COPY-FIX-2 stale-pin: numbered SQL now lives under history/pre_tracking_migrations
+  // after this branch's baseline squash.
+  const m033 = read("supabase/history/pre_tracking_migrations/033_tag_rules_sync_boss_tool.sql");
   assert.ok(!m033.includes("燈具"), "033 unexpectedly mentions 燈具 — re-check migration need");
 });
 
 // --- 75b ---
 check("75b: title skeleton + variantSummary character hint in prompt", () => {
-  const prompt = read("src/lib/providers/systemPrompt.ts");
+  const prompt = readCopyPrompts();
   assert.match(prompt, /P1-75b/);
   assert.match(prompt, /品牌 ×/);
   assert.match(prompt, /最多 3/);
@@ -127,7 +134,7 @@ check("75b: title skeleton + variantSummary character hint in prompt", () => {
 
 // --- 76 ---
 check("76: emoji rules + multi examples + HelloKitty static anchor", () => {
-  const prompt = read("src/lib/providers/systemPrompt.ts");
+  const prompt = readCopyPrompts();
   assert.match(prompt, /Emoji 硬性｜小編聊天口吻|必須自然使用 1–2 個|必須自然使用 1-2 個/);
   assert.match(prompt, /可愛周邊輕鬆感[\s\S]*鼓勵/);
   assert.match(prompt, /XIAOBIAN_STYLE_ANCHOR|老闆點讚的語感錨點/);
@@ -142,7 +149,7 @@ check("76: emoji rules + multi examples + HelloKitty static anchor", () => {
 });
 
 check("76-fix: field-level emoji rules + checklist + soft warning wiring", () => {
-  const prompt = read("src/lib/providers/systemPrompt.ts");
+  const prompt = readCopyPrompts();
   assert.match(prompt, /欄位硬性｜generated_description_html｜小編聊天口吻/);
   assert.match(prompt, /欄位硬性｜generated_faq_html｜小編聊天口吻/);
   assert.match(prompt, /輸出前自檢清單（小編聊天口吻必勾）/);
@@ -186,8 +193,9 @@ check("76: emojiPolicy detects presence", () => {
 
 // --- 66 ---
 check("66: migration 034 generation_tone + generate write", () => {
-  assert.ok(exists("supabase/migrations/034_generation_tone.sql"));
-  const mig = read("supabase/migrations/034_generation_tone.sql");
+  const migPath = "supabase/history/pre_tracking_migrations/034_generation_tone.sql";
+  assert.ok(exists(migPath));
+  const mig = read(migPath);
   assert.match(mig, /generation_tone/);
   assert.match(mig, /add column if not exists/);
 
@@ -202,8 +210,9 @@ check("66: migration 034 generation_tone + generate write", () => {
 
 // --- 69 ---
 check("69: migration 035 kind check + export routes record batch", () => {
-  assert.ok(exists("supabase/migrations/035_publish_batches_csv_kinds.sql"));
-  const mig = read("supabase/migrations/035_publish_batches_csv_kinds.sql");
+  const migPath = "supabase/history/pre_tracking_migrations/035_publish_batches_csv_kinds.sql";
+  assert.ok(exists(migPath));
+  const mig = read(migPath);
   assert.match(mig, /showmore/);
   assert.match(mig, /matrixify/);
   assert.match(mig, /publish_batches_kind_check/);
@@ -227,7 +236,7 @@ check("69: migration 035 kind check + export routes record batch", () => {
 });
 
 check("69: 027 original kind was shopify_api only (baseline)", () => {
-  const m027 = read("supabase/migrations/027_publish_batches.sql");
+  const m027 = read("supabase/history/pre_tracking_migrations/027_publish_batches.sql");
   assert.match(m027, /check \(kind in \('shopify_api'\)\)/);
 });
 

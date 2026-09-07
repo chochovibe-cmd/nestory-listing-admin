@@ -242,7 +242,7 @@ assert.match(chaochaoContract, /商品介紹＋收藏亮點合計至少自然使
   "Chaochao product-specific fact minimum disappeared");
 assert.match(chaochaoContract, /精確尺寸、材質、容量、款式數、功能、授權、配件與特殊 claim/u,
   "Chaochao evidence safety field list disappeared");
-assert.match(chaochaoContract, /evidence 不足時寧可少寫/u,
+assert.match(chaochaoContract, /evidence 不足時改用體驗式內容把段落寫滿/u,
   "Chaochao insufficient-evidence fallback disappeared");
 
 for (const boilerplate of [
@@ -391,9 +391,9 @@ assert.doesNotMatch(directFormatterOutput, /<h2>獨特的隨身配件<\/h2>/u,
 const promptBaseBlob = createHash("sha1")
   .update(`blob ${Buffer.byteLength(promptBase)}\0${promptBase}`)
   .digest("hex");
-// COPY-FIX-1 re-pin: base gained field-regen webSearchSummary injection +
-// search-evidence usage rewording (同款判斷後可正面使用); see docs/audits/COPY-EVIDENCE-SUPPLY-2026-09-07.md.
-assert.equal(promptBaseBlob, "42ee3bdb9aef87a57ccb3c59e85257a66da5d7ab",
+// COPY-FIX-2 re-pin: base guardrails rewritten as positive prompts + concentrated
+// 文案紅線 list; see docs/audits/COPY-POSITIVE-PROMPT-2026-09-07.md.
+assert.equal(promptBaseBlob, "a78d2dfee9f03297d11b2441e7514ab77f8baddb",
   "systemPromptBase.ts changed from the approved immutable blob");
 
 // R0A existing-spec-first; no evidence/vision/spec-merge recovery regressions.

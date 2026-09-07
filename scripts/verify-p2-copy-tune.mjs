@@ -26,6 +26,11 @@ function check(name, fn) {
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
 const exists = (rel) => fs.existsSync(path.join(root, rel));
 
+// COPY-FIX-2: length-table contract lives in systemPromptBase.ts (wrapper must not duplicate it).
+function readCopyPrompts() {
+  return `${read("src/lib/providers/systemPromptBase.ts")}\n${read("src/lib/providers/systemPrompt.ts")}`;
+}
+
 // --- Inline mirrors of title clamp (keep in sync with titleGenerator.ts) ---
 function textLen(value) {
   return Array.from(value).length;
@@ -114,14 +119,15 @@ check("79: characterAliasMap + resolve + findCharacterEntry aliases", () => {
 
 // --- 80 + 83 ---
 check("80/83: titleGenerator constants + helpers", () => {
-  const src = read("src/lib/contentGenerator/titleGenerator.ts");
+  // COPY-FIX-2 stale-pin: title body lives in titleGeneratorBase.ts on this branch.
+  const src = read("src/lib/contentGenerator/titleGeneratorBase.ts");
   assert.match(src, /OFFICIAL_TITLE_MAX_LENGTH = 60/);
   assert.match(src, /ENRICHED_TITLE_MAX_LENGTH = 80/);
   assert.match(src, /TITLE_SEGMENT3_BLACKLIST/);
   assert.match(src, /clampOfficialTitle/);
   assert.match(src, /scrubEnrichedTitleSegment3/);
   assert.match(src, /sanitizeTitleSegment3/);
-  assert.match(src, /pickScenarioKeywords/);
+  assert.match(read("src/lib/contentGenerator/scenarioKeywords.ts"), /pickScenarioKeywords/);
   assert.doesNotMatch(src, /const TITLE_MAX_LENGTH = 80/);
 });
 
@@ -146,14 +152,15 @@ check("80/83: clamp skeleton prefers cut seg3; no-pipe safe (mirror)", () => {
 check("80/83: generate route clamp + history split", () => {
   const route = read("src/app/api/generate/route.ts");
   assert.match(route, /clampOfficialTitle/);
-  assert.match(route, /scrubEnrichedTitleSegment3/);
+  assert.match(route, /normalizeEnrichedTitleContract/);
+  assert.match(read("src/lib/contentGenerator/titleFinalizer.ts"), /scrubEnrichedTitleSegment3/);
   assert.match(route, /enrichedTitleFull/);
   assert.match(route, /officialTitleZh/);
   assert.match(route, /ENRICHED_TITLE_MAX_LENGTH/);
 });
 
 check("80/83: systemPrompt unique length table, no old conflicts", () => {
-  const src = read("src/lib/providers/systemPrompt.ts");
+  const src = readCopyPrompts();
   assert.match(src, /標題長度唯一真相表/);
   assert.match(src, /enriched_title（你輸出）/);
   assert.match(src, /官網 title_zh（後端 clamp）/);

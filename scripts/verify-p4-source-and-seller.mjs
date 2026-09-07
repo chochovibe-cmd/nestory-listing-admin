@@ -121,10 +121,10 @@ check("prompt: wrapper delegates and P4 ban + web search honesty kept in base", 
   const { base } = readSystemPromptArchitecture();
   assert.match(base, /P4 出處標記禁令/);
   assert.match(base, /禁止加「（來源：網路）」|禁止標「來源：網路」|顧客文案禁止|顧客可見欄位一律禁止出現/);
-  // Honesty: still "不確定就不寫" / evidence pool layer 4
-  assert.match(base, /不確定就不寫/);
+  // COPY-FIX-2: honesty is the concentrated 文案紅線 list; search facts are used positively after same-SKU judgement.
+  assert.match(base, /【文案紅線｜只有這些沒依據才不准寫】/);
   assert.match(base, /網路搜尋補充資訊（B19|網路搜尋補充（若有提供）/);
-  assert.match(base, /不確定勿寫|不確定就不寫/);
+  assert.match(base, /合理判斷同款後，把規格、功能、系列背景當可用事實正面寫入|直接自信地寫進文案/);
 });
 
 check("tavily: no 須標來源; internal-only framing", () => {

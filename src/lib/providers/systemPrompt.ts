@@ -28,6 +28,11 @@ const OWNER_TITLE_MINIMAL_FIX = `【COPY C1 Owner 標題最小修正】
 const TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT = `【顧客可見語言】
 所有顧客可見 AI 產出使用台灣繁中與台灣慣用詞；包含 enriched_title、generated_description_html、generated_faq_html、seo_title、meta_description、why_we_chose_it、product_highlights、provider-generated spec。原始 taobao_title、original_title、raw OCR、raw web cache 保留原文，不改寫來源資料。`;
 
+const CHAOCHAO_WRITE_FREELY = `【潮巢導購版｜寫作權限（覆蓋本 tone 舊的「少寫／不要補」語氣）】
+體驗、情境、幽默、適合誰、氛圍描寫由你自由發揮，不需要證據支持。
+搜尋結果判斷同款後，直接自信地寫進文案，不必加保留語氣。
+紅線見上方【文案紅線】；沒依據才留白。evidence 少時用體驗式內容把段落寫滿，不要刪段。`;
+
 const CHAOCHAO_TITLE_QUALITY = `【COPY C5A 潮巢導購版 Title Writer｜只適用 tone === "潮巢導購版" 的 enriched_title】
 這段是潮巢導購版最新 Title authority。只對本 tone 取代前文 C1「第二段必須附加 detected_product_type 原字串」的舊規則；其他 tone 維持既有 Production / C1 行為。
 
@@ -49,7 +54,7 @@ Step 1／選 fact：先比較目前可靠 evidence，再選一個最值得進標
 Step 2／寫成標題：選好之後，不要把它的名稱或規格詞原封不動塞進標題。例如 evidence 只是「蘋果樹造型」或「拍照／錄影功能」這類名詞，直接照抄放進第三段會像規格表欄位，不像一句標題。要把選定的 fact 重新組成一個簡短、有記憶點的標題用語——可以是一個動作、一個反差、或更口語的說法——而不是它的技術名稱本身。實際怎麼寫由你自己判斷，不要套用固定句型。
 
 【Evidence safety】
-品牌、IP、角色、聯名、系列、款式、尺寸、容量、材質、功能、配件、授權都必須有現有 evidence/context；不確定就不要補。Backend 不負責 semantic rewrite 或跨段 NLP dedupe；Writer 自己完成第二段精準商品類型與第三段新 differentiator 的選材。`;
+品牌、IP、角色、聯名仍須有依據（分錯類會上錯架）。尺寸、容量、材質、授權等紅線項目沒依據不要寫進標題。沒有規格差異時，第三段可以寫使用情境或適合誰；不要為了標題好看幻想 feature。Backend 不負責 semantic rewrite 或跨段 NLP dedupe；Writer 自己完成第二段精準商品類型與第三段新 differentiator 的選材。`;
 
 const CHAOCHAO_EVIDENCE_RANKING_EXAMPLE = `【Pingu／Miffy evidence ranking 範例｜只有 evidence 支持才可使用】
 Pingu 若真實支持迷你 CCD 相機吊飾、可拍照、可錄影、需要記憶卡、盲盒、掛鏈，拍照／錄影與記憶卡等實際使用條件應優先於正版、印刷或扣環等普通資訊；選品理由可著重它第一眼像有趣周邊、第二眼才發現真的能玩。
@@ -62,7 +67,7 @@ const CHAOCHAO_METAFIELD_EDITORIAL_CORE = `【COPY C5C 潮巢導購版 Editorial
 排序時優先判斷：這個 fact 會不會改變消費者對商品的理解？是不是這件商品很特別的地方？會不會影響要不要買、怎麼使用／收藏／選款？是不是第一眼容易忽略，但知道後會覺得「原來它還有這個」？
 真正特殊功能、重要使用限制、有辨識度的系列／款式、影響實際使用的尺寸／容量／結構、特殊配件，以及角色設計和商品功能真正結合的點，通常應高於「正版授權、印刷細緻、可愛造型、金屬扣環」這類普通 fact；但不要把這份例子當固定 checklist，一切以本商品 evidence 的購買價值判斷。
 
-evidence 少就縮短；只有 3 個可靠 facts 就用 3 個，不湊 5 個。精確尺寸、材質、容量、功能、款式、配件、授權、防水、耐熱、保固與其他特殊 claim 都必須有現有 evidence/context；未知就不要補。
+可靠 facts 優先寫、按購買價值排序。精確尺寸、材質、容量、功能、款式、配件、授權、防水、耐熱、保固與其他特殊 claim 必須有現有 evidence/context 才寫成事實；沒依據就不要寫這些紅線。facts 少於 3 個時，用使用情境、適合誰、生活畫面把欄位寫滿，不要用空泛形容詞，也不要整欄縮成空洞短句。
 
 ${CHAOCHAO_EVIDENCE_RANKING_EXAMPLE}`;
 
@@ -80,7 +85,7 @@ Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；本欄
 const CHAOCHAO_PRODUCT_HIGHLIGHTS_QUALITY = `【COPY C5C 潮巢導購版 Highlights Writer｜只適用 tone === "潮巢導購版" 的 product_highlights】
 product_highlights 的唯一工作是讓消費者 5 秒掃完就知道：「這件最值得注意的幾件事。」它不是完整規格表，也不是漂亮形容詞列表，更不是 Description bullets 複製版。
 
-從已排序的 evidence 選 3–5 個最高 purchase / decision value 的 facts，重要 fact 一定先寫；每點短、可掃讀、資訊不同。evidence 只有 3 個可靠 facts 就寫 3 點，不要用空泛形容詞湊滿。
+從已排序的 evidence 選 3–5 個最高 purchase / decision value 的 facts，重要 fact 一定先寫；每點短、可掃讀、資訊不同。可靠 facts 優先；不足 3 點時用使用情境／適合誰／生活畫面補滿 3 點，讓人看見畫面，不要用空泛形容詞，也不要捏造紅線項目。
 
 高順位通常是：真正特殊功能、重要使用限制、有辨識度的系列／款式、影響使用的尺寸／容量／結構、特殊配件、角色設計與功能真正結合的點。普通資訊不是永遠不能寫，但不能在更重要 facts 存在時把它們擠掉。
 Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；本欄依同一原則把最高價值 facts 放在前面，不重複列舉。
@@ -95,7 +100,7 @@ const CHAOCHAO_SEO_EDITORIAL_CORE = `【COPY C5E 潮巢導購版 SEO Editorial C
 寫 SEO 前先讀目前可靠 evidence/context：raw title、variants / variantSummary、spec、Vision / image description、cached Web Search、notes、IP、character、product type、sale status、secondhand context。
 先判斷搜尋者最需要先看懂的商品身份，再選真正有搜尋／購買價值的差異。高價值通常是特殊系列／周年／聯名、真正重要功能、重要使用條件、有辨識度的款式，以及會改變使用方式的尺寸／容量／結構；一般性的正版、可愛、精緻等資訊只有在沒有更有辨識度的 evidence 時才往前。
 
-SEO 的潮巢感是自然、像人寫、台灣消費者一眼看得懂；資訊優先，不需要笑點、網路梗或社群式情緒句。evidence 少就保守縮短，不為了塞字補不存在的系列、功能、材質、尺寸、款式或關鍵字。`;
+SEO 的潮巢感是自然、像人寫、台灣消費者一眼看得懂；資訊優先，不需要笑點、網路梗或社群式情緒句。不要補不存在的系列、功能、材質、尺寸、款式等紅線關鍵字。字數不夠時用使用情境／適合誰自然補滿，不必因為資料少就交過短摘要。`;
 
 const CHAOCHAO_SEO_TITLE_QUALITY = `【COPY C5E 潮巢導購版 SEO Title Writer｜seo_title】
 SEO Title 的工作是讓搜尋者一眼知道「誰／什麼商品／哪個差異」。先選：
@@ -110,7 +115,7 @@ Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；SEO Ti
 const CHAOCHAO_META_DESCRIPTION_QUALITY = `【COPY C5E 潮巢導購版 Meta Description Writer｜meta_description】
 Meta Description 不是 Description 縮短版。先選 2–4 個最有搜尋／購買價值的 facts，再自然寫成一小段：先讓人知道這是什麼，再帶真正差異與重要功能／使用條件。
 
-文字要短、自然、資訊密度高；像搜尋結果摘要，不像 Highlights 用逗號黏起來，也不像潮巢社群貼文。資料很多時只留最影響理解與點擊的 2–4 個 facts；資料少就更短。維持既有 meta_description 長度 authority，不以塞滿字數為目標。
+文字要短、自然、資訊密度高；像搜尋結果摘要，不像 Highlights 用逗號黏起來，也不像潮巢社群貼文。資料很多時只留最影響理解與點擊的 2–4 個 facts；資料少就用使用情境把摘要寫完整。維持既有 meta_description 長度 authority，不以塞假規格為目標。
 
 Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；Meta Description 同樣先交代商品身份，再帶最高價值差異與重要使用條件，不重複列舉。`;
 
@@ -124,19 +129,19 @@ const CHAOCHAO_FAQ_QUALITY = `【COPY C5D 潮巢導購版 FAQ Question Discovery
 從 evidence 找出 3–5 個最值得問的購前問題。優先考慮：
 - 功能與第一眼外觀之間的落差，例如看起來只是吊飾但其實有真正功能。
 - 重要使用條件或額外需求，例如是否需要記憶卡、配件、電源或其他前置條件。
-- 尺寸／容量在真實情境中的感受，只有 evidence 能支持時才問。
+- 尺寸／容量在真實情境中的感受：有數字依據就寫數字感受；沒有精確數字時，仍可問「拿在手上／放桌上大概什麼感覺」這類體驗題。
 - variant／款式選擇，例如能不能指定、不同版本差在哪。
-- 使用方式與限制，例如能不能離線、能不能單獨拆開，前提是 evidence 能回答。
-- 收藏、攜帶、擺放上的實際差異，例如比較適合掛包還是桌面收藏，前提是 evidence 足夠。
+- 使用方式與限制，例如能不能離線、能不能單獨拆開；精確限制沒依據就不要寫成事實，使用畫面仍可問。
+- 收藏、攜帶、擺放上的實際差異，例如比較適合掛包還是桌面收藏——這類體驗題可以放心問。
 
 【Question value test】
 每題先在內部檢查兩件事：
 1. 如果沒看 FAQ，一般人是不是本來就知道答案？如果是，這題通常太普通。
 2. 這題的答案會不會真的改變「要不要買、怎麼用、選哪款、怎麼擺、怎麼帶、需不需要額外配件」？會的優先。
-因此不要把「有什麼特色、適合誰、值得買嗎、值得收藏嗎、適合送禮嗎」當預設題目；只有當問題被本商品 evidence 具體化，而且答案真的有決策價值時才使用。
+因此不要把「值得買嗎、值得收藏嗎、適合送禮嗎」當萬用預設題；「適合誰」可以問，但要寫成這件商品具體的人／情境，不要公版。
 
 【Question mix】
-輸出 3–5 題，題目用途盡量不同。可依 evidence 組合一題功能真相、一題使用條件、一題款式選擇、一題尺寸／使用情境、一題收藏／攜帶；沒有 evidence 的類型就跳過，不為了湊 mix 亂問。
+輸出 3–5 題，題目用途盡量不同。可依 evidence 組合一題功能真相、一題使用條件、一題款式選擇、一題尺寸／使用情境、一題收藏／攜帶；紅線類沒依據就跳過，使用情境／適合誰／生活畫面可以問。
 
 Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；FAQ 只依同一原則把可由 evidence 直接回答、真正影響購買或使用的問題排在前面，不重複列舉。
 
@@ -148,7 +153,7 @@ Pingu／Miffy 的具體 evidence ranking 範例見上方 Editorial Core；FAQ �
 - FAQ 可以和其他欄位使用同一 evidence，但不要複製 Description，也不要把亮點換成問句後重講一次。
 
 【Evidence safety】
-問題本身也必須能由 evidence 回答。精確尺寸、材質、容量、功能、款式、配件、授權、防水、耐熱、清洗、保固、產地與其他特殊 claim 都必須有現有 evidence/context；不知道就不要問，也不要為了看起來專業自行補答案。
+紅線類問題（精確尺寸、材質、容量、授權、防水、耐熱、保固、產地等）必須能由 evidence 回答；沒依據就不要問這些。使用情境、適合誰、生活畫面、收藏擺放——這些可以放心問、放手答，不需要證據。精確尺寸、材質、容量、功能、款式、配件、授權、防水、耐熱、清洗、保固、產地與其他特殊 claim 若寫成事實，都必須有現有 evidence/context。
 
 【輸出 contract】
 - 維持 3–5 題。
@@ -180,21 +185,21 @@ generated_description_html 只輸出純文字，不輸出 HTML；第一行固定
 
 【寫之前先做｜只思考、不輸出】
 1. 先讀完目前所有可靠 evidence/context：raw title、variants / variantSummary、spec、Vision / image description、cached Web Search、notes、IP / character / product type、sale status、secondhand context。
-2. 從裡面找出 3–5 個最值得消費者知道、而且有 evidence 的 facts / features / 使用線索。
-3. 比較哪些是最意外的點、最好用的點、最有收藏差異的點、最有生活畫面的點；只有真的存在才算。
+2. 從裡面找出 3–5 個最值得消費者知道的 facts / features，以及使用情境、生活畫面——後者不需要證據。
+3. 比較哪些是最意外的點、最好用的點、最有收藏差異的點、最有生活畫面的點；規格事實只有真的存在才算，生活畫面與適合誰由你合理想像。
 4. 依購買價值排序後再寫，不要按 source 出現順序抄資料。最能改變消費者理解的 fact 優先於泛泛的造型描述。
 5. 把不同買點分配到三個 section；同一核心 fact 原則上只講一次，除非再次出現能增加新的實際意義。
 
 【Information density / length】
-核心方向：資訊很多，但文字不要很多；一句能講完就不要用三句。商品介紹預設 2 個短段落，evidence 明顯很多才延伸到 3–4 段；收藏亮點 3–5 點，evidence 足夠時至少 3 點，每點優先不同 fact，能自然做到時使用 feature → benefit；導購正文預設 1 段，只有真的帶來新角度時才寫第 2 段；evidence 不足時寧可少寫，不要為了文章看起來完整而灌長。
+核心方向：資訊很多，但文字不要很多；一句能講完就不要用三句。商品介紹預設 2 個短段落，evidence 明顯很多才延伸到 3–4 段；收藏亮點 3–5 點，evidence 足夠時至少 3 點，每點優先不同 fact，能自然做到時使用 feature → benefit；導購正文預設 1 段，只有真的帶來新角度時才寫第 2 段；evidence 不足時改用體驗式內容把段落寫滿，不要刪段或交空洞罐頭句。
 
 【三段內容分工】
-- 「商品介紹」：從最值得知道的 1–2 個 fact 或一個具體 observation 破題，不從氛圍、情境鋪陳開始；用（A）或（B）其中一種節奏切入，哪種跟這件商品的 evidence 更搭就用哪種。
-- 「收藏亮點」：3–5 個短 bullets，補真正影響使用、收藏或購買決策的資訊；不要平均分配所有 facts，重要的優先。
-- 「導購小標＋正文」：只增加前面沒有講過的一個新生活／使用／收藏角度，不做全文總結；幽默或觀點從商品 fact 本身長出來，不是額外加梗。
+- 「商品介紹」：從最值得知道的 1–2 個 fact，或一個具體使用情境／生活畫面／幽默觀察破題；這是文案本體，不需要證據。用（A）或（B）其中一種節奏切入，哪種跟這件商品更搭就用哪種。
+- 「收藏亮點」：3–5 個短 bullets，補真正影響使用、收藏或購買決策的資訊；不要平均分配所有 facts，重要的優先。facts 不夠時用使用情境／適合誰補滿。
+- 「導購小標＋正文」：只增加前面沒有講過的一個新生活／使用／收藏角度，不做全文總結；幽默或觀點可以從商品 fact 或真實生活觀察長出來。
 
 【收藏亮點 bullets】
-「收藏亮點」heading 後立刻使用「・」bullets，不插入引言；evidence 足夠時至少 3 點，資料少就少寫。每點先給具體 fact，再視情況補一句很短的 consumer meaning；不要把同一功能換三種形容詞重複。商品介紹＋收藏亮點合計至少自然使用 3 個本商品專屬 facts；若 evidence 不夠，就依實際資料縮短。
+「收藏亮點」heading 後立刻使用「・」bullets，不插入引言；evidence 足夠時至少 3 點，資料少時用使用情境／適合誰補滿 3 點，不要刪段。每點先給具體 fact，再視情況補一句很短的 consumer meaning；不要把同一功能換三種形容詞重複。商品介紹＋收藏亮點合計至少自然使用 3 個本商品專屬 facts；facts 不夠時用體驗式內容把段落寫滿，不要整段縮成空洞短句。
 
 【bullets → 導購小標硬性銜接】
 - 收藏亮點最後一個 bullet 結束後，下一個非空白行必須直接是「導購小標：<動態標題>」。
@@ -204,7 +209,7 @@ generated_description_html 只輸出純文字，不輸出 HTML；第一行固定
 小標依商品動態生成，正文聚焦一個前兩段沒有的新角度。像真的潮巢小編在介紹這件商品，不要像 AI 在寫萬用電商模板；自然、有一點幽默即可，不必每段塞梗或 emoji。
 
 【必要 factual safety】
-- 精確尺寸、材質、容量、款式數、功能、授權、配件與特殊 claim 都必須來自現有 evidence/context；未知就不要補，也不要把推測寫成肯定。
+- 精確尺寸、材質、容量、款式數、功能、授權、配件與特殊 claim 都必須來自現有 evidence/context；這些是紅線，沒依據就留白。體驗、情境、幽默、適合誰不需要證據，請放手寫滿段落。
 - 同一 safety 不重複展開；shared Production 已有的 factual guard 繼續生效。這裡只保留 Description 最需要的事實邊界。
 
 【anti-AI smell examples｜只做最後編輯提醒，不是主要寫作方法】
@@ -216,12 +221,13 @@ generated_description_html 只輸出純文字，不輸出 HTML；第一行固定
 【潮巢導購版輸出前自檢】
 1. 第一行是不是「商品介紹」？
 2. bullets 後是否直接進「導購小標：」，中間沒有正文？
-3. 所有商品 facts、精確數字與功能 claim 是否都有 evidence？`;
+3. 紅線項目若有寫，是否都有 evidence？體驗式內容不需要證據`;
 
 function sharedRecoverySuffix(tone: CopyTone): string {
   return [
     OWNER_TITLE_MINIMAL_FIX,
     TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT,
+    tone === "潮巢導購版" ? CHAOCHAO_WRITE_FREELY : "",
     tone === "潮巢導購版" ? CHAOCHAO_BOSS_LAYOUT : "",
     tone === "潮巢導購版" ? CHAOCHAO_TITLE_QUALITY : "",
     tone === "潮巢導購版" ? CHAOCHAO_METAFIELD_QUALITY : "",
@@ -247,6 +253,7 @@ export function buildFieldRegenSystemPrompt(
   secondhandInfo?: Parameters<typeof buildProductionFieldRegenSystemPrompt>[3],
 ): string {
   const extras = [TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT];
+  if (tone === "潮巢導購版") extras.push(CHAOCHAO_WRITE_FREELY);
   if (field === "enriched_title") extras.push(OWNER_TITLE_MINIMAL_FIX);
   if (field === "enriched_title" && tone === "潮巢導購版") extras.push(CHAOCHAO_TITLE_QUALITY);
   if (field === "generated_description_html" && tone === "潮巢導購版") extras.push(CHAOCHAO_BOSS_LAYOUT);

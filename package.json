@@ -34,6 +34,7 @@
     "verify:p4": "node scripts/verify-p4-source-and-seller.mjs",
     "verify:variant-axis-atomic": "node scripts/verify-variant-axis-atomic.mjs",
     "verify:variant-duplicates": "node scripts/verify-variant-duplicate-protection.mjs",
+    "verify:gen-progress-card": "node scripts/verify-gen-progress-card.mjs",
     "verify:mobile-resultcard-expand": "node scripts/verify-mobile-resultcard-expand.mjs",
     "verify:mobile-resultcard-gesture": "node scripts/verify-mobile-resultcard-gesture-guard.mjs",
     "verify:resultcard-uiux-d2": "node scripts/verify-resultcard-uiux-d2.mjs",

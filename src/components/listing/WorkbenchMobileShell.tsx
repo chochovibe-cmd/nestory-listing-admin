@@ -5,9 +5,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   GENERATION_PROGRESS_EVENT,
+  getLastGenerationProgress,
+  setLastGenerationProgress,
   type GenerationProgress
 } from "@/components/listing/generationProgress";
-import { JUMP_TO_DRAFT_EVENT, type JumpToDraftDetail } from "@/lib/drafts/jumpToDraft";
+import {
+  JUMP_TO_DRAFT_EVENT,
+  setLastJumpToDraft,
+  type JumpToDraftDetail
+} from "@/lib/drafts/jumpToDraft";
 import { workbenchPaneFromSearch } from "@/lib/nav";
 
 export type WorkbenchPane = "input" | "results";
@@ -18,6 +24,22 @@ export type InputSubTab = "form" | "preview";
 function tabIndex(pane: WorkbenchPane, inputSub: InputSubTab): number {
   if (pane === "results") return 2;
   return inputSub === "form" ? 0 : 1;
+}
+
+function isDesktopWorkbench(): boolean {
+  return window.matchMedia("(min-width: 960px)").matches;
+}
+
+function hrefForWorkbenchPane(
+  pathname: string,
+  search: string,
+  next: WorkbenchPane
+): string {
+  const params = new URLSearchParams(search);
+  if (next === "results") params.set("pane", "results");
+  else params.delete("pane");
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
 }
 
 /**
@@ -44,11 +66,17 @@ export function WorkbenchMobileShell({
   );
   const [pane, setPane] = useState<WorkbenchPane>(urlPane);
   const [inputSub, setInputSub] = useState<InputSubTab>("form");
-  const [genActive, setGenActive] = useState(false);
+  const [genActive, setGenActive] = useState(
+    () => Boolean(getLastGenerationProgress()?.visible)
+  );
   /** UX-X T93: slide direction class on the entering pane/slot (mobile only CSS). */
   const [tabAnimClass, setTabAnimClass] = useState("");
   const prevTabRef = useRef(tabIndex(urlPane, "form"));
   const animTimerRef = useRef<number | null>(null);
+  const paneRef = useRef(pane);
+  const inputSubRef = useRef(inputSub);
+  paneRef.current = pane;
+  inputSubRef.current = inputSub;
 
   const setPaneAndUrl = useCallback(
     (next: WorkbenchPane, replace = true, inputSubNext?: InputSubTab) => {
@@ -57,14 +85,10 @@ export function WorkbenchMobileShell({
         setInputSub(inputSubNext ?? "form");
       }
       if (pathname !== "/drafts/new") return;
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
-      if (next === "results") {
-        params.set("pane", "results");
-      } else {
-        params.delete("pane");
-      }
-      const qs = params.toString();
-      const href = qs ? `${pathname}?${qs}` : pathname;
+      const search = searchParams?.toString() ?? "";
+      const href = hrefForWorkbenchPane(pathname, search, next);
+      const currentHref = search ? `${pathname}?${search}` : pathname;
+      if (href === currentHref) return;
       if (replace) router.replace(href, { scroll: false });
       else router.push(href, { scroll: false });
     },
@@ -102,14 +126,21 @@ export function WorkbenchMobileShell({
   }, [pane, inputSub]);
 
   useEffect(() => {
+    const hydrated = getLastGenerationProgress();
+    if (hydrated?.visible) setGenActive(true);
+
     function onProgress(event: Event) {
       const model = (event as CustomEvent<GenerationProgress>).detail;
+      setLastGenerationProgress(model ?? null);
       if (!model || !model.visible) {
         setGenActive(false);
         return;
       }
       setGenActive(true);
-      // 文案生成開始 → 手機跳「快速預覽」（不再直接跳審核結果）
+      // Desktop keeps both panes; do not replace URL (remounts the gen-card).
+      if (isDesktopWorkbench()) return;
+      // Mobile: jump to 快速預覽 once. Same URL → no replace.
+      if (paneRef.current === "input" && inputSubRef.current === "preview") return;
       setPaneAndUrl("input", true, "preview");
     }
     window.addEventListener(GENERATION_PROGRESS_EVENT, onProgress);
@@ -121,6 +152,9 @@ export function WorkbenchMobileShell({
     function onJump(event: Event) {
       const detail = (event as CustomEvent<JumpToDraftDetail>).detail;
       if (!detail?.draftId) return;
+      setLastJumpToDraft(detail);
+      if (isDesktopWorkbench()) return;
+      if (paneRef.current === "results") return;
       setPaneAndUrl("results");
     }
     window.addEventListener(JUMP_TO_DRAFT_EVENT, onJump);

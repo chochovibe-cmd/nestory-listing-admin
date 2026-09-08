@@ -23,8 +23,8 @@ export type CaptureMeta = {
   sku_dimensions?: number;
   warnings_from_client?: string[];
   /**
-   * CAP-2.6 / 86: 促銷後價（券后／店優惠后）；不得當草稿成本。
-   * 備註用；price_cny 應為原價。
+   * CAP-2.6 / 86: 促銷後價（券后／店優惠后）；不得當草稿成本、不得寫進 note。
+   * 進 raw_capture.client_meta + 白話 warning；price_cny 應為原價。
    */
   promo_price_cny?: number | null;
 };
@@ -35,7 +35,7 @@ export type CaptureImportBody = {
   source_platform?: string | null;
   title?: string | null;
   price_cny?: number | null;
-  /** 劃線原價 CNY → note line only (not compare_at_price). */
+  /** 劃線原價 CNY（payload 保留；不得寫進草稿 note／不得當成本）。 */
   list_price_cny?: number | null;
   sku_table?: unknown;
   variants_flat?: CaptureVariantFlat[];

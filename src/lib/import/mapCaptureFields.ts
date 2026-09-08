@@ -5,6 +5,10 @@
 import { normalizeDetectedProductBrand } from "@/lib/providers/productBrand";
 import { normalizeVideoUrls } from "@/lib/media/videoUrls";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
+import {
+  parseAndFilterSpecText,
+  type SpecRow
+} from "@/lib/images/detailCompose/filterSpecs";
 import type {
   CaptureFilledSummary,
   CaptureImportBody,
@@ -74,7 +78,53 @@ function stringList(value: unknown): string[] {
   return out;
 }
 
-/** Build spec_text from params object (key：value lines). */
+/** SKU selector axes dumped as params — not product spec (材質／產地／貨號). */
+const SKU_AXIS_PARAM_KEY_RE =
+  /顏色分類|颜色分类|颜色分類|顏色分类|鞋碼|鞋码|尺碼|尺码|^口味$|口味分類|口味分类/;
+
+function isSkuAxisParamKey(key: string): boolean {
+  const k = key.replace(/\s+/g, "").trim();
+  if (!k) return false;
+  return SKU_AXIS_PARAM_KEY_RE.test(k);
+}
+
+/** Long slash/comma dumps look like SKU option lists, not a single spec value. */
+function looksLikeSkuOptionList(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (v.length >= 80) return true;
+  const parts = v.split(/[/／、,，;；|]+/).map((s) => s.trim()).filter(Boolean);
+  return parts.length >= 4;
+}
+
+function formatSpecRows(rows: SpecRow[]): string | null {
+  const lines: string[] = [];
+  for (const row of rows) {
+    const k = (row.key || "").trim();
+    const v = (row.value || "").trim();
+    if (!k && !v) continue;
+    lines.push(k ? `${k}：${v}` : v);
+  }
+  return lines.length ? lines.join("\n") : null;
+}
+
+/** Drop seller-service / promo noise (P4／SYN-1) and obvious SKU-axis param rows. */
+export function filterCaptureSpecText(specText: string | null | undefined): string | null {
+  const filtered = parseAndFilterSpecText(specText);
+  const kept: SpecRow[] = [];
+  for (const row of filtered) {
+    const k = (row.key || "").trim();
+    const v = (row.value || "").trim();
+    if (isSkuAxisParamKey(k)) continue;
+    if (v && looksLikeSkuOptionList(v) && !/品牌|材質|材质|產地|产地|貨號|货号/.test(k)) {
+      continue;
+    }
+    kept.push(row);
+  }
+  return formatSpecRows(kept);
+}
+
+/** Build spec_text from params: filter promo/SKU-axis noise first, then join. */
 export function formatParamsAsSpecText(
   params: Record<string, string | number | null | undefined> | null | undefined
 ): string | null {
@@ -88,7 +138,7 @@ export function formatParamsAsSpecText(
     if (!v) continue;
     lines.push(`${k}：${v}`);
   }
-  return lines.length ? lines.join("\n") : null;
+  return filterCaptureSpecText(lines.length ? lines.join("\n") : null);
 }
 
 /** Pull brand-like keys from params; run through 75a sanitizer. */
@@ -354,25 +404,18 @@ export function mapCaptureToDraftFields(
     warnings.push(WARNING_MISSING_PRICE);
   }
 
-  const noteParts: string[] = [];
-  // CAP-2.6 / 86: promo in meta → note; list_price only if distinct from cost + promo
+  // CAP-2.6 / 86: promo stays in capture_meta / client_meta; never note / never cost.
   const promoPrice = asPositiveNumber(body.capture_meta?.promo_price_cny);
-  if (promoPrice != null) {
-    noteParts.push(`來源促銷價（券後／店優惠後）：CNY ${promoPrice}`);
-  }
-  if (
-    listPrice != null &&
-    (price == null || Math.abs(listPrice - price) >= 0.001) &&
-    (promoPrice == null || Math.abs(listPrice - promoPrice) >= 0.001)
-  ) {
-    noteParts.push(`來源劃線原價：CNY ${listPrice}`);
+  if (promoPrice != null && (price == null || Math.abs(promoPrice - price) >= 0.001)) {
+    warnings.push(`頁面另有促銷價 CNY ${promoPrice}，未當作成本`);
   }
 
   const params = body.params && typeof body.params === "object" ? body.params : null;
   const explicitSpec = asTrimmedString(body.spec_text);
   const fromParams = formatParamsAsSpecText(params ?? undefined);
-  const specText = explicitSpec ?? fromParams;
+  const specText = filterCaptureSpecText(explicitSpec) ?? fromParams;
 
+  // Brand from raw params (before spec filter) so 品牌 is not lost if a row is dropped.
   const productBrand = extractBrandFromParams(params ?? undefined);
 
   const multiDim = detectMultiDimSku(body);
@@ -455,7 +498,7 @@ export function mapCaptureToDraftFields(
     taobao_title: title,
     original_title: title,
     cny_price: cnyPrice,
-    note: noteParts.length ? noteParts.join("\n") : null,
+    note: null,
     spec_text: specText,
     product_brand: productBrand,
     video_urls: videos,

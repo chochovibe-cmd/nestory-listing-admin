@@ -247,9 +247,7 @@ export function WorkspaceInputPanel({
   const [costCurrency, setCostCurrency] = useState<CostCurrency>("CNY");
   const [taobaoUrl, setTaobaoUrl] = useState("");
   const [note, setNote] = useState("");
-  // UX-PKG5: 背景欄（無可見輸入框）。規格截圖／restore／snapshot 仍寫入；
-  // 送 generate 時若非空則為權威不被覆蓋；空則後端用 LLM 整理 [[spec]] 回寫。
-  // 使用者要改規格 → 結果卡「商品規格」或「補充備註」（note）。
+  // 商品規格：空則收合（UX-PKG5）；有 specText 自動展開（外掛／restore／截圖）。
   const [specText, setSpecText] = useState("");
   // D10-open: YouTube links (one per line, max 3) → product_drafts.video_urls
   const [videoUrlsText, setVideoUrlsText] = useState("");
@@ -279,6 +277,7 @@ export function WorkspaceInputPanel({
   const [aiSectionOpen, setAiSectionOpen] = useState(false);
   const [variantSectionOpen, setVariantSectionOpen] = useState(false);
   const [noteSectionOpen, setNoteSectionOpen] = useState(false);
+  const [specSectionOpen, setSpecSectionOpen] = useState(false);
   const [videoSectionOpen, setVideoSectionOpen] = useState(false);
   /** UX-B2-P03: 商品來源雙卡預設收合 */
   const [sourceSectionOpen, setSourceSectionOpen] = useState(false);
@@ -287,6 +286,7 @@ export function WorkspaceInputPanel({
   const prevAiContentRef = useRef(false);
   const prevVariantContentRef = useRef(false);
   const prevNoteContentRef = useRef(false);
+  const prevSpecContentRef = useRef(false);
   const prevVideoContentRef = useRef(false);
   const prevSourceContentRef = useRef(false);
   // B17 mobile accordion: 1基本 2圖片 3價格規格 4風格；never hard-block manual jumps
@@ -383,6 +383,7 @@ export function WorkspaceInputPanel({
     sessionProvider !== null;
   const variantHasContent = variants.length > 0 || variantDimensions.length > 0;
   const noteHasContent = note.trim().length > 0;
+  const specHasContent = specText.trim().length > 0;
   const videoHasContent = videoUrlsText.trim().length > 0;
   // UX-B2-P03: URL filled or product screenshot OCR succeeded (recognizing alone does not count)
   const sourceHasContent = Boolean(taobaoUrl.trim()) || productShotProvided;
@@ -399,6 +400,10 @@ export function WorkspaceInputPanel({
     if (noteHasContent && !prevNoteContentRef.current) setNoteSectionOpen(true);
     prevNoteContentRef.current = noteHasContent;
   }, [noteHasContent]);
+  useEffect(() => {
+    if (specHasContent && !prevSpecContentRef.current) setSpecSectionOpen(true);
+    prevSpecContentRef.current = specHasContent;
+  }, [specHasContent]);
   useEffect(() => {
     if (videoHasContent && !prevVideoContentRef.current) setVideoSectionOpen(true);
     prevVideoContentRef.current = videoHasContent;
@@ -1424,9 +1429,11 @@ export function WorkspaceInputPanel({
     // B17: collapse advanced after light reset (tone/length/web kept → AI may stay open if non-default)
     setVariantSectionOpen(false);
     setNoteSectionOpen(false);
+    setSpecSectionOpen(false);
     setVideoSectionOpen(false);
     prevVariantContentRef.current = false;
     prevNoteContentRef.current = false;
+    prevSpecContentRef.current = false;
     prevVideoContentRef.current = false;
     setMobileStep(1);
     autoAdv12Ref.current = false;
@@ -1467,14 +1474,17 @@ export function WorkspaceInputPanel({
     const restoredVariants =
       (seed.variants?.length ?? 0) > 0 || (seed.variantDimensions?.length ?? 0) > 0;
     const restoredNote = Boolean(seed.note?.trim());
+    const restoredSpec = Boolean(seed.specText?.trim());
     const restoredVideo = Boolean(seed.videoUrlsText?.trim());
     const restoredSource = Boolean(seed.taobaoUrl?.trim());
     if (restoredVariants) setVariantSectionOpen(true);
     if (restoredNote) setNoteSectionOpen(true);
+    if (restoredSpec) setSpecSectionOpen(true);
     if (restoredVideo) setVideoSectionOpen(true);
     if (restoredSource) setSourceSectionOpen(true);
     prevVariantContentRef.current = restoredVariants;
     prevNoteContentRef.current = restoredNote;
+    prevSpecContentRef.current = restoredSpec;
     prevVideoContentRef.current = restoredVideo;
     prevSourceContentRef.current = restoredSource;
 
@@ -1536,17 +1546,20 @@ export function WorkspaceInputPanel({
     const restoredVariants =
       (fields.variants?.length ?? 0) > 0 || (fields.variantDimensions?.length ?? 0) > 0;
     const restoredNote = Boolean(fields.note?.trim());
+    const restoredSpec = Boolean(fields.specText?.trim());
     const restoredVideo = Boolean(fields.videoUrlsText?.trim());
     const restoredSource = Boolean(fields.taobaoUrl?.trim());
     if (restoredAi) setAiSectionOpen(true);
     if (restoredVariants) setVariantSectionOpen(true);
     if (restoredNote) setNoteSectionOpen(true);
+    if (restoredSpec) setSpecSectionOpen(true);
     if (restoredVideo) setVideoSectionOpen(true);
     if (restoredSource) setSourceSectionOpen(true);
     // Align prev refs so effects don't fight manual collapse right after restore
     prevAiContentRef.current = restoredAi;
     prevVariantContentRef.current = restoredVariants;
     prevNoteContentRef.current = restoredNote;
+    prevSpecContentRef.current = restoredSpec;
     prevVideoContentRef.current = restoredVideo;
     prevSourceContentRef.current = restoredSource;
 
@@ -2683,6 +2696,24 @@ export function WorkspaceInputPanel({
                   </div>
                 </div>
               </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            className="adv-spec"
+            onToggle={() => setSpecSectionOpen((v) => !v)}
+            open={specSectionOpen}
+            summary={specHasContent ? "已填" : undefined}
+            title="商品規格"
+          >
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>商品規格</label>
+              <textarea
+                onChange={(e) => setSpecText(e.target.value)}
+                placeholder="材質、尺寸、產地、貨號（外掛會自動填）"
+                rows={4}
+                value={specText}
+              />
             </div>
           </CollapsibleSection>
 

@@ -15,13 +15,24 @@ import { FactoryBridgeStrip } from "@/components/listing/FactoryBridgeStrip";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
 import { buildFactoryBridgeSummary } from "@/lib/images/factoryBridge";
-import { GENERATION_PROGRESS_EVENT, type GenerationProgress } from "@/components/listing/generationProgress";
+import {
+  GENERATION_DONE_MAX_MS,
+  GENERATION_PROGRESS_EVENT,
+  draftMatchesGenerationProgressTitle,
+  generationProgressAllDone,
+  generationProgressHasError,
+  getLastGenerationProgress,
+  setLastGenerationProgress,
+  type GenerationProgress
+} from "@/components/listing/generationProgress";
 import {
   JUMP_DRAFT_ID_FIRST,
   JUMP_TO_DRAFT_EVENT,
   clearJumpDraftId,
+  getLastJumpToDraft,
   readJumpDraftId,
   scrollToDraftCard,
+  setLastJumpToDraft,
   type JumpToDraftDetail
 } from "@/lib/drafts/jumpToDraft";
 import {
@@ -227,22 +238,24 @@ export function DraftResultsPanel({
 
   // B1: the input panel (left) drives the 生成 progress card via a window event;
   // this panel (right) renders it at the top of the results list, matching the
-  // Mockup's information architecture. On success the card auto-clears once the
-  // real ResultCard lands via router.refresh; on error it stays put so the
-  // operator can read which step went red and why.
-  const [progress, setProgress] = useState<GenerationProgress | null>(null);
+  // Mockup's information architecture. Progress is also kept in a module singleton
+  // so router.refresh / pane replace remounts can hydrate instead of flashing away.
+  // Error stays put. allDone waits for a ResultCard (or pending_copy keep).
+  const [progress, setProgress] = useState<GenerationProgress | null>(
+    () => getLastGenerationProgress()
+  );
   useEffect(() => {
+    const hydrated = getLastGenerationProgress();
+    if (hydrated) setProgress(hydrated);
+
     function onProgress(event: Event) {
       const model = (event as CustomEvent<GenerationProgress>).detail;
+      setLastGenerationProgress(model ?? null);
       if (!model || !model.visible) {
         setProgress(null);
         return;
       }
       setProgress(model);
-      const allDone = model.steps.length > 0 && model.steps.every((step) => step.status === "done");
-      if (allDone) {
-        setTimeout(() => setProgress(null), 1500);
-      }
     }
     window.addEventListener(GENERATION_PROGRESS_EVENT, onProgress);
     return () => window.removeEventListener(GENERATION_PROGRESS_EVENT, onProgress);
@@ -337,8 +350,7 @@ export function DraftResultsPanel({
   // R4 §7: jump strip → switch station + scroll to card
   // T133: also pulse-highlight the target card
   useEffect(() => {
-    function onJump(event: Event) {
-      const detail = (event as CustomEvent<JumpToDraftDetail>).detail;
+    function applyJump(detail: JumpToDraftDetail) {
       if (!detail?.draftId) return;
       if (detail.station && isStationFilterKey(detail.station)) {
         setStage(detail.station);
@@ -350,7 +362,18 @@ export function DraftResultsPanel({
       }
       armJumpHighlight(detail.draftId);
     }
+
+    function onJump(event: Event) {
+      const detail = (event as CustomEvent<JumpToDraftDetail>).detail;
+      if (!detail?.draftId) return;
+      setLastJumpToDraft(detail);
+      applyJump(detail);
+    }
     window.addEventListener(JUMP_TO_DRAFT_EVENT, onJump);
+
+    const lastJump = getLastJumpToDraft();
+    if (lastJump?.draftId) applyJump(lastJump);
+
     return () => {
       window.removeEventListener(JUMP_TO_DRAFT_EVENT, onJump);
       clearJumpHighlightTimer();
@@ -534,6 +557,44 @@ export function DraftResultsPanel({
     if (!targetId) return;
     armJumpHighlight(targetId);
   }, [prefsReady, visibleDrafts]);
+
+  // allDone: keep gen-card until a matching ResultCard is in the work queue,
+  // or up to ~10s. pending_copy is filtered out of the three-station list —
+  // keep the card so the right pane is not empty. Errors never auto-clear.
+  useEffect(() => {
+    if (!progress) return;
+    if (generationProgressHasError(progress)) return;
+    if (!generationProgressAllDone(progress)) return;
+
+    const title = progress.title;
+    const matches = (draft: {
+      title_zh?: string | null;
+      original_title?: string | null;
+      taobao_title?: string | null;
+    }) => draftMatchesGenerationProgressTitle(title, draft);
+
+    const pendingHeld = scopedDrafts.some(
+      (draft) => draft.status === "pending_copy" && matches(draft)
+    );
+    if (pendingHeld) return;
+
+    const landed =
+      workQueueDrafts.some(matches) || visibleDrafts.some(matches);
+    if (landed) {
+      setLastGenerationProgress(null);
+      setProgress(null);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const latest = getLastGenerationProgress();
+      if (!latest || generationProgressHasError(latest)) return;
+      if (!generationProgressAllDone(latest)) return;
+      setLastGenerationProgress(null);
+      setProgress(null);
+    }, GENERATION_DONE_MAX_MS);
+    return () => window.clearTimeout(timer);
+  }, [progress, scopedDrafts, visibleDrafts, workQueueDrafts]);
 
   const allSelected =
     visibleDrafts.length > 0 && visibleDrafts.every((draft) => selectedIds.has(draft.id));

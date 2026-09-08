@@ -109,12 +109,20 @@ function extractBrandFromParams(params) {
 
 function formatParamsAsSpecText(params) {
   if (!params || typeof params !== "object") return null;
+  const noise = /優惠券|包郵|免運|運費|滿減|立減|紅包|店鋪優惠|售後|保固/;
+  const skuAxis = /顏色分類|颜色分类|颜色分類|顏色分类|鞋碼|鞋码|尺碼|尺码|^口味$|口味分類|口味分类/;
   const lines = [];
   for (const [key, raw] of Object.entries(params)) {
     const k = key.trim();
     if (!k || raw == null) continue;
     const v = String(raw).trim();
     if (!v) continue;
+    if (noise.test(k) || noise.test(v)) continue;
+    if (skuAxis.test(k.replace(/\s+/g, ""))) continue;
+    const parts = v.split(/[/／、,，;；|]+/).map((s) => s.trim()).filter(Boolean);
+    if ((parts.length >= 4 || v.length >= 80) && !/品牌|材質|材质|產地|产地|貨號|货号/.test(k)) {
+      continue;
+    }
     lines.push(`${k}：${v}`);
   }
   return lines.length ? lines.join("\n") : null;
@@ -334,7 +342,13 @@ check("source: CAP-2.6 contract fields (promo_price_cny + image_url)", () => {
   assert.match(types, /image_url/);
   assert.match(types, /MAX_VARIANT_IMAGES\s*=\s*24/);
   const map = read("src/lib/import/mapCaptureFields.ts");
-  assert.match(map, /來源促銷價|promo_price_cny/);
+  assert.match(map, /promo_price_cny/);
+  assert.match(map, /未當作成本/);
+  assert.doesNotMatch(map, /noteParts\.push\(`來源促銷價/);
+  assert.doesNotMatch(map, /來源促銷價/);
+  assert.doesNotMatch(map, /來源劃線原價/);
+  assert.match(map, /parseAndFilterSpecText|filterSpecsForDetailImage/);
+  assert.match(map, /from ["']@\/lib\/images\/detailCompose\/filterSpecs["']/);
   assert.match(map, /variantImageUrls|image_url/);
   const seed = read("src/lib/drafts/mapDraftToWorkspaceForm.ts");
   assert.match(seed, /image_type === ["']variant["']|["']variant["']/);
@@ -396,6 +410,31 @@ check("pure: title empty stays empty; params→spec; brand 75a", () => {
   const spec = formatParamsAsSpecText({ 品牌: "TOYUKI", 材質: "PVC" });
   assert.ok(spec.includes("品牌：TOYUKI"));
   assert.ok(spec.includes("材質：PVC"));
+});
+
+check("pure: params filter promo / seller-service / SKU-axis from spec_text", () => {
+  const spec = formatParamsAsSpecText({
+    材質: "PVC",
+    品牌: "TOYUKI",
+    優惠券: "滿99減10",
+    包郵: "偏遠除外",
+    颜色分类: "粉/藍/白/黑/綠"
+  });
+  assert.ok(spec, "spec_text should keep real params");
+  assert.ok(spec.includes("材質：PVC"), "keep 材質");
+  assert.ok(spec.includes("品牌：TOYUKI"), "keep 品牌");
+  assert.ok(!/優惠券/.test(spec), "drop 優惠券 noise");
+  assert.ok(!/包郵/.test(spec), "drop 包郵 noise");
+  assert.ok(!/颜色分类/.test(spec), "drop SKU axis 颜色分类");
+  // Brand still extracted from raw params even when noise rows exist
+  assert.equal(
+    extractBrandFromParams({
+      品牌: "TOYUKI官方",
+      優惠券: "滿99減10",
+      颜色分类: "粉/藍"
+    }),
+    "TOYUKI"
+  );
 });
 
 check("pure: multi-dim → stored info (axis × actual rows)", () => {

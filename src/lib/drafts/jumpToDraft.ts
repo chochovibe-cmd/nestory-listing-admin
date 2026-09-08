@@ -24,12 +24,33 @@ export type JumpToDraftDetail = {
   station?: StationFilterKey | "input" | null;
 };
 
+/**
+ * Survives DraftResultsPanel remount when jump also changes the workbench URL.
+ * TTL so a later unrelated refresh does not re-pulse an old target.
+ */
+const LAST_JUMP_TTL_MS = 4000;
+let lastJump: { detail: JumpToDraftDetail; at: number } | null = null;
+
+export function getLastJumpToDraft(): JumpToDraftDetail | null {
+  if (!lastJump) return null;
+  if (Date.now() - lastJump.at > LAST_JUMP_TTL_MS) {
+    lastJump = null;
+    return null;
+  }
+  return lastJump.detail;
+}
+
+export function setLastJumpToDraft(detail: JumpToDraftDetail | null): void {
+  lastJump = detail ? { detail, at: Date.now() } : null;
+}
+
 export function draftCardDomId(draftId: string): string {
   return `draft-card-${draftId}`;
 }
 
 export function emitJumpToDraft(detail: JumpToDraftDetail): void {
   if (typeof window === "undefined") return;
+  setLastJumpToDraft(detail);
   window.dispatchEvent(
     new CustomEvent<JumpToDraftDetail>(JUMP_TO_DRAFT_EVENT, { detail })
   );

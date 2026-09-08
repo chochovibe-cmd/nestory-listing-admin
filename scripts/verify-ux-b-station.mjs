@@ -129,6 +129,9 @@ check("WorkbenchMobileShell T4 slots", () => {
   assert.match(src, /wb-form-slot/);
   assert.match(src, /wb-preview-slot/);
   assert.doesNotMatch(src, /◈ 結果/);
+  assert.match(src, /matchMedia\("\(min-width: 960px\)"\)/);
+  assert.match(src, /setLastGenerationProgress/);
+  assert.match(src, /if \(href === currentHref\) return;/);
 });
 
 check("nav factory shortLabel 工廠", () => {

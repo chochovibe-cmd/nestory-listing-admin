@@ -308,6 +308,34 @@ assert.match(prompt,
   /field === "generated_description_html" && tone === "潮巢導購版"\) extras\.push\(CHAOCHAO_BOSS_LAYOUT\)/u,
   "Description regeneration Chaochao wrapper is no longer field-and-tone-gated");
 
+// COPY-FIX-4: Chaochao voice few-shot anchors (prompt-only; title/SEO/format/redlines unchanged).
+assert.match(prompt, /【潮巢語氣真實錨點/, "Chaochao voice-anchor heading missing");
+assert.match(
+  prompt,
+  /這是潮巢編輯部真實文章的節奏，模仿它的語感，不要抄句子/,
+  "voice-anchor imitate-don't-copy instruction missing",
+);
+assert.match(prompt, /Hello Kitty 沒有嘴巴/, "Hello Kitty opening sample missing");
+assert.match(prompt, /你買的不是「長得像」的公仔/, "licensed-goods value-claim sample missing");
+assert.match(
+  prompt,
+  /tone === "潮巢導購版" \? CHAOCHAO_VOICE_ANCHOR : ""/,
+  "full-generate voice anchor is no longer tone-gated",
+);
+assert.match(prompt, /extras\.push\(CHAOCHAO_VOICE_ANCHOR\)/, "field-regen voice-anchor injection missing");
+assert.match(prompt, /【寫作要求｜選品觀點，不是賣點總結】/, "Why writer selection-viewpoint requirement missing");
+assert.match(prompt, /精心設計、實用又美觀、理想選擇/, "Why writer banned empty phrases missing");
+assert.match(prompt, /只想要最便宜的話這不是首選/, "Why writer honest-stance example missing");
+assert.match(prompt, /【寫作要求｜每一點都是具體事實或使用觀察】/, "Highlights concrete-fact requirement missing");
+assert.match(prompt, /高顏值設計、實用又美觀、滿足雙重需要/, "Highlights banned generic phrases missing");
+assert.match(
+  prompt,
+  /尺寸適不適合放床頭、送禮包裝、跟另一款差在哪/,
+  "FAQ specific-question examples missing",
+);
+assert.match(prompt, /適合什麼類型的消費者？/, "FAQ banned generic question missing");
+assert.match(prompt, /這些是你不准寫出來的句型/, "anti-example framing missing");
+
 assert.match(resultCardCopyPanel,
   /descriptionPreviewHtml\(description, draft\.generation_tone, draft\.sale_status\)/u,
   "ResultCard preview no longer passes stored generation_tone and sale_status");

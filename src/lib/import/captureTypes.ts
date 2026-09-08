@@ -81,6 +81,17 @@ export type CaptureImportExists = {
   message: string;
 };
 
+/** Same URL already has a draft; empty spec/variants were filled from a new capture. */
+export type CaptureImportUpdated = {
+  ok: true;
+  status: "updated";
+  draft_id: string;
+  open_path: string;
+  message: string;
+  filled: CaptureFilledSummary;
+  warnings: string[];
+};
+
 export type CaptureImportError = {
   ok: false;
   error: string;
@@ -90,6 +101,7 @@ export type CaptureImportError = {
 export type CaptureImportResponse =
   | CaptureImportCreated
   | CaptureImportExists
+  | CaptureImportUpdated
   | CaptureImportError;
 
 export const PRICE_PLACEHOLDER_CNY = 0.01;

@@ -199,6 +199,200 @@
   }
 
   /**
+   * CAP-2.8: Tmall/Taobao SSR embeds full SKU in __ICE_APP_CONTEXT__.
+   * Content scripts cannot read the page window (isolated world), so parse the
+   * inline script. This is how size/color still exist when the size picker is
+   * collapsed or image-only in the DOM.
+   */
+  function parseJsonObjectAt(text, braceIndex) {
+    if (braceIndex < 0 || braceIndex >= text.length || text[braceIndex] !== "{") {
+      return null;
+    }
+    var depth = 0;
+    var inStr = false;
+    var esc = false;
+    var quote = "";
+    for (var j = braceIndex; j < text.length; j++) {
+      var ch = text[j];
+      if (inStr) {
+        if (esc) {
+          esc = false;
+          continue;
+        }
+        if (ch === "\\") {
+          esc = true;
+          continue;
+        }
+        if (ch === quote) inStr = false;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        inStr = true;
+        quote = ch;
+        continue;
+      }
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          try {
+            return JSON.parse(text.slice(braceIndex, j + 1));
+          } catch (_e) {
+            return null;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function findIceObjectBrace(text, from) {
+    var slice = text.slice(from);
+    var m = slice.match(/var\s+b\s*=\s*\{/);
+    if (m && m.index >= 0) return from + m.index + m[0].length - 1;
+    m = slice.match(/__ICE_APP_CONTEXT__\s*=\s*\{/);
+    if (m && m.index >= 0) return from + m.index + m[0].length - 1;
+    return -1;
+  }
+
+  function iceHasSku(parsed) {
+    var res = iceResFromContext(parsed);
+    return !!(res && res.skuBase && Array.isArray(res.skuBase.props) && res.skuBase.props.length);
+  }
+
+  function parseIceAppContext(doc) {
+    if (!doc || !doc.querySelectorAll) return null;
+    var scripts = doc.querySelectorAll("script");
+    var fallback = null;
+    for (var i = 0; i < scripts.length; i++) {
+      var t = scripts[i].textContent || scripts[i].innerText || "";
+      if (!t || t.indexOf("__ICE_APP_CONTEXT__") < 0) continue;
+      var searchFrom = 0;
+      var guard = 0;
+      while (guard++ < 8) {
+        var brace = findIceObjectBrace(t, searchFrom);
+        if (brace < 0) break;
+        var parsed = parseJsonObjectAt(t, brace);
+        if (parsed) {
+          if (iceHasSku(parsed)) return parsed;
+          if (!fallback) fallback = parsed;
+        }
+        searchFrom = brace + 1;
+      }
+    }
+    return fallback;
+  }
+
+  function iceResFromContext(ice) {
+    if (!ice || typeof ice !== "object") return null;
+    var home = ice.loaderData && ice.loaderData.home;
+    var res = home && home.data && home.data.res;
+    if (res && typeof res === "object") return res;
+    if (ice.res && typeof ice.res === "object") return ice.res;
+    return null;
+  }
+
+  function iceParamsFromRes(res) {
+    var params = {};
+    var ind = res && res.plusViewVO && res.plusViewVO.industryParamVO;
+    if (!ind) return params;
+    function take(list) {
+      if (!list || !list.length) return;
+      for (var i = 0; i < list.length; i++) {
+        var row = list[i] || {};
+        var k = String(row.propertyName || "").trim();
+        var v = String(row.valueName || "").trim();
+        if (k && v) params[k] = v;
+      }
+    }
+    take(ind.enhanceParamList);
+    take(ind.basicParamList);
+    return params;
+  }
+
+  function iceSkuFromRes(res) {
+    var base = res && res.skuBase;
+    if (!base || !Array.isArray(base.props) || !base.props.length) return null;
+    var axes = [];
+    var valuesPerAxis = [];
+    var imageByValue = {};
+    var pairToValue = {};
+    for (var p = 0; p < base.props.length && axes.length < 3; p++) {
+      var prop = base.props[p] || {};
+      var axisName = String(prop.name || "").trim();
+      if (!axisName) continue;
+      axes.push(axisName);
+      var vals = [];
+      var list = Array.isArray(prop.values) ? prop.values : [];
+      for (var v = 0; v < list.length; v++) {
+        var item = list[v] || {};
+        var vn = String(item.name || "").trim();
+        if (!vn) continue;
+        vals.push(vn);
+        pairToValue[String(prop.pid) + ":" + String(item.vid)] = {
+          axis: axisName,
+          name: vn
+        };
+        if (item.image && !imageByValue[vn]) imageByValue[vn] = String(item.image);
+      }
+      valuesPerAxis.push(vals);
+    }
+    if (!axes.length) return null;
+
+    var variants_flat = [];
+    var skus = Array.isArray(base.skus) ? base.skus : [];
+    var infoMap = (res.skuCore && res.skuCore.sku2info) || {};
+    for (var s = 0; s < skus.length && variants_flat.length < 200; s++) {
+      var sku = skus[s] || {};
+      var parts = String(sku.propPath || "")
+        .split(";")
+        .map(function (x) {
+          return x.trim();
+        })
+        .filter(Boolean);
+      if (!parts.length) continue;
+      var flat = {
+        option1_name: null,
+        option1_value: null,
+        option2_name: null,
+        option2_value: null,
+        option3_name: null,
+        option3_value: null,
+        cny_price: null,
+        sku: sku.skuId ? String(sku.skuId) : null,
+        image_url: null
+      };
+      var ok = true;
+      for (var d = 0; d < Math.min(parts.length, 3); d++) {
+        var meta = pairToValue[parts[d]];
+        if (!meta) {
+          ok = false;
+          break;
+        }
+        flat["option" + (d + 1) + "_name"] = meta.axis;
+        flat["option" + (d + 1) + "_value"] = meta.name;
+      }
+      if (!ok || !flat.option1_value) continue;
+      var info = infoMap[sku.skuId] || infoMap[String(sku.skuId)] || {};
+      var priceText =
+        (info.price && info.price.priceText) ||
+        (info.subPrice && info.subPrice.priceText) ||
+        null;
+      if (priceText != null) {
+        flat.cny_price = NestoryCap.parsePrice(priceText);
+      }
+      variants_flat.push(flat);
+    }
+
+    return {
+      axes: axes,
+      valuesPerAxis: valuesPerAxis,
+      imageByValue: imageByValue,
+      variants_flat: variants_flat
+    };
+  }
+
+  /**
    * CAP-2.6 / 86: scan common price nodes for labeled 优惠前 / 券后 text.
    * @returns {{ original: number|null, promo: number|null, onlyPromo: boolean }}
    */
@@ -332,10 +526,49 @@
 
     var skuRoot = dom.firstMatch(doc, S.skuRoot);
     var skuParts = extractSkuFromRoot(skuRoot, S, dom, href);
+    var ice = parseIceAppContext(doc);
+    var iceRes = iceResFromContext(ice);
+    var iceSku = iceSkuFromRes(iceRes);
+    var iceParams = iceParamsFromRes(iceRes);
     var sku_table = null;
     var variants_flat = [];
     var sku_dimensions = 0;
-    if (skuParts.axes.length) {
+    var usedIceSku = false;
+    var iceHasValues =
+      iceSku &&
+      iceSku.axes.length &&
+      iceSku.valuesPerAxis.some(function (vals) {
+        return vals && vals.length;
+      });
+    if (iceHasValues) {
+      usedIceSku = true;
+      skuParts = {
+        axes: iceSku.axes,
+        valuesPerAxis: iceSku.valuesPerAxis,
+        imageByValue: iceSku.imageByValue
+      };
+      sku_dimensions = iceSku.axes.length;
+      sku_table = NestoryCap.cartesianSkuTable(
+        iceSku.axes,
+        iceSku.valuesPerAxis,
+        price_cny
+      );
+      if (iceSku.variants_flat.length) {
+        variants_flat = iceSku.variants_flat;
+      } else {
+        var iceFlat = NestoryCap.flattenSkuTable(sku_table);
+        variants_flat = iceFlat.variants_flat;
+      }
+      if (NestoryCap.attachVariantImages) {
+        variants_flat = NestoryCap.attachVariantImages(
+          variants_flat,
+          iceSku.imageByValue || {}
+        );
+      }
+      if (NestoryCap.omitUniformVariantPrices) {
+        variants_flat = NestoryCap.omitUniformVariantPrices(variants_flat, price_cny);
+      }
+    } else if (skuParts.axes.length) {
       sku_table = NestoryCap.cartesianSkuTable(
         skuParts.axes,
         skuParts.valuesPerAxis,
@@ -344,14 +577,12 @@
       var flat = NestoryCap.flattenSkuTable(sku_table);
       variants_flat = flat.variants_flat;
       sku_dimensions = flat.sku_dimensions;
-      // 88: attach SKU thumbs by option value
       if (NestoryCap.attachVariantImages) {
         variants_flat = NestoryCap.attachVariantImages(
           variants_flat,
           skuParts.imageByValue || {}
         );
       }
-      // 87: omit cny_price when equals product price_cny
       if (NestoryCap.omitUniformVariantPrices) {
         variants_flat = NestoryCap.omitUniformVariantPrices(variants_flat, price_cny);
       }
@@ -360,6 +591,9 @@
       }
     } else {
       warnings.push("sku: 未抓到");
+    }
+    if (usedIceSku) {
+      warnings.push("sku: 使用頁面資料表（ICE）");
     }
 
     var main_image_urls = dom.uniqueUrls(
@@ -399,7 +633,11 @@
     if (!video_urls.length) warnings.push("video_urls: 未抓到");
 
     var params = extractParams(doc, S, dom);
-    if (!Object.keys(params).length) {
+    var iceParamKeys = Object.keys(iceParams);
+    if (iceParamKeys.length) {
+      params = params && Object.keys(params).length ? Object.assign({}, iceParams, params) : iceParams;
+    }
+    if (!params || !Object.keys(params).length) {
       warnings.push("params: 未抓到");
       params = null;
     }

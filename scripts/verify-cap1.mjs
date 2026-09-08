@@ -299,14 +299,19 @@ check("source: createCaptureDraft dedupe excludes archived + no overwrite", () =
   const src = read("src/lib/import/createCaptureDraft.ts");
   assert.match(src, /status !== ["']archived["']/);
   assert.match(src, /status:\s*["']exists["']/);
+  assert.match(src, /status:\s*["']updated["']/);
+  assert.match(src, /refillEmptyCaptureFields/);
   assert.match(src, /queryDuplicateMatches|extractUrlMatchKey/);
   assert.match(src, /fetchAndStoreCaptureImages/);
   // CAP-2.6: images before variants; applyVariantImageIds
   assert.match(src, /applyVariantImageIds/);
   // Order of *calls* (ignore import lines): await fetch… then applyVariant… then persistVariants
-  const callFetch = src.search(/await\s+fetchAndStoreCaptureImages\s*\(/);
-  const callApply = src.search(/applyVariantImageIds\s*\(/);
-  const callPersist = src.search(/await\s+persistVariantsSafe\s*\(|persistVariantsSafe\s*\(/);
+  const createFnStart = src.indexOf("export async function createCaptureDraft");
+  assert.ok(createFnStart > 0, "createCaptureDraft export");
+  const createFn = src.slice(createFnStart);
+  const callFetch = createFn.search(/await\s+fetchAndStoreCaptureImages\s*\(/);
+  const callApply = createFn.search(/applyVariantImageIds\s*\(/);
+  const callPersist = createFn.search(/await\s+persistVariantsSafe\s*\(|persistVariantsSafe\s*\(/);
   assert.ok(callFetch > 0, "must call fetchAndStoreCaptureImages");
   assert.ok(callApply > callFetch, "applyVariantImageIds after image fetch");
   assert.ok(callPersist > callApply, "persistVariants after image map");

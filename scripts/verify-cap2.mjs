@@ -81,7 +81,8 @@ check("files: extension scaffold present", () => {
     "scripts/fixtures/taobao-item-missing-price.html",
     "scripts/fixtures/taobao-item-promo.html",
     "scripts/fixtures/taobao-item-promo-only.html",
-    "scripts/fixtures/tmall-ssr2025-sku.html"
+    "scripts/fixtures/tmall-ssr2025-sku.html",
+    "scripts/fixtures/tmall-ssr2025-ice-sku.html"
   ];
   for (const f of need) assert.ok(exists(f), `missing ${f}`);
 });
@@ -361,6 +362,58 @@ check("DOM: tmall ssr2025 fixture → 1 SKU axis, multiple values, params", () =
   assert.equal(body.params["材質"], "珊瑚絨");
   assert.ok(body.params["貨號"]);
   assert.ok(!body.params["家泰吉"], "emphasis title/value must not stay swapped");
+});
+
+check("ICE: 2-axis shoe SKU without DOM valueItem still flattens", () => {
+  const href = "https://detail.tmall.com/item.htm?id=ice-shoe";
+  const { document } = loadDoc("scripts/fixtures/tmall-ssr2025-ice-sku.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  assert.equal(body.source_platform, "tmall");
+  assert.ok(body.sku_table && body.sku_table.axes.includes("颜色分类"));
+  assert.ok(body.sku_table.axes.includes("鞋码"));
+  assert.equal(body.variants_flat.length, 4);
+  const sizeValues = new Set(body.variants_flat.map((v) => v.option2_value));
+  assert.ok(sizeValues.has("35") && sizeValues.has("36") && sizeValues.has("37"));
+  assert.ok(
+    body.capture_meta.warnings_from_client.some((w) => /ICE/.test(w)),
+    "should record ICE sku source"
+  );
+  assert.equal(body.params["品牌"], "测试牌");
+  assert.equal(body.params["产地"], "中国大陆");
+  assert.equal(body.params["货号"], "SHOE-001");
+});
+
+check("ICE: minified var b={ still parses", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">min shoe</h1>' +
+    "<script>!(function(){var a=window.__ICE_APP_CONTEXT__||{};var b=" +
+    '{"appData":null,"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"颜色分类","values":[{"vid":"r","name":"红"}]},' +
+    '{"pid":"2","name":"鞋码","values":[{"vid":"40","name":"40"}]}],' +
+    '"skus":[{"propPath":"1:r;2:40","skuId":"x1"}]},' +
+    '"skuCore":{"sku2info":{"x1":{"price":{"priceText":"88.00"}}}}}}}}};' +
+    "window.__ICE_APP_CONTEXT__=Object.assign(a,b);})();</script></body></html>";
+  const { document } = parseHTML(html);
+  const href = "https://detail.tmall.com/item.htm?id=min-ice";
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  assert.ok(body.sku_table && body.sku_table.axes.includes("鞋码"));
+  assert.equal(body.variants_flat.length, 1);
+  assert.equal(body.variants_flat[0].option2_value, "40");
+});
+
+check("ICE: props without skus[] still cartesian-flatten", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">no sku rows</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"颜色分类","values":[{"vid":"a","name":"黑"},{"vid":"b","name":"白"}]},' +
+    '{"pid":"2","name":"鞋码","values":[{"vid":"40","name":"40"},{"vid":"41","name":"41"}]}]' +
+    "}}}}}};</script></body></html>";
+  const { document } = parseHTML(html);
+  const href = "https://detail.tmall.com/item.htm?id=no-skus";
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  assert.ok(body.sku_table.axes.includes("鞋码"));
+  assert.equal(body.variants_flat.length, 4);
 });
 
 check("contract: static assert vs captureTypes.ts field names", () => {

@@ -8,7 +8,8 @@ import { persistVariantsSafe } from "@/lib/variants/variantPersist";
 import type {
   CaptureImportBody,
   CaptureImportCreated,
-  CaptureImportExists
+  CaptureImportExists,
+  CaptureImportUpdated
 } from "@/lib/import/captureTypes";
 import { mapCaptureToDraftFields } from "@/lib/import/mapCaptureFields";
 import {
@@ -20,7 +21,21 @@ import { captureOpenPath } from "@/lib/drafts/mapDraftToWorkspaceForm";
 export type CreateCaptureDraftResult =
   | CaptureImportCreated
   | CaptureImportExists
+  | CaptureImportUpdated
   | { ok: false; error: string; message: string; status: number };
+
+function isBlankText(value: unknown): boolean {
+  return !String(value ?? "").trim();
+}
+
+function dimensionsLackValues(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length === 0) return true;
+  return value.every((d) => {
+    if (!d || typeof d !== "object") return true;
+    const vals = (d as { values?: unknown }).values;
+    return !Array.isArray(vals) || vals.length === 0;
+  });
+}
 
 function openPathForDraft(draftId: string): string {
   // CAP-2.5: workbench form with server seed (not legacy /drafts/[id] detail)
@@ -47,6 +62,109 @@ export async function findExistingCaptureDraft(
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   if (!active.length) return null;
   return { id: active[0].id, createdAt: active[0].createdAt };
+}
+
+/**
+ * CAP-2.7 follow-up: same URL may already have a draft from before SKU selectors
+ * worked. Only fill blank spec / brand / dimensions / variant rows. Never overwrite
+ * fields the operator already has.
+ */
+async function refillEmptyCaptureFields(input: {
+  serviceSupabase: any;
+  userId: string;
+  draftId: string;
+  sourceUrl: string;
+  body: CaptureImportBody;
+}): Promise<CaptureImportUpdated | null> {
+  const mapped = mapCaptureToDraftFields(input.body, { userId: input.userId });
+  const hasNewSpec = !isBlankText(mapped.draftRow.spec_text);
+  const hasNewBrand = !isBlankText(mapped.draftRow.product_brand);
+  const mappedDims = mapped.draftRow.variant_dimensions;
+  const hasNewDims = Array.isArray(mappedDims) && mappedDims.length > 0;
+  const hasNewVariants = mapped.variantRows.length > 0;
+  if (!hasNewSpec && !hasNewBrand && !hasNewDims && !hasNewVariants) {
+    return null;
+  }
+
+  const { data: draft, error: draftError } = await input.serviceSupabase
+    .from("product_drafts")
+    .select("id, spec_text, product_brand, variant_dimensions")
+    .eq("id", input.draftId)
+    .maybeSingle();
+  if (draftError || !draft?.id) return null;
+
+  const { count: variantCount, error: countError } = await input.serviceSupabase
+    .from("product_variants")
+    .select("id", { count: "exact", head: true })
+    .eq("draft_id", input.draftId);
+  if (countError) return null;
+
+  const specEmpty = isBlankText(draft.spec_text);
+  const brandEmpty = isBlankText(draft.product_brand);
+  const dimsNeedFill = dimensionsLackValues(draft.variant_dimensions);
+  const variantsEmpty = !variantCount;
+
+  const patch: Record<string, unknown> = {};
+  const filledBits: string[] = [];
+  if (specEmpty && hasNewSpec) {
+    patch.spec_text = mapped.draftRow.spec_text;
+    filledBits.push("規格");
+  }
+  if (brandEmpty && hasNewBrand) {
+    patch.product_brand = mapped.draftRow.product_brand;
+    filledBits.push("品牌");
+  }
+  if (dimsNeedFill && hasNewDims) {
+    patch.variant_dimensions = mapped.draftRow.variant_dimensions;
+    filledBits.push("規格軸");
+  }
+
+  let variantsWritten = 0;
+  const warnings = [...mapped.warnings];
+
+  if (variantsEmpty && hasNewVariants) {
+    const withDraft = mapped.variantRows.map((row) => ({
+      ...row,
+      draft_id: input.draftId
+    }));
+    const vr = await persistVariantsSafe(input.serviceSupabase, input.draftId, withDraft);
+    if (!vr.ok) {
+      warnings.push(`款式補寫失敗：${vr.error}`);
+    } else {
+      variantsWritten = vr.inserted;
+      filledBits.push("款式");
+    }
+  }
+
+  if (Object.keys(patch).length === 0 && variantsWritten === 0) {
+    return null;
+  }
+
+  if (Object.keys(patch).length > 0) {
+    const { error: patchError } = await input.serviceSupabase
+      .from("product_drafts")
+      .update(patch)
+      .eq("id", input.draftId);
+    if (patchError) {
+      warnings.push(`補寫規格欄位失敗：${patchError.message}`);
+      if (variantsWritten === 0) return null;
+    }
+  }
+
+  return {
+    ok: true,
+    status: "updated",
+    draft_id: input.draftId,
+    open_path: openPathForDraft(input.draftId),
+    message: `已補上空白欄位：${filledBits.join("、")}`,
+    filled: {
+      ...mapped.filled,
+      spec_text: Boolean(patch.spec_text) || mapped.filled.spec_text,
+      product_brand: Boolean(patch.product_brand) || mapped.filled.product_brand,
+      variants: variantsWritten || mapped.filled.variants
+    },
+    warnings
+  };
 }
 
 export async function createCaptureDraft(input: {
@@ -91,6 +209,14 @@ export async function createCaptureDraft(input: {
   }
 
   if (existing) {
+    const refill = await refillEmptyCaptureFields({
+      serviceSupabase: input.serviceSupabase,
+      userId: input.userId,
+      draftId: existing.id,
+      sourceUrl,
+      body: input.body
+    });
+    if (refill) return refill;
     return {
       ok: true,
       status: "exists",

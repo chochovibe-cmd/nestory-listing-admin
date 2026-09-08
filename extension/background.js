@@ -272,6 +272,19 @@ async function captureActiveTab() {
     return;
   }
 
+  if (json.ok && json.status === "updated") {
+    await setLastResult({
+      ok: true,
+      status: "updated",
+      line: json.message || "已補上空白規格／款式",
+      draft_id: json.draft_id,
+      open_path: json.open_path,
+      at: new Date().toISOString()
+    });
+    await setBadge("ok", "✓");
+    return;
+  }
+
   if (json.ok && json.status === "exists") {
     await setLastResult({
       ok: true,

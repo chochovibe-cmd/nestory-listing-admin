@@ -80,7 +80,8 @@ check("files: extension scaffold present", () => {
     "scripts/fixtures/taobao-item-sample.html",
     "scripts/fixtures/taobao-item-missing-price.html",
     "scripts/fixtures/taobao-item-promo.html",
-    "scripts/fixtures/taobao-item-promo-only.html"
+    "scripts/fixtures/taobao-item-promo-only.html",
+    "scripts/fixtures/tmall-ssr2025-sku.html"
   ];
   for (const f of need) assert.ok(exists(f), `missing ${f}`);
 });
@@ -149,6 +150,18 @@ check("selectors: single catalog has taobao/tmall/shopee/generic", () => {
   const merged = Cap.mergeSelectors(Cap.SELECTORS.tmall, Cap.SELECTORS.taobao);
   assert.ok(merged.price);
   assert.ok(merged.skuRoot);
+  assert.ok(
+    Cap.SELECTORS.taobao.skuRoot.includes("#SkuPanel_tbpcDetail_ssr2025"),
+    "taobao skuRoot must include ssr2025 SkuPanel"
+  );
+  assert.ok(
+    Cap.SELECTORS.tmall.skuRoot.includes("#SkuPanel_tbpcDetail_ssr2025"),
+    "tmall skuRoot override must include ssr2025 SkuPanel (diff replaces taobao)"
+  );
+  assert.equal(merged.skuRoot[0], "#SkuPanel_tbpcDetail_ssr2025");
+  assert.ok(Cap.SELECTORS.taobao.skuAxis.includes("[class*='skuItem--']"));
+  assert.ok(Cap.SELECTORS.taobao.skuValue.includes("[class*='valueItem--']"));
+  assert.ok(Cap.SELECTORS.taobao.paramsTable.includes("[class*='ParamsInfoItem--']"));
 });
 
 check("parsePrice: honest nulls", () => {
@@ -304,6 +317,50 @@ check("DOM: missing price → omit price_cny + client warning", () => {
     "expected price_cny warning"
   );
   assert.ok(body.title);
+});
+
+check("DOM: tmall ssr2025 fixture → 1 SKU axis, multiple values, params", () => {
+  const href = "https://detail.tmall.com/item.htm?id=ssr2025";
+  const { document } = loadDoc("scripts/fixtures/tmall-ssr2025-sku.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+
+  assert.equal(body.source_platform, "tmall");
+  assert.ok(body.title && /玉桂狗/.test(body.title), "ssr2025 title");
+  assert.ok(body.sku_table && Array.isArray(body.sku_table.axes));
+  assert.ok(body.sku_table.axes.length >= 1, "need at least 1 SKU axis");
+  assert.equal(
+    new Set(body.sku_table.axes).size,
+    body.sku_table.axes.length,
+    "skuItemClipX must not duplicate the axis"
+  );
+  assert.ok(!body.sku_table.axes.includes("數量"), "quantity picker is not an SKU axis");
+  const values = new Set();
+  for (const row of body.sku_table.rows || []) {
+    for (const axis of body.sku_table.axes) {
+      if (row[axis]) values.add(row[axis]);
+    }
+  }
+  assert.ok(values.size >= 2, `need multiple SKU values, got ${values.size}`);
+  assert.ok(
+    Array.isArray(body.variants_flat) && body.variants_flat.length >= 2,
+    "need multiple flattened variants"
+  );
+  assert.ok(
+    body.variants_flat.every((v) => v.option2_name !== "顏色分類"),
+    "duplicate 顏色分類 cartesian must not appear"
+  );
+  assert.ok(
+    ![...values].some((v) => /推薦$/.test(v)),
+    "valueItemText should drop 推薦 badge"
+  );
+  assert.ok(body.params && typeof body.params === "object");
+  const paramKeys = Object.keys(body.params);
+  assert.ok(paramKeys.length >= 1, "need at least 1 params row");
+  assert.equal(body.params["品牌"], "家泰吉");
+  assert.equal(body.params["產地"], "中國大陸");
+  assert.equal(body.params["材質"], "珊瑚絨");
+  assert.ok(body.params["貨號"]);
+  assert.ok(!body.params["家泰吉"], "emphasis title/value must not stay swapped");
 });
 
 check("contract: static assert vs captureTypes.ts field names", () => {

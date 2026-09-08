@@ -63,6 +63,9 @@
       "[class*='couponPrice']"
     ],
     skuRoot: [
+      "#SkuPanel_tbpcDetail_ssr2025",
+      "[id^='SkuPanel_'][id*='ssr2025']",
+      "#skuOptionsArea",
       "[class*='skuWrapper']",
       "[class*='SkuContent']",
       "[class*='skuContent']",
@@ -70,13 +73,20 @@
       ".tb-sku",
       "[class*='Sku--']"
     ],
+    /**
+     * CAP-2.7: first-match-wins in adapter.
+     * `[class*='skuItem--']` before `[class*='skuItem']` so ssr2025
+     * `skuItemClipX` is not treated as a second axis.
+     */
     skuAxis: [
-      "[class*='skuItem']",
-      "[class*='SkuItem']",
+      "[class*='skuItem--']",
+      "[class*='SkuItem--']",
       "dl.tb-prop",
-      "[class*='valueItem']"
+      "[class*='skuItem']",
+      "[class*='SkuItem']"
     ],
     skuAxisLabel: [
+      "[class*='ItemLabel--']",
       "[class*='ItemLabel']",
       "[class*='labelName']",
       "dt",
@@ -84,6 +94,8 @@
       ".tb-property-type"
     ],
     skuValue: [
+      "[class*='valueItem--']",
+      "[class*='ValueItem--']",
       "[class*='valueItem']",
       "[class*='ValueItem']",
       "li a",
@@ -93,7 +105,12 @@
       "span[class*='value']"
     ],
     /** CAP-2.6 / 88: SKU 選項縮圖（相對於 skuValue 節點） */
-    skuValueThumb: ["img", "[class*='thumb'] img", "[style*='background']"],
+    skuValueThumb: [
+      "img",
+      "[class*='valueItemImg']",
+      "[class*='thumb'] img",
+      "[style*='background']"
+    ],
     mainGallery: [
       "[class*='thumbnail--'] img",
       "[class*='Thumbnail--'] img",
@@ -121,6 +138,9 @@
       "source[type*='video']"
     ],
     paramsTable: [
+      "[class*='ParamsInfoItem--']",
+      "[class*='generalParamsInfoItem--']",
+      "[class*='emphasisParamsInfoItem--']",
       "[class*='ItemParams'] tr",
       "[class*='params'] tr",
       "#J_AttrUL li",
@@ -134,6 +154,10 @@
   /** 天貓差集；缺 key 時 adapter fallback 到 taobao */
   var tmall = {
     title: [
+      "[class*='MainTitle']",
+      "[class*='mainTitle']",
+      "h1[class*='MainTitle']",
+      "h1[class*='mainTitle']",
       "h1[data-title]",
       "[class*='ItemHeader--mainTitle']",
       ".tb-detail-hd h1",
@@ -141,11 +165,14 @@
     ],
     price: [
       "[class*='Price--priceText']",
+      "[class*='highlightPrice'] [class*='text']",
+      "[class*='highlightPrice']",
       ".tm-price",
       "#J_StrPriceModBox .tm-price",
       ".tm-promo-price .tm-price"
     ],
     originalPrice: [
+      "[class*='subPrice']",
       "[class*='originPrice']",
       "[class*='Price--subPriceText']",
       ".tm-price-panel del",
@@ -153,19 +180,57 @@
       "del"
     ],
     listPrice: [
+      "[class*='subPrice']",
       "[class*='Price--subPriceText']",
       ".tm-price-panel del",
       ".tm-yen + del"
     ],
     promoPrice: [
-      ".tm-promo-price .tm-price",
       "[class*='highlightPrice'] [class*='text']",
+      ".tm-promo-price .tm-price",
       "[class*='PromoPrice']"
     ],
+    /** CAP-2.7: tmall skuRoot 整包覆蓋 taobao，ssr2025 id 必須寫在差集裡 */
     skuRoot: [
+      "#SkuPanel_tbpcDetail_ssr2025",
+      "[id^='SkuPanel_'][id*='ssr2025']",
+      "#skuOptionsArea",
+      "[class*='skuWrapper']",
+      "[class*='SkuContent']",
       ".tb-sku",
-      "#J_isku",
-      "[class*='skuWrapper']"
+      "#J_isku"
+    ],
+    skuAxis: [
+      "[class*='skuItem--']",
+      "[class*='SkuItem--']",
+      "dl.tb-prop",
+      "[class*='skuItem']",
+      "[class*='SkuItem']"
+    ],
+    skuAxisLabel: [
+      "[class*='ItemLabel--']",
+      "[class*='ItemLabel']",
+      "dt",
+      "[class*='skuLabel']",
+      ".tb-property-type"
+    ],
+    skuValue: [
+      "[class*='valueItem--']",
+      "[class*='ValueItem--']",
+      "[class*='valueItem']",
+      "li a",
+      "li",
+      "[class*='skuValue']"
+    ],
+    paramsTable: [
+      "[class*='ParamsInfoItem--']",
+      "[class*='generalParamsInfoItem--']",
+      "[class*='emphasisParamsInfoItem--']",
+      "[class*='ItemParams'] tr",
+      "#J_AttrUL li",
+      ".attributes-list li",
+      "[class*='InfoItem']",
+      "table[class*='attr'] tr"
     ],
     mainGallery: [
       "#J_UlThumb img",

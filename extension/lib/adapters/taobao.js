@@ -58,14 +58,20 @@
     var imageByValue = {};
     if (!rootEl) return { axes: axes, valuesPerAxis: valuesPerAxis, imageByValue: imageByValue };
 
-    // Prefer dl.tb-prop style groups
+    // CAP-2.7: first matching skuAxis selector wins (ssr2025 skuItem-- before skuItemClipX).
     var groups = [];
-    try {
-      var dls = rootEl.querySelectorAll("dl.tb-prop, [class*='skuItem'], [class*='SkuItem']");
-      if (dls && dls.length) {
-        for (var i = 0; i < dls.length; i++) groups.push(dls[i]);
-      }
-    } catch (_e) {}
+    var axisSels =
+      S.skuAxis && S.skuAxis.length
+        ? S.skuAxis
+        : ["dl.tb-prop", "[class*='skuItem']", "[class*='SkuItem']"];
+    for (var ai = 0; ai < axisSels.length && !groups.length; ai++) {
+      try {
+        var dls = rootEl.querySelectorAll(axisSels[ai]);
+        if (dls && dls.length) {
+          for (var i = 0; i < dls.length; i++) groups.push(dls[i]);
+        }
+      } catch (_e) {}
+    }
 
     if (!groups.length) {
       groups = [rootEl];
@@ -92,6 +98,7 @@
 
       label = label.replace(/[:：]\s*$/, "").trim();
       if (!label || label.length > 40) return;
+      if (/^(数量|數量|购买数量|購買數量)$/.test(label)) return;
 
       var vals = [];
       var valueNodes = [];
@@ -113,14 +120,21 @@
         } catch (_e4) {}
       }
       valueNodes.forEach(function (n) {
+        var textChild =
+          n.querySelector && n.querySelector("[class*='valueItemText']");
         var t =
-          (n.getAttribute && (n.getAttribute("data-value") || n.getAttribute("title"))) ||
+          (n.getAttribute &&
+            (n.getAttribute("data-value") || n.getAttribute("title"))) ||
+          (textChild &&
+            ((textChild.getAttribute && textChild.getAttribute("title")) ||
+              dom.textOf(textChild))) ||
           dom.textOf(n);
         t = String(t || "")
           .replace(/\s+/g, " ")
           .trim();
         if (!t || t.length > 60) return;
         if (/^请选择|請選擇|选择|選擇/i.test(t)) return;
+        if (/^(推荐|推薦|切换大图模式|切換大圖模式)$/i.test(t)) return;
         vals.push(t);
         var thumb = thumbFromSkuNode(n, baseHref, dom);
         if (thumb && !imageByValue[t]) {
@@ -171,6 +185,13 @@
       if (children.length >= 2) {
         var k2 = dom.textOf(children[0]).replace(/[:：]\s*$/, "");
         var v2 = dom.textOf(children[1]);
+        // ssr2025 emphasis chips: large title is the value, subtitle is the label
+        var rowClass = (row.getAttribute && row.getAttribute("class")) || "";
+        if (/emphasisParams/i.test(rowClass)) {
+          var swapped = k2;
+          k2 = v2.replace(/[:：]\s*$/, "");
+          v2 = swapped;
+        }
         if (k2 && v2) params[k2] = v2;
       }
     });

@@ -40,14 +40,47 @@ export function fingerprintWebSearchQuery(query: string): string {
 }
 
 /**
+ * COPY-FIX-1: take the leading meaningful keywords from long free-text
+ * evidence (spec / note / vision description) so they can supplement the
+ * search query without blowing past Tavily's query-size hygiene (~400 chars).
+ */
+function extractSupplementKeywords(
+  sources: Array<string | null | undefined>,
+  maxTotalLength: number,
+): string {
+  const parts: string[] = [];
+  let total = 0;
+  for (const raw of sources) {
+    const text = (raw ?? "")
+      .normalize("NFKC")
+      .replace(/https?:\/\/\S+/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text) continue;
+    const remaining = maxTotalLength - total;
+    if (remaining <= 0) break;
+    const piece = text.slice(0, remaining).trim();
+    if (!piece) continue;
+    parts.push(piece);
+    total += piece.length + 1;
+  }
+  return parts.join(" ").trim();
+}
+
+/**
  * One combined query per generation (D1-A): cleaned title + light product-spec tail.
- * Prefer title; optional known IP/character/type hints when already on the draft.
+ * Title stays the trunk; known IP/character/type hints plus form evidence
+ * (spec / note / image description, COPY-FIX-1) are appended as supplement
+ * keywords so a sparse or empty title no longer kills the search.
  */
 export function buildWebSearchQuery(input: {
   rawTitle: string;
   ipName?: string | null;
   characterName?: string | null;
   productType?: string | null;
+  specText?: string | null;
+  note?: string | null;
+  imageDescription?: string | null;
 }): string {
   let title = (input.rawTitle ?? "").normalize("NFKC").trim();
   // Drop common marketplace noise so the search focuses on the product.
@@ -58,16 +91,25 @@ export function buildWebSearchQuery(input: {
     .replace(/\s+/g, " ")
     .trim();
 
+  // Title keeps its existing 160-char cap as the query trunk.
+  const titleHead = title.slice(0, 160);
+
   const hints = [input.ipName, input.characterName, input.productType]
     .map((v) => (v ?? "").normalize("NFKC").trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    // Skip hints the title already contains to avoid keyword duplication.
+    .filter((v) => !titleHead.includes(v));
 
-  const base = title || hints.join(" ");
+  // COPY-FIX-1: spec / note / vision keywords, combined cap ~120 chars.
+  const extras = extractSupplementKeywords(
+    [input.specText, input.note, input.imageDescription],
+    120,
+  );
+
+  const base = [titleHead, hints.join(" "), extras].filter(Boolean).join(" ").trim();
   if (!base) return "";
 
-  // Keep under ~200 chars for provider hygiene.
-  const head = base.slice(0, 160);
-  return `${head} 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
+  return `${base} 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
 }
 
 function parseWebSearchCacheEntry(raw: unknown): {
@@ -316,6 +358,10 @@ export async function resolveWebSearchForGenerate(params: {
   ipName?: string | null;
   characterName?: string | null;
   productType?: string | null;
+  /** COPY-FIX-1: form evidence feeding the query as supplement keywords. */
+  specText?: string | null;
+  note?: string | null;
+  imageDescription?: string | null;
   existingCache?: unknown;
   provider?: WebSearchProvider;
 }): Promise<{
@@ -343,9 +389,12 @@ export async function resolveWebSearchForGenerate(params: {
     ipName: params.ipName,
     characterName: params.characterName,
     productType: params.productType,
+    specText: params.specText,
+    note: params.note,
+    imageDescription: params.imageDescription,
   });
   if (!query) {
-    warnings.push("Web Search 已開啟，但標題為空，無法組查詢，本次未搜尋。");
+    warnings.push("Web Search 已開啟，但標題、規格、備註與圖片辨識皆為空，無法組查詢，本次未搜尋。");
     return { result: null, cacheToPersist: null, warnings, didLiveSearch: false };
   }
 

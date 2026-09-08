@@ -3,19 +3,16 @@ import type { CopyTone } from "@/lib/providers/copy";
 
 /**
  * 文案呈現包 + P2-81：商品描述開頭的「到貨方式」小提醒。
- * 四銷售狀態 × 五具體語氣（依IP自動匹配已在 resolve 後才進來）。
+ * 原五具體語氣維持既有句子；COPY C1.1 的潮巢導購版另走短資訊型四句。
  *
  * 鐵則：事實不可變——
  * - 海外代購：約 14 天
  * - 預購中：到貨時程以頁面說明為準
  * - 台灣現貨／二手現貨：約 1–3 個工作天出貨
  * - 二手：品況見商品資訊
- *
- * 只在 Shopify 邊界（payload.ts）注入，不寫回 DB 描述欄；
- * Showmore 端已有既有的【交貨方式說明】結尾段，不重複。
- * saleStatusNoticeText 亦 export 給定稿預覽 UI（預覽串接歸 UX）。
  */
 
+const CHAOCHAO_SALES_TONE = "潮巢導購版";
 const CONCRETE_TONES = [
   "黑膠文藝收藏感",
   "日系選物店溫柔感",
@@ -29,9 +26,17 @@ type ConcreteTone = (typeof CONCRETE_TONES)[number];
 /** Fallback when generation_tone missing (old drafts) — P2 81-A. */
 const DEFAULT_NOTICE_TONE: ConcreteTone = "小編聊天口吻";
 
+const CHAOCHAO_NOTICE_BY_STATUS: Readonly<Record<string, string>> = {
+  "海外代購（約14天）": "此為海外代購商品，預估約 14 天。",
+  預購中: "此為預購商品，到貨時程以頁面說明為準。",
+  台灣現貨: "此為台灣現貨商品，約 1–3 個工作天出貨。",
+  二手現貨: "此為二手現貨商品，品況請見商品資訊，約 1–3 個工作天出貨。",
+};
+
 /**
- * 4 statuses × 5 tones = 20 sentences.
- * Keys use normalizeSaleStatusLabel outputs.
+ * 4 statuses × 5 legacy tones = 20 sentences.
+ * COPY C1.1 adds a separate four-sentence informational branch without
+ * changing the historical 20-row contract used by existing verifiers.
  */
 const SALE_STATUS_NOTICES_BY_TONE: Record<
   string,
@@ -101,32 +106,34 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/**
- * 純文字版提醒（無則空字串）。
- * @param saleStatus 銷售狀態
- * @param tone 本次 generation_tone（已 resolve 的具體語氣；缺則 fallback 現行四句）
- */
+/** 純文字版提醒（無則空字串）。 */
 export function saleStatusNoticeText(
   saleStatus: string | null | undefined,
   tone?: string | null | CopyTone,
 ): string {
   const normalized = normalizeSaleStatusLabel(saleStatus);
+  if ((tone ?? "").trim() === CHAOCHAO_SALES_TONE) {
+    return CHAOCHAO_NOTICE_BY_STATUS[normalized] ?? "";
+  }
   const bucket = SALE_STATUS_NOTICES_BY_TONE[normalized];
   if (!bucket) return "";
   const resolved = resolveNoticeTone(tone ?? null);
   return bucket[resolved] ?? bucket.default ?? "";
 }
 
-/** Shopify 描述開頭用的 HTML 段落（無則空字串）。 */
+/** Shopify/Preview 描述用的 HTML 段落（無則空字串）。 */
 export function saleStatusNoticeHtml(
   saleStatus: string | null | undefined,
   tone?: string | null | CopyTone,
 ): string {
   const text = saleStatusNoticeText(saleStatus, tone);
-  return text ? `<p><em>${escapeHtml(text)}</em></p>` : "";
+  if (!text) return "";
+  return (tone ?? "").trim() === CHAOCHAO_SALES_TONE
+    ? `<p>${escapeHtml(text)}</p>`
+    : `<p><em>${escapeHtml(text)}</em></p>`;
 }
 
-/** 供 verify／報告列出 20 句全文。 */
+/** 供 verify／報告列出既有 20 句全文。 */
 export function listAllSaleStatusNotices(): Array<{
   saleStatus: string;
   tone: ConcreteTone;

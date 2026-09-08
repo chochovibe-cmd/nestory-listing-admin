@@ -152,15 +152,15 @@ async function persistProductVariants(
   return { ok: true };
 }
 
-// B8: 6 tones aligned with COPY_TONES / Mockup tone-cards (A9 backend already had all 6).
-// 文案呈現包：usesEmoji=true 的語氣會在文案裡帶最多 1–2 個 emoji（systemPrompt EMOJI_TONES），
-// 卡片上標示「可含Emoji」讓老闆能避開。
+// COPY C1: 7 tone cards aligned with COPY_TONES; the seventh manual tone sits before auto-match.
+// usesEmoji=true only means the copy may contain emoji; the selected tone's prompt owns the actual policy.
 const TONE_OPTIONS = [
   { value: "黑膠文藝收藏感", emoji: "🎙️", desc: "沉穩、有故事感", usesEmoji: false },
   { value: "日系選物店溫柔感", emoji: "🌸", desc: "溫柔清楚好審稿", usesEmoji: false },
   { value: "可愛周邊輕鬆感", emoji: "🧸", desc: "可愛不浮誇", usesEmoji: true },
   { value: "中二熱血宣言", emoji: "🔥", desc: "動漫梗、招式感", usesEmoji: false },
   { value: "小編聊天口吻", emoji: "💬", desc: "像 IG 限動推坑", usesEmoji: true },
+  { value: "潮巢導購版", emoji: "🛍️", desc: "痛點導購・資訊完整", usesEmoji: true },
   { value: "依IP自動匹配", emoji: "✨", desc: "鬼滅→熱血、吉伊卡哇→軟萌", usesEmoji: false },
 ] as const;
 

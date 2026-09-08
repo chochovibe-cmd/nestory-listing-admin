@@ -1,25 +1,13 @@
-// A23 (2026-07-10, A14 finding): the copy system prompt deliberately generates
-// generated_description_html as PLAIN TEXT (blank-line-separated paragraphs,
-// "・" bullet lines) -- see systemPrompt.ts's 描述格式 section. That's correct
-// for ResultCard.tsx, which edits description_html in a plain <textarea> on
-// purpose (so operators review readable Chinese, not HTML soup). The mismatch
-// only bites at the Shopify boundary: Shopify's rich-text descriptionHtml
-// field doesn't render raw "\n" as a line break, so the five A/B/C/D/E
-// sections collapsed into one run-on paragraph on the product page.
-//
-// fix(B10): rule-engine / test-mode previously wrote real HTML into the same
-// column. Storage contract is now plain text everywhere; isLikelyHtml guards
-// payload conversion so legacy HTML rows are not double-wrapped.
-
+// A23: description_html storage stays plain text; rich HTML is a render/publish boundary concern.
 import { matchSectionHeader } from "./sectionHeaders";
+import { saleStatusNoticeHtml } from "./saleStatusNotice";
+
+const CHAOCHAO_SALES_TONE = "潮巢導購版";
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// A17: "➼" marks the rule-engine-appended "適用情境" line (scenarioKeywords.ts)
-// alongside the model's own "・" bullets in the D段 block -- both render as
-// <li> in the same list.
 const BULLET_PREFIX = /^[・･•➼]\s*/;
 
 /** True when the string looks like markup (legacy rows / accidental HTML store). */
@@ -30,11 +18,7 @@ export function isLikelyHtml(text: string | null | undefined): boolean {
   );
 }
 
-/**
- * Convert legacy HTML description blobs back to plain paragraphs so the
- * textarea / storage contract stays readable Chinese, not markup soup.
- * Block tags become blank-line separators; <br> / list items become newlines.
- */
+/** Convert legacy HTML description blobs back to the plain textarea/storage contract. */
 export function htmlDescriptionToPlainText(html: string | null | undefined): string {
   if (!html) return "";
   let text = html
@@ -62,20 +46,14 @@ export function htmlDescriptionToPlainText(html: string | null | undefined): str
   return text;
 }
 
-/** Normalize any description (plain or legacy HTML) to the plain-text store form. */
 export function normalizeDescriptionToPlainText(text: string | null | undefined): string {
   if (!text) return "";
   return isLikelyHtml(text) ? htmlDescriptionToPlainText(text) : text;
 }
 
-/**
- * Shopify-boundary converter: plain text → HTML paragraphs / lists.
- * If input is already HTML (legacy DB row), return as-is — never double-wrap.
- */
+/** Original six-tone formatter. COPY C1.1 deliberately leaves this contract unchanged. */
 export function formatPlainTextAsHtml(text: string | null | undefined): string {
   if (!text) return "";
-
-  // fix(B10): already-HTML content must not be escaped into another <p> layer.
   if (isLikelyHtml(text)) return text;
 
   const blocks = text
@@ -89,10 +67,6 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean);
-
-      // 文案呈現包：段落標題行升級為真正的 <h3> 標題（視覺層級），
-      // 新制「◈ 商品亮點」與舊制「B｜商品亮點」都認得；
-      // 舊制「A｜開頭句…」帶內文的字母行 → 去前綴當一般段落。
       const htmlParts: string[] = [];
       const paragraphLines: string[] = [];
       const bulletLines: string[] = [];
@@ -120,12 +94,11 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
           continue;
         }
         if (header && header.inlineContent) {
-          // legacy "A｜開頭句…": strip the letter prefix, keep the sentence
           flushBullets();
           paragraphLines.push(header.inlineContent);
           continue;
         }
-        if (header) continue; // bare letter header with no title/content — drop
+        if (header) continue;
 
         if (BULLET_PREFIX.test(line)) {
           flushParagraph();
@@ -137,19 +110,174 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
       }
       flushParagraph();
       flushBullets();
-
       return htmlParts.join("");
     })
     .join("");
 }
 
+type ChaochaoSection = "intro" | "highlights" | "sales";
+
+const CHAOCHAO_KNOWN_SECTION_HEADING =
+  /^(?:商品介紹|收藏亮點|商品亮點|適合誰|為什麼會想帶回家|商品資訊|購買提醒|常見問題|FAQ|導購小標|導購標題)$/iu;
+const CHAOCHAO_SENTENCE_PUNCTUATION = /[。！？!?；;：:]/u;
+
+function isKnownChaochaoSectionHeading(line: string): boolean {
+  return CHAOCHAO_KNOWN_SECTION_HEADING.test(line) || matchSectionHeader(line) !== null;
+}
+
+function isConservativeMissingSalesHeadingCandidate(line: string): boolean {
+  const length = Array.from(line).length;
+  return (
+    length >= 2 &&
+    length <= 24 &&
+    !BULLET_PREFIX.test(line) &&
+    !isKnownChaochaoSectionHeading(line) &&
+    !CHAOCHAO_SENTENCE_PUNCTUATION.test(line)
+  );
+}
+
+function looksLikeChaochaoSalesBody(line: string | undefined): boolean {
+  if (!line || BULLET_PREFIX.test(line) || isKnownChaochaoSectionHeading(line)) return false;
+  if (/^(?:導購小標|導購標題)\s*[：:]/u.test(line)) return false;
+  return Array.from(line).length >= 12 || CHAOCHAO_SENTENCE_PUNCTUATION.test(line);
+}
+
+function looksLikeChaochaoSalesSource(text: string): boolean {
+  const normalized = normalizeDescriptionToPlainText(text).replace(/◈/g, "");
+  return (
+    /^商品介紹\s*$/mu.test(normalized) &&
+    /^收藏亮點\s*$/mu.test(normalized) &&
+    /^(?:導購小標|導購標題)\s*[：:]/mu.test(normalized)
+  );
+}
+
 /**
- * Preview renderer for the ResultCard description toggle:
- * plain → convert; legacy HTML → use as stored (same boundary helper).
+ * COPY C1.1 boss-format renderer.
+ * Storage remains plain text; Preview and Shopify receive h2/p/ul/li semantics.
+ * No inline typography styles are emitted: Shopify Theme owns visual typography.
  */
-export function descriptionPreviewHtml(text: string | null | undefined): string {
+export function formatChaochaoSalesDescriptionHtml(
+  text: string | null | undefined,
+  saleStatus?: string | null,
+  tolerateMissingSalesHeading = false,
+): string {
+  const plain = normalizeDescriptionToPlainText(text)
+    .replace(/◈/g, "")
+    .trim();
+
+  const introParagraphs: string[] = [];
+  const highlightItems: string[] = [];
+  const salesParagraphs: string[] = [];
+  let dynamicHeading = "這件商品為什麼有意思";
+  let section: ChaochaoSection = "intro";
+  let paragraphBuffer: string[] = [];
+  let previousContentWasHighlightBullet = false;
+
+  const flushParagraph = () => {
+    if (paragraphBuffer.length === 0) return;
+    const joined = paragraphBuffer.join(" ").replace(/\s+/g, " ").trim();
+    if (joined) {
+      if (section === "highlights") highlightItems.push(joined.replace(BULLET_PREFIX, ""));
+      else if (section === "sales") salesParagraphs.push(joined);
+      else introParagraphs.push(joined);
+    }
+    paragraphBuffer = [];
+  };
+
+  const lines = plain.split(/\r?\n/u);
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
+    const line = rawLine.trim();
+    if (!line) {
+      flushParagraph();
+      continue;
+    }
+    if (/^商品介紹$/u.test(line)) {
+      flushParagraph();
+      section = "intro";
+      previousContentWasHighlightBullet = false;
+      continue;
+    }
+    if (/^收藏亮點$/u.test(line)) {
+      flushParagraph();
+      section = "highlights";
+      previousContentWasHighlightBullet = false;
+      continue;
+    }
+    const salesHeading = line.match(/^(?:導購小標|導購標題)\s*[：:]\s*(.+)$/u);
+    if (salesHeading) {
+      flushParagraph();
+      dynamicHeading = salesHeading[1].trim() || dynamicHeading;
+      section = "sales";
+      previousContentWasHighlightBullet = false;
+      continue;
+    }
+    if (section === "highlights" && BULLET_PREFIX.test(line)) {
+      flushParagraph();
+      highlightItems.push(line.replace(BULLET_PREFIX, "").trim());
+      previousContentWasHighlightBullet = true;
+      continue;
+    }
+    if (
+      tolerateMissingSalesHeading &&
+      section === "highlights" &&
+      highlightItems.length > 0 &&
+      previousContentWasHighlightBullet &&
+      paragraphBuffer.length === 0 &&
+      isConservativeMissingSalesHeadingCandidate(line)
+    ) {
+      const nextContent = lines
+        .slice(index + 1)
+        .map((nextLine) => nextLine.trim())
+        .find(Boolean);
+      if (looksLikeChaochaoSalesBody(nextContent)) {
+        dynamicHeading = line;
+        section = "sales";
+        previousContentWasHighlightBullet = false;
+        continue;
+      }
+    }
+    if (section === "highlights") {
+      previousContentWasHighlightBullet = false;
+    }
+    paragraphBuffer.push(line);
+  }
+  flushParagraph();
+
+  const introHtml = introParagraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+  const highlightsHtml = `<ul>${highlightItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+  const salesHtml = salesParagraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+
+  return (
+    `<h2>商品介紹</h2>` +
+    saleStatusNoticeHtml(saleStatus, CHAOCHAO_SALES_TONE) +
+    introHtml +
+    `<h2>收藏亮點</h2>` +
+    highlightsHtml +
+    `<h2>${escapeHtml(dynamicHeading)}</h2>` +
+    salesHtml
+  );
+}
+
+/**
+ * ResultCard preview renderer.
+ * `tone`/`saleStatus` can be passed by newer call sites; source-shape detection keeps
+ * the current ResultCard call compatible without any UI/CSS redesign.
+ */
+export function descriptionPreviewHtml(
+  text: string | null | undefined,
+  tone?: string | null,
+  saleStatus?: string | null,
+): string {
   if (!text) return "<p>尚無內容</p>";
-  const html = formatPlainTextAsHtml(text);
+  const isChaochao = tone === CHAOCHAO_SALES_TONE || looksLikeChaochaoSalesSource(text);
+  const html = isChaochao
+    ? formatChaochaoSalesDescriptionHtml(
+        text,
+        saleStatus,
+        tone === CHAOCHAO_SALES_TONE,
+      )
+    : formatPlainTextAsHtml(text);
   return html || "<p>尚無內容</p>";
 }
 
@@ -162,13 +290,8 @@ export interface FaqPair {
   answer: string;
 }
 
-// Shared by htmlFaqToPlainText (below) and faqJsonLd.ts's FAQPage schema
-// builder (A21-2) -- both need the same <h3><strong>Q</strong></h3><p>A</p>
-// pairs out of generated_faq_html, per systemPrompt.ts's FAQ rules. Keeping
-// one regex avoids the two call sites silently drifting apart.
 export function extractFaqPairs(html: string | null | undefined): FaqPair[] {
   if (!html) return [];
-
   const pairs: FaqPair[] = [];
   const pattern = /<h3>\s*<strong>(.*?)<\/strong>\s*<\/h3>\s*<p>(.*?)<\/p>/gis;
   let match: RegExpExecArray | null;
@@ -176,18 +299,11 @@ export function extractFaqPairs(html: string | null | undefined): FaqPair[] {
   while ((match = pattern.exec(html)) !== null) {
     const question = stripHtmlTags(match[1]);
     const answer = stripHtmlTags(match[2]);
-    if (question || answer) {
-      pairs.push({ question, answer });
-    }
+    if (question || answer) pairs.push({ question, answer });
   }
-
   return pairs;
 }
 
-// A22b: the reverse direction -- generated_faq_html is real HTML, but
-// Shopify's custom.product_faq metafield is a plain multi_line_text_field,
-// not a rich-text field. Used only when building that metafield's value; the
-// FAQ tab in the app keeps rendering the real HTML.
 export function htmlFaqToPlainText(html: string | null | undefined): string {
   return extractFaqPairs(html)
     .map(({ question, answer }) => `Q：${question}\nA：${answer}`)

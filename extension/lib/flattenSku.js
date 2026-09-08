@@ -164,19 +164,22 @@
     if (!cleanAxes.length) {
       return { axes: [], rows: [] };
     }
-    var lists = cleanAxes.map(function (_a, i) {
-      var vs = (valuesPerAxis && valuesPerAxis[i]) || [];
-      return vs
+    var keptAxes = [];
+    var lists = [];
+    for (var i = 0; i < cleanAxes.length; i++) {
+      var vs = ((valuesPerAxis && valuesPerAxis[i]) || [])
         .map(function (v) {
           return String(v || "").trim();
         })
         .filter(Boolean);
-    });
-    if (lists.some(function (l) {
-      return l.length === 0;
-    })) {
-      return { axes: cleanAxes, rows: [] };
+      if (!vs.length) continue;
+      keptAxes.push(cleanAxes[i]);
+      lists.push(vs);
     }
+    if (!keptAxes.length) {
+      return { axes: [], rows: [] };
+    }
+    cleanAxes = keptAxes;
 
     var rows = [];
     function walk(depth, acc) {

@@ -192,6 +192,32 @@ check("flattenSku: 2-dim → variants_flat + sku_dimensions", () => {
   assert.equal(variants_flat[0].cny_price, 29.9);
 });
 
+check("cartesianSkuTable: drop empty axis instead of wiping all rows", () => {
+  const table = Cap.cartesianSkuTable(["顏色分類", "分類"], [["粉", "藍"], []], 10);
+  assert.deepEqual(table.axes, ["顏色分類"]);
+  assert.equal(table.rows.length, 2);
+  assert.equal(table.rows[0]["顏色分類"], "粉");
+});
+
+check("ICE: empty second prop does not wipe color SKUs", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">kitty towel</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1627207","name":"颜色分类","values":[' +
+    '{"vid":"p","name":"粉色Hello Kitty禮盒浴巾毛巾乾髮帽三件套超長名稱仍然要抓到"},' +
+    '{"vid":"w","name":"白色"}]},' +
+    '{"pid":"empty","name":"分类","values":[]}],' +
+    '"skus":[{"propPath":"1627207:p","skuId":"s1"},{"propPath":"1627207:w","skuId":"s2"}]}}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const href = "https://detail.tmall.com/item.htm?id=empty-axis";
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  assert.ok(body.sku_table.axes.includes("颜色分类"));
+  assert.ok(!body.sku_table.axes.includes("分类"));
+  assert.ok(body.variants_flat.length >= 2);
+  assert.ok(body.variants_flat.some((v) => /粉色Hello Kitty/.test(String(v.option1_value || ""))));
+});
+
 check("CAP-2.6/87: omitUniformVariantPrices clears equal product price", () => {
   const rows = [
     { option1_value: "粉", cny_price: 59.9 },

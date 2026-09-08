@@ -99,6 +99,14 @@
       label = label.replace(/[:：]\s*$/, "").trim();
       if (!label || label.length > 40) return;
       if (/^(数量|數量|购买数量|購買數量)$/.test(label)) return;
+      // 「分類」 is a fragment of 「顏色分類」 — not a second empty axis.
+      if (
+        axes.some(function (a) {
+          return a !== label && a.indexOf(label) >= 0 && a.length > label.length;
+        })
+      ) {
+        return;
+      }
 
       var vals = [];
       var valueNodes = [];
@@ -132,7 +140,7 @@
         t = String(t || "")
           .replace(/\s+/g, " ")
           .trim();
-        if (!t || t.length > 60) return;
+        if (!t || t.length > 160) return;
         if (/^请选择|請選擇|选择|選擇/i.test(t)) return;
         if (/^(推荐|推薦|切换大图模式|切換大圖模式)$/i.test(t)) return;
         vals.push(t);
@@ -321,7 +329,6 @@
       var prop = base.props[p] || {};
       var axisName = String(prop.name || "").trim();
       if (!axisName) continue;
-      axes.push(axisName);
       var vals = [];
       var list = Array.isArray(prop.values) ? prop.values : [];
       for (var v = 0; v < list.length; v++) {
@@ -335,6 +342,15 @@
         };
         if (item.image && !imageByValue[vn]) imageByValue[vn] = String(item.image);
       }
+      if (!vals.length) continue;
+      if (
+        axes.some(function (a) {
+          return a !== axisName && a.indexOf(axisName) >= 0 && a.length > axisName.length;
+        })
+      ) {
+        continue;
+      }
+      axes.push(axisName);
       valuesPerAxis.push(vals);
     }
     if (!axes.length) return null;

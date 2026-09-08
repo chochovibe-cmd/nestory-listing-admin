@@ -308,12 +308,21 @@ function mapVariantRows(
 } {
   const rows: Array<Record<string, unknown>> = [];
   const dimNames: string[] = [];
+  const valuesByName = new Map<string, string[]>();
   const imageUrls: string[] = [];
   const seenImg = new Set<string>();
   const product =
     productPriceCny != null && Number.isFinite(productPriceCny) && productPriceCny > 0
       ? productPriceCny
       : null;
+
+  function addDimValue(name: string | null, value: string | null) {
+    if (!name || !value) return;
+    if (!dimNames.includes(name)) dimNames.push(name);
+    const list = valuesByName.get(name) ?? [];
+    if (!list.includes(value)) list.push(value);
+    valuesByName.set(name, list);
+  }
 
   flats.forEach((v, index) => {
     const o1n = asTrimmedString(v.option1_name) ?? "款式";
@@ -325,9 +334,9 @@ function mapVariantRows(
     const o3n = asTrimmedString(v.option3_name);
     const o3v = asTrimmedString(v.option3_value);
 
-    for (const name of [o1n, o2n, o3n]) {
-      if (name && !dimNames.includes(name)) dimNames.push(name);
-    }
+    addDimValue(o1n, o1v);
+    addDimValue(o2n, o2v);
+    addDimValue(o3n, o3v);
 
     // Prefer flat.cny_price; if missing, map from sku_table cell only when
     // cell price differs from product cost (CAP-2.6 / 87 D1+C1).
@@ -378,7 +387,10 @@ function mapVariantRows(
 
   const dimensions =
     dimNames.length > 0
-      ? dimNames.slice(0, 3).map((name) => ({ name }))
+      ? dimNames.slice(0, 3).map((name) => {
+          const values = valuesByName.get(name) ?? [];
+          return values.length > 0 ? { name, values } : { name };
+        })
       : rows.length > 0
         ? [{ name: "款式" }]
         : [];

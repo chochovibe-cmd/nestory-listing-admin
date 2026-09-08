@@ -301,6 +301,9 @@ check("source: mapCaptureFields honesty + warnings + source_type capture", () =>
   assert.match(src, /normalizeDetectedProductBrand/);
   assert.match(src, /stripOversizedCaptureFields/);
   assert.match(src, /pending_input/);
+  // Empty option2_name shelves: only store an axis when it has a value.
+  assert.match(src, /function addDimValue/);
+  assert.match(src, /if \(!name \|\| !value\) return/);
 });
 
 check("source: createCaptureDraft dedupe excludes archived + no overwrite", () => {
@@ -309,6 +312,8 @@ check("source: createCaptureDraft dedupe excludes archived + no overwrite", () =
   assert.match(src, /status:\s*["']exists["']/);
   assert.match(src, /status:\s*["']updated["']/);
   assert.match(src, /refillEmptyCaptureFields/);
+  assert.match(src, /dimensionsLackValues/);
+  assert.match(src, /dimsNeedFill/);
   assert.match(src, /queryDuplicateMatches|extractUrlMatchKey/);
   assert.match(src, /fetchAndStoreCaptureImages/);
   // CAP-2.6: images before variants; applyVariantImageIds

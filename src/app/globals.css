@@ -239,6 +239,11 @@ select {
   min-width: 0;
 }
 
+/* Login has no sidebar. Keep a single track so the form can center. */
+.shell--login {
+  grid-template-columns: 1fr;
+}
+
 .shell-main {
   min-width: 0;
 }

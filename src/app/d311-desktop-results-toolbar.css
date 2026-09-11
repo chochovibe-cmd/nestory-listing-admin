@@ -1,0 +1,207 @@
+/*
+ * D3.11 desktop results / login polish — 2026-09-11.
+ * Owner: desktop only. Mobile <=959 contracts in d33–d310 stay untouched.
+ *
+ * - Hide the duplicate 全選 / gesture row (header already has 全選).
+ * - Restore sliding 全選 (not native checkbox) at compact header size.
+ * - Shrink 逐件審核 to match 一般／二手 header pills so the two panel
+ *   header rules sit on one line.
+ * - 只看我的 sits before station pills; unify control height / border / radius.
+ */
+
+@media (min-width: 960px) {
+  .workbench-panes .workspace-input-panel > .panel-header,
+  .workbench-panes .results-panel > .rc-panel-header {
+    min-height: 52px;
+    box-sizing: border-box;
+  }
+
+  .results-panel .rc-selection-guide-row {
+    display: none;
+  }
+
+  /* Compact header review group: same height as 新增商品 一般／二手 pills. */
+  .results-panel .rc-panel-header .rc-header-seq-btn.nb-btn {
+    min-height: 26px;
+    height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    border-radius: 999px;
+    border-width: var(--frame-w);
+    box-sizing: border-box;
+  }
+
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop {
+    top: 11px;
+    right: 16px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    gap: 0;
+  }
+  .results-panel:has(.rc-header-seq-btn) .stage-filter-row > .rc-header-select-all--desktop {
+    right: 108px;
+  }
+
+  /* Sliding track: compact D3.6 two-segment control, not a checkbox. */
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > input[type="checkbox"] {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > span:last-child {
+    display: none;
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track {
+    position: relative;
+    display: block;
+    width: 88px;
+    min-width: 88px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0;
+    overflow: hidden;
+    border: var(--frame-w) solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    box-sizing: border-box;
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track::before {
+    content: "全選";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    z-index: 2;
+    display: grid;
+    width: 50%;
+    place-items: center;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track::after {
+    content: none;
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop .rc-toggle-track > span {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    bottom: 2px;
+    left: calc(50% + 2px);
+    z-index: 1;
+    width: auto;
+    height: auto;
+    margin: 0;
+    border: var(--frame-w) solid var(--border);
+    border-radius: 999px;
+    background: var(--surface2);
+    transform: none;
+    transition: left .16s ease, right .16s ease, background .16s ease, border-color .16s ease;
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track {
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track::before {
+    color: var(--accent-fg);
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > input:checked + .rc-toggle-track > span {
+    left: 2px;
+    right: calc(50% + 2px);
+    border-color: var(--accent);
+    background: var(--accent);
+    transform: none;
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track {
+    border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+    background: var(--surface);
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track::before {
+    color: var(--text);
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > input:indeterminate + .rc-toggle-track > span {
+    left: calc(50% + 2px);
+    right: 2px;
+    background: var(--surface2);
+    transform: none;
+  }
+  .results-panel .stage-filter-row > .rc-header-select-all--desktop > input:focus-visible + .rc-toggle-track {
+    outline: 2px solid color-mix(in srgb, var(--accent) 42%, transparent);
+    outline-offset: 2px;
+  }
+
+  /* Filter row: 只看我的 → station pills → sort. Shared capsule geometry. */
+  .results-panel .stage-filter-row {
+    --results-ctrl-h: 36px;
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+  .results-panel .stage-filter-row > .results-scope-label {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    margin: 0;
+  }
+  .results-panel .stage-filter-row .stage-filter-pills {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: var(--results-ctrl-h);
+    min-height: var(--results-ctrl-h);
+    padding: 1px;
+    border: var(--frame-w) solid var(--border);
+    border-radius: 999px;
+    box-sizing: border-box;
+  }
+  .results-panel .stage-filter-row .stage-filter-pills .pill-btn {
+    min-height: 0;
+    height: calc(var(--results-ctrl-h) - 2px - 2 * var(--frame-w));
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+  }
+  .results-panel .stage-filter-row .stage-filter-end {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    margin-left: 0;
+  }
+  .results-panel .stage-filter-row .results-scope-label .ir-scope-select,
+  .results-panel .stage-filter-row .results-sort-label {
+    min-height: var(--results-ctrl-h);
+    height: var(--results-ctrl-h);
+    padding: 0 12px;
+    border: var(--frame-w) solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    box-sizing: border-box;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .results-panel .stage-filter-row .results-sort-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .results-panel .stage-filter-row .results-sort-label .sort-sel {
+    min-height: 0;
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+}

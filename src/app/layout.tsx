@@ -19,6 +19,7 @@ import "./d39b-mobile-variant-table.css";
 import "./d310c-mobile-variant-dialog.css";
 import "./d310d-mobile-variant-dialog.css";
 import "./d310d1-mobile-character-picker.css";
+import "./d311-desktop-results-toolbar.css";
 
 /* UX-K T50: self-host via next/font (replaces Google Fonts @import in globals.css). */
 const notoSansTC = Noto_Sans_TC({

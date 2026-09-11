@@ -3,7 +3,7 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-04（G4-D browser QA evidence）
+更新基準：2026-09-11（D3.11 電腦版登入／結果列 UI；G4-D 證據仍以 2026-09-04 為準）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source 目前 HEAD：`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`
 已知 Vercel production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`
@@ -12,6 +12,10 @@ PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入�
 > **2026-09-02 外部查證結果：**Vercel production alias 的 `READY` deployment 是 `6960a0c`；不是本輪 `f0a6bfa`。Supabase 正式專案狀態為 `ACTIVE_HEALTHY`，migration ledger 僅有 baseline/reconcile 兩筆；`20260822223100` 與 `20260902090000` 都還未套用。同理，source verifier／CI pass 仍不是 Shopify mock 或真實 E2E 的通過證明。
 >
 > 下方 D3.4–D3.7 中關於「PR #8 Draft／未 merge／尚未 production deploy」的敘述，是當時 package 的歷史條件；現況一律以上方 release truth 與 `docs/audits/RELEASE-TRUTH-RECONCILE-2026-09-01.md` 為準。
+
+## 2026-09-11 D3.11 電腦版結果列／登入（未 Preview）
+
+老闆指定只改電腦版：登入被 `.shell` 兩欄擠到左側；結果列全選重複且變成勾選；標題底線不齊；「只看我的」要放到文案待審核前面。已在 `codex/cap-tmall-sku-ssr2025` 加上 `d311-desktop-results-toolbar.css`（`>=960px` only）。手機 D3.6／D3.7 契約不改。尚未 push Preview。
 
 ## 2026-09-03 Shopify 並行上線準備
 

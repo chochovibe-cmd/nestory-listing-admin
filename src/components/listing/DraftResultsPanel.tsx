@@ -1502,7 +1502,9 @@ export function DraftResultsPanel({
         ) : null}
 
         {/* D2: controls follow the user's reading order: tabs, filters, select-all,
-            then selected actions. Desktop CSS keeps select-all beside sort. */}
+            then selected actions. Desktop CSS keeps select-all beside sort.
+            D3.11 desktop: 只看我的 sits before station pills; mobile grid placement
+            still pins scope to row 2 via .results-scope-label. */}
         <div className="stage-filter-row">
           {showToolbar ? (
             <label className="rc-header-select-all rc-header-select-all--desktop">
@@ -1517,6 +1519,20 @@ export function DraftResultsPanel({
               <span>全選</span>
             </label>
           ) : null}
+          {roleReady && admin ? (
+            <label className="results-scope-label">
+              <span className="sr-only">範圍</span>
+              <select
+                aria-label="範圍"
+                className="ir-scope-select"
+                onChange={(event) => setScope(event.target.value as ResultsScopeMode)}
+                value={scope}
+              >
+                <option value="mine">只看我的</option>
+                <option value="all">全部成員</option>
+              </select>
+            </label>
+          ) : null}
           <StageFilterPills
             counts={stageCounts}
             onChange={onStageChange}
@@ -1524,20 +1540,6 @@ export function DraftResultsPanel({
             factoryPendingCount={factoryBridgeSummary.pendingReview}
           />
           <div className="stage-filter-end">
-            {roleReady && admin ? (
-              <label className="results-scope-label">
-                <span className="sr-only">範圍</span>
-                <select
-                  aria-label="範圍"
-                  className="ir-scope-select"
-                  onChange={(event) => setScope(event.target.value as ResultsScopeMode)}
-                  value={scope}
-                >
-                  <option value="mine">只看我的</option>
-                  <option value="all">全部成員</option>
-                </select>
-              </label>
-            ) : null}
             <label className="results-sort-label">
               <span aria-hidden="true" className="results-sort-icon">⇅</span>
               <span className="sr-only">排序</span>

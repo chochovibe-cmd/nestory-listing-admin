@@ -103,6 +103,10 @@ function imageFilesFromClipboard(data: DataTransfer | null): File[] {
   return out;
 }
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
+import {
+  isMissingVariantOverrideColumn,
+  omitVariantOverrideColumns
+} from "@/lib/variants/variantPersist";
 
 /** B7: insert-first overwrite so a failed insert never leaves variants empty. */
 async function persistProductVariants(
@@ -132,7 +136,13 @@ async function persistProductVariants(
     return { ok: true };
   }
 
-  const { error: insertError } = await client.from("product_variants").insert(rows);
+  let { error: insertError } = await client.from("product_variants").insert(rows);
+  if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
+    const retry = await client
+      .from("product_variants")
+      .insert(omitVariantOverrideColumns(rows));
+    insertError = retry.error;
+  }
   if (insertError) {
     return {
       ok: false,

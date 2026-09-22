@@ -44,6 +44,26 @@ export type SupabaseLike = {
   };
 };
 
+/** D3.10A columns. Production ledger does not have them yet. */
+const VARIANT_OVERRIDE_COLUMNS = [
+  "cost_is_inherited",
+  "sell_price_locked",
+  "compare_at_locked"
+] as const;
+
+export function isMissingVariantOverrideColumn(message: string): boolean {
+  if (!/schema cache|does not exist/i.test(message)) return false;
+  return VARIANT_OVERRIDE_COLUMNS.some((column) => message.includes(column));
+}
+
+export function omitVariantOverrideColumns<T extends Record<string, unknown>>(rows: T[]): T[] {
+  return rows.map((row) => {
+    const next = { ...row };
+    for (const column of VARIANT_OVERRIDE_COLUMNS) delete next[column];
+    return next;
+  });
+}
+
 function optionValue(payload: VariantInsertPayload, key: string): string {
   const value = payload[key];
   return typeof value === "string" ? value.trim() : "";
@@ -128,7 +148,13 @@ export async function persistVariantsSafe(
   }
 
   const withDraft = rows.map((r) => ({ ...r, draft_id: draftId }));
-  const { error: insertError } = await client.from("product_variants").insert(withDraft);
+  let { error: insertError } = await client.from("product_variants").insert(withDraft);
+  if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
+    const retry = await client
+      .from("product_variants")
+      .insert(omitVariantOverrideColumns(withDraft));
+    insertError = retry.error;
+  }
 
   if (insertError) {
     return {

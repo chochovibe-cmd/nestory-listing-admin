@@ -13,6 +13,8 @@ const mapDraft = fs.readFileSync("src/lib/drafts/mapDraftToWorkspaceForm.ts", "u
 const autosave = fs.readFileSync("src/lib/drafts/workspaceAutosave.ts", "utf8");
 const newPage = fs.readFileSync("src/app/drafts/new/page.tsx", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260822223100_variant_split_override_semantics.sql", "utf8");
+const persist = fs.readFileSync("src/lib/variants/variantPersist.ts", "utf8");
+const inputPanel = fs.readFileSync("src/components/listing/WorkspaceInputPanel.tsx", "utf8");
 
 function count(source, token) {
   return source.split(token).length - 1;
@@ -156,5 +158,10 @@ assert.match(main, /const TOUCH_DRAG_PX = 8;/);
 assert.match(main, /function duplicateRow\(index: number\)/);
 assert.match(render, /onClick=\{\(\) => duplicateRow\(index\)\}/);
 assert.match(render, /onClick=\{\(\) => removeRow\(index\)\}/);
+
+assert.match(persist, /function isMissingVariantOverrideColumn/);
+assert.match(persist, /function omitVariantOverrideColumns/);
+assert.match(persist, /isMissingVariantOverrideColumn\(insertError\.message\)/);
+assert.match(inputPanel, /omitVariantOverrideColumns\(rows\)/);
 
 console.log("D3.10A shared mobile table + persistent split overrides + stepper contract passed with D3.10B presentation supersession");

@@ -3,7 +3,7 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-22（擷取款式列載入：正式庫尚未有 D3.10A 欄位時，草稿頁改回基礎欄位再查；G4-D 證據仍以 2026-09-04 為準）
+更新基準：2026-09-22（擷取預設改海外代購；商品規格去掉出貨／預售，簡繁同一句只留一行。款式列載入修正同日。G4-D 證據仍以 2026-09-04 為準）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source 目前 HEAD：`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`
 已知 Vercel production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`

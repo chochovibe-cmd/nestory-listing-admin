@@ -3,6 +3,7 @@
  * Honesty: missing → empty/null/placeholder; never invent title/price/brand.
  */
 import { normalizeDetectedProductBrand } from "@/lib/providers/productBrand";
+import { localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
 import { normalizeVideoUrls } from "@/lib/media/videoUrls";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import {
@@ -88,6 +89,17 @@ function isSkuAxisParamKey(key: string): boolean {
   return SKU_AXIS_PARAM_KEY_RE.test(k);
 }
 
+/**
+ * Taobao fulfillment talk. Not our sale status and not a product spec.
+ * Simplified and traditional both match.
+ */
+const FULFILLMENT_SPEC_RE =
+  /出售[状狀][态態]|[发發][货貨]|出[货貨]|到[货貨]|[预預]售|庫存|库存|物流|[运運]費|包[邮郵]/;
+
+function isFulfillmentSpec(key: string, value: string): boolean {
+  return FULFILLMENT_SPEC_RE.test(key) || FULFILLMENT_SPEC_RE.test(value);
+}
+
 /** Long slash/comma dumps look like SKU option lists, not a single spec value. */
 function looksLikeSkuOptionList(value: string): boolean {
   const v = value.trim();
@@ -108,18 +120,28 @@ function formatSpecRows(rows: SpecRow[]): string | null {
   return lines.length ? lines.join("\n") : null;
 }
 
-/** Drop seller-service / promo noise (P4／SYN-1) and obvious SKU-axis param rows. */
+/**
+ * Drop seller-service / promo / fulfillment noise (P4／SYN-1) and SKU-axis params.
+ * Simplified and traditional copies of the same line collapse to one traditional line.
+ */
 export function filterCaptureSpecText(specText: string | null | undefined): string | null {
   const filtered = parseAndFilterSpecText(specText);
   const kept: SpecRow[] = [];
+  const seen = new Set<string>();
   for (const row of filtered) {
     const k = (row.key || "").trim();
     const v = (row.value || "").trim();
     if (isSkuAxisParamKey(k)) continue;
+    if (isFulfillmentSpec(k, v)) continue;
     if (v && looksLikeSkuOptionList(v) && !/品牌|材質|材质|產地|产地|貨號|货号/.test(k)) {
       continue;
     }
-    kept.push(row);
+    const key = localizeToTaiwanTraditionalText(k);
+    const value = localizeToTaiwanTraditionalText(v);
+    const sig = `${key}\u0001${value}`;
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    kept.push({ key, value });
   }
   return formatSpecRows(kept);
 }
@@ -522,7 +544,7 @@ export function mapCaptureToDraftFields(
     created_by: opts.userId,
     inventory_quantity: null,
     inventory_policy: "continue",
-    sale_status: "台灣現貨",
+    sale_status: "海外代購（約14天）",
     generation_status: "pending",
     raw_capture: rawCapture
   };

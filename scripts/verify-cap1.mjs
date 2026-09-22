@@ -111,18 +111,24 @@ function formatParamsAsSpecText(params) {
   if (!params || typeof params !== "object") return null;
   const noise = /優惠券|包郵|免運|運費|滿減|立減|紅包|店鋪優惠|售後|保固/;
   const skuAxis = /顏色分類|颜色分类|颜色分類|顏色分类|鞋碼|鞋码|尺碼|尺码|^口味$|口味分類|口味分类/;
+  const fulfillment = /出售[状狀][态態]|[发發][货貨]|出[货貨]|到[货貨]|[预預]售|庫存|库存|物流|[运運]費|包[邮郵]/;
   const lines = [];
+  const seen = new Set();
   for (const [key, raw] of Object.entries(params)) {
     const k = key.trim();
     if (!k || raw == null) continue;
     const v = String(raw).trim();
     if (!v) continue;
     if (noise.test(k) || noise.test(v)) continue;
+    if (fulfillment.test(k) || fulfillment.test(v)) continue;
     if (skuAxis.test(k.replace(/\s+/g, ""))) continue;
     const parts = v.split(/[/／、,，;；|]+/).map((s) => s.trim()).filter(Boolean);
     if ((parts.length >= 4 || v.length >= 80) && !/品牌|材質|材质|產地|产地|貨號|货号/.test(k)) {
       continue;
     }
+    const sig = `${k}\u0001${v}`.replace(/[简簡]/g, "簡");
+    if (seen.has(sig)) continue;
+    seen.add(sig);
     lines.push(`${k}：${v}`);
   }
   return lines.length ? lines.join("\n") : null;
@@ -431,6 +437,24 @@ check("pure: params filter promo / seller-service / SKU-axis from spec_text", ()
   assert.ok(!/優惠券/.test(spec), "drop 優惠券 noise");
   assert.ok(!/包郵/.test(spec), "drop 包郵 noise");
   assert.ok(!/颜色分类/.test(spec), "drop SKU axis 颜色分类");
+  const fulfillment = formatParamsAsSpecText({
+    材質: "PVC",
+    產地: "中國",
+    包装规格: "单盒",
+    出售状态: "全款预售",
+    发货时间: "15天内"
+  });
+  assert.ok(fulfillment.includes("材質：PVC"));
+  assert.ok(fulfillment.includes("產地：中國"));
+  assert.ok(fulfillment.includes("包装规格：单盒"));
+  assert.ok(!/出售/.test(fulfillment));
+  assert.ok(!/预售|預售/.test(fulfillment));
+  assert.ok(!/发货|發貨/.test(fulfillment));
+  const mapSrc = read("src/lib/import/mapCaptureFields.ts");
+  assert.match(mapSrc, /sale_status:\s*"海外代購（約14天）"/);
+  assert.match(mapSrc, /FULFILLMENT_SPEC_RE/);
+  assert.match(mapSrc, /localizeToTaiwanTraditionalText/);
+  assert.match(mapSrc, /seen\.has\(sig\)/);
   // Brand still extracted from raw params even when noise rows exist
   assert.equal(
     extractBrandFromParams({

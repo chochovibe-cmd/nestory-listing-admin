@@ -354,14 +354,14 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 - 不要寫價格
 - 【P4 出處標記禁令】描述／spec／賣點／FAQ／meta 等顧客可見欄位一律禁止出現
   「（來源：網路）」「來源：…」「（來源：URL）」或任何出處註記；網搜僅作內部參考
-若輸入資料已提供「商品規格（操作者補充）」，以那份為準，只做簡繁與格式整理，不要另外編造或推翻。
+若輸入資料已提供「商品規格（送出生成前已由操作者確認）」，以那份為準，只做簡繁與格式整理，不要另外編造或推翻。
 留空是允許的：真的完全沒有可寫的規格時，spec 就只寫「（無）」，不要硬湊。
 
 【網路搜尋補充（若有提供）】
 輸入若含「網路搜尋補充資訊」，可作冷門 IP／角色背景與同款規格的參考。規則：
 - 當參考用，不是官方背書；有把握的事實可直接寫進文案，語氣自然，不要寫「據網路／公開資料」這類出處句
 - 規格數字只有搜尋結果清楚標出且你合理判斷為同款時才寫入——直接寫內容，禁止標來源或附 URL；不確定就不寫
-- 與賣家自標資訊衝突時，以賣家自標（款式／標題／圖上文字／操作者補充）為準
+- 與賣家自標資訊衝突時，以賣家自標（款式／標題／圖上文字／送出前已確認的商品規格）為準
 
 【FAQ 規則】
 - 3-5 題，每題 <h3><strong>問題</strong></h3> + <p>回答</p>（2-3 句）
@@ -492,7 +492,7 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
   }
   if (note) lines.push(`補充備註：${note}`);
   if (imageDescription) lines.push(`商品外觀描述（來自主圖/詳情圖辨識）：${imageDescription}`);
-  if (specText) lines.push(`商品規格（操作者補充，以此為準只做整理）：${specText}`);
+  if (specText) lines.push(`商品規格（送出生成前已由操作者確認，以此為準只做整理）：${specText}`);
   if (webSearchSummary) {
     lines.push(
       `網路搜尋補充資訊（內部參考、須核實；可寫入有把握的規格事實，但顧客文案禁止標「來源：網路」或附 URL；不確定勿寫）：\n${webSearchSummary}`,
@@ -601,7 +601,12 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
     `銷售狀態：${input.saleStatus}`,
   ];
   if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
-  if (input.specText) lines.push(`商品規格（操作者補充）：${input.specText}`);
+  if (input.specText) lines.push(`商品規格（送出生成前已由操作者確認）：${input.specText}`);
+  if (input.webSearchSummary?.trim()) {
+    lines.push(
+      `網路搜尋補充資訊（內部參考、須核實；可寫入有把握的規格事實，但顧客文案禁止標「來源：網路」或附 URL；不確定勿寫）：\n${input.webSearchSummary.trim()}`,
+    );
+  }
   if (input.ipKnowledgePromptBlock?.trim()) {
     lines.push(input.ipKnowledgePromptBlock.trim());
   }

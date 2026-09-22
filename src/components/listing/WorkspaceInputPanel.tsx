@@ -197,6 +197,9 @@ type VariantImageOption = { id: string; url: string; label: string };
 // (nestory:pricing-settings-changed). Steps map honestly onto our two real
 // network phases (analyze-images then generate); we do NOT fake a streaming
 // animation (that waits for A20).
+function formatSeconds(ms: number): string {
+  return `${(Math.max(0, ms) / 1000).toFixed(1)} 秒`;
+}
 function emitProgress(model: GenerationProgress) {
   window.dispatchEvent(new CustomEvent<GenerationProgress>(GENERATION_PROGRESS_EVENT, { detail: model }));
 }
@@ -411,7 +414,10 @@ export function WorkspaceInputPanel({
     prevNoteContentRef.current = noteHasContent;
   }, [noteHasContent]);
   useEffect(() => {
-    if (specHasContent && !prevSpecContentRef.current) setSpecSectionOpen(true);
+    if (specHasContent && !prevSpecContentRef.current) {
+      setSpecSectionOpen(true);
+      setMobileStep(4);
+    }
     prevSpecContentRef.current = specHasContent;
   }, [specHasContent]);
   useEffect(() => {
@@ -1366,7 +1372,7 @@ export function WorkspaceInputPanel({
   // Requirement 4: analyze-images must NEVER block generation. On any failure we
   // return a warning string (surfaced as 黃字 via the draft's warnings) and let
   // generate run without image info, rather than throwing.
-  async function analyzeImages(id: string): Promise<string[]> {
+  async function analyzeImages(id: string): Promise<{ warnings: string[]; cached: boolean }> {
     try {
       const response = await fetch("/api/analyze-images", {
         method: "POST",
@@ -1375,20 +1381,26 @@ export function WorkspaceInputPanel({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        return [
-          payload.error
-            ? `圖片辨識未完成（已略過圖片資訊繼續生成）：${payload.error}`
-            : "圖片辨識未完成，已略過圖片資訊繼續生成。"
-        ];
+        return {
+          cached: false,
+          warnings: [
+            payload.error
+              ? `圖片辨識未完成（已略過圖片資訊繼續生成）：${payload.error}`
+              : "圖片辨識未完成，已略過圖片資訊繼續生成。"
+          ]
+        };
       }
-      return Array.isArray(payload.warnings) ? payload.warnings : [];
+      return {
+        cached: payload.cached === true,
+        warnings: Array.isArray(payload.warnings) ? payload.warnings : []
+      };
     } catch {
-      return ["圖片辨識連線失敗，已略過圖片資訊繼續生成。"];
+      return { cached: false, warnings: ["圖片辨識連線失敗，已略過圖片資訊繼續生成。"] };
     }
   }
 
-  function stepModel(title: string, statuses: StepStatus[], error?: string): GenerationProgress {
-    return { visible: true, title, steps: GENERATION_STEP_LABELS.map((label, i) => ({ label, status: statuses[i] })), error };
+  function stepModel(title: string, statuses: StepStatus[], error?: string, timingNote?: string): GenerationProgress {
+    return { visible: true, title, steps: GENERATION_STEP_LABELS.map((label, i) => ({ label, status: statuses[i] })), error, timingNote };
   }
 
   function resetForNextItem() {
@@ -1796,7 +1808,9 @@ export function WorkspaceInputPanel({
     setFlowPhase("generate");
     const cardTitle = title.trim().slice(0, 18);
 
+    const saveStarted = Date.now();
     const id = await persistDraft();
+    const saveMs = Date.now() - saveStarted;
     if (!id) {
       setSubmitting(false);
       setSubmitPhase(null);
@@ -1811,19 +1825,27 @@ export function WorkspaceInputPanel({
     emitProgress(stepModel(cardTitle, ["done", hasImages ? "active" : "done", "pending", "pending"]));
 
     // Wait for any background image uploads to finish before analysis reads them.
+    let uploadMs = 0;
     if (hasImages) {
       setSubmitPhase("uploading");
+      const uploadStarted = Date.now();
       await Promise.allSettled(uploadPromisesRef.current);
+      uploadMs = Date.now() - uploadStarted;
     }
 
     let step2: StepStatus = "done";
+    let visionMs = 0;
+    let visionCached = false;
     const imageWarnings: string[] = [];
     if (hasImages) {
       setSubmitPhase("analyzing");
-      const warnings = await analyzeImages(id);
-      if (warnings.length > 0) {
+      const visionStarted = Date.now();
+      const analyzed = await analyzeImages(id);
+      visionMs = Date.now() - visionStarted;
+      visionCached = analyzed.cached;
+      if (analyzed.warnings.length > 0) {
         step2 = "warn";
-        imageWarnings.push(...warnings);
+        imageWarnings.push(...analyzed.warnings);
       }
     }
 
@@ -1835,6 +1857,7 @@ export function WorkspaceInputPanel({
     const providerForThisRun = sessionProvider ?? readStoredAiProvider();
 
     let response: Response;
+    const generateStarted = Date.now();
     try {
       response = await fetch("/api/generate", {
         method: "POST",
@@ -1870,6 +1893,20 @@ export function WorkspaceInputPanel({
     }
 
     const payload = await response.json().catch(() => ({}));
+    const generateMs = Date.now() - generateStarted;
+    const serverStage = payload.stageMs && typeof payload.stageMs === "object"
+      ? payload.stageMs as Record<string, unknown>
+      : {};
+    const timingNote = [
+      `存檔 ${formatSeconds(saveMs)}`,
+      hasImages ? `等圖片上傳 ${formatSeconds(uploadMs)}` : null,
+      hasImages ? `圖片辨識 ${formatSeconds(visionMs)}${visionCached ? "（沿用上次）" : ""}` : null,
+      `文案生成 ${formatSeconds(generateMs)}`,
+      typeof serverStage.webSearch === "number" ? `商品搜尋 ${formatSeconds(serverStage.webSearch)}` : null,
+      typeof serverStage.ipSearch === "number" ? `IP 搜尋 ${formatSeconds(serverStage.ipSearch)}` : null,
+      typeof serverStage.copy === "number" ? `文案 AI ${formatSeconds(serverStage.copy)}` : null,
+      typeof serverStage.persist === "number" ? `寫入 ${formatSeconds(serverStage.persist)}` : null,
+    ].filter((part): part is string => Boolean(part)).join(" · ");
     setSubmitting(false);
     setSubmitPhase(null);
     // Always clear one-shot override after the attempt (success or fail) so the
@@ -1881,14 +1918,14 @@ export function WorkspaceInputPanel({
       const errorText = payload.error ?? "生成失敗";
       setFlowPhase("fill");
       showToast(errorText + "，可以到右側卡片按「重新生成」再試一次", "error");
-      emitProgress(stepModel(cardTitle, ["done", step2, "error", "pending"], errorText));
+      emitProgress(stepModel(cardTitle, ["done", step2, "error", "pending"], errorText, timingNote));
       router.refresh();
       return;
     }
 
     // Requirement 5: success -> all steps done. Card auto-clears once the real
     // ResultCard lands via router.refresh (handled in DraftResultsPanel).
-    emitProgress(stepModel(cardTitle, ["done", step2, "done", "done"]));
+    emitProgress(stepModel(cardTitle, ["done", step2, "done", "done"], undefined, timingNote));
     // T92: step 2 done → step 3 active（確認發布）
     setFlowPhase("review");
 
@@ -2689,7 +2726,7 @@ export function WorkspaceInputPanel({
                     <span className="wsearch-label-row">
                       🔍 Web Search 補充資訊
                       <FieldHelp label="Web Search 說明">
-                        預設開啟（冷門 IP／規格更準）；趕時間可關。搜尋結果只當內部核實，不會寫進上架文案。
+                        預設開啟。判斷是同款、而且有把握的規格與功能會寫進文案，不會標出處。不確定就不寫。趕時間可關。
                       </FieldHelp>
                     </span>
                   </div>
@@ -2717,7 +2754,12 @@ export function WorkspaceInputPanel({
             title="商品規格"
           >
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>商品規格</label>
+              <label className="label-with-help">
+                <span>商品規格</span>
+                <FieldHelp label="商品規格說明">
+                  外掛或截圖帶入的規格會出現在這裡。送出生成前可以改；文案會以你看到的這份為準。
+                </FieldHelp>
+              </label>
               <textarea
                 onChange={(e) => setSpecText(e.target.value)}
                 placeholder="材質、尺寸、產地、貨號（外掛會自動填）"

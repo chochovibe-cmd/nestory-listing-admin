@@ -6,12 +6,81 @@
 // (not the CopyProvider abstraction -- this is a different concern: raw visual
 // facts in, not brand-voice copy out).
 
+import { externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout, VISION_TIMEOUT_MS } from "./externalTimeout";
+
 const DEFAULT_VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
 // Guards against a draft with an unreasonable number of uploaded images
 // blowing up one request's payload/latency/cost.
 const MAX_DESCRIBE_IMAGES = 6;
 const MAX_OCR_IMAGES = 4;
+
+export type VisionImageCandidate = {
+  imageType: "main" | "detail";
+  url: string;
+  sortOrder: number;
+};
+
+function uniqueVisionCandidates(
+  candidates: readonly VisionImageCandidate[],
+): VisionImageCandidate[] {
+  const seen = new Set<string>();
+  return candidates
+    .filter((candidate) => candidate.url.trim())
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .filter((candidate) => {
+      const url = candidate.url.trim();
+      if (seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    });
+}
+
+function evenlySpaced<T>(items: readonly T[], count: number): T[] {
+  if (count <= 0 || items.length === 0) return [];
+  if (items.length <= count) return [...items];
+  if (count === 1) return [items[0]!];
+  return Array.from({ length: count }, (_, index) => {
+    const sourceIndex = Math.round((index * (items.length - 1)) / (count - 1));
+    return items[sourceIndex]!;
+  });
+}
+
+/** One hero image, then detail images spread across the full ordered set. */
+export function selectRepresentativeVisionImages(
+  candidates: readonly VisionImageCandidate[],
+  cap = MAX_DESCRIBE_IMAGES,
+): VisionImageCandidate[] {
+  const safeCap = Math.max(0, Math.min(MAX_DESCRIBE_IMAGES, Math.floor(cap)));
+  if (safeCap === 0) return [];
+  const unique = uniqueVisionCandidates(candidates);
+  const mains = unique.filter((candidate) => candidate.imageType === "main");
+  const details = unique.filter((candidate) => candidate.imageType === "detail");
+  const selected: VisionImageCandidate[] = [];
+  if (mains[0]) selected.push(mains[0]);
+  selected.push(...evenlySpaced(details, safeCap - selected.length));
+  for (const main of mains.slice(1)) {
+    if (selected.length >= safeCap) break;
+    selected.push(main);
+  }
+  return selected.slice(0, safeCap);
+}
+
+/** Changes when the ordered image set changes, so unchanged images can skip Vision. */
+export function buildVisionSourceFingerprint(
+  candidates: readonly VisionImageCandidate[],
+): string {
+  const source = uniqueVisionCandidates(candidates)
+    .map((candidate) => `${candidate.imageType}:${candidate.sortOrder}:${candidate.url.trim()}`)
+    .join("\n");
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `v1-${(hash >>> 0).toString(16).padStart(8, "0")}-${source.length}`;
+}
 
 // B1 (Mockup差異備忘 差異2): 規格圖 OCR 廢棄後，詳情圖是圖上文字的主要來源。除了外觀
 // 描述，這支 prompt 現在還要「轉錄詳情圖上實際印出來、看得到的文字」（廣告文案／賣點／
@@ -57,12 +126,15 @@ async function callVision(systemPrompt: string, userText: string, imageUrls: str
     ...imageUrls.map((url): VisionContentBlock => ({ type: "image_url", image_url: { url } })),
   ];
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
+    signal: externalTimeoutSignal(VISION_TIMEOUT_MS),
     body: JSON.stringify({
       model: DEFAULT_VISION_MODEL,
       max_tokens: 700,
@@ -72,6 +144,10 @@ async function callVision(systemPrompt: string, userText: string, imageUrls: str
       ],
     }),
   });
+  } catch (error) {
+    if (isExternalTimeout(error)) throw new Error(externalTimeoutMessage("vision"));
+    throw error;
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -182,12 +258,15 @@ export async function recognizeProductScreenshots(
     ...urls.map((url): VisionContentBlock => ({ type: "image_url", image_url: { url } })),
   ];
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
+    signal: externalTimeoutSignal(VISION_TIMEOUT_MS),
     body: JSON.stringify({
       model: DEFAULT_VISION_MODEL,
       max_tokens: 1200,
@@ -198,6 +277,10 @@ export async function recognizeProductScreenshots(
       ],
     }),
   });
+  } catch (error) {
+    if (isExternalTimeout(error)) throw new Error(externalTimeoutMessage("vision"));
+    throw error;
+  }
 
   if (!response.ok) {
     const errorText = await response.text();

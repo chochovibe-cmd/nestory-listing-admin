@@ -1,3 +1,4 @@
+import { externalTimeoutMessage, isExternalTimeout } from "../externalTimeout";
 import { TavilyWebSearchProvider } from "./tavily";
 import type {
   WebSearchCache,
@@ -40,14 +41,45 @@ export function fingerprintWebSearchQuery(query: string): string {
 }
 
 /**
+ * Leading keywords from long evidence (spec / note / vision) so a sparse title
+ * can still search, without blowing past Tavily query hygiene (~400 chars).
+ */
+function extractSupplementKeywords(
+  sources: Array<string | null | undefined>,
+  maxTotalLength: number,
+): string {
+  const parts: string[] = [];
+  let total = 0;
+  for (const raw of sources) {
+    const text = (raw ?? "")
+      .normalize("NFKC")
+      .replace(/https?:\/\/\S+/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text) continue;
+    const remaining = maxTotalLength - total;
+    if (remaining <= 0) break;
+    const piece = text.slice(0, remaining).trim();
+    if (!piece) continue;
+    parts.push(piece);
+    total += piece.length + 1;
+  }
+  return parts.join(" ").trim();
+}
+
+/**
  * One combined query per generation (D1-A): cleaned title + light product-spec tail.
- * Prefer title; optional known IP/character/type hints when already on the draft.
+ * Title stays the trunk. Known IP/character/type hints, plus spec / note / vision
+ * keywords, are appended so a sparse title still searches. Depth stays basic.
  */
 export function buildWebSearchQuery(input: {
   rawTitle: string;
   ipName?: string | null;
   characterName?: string | null;
   productType?: string | null;
+  specText?: string | null;
+  note?: string | null;
+  imageDescription?: string | null;
 }): string {
   let title = (input.rawTitle ?? "").normalize("NFKC").trim();
   // Drop common marketplace noise so the search focuses on the product.
@@ -58,16 +90,20 @@ export function buildWebSearchQuery(input: {
     .replace(/\s+/g, " ")
     .trim();
 
+  const titleHead = title.slice(0, 160);
   const hints = [input.ipName, input.characterName, input.productType]
     .map((v) => (v ?? "").normalize("NFKC").trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((v) => !titleHead.includes(v));
+  const extras = extractSupplementKeywords(
+    [input.specText, input.note, input.imageDescription],
+    120,
+  );
 
-  const base = title || hints.join(" ");
+  const base = [titleHead, hints.join(" "), extras].filter(Boolean).join(" ").trim();
   if (!base) return "";
 
-  // Keep under ~200 chars for provider hygiene.
-  const head = base.slice(0, 160);
-  return `${head} 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
+  return `${base} 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
 }
 
 function parseWebSearchCacheEntry(raw: unknown): {
@@ -294,8 +330,16 @@ export async function resolveIpBackgroundSearchForGenerate(params: {
       useNeutralFallback: false,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown error";
-    warnings.push(`冷門 IP 背景網搜失敗（${message}），本次以中性寫法處理。`);
+    const message = isExternalTimeout(error)
+      ? externalTimeoutMessage("search")
+      : error instanceof Error
+        ? error.message
+        : "unknown error";
+    warnings.push(
+      isExternalTimeout(error)
+        ? message
+        : `冷門 IP 背景網搜失敗（${message}），本次以中性寫法處理。`,
+    );
     return {
       summary: null,
       cacheToPersist: null,
@@ -316,6 +360,9 @@ export async function resolveWebSearchForGenerate(params: {
   ipName?: string | null;
   characterName?: string | null;
   productType?: string | null;
+  specText?: string | null;
+  note?: string | null;
+  imageDescription?: string | null;
   existingCache?: unknown;
   provider?: WebSearchProvider;
 }): Promise<{
@@ -343,9 +390,12 @@ export async function resolveWebSearchForGenerate(params: {
     ipName: params.ipName,
     characterName: params.characterName,
     productType: params.productType,
+    specText: params.specText,
+    note: params.note,
+    imageDescription: params.imageDescription,
   });
   if (!query) {
-    warnings.push("Web Search 已開啟，但標題為空，無法組查詢，本次未搜尋。");
+    warnings.push("Web Search 已開啟，但沒有可用的標題或規格文字，無法組查詢，本次未搜尋。");
     return { result: null, cacheToPersist: null, warnings, didLiveSearch: false };
   }
 
@@ -389,8 +439,13 @@ export async function resolveWebSearchForGenerate(params: {
       didLiveSearch: true,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown error";
-    warnings.push(`Web Search 失敗（${message}），本次生成未使用網路搜尋結果。`);
+    const timedOut = isExternalTimeout(error);
+    const message = timedOut
+      ? externalTimeoutMessage("search")
+      : error instanceof Error
+        ? error.message
+        : "unknown error";
+    warnings.push(timedOut ? message : `Web Search 失敗（${message}），本次生成未使用網路搜尋結果。`);
     return { result: null, cacheToPersist: null, warnings, didLiveSearch: false };
   }
 }

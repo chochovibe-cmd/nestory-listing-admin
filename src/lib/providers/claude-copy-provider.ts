@@ -1,3 +1,4 @@
+import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
 import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry, makeFieldEmptyCheck } from "./copy";
 import {
   buildCopySystemPrompt,
@@ -60,13 +61,16 @@ export class ClaudeCopyProvider implements CopyProvider {
     return generateWithParseRetry(async (formatReminder) => {
       const userContent = formatReminder ? `${user}\n\n${formatReminder}` : user;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      let response: Response;
+      try {
+        response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
         },
+        signal: externalTimeoutSignal(COPY_TIMEOUT_MS),
         body: JSON.stringify({
           model: DEFAULT_MODEL,
           // A6: 1500 truncated the 「詳細」length copy (文案風險 #6). 3000 leaves
@@ -76,6 +80,10 @@ export class ClaudeCopyProvider implements CopyProvider {
           messages: [{ role: "user", content: userContent }],
         }),
       });
+      } catch (error) {
+        if (isExternalTimeout(error)) throw new Error(externalTimeoutMessage("copy"));
+        throw error;
+      }
 
       if (!response.ok) {
         const errorText = await response.text();

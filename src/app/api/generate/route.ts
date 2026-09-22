@@ -700,6 +700,8 @@ export async function POST(request: NextRequest) {
   );
 
   const extraWarnings: string[] = [];
+  const stageMs: Record<string, number> = {};
+  let afterCopyAt = 0;
 
   // B1: carry forward any image-analysis warnings collected client-side so they
   // land in validation_warnings (黃字) instead of silently vanishing.
@@ -728,14 +730,35 @@ export async function POST(request: NextRequest) {
   }
 
   if (runMode !== "test") {
-    const searchOutcome = await resolveWebSearchForGenerate({
+    const productStarted = Date.now();
+    const productTask = resolveWebSearchForGenerate({
       useWebSearch,
       rawTitle: rawTitleForSearch,
       ipName: draft.ip_name ?? candidateIpForPack,
       characterName: draft.character_name,
       productType: draft.product_type,
+      specText: draft.spec_text,
+      note: draft.note,
+      imageDescription: draft.image_description,
       existingCache: draft.web_search_cache,
+    }).finally(() => {
+      stageMs.webSearch = Date.now() - productStarted;
     });
+
+    // P5 層3: cold IP background search runs with the product search, not after it.
+    const ipStarted = Date.now();
+    const ipTask = !knowledgePack
+      ? resolveIpBackgroundSearchForGenerate({
+          useWebSearch,
+          ipName: candidateIpForPack,
+          hasKnowledgePack: false,
+          existingCache: draft.web_search_cache,
+        }).finally(() => {
+          stageMs.ipSearch = Date.now() - ipStarted;
+        })
+      : Promise.resolve(null);
+
+    const [searchOutcome, ipBg] = await Promise.all([productTask, ipTask]);
     if (searchOutcome.warnings.length > 0) extraWarnings.push(...searchOutcome.warnings);
     if (searchOutcome.result?.summary) {
       webSearchSummary = searchOutcome.result.summary;
@@ -745,14 +768,7 @@ export async function POST(request: NextRequest) {
       productCacheToPersist = searchOutcome.cacheToPersist;
     }
 
-    // P5 層3: cold IP / no pack → optional IP-background search (shared cache).
-    if (!knowledgePack) {
-      const ipBg = await resolveIpBackgroundSearchForGenerate({
-        useWebSearch,
-        ipName: candidateIpForPack,
-        hasKnowledgePack: false,
-        existingCache: draft.web_search_cache,
-      });
+    if (ipBg) {
       if (ipBg.warnings.length > 0) extraWarnings.push(...ipBg.warnings);
       if (ipBg.summary) {
         ipKnowledgePromptBlock = buildIpBackgroundSearchPromptBlock(ipBg.summary);
@@ -791,6 +807,7 @@ export async function POST(request: NextRequest) {
       const noteForRun = regenNotes
         ? [draft.note?.trim() || null, `【重新生成方向】${regenNotes}`].filter(Boolean).join("\n")
         : draft.note;
+      const copyStarted = Date.now();
       const raw = await COPY_PROVIDERS[providerKey].generate({
         rawTitle: rawTitleForSearch,
         saleStatus: draft.sale_status,
@@ -824,6 +841,8 @@ export async function POST(request: NextRequest) {
         detectedIpName: draft.ip_name ?? candidateIpForPack,
         ipToneMap,
       });
+      stageMs.copy = Date.now() - copyStarted;
+      afterCopyAt = Date.now();
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
       // P2-79: character → dictionary canonical (Miffy), not surface alias (米飛)
       const resolvedCharacter =
@@ -1253,12 +1272,15 @@ export async function POST(request: NextRequest) {
       created_by: user.id,
     }));
 
+  const persistStarted = afterCopyAt || Date.now();
   if (historyRows.length > 0) {
     await serviceSupabase.from("generation_history").insert(historyRows);
   }
+  stageMs.persist = Date.now() - persistStarted;
 
   return Response.json({
     ok: true,
+    stageMs,
     draftState: localizedOutput.draft_state,
     validationErrors: localizedOutput.validation_errors,
     validationWarnings: allWarnings,

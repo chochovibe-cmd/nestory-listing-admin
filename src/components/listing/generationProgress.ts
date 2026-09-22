@@ -12,6 +12,7 @@ export type GenerationProgress = {
   title: string;
   steps: { label: string; status: StepStatus }[];
   error?: string;
+  timingNote?: string;
 };
 
 // The four honest phases of the two-request pipeline (analyze-images, then

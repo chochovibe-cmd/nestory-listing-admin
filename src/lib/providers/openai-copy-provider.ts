@@ -1,3 +1,4 @@
+import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
 import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry, makeFieldEmptyCheck } from "./copy";
 import {
   buildCopySystemPrompt,
@@ -41,12 +42,15 @@ export class OpenAICopyProvider implements CopyProvider {
     return generateWithParseRetry(async (formatReminder) => {
       const userContent = formatReminder ? `${user}\n\n${formatReminder}` : user;
 
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      let response: Response;
+      try {
+        response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
+        signal: externalTimeoutSignal(COPY_TIMEOUT_MS),
         body: JSON.stringify({
           model: DEFAULT_MODEL,
           // A6: cap generous enough for the full 「詳細」copy without truncation.
@@ -59,6 +63,10 @@ export class OpenAICopyProvider implements CopyProvider {
           ],
         }),
       });
+      } catch (error) {
+        if (isExternalTimeout(error)) throw new Error(externalTimeoutMessage("copy"));
+        throw error;
+      }
 
       if (!response.ok) {
         const errorText = await response.text();

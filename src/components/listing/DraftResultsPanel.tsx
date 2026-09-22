@@ -1498,6 +1498,7 @@ export function DraftResultsPanel({
               ))}
             </div>
             {progress.error ? <div className="gen-error">⚠ {progress.error}</div> : null}
+            {progress.timingNote ? <div className="muted">{progress.timingNote}</div> : null}
           </div>
         ) : null}
 

@@ -51,7 +51,8 @@ const scripts = [
   // G4 live-test allowlist + full-sync source/contract guards.
   "scripts/verify-shopify-live-test-guard.mjs",
   "scripts/verify-shopify-full-sync.mjs",
-  "scripts/verify-shopify-sync-ux.mjs"
+  "scripts/verify-shopify-sync-ux.mjs",
+  "scripts/verify-websearch-copy-path.mjs"
 ];
 
 for (const script of scripts) {

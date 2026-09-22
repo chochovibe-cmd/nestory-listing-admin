@@ -1,3 +1,4 @@
+import { externalTimeoutSignal, WEB_SEARCH_TIMEOUT_MS } from "../externalTimeout";
 import type { WebSearchProvider, WebSearchSource } from "./types";
 
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
@@ -38,6 +39,7 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
     const response = await fetch(TAVILY_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: externalTimeoutSignal(WEB_SEARCH_TIMEOUT_MS),
       body: JSON.stringify({
         api_key: apiKey,
         query: trimmed,

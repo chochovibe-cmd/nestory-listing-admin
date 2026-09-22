@@ -71,20 +71,32 @@ export default async function NewDraftPage({
         redirect(href);
       }
 
-      const [{ data: seedImages }, { data: seedVariants }] = await Promise.all([
-        supabase
-          .from("product_images")
-          .select("*")
-          .eq("draft_id", typed.id)
-          .order("sort_order"),
-        supabase
+      const variantSelectBase =
+        "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, cny_price, sku, price_locked, inventory_quantity, inventory_policy, image_id";
+      // D3.10A columns are not on production yet. Selecting them makes PostgREST
+      // fail the whole query, so the form shows axis values and 尚無款式.
+      const variantSelectFull = `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked`;
+
+      const { data: seedImages } = await supabase
+        .from("product_images")
+        .select("*")
+        .eq("draft_id", typed.id)
+        .order("sort_order");
+
+      let { data: seedVariants } = await supabase
+        .from("product_variants")
+        .select(variantSelectFull)
+        .eq("draft_id", typed.id)
+        .order("sort_order", { ascending: true });
+
+      if (!seedVariants) {
+        const fallback = await supabase
           .from("product_variants")
-          .select(
-            "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, cny_price, sku, cost_is_inherited, sell_price_locked, compare_at_locked, price_locked, inventory_quantity, inventory_policy, image_id"
-          )
+          .select(variantSelectBase)
           .eq("draft_id", typed.id)
-          .order("sort_order", { ascending: true })
-      ]);
+          .order("sort_order", { ascending: true });
+        seedVariants = fallback.data as typeof seedVariants;
+      }
 
       initialFromServer = mapDraftToWorkspaceForm(
         typed,

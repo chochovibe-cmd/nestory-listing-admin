@@ -103,6 +103,8 @@ assert.match(mapDraft, /dbRowsToForm\(dimsRaw, variants, \{[\s\S]*productCost: d
 for (const token of ["cost_is_inherited", "sell_price_locked", "compare_at_locked", "price_locked"]) {
   assert.ok(newPage.includes(token), `draft reload SELECT missing ${token}`);
 }
+assert.match(newPage, /variantSelectBase/);
+assert.match(newPage, /if \(!seedVariants\)/);
 for (const token of ["costIsInherited?: boolean;", "sellPriceLocked?: boolean;", "compareAtLocked?: boolean;"]) {
   assert.ok(autosave.includes(token), `autosave snapshot missing ${token}`);
 }

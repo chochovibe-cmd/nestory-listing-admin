@@ -36,7 +36,7 @@ export function createWebSearchProvider(
 }
 
 /** NFKC + trim + collapse whitespace — cache key for D2-A. */
-const WEB_SEARCH_CACHE_VERSION = "adv8eq3";
+const WEB_SEARCH_CACHE_VERSION = "adv8feat1";
 export function fingerprintWebSearchQuery(query: string): string {
   const normalized = query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
   return `${WEB_SEARCH_CACHE_VERSION}:${normalized}`;
@@ -147,7 +147,7 @@ export function buildWebSearchQuery(input: {
   const base = [titleHead, hints.join(" "), extras].filter(Boolean).join(" ").trim();
   if (!base) return "";
 
-  return `${base} 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
+  return `${base} 造型 系列 角色 特色 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
 }
 
 function parseWebSearchCacheEntry(raw: unknown): {

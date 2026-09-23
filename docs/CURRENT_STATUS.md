@@ -3,14 +3,21 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-23（潮巢導購聲音改 Owner 樣板，工作分支 `agent/chaochao-tone-on-live`；正式站不含本包）
+更新基準：2026-09-23（潮巢導購寫手拆層 CC-7，工作分支 `agent/chaochao-tone-on-live`；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：`6bf4b8393d31db5c8f2c5dbd7d0c173a2d8e37ff`（聲音包尚未 push）
+Git source 目前 HEAD：見 git log「CC-7／chaochao writer」（基準 `14f27c4`；commit 後補 SHA）
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
-上一包 Preview：`https://nestory-listing-admin-8i15ggzf2-chocho-nestory.vercel.app`（尚無本包聲音）
+CC-6 Preview（不含 CC-7）：`https://nestory-listing-admin-2u2u3lg60-chocho-nestory.vercel.app`
+上一包 Preview：`https://nestory-listing-admin-8i15ggzf2-chocho-nestory.vercel.app`
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
 
-## 2026-09-23 潮巢導購聲音（Owner 樣板，本機未 push）
+## 2026-09-23 潮巢導購寫手拆層（CC-7）
+
+Owner 確認潮巢導購版是老闆要求，不改回舊 A–E。要以前那種有創意、有內容、看圖能寫顏色材質的文。3～5 是主軸先後，不是上限。
+
+已完成（本機）：寫手短核心放最後；3～5 是主軸不是上限；看圖可寫雨衣黃／蓬鬆絨毛；搜尋 `adv8feat1`。`typecheck`、`verify:all` 通過。未 push、未測真實模型。詳細：`docs/audits/COPY-CHAOCHAO-WRITER-2026-09-23.md`。
+
+## 2026-09-23 潮巢導購聲音（Owner 樣板，CC-6）
 
 Owner 判定上一包語氣未過，要求整理規則、只用正面引導，並指定雨衣／衝浪／滑雪吊飾文案當聲音。
 
@@ -21,7 +28,7 @@ Owner 判定上一包語氣未過，要求整理規則、只用正面引導，�
 - 規格、IP、標題、紅線等必要作業仍保留
 - 沒有空泛電商句禁詞池
 
-未做：尚未 push Preview、未部署正式站、無真實 Shopify write。測聲音請等下一條預覽網址，不要用上一條 `8i15ggzf2`。
+未做：已 push Preview `https://nestory-listing-admin-2u2u3lg60-chocho-nestory.vercel.app`。未部署正式站、無真實 Shopify write。不要用上一條 `8i15ggzf2`。
 
 ## 2026-09-23 潮巢導購文案重建（推 Preview 給 Owner 實測）
 

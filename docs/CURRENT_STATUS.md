@@ -5,7 +5,7 @@
 
 更新基準：2026-09-23（潮巢導購寫手拆層 CC-7，工作分支 `agent/chaochao-tone-on-live`；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：見 git log「CC-7／chaochao writer」（基準 `14f27c4`；commit 後補 SHA）
+Git source 目前 HEAD：`5966c33`（CC-7 潮巢導購寫手拆層，基準 `14f27c4`；未 push）
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
 CC-6 Preview（不含 CC-7）：`https://nestory-listing-admin-2u2u3lg60-chocho-nestory.vercel.app`
 上一包 Preview：`https://nestory-listing-admin-8i15ggzf2-chocho-nestory.vercel.app`

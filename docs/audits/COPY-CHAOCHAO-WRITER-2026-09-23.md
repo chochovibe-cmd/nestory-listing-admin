@@ -2,8 +2,8 @@
 
 分支：`agent/chaochao-tone-on-live`  
 接續：`14f27c4`（CC-6 Owner 樣板 Preview，語氣仍未過）  
-本包：CC-7。**潮巢導購版維持現有五段**，不改回舊工具 A｜B｜C｜D｜E。  
-無正式站 deploy、無真實 Shopify write、無 DB migration。
+本包：CC-7 `5966c33`。**潮巢導購版維持現有五段**，不改回舊工具 A｜B｜C｜D｜E。  
+無正式站 deploy、無真實 Shopify write、無 DB migration。未 push。
 
 ## 為什麼又改
 

@@ -43,8 +43,8 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
       body: JSON.stringify({
         api_key: apiKey,
         query: trimmed,
-        search_depth: "basic",
-        max_results: 5,
+        search_depth: "advanced",
+        max_results: 8,
         include_answer: true,
       }),
     });
@@ -92,7 +92,7 @@ function formatTavilySummary(
 
   if (results.length > 0) {
     lines.push("", "【來源摘錄】");
-    for (const row of results.slice(0, 5)) {
+    for (const row of results.slice(0, 8)) {
       const title = (row.title ?? "").trim() || "（無標題）";
       const url = (row.url ?? "").trim();
       const content = (row.content ?? "").trim().slice(0, 400);

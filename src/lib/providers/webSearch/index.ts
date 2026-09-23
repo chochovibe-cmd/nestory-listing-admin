@@ -395,7 +395,7 @@ export async function resolveWebSearchForGenerate(params: {
     imageDescription: params.imageDescription,
   });
   if (!query) {
-    warnings.push("Web Search 已開啟，但沒有可用的標題或規格文字，無法組查詢，本次未搜尋。");
+    warnings.push("Web Search 已開啟，但標題、規格、備註與圖片辨識皆為空，無法組查詢，本次未搜尋。");
     return { result: null, cacheToPersist: null, warnings, didLiveSearch: false };
   }
 

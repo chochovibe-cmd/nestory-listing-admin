@@ -33,7 +33,7 @@ const { selectRepresentativeVisionImages } = await import(
   "../src/lib/providers/visionProvider.ts"
 );
 
-const promptSource = fs.readFileSync(path.join(root, "src/lib/providers/systemPrompt.ts"), "utf8");
+const promptSource = fs.readFileSync(path.join(root, "src/lib/providers/systemPromptBase.ts"), "utf8");
 const transpiled = ts.transpileModule(promptSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText.replace(/^\s*import\s.+?;\s*$/gm, "");

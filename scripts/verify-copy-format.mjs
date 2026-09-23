@@ -81,8 +81,10 @@ await check("mirror: normal line is not a header", () => {
   assert.equal(mirrorMatch("・柔軟材質：舒適手感"), null);
 });
 
+// COPY-FIX-1 stale-pin refresh: prompt body moved to systemPromptBase.ts
+// (Production-derived base; systemPrompt.ts is the branch wrapper).
 await check("systemPrompt uses ◈ headers, bans letter prefixes", () => {
-  const src = read("src/lib/providers/systemPrompt.ts");
+  const src = read("src/lib/providers/systemPromptBase.ts");
   assert.match(src, /◈ 商品亮點/);
   assert.match(src, /◈ 適合誰/);
   assert.match(src, /◈ 商品資訊/);
@@ -91,10 +93,12 @@ await check("systemPrompt uses ◈ headers, bans letter prefixes", () => {
   assert.doesNotMatch(src, /^B｜商品亮點/m);
 });
 
-await check("systemPrompt emoji tone policy (2 tones allowed)", () => {
-  const src = read("src/lib/providers/systemPrompt.ts");
+// COPY-FIX-1 stale-pin refresh: COPY C1 added 潮巢導購版 as a third
+// (optional-emoji) tone; policy body lives in systemPromptBase.ts.
+await check("systemPrompt emoji tone policy (3 tones allowed)", () => {
+  const src = read("src/lib/providers/systemPromptBase.ts");
   assert.match(src, /EMOJI_TONES/);
-  assert.match(src, /小編聊天口吻.*可愛周邊輕鬆感|"小編聊天口吻", "可愛周邊輕鬆感"/s);
+  assert.match(src, /"小編聊天口吻", "可愛周邊輕鬆感", CHAOCHAO_SALES_TONE/);
   assert.match(src, /toneEmojiRule\(tone\)/);
   assert.match(src, /不使用 emoji/);
 });
@@ -121,9 +125,11 @@ await check("saleStatusNotice covers all four statuses with emoji", () => {
   assert.match(src, /14 天/);
 });
 
+// COPY-FIX-1 stale-pin refresh: saleStatusNoticeHtml gained a tone arg on
+// this branch (Chaochao layout renders the notice inside its own formatter).
 await check("payload prepends saleStatusNoticeHtml at Shopify boundary", () => {
   const src = read("src/lib/shopify/payload.ts");
-  assert.match(src, /saleStatusNoticeHtml\(draft\.sale_status\)/);
+  assert.match(src, /saleStatusNoticeHtml\(draft\.sale_status(?:, draft\.generation_tone)?\)/);
   assert.match(src, /from "@\/lib\/contentGenerator\/saleStatusNotice"/);
 });
 
@@ -132,7 +138,8 @@ await check("tone cards mark emoji tones", () => {
   assert.match(src, /usesEmoji: true/);
   assert.match(src, /可含Emoji/);
   const emojiTrue = src.match(/usesEmoji: true/g) || [];
-  assert.equal(emojiTrue.length, 2, "exactly two tones use emoji");
+  // COPY-FIX-1 stale-pin refresh: 3 emoji tones since COPY C1 added 潮巢導購版.
+  assert.equal(emojiTrue.length, 3, "exactly three tones use emoji");
 });
 
 if (failures.length > 0) {

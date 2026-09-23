@@ -88,6 +88,12 @@ export function ResultCardCopyPanel({
   onSaveCombo: () => void;
 }) {
   const fieldBusy = regeneratingField != null || regenerating || comboSaving;
+  const descriptionVersions = versionsByField.generated_description_html;
+  const descriptionVersionIndex = versionIndex.generated_description_html ?? 0;
+  const isBrowsingHistoricalDescription =
+    !copyDirty.generated_description_html &&
+    descriptionVersions.length > 0 &&
+    descriptionVersionIndex < descriptionVersions.length - 1;
 
   return (
     <div className="rc-tabpanel rc-tabpanel--copy" role="tabpanel">
@@ -276,7 +282,13 @@ export function ResultCardCopyPanel({
             </span>
           </div>
           {descriptionView === "preview" ? (
-            <CopyPreviewBlock html={descriptionPreviewHtml(description)} />
+            <CopyPreviewBlock
+              html={
+                isBrowsingHistoricalDescription
+                  ? descriptionPreviewHtml(description, undefined, draft.sale_status)
+                  : descriptionPreviewHtml(description, draft.generation_tone, draft.sale_status)
+              }
+            />
           ) : (
             <textarea
               className="edit-textarea"

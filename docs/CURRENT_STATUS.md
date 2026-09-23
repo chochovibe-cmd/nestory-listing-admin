@@ -3,11 +3,19 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-23（正式站已換上測試線 `2bdf011`；沒有潮巢語氣。G4-D 證據仍以 2026-09-04 為準）
+更新基準：2026-09-23（正式站仍是 `2bdf011` 那條，沒有潮巢語氣。潮巢語氣已接到預覽分支 `agent/chaochao-tone-on-live`，等 Owner 看文案後才上正式站。）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source 目前 HEAD：`2bdf0113abc5c672154e1e1226ed4361a918dcc0`
 已知 Vercel production：`2bdf0113abc5c672154e1e1226ed4361a918dcc0`（公開網址 `https://nestory-listing-admin.vercel.app`）
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
+
+## 2026-09-23 潮巢語氣接到預覽分支（尚未上正式站）
+
+規格中繼與生成速度 Owner 已在正式站確認沒問題。下一步把 `origin/agent/copy-chaocao-sales-tone`（`3c56fc2`）合併進正式線的後代，分支名 `agent/chaochao-tone-on-live`。
+
+保留正式站已上線的行為：網搜詞含規格／備註／圖片、分段計時、兩次搜尋同時做、規格中繼由 AI 整理成台灣繁體而不是照貼外掛原文。
+
+接上的是潮巢導購版語氣、標題格式、介紹與 FAQ 口吻。正式站在 Owner 看過預覽文案之前不要換。
 
 ## 2026-09-23 正式站換上測試線（沒有潮巢語氣）
 
@@ -52,6 +60,44 @@ Owner 要求把已經改好、且在預覽站看過速度的測試線上正式�
 - 仍未放行：G2 `SHOPIFY_LOCATION_ID`／production credentials 有效性、mock partial-create/retry runtime、G4 owner-approved real Shopify `DRAFT`、PR #10 merge／migrations／production deploy、G5 文案定稿後的小批次 `ACTIVE`。
 - Owner 已批准進入 G4 準備，且真實 Shopify 只可建立 1 筆 `DRAFT`、不得 `ACTIVE`。G4-A～D 本機 source 與 browser QA 已完成：mobile + desktop、dark/kitty/nordic、永久刪除精確標題確認與 disabled/enabled 行為均通過，fresh tab hydration error 0。typecheck、`verify:all` 已通過。自動 dirty triggers 已加入 migration source，但尚未套用；尚未 push Preview、部署、真實 Shopify E2E 或寫入。詳見 `docs/audits/SHOPIFY-FULL-CONNECTION-DESIGN-2026-09-03.md`。
 - 詳細邊界與證據：`docs/audits/SHOPIFY-GO-LIVE-PREP-2026-09-03.md`。
+
+## COPY C1 / R0A / R0B — 潮巢導購版 Owner scope recovery（2026-08-25）
+
+COPY C1 以 production/default authority `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 為共用功能基準，在 PR #9 / branch `agent/copy-chaocao-sales-tone` 新增第 7 種 manual tone「潮巢導購版」。後續 C1.x 曾把 shared data/title/SKU/FAQ contract 擴張；R0A / R0B 已把越界 shared behavior 收回 Production semantics，同時保留 Owner 明確 allowlist。
+
+R0A 已 supersede：Evidence Pack、Full Generate Vision bridge、Vision fingerprint/representative sampling redesign、deterministic Web Search→spec merge、canonical-key/evidence spec merge。`spec_text` 回到 existing-first：draft 既有非空規格 authoritative，只有 existing 空白時才採 provider spec；Taiwan Traditional customer finalizer 保留。
+
+R0B supersede：
+
+- C1.2 structured title assembly / feature-only title regeneration；
+- C1.3 persisted-SKU authority / backend SKU override；
+- later shared FAQ rewrite / simplification。
+
+R0B final shared allowlist 只剩：
+
+1. enriched title separator 統一為 ASCII ` | `；
+2. 保留 AI 原本完整三段 title，只在現有 segment 2 缺少時 append detected product type；segment 1 / segment 3 不做新 assembly、rerank 或 cross-segment dedupe；
+3. 顧客可見 AI 結果 deterministic 台灣繁中；`taobao_title`、`original_title`、raw OCR / raw web cache 保留原來源文字。
+
+R0B shared recovery：
+
+- Title：Production `titleGenerator.ts` 語意重新成為 authority，原 character redundancy、feature ladder、blacklist、segment-3 scrub、80/60 clamp 全保留；Full Generate 與單欄 title regen 都由 AI 產完整 enriched title，再走相同 minimal separator + segment-2-type finalizer，最後回 Production scrub/clamp。
+- SKU：system prompt 回 Production `CHO-{型態縮寫}-{IP縮寫}-{角色縮寫}-001` contract；Full Generate 回 `raw.sku → detected.sku → draftUpdate.sku`；Shopify payload 回 Production `generateSku()` / `variantSeed` precedence，不保護既有壞 draft SKU。
+- FAQ / GEO：共用 prompt 回 Production 3–5 題、`<h3><strong>問題</strong></h3> + <p>回答</p>`、2–3 句、自由導購/目標客群 creativity、低價值問題 guidance、standalone-answer GEO，以及禁止「如上所述／如前面提到／如圖所示」。本包沒有 FAQ Writer V2 或 FAQ 品質 redesign。
+
+Final tone-specific allowlist：
+
+- 第 7 種 `潮巢導購版`；
+- 潮巢 tone voice：幽默、可愛、有人味、有生活感、可角色梗／小吐槽、適合時少量中二，evidence safety 不放寬；
+- Boss description hierarchy：`商品介紹 → 收藏亮點 bullets → 導購小標：動態標題＋正文`，Shopify boundary 轉 `h2/p/ul/li`；原 6 tones 共用 behavior 不因此改寫；
+- 潮巢 tone-specific emoji allowance 保留，原 6 tones emoji contract 仍依 Production-derived base。
+
+Dedicated audits：
+
+- `docs/audits/COPY-C1-CHAONEST-SALES-TONE-2026-08-25.md`
+- `docs/audits/COPY-C1-R0B-TITLE-SKU-FAQ-RECOVERY-2026-08-25.md`
+
+Scope freeze：沒有 Evidence Pack、Vision bridge、spec/Web Search redesign、title segment-3 redesign、first-segment redesign、new SKU design、FAQ enhancement、Why/Highlights Writer、UI、pricing、variants、inventory、Shopify lifecycle/go-live、DB migration 或 Shopify production write。
 
 ## Latest release-branch package — D3.7 mobile gesture guidance + bidirectional swipe
 

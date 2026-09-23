@@ -46,6 +46,10 @@ const scripts = [
   // SYN-1 detail compose + to_trad + P4 regression
   "scripts/verify-syn1.mjs",
   "scripts/verify-p4-source-and-seller.mjs",
+  // COPY C3 title authority / recovery composition guard
+  "scripts/verify-title-sync.mjs",
+  // COPY C1 — seventh manual sales-copy tone; no production network writes.
+  "scripts/verify-copy-c1-chaonest-sales-tone.mjs",
   // Shopify Lifecycle Safety A1 — mock/injected only, never real network.
   "scripts/verify-shopify-lifecycle-safety.mjs",
   // G4 live-test allowlist + full-sync source/contract guards.

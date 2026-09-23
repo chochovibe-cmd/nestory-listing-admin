@@ -36,37 +36,79 @@ export function createWebSearchProvider(
 }
 
 /** NFKC + trim + collapse whitespace — cache key for D2-A. */
-const WEB_SEARCH_CACHE_VERSION = "adv8";
+const WEB_SEARCH_CACHE_VERSION = "adv8eq3";
 export function fingerprintWebSearchQuery(query: string): string {
   const normalized = query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
   return `${WEB_SEARCH_CACHE_VERSION}:${normalized}`;
 }
 
+function uniqueKeywordPieces(text: string): string[] {
+  const tokens = text
+    .split(/[\s,，、;；|/]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const token of tokens) {
+    const key = token.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(token);
+  }
+  return unique;
+}
+
+function takeShare(text: string, maxLength: number, used: Set<string>): string {
+  if (maxLength <= 0 || !text) return "";
+  const pieces: string[] = [];
+  let total = 0;
+  for (const token of uniqueKeywordPieces(text)) {
+    const key = token.toLocaleLowerCase();
+    if (used.has(key)) continue;
+    if (total + token.length + (pieces.length > 0 ? 1 : 0) > maxLength) continue;
+    used.add(key);
+    pieces.push(token);
+    total += token.length + (pieces.length > 1 ? 1 : 0);
+  }
+  if (pieces.length === 0) {
+    const fallback = text.slice(0, maxLength).trim();
+    if (fallback && !used.has(fallback.toLocaleLowerCase())) {
+      used.add(fallback.toLocaleLowerCase());
+      return fallback;
+    }
+  }
+  return pieces.join(" ").trim();
+}
+
 /**
  * Leading keywords from long evidence (spec / note / vision) so a sparse title
- * can still search, without blowing past Tavily query hygiene (~400 chars).
+ * can still search. Each source gets a fair share; leftovers are redistributed.
  */
 function extractSupplementKeywords(
   sources: Array<string | null | undefined>,
   maxTotalLength: number,
 ): string {
-  const parts: string[] = [];
-  let total = 0;
-  for (const raw of sources) {
-    const text = (raw ?? "")
-      .normalize("NFKC")
-      .replace(/https?:\/\/\S+/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!text) continue;
-    const remaining = maxTotalLength - total;
-    if (remaining <= 0) break;
-    const piece = text.slice(0, remaining).trim();
-    if (!piece) continue;
-    parts.push(piece);
-    total += piece.length + 1;
+  const cleaned = sources
+    .map((raw) =>
+      (raw ?? "")
+        .normalize("NFKC")
+        .replace(/https?:\/\/\S+/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter(Boolean);
+  if (cleaned.length === 0) return "";
+
+  const used = new Set<string>();
+  const share = Math.floor(maxTotalLength / cleaned.length);
+  const parts = cleaned.map((text) => takeShare(text, share, used));
+  let usedLength = parts.join(" ").replace(/\s+/g, " ").trim().length;
+  if (usedLength < maxTotalLength) {
+    const leftover = maxTotalLength - usedLength;
+    const extra = takeShare(cleaned.join(" "), leftover, used);
+    if (extra) parts.push(extra);
   }
-  return parts.join(" ").trim();
+  return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
 /**

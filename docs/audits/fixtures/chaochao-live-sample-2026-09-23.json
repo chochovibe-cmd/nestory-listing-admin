@@ -1,0 +1,34 @@
+{
+  "kind": "真實模型生成（單筆抽樣，未寫入草稿／未發布）",
+  "fixtureId": "plush-bread",
+  "provider": "openai",
+  "model": "gpt-4o",
+  "elapsedMs": 13891,
+  "usage": {
+    "inputTokens": 7268,
+    "outputTokens": 882,
+    "cachedInputTokens": 0,
+    "cacheCreationTokens": 0,
+    "costUsd": 0.02699
+  },
+  "outputTruncated": false,
+  "title": "三麗鷗 Hello Kitty | 面包造型絨毛吊飾 | 可指定角色",
+  "titleParts": {
+    "titleIp": "三麗鷗 Hello Kitty",
+    "titleBrand": "",
+    "titleItem": "面包造型絨毛吊飾",
+    "titleDiff": "可指定角色"
+  },
+  "description": "商品介紹\n\n三麗鷗的Hello Kitty、Melody和大耳狗這次化身為圓滾滾的麵包吊飾！就像一顆搶手的可愛麵包，這個小吊飾同樣令人忍不住想咬它一口！柔軟的絨毛搭配獨特的淺咖啡色與白色糖霜的設計，無論掛在包包上還是鑰匙上，都是亮眼又實用的小物。\n\n收藏亮點\n・選擇多樣：提供Hello Kitty、大耳狗和美樂蒂三種角色，讓你的收藏更具選擇性。\n・身軀圓潤：麵包造型讓這個吊飾看起來既可愛又飽滿。\n・材質舒適：柔軟的毛絨材質，握在手中備感舒適。\n・小巧可愛：10公分的精緻尺寸，搭配可伸縮的掛繩，隨時隨地都能裝飾你的生活。\n\n適合誰\n・喜愛三麗鷗角色的粉絲，這是日常生活中的小確幸。\n・包包或鑰匙需要點綴的小伙伴，這款吊飾絕對是絕佳選擇。\n・想為朋友或自己增添一份獨特小禮物的人。\n\n商品資訊\n・角色：Hello Kitty、大耳狗、美樂蒂\n・尺寸：約 10cm\n・材質：毛絨\n・填充：PP棉",
+  "whyWeChoseIt": "我們選擇這款吊飾因為它以獨具匠心的麵包造型呈現三麗鷗的經典角色，增加可愛度的同時，也讓生活充滿樂趣。",
+  "productHighlights": [
+    "提供Hello Kitty、大耳狗、美樂蒂三種選擇",
+    "圓滾滾的麵包造型設計",
+    "柔軟毛絨材質，具舒適手感",
+    "小型 10cm 尺寸，便於攜帶"
+  ],
+  "spec": "角色：Hello Kitty、大耳狗、美樂蒂\n尺寸：約 10cm\n材質：毛絨\n填充：PP棉",
+  "faq": "<h3><strong>這款吊飾有哪幾種角色？</strong></h3>\n<p>這款吊飾提供Hello Kitty、大耳狗和美樂蒂三種角色選擇。</p>\n\n<h3><strong>吊飾的尺寸是多少？</strong></h3>\n<p>吊飾的尺寸約為10公分，適合搭配在包包上或作為鑰匙圈使用。</p>\n\n<h3><strong>吊飾的材質是什麼？</strong></h3>\n<p>吊飾採用柔軟的毛絨材質，內部填充PP棉。</p>",
+  "seoTitle": "三麗鷗 Hello Kitty 面包造型絨毛吊飾 可指定角色 | 潮巢 Nestory",
+  "metaDescription": "三麗鷗麵包造型吊飾，柔軟絨毛材質，三角色款選，可愛又實用的日常搭配小物。"
+}

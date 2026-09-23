@@ -95,7 +95,7 @@ function formatTavilySummary(
     for (const row of results.slice(0, 8)) {
       const title = (row.title ?? "").trim() || "（無標題）";
       const url = (row.url ?? "").trim();
-      const content = (row.content ?? "").trim().slice(0, 400);
+      const content = extractRelevantExcerpt(row.content ?? "", 400);
       lines.push(`- ${title}${url ? `（${url}）` : ""}`);
       if (content) lines.push(`  ${content}`);
     }
@@ -113,4 +113,33 @@ function formatTavilySummary(
   }
 
   return lines.join("\n");
+}
+
+const PRODUCT_FACT_HINT =
+  /尺寸|規格|材質|成分|重量|容量|配件|內容物|包裝|功能|款式|系列|cm|mm|填充|絨毛|PVC|ABS|適用|盲盒|授權|正版|充電|電池|記憶卡/i;
+
+export function extractRelevantExcerpt(content: string, maxLen = 400): string {
+  const text = (content ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (Array.from(text).length <= maxLen) return text;
+
+  const sentences = text.split(/(?<=[。．.！？!?\n；;])/).map((part) => part.trim()).filter(Boolean);
+  const matchIndex = sentences.findIndex((sentence) => PRODUCT_FACT_HINT.test(sentence));
+  const start = matchIndex >= 0 ? matchIndex : 0;
+  let excerpt = "";
+  for (let i = start; i < sentences.length; i += 1) {
+    const next = excerpt ? `${excerpt}${sentences[i]}` : sentences[i];
+    if (Array.from(next).length > maxLen) break;
+    excerpt = next;
+  }
+  if (Array.from(excerpt).length < Math.floor(maxLen * 0.4) && start > 0) {
+    excerpt = "";
+    for (const sentence of sentences) {
+      const next = excerpt ? `${excerpt}${sentence}` : sentence;
+      if (Array.from(next).length > maxLen) break;
+      excerpt = next;
+    }
+  }
+  if (!excerpt) excerpt = Array.from(text).slice(0, maxLen).join("");
+  return excerpt.trim();
 }

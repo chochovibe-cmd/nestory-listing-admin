@@ -3,13 +3,37 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-23（主線已含潮巢語氣與加深搜尋 `2fb59c0`。文案仍不夠，Owner 要交 GPT 精修，不是再加新功能。）
+更新基準：2026-09-23（潮巢導購文案重建推 Preview，工作分支 `agent/chaochao-tone-on-live`；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：含 `2fb59c08ac2e295373c5897accd2598c25526fc7` 的本紀錄提交
-已知 Vercel production：同上，公開網址 `https://nestory-listing-admin.vercel.app`
+Git source 目前 HEAD：工作分支待 push 後更新
+已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
 
+## 2026-09-23 潮巢導購文案重建（推 Preview 給 Owner 實測）
+
+Owner 批准重建潮巢導購版文案與全站商品標題契約。工作在 `agent/chaochao-tone-on-live`，基準 SHA `a3b3c57`。
+
+已完成：
+
+- 全語氣商品標題：`IP中文＋英文 × 品牌 | 精準品項 | 差異`，最多 80 字，取消再砍 60
+- 潮巢單一寫作契約：商品介紹／收藏亮點／適合誰／商品資訊；正面指令與三類示範
+- 潮巢 SEO 不再追加「○○首選」或堆同義詞；品牌尾綴仍由後端加
+- 單欄重生帶入款式、備註、搜尋、IP 背景；搜尋補充詞均分；摘錄改抓相關句
+- 輸出截斷會警告，不自動加一次付費重試
+- 舊潮巢三段稿仍可讀；其他語氣正文維持原格式
+
+未做／不要當成已完成：
+
+- 真實模型只抽了 1 筆麵包吊飾（gpt-4o，約 $0.027，未截斷）；其餘 4 組 fixture 標「非真實模型生成」
+- `pnpm run verify:all`、`typecheck`、`build` 本機通過
+- 未部署正式站、無真實 Shopify write、無 DB migration
+- 未改 `.claude/settings.local.json`
+
+詳細：`docs/audits/COPY-CHAOCHAO-REWRITE-2026-09-23.md`
+
 ## 2026-09-23 潮巢語氣與加深搜尋已上主線
+
+> 本節是主線合併當下的歷史。文案契約已被上方「潮巢導購文案重建」覆寫（四段正文、不再痛點開頭、潮巢 SEO 不堆首選）。搜尋最多 8 筆仍在，快取版本改為 `adv8eq3`。
 
 Owner 看過預覽，覺得有比較好、仍不夠。要求把這輪先推上主線，交給 GPT 協作精修。
 

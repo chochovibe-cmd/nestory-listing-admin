@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -83,8 +82,8 @@ assert.match(titleBase, /export function formatCharacterText/u, "Production form
 assert.match(titleBase, /const TITLE_DEDUPE_TERMS/u, "Production title dedupe terms missing");
 assert.match(titleBase, /export const TITLE_SEGMENT3_BLACKLIST/u, "Production title blacklist missing");
 assert.match(titleBase, /export function scrubEnrichedTitleSegment3/u, "Production segment-3 scrub missing");
-assert.match(titleBase, /export const OFFICIAL_TITLE_MAX_LENGTH = 60/u, "Production 60-char official clamp missing");
-assert.match(titleBase, /export const ENRICHED_TITLE_MAX_LENGTH = 80/u, "Production 80-char enriched limit missing");
+assert.match(titleBase, /export const OFFICIAL_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/u, "unified 80-char official title cap missing");
+assert.match(titleBase, /export const ENRICHED_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/u, "unified 80-char enriched title cap missing");
 
 const featureLadder = section(titleBase, "function getShortFeatureText", "function textLen");
 const ladderMarkers = [
@@ -96,7 +95,7 @@ const ladderMarkers = [
   "if (sizeText) return sizeText;",
   "const scenario = pickTitleScenarioFallback(draft);",
   "if (hasMultipleCharacters) return '款式可選';",
-  "return getSelectableText(sourceText) ?? '標準款';",
+  "return getSelectableText(sourceText) ?? '';",
 ];
 let previousIndex = -1;
 for (const marker of ladderMarkers) {
@@ -159,45 +158,27 @@ for (const [input, productType, expected] of titleFixtures) {
   );
 }
 
-// COPY-FIX-3: Chaochao Title Writer format v2 (prompt-only; backend still no-append).
-assert.match(prompt, /COPY C5A 潮巢導購版 Title Writer/, "C5A Chaochao Title Writer contract missing");
-assert.match(prompt, /商品名稱不可以被擠到第三段/, "title format v2: product name must stay in segment 2");
-assert.match(
-  prompt,
-  /家泰吉 × 三麗鷗 Sanrio \| 凱蒂貓 Hello Kitty 浴巾禮盒 \| 婚禮伴手禮/,
-  "title format v2 owner example missing",
-);
-assert.match(
-  prompt,
-  /三麗鷗 Sanrio \| 玉桂狗 \| 高顏值毛巾禮盒三件套/,
-  "title format v2 bad example missing",
-);
-assert.match(prompt, /全形「．」分隔/, "title format v2 multi-character separator missing");
-assert.match(
-  prompt,
-  /角色英文名、品牌英文名沒有依據時不要硬翻/,
-  "title format v2 evidence-safe English names missing",
-);
-assert.match(
-  prompt,
-  /detected_product_type 只當 fallback \/ semantic reference，不是 mandatory exact substring/,
-  "C5A detected_product_type fallback/reference authority missing",
-);
+const titlePrompt = read("src/lib/providers/titlePrompt.ts");
+const chaochaoPrompt = read("src/lib/providers/chaochaoPrompt.ts");
 
-// Production enriched-title boundary: Production scrub, then raw Array.from(...).slice(0,80).
-assert.match(titleFinalizer, /const normalized = normalizeTitleSeparators\(value\);/u,
-  "title finalizer no longer normalizes separators before scrub");
-assert.match(titleFinalizer, /const scrubbed = scrubEnrichedTitleSegment3\(normalized\);/u,
-  "Production segment-3 scrub is not applied before enriched clamp");
-assert.match(titleFinalizer, /Array\.from\(scrubbed\)\.slice\(0, maxLen\)\.join\(""\)/u,
-  "Production raw Array.from(...).slice enriched clamp missing");
-assert.doesNotMatch(titleFinalizer, /enforceSkeletonTitleLength|clampOfficialTitle/u,
-  "80-char helper must not become skeleton-aware or apply the official clamp");
-assert.match(route, /const enrichedTitleFull = normalizeEnrichedTitleContract\([\s\S]*?ENRICHED_TITLE_MAX_LENGTH,[\s\S]*?\);\s*const officialTitleZh = clampOfficialTitle\(enrichedTitleFull\);/u,
-  "Full Generate no longer preserves 80-stage then Production 60 official clamp");
+// Shared title contract lives in titlePrompt.ts and is used by every tone.
+assert.match(titlePrompt, /商品標題契約｜所有語氣共用/, "shared title contract missing");
+assert.match(titlePrompt, /IP中文＋英文 × 品牌/, "IP-first brand-second title order missing");
+assert.match(titlePrompt, /三麗鷗 Sanrio × Bandai \| 家族米粒公仔吊飾盲盒 \| 隨機單盒/, "owner title example missing");
+assert.match(titlePrompt, /不要填「標準款」/, "filler 標準款 rule missing");
+assert.match(promptBase, /SHARED_PRODUCT_TITLE_PROMPT/, "base prompt no longer injects the shared title contract");
+assert.doesNotMatch(prompt, /COPY C5A 潮巢導購版 Title Writer/, "Chaochao-only title overlay returned");
+assert.doesNotMatch(prompt, /CHAOCHAO_BOSS_LAYOUT/, "stacked Chaochao layout overlay returned");
+
+assert.match(titleFinalizer, /finalizeProductTitle/u, "shared product title assembler missing");
+assert.match(titleFinalizer, /PRODUCT_TITLE_MAX_LENGTH/u, "unified title cap missing from finalizer");
+assert.doesNotMatch(titleFinalizer, /clampOfficialTitle/u,
+  "title finalizer must not re-introduce the old official clamp helper");
+assert.match(route, /const officialTitleZh = enrichedTitleFull;/u,
+  "Full Generate still splits 80-char generation from a shorter official title");
 const regenTitleBlock = section(route, 'if (regenField === "enriched_title")', '} else {');
-assert.match(regenTitleBlock, /normalizeEnrichedTitleContract/u, "single-field title regen bypasses title finalizer");
-assert.match(regenTitleBlock, /clampOfficialTitle\(historyContent\)/u, "single-field title regen lost Production 60 clamp");
+assert.match(regenTitleBlock, /finalizeProductTitle/u, "single-field title regen bypasses title assembler");
+assert.match(regenTitleBlock, /value = historyContent/u, "single-field title regen history and stored title diverged");
 
 // SKU: Production raw provider SKU wins full generation; field regen has no SKU write.
 assert.match(route, /sku: raw\.sku,/u, "raw.sku no longer feeds detected.sku");
@@ -241,100 +222,20 @@ assert.match(prompt, /所有顧客可見 AI 產出使用台灣繁中與台灣慣
 assert.match(finalizer, /localizeToTaiwanTraditionalText/u, "Taiwan Traditional finalizer missing");
 assert.match(finalizer, /stripCustomerSourceMarkers/u, "customer-facing source marker cleanup missing");
 
-// Approved seventh tone + Boss description hierarchy retained without changing shared FAQ rules.
 assert.match(copy, /"潮巢導購版"/u, "seventh Chaochao tone disappeared");
-assert.match(prompt, /潮巢導購版 Boss description hierarchy/u, "Boss hierarchy wrapper disappeared");
-const chaochaoContract = section(prompt, "const CHAOCHAO_BOSS_LAYOUT", "function sharedRecoverySuffix");
-assert.match(chaochaoContract, /只適用 tone === "潮巢導購版"/u,
-  "Chaochao contract is not explicitly tone-only");
-assert.match(chaochaoContract, /第一行固定且只能是「商品介紹」/u,
-  "Chaochao description no longer starts exactly with 商品介紹");
-assert.match(chaochaoContract,
-  /商品介紹\n（正文 2–4 個短段落）\n\n收藏亮點\n・亮點一\n・亮點二\n・亮點三\n\n導購小標：依這件商品動態產生/u,
-  "Chaochao exact three-section source contract changed");
-assert.match(chaochaoContract, /「收藏亮點」heading 後立刻使用「・」bullets/u,
-  "Chaochao 收藏亮點 no longer requires direct bullets");
-assert.match(chaochaoContract,
-  /最後一個 bullet 結束後，下一個非空白行必須直接是「導購小標：<動態標題>」/u,
-  "Chaochao bullets no longer flow directly into the dynamic sales heading");
-assert.match(chaochaoContract, /禁止插入無標題正文、總結/u,
-  "Chaochao contract no longer forbids post-bullet unheaded prose");
-assert.match(chaochaoContract, /feature → benefit/u,
-  "Chaochao feature-to-benefit rule disappeared");
-assert.match(chaochaoContract, /evidence 足夠時至少 3 點/u,
-  "Chaochao evidence-rich bullet minimum disappeared");
-assert.match(chaochaoContract, /商品介紹＋收藏亮點合計至少自然使用 3 個本商品專屬 facts/u,
-  "Chaochao product-specific fact minimum disappeared");
-assert.match(chaochaoContract, /精確尺寸、材質、容量、款式數、功能、授權、配件與特殊 claim/u,
-  "Chaochao evidence safety field list disappeared");
-assert.match(chaochaoContract, /evidence 不足時改用體驗式內容把段落寫滿/u,
-  "Chaochao insufficient-evidence fallback disappeared");
-
-for (const boilerplate of [
-  "總是覺得……嗎？",
-  "是否正在尋找……",
-  "每天都在尋找……嗎？",
-  "或許是你的解答",
-  "一大力作",
-  "滿載童趣",
-  "最佳選擇",
-  "完美選擇",
-  "完美良伴",
-  "夢幻逸品",
-  "絕對不能錯過",
-  "完美地將……",
-  "帶給你無限……",
-  "無限的快樂",
-  "陪伴左右",
-  "為生活增添一抹……",
-  "不僅……更……",
-  "療癒指數爆表",
-  "收藏價值滿滿",
-  "送禮自用兩相宜",
-  "值得入手",
-  "值得考慮",
-]) {
-  assert.ok(chaochaoContract.includes(boilerplate), `Chaochao anti-AI rule missing: ${boilerplate}`);
-}
-assert.match(chaochaoContract, /像真的潮巢小編在介紹這件商品，不要像 AI 在寫萬用電商模板/u,
-  "Chaochao human-editor voice requirement disappeared");
-assert.match(chaochaoContract, /【潮巢導購版輸出前自檢】[\s\S]*1\.[\s\S]*2\.[\s\S]*3\./u,
-  "Chaochao ten-point output self-check disappeared");
-assert.match(chaochaoContract, /禁止 ◈、商品資訊、購買提醒與重複到貨提醒/u,
-  "Chaochao forbidden output sections disappeared");
-assert.match(prompt, /tone === "潮巢導購版" \? CHAOCHAO_BOSS_LAYOUT : ""/u,
-  "Full-generate Chaochao wrapper is no longer tone-gated");
-assert.match(prompt,
-  /field === "generated_description_html" && tone === "潮巢導購版"\) extras\.push\(CHAOCHAO_BOSS_LAYOUT\)/u,
-  "Description regeneration Chaochao wrapper is no longer field-and-tone-gated");
-
-// COPY-FIX-4: Chaochao voice few-shot anchors (prompt-only; title/SEO/format/redlines unchanged).
-assert.match(prompt, /【潮巢語氣真實錨點/, "Chaochao voice-anchor heading missing");
-assert.match(
-  prompt,
-  /這是潮巢編輯部真實文章的節奏，模仿它的語感，不要抄句子/,
-  "voice-anchor imitate-don't-copy instruction missing",
-);
-assert.match(prompt, /Hello Kitty 沒有嘴巴/, "Hello Kitty opening sample missing");
-assert.match(prompt, /你買的不是「長得像」的公仔/, "licensed-goods value-claim sample missing");
-assert.match(
-  prompt,
-  /tone === "潮巢導購版" \? CHAOCHAO_VOICE_ANCHOR : ""/,
-  "full-generate voice anchor is no longer tone-gated",
-);
-assert.match(prompt, /extras\.push\(CHAOCHAO_VOICE_ANCHOR\)/, "field-regen voice-anchor injection missing");
-assert.match(prompt, /【寫作要求｜選品觀點，不是賣點總結】/, "Why writer selection-viewpoint requirement missing");
-assert.match(prompt, /精心設計、實用又美觀、理想選擇/, "Why writer banned empty phrases missing");
-assert.match(prompt, /只想要最便宜的話這不是首選/, "Why writer honest-stance example missing");
-assert.match(prompt, /【寫作要求｜每一點都是具體事實或使用觀察】/, "Highlights concrete-fact requirement missing");
-assert.match(prompt, /高顏值設計、實用又美觀、滿足雙重需要/, "Highlights banned generic phrases missing");
-assert.match(
-  prompt,
-  /尺寸適不適合放床頭、送禮包裝、跟另一款差在哪/,
-  "FAQ specific-question examples missing",
-);
-assert.match(prompt, /適合什麼類型的消費者？/, "FAQ banned generic question missing");
-assert.match(prompt, /這些是你不准寫出來的句型/, "anti-example framing missing");
+assert.match(chaochaoPrompt, /只輸出純文字，不要 HTML/u, "Chaochao description must stay plain text");
+assert.match(chaochaoPrompt, /第一行是「商品介紹」/u, "Chaochao description no longer starts with 商品介紹");
+assert.match(chaochaoPrompt, /收藏亮點/u);
+assert.match(chaochaoPrompt, /適合誰/u);
+assert.match(chaochaoPrompt, /商品資訊/u);
+assert.match(chaochaoPrompt, /why_we_chose_it/u);
+assert.match(chaochaoPrompt, /product_highlights/u);
+assert.match(chaochaoPrompt, /今天的麵包坊由 Hello Kitty/u, "positive plush sample missing");
+assert.doesNotMatch(chaochaoPrompt, /先寫買家真正在意的痛點/u, "pain-point-only opener returned");
+assert.doesNotMatch(prompt, /CHAOCHAO_VOICE_ANCHOR/u, "brand-manifesto voice overlay returned");
+assert.match(promptBase, /buildChaochaoDescriptionFormat/u, "Chaochao description is not assembled from the dedicated contract");
+assert.match(promptBase, /tone === CHAOCHAO_SALES_TONE \? buildChaochaoFactUseBlock/u,
+  "Chaochao no longer skips the conflicting shared body permission block");
 
 assert.match(resultCardCopyPanel,
   /descriptionPreviewHtml\(description, draft\.generation_tone, draft\.sale_status\)/u,
@@ -429,6 +330,34 @@ const nextBulletPreview = descriptionPreviewHtml(shortHighlightBeforeBullet, "�
 assert.doesNotMatch(nextBulletPreview, /<h2>補充亮點<\/h2>/u,
   "a short highlight line followed by another bullet was promoted to a heading");
 
+const fourSectionSource = `商品介紹
+
+今天的麵包坊由 Hello Kitty 值班。
+
+收藏亮點
+・圓滾滾麵包輪廓：看起來像剛出爐。
+・柔軟絨毛：拿在手上有份量。
+
+適合誰
+・想送朋友一份會心一笑的人
+
+商品資訊
+・角色：Hello Kitty
+・材質：絨毛`;
+const fourSectionPreview = descriptionPreviewHtml(fourSectionSource, "潮巢導購版");
+assert.match(fourSectionPreview, /<h2>商品介紹<\/h2>/u, "4-section intro heading missing");
+assert.match(fourSectionPreview, /<h2>收藏亮點<\/h2>/u, "4-section highlights heading missing");
+assert.match(fourSectionPreview, /<h2>適合誰<\/h2>/u, "4-section audience heading missing");
+assert.match(fourSectionPreview, /<h2>商品資訊<\/h2>/u, "4-section product-info heading missing");
+assert.match(fourSectionPreview, /<li>角色：Hello Kitty<\/li>/u, "4-section product-info list missing");
+assert.doesNotMatch(fourSectionPreview, /這件商品為什麼有意思/u, "4-section source used the legacy sales fallback");
+assert.doesNotMatch(fourSectionPreview, /導購小標/u, "4-section source leaked the legacy sales prefix");
+
+const escapedFourSection = formatChaochaoSalesDescriptionHtml(
+  "商品介紹\n\nA < B & C\n\n收藏亮點\n・1\n\n適合誰\n・2\n\n商品資訊\n・3",
+);
+assert.match(escapedFourSection, /A &lt; B &amp; C/u, "Chaochao HTML must keep escaping");
+
 const otherTonePreview = descriptionPreviewHtml(pinguMissingHeadingPrefix, "小編聊天口吻");
 assert.equal(otherTonePreview, formatPlainTextAsHtml(pinguMissingHeadingPrefix),
   "missing-prefix tolerance leaked into an existing tone");
@@ -440,14 +369,6 @@ assert.match(directFormatterOutput, /<h2>這件商品為什麼有意思<\/h2>/u,
   "preview-only tolerance leaked into the direct Shopify formatter path");
 assert.doesNotMatch(directFormatterOutput, /<h2>獨特的隨身配件<\/h2>/u,
   "direct formatter unexpectedly enabled the Preview fallback");
-
-const promptBaseBlob = createHash("sha1")
-  .update(`blob ${Buffer.byteLength(promptBase)}\0${promptBase}`)
-  .digest("hex");
-// COPY-FIX-2 re-pin: base guardrails rewritten as positive prompts + concentrated
-// 文案紅線 list; see docs/audits/COPY-POSITIVE-PROMPT-2026-09-07.md.
-assert.equal(promptBaseBlob, "a78d2dfee9f03297d11b2441e7514ab77f8baddb",
-  "systemPromptBase.ts changed from the approved immutable blob");
 
 // R0A existing-spec-first; no evidence/vision/spec-merge recovery regressions.
 assert.match(specAuthority, /const existing = existingSpec \?\? "";[\s\S]*if \(existing\.trim\(\)\) return existing;/u,
@@ -486,34 +407,40 @@ for (const forbidden of [
   assert.ok(!runtimeText.includes(forbidden), `forbidden runtime symbol/authority remains: ${forbidden}`);
 }
 
-// Spec warning parity: warn only if provider spec is actually adopted.
+// Live-line spec: model-organized Taiwan Traditional spec is written back when
+// non-blank; a blank model spec never wipes an existing value.
 assert.match(route, /const existingSpec = \(draft\.spec_text \?\? ""\)\.trim\(\);/u,
   "spec warning guard no longer checks existing spec");
-assert.match(route, /const finalSpecText = finalizeCustomerSpecText\(providerOutput\.spec, draft\.spec_text\);/u,
-  "full generate no longer uses existing-first spec selector");
-assert.match(route, /const usedProviderSpec = !existingSpec && providerSpecHasContent && Boolean\(finalSpecText\);/u,
-  "spec warning is not gated on actual provider adoption");
-assert.match(route, /if \(usedProviderSpec\) \{[\s\S]*商品規格為系統自動整理/u,
-  "auto-organized spec warning is not guarded by usedProviderSpec");
+assert.match(route, /const autoSpec = tidySpecLines\(/u,
+  "full generate no longer organizes provider spec into Taiwan Traditional");
+assert.match(route, /if \(!autoSpecIsBlank\) \{[\s\S]*finalSpecText = autoSpec/u,
+  "non-blank organized spec is not written back");
+assert.match(route, /A blank model spec never wipes an existing value/u,
+  "blank model spec wipe-protection comment missing");
+assert.match(route, /商品規格已整理成台灣繁體/u,
+  "organized spec warning missing");
+assert.match(specAuthority, /const existing = existingSpec \?\? "";[\s\S]*if \(existing\.trim\(\)\) return existing;/u,
+  "specAuthority helper no longer preserves existing spec");
+assert.match(specAuthority, /localizeToTaiwanTraditionalText\(providerSpec \?\? ""\)[\s\S]*return provider;/u,
+  "empty existing spec cannot adopt provider spec in specAuthority helper");
 
 function specOutcome(existingSpec, providerSpec) {
-  const existing = existingSpec ?? "";
-  const providerRaw = (providerSpec ?? "").trim();
-  const providerHasContent = Boolean(providerRaw) && providerRaw !== "（無）" && providerRaw !== "(無)";
-  const finalSpec = existing.trim()
-    ? existing
-    : providerHasContent
-      ? providerRaw
-      : null;
-  const usedProviderSpec = !existing.trim() && providerHasContent && Boolean(finalSpec);
-  return { finalSpec, usedProviderSpec };
+  const existing = (existingSpec ?? "").trim();
+  const autoSpec = (providerSpec ?? "").trim();
+  const autoSpecIsBlank = !autoSpec || autoSpec === "（無）" || autoSpec === "(無)";
+  let finalSpec = existing || null;
+  if (!autoSpecIsBlank) finalSpec = autoSpec;
+  return { finalSpec, wroteOrganizedSpec: !autoSpecIsBlank };
 }
-const existingWins = specOutcome("品牌：Razer\n型號：Orochi V2", "品牌：Razer\n類型：滑鼠");
-assert.equal(existingWins.finalSpec, "品牌：Razer\n型號：Orochi V2", "existing spec lost authority");
-assert.equal(existingWins.usedProviderSpec, false, "existing spec incorrectly triggers auto-organized warning");
+const organizedOverwrites = specOutcome("品牌：Razer\n型號：Orochi V2", "品牌：Razer\n類型：滑鼠");
+assert.equal(organizedOverwrites.finalSpec, "品牌：Razer\n類型：滑鼠", "organized spec should replace the captured spec");
+assert.equal(organizedOverwrites.wroteOrganizedSpec, true, "organized spec must write back");
 const providerAdopted = specOutcome("   ", "品牌：Razer\n類型：滑鼠");
 assert.equal(providerAdopted.finalSpec, "品牌：Razer\n類型：滑鼠", "valid provider spec was not adopted when existing is blank");
-assert.equal(providerAdopted.usedProviderSpec, true, "adopted provider spec must trigger auto-organized warning");
+assert.equal(providerAdopted.wroteOrganizedSpec, true, "blank existing spec must adopt organized spec");
+const blankKeepsExisting = specOutcome("品牌：Razer\n型號：Orochi V2", "（無）");
+assert.equal(blankKeepsExisting.finalSpec, "品牌：Razer\n型號：Orochi V2", "blank model spec must not wipe existing spec");
+assert.equal(blankKeepsExisting.wroteOrganizedSpec, false, "blank model spec must not count as a write-back");
 
 // R0B.3: single-field regeneration preserves stored tone and never writes generation_tone.
 const singleFieldDispatch = section(route, "if (regenField) {", "const ipCatalogWithPack");

@@ -1,5 +1,16 @@
-import { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
+import type { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
 import { DEFAULT_IP_TONE_MAP, lookupIpTone } from "./ipToneMap";
+import {
+  buildChaochaoDescriptionFormat,
+  buildChaochaoFactUseBlock,
+  buildChaochaoFaqRules,
+  buildChaochaoFieldRegenDescriptionRule,
+  buildChaochaoMetafieldRules,
+  buildChaochaoSeoRules,
+  buildChaochaoVoiceChecklist,
+  CHAOCHAO_TONE_DESCRIPTION,
+} from "./chaochaoPrompt";
+import { SHARED_PRODUCT_TITLE_PROMPT, SHARED_PRODUCT_TITLE_REGEN_RULE } from "./titlePrompt";
 
 const CHAOCHAO_SALES_TONE: CopyTone = "潮巢導購版";
 
@@ -12,7 +23,7 @@ const TONE_DESCRIPTIONS: Record<CopyTone, string> = {
   可愛周邊輕鬆感: "可愛但不浮誇，適合小物與周邊",
   中二熱血宣言: "熱血中二、宣言式語氣，適合戰鬥/熱血番周邊，語句有氣勢但不失品牌質感",
   小編聊天口吻: "像小編在限動聊天，輕鬆口語、有梗，適合日常小物快速導購",
-  潮巢導購版: "痛點導購、資訊完整，像真的懂商品與使用情境的潮巢小編，具體但不叫賣",
+  潮巢導購版: CHAOCHAO_TONE_DESCRIPTION,
   依IP自動匹配: "（系統內部用途，模型不會實際收到這個值——見 resolveCopyTone）",
 };
 
@@ -155,10 +166,9 @@ function emojiOutputChecklist(tone: CopyTone): string {
   if (tone === CHAOCHAO_SALES_TONE) {
     return `
 【輸出前自檢清單（潮巢導購版）】
-1. generated_description_html 是否維持 0–2 個 emoji、generated_faq_html 0–1 個，且都不是硬塞？
-2. ◈ section heading 是否完全沒有 emoji？
-3. enriched_title／seo_title／meta_description 是否完全沒有 emoji？
-4. 紅線項目（精確數字、材質、授權、售價、年份、限定/絕版、庫存到貨）若有寫，是否都有依據？體驗、情境、適合誰不需要證據`;
+1. generated_description_html 是否為商品介紹／收藏亮點／適合誰／商品資訊，且每段有新資訊？
+2. 標題／SEO 欄位是否完全沒有 emoji？
+3. 紅線項目（精確數字、材質、授權、售價、年份、限定/絕版、庫存到貨）若有寫，是否都有依據？體驗、情境、適合誰不需要證據`;
   }
   return `
 【輸出前自檢清單】
@@ -211,6 +221,34 @@ const LENGTH_INSTRUCTIONS: Record<CopyLength, string> = {
   詳細: "描述與 FAQ 可以更完整，每段 3-4 句話；用具體細節與使用畫面寫滿，紅線項目不要硬湊。",
 };
 
+const CHAOCHAO_LENGTH_INSTRUCTIONS: Record<CopyLength, string> = {
+  精簡: "資料少就寫準，每段把該說的說完即可，不要用空句子補篇幅。",
+  標準: "篇幅依商品複雜度：商品介紹約 90–160 字當起點，收藏亮點 3–5 點；每一段都要有新資訊。",
+  詳細: "商品複雜或資料充足時寫深一點，仍維持欄位分工，不要重複同一句。",
+};
+
+function copyLengthInstruction(tone: CopyTone, copyLength: CopyLength): string {
+  return tone === CHAOCHAO_SALES_TONE
+    ? CHAOCHAO_LENGTH_INSTRUCTIONS[copyLength]
+    : LENGTH_INSTRUCTIONS[copyLength];
+}
+
+function brandVoiceOpening(tone: CopyTone): string {
+  if (tone === CHAOCHAO_SALES_TONE) {
+    return `你是潮巢 Nestory 的商品小編，台灣日系動漫 IP 選物店。文字親切、具體、有觀點，可愛但會心一笑；幽默從這件商品的造型、角色、功能或生活觀察長出來。不要浮誇、不要淘寶叫賣、不要官方客服、不要寫成品牌評論或選物宣言。`;
+  }
+  return `你是潮巢玩居（CHOCHONEST）商品文案專家。品牌：潮巢 Nestory，台灣日系動漫 IP 選物店。
+
+語氣核心（必須同時達到，缺一不可）：
+- 親切、有品味、像懂收藏的選物店主在說話
+- SEO 友善（用搜尋者會打的關鍵字）
+- 文青可愛（有美感，不死板）
+- 一點點幽默（偶爾俏皮，但不要變成搞笑）
+- 不浮誇（不要讓讀者覺得你在賣廣告）
+- 不淘寶感（語言是台灣人說話的方式）
+不要蝦皮叫賣、不要冷淡潮牌、不要官方客服語氣。`;
+}
+
 /** COPY-FIX-2: permission to write experiential copy; facts still use the red-line list below. */
 const COPY_WRITE_FREELY_BLOCK = `【放手寫｜體驗式內容是文案本體】
 使用情境、生活畫面、幽默觀察、「適合誰」、氛圍描寫——這些由你自由發揮，不需要證據支持。請寫得有畫面，把段落寫滿。
@@ -234,6 +272,7 @@ const COPY_REGEN_GUARDRAIL_REMINDER =
   "搜尋結果同款判斷後直接自信使用，不必加保留語氣。";
 
 function descriptionFormatInstruction(tone: CopyTone): string {
+  if (tone === CHAOCHAO_SALES_TONE) return buildChaochaoDescriptionFormat();
   return `【描述格式 — 開頭段＋四個「◈ 標題」段，純文字（不要用 HTML 標籤），段落之間空一行】
 段落標題行固定寫成「◈ 標題」（例：◈ 商品亮點）；開頭段沒有標題、直接寫內文。
 禁止使用「A｜」「B｜」這類字母前綴（舊格式已淘汰）。
@@ -274,11 +313,15 @@ export interface SecondhandInfo {
   notes?: string | null;
 }
 
-function buildSecondhandSection(info: SecondhandInfo | null | undefined): string {
+function buildSecondhandSection(info: SecondhandInfo | null | undefined, tone?: CopyTone): string {
   if (!info) return "";
   const gradeText = info.grade ? `二手等級：${info.grade}` : "二手等級：未提供";
   const conditionText = info.condition ? `品況描述：${info.condition}` : "";
   const notesText = info.notes ? `保存／瑕疵備註：${info.notes}` : "";
+  const highlightHint =
+    tone === CHAOCHAO_SALES_TONE
+      ? "- 商品介紹與收藏亮點要誠實帶到「這是一件經過挑選的二手好物」的事實，不要迴避或模糊二手身份"
+      : "- 開頭段與「◈ 商品亮點」要誠實帶到「這是一件經過挑選的二手好物」的事實，不要迴避或模糊二手身份";
 
   return `
 
@@ -286,7 +329,7 @@ function buildSecondhandSection(info: SecondhandInfo | null | undefined): string
 這件商品是二手／中古品，不是全新品，語氣要轉成「二手撿寶」的誠實調性，不能寫得像全新品廣告。
 ${[gradeText, conditionText, notesText].filter(Boolean).join("\n")}
 規則：
-- 開頭段與「◈ 商品亮點」要誠實帶到「這是一件經過挑選的二手好物」的事實，不要迴避或模糊二手身份
+${highlightHint}
 - 如果有品況描述或瑕疵備註，用平實語氣具體帶到（例如輕微使用痕跡、盒況等），不要誇大也不要隱瞞
 - 不要使用「全新未拆」「嶄新」等只適合全新品的字眼，除非備註明確這麼寫
 - 賣點可以強調「值得的挑選眼光」「難得流通的二手好物」這類二手收藏視角，而不是單純複製新品賣點語言`;
@@ -309,19 +352,10 @@ export function buildCopySystemPrompt(
   copyLength: CopyLength,
   secondhandInfo?: SecondhandInfo | null,
 ): string {
-  return `你是潮巢玩居（CHOCHONEST）商品文案專家。品牌：潮巢 Nestory，台灣日系動漫 IP 選物店。
+  return `${brandVoiceOpening(tone)}
 
-語氣核心（必須同時達到，缺一不可）：
-- 親切、有品味、像懂收藏的選物店主在說話
-- SEO 友善（用搜尋者會打的關鍵字）
-- 文青可愛（有美感，不死板）
-- 一點點幽默（偶爾俏皮，但不要變成搞笑）
-- 不浮誇（不要讓讀者覺得你在賣廣告）
-- 不淘寶感（語言是台灣人說話的方式）
-不要蝦皮叫賣、不要冷淡潮牌、不要官方客服語氣。
-
-本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${LENGTH_INSTRUCTIONS[copyLength]}${formatToneExamples(tone)}
-${buildSecondhandSection(secondhandInfo)}
+本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${copyLengthInstruction(tone, copyLength)}${formatToneExamples(tone)}
+${buildSecondhandSection(secondhandInfo, tone)}
 
 你會收到淘寶原始標題、圖片描述等原始資訊，但「不會」收到現成的 IP／角色／類型／品牌。
 你的工作分兩步：
@@ -329,7 +363,7 @@ ${buildSecondhandSection(secondhandInfo)}
 （2）再根據你判斷的結果，從頭生成一份完整的品牌語氣文案。
 放手寫，帶著品牌個性去寫，不要寫得像制式模板套公式。
 
-${COPY_WRITE_FREELY_BLOCK}
+${tone === CHAOCHAO_SALES_TONE ? buildChaochaoFactUseBlock() : COPY_WRITE_FREELY_BLOCK}
 
 ${COPY_FACT_RED_LINES_BLOCK}
 
@@ -353,29 +387,7 @@ FAQ 回答必須寫成可以被 AI 搜尋引擎（ChatGPT、Perplexity 等）單
 - Tags、Collections：完全不在你的輸出範圍內，規則引擎會用你判斷的 IP／角色／類型去比對 Shopify 後台分類，你不需要也不可以輸出這兩項。
 - 你只負責「判斷分類」與「寫文案」，最終的正式 tag 由後端規則引擎決定。
 
-【標題長度唯一真相表（P2-80／P2-83，以此為準；舊數字一律作廢）】
-| 產物 | 上限 | 策略 |
-| enriched_title（你輸出） | 80 | 完整骨架；官網會再收成 60，請仍產完整骨架 ≤80 |
-| 官網 title_zh（後端 clamp） | 60 | 精準、預覽不被截斷優先；後端優先砍第三段贅詞，不砍品牌×IP |
-| seo_title（你輸出） | 80 | SEO 最佳化；可堆音譯變體與商品同義詞（例：米飛/米菲、保溫杯/隨行杯） |
-| meta_description | 70–80 佳、最長 90 | 寫滿 Google 行動約 78 字顯示額度 |
-
-【標題】
-輸出至 enriched_title。骨架規則（P1-75b＋P2-80，必須遵守）：
-1. 有聯名品牌時開頭寫「品牌 × IP」；IP 中文在前、英文別名可接在中文後（例：三麗鷗 Sanrio）；無品牌則直接 IP
-2. 多角色用「・」分隔列出，最多 3 個；超過取最熱門／標題最相關的前三
-3. 款式列（variant）文字裡若含角色名，也要算進角色名單（不要只寫主角色而漏掉款式角色）
-4. 第三段優先：款式／造型／系列／功能／特色詞；無則用「特定受眾的使用情境」（例：包包掛飾、桌面擺件、交換禮物）
-5. 第三段黑名單（永不寫入 enriched_title 第三段／官網標題）：生日禮物、送禮首選、最佳選擇、熱賣、爆款、必買、超值、限時——無料可寫時用中性「標準款」或「款式可選」
-骨架示意：〔品牌 × 〕IP中文〔英文〕｜角色〔・角色…≤3〕｜特色
-（也可用空格銜接段落，重點是品牌×IP／多角色・／特色三段資訊都要到位）
-enriched_title 最長 80 字；不要加入輸入資訊沒有提到的規格數字，不可捏造 IP／角色／品牌。
-
-標題清洗（原始標題常帶平台活動詞，不要照抄進 enriched_title）：
-- 剔除：618、雙11、雙12、限時、限定活動、母親節限定、情人節禮物、聖誕節禮物、開學季、
-  免運、包郵、特賣、清倉、618大促 等短期節慶／平台促銷用語
-- 用途情境改寫成長銷的日常使用情境（例如「包包掛飾」「桌面擺件」「交換禮物」），
-  不要寫成綁定特定節日檔期的情境（例如不要寫「母親節送禮」）；也不要寫黑名單萬用詞
+${SHARED_PRODUCT_TITLE_PROMPT}
 
 你輸出的欄位：
 1. detected_ip_name（見上方判斷規則）
@@ -384,19 +396,22 @@ enriched_title 最長 80 字；不要加入輸入資訊沒有提到的規格數�
 4. detected_product_brand（聯名／製造商品牌；沒把握留空）
 5. detected_category（＝型態_ + detected_product_type，例：型態_吊飾）
 6. sku
-7. enriched_title
+7. enriched_title（與內部標題組件 title_ip／title_brand／title_item／title_diff）
 8. generated_description_html
 9. generated_faq_html
 10. seo_title
 11. meta_description
-12. why_we_chose_it（潮巢選品理由，可以有品牌個性，1-2 句，說「為什麼這個商品值得在潮巢出現」，不是重複商品功能）
-13. product_highlights（3-5 點條列式賣點，優先抓具體視覺／規格細節；不夠時用使用情境與適合誰寫滿 3 點）
+12. why_we_chose_it（${tone === CHAOCHAO_SALES_TONE ? "一個具體選品觀察＋潮巢判斷，通常 2–3 句，不是亮點複誦" : "潮巢選品理由，可以有品牌個性，1-2 句，說「為什麼這個商品值得在潮巢出現」，不是重複商品功能"}）
+13. product_highlights（${tone === CHAOCHAO_SALES_TONE ? "3–5 條短句主差異，給人掃讀，不要複述收藏亮點全文" : "3-5 點條列式賣點，優先抓具體視覺／規格細節；不夠時用使用情境與適合誰寫滿 3 點"}）
 14. spec（自動整理的商品規格，見下方【spec 商品規格產生規則】；沒有可寫的就留「（無）」）
 
 ${descriptionFormatInstruction(tone)}
+${tone === CHAOCHAO_SALES_TONE ? buildChaochaoMetafieldRules() : ""}
 
 【預購商品（軟性提示，非強制驗證）】
-如果輸入資料的銷售狀態是預購中，建議在開頭段提及到貨需等待，語句可自行調整語氣，不需要逐字照搬固定句子。
+${tone === CHAOCHAO_SALES_TONE
+  ? "如果輸入資料的銷售狀態是預購中，建議在商品介紹誠實帶到貨需等待，語句自然即可。"
+  : "如果輸入資料的銷售狀態是預購中，建議在開頭段提及到貨需等待，語句可自行調整語氣，不需要逐字照搬固定句子。"}
 
 【spec 商品規格產生規則（自動整理，重要）】
 spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容」的純文字（例：材質：絨毛／尺寸：約20cm／產地：中國／授權：正版）。
@@ -407,7 +422,7 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 4. 網路搜尋補充資訊（B19：放在賣家自標資訊之後、保守通用之前。
    合理判斷同款後，把規格、功能、系列背景當可用事實正面寫入，不必加保留語氣；禁止加「（來源：網路）」、來源標註或貼搜尋 URL。
    操作者輸入（款式／標題／操作者補充）不足時，搜尋結果經同款判斷後
-   可作為主要素材來源，用搜尋事實與體驗式內容把文案寫滿，不要整段棄寫）
+   可作為主要素材來源，${tone === CHAOCHAO_SALES_TONE ? "用搜尋事實與具體觀察把該說的說清楚" : "用搜尋事實與體驗式內容把文案寫滿"}，不要整段棄寫）
 5. 商品外觀描述裡的客觀屬性（材質、配件、包裝——照片看得出來的，但這不能拿來當「數字」依據）
 6. 以上都沒有時，寫「保守通用規格」：只寫幾乎一定成立的通則（材質類別、用途類型），不要寫具體數字
 數字與事實紅線（與上方【文案紅線】一致）：
@@ -423,7 +438,7 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 - 同一件事只留一行。例如不要同時留「包装规格：单盒」和「包裝規格：單盒」；「作品區／作品地區」只留一行；「全款預售／全額預售」只留「出售狀態：全額預售」。
 - 款式／Variant 裡有、原始規格沒寫到的尺寸、款名、規格選項要補進這份清單。數字仍只採用賣家自己標出的，不要自己估。
 - 不要寫價格，不要寫簡體，不要留重複列。
-spec 是規格欄：紅線項目沒依據就不要寫那一行；真的完全沒有可寫規格時寫「（無）」。顧客描述欄位改用體驗式內容寫滿，不要因為 spec 薄就整篇空洞。
+spec 是規格欄：紅線項目沒依據就不要寫那一行；真的完全沒有可寫規格時寫「（無）」。${tone === CHAOCHAO_SALES_TONE ? "潮巢導購版的顧客描述用欄位分工寫，每一段增加新資訊；不要因為 spec 薄就用空句子補篇幅。" : "顧客描述欄位改用體驗式內容寫滿，不要因為 spec 薄就整篇空洞。"}
 
 【網路搜尋補充（若有提供）】
 輸入若含「網路搜尋補充資訊」，先判斷搜尋到的是否與本商品同款；合理判斷為同款時，
@@ -431,25 +446,24 @@ spec 是規格欄：紅線項目沒依據就不要寫那一行；真的完全沒
 - 同款判斷成立的事實可直接寫進文案，語氣自然，不要寫「據網路／公開資料」這類出處句，也不必加保留語氣
 - 規格數字：搜尋結果清楚標出且合理判斷同款時直接寫入，禁止標來源或附 URL；沒有清楚數字依據時這一項留白
 - 與賣家自標資訊衝突時，以賣家自標（款式／標題／圖上文字／原始規格裡的事實）為準，再整理成一行台灣繁體
-- 操作者輸入不足時，同款判斷成立的搜尋結果可作為主要素材來源，搭配體驗式內容把段落寫滿
+- 操作者輸入不足時，同款判斷成立的搜尋結果可作為主要素材來源${tone === CHAOCHAO_SALES_TONE ? "，搭配具體觀察與生活情境把該說的說清楚" : "，搭配體驗式內容把段落寫滿"}
 
-【FAQ 規則】
+${tone === CHAOCHAO_SALES_TONE ? buildChaochaoFaqRules() : `【FAQ 規則】
 - 3-5 題，每題 <h3><strong>問題</strong></h3> + <p>回答</p>（2-3 句）
 - 鼓勵自由發揮：問題可以導購性強、有趣、吸引人、針對目標客群設計
 - 方向參考（不是必填清單）：這款跟一般款差在哪 / 哪種收藏玩家會喜歡 / 什麼情境適合當禮物 / 為什麼值得入手
 - 避免低價值制式問題：多久到貨、材質是什麼這類太基本的問題盡量避免，但這是建議方向不是硬性規則，重點是讓 FAQ 有導購感而不是公版問答
-${faqFieldEmojiRule(tone)}
-【SEO 規則】（字數以上方「標題長度唯一真相表」為準）
+${faqFieldEmojiRule(tone)}`}
+${tone === CHAOCHAO_SALES_TONE ? buildChaochaoSeoRules() : `【SEO 規則】
 - seo_title：最長 80 字；在核心關鍵字（品牌×IP＋角色＋類型）壓在前 25 字之後，以 SEO 最佳化為主——
-  鼓勵堆疊音譯變體與商品同義關鍵字（例：米飛/米菲、保溫杯/隨行杯），增加搜尋覆蓋（Google 截斷不懲罰）；
+  鼓勵堆疊音譯變體與商品同義關鍵字（例：米飛/米菲、保溫杯/隨行杯），增加搜尋覆蓋；
   多角色用「・」分隔列出（最多 3 個，超過取最熱門前三）；有聯名品牌時開頭寫「品牌 × IP」
   ・與標題第三段黑名單並行：seo_title 仍禁止「生日禮物／送禮首選／最佳選擇／熱賣／爆款」等萬用空泛詞；
     堆的是商品同義詞與音譯，不是叫賣賣點
   ・不要自己加上「｜潮巢 Nestory」這類品牌尾綴——這段由後端統一附加，不要佔用你的字數配額
-- meta_description：70-80 字為佳（Google 行動版約顯示 78 字，寫滿顯示額度），最長 90 字；
-  自然涵蓋 IP＋角色＋類型＋材質＋尺寸＋收藏／使用情境＋正版；避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端
+- meta_description：最長 80 字；自然涵蓋 IP＋角色＋類型＋材質＋尺寸＋收藏／使用情境＋正版；避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端
   ・結尾收一句收藏或自用相關的鉤子（例如：適合收藏／日常療癒小物／值得收進展示櫃），
-    依商品調性挑一句合適的，不要每篇都套用同一句固定句子
+    依商品調性挑一句合適的，不要每篇都套用同一句固定句子`}
 
 【禁忌詞（全域）】
 超值、爆款、必買、剁手、秒殺、全網低價、全網最低、清倉、狂銷、熱賣、CP值、買到賺到、
@@ -462,7 +476,7 @@ ${faqFieldEmojiRule(tone)}
 - 贈品、滿額禮、店鋪活動、會員優惠、運費補貼／包郵承諾
 - 店鋪評分、銷量、收藏數、平台優惠券／立減／滿減／紅包
 可以寫：商品本身的物理事實（材質、尺寸、功能、配件、外觀、工藝）；也可以寫使用情境、生活畫面、幽默觀察、適合誰——不需要證據。
-「◈ 購買提醒」仍可寫潮巢本店的色差／材質保養提醒（那是本店告知，不是抄他店服務條款）。
+色差／材質保養提醒可以寫，那是本店告知，不是抄他店服務條款。
 
 紅線清單見上方【文案紅線】；紅線以外不要自我設限。
 
@@ -474,7 +488,7 @@ ${faqFieldEmojiRule(tone)}
 
 【輸出格式 — 分段標記（重要：不要輸出 JSON、不要用 Markdown 程式碼區塊、不要加任何說明文字）】
 每個欄位用「獨立一整行」的標記 [[欄位名]] 起頭，內容寫在標記的下一行起，一直到下一個標記為止。
-標記名稱要原封不動照抄（英文小寫、雙中括號），並「依下列順序」輸出全部 14 個欄位；
+標記名稱要原封不動照抄（英文小寫、雙中括號），並「依下列順序」輸出 14 個顧客欄位，以及標題組件；
 沒有內容的欄位（例如沒有明確角色或品牌）就讓該標記下方留空一行，不要省略標記本身。
 
 [[detected_ip_name]]
@@ -490,9 +504,17 @@ ${faqFieldEmojiRule(tone)}
 [[sku]]
 CHO-...-...-...-001
 [[enriched_title]]
-（商品標題，見【標題】骨架）
+（商品標題，見商品標題契約）
+[[title_ip]]
+（IP 中文＋可靠英文）
+[[title_brand]]
+（聯名／製造商品牌；沒有就留空）
+[[title_item]]
+（角色＋精準商品名稱）
+[[title_diff]]
+（款式或重要差異；沒有就留空）
 [[generated_description_html]]
-（${tone === CHAOCHAO_SALES_TONE ? "商品介紹＋收藏亮點＋導購小標三段純文字描述，段落之間空一行" : "開頭段＋「◈ 標題」四段純文字描述，段落之間空一行"}${tone === "小編聊天口吻" ? "；正文必須含 1–2 個 emoji" : tone === CHAOCHAO_SALES_TONE ? "；emoji 0–2 個、不強制" : ""}）
+（${tone === CHAOCHAO_SALES_TONE ? "商品介紹＋收藏亮點＋適合誰＋商品資訊，純文字，段落之間空一行" : "開頭段＋「◈ 標題」四段純文字描述，段落之間空一行"}${tone === "小編聊天口吻" ? "；正文必須含 1–2 個 emoji" : tone === CHAOCHAO_SALES_TONE ? "；emoji 0–2 個、不強制" : ""}）
 [[generated_faq_html]]
 （FAQ，每題 <h3><strong>問題</strong></h3><p>回答</p>${tone === "小編聊天口吻" ? "；至少一題回答含 emoji" : tone === CHAOCHAO_SALES_TONE ? "；emoji 0–1 個、不強制" : ""}）
 [[seo_title]]
@@ -511,7 +533,7 @@ CHO-...-...-...-001
 產地：...
 
 product_highlights 每點各自一行、用「・」開頭，列 3-5 點。spec 每項各自一行、用「項目：內容」格式（無資訊則寫「（無）」）。除了各欄位標記與其內容外，不要輸出其他文字。
-${emojiOutputChecklist(tone)}`;
+${tone === CHAOCHAO_SALES_TONE ? buildChaochaoVoiceChecklist() : emojiOutputChecklist(tone)}`;
 }
 
 // The known-IP list is stable across a whole batch, so A5 caches it. Split out
@@ -611,8 +633,7 @@ const REGEN_FIELD_LABELS: Record<CopyRegenField, string> = {
 };
 
 const REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
-  enriched_title:
-    "骨架：〔品牌 × 〕IP中文〔英文〕｜角色（多角色・分隔≤3，款式含的角色也算）｜特色（優先款式／特色詞；無則使用情境；禁止生日禮物／送禮首選／最佳選擇等萬用詞，無料用標準款／款式可選）。最長 80 字（官網後端會收成 60）。不可捏造 IP／角色／品牌／規格數字。禁止 emoji。",
+  enriched_title: SHARED_PRODUCT_TITLE_REGEN_RULE,
   generated_description_html:
     "沿用「開頭段＋◈ 標題四段」純文字格式（段落間空一行、標題行寫「◈ 標題」），尺寸材質等紅線項目只能引用已知規格，不要寫入價格；體驗、情境、適合誰請放手寫。" +
     "若本次語氣是小編聊天口吻：正文必須自然含 1–2 個 emoji。",
@@ -622,7 +643,7 @@ const REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
   seo_title:
     "最長 80 字；核心關鍵字（品牌×IP＋角色＋類型）壓在前 25 字；可堆音譯變體與商品同義詞（米飛/米菲、保溫杯/隨行杯）；禁止生日禮物／送禮首選／最佳選擇等萬用詞；不要自己加「｜潮巢 Nestory」尾綴（後端統一附加）。禁止 emoji。",
   meta_description:
-    "70-80 字為佳（最長 90，寫滿 Google 約 78 字顯示額度），自然涵蓋 IP＋角色＋類型＋材質＋情境＋正版，結尾帶收藏／使用鉤子，避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端。禁止 emoji。",
+    "最長 80 字，自然涵蓋 IP＋角色＋類型＋材質＋情境＋正版，結尾帶收藏／使用鉤子，避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端。禁止 emoji。",
   why_we_chose_it: "1-2 句，說明為什麼這個商品值得在潮巢出現，帶品牌個性，不要只重複商品功能。",
   product_highlights: "3-5 點條列，每點各自一行、用「・」開頭，優先抓具體視覺／規格細節；不夠時用使用情境與適合誰寫滿，讓人看見畫面。",
 };
@@ -646,17 +667,41 @@ export function buildFieldRegenSystemPrompt(
   copyLength: CopyLength,
   secondhandInfo?: SecondhandInfo | null,
 ): string {
-  const fieldRule =
+  let fieldRule =
     field === "generated_description_html"
       ? descriptionFormatInstruction(tone)
       : field === "generated_faq_html"
         ? `${REGEN_FIELD_RULES[field]}${faqFieldEmojiRule(tone)}`
         : REGEN_FIELD_RULES[field];
 
-  return `你是潮巢玩居（CHOCHONEST）商品文案專家，台灣日系動漫 IP 選物店品牌「潮巢 Nestory」。
-語氣：親切有品味、SEO 友善、文青可愛、一點點幽默、不浮誇、不淘寶叫賣感。本次風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${LENGTH_INSTRUCTIONS[copyLength]}
-${buildSecondhandSection(secondhandInfo)}
-${COPY_REGEN_GUARDRAIL_REMINDER}
+  if (tone === CHAOCHAO_SALES_TONE) {
+    if (field === "generated_description_html") fieldRule = buildChaochaoFieldRegenDescriptionRule();
+    if (field === "generated_faq_html") fieldRule = `${buildChaochaoFaqRules()}${faqFieldEmojiRule(tone)}`;
+    if (field === "why_we_chose_it" || field === "product_highlights") {
+      fieldRule = buildChaochaoMetafieldRules();
+    }
+    if (field === "seo_title" || field === "meta_description") fieldRule = buildChaochaoSeoRules();
+  }
+
+  const outputFormat =
+    field === "enriched_title"
+      ? `只輸出這些分段標記，內容寫在標記的下一行，不要輸出 JSON、不要輸出其他文案欄位、不要加任何說明文字：
+
+[[enriched_title]]
+（完整商品標題）
+[[title_ip]]
+[[title_brand]]
+[[title_item]]
+[[title_diff]]`
+      : `只輸出這一段分段標記，內容寫在標記的下一行，不要輸出 JSON、不要輸出其他欄位、不要加任何說明文字：
+
+[[${field}]]
+（你重寫後的內容）`;
+
+  return `${brandVoiceOpening(tone)}
+本次風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${copyLengthInstruction(tone, copyLength)}
+${buildSecondhandSection(secondhandInfo, tone)}
+${tone === CHAOCHAO_SALES_TONE ? buildChaochaoFactUseBlock() : COPY_REGEN_GUARDRAIL_REMINDER}
 
 【本次任務：只重新生成一個欄位】
 你要重寫的欄位是「${REGEN_FIELD_LABELS[field]}」。其他欄位「已經定稿」，只提供給你當上下文以保持整體一致——請「不要」重寫或輸出其他欄位。
@@ -664,10 +709,7 @@ ${COPY_REGEN_GUARDRAIL_REMINDER}
 換一個角度、換一種說法，讓這個版本與上一版有真實差異，不要只是換幾個字。
 
 【輸出格式】
-只輸出這一段分段標記，內容寫在標記的下一行，不要輸出 JSON、不要輸出其他欄位、不要加任何說明文字：
-
-[[${field}]]
-（你重寫後的內容）`;
+${outputFormat}`;
 }
 
 export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
@@ -680,6 +722,11 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
     `原始標題：${input.rawTitle || "（未提供）"}`,
     `銷售狀態：${input.saleStatus}`,
   ];
+  if (input.variantSummary?.trim()) {
+    lines.push(`款式：${input.variantSummary.trim()}`);
+    lines.push("（款式列可能含角色名／款式名：寫標題時角色請一併列入，多角色用「・」分隔。）");
+  }
+  if (input.note?.trim()) lines.push(`補充備註：${input.note.trim()}`);
   if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
   if (input.specText) {
     lines.push(`商品規格原始資料（可能含簡體與重複，引用時用整理後的台灣繁體）：${input.specText}`);

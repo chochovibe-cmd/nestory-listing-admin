@@ -92,6 +92,7 @@ export class OpenAICopyProvider implements CopyProvider {
           cachedInputTokens: cached,
           cacheCreationTokens: 0,
         },
+        truncated: payload?.choices?.[0]?.finish_reason === "length",
       };
     }, "openai", DEFAULT_MODEL, isEmpty);
   }

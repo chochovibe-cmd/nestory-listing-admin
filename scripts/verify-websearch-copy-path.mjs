@@ -4,11 +4,8 @@
  * Run: node scripts/verify-websearch-copy-path.mjs
  */
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
 
 const root = process.cwd();
 
@@ -32,14 +29,9 @@ const { buildWebSearchQuery, resolveWebSearchForGenerate } = await import(
 const { selectRepresentativeVisionImages } = await import(
   "../src/lib/providers/visionProvider.ts"
 );
-
-const promptSource = fs.readFileSync(path.join(root, "src/lib/providers/systemPromptBase.ts"), "utf8");
-const transpiled = ts.transpileModule(promptSource, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText.replace(/^\s*import\s.+?;\s*$/gm, "");
-const promptModulePath = path.join(os.tmpdir(), "nestory-system-prompt-check.mjs");
-fs.writeFileSync(promptModulePath, transpiled);
-const { buildCopyUserMessage, buildFieldRegenUserMessage } = await import(pathToFileURL(promptModulePath).href);
+const { buildCopyUserMessage, buildFieldRegenUserMessage } = await import(
+  "../src/lib/providers/systemPrompt.ts"
+);
 
 let failed = 0;
 function assert(cond, msg) {
@@ -105,11 +97,15 @@ const regenPrompt = buildFieldRegenUserMessage({
   rawTitle: "Hello Kitty 馬克杯",
   saleStatus: "現貨",
   source: "淘寶",
+  variantSummary: "粉色／綠色",
+  note: "含杯蓋",
   webSearchSummary: summary,
   regenerateField: "generated_description_html",
   currentValues: { generatedDescriptionHtml: "上一版" },
 });
 assert(regenPrompt.includes(summary), "single-field regen prompt receives cached search summary");
+assert(regenPrompt.includes("粉色／綠色"), "single-field regen prompt receives variant summary");
+assert(regenPrompt.includes("含杯蓋"), "single-field regen prompt receives note");
 
 const failedSearch = await resolveWebSearchForGenerate({
   useWebSearch: true,

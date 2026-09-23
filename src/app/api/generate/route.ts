@@ -4,13 +4,12 @@ import { canOperate } from "@/lib/auth/roles";
 import { generateListingContent } from "@/lib/contentGenerator/generateListingContent";
 import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import {
-  appendNestoryBrandSuffix,
+  finalizeMetaDescriptionForTone,
+  finalizeSeoTitleForTone,
   generateSeoContent,
-  injectScenarioKeywordsIntoMetaDescription,
-  injectScenarioKeywordsIntoSeoTitle,
 } from "@/lib/contentGenerator/seoGenerator";
 import { ListingDraftInput, GeneratedListingContent } from "@/lib/contentGenerator/types";
-import { DisplayLabelContext } from "@/lib/contentGenerator/displayLabels";
+import { DisplayLabelContext, formatListingIpDisplayNameFromContext } from "@/lib/contentGenerator/displayLabels";
 import { buildImageAltText } from "@/lib/contentGenerator/altTextGenerator";
 import {
   appendScenarioBulletToDescription,
@@ -20,9 +19,8 @@ import {
 import { matchSectionHeader } from "@/lib/contentGenerator/sectionHeaders";
 import { generateShopifyHandleSlug } from "@/lib/contentGenerator/handleGenerator";
 import {
-  clampOfficialTitle,
   ENRICHED_TITLE_MAX_LENGTH,
-  normalizeEnrichedTitleContract,
+  finalizeProductTitle,
 } from "@/lib/contentGenerator/titleGenerator";
 import { buildGenerateSuccessStatusPatch } from "@/lib/drafts/generateSuccessStatus";
 import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
@@ -40,6 +38,7 @@ import { ClaudeCopyProvider } from "@/lib/providers/claude-copy-provider";
 import { OpenAICopyProvider } from "@/lib/providers/openai-copy-provider";
 import { buildForbiddenTermWarning } from "@/lib/providers/forbiddenTerms";
 import {
+  COPY_OUTPUT_TRUNCATED_WARNING,
   COPY_REGEN_FIELDS,
   COPY_TONES,
   CopyLength,
@@ -207,6 +206,11 @@ function descriptionHasProductInfoSection(description: string | null | undefined
   let dStart = -1;
   let dEnd = lines.length;
   for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i].trim();
+    if (/^商品資訊$/u.test(trimmed)) {
+      dStart = i;
+      continue;
+    }
     const match = matchSectionHeader(lines[i]);
     if (!match) continue;
     if (match.letter === "D" && dStart === -1) {
@@ -214,6 +218,10 @@ function descriptionHasProductInfoSection(description: string | null | undefined
       continue;
     }
     if (dStart !== -1 && match.letter && match.letter !== "D") {
+      dEnd = i;
+      break;
+    }
+    if (dStart !== -1 && /^(?:商品介紹|收藏亮點|適合誰|導購小標|導購標題|購買提醒|常見問題)/u.test(trimmed)) {
       dEnd = i;
       break;
     }
@@ -343,7 +351,7 @@ async function handleFieldRegen(params: {
   let knowledgePackMap = mergeKnowledgePackMap(null);
   const packQuery = await serviceSupabase
     .from("ip_catalog")
-    .select("ip_name, knowledge_pack")
+    .select("ip_name, aliases, knowledge_pack")
     .eq("is_active", true);
   if (!packQuery.error && packQuery.data) {
     knowledgePackMap = mergeKnowledgePackMap(packQuery.data);
@@ -402,20 +410,34 @@ async function handleFieldRegen(params: {
   } else {
     let value = localizeToTaiwanTraditionalText(getCopyFieldValue(raw, regenField));
     if (regenField === "enriched_title") {
-      const full = normalizeEnrichedTitleContract(
-        value.split("包包吊飾").join("包包掛件"),
-        localizeToTaiwanTraditionalText(draft.product_type ?? ""),
-        ENRICHED_TITLE_MAX_LENGTH,
-      );
-      historyContent = finalizeCustomerText(full);
-      value = clampOfficialTitle(historyContent);
+      const ipName = currentValues.detectedIpName || draft.ip_name || "";
+      const catalogRows = (packQuery.data ?? [])
+        .map((row) => ({
+          ip_name: typeof row.ip_name === "string" ? row.ip_name : "",
+          aliases: Array.isArray(row.aliases)
+            ? row.aliases.filter((alias): alias is string => typeof alias === "string")
+            : [],
+        }))
+        .filter((row) => row.ip_name);
+      const finalTitle = finalizeProductTitle({
+        rawTitle: value.split("包包吊飾").join("包包掛件"),
+        titleIp: raw.titleIp,
+        titleBrand: raw.titleBrand,
+        titleItem: raw.titleItem,
+        titleDiff: raw.titleDiff,
+        detectedIpDisplay: formatListingIpDisplayNameFromContext(ipName, { ipCatalog: catalogRows }),
+        detectedBrand: raw.titleBrand || draft.product_brand,
+        maxLen: ENRICHED_TITLE_MAX_LENGTH,
+      });
+      historyContent = finalizeCustomerText(finalTitle);
+      value = historyContent;
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
     } else {
       if (regenField === "seo_title") {
-        value = appendNestoryBrandSuffix(injectScenarioKeywordsIntoSeoTitle(value, scenarioTerms));
+        value = finalizeSeoTitleForTone(value, scenarioTerms, tone);
       }
       if (regenField === "meta_description") {
-        value = injectScenarioKeywordsIntoMetaDescription(value, scenarioTerms);
+        value = finalizeMetaDescriptionForTone(value, scenarioTerms, tone);
       }
       if (regenField === "generated_description_html") {
         value = tone === "潮巢導購版"
@@ -433,6 +455,12 @@ async function handleFieldRegen(params: {
     update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd;
     update.generation_input_tokens = Number(draft.generation_input_tokens ?? 0) + raw.usage.inputTokens;
     update.generation_output_tokens = Number(draft.generation_output_tokens ?? 0) + raw.usage.outputTokens;
+  }
+  if (raw.outputTruncated) {
+    const warnings = Array.isArray(draft.warnings)
+      ? draft.warnings.filter((item): item is string => typeof item === "string")
+      : [];
+    update.warnings = uniqueMessages([...warnings, COPY_OUTPUT_TRUNCATED_WARNING]);
   }
 
   const { error: updateError } = await serviceSupabase
@@ -877,18 +905,26 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("測試模式：未呼叫 AI、未自動偵測 IP；文案為規則引擎產出，tags 依草稿現有資料。");
   }
 
-  // COPY C5A: backend title finalization owns separator/safe scrub/length only.
-  const enrichedTitleFull = normalizeEnrichedTitleContract(
-    localizeToTaiwanTraditionalText(
-      (providerOutput.enrichedTitle || ruleOutput.display_title || "")
-        .trim()
-        .split("包包吊飾")
-        .join("包包掛件"),
-    ),
-    localizeToTaiwanTraditionalText(detected.productType),
-    ENRICHED_TITLE_MAX_LENGTH,
+  const enrichedTitleFull = finalizeCustomerText(
+    finalizeProductTitle({
+      rawTitle: localizeToTaiwanTraditionalText(
+        (providerOutput.enrichedTitle || ruleOutput.display_title || "")
+          .trim()
+          .split("包包吊飾")
+          .join("包包掛件"),
+      ),
+      titleIp: providerOutput.titleIp,
+      titleBrand: providerOutput.titleBrand,
+      titleItem: providerOutput.titleItem,
+      titleDiff: providerOutput.titleDiff,
+      detectedIpDisplay: formatListingIpDisplayNameFromContext(detected.ip || draft.ip_name || "", displayContext),
+      detectedBrand: effectiveProductBrand,
+      maxLen: ENRICHED_TITLE_MAX_LENGTH,
+    }),
   );
-  const officialTitleZh = clampOfficialTitle(enrichedTitleFull);
+  const officialTitleZh = enrichedTitleFull;
+
+  if (providerOutput.outputTruncated) extraWarnings.push(COPY_OUTPUT_TRUNCATED_WARNING);
 
   const descriptionSource = providerOutput.generatedDescriptionHtml || ruleOutput.generated_description_html;
   const descriptionForOutput = generationTone === "潮巢導購版"
@@ -901,10 +937,10 @@ export async function POST(request: NextRequest) {
     generated_description_html: descriptionForOutput,
     generated_faq_html: providerOutput.generatedFaqHtml || ruleOutput.generated_faq_html,
     seo_title: providerOutput.seoTitle
-      ? appendNestoryBrandSuffix(injectScenarioKeywordsIntoSeoTitle(providerOutput.seoTitle, scenarioTerms))
+      ? finalizeSeoTitleForTone(providerOutput.seoTitle, scenarioTerms, generationTone)
       : ruleOutput.seo_title,
     meta_description: providerOutput.metaDescription
-      ? injectScenarioKeywordsIntoMetaDescription(providerOutput.metaDescription, scenarioTerms)
+      ? finalizeMetaDescriptionForTone(providerOutput.metaDescription, scenarioTerms, generationTone)
       : ruleOutput.meta_description,
   });
 

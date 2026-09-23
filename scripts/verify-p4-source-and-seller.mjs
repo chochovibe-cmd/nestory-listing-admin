@@ -257,8 +257,8 @@ check("vision DESCRIBE + RECOGNIZE both expanded", () => {
 check("titleGenerator wrapper delegates to Production base; P4 strip stays out", () => {
   const { base } = readTitleArchitecture();
   assert.ok(!base.includes("stripCustomerSourceMarkers"), "P4 strip helper leaked into title base");
-  assert.match(base, /export const OFFICIAL_TITLE_MAX_LENGTH = 60/);
-  assert.match(base, /export const ENRICHED_TITLE_MAX_LENGTH = 80/);
+  assert.match(base, /export const OFFICIAL_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
+  assert.match(base, /export const ENRICHED_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
   assert.match(base, /export function generateDisplayTitle/);
   assert.match(base, /export function clampOfficialTitle/);
   assert.match(base, /export function scrubEnrichedTitleSegment3/);

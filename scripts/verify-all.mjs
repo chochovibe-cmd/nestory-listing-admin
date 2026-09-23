@@ -50,6 +50,7 @@ const scripts = [
   "scripts/verify-title-sync.mjs",
   // COPY C1 — seventh manual sales-copy tone; no production network writes.
   "scripts/verify-copy-c1-chaonest-sales-tone.mjs",
+  "scripts/verify-chaochao-copy-rewrite-2026-09-23.mjs",
   // Shopify Lifecycle Safety A1 — mock/injected only, never real network.
   "scripts/verify-shopify-lifecycle-safety.mjs",
   // G4 live-test allowlist + full-sync source/contract guards.

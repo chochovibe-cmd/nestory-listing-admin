@@ -170,7 +170,7 @@ const TONE_OPTIONS = [
   { value: "可愛周邊輕鬆感", emoji: "🧸", desc: "可愛不浮誇", usesEmoji: true },
   { value: "中二熱血宣言", emoji: "🔥", desc: "動漫梗、招式感", usesEmoji: false },
   { value: "小編聊天口吻", emoji: "💬", desc: "像 IG 限動推坑", usesEmoji: true },
-  { value: "潮巢導購版", emoji: "🛍️", desc: "痛點導購・資訊完整", usesEmoji: true },
+  { value: "潮巢導購版", emoji: "🛍️", desc: "小編導購・具體生活感", usesEmoji: true },
   { value: "依IP自動匹配", emoji: "✨", desc: "鬼滅→熱血、吉伊卡哇→軟萌", usesEmoji: false },
 ] as const;
 

@@ -1,7 +1,21 @@
+import { scrubEnrichedTitleSegment3 } from "./titleGeneratorBase";
 import {
-  ENRICHED_TITLE_MAX_LENGTH,
-  scrubEnrichedTitleSegment3,
-} from "./titleGeneratorBase";
+  clampTitleByPhrases,
+  finalizeProductTitle,
+  PRODUCT_TITLE_MAX_LENGTH,
+  type ProductTitleParts,
+} from "./titleContract";
+
+export {
+  assembleIpBrandSegment,
+  clampTitleByPhrases,
+  finalizeProductTitle,
+  joinTitleSegments,
+  parseTitleSegments,
+  preferEnglishBrandName,
+  PRODUCT_TITLE_MAX_LENGTH,
+} from "./titleContract";
+export type { ProductTitleParts } from "./titleContract";
 
 /** COPY C1 owner fix #1: normalize pipe spelling only; segment text is otherwise preserved. */
 export function normalizeTitleSeparators(value: string | null | undefined): string {
@@ -14,9 +28,8 @@ export function normalizeTitleSeparators(value: string | null | undefined): stri
 }
 
 /**
- * @deprecated COPY C5A: detected_product_type is a fallback/reference for the Writer,
- * not a backend append authority. Kept as a public compatibility helper so existing
- * imports do not break; it now performs separator normalization only.
+ * @deprecated detected_product_type is Writer evidence, not a backend append authority.
+ * Kept so existing imports do not break; separator normalization only.
  */
 export function appendProductTypeToSecondSegment(
   value: string | null | undefined,
@@ -26,20 +39,22 @@ export function appendProductTypeToSecondSegment(
 }
 
 /**
- * Shared enriched-title boundary for Full Generate and single-field title regen.
- * COPY C5A keeps the backend as a finalizer only: normalize separators, delegate
- * the existing Production segment-3 safety scrub, then preserve the 80-char clamp.
- * The Writer owns segment-2 product specificity and segment-3 editorial selection;
- * the caller still applies the normal 60-char official-title clamp.
+ * Shared product-title finalizer.
+ * Structured IP/brand/item/diff are assembled in code; raw enriched_title is fallback.
  */
 export function normalizeEnrichedTitleContract(
   value: string | null | undefined,
   _detectedProductType: string | null | undefined,
-  maxLen: number = ENRICHED_TITLE_MAX_LENGTH,
+  maxLen: number = PRODUCT_TITLE_MAX_LENGTH,
+  extra: Omit<ProductTitleParts, "rawTitle" | "maxLen"> = {},
 ): string {
   const normalized = normalizeTitleSeparators(value);
-  const scrubbed = scrubEnrichedTitleSegment3(normalized);
-  return Array.from(scrubbed).length > maxLen
-    ? Array.from(scrubbed).slice(0, maxLen).join("")
-    : scrubbed;
+  const scrubbed = extra.titleDiff || extra.titleItem || extra.titleIp || extra.detectedIpDisplay
+    ? normalized
+    : scrubEnrichedTitleSegment3(normalized);
+  return finalizeProductTitle({
+    rawTitle: scrubbed,
+    maxLen,
+    ...extra,
+  });
 }

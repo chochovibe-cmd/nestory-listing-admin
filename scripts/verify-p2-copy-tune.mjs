@@ -70,7 +70,7 @@ function enforceSkeletonTitleLength(seg1, seg2, seg3, maxLen = 60) {
   if (restBudget <= 0) return s1;
   return `${s1} | ${sliceChars(rest, restBudget)}`.trim();
 }
-function clampOfficialTitle(title, maxLen = 60) {
+function clampOfficialTitle(title, maxLen = 80) {
   const raw = (title ?? "").normalize("NFKC").replace(/\s+/g, " ").trim();
   if (!raw) return "";
   if (textLen(raw) <= maxLen) return raw;
@@ -121,8 +121,8 @@ check("79: characterAliasMap + resolve + findCharacterEntry aliases", () => {
 check("80/83: titleGenerator constants + helpers", () => {
   // COPY-FIX-2 stale-pin: title body lives in titleGeneratorBase.ts on this branch.
   const src = read("src/lib/contentGenerator/titleGeneratorBase.ts");
-  assert.match(src, /OFFICIAL_TITLE_MAX_LENGTH = 60/);
-  assert.match(src, /ENRICHED_TITLE_MAX_LENGTH = 80/);
+  assert.match(src, /OFFICIAL_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
+  assert.match(src, /ENRICHED_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
   assert.match(src, /TITLE_SEGMENT3_BLACKLIST/);
   assert.match(src, /clampOfficialTitle/);
   assert.match(src, /scrubEnrichedTitleSegment3/);
@@ -131,45 +131,41 @@ check("80/83: titleGenerator constants + helpers", () => {
   assert.doesNotMatch(src, /const TITLE_MAX_LENGTH = 80/);
 });
 
-check("80/83: clamp skeleton prefers cut seg3; no-pipe safe (mirror)", () => {
+check("80: clamp prefers dropping third segment; no-pipe safe (mirror)", () => {
   const longFeature =
-    "超長第三段特色詞還有更多贅詞繼續堆疊讓標題爆掉需要被優先砍掉的部分還有更多再補一串絕對會超過六十的字元尾巴尾巴尾巴尾巴";
-  const skeleton = `米菲 Miffy | 絨毛吊飾掛件 | ${longFeature}`;
-  assert.ok(textLen(skeleton) > 60, "fixture must exceed 60");
-  const clamped = clampOfficialTitle(skeleton, 60);
-  assert.ok(textLen(clamped) <= 60, `len=${textLen(clamped)} ${clamped}`);
+    "超長第三段特色詞還有更多贅詞繼續堆疊讓標題爆掉需要被優先砍掉的部分還有更多再補一串絕對會超過八十的字元尾巴尾巴尾巴尾巴再加上更多說明好讓整段明顯超過上限";
+  const skeleton = "米菲 Miffy | 絨毛吊飾掛件 | " + longFeature;
+  assert.ok(textLen(skeleton) > 80, `fixture must exceed 80, got ${textLen(skeleton)}`);
+  const clamped = clampOfficialTitle(skeleton, 80);
+  assert.ok(textLen(clamped) <= 80, `len=${textLen(clamped)} ${clamped}`);
   assert.match(clamped, /^米菲 Miffy/);
   assert.ok(!clamped.includes(longFeature), "full third segment must be cut");
   assert.ok(textLen(clamped) < textLen(skeleton));
 
   const flat =
     "米菲Miffy超長沒有分隔符號的標題需要安全截斷不要在詞中間亂砍還要保留開頭品牌資訊段落內容很多很多";
-  const flatClamped = clampOfficialTitle(flat, 60);
-  assert.ok(textLen(flatClamped) <= 60);
+  const flatClamped = clampOfficialTitle(flat, 80);
+  assert.ok(textLen(flatClamped) <= 80);
   assert.ok(flatClamped.startsWith("米菲"));
 });
 
-check("80/83: generate route clamp + history split", () => {
+check("80: generate route uses one final title", () => {
   const route = read("src/app/api/generate/route.ts");
-  assert.match(route, /clampOfficialTitle/);
-  assert.match(route, /normalizeEnrichedTitleContract/);
-  assert.match(read("src/lib/contentGenerator/titleFinalizer.ts"), /scrubEnrichedTitleSegment3/);
+  assert.match(route, /finalizeProductTitle/);
+  assert.match(route, /const officialTitleZh = enrichedTitleFull/);
+  assert.match(read("src/lib/contentGenerator/titleFinalizer.ts"), /finalizeProductTitle/);
   assert.match(route, /enrichedTitleFull/);
-  assert.match(route, /officialTitleZh/);
   assert.match(route, /ENRICHED_TITLE_MAX_LENGTH/);
 });
 
-check("80/83: systemPrompt unique length table, no old conflicts", () => {
+check("80: systemPrompt shared title contract, no old 60-char split", () => {
   const src = readCopyPrompts();
-  assert.match(src, /標題長度唯一真相表/);
-  assert.match(src, /enriched_title（你輸出）/);
-  assert.match(src, /官網 title_zh（後端 clamp）/);
+  assert.match(src, /商品標題契約｜所有語氣共用|SHARED_PRODUCT_TITLE_PROMPT/);
+  assert.doesNotMatch(src, /官網會再收成 60/);
   assert.doesNotMatch(src, /最長不超過 60 字（後端規則引擎另有 80/);
   assert.doesNotMatch(src, /最長 75 字/);
   assert.doesNotMatch(src, /建議 45 字、最長 60 字/);
   assert.doesNotMatch(src, /例如「包包吊飾」「桌面擺件」「送禮首選」/);
-  assert.match(src, /音譯變體/);
-  assert.match(src, /TITLE_SEGMENT3|生日禮物、送禮首選|黑名單/);
 });
 
 // --- 81 ---

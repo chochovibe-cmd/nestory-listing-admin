@@ -108,6 +108,7 @@ export class ClaudeCopyProvider implements CopyProvider {
           cachedInputTokens: Number(u.cache_read_input_tokens) || 0,
           cacheCreationTokens: Number(u.cache_creation_input_tokens) || 0,
         },
+        truncated: payload?.stop_reason === "max_tokens",
       };
     }, "claude", DEFAULT_MODEL, isEmpty);
   }

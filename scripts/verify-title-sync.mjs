@@ -28,28 +28,26 @@ const exists = (rel) => fs.existsSync(path.join(root, rel));
 function mirrorFormatCharacterText(characters) {
   if (characters.length === 0) return "";
   if (characters.length === 1) return characters[0];
-  if (characters.length === 2) return characters.join("・");
-  return characters.slice(0, 3).join("・") + "等角色";
+  return characters.slice(0, 3).join("・");
 }
 
 console.log("verify-title-sync:");
 
-await check("titleGeneratorBase: P2-83 60/80 dual cap, brand × IP, ladder, replacements", () => {
+await check("titleGeneratorBase: unified 80-char product title, IP × brand, ladder", () => {
   const src = read("src/lib/contentGenerator/titleGeneratorBase.ts");
-  assert.match(src, /OFFICIAL_TITLE_MAX_LENGTH = 60/);
-  assert.match(src, /ENRICHED_TITLE_MAX_LENGTH = 80/);
+  assert.match(src, /OFFICIAL_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
+  assert.match(src, /ENRICHED_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
   assert.match(src, /clampOfficialTitle/);
   assert.match(src, /enforceSkeletonTitleLength/);
   assert.match(src, /TITLE_SEGMENT3_BLACKLIST/);
   assert.match(src, /' × '/);
   assert.match(src, /formatCharacterText/);
   assert.match(src, /collectCharacterNames/);
-  assert.match(src, /等角色/);
   assert.match(src, /夏威夷衝浪造型/);
   assert.match(src, /款式可選/);
   assert.match(src, /台灯/);
-  // Night-work unified 80 on official title must be gone
   assert.doesNotMatch(src, /const TITLE_MAX_LENGTH = 80/);
+  assert.match(src, /ipDisplayName \+ ' × ' \+ productBrand/);
 });
 
 await check("titleGenerator wrapper + C5A titleFinalizer composition", () => {
@@ -87,34 +85,32 @@ await check("titleGenerator wrapper + C5A titleFinalizer composition", () => {
   );
   assert.doesNotMatch(finalizer, /segments\[0\]\s*=/, "titleFinalizer rewrites segment 1");
   assert.doesNotMatch(finalizer, /segments\[2\]\s*=/, "titleFinalizer rewrites segment 3");
-  assert.match(finalizer, /normalizeEnrichedTitleContract/, "shared enriched-title finalization entrypoint missing");
+  assert.match(finalizer, /finalizeProductTitle/, "shared product-title assembler missing");
   assert.match(finalizer, /scrubEnrichedTitleSegment3/, "Production segment-3 scrub delegation missing");
 
   const route = read("src/app/api/generate/route.ts");
-  const finalizationCalls = route.match(/normalizeEnrichedTitleContract\(/g) ?? [];
+  const finalizationCalls = route.match(/finalizeProductTitle\(/g) ?? [];
   assert.ok(
     finalizationCalls.length >= 2,
-    "Full Generate + single-field title regen no longer share normalizeEnrichedTitleContract"
+    "Full Generate + single-field title regen no longer share finalizeProductTitle"
   );
   assert.match(
     route,
-    /historyContent = finalizeCustomerText\(full\);\s*value = clampOfficialTitle\(historyContent\);/s,
-    "single-field title regen lost the official 60-char clamp"
+    /value = historyContent/,
+    "single-field title regen history and stored title diverged"
   );
   assert.match(
     route,
-    /const officialTitleZh = clampOfficialTitle\(enrichedTitleFull\);/,
-    "Full Generate lost the official 60-char clamp"
+    /const officialTitleZh = enrichedTitleFull;/,
+    "Full Generate still clamps a second shorter official title"
   );
 });
 
 await check("mirror: character list formatting (1/2/3+)", () => {
   assert.equal(mirrorFormatCharacterText(["小八"]), "小八");
   assert.equal(mirrorFormatCharacterText(["小八", "烏薩奇"]), "小八・烏薩奇");
-  assert.equal(
-    mirrorFormatCharacterText(["小八", "烏薩奇", "吉伊", "小桃"]),
-    "小八・烏薩奇・吉伊等角色"
-  );
+  assert.equal(mirrorFormatCharacterText(["小八", "烏薩奇", "吉伊"]), "小八・烏薩奇・吉伊");
+  assert.equal(mirrorFormatCharacterText(["小八", "烏薩奇", "吉伊", "小桃"]), "小八・烏薩奇・吉伊");
 });
 
 await check("seoGenerator: 80 caps, brand, multi-character ・", () => {
@@ -125,29 +121,22 @@ await check("seoGenerator: 80 caps, brand, multi-character ・", () => {
   assert.match(src, /productBrand \? productBrand \+ ' × '/);
 });
 
-await check("systemPromptBase: P2-83 unique length table, brand + ・ rule", () => {
+await check("systemPromptBase: shared title contract, Chaochao skips conflicting body", () => {
   const src = read("src/lib/providers/systemPromptBase.ts");
-  assert.match(src, /標題長度唯一真相表/);
-  assert.match(src, /enriched_title（你輸出）/);
-  assert.match(src, /官網 title_zh（後端 clamp）/);
-  assert.match(src, /seo_title（你輸出）/);
-  assert.ok(
-    src.includes("| meta_description | 70–80 佳、最長 90 | 寫滿 Google 行動約 78 字顯示額度 |"),
-    "meta_description truth-table contract changed"
-  );
+  const titlePrompt = read("src/lib/providers/titlePrompt.ts");
+  assert.match(titlePrompt, /商品標題契約｜所有語氣共用/);
+  assert.match(src, /SHARED_PRODUCT_TITLE_PROMPT/);
   assert.match(src, /多角色用「・」/);
-  assert.match(src, /品牌 × IP/);
-  assert.match(src, /第三段黑名單/);
-  assert.doesNotMatch(src, /70-110 字/);
-  // Old conflicting numbers must be gone
+  assert.match(titlePrompt, /不要寫：生日禮物/);
+  assert.doesNotMatch(src, /官網會再收成 60/);
   assert.doesNotMatch(src, /最長不超過 60 字（後端規則引擎另有 80/);
   assert.doesNotMatch(src, /最長 75 字/);
   assert.doesNotMatch(src, /建議 45 字、最長 60 字/);
-  // Positive 送禮首選 example removed (blacklist context only)
   assert.doesNotMatch(src, /例如「包包吊飾」「桌面擺件」「送禮首選」/);
+  assert.match(src, /buildChaochaoDescriptionFormat/);
 });
 
-await check("systemPrompt wrapper: Production delegation + C5A Chaochao title authority", () => {
+await check("systemPrompt wrapper: thin Taiwan-traditional suffix only", () => {
   const wrapper = read("src/lib/providers/systemPrompt.ts");
 
   assert.ok(
@@ -162,44 +151,12 @@ await check("systemPrompt wrapper: Production delegation + C5A Chaochao title au
     wrapper.includes("buildProductionCopySystemPrompt(tone, copyLength, secondhandInfo)"),
     "Full Generate no longer delegates to Production base prompt"
   );
-  assert.ok(
-    wrapper.includes("sharedRecoverySuffix(tone)"),
-    "Full Generate no longer composes the recovery suffix"
-  );
-  assert.ok(
-    wrapper.includes('if (field === "enriched_title") extras.push(OWNER_TITLE_MINIMAL_FIX);'),
-    "enriched_title single-field regen lost OWNER_TITLE_MINIMAL_FIX"
-  );
-  assert.ok(
-    wrapper.includes('if (field === "enriched_title" && tone === "潮巢導購版") extras.push(CHAOCHAO_TITLE_QUALITY);'),
-    "Chaochao enriched_title single-field regen lost C5A title authority"
-  );
-  assert.ok(
-    wrapper.includes("buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo)"),
-    "single-field regen no longer delegates to Production base prompt"
-  );
-  assert.match(wrapper, /COPY C1 Owner 標題最小修正/, "shared Owner title minimal-fix contract missing");
-  assert.match(wrapper, /COPY C5A 潮巢導購版 Title Writer/, "C5A Chaochao Title Writer contract missing");
-  assert.match(
-    wrapper,
-    /detected_product_type 只當 fallback \/ semantic reference，不是 mandatory exact substring/,
-    "Chaochao detected_product_type fallback/reference authority missing"
-  );
-  assert.match(wrapper, /第三段：只放第二段還沒有的新資訊/, "Chaochao third-segment new-information rule missing");
-  assert.match(wrapper, /ASCII pipe/, "Owner ASCII separator rule missing");
-  // COPY-FIX-3 title format v2: keep C5A fallback/new-info phrases; lock owner format.
-  assert.match(wrapper, /商品名稱不可以被擠到第三段/, "Chaochao title v2: product name must stay in segment 2");
-  assert.match(
-    wrapper,
-    /家泰吉 × 三麗鷗 Sanrio \| 凱蒂貓 Hello Kitty 浴巾禮盒 \| 婚禮伴手禮/,
-    "Chaochao title v2 owner example missing"
-  );
-  assert.match(wrapper, /全形「．」分隔/, "Chaochao title v2 multi-character separator missing");
-  assert.match(wrapper, /角色英文名、品牌英文名沒有依據時不要硬翻/, "Chaochao title v2 evidence-safe English names missing");
-  assert.match(wrapper, /「高顏值」這類修飾詞屬於第三段素材/, "Chaochao title v2 hook-vs-product-name rule missing");
+  assert.match(wrapper, /所有顧客可見 AI 產出使用台灣繁中與台灣慣用詞/, "Taiwan Traditional suffix missing");
+  assert.doesNotMatch(wrapper, /CHAOCHAO_BOSS_LAYOUT|CHAOCHAO_TITLE_QUALITY|OWNER_TITLE_MINIMAL_FIX/,
+    "stacked Chaochao overlay returned to the wrapper");
   assert.doesNotMatch(
     wrapper,
-    /標題長度唯一真相表|骨架規則（P1-75b＋P2-80/,
+    /骨架規則（P1-75b＋P2-80/,
     "shared Production title prompt was duplicated back into systemPrompt.ts"
   );
 });

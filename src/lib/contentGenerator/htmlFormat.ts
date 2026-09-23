@@ -115,7 +115,7 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
     .join("");
 }
 
-type ChaochaoSection = "intro" | "highlights" | "sales";
+type ChaochaoSection = "intro" | "highlights" | "audience" | "info";
 
 const CHAOCHAO_KNOWN_SECTION_HEADING =
   /^(?:商品介紹|收藏亮點|商品亮點|適合誰|為什麼會想帶回家|商品資訊|購買提醒|常見問題|FAQ|導購小標|導購標題)$/iu;
@@ -138,7 +138,7 @@ function isConservativeMissingSalesHeadingCandidate(line: string): boolean {
 
 function looksLikeChaochaoSalesBody(line: string | undefined): boolean {
   if (!line || BULLET_PREFIX.test(line) || isKnownChaochaoSectionHeading(line)) return false;
-  if (/^(?:導購小標|導購標題)\s*[：:]/u.test(line)) return false;
+  if (/^(?:導購小標|導購標題|適合誰)\s*[：:]/u.test(line)) return false;
   return Array.from(line).length >= 12 || CHAOCHAO_SENTENCE_PUNCTUATION.test(line);
 }
 
@@ -147,14 +147,26 @@ function looksLikeChaochaoSalesSource(text: string): boolean {
   return (
     /^商品介紹\s*$/mu.test(normalized) &&
     /^收藏亮點\s*$/mu.test(normalized) &&
-    /^(?:導購小標|導購標題)\s*[：:]/mu.test(normalized)
+    (
+      /^(?:導購小標|導購標題)\s*[：:]/mu.test(normalized) ||
+      /^適合誰(?:\s*[：:].*)?$/mu.test(normalized) ||
+      /^商品資訊\s*$/mu.test(normalized)
+    )
   );
 }
 
+function renderParagraphs(values: string[]): string {
+  return values.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
+}
+
+function renderList(values: string[]): string {
+  if (values.length === 0) return "<ul></ul>";
+  return `<ul>${values.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
 /**
- * COPY C1.1 boss-format renderer.
- * Storage remains plain text; Preview and Shopify receive h2/p/ul/li semantics.
- * No inline typography styles are emitted: Shopify Theme owns visual typography.
+ * Chaochao renderer: 商品介紹 / 收藏亮點 / 適合誰 / 商品資訊.
+ * Old three-section 導購小標 source remains readable.
  */
 export function formatChaochaoSalesDescriptionHtml(
   text: string | null | undefined,
@@ -167,8 +179,14 @@ export function formatChaochaoSalesDescriptionHtml(
 
   const introParagraphs: string[] = [];
   const highlightItems: string[] = [];
-  const salesParagraphs: string[] = [];
-  let dynamicHeading = "這件商品為什麼有意思";
+  const audienceParagraphs: string[] = [];
+  const audienceItems: string[] = [];
+  const infoItems: string[] = [];
+  const infoParagraphs: string[] = [];
+  let audienceHeading = "這件商品為什麼有意思";
+  let sawAudienceHeading = false;
+  let sawInfoHeading = false;
+  let sawLegacySalesHeading = false;
   let section: ChaochaoSection = "intro";
   let paragraphBuffer: string[] = [];
   let previousContentWasHighlightBullet = false;
@@ -178,7 +196,8 @@ export function formatChaochaoSalesDescriptionHtml(
     const joined = paragraphBuffer.join(" ").replace(/\s+/g, " ").trim();
     if (joined) {
       if (section === "highlights") highlightItems.push(joined.replace(BULLET_PREFIX, ""));
-      else if (section === "sales") salesParagraphs.push(joined);
+      else if (section === "audience") audienceParagraphs.push(joined.replace(BULLET_PREFIX, ""));
+      else if (section === "info") infoParagraphs.push(joined.replace(BULLET_PREFIX, ""));
       else introParagraphs.push(joined);
     }
     paragraphBuffer = [];
@@ -186,8 +205,7 @@ export function formatChaochaoSalesDescriptionHtml(
 
   const lines = plain.split(/\r?\n/u);
   for (let index = 0; index < lines.length; index += 1) {
-    const rawLine = lines[index];
-    const line = rawLine.trim();
+    const line = lines[index].trim();
     if (!line) {
       flushParagraph();
       continue;
@@ -204,11 +222,29 @@ export function formatChaochaoSalesDescriptionHtml(
       previousContentWasHighlightBullet = false;
       continue;
     }
+    const audienceNamed = line.match(/^適合誰\s*[：:]\s*(.+)$/u);
+    if (line === "適合誰" || audienceNamed) {
+      flushParagraph();
+      audienceHeading = audienceNamed?.[1]?.trim() || "適合誰";
+      section = "audience";
+      sawAudienceHeading = true;
+      previousContentWasHighlightBullet = false;
+      continue;
+    }
+    if (/^商品資訊$/u.test(line)) {
+      flushParagraph();
+      section = "info";
+      sawInfoHeading = true;
+      previousContentWasHighlightBullet = false;
+      continue;
+    }
     const salesHeading = line.match(/^(?:導購小標|導購標題)\s*[：:]\s*(.+)$/u);
     if (salesHeading) {
       flushParagraph();
-      dynamicHeading = salesHeading[1].trim() || dynamicHeading;
-      section = "sales";
+      audienceHeading = salesHeading[1].trim() || audienceHeading;
+      section = "audience";
+      sawAudienceHeading = true;
+      sawLegacySalesHeading = true;
       previousContentWasHighlightBullet = false;
       continue;
     }
@@ -218,8 +254,20 @@ export function formatChaochaoSalesDescriptionHtml(
       previousContentWasHighlightBullet = true;
       continue;
     }
+    if (section === "audience" && BULLET_PREFIX.test(line)) {
+      flushParagraph();
+      audienceItems.push(line.replace(BULLET_PREFIX, "").trim());
+      continue;
+    }
+    if (section === "info" && BULLET_PREFIX.test(line)) {
+      flushParagraph();
+      infoItems.push(line.replace(BULLET_PREFIX, "").trim());
+      continue;
+    }
     if (
       tolerateMissingSalesHeading &&
+      !sawAudienceHeading &&
+      !sawInfoHeading &&
       section === "highlights" &&
       highlightItems.length > 0 &&
       previousContentWasHighlightBullet &&
@@ -231,8 +279,10 @@ export function formatChaochaoSalesDescriptionHtml(
         .map((nextLine) => nextLine.trim())
         .find(Boolean);
       if (looksLikeChaochaoSalesBody(nextContent)) {
-        dynamicHeading = line;
-        section = "sales";
+        audienceHeading = line;
+        section = "audience";
+        sawAudienceHeading = true;
+        sawLegacySalesHeading = true;
         previousContentWasHighlightBullet = false;
         continue;
       }
@@ -244,19 +294,32 @@ export function formatChaochaoSalesDescriptionHtml(
   }
   flushParagraph();
 
-  const introHtml = introParagraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
-  const highlightsHtml = `<ul>${highlightItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
-  const salesHtml = salesParagraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
-
-  return (
+  let html =
     `<h2>商品介紹</h2>` +
     saleStatusNoticeHtml(saleStatus, CHAOCHAO_SALES_TONE) +
-    introHtml +
+    renderParagraphs(introParagraphs) +
     `<h2>收藏亮點</h2>` +
-    highlightsHtml +
-    `<h2>${escapeHtml(dynamicHeading)}</h2>` +
-    salesHtml
-  );
+    renderList(highlightItems);
+
+  const audienceBody = renderList(audienceItems).replace("<ul></ul>", "") + renderParagraphs(audienceParagraphs);
+  const infoBody = renderList(infoItems).replace("<ul></ul>", "") + renderParagraphs(infoParagraphs);
+
+  const isNewFour = sawInfoHeading || (sawAudienceHeading && !sawLegacySalesHeading);
+  if (isNewFour) {
+    if (sawAudienceHeading || audienceBody) {
+      html += `<h2>${escapeHtml(audienceHeading)}</h2>` + audienceBody;
+    }
+    if (sawInfoHeading || infoBody) {
+      html += `<h2>商品資訊</h2>` + (infoBody || renderList([]));
+    }
+    return html;
+  }
+
+  html += `<h2>${escapeHtml(audienceHeading)}</h2>`;
+  html += audienceItems.length > 0
+    ? renderList(audienceItems) + renderParagraphs(audienceParagraphs)
+    : renderParagraphs(audienceParagraphs);
+  return html;
 }
 
 /**

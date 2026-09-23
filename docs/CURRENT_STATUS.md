@@ -3,13 +3,36 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-22（擷取預設改海外代購；商品規格去掉出貨／預售，簡繁同一句只留一行。款式列載入修正同日。G4-D 證據仍以 2026-09-04 為準）
+更新基準：2026-09-23（正式站已換上測試線 `2bdf011`；沒有潮巢語氣。G4-D 證據仍以 2026-09-04 為準）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：`6960a0cd257590abb6c1ccb7c97a2c3e772714d3`
-已知 Vercel production baseline：`6ff020dd1d68152b6688c9695f8f96188b7862be`
+Git source 目前 HEAD：`2bdf0113abc5c672154e1e1226ed4361a918dcc0`
+已知 Vercel production：`2bdf0113abc5c672154e1e1226ed4361a918dcc0`（公開網址 `https://nestory-listing-admin.vercel.app`）
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
 
-> **2026-09-02 外部查證結果：**Vercel production alias 的 `READY` deployment 是 `6960a0c`；不是本輪 `f0a6bfa`。Supabase 正式專案狀態為 `ACTIVE_HEALTHY`，migration ledger 僅有 baseline/reconcile 兩筆；`20260822223100` 與 `20260902090000` 都還未套用。同理，source verifier／CI pass 仍不是 Shopify mock 或真實 E2E 的通過證明。
+## 2026-09-23 正式站換上測試線（沒有潮巢語氣）
+
+Owner 要求把已經改好、且在預覽站看過速度的測試線上正式站，不要再等語氣合併。
+
+這一版**不是**「所有歷史修改都測過、也都上線」。潮巢語氣整包還在別的分支。
+
+已在預設分支，且 Vercel Production deployment `6606116563` 於 2026-09-23T04:05:34Z 成功。公開網址：`https://nestory-listing-admin.vercel.app`。
+
+這一版有 commit、並已在正式站的範圍：
+
+- `f0a6bfa` 圖片抓取與路由授權加固
+- `d02ea9b` 安全加固的 CI／正式站核對紀錄
+- `4cd7269` 受控的 Shopify 同步開關
+- `79f89a7` 到 `1d0d2d4` 天貓擷取、款式列、規格清理、正式庫沒有覆寫欄位時仍可存款式
+- `d1052d2` 網搜詞帶上規格、備註、圖片文字；單欄重生沿用已存搜尋；分段計時；圖片沒變不重看；搜尋與文案逾時
+- `2bdf011` 規格中繼不再照貼外掛原文，改由 AI 整理成台灣繁體，並可補款式裡有的規格
+
+這一版**沒有**的範圍：
+
+- `origin/agent/copy-chaocao-sales-tone`，HEAD `3c56fc2`。潮巢語氣、標題格式 v2、介紹與 FAQ 口吻只在這條線，約 40 個提交，尚未接到正式站。所以正式站的文案說話方式不是潮巢語氣版。
+- 真實 Shopify 建商品仍未放行。
+- migration `20260822223100`、`20260902090000` 這次沒有套用到正式資料庫。
+
+> **2026-09-02 外部查證結果：**當時 Vercel production alias 的 `READY` deployment 是 `6960a0c`；不是當時的 `f0a6bfa`。2026-09-23 起正式站改為 `2bdf011`，以上方本節為準。Supabase 正式專案狀態為 `ACTIVE_HEALTHY`，migration ledger 僅有 baseline/reconcile 兩筆；`20260822223100` 與 `20260902090000` 都還未套用。同理，source verifier／CI pass 仍不是 Shopify mock 或真實 E2E 的通過證明。
 >
 > 下方 D3.4–D3.7 中關於「PR #8 Draft／未 merge／尚未 production deploy」的敘述，是當時 package 的歷史條件；現況一律以上方 release truth 與 `docs/audits/RELEASE-TRUTH-RECONCILE-2026-09-01.md` 為準。
 

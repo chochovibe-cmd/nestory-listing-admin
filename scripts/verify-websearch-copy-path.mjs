@@ -99,7 +99,7 @@ const fullPrompt = buildCopyUserMessage({
 });
 assert(fullPrompt.includes(summary), "full generate prompt receives search summary");
 assert(fullPrompt.includes("陶瓷 300ml"), "full generate prompt receives confirmed spec");
-assert(fullPrompt.includes("送出生成前已由操作者確認"), "spec is labeled as confirmed before submit");
+assert(fullPrompt.includes("不要原樣照抄"), "raw spec is source material, not the final spec");
 
 const regenPrompt = buildFieldRegenUserMessage({
   rawTitle: "Hello Kitty 馬克杯",

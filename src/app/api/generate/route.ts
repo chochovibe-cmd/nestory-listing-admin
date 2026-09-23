@@ -107,6 +107,20 @@ function uniqueMessages(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function tidySpecLines(spec: string): string {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const rawLine of spec.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const key = line.replace(/\s+/g, "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
 /** A7: reuse draft-cached search text without spending another Tavily call. */
 function parseCachedWebSearchSummary(raw: unknown): string | undefined {
   if (!raw || typeof raw !== "object") return undefined;
@@ -1048,22 +1062,24 @@ export async function POST(request: NextRequest) {
     if (metaDuplicateWarning) extraWarnings.push(metaDuplicateWarning);
   }
 
-  // 規格自動化 (Mockup差異備忘 差異2, 老闆 2026-07-11): when the operator left
-  // spec_text empty, adopt the model's [[spec]] synthesis and flag it for a
-  // review glance. A non-empty spec_text (operator 補充/修正) is authoritative and
-  // never overwritten. Empty spec never blocks generation -- it just stays null.
+  // 規格中繼 shows the polished spec, not the raw capture. Input spec_text is
+  // source material; [[spec]] is written back when the model produced one.
+  // A blank model spec never wipes an existing value.
   const existingSpec = (draft.spec_text ?? "").trim();
-  const autoSpec = localizeToTaiwanTraditionalText(providerOutput.spec ?? "").trim();
+  const autoSpec = tidySpecLines(
+    stripCustomerSourceMarkers(localizeToTaiwanTraditionalText(providerOutput.spec ?? "").trim()),
+  );
   const autoSpecIsBlank = !autoSpec || autoSpec === "（無）" || autoSpec === "(無)";
   let finalSpecText: string | null = draft.spec_text ?? null;
-  if (!existingSpec && !autoSpecIsBlank) {
-    // P4: strip residual 「（來源：網路）」 from auto-spec before persist
-    finalSpecText = stripCustomerSourceMarkers(autoSpec);
-    extraWarnings.push(
-      webSearchSummary
-        ? "商品規格為系統自動整理（來自款式／標題／圖片文字／網路搜尋），發布前請審核瞄一眼確認無誤、必要時修正。"
-        : "商品規格為系統自動整理（來自款式／標題／圖片文字），發布前請審核瞄一眼確認無誤、必要時修正。",
-    );
+  if (!autoSpecIsBlank) {
+    finalSpecText = autoSpec;
+    if (existingSpec !== autoSpec) {
+      extraWarnings.push(
+        webSearchSummary
+          ? "商品規格已整理成台灣繁體（含款式／標題／圖片文字／網路搜尋），發布前請瞄一眼，必要時可改。"
+          : "商品規格已整理成台灣繁體（含款式／標題／圖片文字），發布前請瞄一眼，必要時可改。",
+      );
+    }
   }
 
   // P2-82 (回饋 26)：只警告不自動抽——規格中繼空但描述「商品資訊」段有內容

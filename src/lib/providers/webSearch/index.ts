@@ -36,8 +36,10 @@ export function createWebSearchProvider(
 }
 
 /** NFKC + trim + collapse whitespace — cache key for D2-A. */
+const WEB_SEARCH_CACHE_VERSION = "adv8";
 export function fingerprintWebSearchQuery(query: string): string {
-  return query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+  const normalized = query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+  return `${WEB_SEARCH_CACHE_VERSION}:${normalized}`;
 }
 
 /**

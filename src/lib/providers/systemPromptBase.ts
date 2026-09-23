@@ -572,14 +572,12 @@ function buildChaochaoCopyUserMessage(
   if (input.compareAtPrice) lines.push(`台幣定價：NT$${input.compareAtPrice}`);
   if (input.variantSummary) lines.push(`款式：${input.variantSummary}`);
   if (input.note) lines.push(`補充備註：${input.note}`);
-  if (input.imageDescription) {
-    lines.push(`【已確認畫面資料】${input.imageDescription}`);
-  }
+  if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
   if (input.specText) {
     lines.push(`商品規格原始資料（整理進 [[spec]]，寫成一份台灣繁體）：${input.specText}`);
   }
   if (input.webSearchSummary) {
-    lines.push(`【已確認搜尋資料】（判斷同款後可直接使用，含造型與系列，不限規格）：\n${input.webSearchSummary}`);
+    lines.push(`網路搜尋補充資訊（判斷同款後可直接使用）：\n${input.webSearchSummary}`);
   }
   if (input.ipKnowledgePromptBlock?.trim()) {
     lines.push(input.ipKnowledgePromptBlock.trim());
@@ -600,7 +598,7 @@ function buildChaochaoCopyUserMessage(
     lines,
     input,
     options,
-    "請先根據已確認資料寫潮巢導購正文，再填其他分段標記。",
+    "請依照 system prompt 的寫法樣板與分段標記，根據以上事實生成文案。",
   );
 }
 
@@ -789,13 +787,7 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
     lines.push("（款式列可能含角色名／款式名：寫標題時角色請一併列入，多角色用「・」分隔。）");
   }
   if (input.note?.trim()) lines.push(`補充備註：${input.note.trim()}`);
-  if (input.imageDescription) {
-    lines.push(
-      input.tone === CHAOCHAO_SALES_TONE
-        ? `【已確認畫面資料】${input.imageDescription}`
-        : `商品外觀描述：${input.imageDescription}`,
-    );
-  }
+  if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
   if (input.specText) {
     lines.push(`商品規格原始資料（可能含簡體與重複，引用時用整理後的台灣繁體）：${input.specText}`);
   }
@@ -804,7 +796,7 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
   if (input.webSearchSummary?.trim()) {
     lines.push(
       input.tone === CHAOCHAO_SALES_TONE
-        ? `【已確認搜尋資料】（判斷同款後可直接使用，含造型與系列，不限規格）：\n${input.webSearchSummary.trim()}`
+        ? `網路搜尋補充資訊（判斷同款後可直接使用）：\n${input.webSearchSummary.trim()}`
         : `網路搜尋補充資訊（合理判斷與本商品同款時，可直接把搜尋到的規格、功能、系列背景當作可用事實自信寫進文案，不必加保留語氣；判斷不是同款或與賣家自標矛盾時才捨棄；顧客文案禁止標「來源：網路」或附 URL；紅線項目沒依據不要寫，體驗式內容請放手寫）：\n${input.webSearchSummary.trim()}`,
     );
   }

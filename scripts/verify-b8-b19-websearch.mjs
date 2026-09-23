@@ -46,7 +46,7 @@ function buildWebSearchQuery(input) {
   const base = title || hints.join(" ");
   if (!base) return "";
   const head = base.slice(0, 160);
-  return `${head} 造型 系列 角色 特色 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
+  return `${head} 商品規格 尺寸 材質`.replace(/\s+/g, " ").trim();
 }
 
 function parseWebSearchCache(raw) {

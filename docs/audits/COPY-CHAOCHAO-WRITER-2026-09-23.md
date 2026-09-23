@@ -2,8 +2,18 @@
 
 分支：`agent/chaochao-tone-on-live`  
 接續：`14f27c4`（CC-6 Owner 樣板 Preview，語氣仍未過）  
-本包：CC-7 `5966c33`。**潮巢導購版維持現有五段**，不改回舊工具 A｜B｜C｜D｜E。  
-無正式站 deploy、無真實 Shopify write、無 DB migration。未 push。
+本包：CC-7 `5966c33`。Preview：`https://nestory-listing-admin-mrdilc17v-chocho-nestory.vercel.app`  
+**潮巢導購版維持現有五段**，不改回舊工具 A｜B｜C｜D｜E。  
+無正式站 deploy、無真實 Shopify write、無 DB migration。
+
+## Owner 判定（2026-09-23）
+
+Owner 說這版不喜歡，先回到上一版。
+
+已 `git revert` `51e0b94` 與 `5966c33`。程式回到 CC-6 `14f27c4`。
+
+現役 Preview：`https://nestory-listing-admin-2u2u3lg60-chocho-nestory.vercel.app`  
+不要再用 `mrdilc17v`（CC-7）或 `8i15ggzf2`（CC-5）。
 
 ## 為什麼又改
 
@@ -29,7 +39,6 @@ Owner 實測 CC-5／CC-6 都覺得幾乎沒差。GPT／Showmore 診斷與程式�
 
 ## 不要當成已完成
 
-- 尚未 push 本包 Preview（CC-6 的 `2u2u3lg60` 不含本包）
-- 未測真實模型輸出
-- 其他語氣 prompt 未拆層
+- CC-7 不是現役；不要在這包上面繼續改
+- 現役是 CC-6 Owner 樣板
 - 正式站未換

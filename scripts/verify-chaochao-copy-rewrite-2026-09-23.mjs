@@ -55,11 +55,11 @@ function check(name, fn) {
   }
 }
 
-check("Chaochao writer core stays last; title essay stays off Chaochao", () => {
+check("all tones share one title prompt, Chaochao uses a short dedicated voice prompt", () => {
   const chaochao = buildCopySystemPrompt("潮巢導購版", "標準");
   const vinyl = buildCopySystemPrompt("黑膠文藝收藏感", "標準");
+  assert.match(chaochao, /商品標題契約｜所有語氣共用/);
   assert.match(vinyl, /商品標題契約｜所有語氣共用/);
-  assert.doesNotMatch(chaochao, /商品標題契約｜所有語氣共用/);
   assert.match(chaochao, /IP中文＋英文 × 品牌/);
   assert.match(vinyl, /IP中文＋英文 × 品牌/);
   assert.doesNotMatch(chaochao, /官網會再收成 60/);
@@ -69,23 +69,16 @@ check("Chaochao writer core stays last; title essay stays off Chaochao", () => {
   assert.match(chaochao, /商品介紹/);
   assert.match(chaochao, /收藏亮點/);
   assert.match(chaochao, /購買提醒/);
-  assert.match(chaochao, /不要改回舊工具的 A｜B｜C｜D｜E/);
   assert.match(vinyl, /開頭段＋四個「◈ 標題」/);
   assert.match(vinyl, /鼓勵堆疊音譯變體/);
   assert.doesNotMatch(chaochao, /鼓勵堆疊音譯變體/);
-  assert.match(chaochao, /潮巢導購寫手/);
-  assert.match(chaochao, /3～5 個真實特色當主軸/);
-  assert.match(chaochao, /這是先後順序，不是上限/);
-  assert.match(chaochao, /約 10cm 掛在包包上不會太有負擔/);
-  assert.match(chaochao, /雨衣黃、淺咖啡糖霜、蓬鬆絨毛/);
-  assert.doesNotMatch(chaochao, /把雨季變可愛一點/);
+  assert.match(chaochao, /把雨季變可愛一點/);
+  assert.match(chaochao, /滑雪服主題造型/);
   assert.doesNotMatch(chaochao, /Hello Kitty 沒有嘴巴/);
   assert.doesNotMatch(chaochao, /把段落寫滿/);
   assert.doesNotMatch(chaochao, /像懂收藏的選物店主/);
+  assert.doesNotMatch(chaochao, /不要停在「不僅是收藏品」/);
   assert.match(chaochao, /商品小編/);
-  const writerAt = chaochao.lastIndexOf("【潮巢導購寫手");
-  const titlePartsAt = chaochao.indexOf("[[title_diff]]");
-  assert.ok(writerAt > titlePartsAt, "writer core must come after ops so it is not covered");
   assert.ok(chaochao.length < vinyl.length, `Chaochao prompt should be shorter than shared tones (${chaochao.length} vs ${vinyl.length})`);
 });
 
@@ -230,7 +223,6 @@ check("non-SEO regen user message includes variant, note, search, IP context", (
   assert.match(regen, /Hello Kitty／大耳狗/);
   assert.match(regen, /指定角色/);
   assert.match(regen, /材質：絨毛/);
-  assert.match(regen, /【已確認搜尋資料】/);
   assert.match(regen, /【IP背景】三麗鷗/);
   const titleRegen = buildFieldRegenSystemPrompt("enriched_title", "黑膠文藝收藏感", "標準");
   assert.match(titleRegen, /商品標題契約/);
@@ -257,8 +249,6 @@ check("search supplements keep later sources after a long spec", () => {
   });
   assert.match(query, /含杯蓋/);
   assert.match(query, /白色陶瓷/);
-  assert.match(query, /造型/);
-  assert.match(query, /特色/);
   const excerpt = extractRelevantExcerpt(
     "前言廣告促銷滿減包郵。本款尺寸約 10cm，材質絨毛，內含記憶卡槽。後面還有更多無關文字。",
     80,
@@ -287,18 +277,6 @@ check("five fixture cases assemble title, 4-section HTML, Chaochao SEO", () => {
     const meta = finalizeMetaDescriptionForTone(item.metaDescription, ["交換禮物"], "潮巢導購版");
     assert.doesNotMatch(meta, /首選/);
   }
-});
-
-check("vision and search feed Chaochao with sensory facts, not spec-only", () => {
-  const vision = fs.readFileSync(path.join(root, "src/lib/providers/visionProvider.ts"), "utf8");
-  assert.match(vision, /雨衣黃、淺咖啡糖霜、蓬鬆絨毛/);
-  assert.doesNotMatch(vision, /不要形容詞堆疊、不要行銷語氣/);
-  const search = fs.readFileSync(path.join(root, "src/lib/providers/webSearch/index.ts"), "utf8");
-  assert.match(search, /adv8feat1/);
-  assert.match(search, /造型 系列 角色 特色 商品規格 尺寸 材質/);
-  const tavily = fs.readFileSync(path.join(root, "src/lib/providers/webSearch/tavily.ts"), "utf8");
-  assert.match(tavily, /造型、系列、角色差異/);
-  assert.match(tavily, /不要標「來源：網路」/);
 });
 
 check("truncation is reported without auto retry", () => {

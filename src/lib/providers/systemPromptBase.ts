@@ -1,13 +1,9 @@
 import type { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
 import { DEFAULT_IP_TONE_MAP, lookupIpTone } from "./ipToneMap";
 import {
+  buildChaochaoCopySystemPrompt,
   buildChaochaoDescriptionFormat,
-  buildChaochaoFactUseBlock,
-  buildChaochaoFaqRules,
-  buildChaochaoFieldRegenDescriptionRule,
-  buildChaochaoMetafieldRules,
-  buildChaochaoSeoRules,
-  buildChaochaoVoiceChecklist,
+  buildChaochaoFieldRegenSystemPrompt,
   CHAOCHAO_TONE_DESCRIPTION,
 } from "./chaochaoPrompt";
 import { SHARED_PRODUCT_TITLE_PROMPT, SHARED_PRODUCT_TITLE_REGEN_RULE } from "./titlePrompt";
@@ -352,6 +348,13 @@ export function buildCopySystemPrompt(
   copyLength: CopyLength,
   secondhandInfo?: SecondhandInfo | null,
 ): string {
+  if (tone === CHAOCHAO_SALES_TONE) {
+    return buildChaochaoCopySystemPrompt(
+      copyLength,
+      buildSecondhandSection(secondhandInfo, tone),
+    );
+  }
+
   return `${brandVoiceOpening(tone)}
 
 本次文案風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${copyLengthInstruction(tone, copyLength)}${formatToneExamples(tone)}
@@ -363,7 +366,7 @@ ${buildSecondhandSection(secondhandInfo, tone)}
 （2）再根據你判斷的結果，從頭生成一份完整的品牌語氣文案。
 放手寫，帶著品牌個性去寫，不要寫得像制式模板套公式。
 
-${tone === CHAOCHAO_SALES_TONE ? buildChaochaoFactUseBlock() : COPY_WRITE_FREELY_BLOCK}
+${COPY_WRITE_FREELY_BLOCK}
 
 ${COPY_FACT_RED_LINES_BLOCK}
 
@@ -401,17 +404,14 @@ ${SHARED_PRODUCT_TITLE_PROMPT}
 9. generated_faq_html
 10. seo_title
 11. meta_description
-12. why_we_chose_it（${tone === CHAOCHAO_SALES_TONE ? "一個具體選品觀察＋潮巢判斷，通常 2–3 句，不是亮點複誦" : "潮巢選品理由，可以有品牌個性，1-2 句，說「為什麼這個商品值得在潮巢出現」，不是重複商品功能"}）
-13. product_highlights（${tone === CHAOCHAO_SALES_TONE ? "3–5 條短句主差異，給人掃讀，不要複述收藏亮點全文" : "3-5 點條列式賣點，優先抓具體視覺／規格細節；不夠時用使用情境與適合誰寫滿 3 點"}）
+12. why_we_chose_it（潮巢選品理由，可以有品牌個性，1-2 句，說「為什麼這個商品值得在潮巢出現」，不是重複商品功能）
+13. product_highlights（3-5 點條列式賣點，優先抓具體視覺／規格細節；不夠時用使用情境與適合誰寫滿 3 點）
 14. spec（自動整理的商品規格，見下方【spec 商品規格產生規則】；沒有可寫的就留「（無）」）
 
 ${descriptionFormatInstruction(tone)}
-${tone === CHAOCHAO_SALES_TONE ? buildChaochaoMetafieldRules() : ""}
 
 【預購商品（軟性提示，非強制驗證）】
-${tone === CHAOCHAO_SALES_TONE
-  ? "如果輸入資料的銷售狀態是預購中，建議在商品介紹誠實帶到貨需等待，語句自然即可。"
-  : "如果輸入資料的銷售狀態是預購中，建議在開頭段提及到貨需等待，語句可自行調整語氣，不需要逐字照搬固定句子。"}
+如果輸入資料的銷售狀態是預購中，建議在開頭段提及到貨需等待，語句可自行調整語氣，不需要逐字照搬固定句子。
 
 【spec 商品規格產生規則（自動整理，重要）】
 spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容」的純文字（例：材質：絨毛／尺寸：約20cm／產地：中國／授權：正版）。
@@ -422,7 +422,7 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 4. 網路搜尋補充資訊（B19：放在賣家自標資訊之後、保守通用之前。
    合理判斷同款後，把規格、功能、系列背景當可用事實正面寫入，不必加保留語氣；禁止加「（來源：網路）」、來源標註或貼搜尋 URL。
    操作者輸入（款式／標題／操作者補充）不足時，搜尋結果經同款判斷後
-   可作為主要素材來源，${tone === CHAOCHAO_SALES_TONE ? "用搜尋事實與具體觀察把該說的說清楚" : "用搜尋事實與體驗式內容把文案寫滿"}，不要整段棄寫）
+   可作為主要素材來源，用搜尋事實與體驗式內容把文案寫滿，不要整段棄寫）
 5. 商品外觀描述裡的客觀屬性（材質、配件、包裝——照片看得出來的，但這不能拿來當「數字」依據）
 6. 以上都沒有時，寫「保守通用規格」：只寫幾乎一定成立的通則（材質類別、用途類型），不要寫具體數字
 數字與事實紅線（與上方【文案紅線】一致）：
@@ -438,7 +438,7 @@ spec 欄位是「自動整理的商品規格」，寫成幾行「項目：內容
 - 同一件事只留一行。例如不要同時留「包装规格：单盒」和「包裝規格：單盒」；「作品區／作品地區」只留一行；「全款預售／全額預售」只留「出售狀態：全額預售」。
 - 款式／Variant 裡有、原始規格沒寫到的尺寸、款名、規格選項要補進這份清單。數字仍只採用賣家自己標出的，不要自己估。
 - 不要寫價格，不要寫簡體，不要留重複列。
-spec 是規格欄：紅線項目沒依據就不要寫那一行；真的完全沒有可寫規格時寫「（無）」。${tone === CHAOCHAO_SALES_TONE ? "潮巢導購版的顧客描述用欄位分工寫，每一段增加新資訊；不要因為 spec 薄就用空句子補篇幅。" : "顧客描述欄位改用體驗式內容寫滿，不要因為 spec 薄就整篇空洞。"}
+spec 是規格欄：紅線項目沒依據就不要寫那一行；真的完全沒有可寫規格時寫「（無）」。顧客描述欄位改用體驗式內容寫滿，不要因為 spec 薄就整篇空洞。
 
 【網路搜尋補充（若有提供）】
 輸入若含「網路搜尋補充資訊」，先判斷搜尋到的是否與本商品同款；合理判斷為同款時，
@@ -446,15 +446,15 @@ spec 是規格欄：紅線項目沒依據就不要寫那一行；真的完全沒
 - 同款判斷成立的事實可直接寫進文案，語氣自然，不要寫「據網路／公開資料」這類出處句，也不必加保留語氣
 - 規格數字：搜尋結果清楚標出且合理判斷同款時直接寫入，禁止標來源或附 URL；沒有清楚數字依據時這一項留白
 - 與賣家自標資訊衝突時，以賣家自標（款式／標題／圖上文字／原始規格裡的事實）為準，再整理成一行台灣繁體
-- 操作者輸入不足時，同款判斷成立的搜尋結果可作為主要素材來源${tone === CHAOCHAO_SALES_TONE ? "，搭配具體觀察與生活情境把該說的說清楚" : "，搭配體驗式內容把段落寫滿"}
+- 操作者輸入不足時，同款判斷成立的搜尋結果可作為主要素材來源，搭配體驗式內容把段落寫滿
 
-${tone === CHAOCHAO_SALES_TONE ? buildChaochaoFaqRules() : `【FAQ 規則】
+【FAQ 規則】
 - 3-5 題，每題 <h3><strong>問題</strong></h3> + <p>回答</p>（2-3 句）
 - 鼓勵自由發揮：問題可以導購性強、有趣、吸引人、針對目標客群設計
 - 方向參考（不是必填清單）：這款跟一般款差在哪 / 哪種收藏玩家會喜歡 / 什麼情境適合當禮物 / 為什麼值得入手
 - 避免低價值制式問題：多久到貨、材質是什麼這類太基本的問題盡量避免，但這是建議方向不是硬性規則，重點是讓 FAQ 有導購感而不是公版問答
-${faqFieldEmojiRule(tone)}`}
-${tone === CHAOCHAO_SALES_TONE ? buildChaochaoSeoRules() : `【SEO 規則】
+${faqFieldEmojiRule(tone)}
+【SEO 規則】
 - seo_title：最長 80 字；在核心關鍵字（品牌×IP＋角色＋類型）壓在前 25 字之後，以 SEO 最佳化為主——
   鼓勵堆疊音譯變體與商品同義關鍵字（例：米飛/米菲、保溫杯/隨行杯），增加搜尋覆蓋；
   多角色用「・」分隔列出（最多 3 個，超過取最熱門前三）；有聯名品牌時開頭寫「品牌 × IP」
@@ -463,7 +463,7 @@ ${tone === CHAOCHAO_SALES_TONE ? buildChaochaoSeoRules() : `【SEO 規則】
   ・不要自己加上「｜潮巢 Nestory」這類品牌尾綴——這段由後端統一附加，不要佔用你的字數配額
 - meta_description：最長 80 字；自然涵蓋 IP＋角色＋類型＋材質＋尺寸＋收藏／使用情境＋正版；避免出現：現貨、約14天、到貨、出貨、物流、缺貨、下單後、供應端
   ・結尾收一句收藏或自用相關的鉤子（例如：適合收藏／日常療癒小物／值得收進展示櫃），
-    依商品調性挑一句合適的，不要每篇都套用同一句固定句子`}
+    依商品調性挑一句合適的，不要每篇都套用同一句固定句子
 
 【禁忌詞（全域）】
 超值、爆款、必買、剁手、秒殺、全網低價、全網最低、清倉、狂銷、熱賣、CP值、買到賺到、
@@ -514,9 +514,9 @@ CHO-...-...-...-001
 [[title_diff]]
 （款式或重要差異；沒有就留空）
 [[generated_description_html]]
-（${tone === CHAOCHAO_SALES_TONE ? "商品介紹＋收藏亮點＋適合誰＋商品資訊，純文字，段落之間空一行" : "開頭段＋「◈ 標題」四段純文字描述，段落之間空一行"}${tone === "小編聊天口吻" ? "；正文必須含 1–2 個 emoji" : tone === CHAOCHAO_SALES_TONE ? "；emoji 0–2 個、不強制" : ""}）
+（開頭段＋「◈ 標題」四段純文字描述，段落之間空一行${tone === "小編聊天口吻" ? "；正文必須含 1–2 個 emoji" : ""}）
 [[generated_faq_html]]
-（FAQ，每題 <h3><strong>問題</strong></h3><p>回答</p>${tone === "小編聊天口吻" ? "；至少一題回答含 emoji" : tone === CHAOCHAO_SALES_TONE ? "；emoji 0–1 個、不強制" : ""}）
+（FAQ，每題 <h3><strong>問題</strong></h3><p>回答</p>${tone === "小編聊天口吻" ? "；至少一題回答含 emoji" : ""}）
 [[seo_title]]
 （SEO 標題，禁止 emoji）
 [[meta_description]]
@@ -533,7 +533,7 @@ CHO-...-...-...-001
 產地：...
 
 product_highlights 每點各自一行、用「・」開頭，列 3-5 點。spec 每項各自一行、用「項目：內容」格式（無資訊則寫「（無）」）。除了各欄位標記與其內容外，不要輸出其他文字。
-${tone === CHAOCHAO_SALES_TONE ? buildChaochaoVoiceChecklist() : emojiOutputChecklist(tone)}`;
+${emojiOutputChecklist(tone)}`;
 }
 
 // The known-IP list is stable across a whole batch, so A5 caches it. Split out
@@ -545,7 +545,68 @@ export function buildKnownIpBlock(knownIpNames?: string[]): string | null {
   return `已建檔 IP 清單（判斷 detected_ip_name 時，若商品屬於其中之一，必須完全照抄清單中的中文名稱）：\n${knownIpNames.join("、")}`;
 }
 
+function appendKnownIpAndClose(
+  lines: string[],
+  input: CopyProviderInput,
+  options: { omitKnownIpList?: boolean } | undefined,
+  closing: string,
+): string {
+  if (!options?.omitKnownIpList) {
+    const ipBlock = buildKnownIpBlock(input.knownIpNames);
+    if (ipBlock) lines.push("", ipBlock);
+  }
+  lines.push(closing);
+  return lines.join("\n");
+}
+
+function buildChaochaoCopyUserMessage(
+  input: CopyProviderInput,
+  options?: { omitKnownIpList?: boolean },
+): string {
+  const lines = [
+    `商品來源：${input.source || "淘寶"}`,
+    `原始標題：${input.rawTitle || "（未提供，請盡量從其他資訊判斷）"}`,
+    `銷售狀態：${input.saleStatus}`,
+  ];
+  if (input.price) lines.push(`台幣售價：NT$${input.price}`);
+  if (input.compareAtPrice) lines.push(`台幣定價：NT$${input.compareAtPrice}`);
+  if (input.variantSummary) lines.push(`款式：${input.variantSummary}`);
+  if (input.note) lines.push(`補充備註：${input.note}`);
+  if (input.imageDescription) lines.push(`商品外觀描述：${input.imageDescription}`);
+  if (input.specText) {
+    lines.push(`商品規格原始資料（整理進 [[spec]]，寫成一份台灣繁體）：${input.specText}`);
+  }
+  if (input.webSearchSummary) {
+    lines.push(`網路搜尋補充資訊（判斷同款後可直接使用）：\n${input.webSearchSummary}`);
+  }
+  if (input.ipKnowledgePromptBlock?.trim()) {
+    lines.push(input.ipKnowledgePromptBlock.trim());
+  }
+  if (input.isSecondhand) {
+    lines.push(
+      `這是二手／中古商品：` +
+        [
+          input.secondhandGrade ? `等級 ${input.secondhandGrade}` : null,
+          input.secondhandCondition ? `品況 ${input.secondhandCondition}` : null,
+          input.secondhandNotes ? `備註 ${input.secondhandNotes}` : null,
+        ]
+          .filter(Boolean)
+          .join("／"),
+    );
+  }
+  return appendKnownIpAndClose(
+    lines,
+    input,
+    options,
+    "請依照 system prompt 的寫法樣板與分段標記，根據以上事實生成文案。",
+  );
+}
+
 export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitKnownIpList?: boolean }): string {
+  if (input.tone === CHAOCHAO_SALES_TONE) {
+    return buildChaochaoCopyUserMessage(input, options);
+  }
+
   const {
     rawTitle,
     saleStatus,
@@ -667,21 +728,20 @@ export function buildFieldRegenSystemPrompt(
   copyLength: CopyLength,
   secondhandInfo?: SecondhandInfo | null,
 ): string {
-  let fieldRule =
+  if (tone === CHAOCHAO_SALES_TONE) {
+    return buildChaochaoFieldRegenSystemPrompt(
+      field,
+      copyLength,
+      buildSecondhandSection(secondhandInfo, tone),
+    );
+  }
+
+  const fieldRule =
     field === "generated_description_html"
       ? descriptionFormatInstruction(tone)
       : field === "generated_faq_html"
         ? `${REGEN_FIELD_RULES[field]}${faqFieldEmojiRule(tone)}`
         : REGEN_FIELD_RULES[field];
-
-  if (tone === CHAOCHAO_SALES_TONE) {
-    if (field === "generated_description_html") fieldRule = buildChaochaoFieldRegenDescriptionRule();
-    if (field === "generated_faq_html") fieldRule = `${buildChaochaoFaqRules()}${faqFieldEmojiRule(tone)}`;
-    if (field === "why_we_chose_it" || field === "product_highlights") {
-      fieldRule = buildChaochaoMetafieldRules();
-    }
-    if (field === "seo_title" || field === "meta_description") fieldRule = buildChaochaoSeoRules();
-  }
 
   const outputFormat =
     field === "enriched_title"
@@ -701,7 +761,7 @@ export function buildFieldRegenSystemPrompt(
   return `${brandVoiceOpening(tone)}
 本次風格：${tone}（${TONE_DESCRIPTIONS[tone]}）。${toneEmojiRule(tone)}${copyLengthInstruction(tone, copyLength)}
 ${buildSecondhandSection(secondhandInfo, tone)}
-${tone === CHAOCHAO_SALES_TONE ? buildChaochaoFactUseBlock() : COPY_REGEN_GUARDRAIL_REMINDER}
+${COPY_REGEN_GUARDRAIL_REMINDER}
 
 【本次任務：只重新生成一個欄位】
 你要重寫的欄位是「${REGEN_FIELD_LABELS[field]}」。其他欄位「已經定稿」，只提供給你當上下文以保持整體一致——請「不要」重寫或輸出其他欄位。
@@ -735,7 +795,9 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
   // evidence entirely; inject it with the same framing as full generation.
   if (input.webSearchSummary?.trim()) {
     lines.push(
-      `網路搜尋補充資訊（合理判斷與本商品同款時，可直接把搜尋到的規格、功能、系列背景當作可用事實自信寫進文案，不必加保留語氣；判斷不是同款或與賣家自標矛盾時才捨棄；顧客文案禁止標「來源：網路」或附 URL；紅線項目沒依據不要寫，體驗式內容請放手寫）：\n${input.webSearchSummary.trim()}`,
+      input.tone === CHAOCHAO_SALES_TONE
+        ? `網路搜尋補充資訊（判斷同款後可直接使用）：\n${input.webSearchSummary.trim()}`
+        : `網路搜尋補充資訊（合理判斷與本商品同款時，可直接把搜尋到的規格、功能、系列背景當作可用事實自信寫進文案，不必加保留語氣；判斷不是同款或與賣家自標矛盾時才捨棄；顧客文案禁止標「來源：網路」或附 URL；紅線項目沒依據不要寫，體驗式內容請放手寫）：\n${input.webSearchSummary.trim()}`,
     );
   }
   if (input.ipKnowledgePromptBlock?.trim()) {

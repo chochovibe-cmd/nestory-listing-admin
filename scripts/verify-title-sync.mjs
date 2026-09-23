@@ -133,6 +133,7 @@ await check("systemPromptBase: shared title contract, Chaochao skips conflicting
   assert.doesNotMatch(src, /最長 75 字/);
   assert.doesNotMatch(src, /建議 45 字、最長 60 字/);
   assert.doesNotMatch(src, /例如「包包吊飾」「桌面擺件」「送禮首選」/);
+  assert.match(src, /buildChaochaoCopySystemPrompt/);
   assert.match(src, /buildChaochaoDescriptionFormat/);
 });
 

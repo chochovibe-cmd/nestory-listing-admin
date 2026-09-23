@@ -228,14 +228,17 @@ assert.match(chaochaoPrompt, /第一行是「商品介紹」/u, "Chaochao descri
 assert.match(chaochaoPrompt, /收藏亮點/u);
 assert.match(chaochaoPrompt, /適合誰/u);
 assert.match(chaochaoPrompt, /商品資訊/u);
+assert.match(chaochaoPrompt, /購買提醒/u);
 assert.match(chaochaoPrompt, /why_we_chose_it/u);
 assert.match(chaochaoPrompt, /product_highlights/u);
-assert.match(chaochaoPrompt, /今天的麵包坊由 Hello Kitty/u, "positive plush sample missing");
+assert.match(chaochaoPrompt, /把雨季變可愛一點/u, "owner rain-coat sample missing");
+assert.match(chaochaoPrompt, /滑雪服主題造型/u, "owner ski-suit highlight sample missing");
 assert.doesNotMatch(chaochaoPrompt, /先寫買家真正在意的痛點/u, "pain-point-only opener returned");
+assert.doesNotMatch(chaochaoPrompt, /不要停在「不僅是收藏品」/u, "empty-phrase ban pool returned");
 assert.doesNotMatch(prompt, /CHAOCHAO_VOICE_ANCHOR/u, "brand-manifesto voice overlay returned");
-assert.match(promptBase, /buildChaochaoDescriptionFormat/u, "Chaochao description is not assembled from the dedicated contract");
-assert.match(promptBase, /tone === CHAOCHAO_SALES_TONE \? buildChaochaoFactUseBlock/u,
-  "Chaochao no longer skips the conflicting shared body permission block");
+assert.match(promptBase, /buildChaochaoCopySystemPrompt/u, "Chaochao is not assembled from the dedicated contract");
+assert.match(promptBase, /if \(tone === CHAOCHAO_SALES_TONE\) \{\s*return buildChaochaoCopySystemPrompt/u,
+  "Chaochao no longer skips the shared body prompt");
 
 assert.match(resultCardCopyPanel,
   /descriptionPreviewHtml\(description, draft\.generation_tone, draft\.sale_status\)/u,

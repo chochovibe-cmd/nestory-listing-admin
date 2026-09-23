@@ -55,7 +55,7 @@ function check(name, fn) {
   }
 }
 
-check("all tones share one title prompt, Chaochao does not inherit 4-section body", () => {
+check("all tones share one title prompt, Chaochao uses a short dedicated voice prompt", () => {
   const chaochao = buildCopySystemPrompt("潮巢導購版", "標準");
   const vinyl = buildCopySystemPrompt("黑膠文藝收藏感", "標準");
   assert.match(chaochao, /商品標題契約｜所有語氣共用/);
@@ -66,15 +66,20 @@ check("all tones share one title prompt, Chaochao does not inherit 4-section bod
   assert.doesNotMatch(chaochao, /開頭段＋四個「◈ 標題」/);
   assert.doesNotMatch(chaochao, /先寫買家真正在意的痛點/);
   assert.doesNotMatch(chaochao, /導購小標：依這件商品/);
-  assert.match(chaochao, /商品介紹／收藏亮點／適合誰／商品資訊/);
+  assert.match(chaochao, /商品介紹/);
+  assert.match(chaochao, /收藏亮點/);
+  assert.match(chaochao, /購買提醒/);
   assert.match(vinyl, /開頭段＋四個「◈ 標題」/);
   assert.match(vinyl, /鼓勵堆疊音譯變體/);
   assert.doesNotMatch(chaochao, /鼓勵堆疊音譯變體/);
-  assert.match(chaochao, /今天的麵包坊由 Hello Kitty/);
+  assert.match(chaochao, /把雨季變可愛一點/);
+  assert.match(chaochao, /滑雪服主題造型/);
   assert.doesNotMatch(chaochao, /Hello Kitty 沒有嘴巴/);
   assert.doesNotMatch(chaochao, /把段落寫滿/);
   assert.doesNotMatch(chaochao, /像懂收藏的選物店主/);
+  assert.doesNotMatch(chaochao, /不要停在「不僅是收藏品」/);
   assert.match(chaochao, /商品小編/);
+  assert.ok(chaochao.length < vinyl.length, `Chaochao prompt should be shorter than shared tones (${chaochao.length} vs ${vinyl.length})`);
 });
 
 check("title assembly: English brand, Chinese fallback, no brand, omit filler third", () => {
@@ -174,6 +179,13 @@ check("new and old Chaochao description HTML remain readable", () => {
   assert.match(html, /<h2>適合誰<\/h2>/);
   assert.match(html, /<h2>商品資訊<\/h2>/);
   assert.match(html, /&amp;|&lt;|<li>角色：Hello Kitty<\/li>/);
+
+  const withCare = formatChaochaoSalesDescriptionHtml(`${next}
+
+購買提醒
+・毛絨拍鬆即可恢復蓬鬆感`);
+  assert.match(withCare, /<h2>購買提醒<\/h2>/);
+  assert.match(withCare, /<li>毛絨拍鬆即可恢復蓬鬆感<\/li>/);
 
   const escaped = formatChaochaoSalesDescriptionHtml("商品介紹\n\nA < B & C\n\n收藏亮點\n・1\n\n適合誰\n・2\n\n商品資訊\n・3");
   assert.match(escaped, /A &lt; B &amp; C/);

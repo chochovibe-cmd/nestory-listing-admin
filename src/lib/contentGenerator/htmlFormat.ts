@@ -115,7 +115,7 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
     .join("");
 }
 
-type ChaochaoSection = "intro" | "highlights" | "audience" | "info";
+type ChaochaoSection = "intro" | "highlights" | "audience" | "info" | "care";
 
 const CHAOCHAO_KNOWN_SECTION_HEADING =
   /^(?:商品介紹|收藏亮點|商品亮點|適合誰|為什麼會想帶回家|商品資訊|購買提醒|常見問題|FAQ|導購小標|導購標題)$/iu;
@@ -165,7 +165,7 @@ function renderList(values: string[]): string {
 }
 
 /**
- * Chaochao renderer: 商品介紹 / 收藏亮點 / 適合誰 / 商品資訊.
+ * Chaochao renderer: 商品介紹 / 收藏亮點 / 適合誰 / 商品資訊 / 購買提醒.
  * Old three-section 導購小標 source remains readable.
  */
 export function formatChaochaoSalesDescriptionHtml(
@@ -183,6 +183,8 @@ export function formatChaochaoSalesDescriptionHtml(
   const audienceItems: string[] = [];
   const infoItems: string[] = [];
   const infoParagraphs: string[] = [];
+  const careItems: string[] = [];
+  const careParagraphs: string[] = [];
   let audienceHeading = "這件商品為什麼有意思";
   let sawAudienceHeading = false;
   let sawInfoHeading = false;
@@ -198,6 +200,7 @@ export function formatChaochaoSalesDescriptionHtml(
       if (section === "highlights") highlightItems.push(joined.replace(BULLET_PREFIX, ""));
       else if (section === "audience") audienceParagraphs.push(joined.replace(BULLET_PREFIX, ""));
       else if (section === "info") infoParagraphs.push(joined.replace(BULLET_PREFIX, ""));
+      else if (section === "care") careParagraphs.push(joined.replace(BULLET_PREFIX, ""));
       else introParagraphs.push(joined);
     }
     paragraphBuffer = [];
@@ -216,7 +219,7 @@ export function formatChaochaoSalesDescriptionHtml(
       previousContentWasHighlightBullet = false;
       continue;
     }
-    if (/^收藏亮點$/u.test(line)) {
+    if (/^(?:收藏亮點|商品亮點)$/u.test(line)) {
       flushParagraph();
       section = "highlights";
       previousContentWasHighlightBullet = false;
@@ -235,6 +238,12 @@ export function formatChaochaoSalesDescriptionHtml(
       flushParagraph();
       section = "info";
       sawInfoHeading = true;
+      previousContentWasHighlightBullet = false;
+      continue;
+    }
+    if (/^購買提醒$/u.test(line)) {
+      flushParagraph();
+      section = "care";
       previousContentWasHighlightBullet = false;
       continue;
     }
@@ -262,6 +271,11 @@ export function formatChaochaoSalesDescriptionHtml(
     if (section === "info" && BULLET_PREFIX.test(line)) {
       flushParagraph();
       infoItems.push(line.replace(BULLET_PREFIX, "").trim());
+      continue;
+    }
+    if (section === "care" && BULLET_PREFIX.test(line)) {
+      flushParagraph();
+      careItems.push(line.replace(BULLET_PREFIX, "").trim());
       continue;
     }
     if (
@@ -303,6 +317,7 @@ export function formatChaochaoSalesDescriptionHtml(
 
   const audienceBody = renderList(audienceItems).replace("<ul></ul>", "") + renderParagraphs(audienceParagraphs);
   const infoBody = renderList(infoItems).replace("<ul></ul>", "") + renderParagraphs(infoParagraphs);
+  const careBody = renderList(careItems).replace("<ul></ul>", "") + renderParagraphs(careParagraphs);
 
   const isNewFour = sawInfoHeading || (sawAudienceHeading && !sawLegacySalesHeading);
   if (isNewFour) {
@@ -312,6 +327,9 @@ export function formatChaochaoSalesDescriptionHtml(
     if (sawInfoHeading || infoBody) {
       html += `<h2>商品資訊</h2>` + (infoBody || renderList([]));
     }
+    if (careBody) {
+      html += `<h2>購買提醒</h2>` + careBody;
+    }
     return html;
   }
 
@@ -319,6 +337,9 @@ export function formatChaochaoSalesDescriptionHtml(
   html += audienceItems.length > 0
     ? renderList(audienceItems) + renderParagraphs(audienceParagraphs)
     : renderParagraphs(audienceParagraphs);
+  if (careBody) {
+    html += `<h2>購買提醒</h2>` + careBody;
+  }
   return html;
 }
 

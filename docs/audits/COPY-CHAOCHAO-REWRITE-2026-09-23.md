@@ -55,9 +55,9 @@ UI 只改一句語氣說明，沿用既有 tone option；預覽／發布沿用�
 - `pnpm run build` — 通過（編譯期間有短暫 `read ECONNRESET` 重試，最後 Compiled successfully）
 - 真實模型抽樣：1 筆 OpenAI `gpt-4o`（麵包吊飾固定素材），約 $0.027、input 7268／output 882、未截斷。紀錄在 `docs/audits/fixtures/chaochao-live-sample-2026-09-23.json`。其餘 4 組僅 fixture，非真實模型。
 
-## Owner 還需要實測
+## Owner 實測結果（2026-09-23 晚）
 
-1. 用潮巢導購版跑真實生成（麵包吊飾、單角色、多角色盲盒、功能商品、資料少）。
-2. 看幽默是否從商品長出來、欄位是否各說各話、拿掉角色名後是否仍能辨識商品。
-3. 若出現截斷警告，再討論是否提高 3000 token。
-4. 預覽站看過後再決定是否 push／部署。
+Preview：`https://nestory-listing-admin-8i15ggzf2-chocho-nestory.vercel.app`  
+判定：**語氣未過**。Owner 覺得文案幾乎沒優化差別。
+
+後續（同一晚，本機未 push）：改走專屬短 prompt，開頭放 Owner 雨衣／衝浪／滑雪樣板，購買提醒可渲染。測聲音需再推 Preview。

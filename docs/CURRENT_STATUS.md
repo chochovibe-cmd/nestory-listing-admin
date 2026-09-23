@@ -3,11 +3,25 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-23（潮巢導購文案重建推 Preview，工作分支 `agent/chaochao-tone-on-live`；正式站不含本包）
+更新基準：2026-09-23（潮巢導購聲音改 Owner 樣板，工作分支 `agent/chaochao-tone-on-live`；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：工作分支待 push 後更新
+Git source 目前 HEAD：`6bf4b8393d31db5c8f2c5dbd7d0c173a2d8e37ff`（聲音包尚未 push）
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
+上一包 Preview：`https://nestory-listing-admin-8i15ggzf2-chocho-nestory.vercel.app`（尚無本包聲音）
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
+
+## 2026-09-23 潮巢導購聲音（Owner 樣板，本機未 push）
+
+Owner 判定上一包語氣未過，要求整理規則、只用正面引導，並指定雨衣／衝浪／滑雪吊飾文案當聲音。
+
+已完成（本機）：
+
+- 潮巢不再套其他語氣那包長規則，改走專屬短 prompt
+- 樣板放在最前面；購買提醒可出現在預覽
+- 規格、IP、標題、紅線等必要作業仍保留
+- 沒有空泛電商句禁詞池
+
+未做：尚未 push Preview、未部署正式站、無真實 Shopify write。測聲音請等下一條預覽網址，不要用上一條 `8i15ggzf2`。
 
 ## 2026-09-23 潮巢導購文案重建（推 Preview 給 Owner 實測）
 
@@ -28,6 +42,8 @@ Owner 批准重建潮巢導購版文案與全站商品標題契約。工作在 `
 - `pnpm run verify:all`、`typecheck`、`build` 本機通過
 - 未部署正式站、無真實 Shopify write、無 DB migration
 - 未改 `.claude/settings.local.json`
+
+Owner Preview 實測（CC-5，2026-09-23 晚）：**語氣未過**。覺得跟上一版幾乎沒差。本包實際改到的是標題順序、四段排版、不再痛點開頭、SEO 不堆「首選」；模型仍寫目錄句（例：化身為圓滾滾…亮眼又實用的小物），示範句「今天的麵包坊由 Hello Kitty 值班」沒被學到。原因：潮巢仍跟 14 欄、紅線、IP 判斷同一大包 prompt（抽樣約 7268 input tokens），聲音示範埋在規則裡，gpt-4o 會優先交安全電商文。下一包應只改「怎麼說話」（示範置頂、砍重複規則、用 Owner 認可樣板），不要再重建結構。
 
 詳細：`docs/audits/COPY-CHAOCHAO-REWRITE-2026-09-23.md`
 

@@ -83,7 +83,7 @@ Pre-tracking history：
 - `6ff020dd1d68152b6688c9695f8f96188b7862be` 是先前文件中的 production baseline。
 - PR #8 已在 2026-08-25 以 merge commit `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支 `codex/nestory-v0.1-safety-skeleton`；舊文件中「PR #8 Draft／未 merge」都是合併前的歷史敘述，不可當現況。
 - 2026-09-02 已從 Vercel production alias 只讀核對：當時正式站 `READY`，commit 是 `6960a0cd257590abb6c1ccb7c97a2c3e772714d3`。
-- 2026-09-23 Owner 要求把測試線上正式站。預設分支已 fast-forward 到 `2bdf0113abc5c672154e1e1226ed4361a918dcc0`，Vercel Production deployment 成功。公開網址 `https://nestory-listing-admin.vercel.app`。這一版含擷取／款式、受控 Shopify、網搜補資料、生成計時與規格中繼整理。**不含** `agent/copy-chaocao-sales-tone`（`3c56fc2`）的潮巢語氣。細節見 `docs/CURRENT_STATUS.md` 2026-09-23 一節。
+- 2026-09-23 稍後 Owner 要求把潮巢語氣與加深搜尋這輪也上主線，給 GPT 精修。預設分支含 `2fb59c08ac2e295373c5897accd2598c25526fc7`。上面「不含潮巢語氣」只適用到 `2bdf011` 那一次部署。細節見 `docs/CURRENT_STATUS.md` 最上方 2026-09-23 一節。
 
 同樣地，Git commit、Preview、GitHub CI、Vercel Production 和 Shopify 都是不同的證據來源。不得把任一項的成功推成另一項已通過。
 

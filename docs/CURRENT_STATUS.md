@@ -3,13 +3,27 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-23（正式站仍是 `2bdf011` 那條，沒有潮巢語氣。潮巢語氣已接到預覽分支 `agent/chaochao-tone-on-live`，等 Owner 看文案後才上正式站。）
+更新基準：2026-09-23（主線已含潮巢語氣與加深搜尋 `2fb59c0`。文案仍不夠，Owner 要交 GPT 精修，不是再加新功能。）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：`2bdf0113abc5c672154e1e1226ed4361a918dcc0`
-已知 Vercel production：`2bdf0113abc5c672154e1e1226ed4361a918dcc0`（公開網址 `https://nestory-listing-admin.vercel.app`）
+Git source 目前 HEAD：含 `2fb59c08ac2e295373c5897accd2598c25526fc7` 的本紀錄提交
+已知 Vercel production：同上，公開網址 `https://nestory-listing-admin.vercel.app`
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
 
-## 2026-09-23 潮巢語氣接到預覽分支（尚未上正式站）
+## 2026-09-23 潮巢語氣與加深搜尋已上主線
+
+Owner 看過預覽，覺得有比較好、仍不夠。要求把這輪先推上主線，交給 GPT 協作精修。
+
+主線現在包含 `agent/chaochao-tone-on-live` 到 `2fb59c0`：
+
+- 潮巢導購版三段排版（商品介紹、收藏亮點、導購小標）
+- 有依據的規格寫進收藏亮點；開頭先寫痛點；用「你」
+- Tavily 改較完整搜尋、最多 8 筆；搜尋快取版本 `adv8`，舊的 5 筆快取不會沿用
+- SEO 在原字數內堆同義詞
+- 先前已上線的擷取、款式、網搜詞、計時、規格中繼整理
+
+文案豐富度、導購共鳴、人味與 SEO 覆蓋仍不夠，下一步是精修提示詞，不是再加一條功能線。真實 Shopify 上架與未套用的 migration 仍不要當成已完成。
+
+## 2026-09-23 潮巢語氣接到預覽分支（歷史，已被上一節取代）
 
 規格中繼與生成速度 Owner 已在正式站確認沒問題。下一步把 `origin/agent/copy-chaocao-sales-tone`（`3c56fc2`）合併進正式線的後代，分支名 `agent/chaochao-tone-on-live`。
 

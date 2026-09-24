@@ -60,8 +60,8 @@ check("all tones share one title prompt, Chaochao uses a short dedicated voice p
   const vinyl = buildCopySystemPrompt("黑膠文藝收藏感", "標準");
   assert.match(chaochao, /商品標題契約｜所有語氣共用/);
   assert.match(vinyl, /商品標題契約｜所有語氣共用/);
-  assert.match(chaochao, /IP中文＋英文 × 品牌/);
-  assert.match(vinyl, /IP中文＋英文 × 品牌/);
+  assert.match(chaochao, /品牌 × IP中文＋英文/);
+  assert.match(vinyl, /品牌 × IP中文＋英文/);
   assert.doesNotMatch(chaochao, /官網會再收成 60/);
   assert.doesNotMatch(chaochao, /開頭段＋四個「◈ 標題」/);
   assert.doesNotMatch(chaochao, /先寫買家真正在意的痛點/);
@@ -73,7 +73,7 @@ check("all tones share one title prompt, Chaochao uses a short dedicated voice p
   assert.match(vinyl, /鼓勵堆疊音譯變體/);
   assert.doesNotMatch(chaochao, /鼓勵堆疊音譯變體/);
   assert.match(chaochao, /把雨季變可愛一點/);
-  assert.match(chaochao, /滑雪服主題造型/);
+  assert.match(chaochao, /滑雪服/);
   assert.doesNotMatch(chaochao, /Hello Kitty 沒有嘴巴/);
   assert.doesNotMatch(chaochao, /把段落寫滿/);
   assert.doesNotMatch(chaochao, /像懂收藏的選物店主/);
@@ -83,6 +83,8 @@ check("all tones share one title prompt, Chaochao uses a short dedicated voice p
 });
 
 check("title assembly: English brand, Chinese fallback, no brand, omit filler third", () => {
+  assert.equal(finalizeProductTitle({ titleIp: "三麗鷗 Sanrio", titleBrand: "中文 TOP TOY", titleItem: "吊飾" }), "TOP TOY × 三麗鷗 Sanrio | 吊飾");
+  assert.equal(finalizeProductTitle({ titleIp: "三麗鷗 Sanrio", titleBrand: "中文品牌", titleItem: "吊飾" }), "中文品牌 × 三麗鷗 Sanrio | 吊飾");
   assert.equal(
     finalizeProductTitle({
       titleIp: "三麗鷗 Sanrio",
@@ -90,7 +92,7 @@ check("title assembly: English brand, Chinese fallback, no brand, omit filler th
       titleItem: "家族米粒公仔吊飾盲盒",
       titleDiff: "隨機單盒",
     }),
-    "三麗鷗 Sanrio × Bandai | 家族米粒公仔吊飾盲盒 | 隨機單盒",
+    "Bandai × 三麗鷗 Sanrio | 家族米粒公仔吊飾盲盒 | 隨機單盒",
   );
   assert.equal(
     finalizeProductTitle({
@@ -98,7 +100,7 @@ check("title assembly: English brand, Chinese fallback, no brand, omit filler th
       titleBrand: "BRUNO",
       titleItem: "聯名多功能料理鍋／電熱鍋",
     }),
-    "寶可夢 Pokémon × BRUNO | 聯名多功能料理鍋／電熱鍋",
+    "BRUNO × 寶可夢 Pokémon | 聯名多功能料理鍋／電熱鍋",
   );
   assert.equal(
     finalizeProductTitle({
@@ -116,7 +118,7 @@ check("title assembly: English brand, Chinese fallback, no brand, omit filler th
       titleItem: "家族米粒公仔吊飾盲盒",
       titleDiff: "隨機單盒",
     }),
-    "三麗鷗 Sanrio × Bandai | 家族米粒公仔吊飾盲盒 | 隨機單盒",
+    "Bandai × 三麗鷗 Sanrio | 家族米粒公仔吊飾盲盒 | 隨機單盒",
   );
 });
 
@@ -129,9 +131,9 @@ check("long title trims by phrase, not mid-word", () => {
     titleDiff: "隨機單盒附贈超長不必要的第三段說明文字繼續堆",
   });
   assert.ok(Array.from(title).length <= PRODUCT_TITLE_MAX_LENGTH, title);
-  assert.match(title, /^三麗鷗/);
+  assert.match(title, /^Bandai × 三麗鷗/);
   assert.doesNotMatch(title, /標準款/);
-  assert.equal(parseTitleSegments(title)[0], "三麗鷗 Sanrio × Bandai");
+  assert.equal(parseTitleSegments(title)[0], "Bandai × 三麗鷗 Sanrio");
   assert.doesNotMatch(title, /KittyAli$/);
 });
 
@@ -139,7 +141,7 @@ check("parser keeps assembler keys and 14 customer fields", () => {
   assert.equal(COPY_SEGMENT_KEYS.length, 14);
   const parsed = parseCopySegments(
     `[[enriched_title]]
-三麗鷗 Sanrio × Bandai | 家族米粒公仔吊飾盲盒 | 隨機單盒
+Bandai × 三麗鷗 Sanrio | 家族米粒公仔吊飾盲盒 | 隨機單盒
 [[title_ip]]
 三麗鷗 Sanrio
 [[title_brand]]
@@ -264,7 +266,9 @@ check("five fixture cases assemble title, 4-section HTML, Chaochao SEO", () => {
   assert.equal(fixtures.cases.length, 5);
   for (const item of fixtures.cases) {
     const title = finalizeProductTitle(item.titleParts);
-    assert.equal(title, item.expectedTitle, item.id);
+    // Keep the historical fixture intact; apply the owner's current brand-first contract.
+    const expectedTitle = item.expectedTitle.replace("三麗鷗 Sanrio × Bandai", "Bandai × 三麗鷗 Sanrio");
+    assert.equal(title, expectedTitle, item.id);
     assert.ok(Array.from(title).length <= PRODUCT_TITLE_MAX_LENGTH, item.id);
     const html = formatChaochaoSalesDescriptionHtml(item.description);
     assert.match(html, /<h2>商品介紹<\/h2>/, item.id);

@@ -115,31 +115,80 @@ function formatTavilySummary(
   return lines.join("\n");
 }
 
-const PRODUCT_FACT_HINT =
-  /尺寸|規格|材質|成分|重量|容量|配件|內容物|包裝|功能|款式|系列|cm|mm|填充|絨毛|PVC|ABS|適用|盲盒|授權|正版|充電|電池|記憶卡/i;
+const IDENTITY_OR_DESIGN_HINT =
+  /商品|公仔|玩偶|娃娃|角色|人物|造型|外觀|系列|款式|聯名|限定|盲盒|授權|正版|IP|三麗鷗|Hello\s*Kitty|Kuromi|酷洛米|美樂蒂|布丁狗|大耳狗|玉桂狗|Pochacco|帕恰狗|蛋黃哥|史努比|迪士尼/i;
+const SPEC_OR_USE_HINT =
+  /尺寸|規格|材質|成分|重量|容量|配件|內容物|包裝|功能|cm|mm|公分|毫米|填充|絨毛|PVC|ABS|適用|使用|收納|可拆|可洗|充電|電池|記憶卡|耐熱|防水|承重|長\s*\d/i;
+const RELEVANT_HINT = new RegExp(`${IDENTITY_OR_DESIGN_HINT.source}|${SPEC_OR_USE_HINT.source}`, "i");
 
 export function extractRelevantExcerpt(content: string, maxLen = 400): string {
-  const text = (content ?? "").replace(/\s+/g, " ").trim();
+  const text = (content ?? "").replace(/\r\n?/g, "\n").trim();
   if (!text) return "";
-  if (Array.from(text).length <= maxLen) return text;
+  const requestedLimit = Number.isFinite(maxLen) ? Math.floor(maxLen) : 400;
+  const limit = Math.max(0, requestedLimit);
+  if (!limit) return "";
 
-  const sentences = text.split(/(?<=[。．.！？!?\n；;])/).map((part) => part.trim()).filter(Boolean);
-  const matchIndex = sentences.findIndex((sentence) => PRODUCT_FACT_HINT.test(sentence));
-  const start = matchIndex >= 0 ? matchIndex : 0;
-  let excerpt = "";
-  for (let i = start; i < sentences.length; i += 1) {
-    const next = excerpt ? `${excerpt}${sentences[i]}` : sentences[i];
-    if (Array.from(next).length > maxLen) break;
-    excerpt = next;
+  // Split before whitespace normalization so source line breaks remain useful sentence boundaries.
+  // A dot between digits is a decimal point (for example, 1.5cm), not a sentence end.
+  const decimalProtected = text.replace(/(\d)\.(\d)/g, "$1\uE000$2");
+  const sentences = decimalProtected
+    .split(/(?<=[。．！？!?；;.\n])/)
+    .map((part) => part.replace(/\uE000/g, ".").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const sentence of sentences) {
+    const key = sentence.toLocaleLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(sentence);
   }
-  if (Array.from(excerpt).length < Math.floor(maxLen * 0.4) && start > 0) {
-    excerpt = "";
-    for (const sentence of sentences) {
-      const next = excerpt ? `${excerpt}${sentence}` : sentence;
-      if (Array.from(next).length > maxLen) break;
-      excerpt = next;
+
+  const identityIndex = unique.findIndex((sentence) => IDENTITY_OR_DESIGN_HINT.test(sentence));
+  const specIndex = unique.findIndex((sentence) => SPEC_OR_USE_HINT.test(sentence));
+  const selected = new Set<number>();
+  if (identityIndex >= 0) selected.add(identityIndex);
+  if (specIndex >= 0) selected.add(specIndex);
+
+  // Add further relevant sentences while space remains; output order always follows the source.
+  const ordered = [...selected].sort((a, b) => a - b);
+  const charCount = (value: string) => Array.from(value).length;
+  let used = ordered.reduce((sum, index, position) => sum + charCount(unique[index]) + (position ? 1 : 0), 0);
+  for (let i = 0; i < unique.length; i += 1) {
+    if (selected.has(i) || !RELEVANT_HINT.test(unique[i])) continue;
+    const cost = charCount(unique[i]) + (selected.size ? 1 : 0);
+    if (used + cost <= limit) {
+      selected.add(i);
+      used += cost;
     }
   }
-  if (!excerpt) excerpt = Array.from(text).slice(0, maxLen).join("");
-  return excerpt.trim();
+
+  let excerpt = [...selected].sort((a, b) => a - b).map((index) => unique[index]).join(" ");
+  if (excerpt) {
+    if (charCount(excerpt) <= limit) return excerpt;
+    // Share an overfull budget across representatives, then give unused space to the longer one.
+    // This prevents a long identity sentence from consuming the spec/use representative's space.
+    const representatives = [...selected].sort((a, b) => a - b).map((index) => unique[index]);
+    if (representatives.length === 1) {
+      return Array.from(representatives[0]).slice(0, limit).join("").trim();
+    }
+    const available = Math.max(0, limit - (representatives.length - 1));
+    const initialShare = Math.floor(available / representatives.length);
+    const lengths = representatives.map(charCount);
+    const quotas = lengths.map((length) => Math.min(length, initialShare));
+    let remaining = available - quotas.reduce((sum, quota) => sum + quota, 0);
+    for (let i = 0; i < quotas.length && remaining > 0; i += 1) {
+      const extra = Math.min(lengths[i] - quotas[i], remaining);
+      quotas[i] += extra;
+      remaining -= extra;
+    }
+    return representatives
+      .map((sentence, index) => Array.from(sentence).slice(0, quotas[index]).join(""))
+      .join(" ")
+      .trim();
+  }
+
+  // No recognizable product facts: retain source context, with a bounded long-sentence fallback.
+  const first = unique[0] ?? text.replace(/\s+/g, " ").trim();
+  return Array.from(first).slice(0, limit).join("").trim();
 }

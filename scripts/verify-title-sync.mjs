@@ -33,7 +33,7 @@ function mirrorFormatCharacterText(characters) {
 
 console.log("verify-title-sync:");
 
-await check("titleGeneratorBase: unified 80-char product title, IP × brand, ladder", () => {
+await check("titleGeneratorBase: unified 80-char product title, brand × IP, ladder", () => {
   const src = read("src/lib/contentGenerator/titleGeneratorBase.ts");
   assert.match(src, /OFFICIAL_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
   assert.match(src, /ENRICHED_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
@@ -127,7 +127,7 @@ await check("systemPromptBase: shared title contract, Chaochao skips conflicting
   assert.match(titlePrompt, /商品標題契約｜所有語氣共用/);
   assert.match(src, /SHARED_PRODUCT_TITLE_PROMPT/);
   assert.match(src, /多角色用「・」/);
-  assert.match(titlePrompt, /不要寫：生日禮物/);
+  assert.match(titlePrompt, /持續有效的商品特色/);
   assert.doesNotMatch(src, /官網會再收成 60/);
   assert.doesNotMatch(src, /最長不超過 60 字（後端規則引擎另有 80/);
   assert.doesNotMatch(src, /最長 75 字/);

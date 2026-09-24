@@ -29,6 +29,9 @@ if (process.env.NESTORY_TS_IMPORT !== "1") {
 const { finalizeProductTitle, parseTitleSegments, PRODUCT_TITLE_MAX_LENGTH } = await import(
   "../src/lib/contentGenerator/titleContract.ts"
 );
+const { stripChaochaoInstructionEcho } = await import(
+  "../src/lib/contentGenerator/chaochaoCopyGuard.ts"
+);
 const { parseCopySegments, COPY_SEGMENT_KEYS, COPY_OUTPUT_TRUNCATED_WARNING, generateWithParseRetry } = await import(
   "../src/lib/providers/copy.ts"
 );
@@ -82,7 +85,28 @@ check("all tones share one title prompt, Chaochao uses a short dedicated voice p
   assert.ok(chaochao.length < vinyl.length, `Chaochao prompt should be shorter than shared tones (${chaochao.length} vs ${vinyl.length})`);
 });
 
-check("title assembly: English brand, Chinese fallback, no brand, omit filler third", () => {
+check("title assembly: English brand from evidence, style split, Chinese fallback", () => {
+  assert.equal(
+    finalizeProductTitle({
+      titleIp: "七龍珠 DRAGON BALL Z",
+      titleBrand: "名創優品",
+      titleItem: "孫悟空 Q版萌粒鍵帽盲盒擺件",
+      brandEvidence: "名創優品 MINISO 聯名 DRAGON BALL",
+    }),
+    "MINISO × 七龍珠 DRAGON BALL Z | 孫悟空 盲盒擺件 | Q版萌粒鍵帽",
+  );
+  assert.equal(
+    finalizeProductTitle({
+      titleIp: "七龍珠 DRAGON BALL Z",
+      titleBrand: "名創優品",
+      titleItem: "孫悟空 Q版萌粒鍵帽盲盒擺件",
+    }),
+    "MINISO × 七龍珠 DRAGON BALL Z | 孫悟空 盲盒擺件 | Q版萌粒鍵帽",
+  );
+  assert.equal(
+    stripChaochaoInstructionEcho("商品資訊\n逐行整理 IP、角色、品項，以及本次資料可確認的尺寸、材質。\n尺寸：約11公分"),
+    "商品資訊\n尺寸：約11公分",
+  );
   assert.equal(finalizeProductTitle({ titleIp: "三麗鷗 Sanrio", titleBrand: "中文 TOP TOY", titleItem: "吊飾" }), "TOP TOY × 三麗鷗 Sanrio | 吊飾");
   assert.equal(finalizeProductTitle({ titleIp: "三麗鷗 Sanrio", titleBrand: "中文品牌", titleItem: "吊飾" }), "中文品牌 × 三麗鷗 Sanrio | 吊飾");
   assert.equal(

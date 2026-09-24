@@ -821,7 +821,12 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
 
   const previous = currentFieldText(field, input).trim();
   if (previous) {
-    lines.push("", `【這個欄位的上一版（請避免雷同、換角度重寫）】\n${previous}`);
+    lines.push(
+      "",
+      input.tone === CHAOCHAO_SALES_TONE
+        ? `【這個欄位的上一版】\n${previous}\n可換說法，必須保留已確認的角色、商品種類、造型、尺寸與材質。`
+        : `【這個欄位的上一版（請避免雷同、換角度重寫）】\n${previous}`,
+    );
   }
 
   // The remaining finalised fields, for consistency (excluding the one being rewritten).

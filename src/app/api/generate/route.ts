@@ -22,6 +22,7 @@ import {
   ENRICHED_TITLE_MAX_LENGTH,
   finalizeProductTitle,
 } from "@/lib/contentGenerator/titleGenerator";
+import { stripChaochaoInstructionEcho } from "@/lib/contentGenerator/chaochaoCopyGuard";
 import { buildGenerateSuccessStatusPatch } from "@/lib/drafts/generateSuccessStatus";
 import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
 import { buildMetaContentGapWarning, buildMetaDuplicateWarning } from "@/lib/contentGenerator/metaUniqueness";
@@ -118,6 +119,18 @@ function tidySpecLines(spec: string): string {
     lines.push(line);
   }
   return lines.join("\n");
+}
+
+function brandEvidenceText(draft: ProductDraft, ...extra: Array<string | null | undefined>): string {
+  return [
+    draft.taobao_title,
+    draft.original_title,
+    draft.note,
+    draft.spec_text,
+    draft.product_brand,
+    parseCachedWebSearchSummary(draft.web_search_cache),
+    ...extra,
+  ].filter((part): part is string => typeof part === "string" && part.trim().length > 0).join("\n");
 }
 
 /** A7: reuse draft-cached search text without spending another Tavily call. */
@@ -403,7 +416,9 @@ async function handleFieldRegen(params: {
   let historyContent: string;
 
   if (regenField === "product_highlights") {
-    const localized = finalizeCustomerTextList(raw.productHighlights);
+    const localized = finalizeCustomerTextList(raw.productHighlights)
+      .map((line) => tone === "潮巢導購版" ? stripChaochaoInstructionEcho(line) : line)
+      .filter((line) => line.trim().length > 0);
     update.product_highlights = localized;
     responseHighlights = localized;
     historyContent = localized.join("\n");
@@ -427,6 +442,7 @@ async function handleFieldRegen(params: {
         titleDiff: raw.titleDiff,
         detectedIpDisplay: formatListingIpDisplayNameFromContext(ipName, { ipCatalog: catalogRows }),
         detectedBrand: raw.titleBrand || draft.product_brand,
+        brandEvidence: brandEvidenceText(draft, raw.titleBrand, raw.enrichedTitle),
         maxLen: ENRICHED_TITLE_MAX_LENGTH,
       });
       historyContent = finalizeCustomerText(finalTitle);
@@ -445,6 +461,7 @@ async function handleFieldRegen(params: {
           : normalizeDescriptionToPlainText(appendScenarioBulletToDescription(value, scenarioTerms));
       }
       value = finalizeCustomerText(value);
+      if (tone === "潮巢導購版") value = stripChaochaoInstructionEcho(value);
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
       historyContent = value;
     }
@@ -919,6 +936,7 @@ export async function POST(request: NextRequest) {
       titleDiff: providerOutput.titleDiff,
       detectedIpDisplay: formatListingIpDisplayNameFromContext(detected.ip || draft.ip_name || "", displayContext),
       detectedBrand: effectiveProductBrand,
+      brandEvidence: brandEvidenceText(draft, providerOutput.titleBrand, providerOutput.enrichedTitle),
       maxLen: ENRICHED_TITLE_MAX_LENGTH,
     }),
   );
@@ -954,8 +972,18 @@ export async function POST(request: NextRequest) {
   localizedOutput.meta_description = finalizeCustomerText(
     localizedOutput.meta_description,
   );
-  const cleanedWhyWeChoseIt = finalizeCustomerText(providerOutput.whyWeChoseIt);
-  const cleanedProductHighlights = finalizeCustomerTextList(providerOutput.productHighlights);
+  let cleanedWhyWeChoseIt = finalizeCustomerText(providerOutput.whyWeChoseIt);
+  let cleanedProductHighlights = finalizeCustomerTextList(providerOutput.productHighlights);
+  if (generationTone === "潮巢導購版") {
+    localizedOutput.generated_description_html = stripChaochaoInstructionEcho(localizedOutput.generated_description_html);
+    localizedOutput.generated_faq_html = stripChaochaoInstructionEcho(localizedOutput.generated_faq_html);
+    localizedOutput.seo_title = stripChaochaoInstructionEcho(localizedOutput.seo_title);
+    localizedOutput.meta_description = stripChaochaoInstructionEcho(localizedOutput.meta_description);
+    cleanedWhyWeChoseIt = stripChaochaoInstructionEcho(cleanedWhyWeChoseIt);
+    cleanedProductHighlights = cleanedProductHighlights
+      .map((line) => stripChaochaoInstructionEcho(line))
+      .filter((line) => line.trim().length > 0);
+  }
 
   const forbiddenWarning = buildForbiddenTermWarning([
     localizedOutput.display_title,

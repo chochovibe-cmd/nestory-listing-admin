@@ -3,12 +3,16 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-23（潮巢導購回到 CC-6；CC-7 已撤回，工作分支 `agent/chaochao-tone-on-live`；正式站不含本包）
+更新基準：2026-09-24（潮巢欄位文案已推 Preview `b6fc4d7`；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：`4c66745`（CC-7 已 revert，程式等同 `14f27c4`）
+Git source 目前 HEAD：`b6fc4d7`（預覽分支 `agent/chaochao-tone-on-live`）
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
-現役 Preview（CC-6）：`https://nestory-listing-admin-2u2u3lg60-chocho-nestory.vercel.app`
-不要用：CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+現役 Preview：`https://nestory-listing-admin-git-agent-chaochao-6460e3-chocho-nestory.vercel.app`
+不要用：上一版 CC-6 `2u2u3lg60`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-09-24 潮巢欄位文案（Preview，Owner 實測中）
+
+本機規則已推上預覽，正式站沒換。測文案請用上面的現役 Preview。語氣好不好由 Owner 看生成結果；自動檢查已過，兩次模型對照還沒跑。詳細：`docs/audits/COPY-EDITORIAL-2026-09-24.md`。
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
 
 ## 2026-09-23 潮巢導購寫手拆層（CC-7）— Owner 不喜歡，已撤回

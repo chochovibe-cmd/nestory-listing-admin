@@ -83,7 +83,7 @@ export function preferEnglishBrandName(value: string | null | undefined): string
   const brand = cleanBrand(value);
   if (!brand) return "";
   if (/^[A-Za-z0-9][A-Za-z0-9 .&'’+\-]*$/.test(brand)) return brand;
-  const latinToken = brand.match(/\b[A-Za-z][A-Za-z0-9.&'’+\-]*(?:\s+[A-Za-z][A-Za-z0-9.&'’+\-]*)*/);
+  const latinToken = brand.match(/\b[A-Za-z][A-Za-z0-9.&'’+\-]{1,}\b/);
   if (latinToken && latinToken[0].length >= 2 && !/[\u3400-\u9fff]/.test(latinToken[0])) {
     return latinToken[0];
   }
@@ -97,7 +97,7 @@ export function assembleIpBrandSegment(ip: string, brand: string): string {
     const ipKey = ipText.toLocaleLowerCase();
     const brandKey = brandText.toLocaleLowerCase();
     if (ipKey.includes(brandKey) || brandKey.includes(ipKey)) return ipText;
-    return `${brandText} × ${ipText}`;
+    return `${ipText} × ${brandText}`;
   }
   return ipText || brandText;
 }

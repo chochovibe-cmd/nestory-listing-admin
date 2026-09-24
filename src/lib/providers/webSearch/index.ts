@@ -36,7 +36,7 @@ export function createWebSearchProvider(
 }
 
 /** NFKC + trim + collapse whitespace — cache key for D2-A. */
-const WEB_SEARCH_CACHE_VERSION = "adv8editorial1";
+const WEB_SEARCH_CACHE_VERSION = "adv8eq3";
 export function fingerprintWebSearchQuery(query: string): string {
   const normalized = query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
   return `${WEB_SEARCH_CACHE_VERSION}:${normalized}`;
@@ -114,7 +114,7 @@ function extractSupplementKeywords(
 /**
  * One combined query per generation (D1-A): cleaned title + light product-spec tail.
  * Title stays the trunk. Known IP/character/type hints, plus spec / note / vision
- * keywords, are appended so a sparse title still searches. Provider depth is unchanged.
+ * keywords, are appended so a sparse title still searches. Depth stays basic.
  */
 export function buildWebSearchQuery(input: {
   rawTitle: string;

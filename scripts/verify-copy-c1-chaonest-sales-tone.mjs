@@ -163,9 +163,9 @@ const chaochaoPrompt = read("src/lib/providers/chaochaoPrompt.ts");
 
 // Shared title contract lives in titlePrompt.ts and is used by every tone.
 assert.match(titlePrompt, /商品標題契約｜所有語氣共用/, "shared title contract missing");
-assert.match(titlePrompt, /品牌 × IP中文＋英文/, "IP-first brand-second title order missing");
-assert.match(titlePrompt, /Bandai × 三麗鷗 Sanrio \| 家族米粒公仔吊飾盲盒 \| 隨機單盒/, "owner title example missing");
-assert.match(titlePrompt, /資料只夠兩段時留空/, "filler 標準款 rule missing");
+assert.match(titlePrompt, /IP中文＋英文 × 品牌/, "IP-first brand-second title order missing");
+assert.match(titlePrompt, /三麗鷗 Sanrio × Bandai \| 家族米粒公仔吊飾盲盒 \| 隨機單盒/, "owner title example missing");
+assert.match(titlePrompt, /不要填「標準款」/, "filler 標準款 rule missing");
 assert.match(promptBase, /SHARED_PRODUCT_TITLE_PROMPT/, "base prompt no longer injects the shared title contract");
 assert.doesNotMatch(prompt, /COPY C5A 潮巢導購版 Title Writer/, "Chaochao-only title overlay returned");
 assert.doesNotMatch(prompt, /CHAOCHAO_BOSS_LAYOUT/, "stacked Chaochao layout overlay returned");
@@ -223,8 +223,8 @@ assert.match(finalizer, /localizeToTaiwanTraditionalText/u, "Taiwan Traditional 
 assert.match(finalizer, /stripCustomerSourceMarkers/u, "customer-facing source marker cleanup missing");
 
 assert.match(copy, /"潮巢導購版"/u, "seventh Chaochao tone disappeared");
-assert.match(chaochaoPrompt, /以純文字五段呈現/u, "Chaochao description must stay plain text");
-assert.match(chaochaoPrompt, /商品介紹/u, "Chaochao description no longer starts with 商品介紹");
+assert.match(chaochaoPrompt, /只輸出純文字，不要 HTML/u, "Chaochao description must stay plain text");
+assert.match(chaochaoPrompt, /第一行是「商品介紹」/u, "Chaochao description no longer starts with 商品介紹");
 assert.match(chaochaoPrompt, /收藏亮點/u);
 assert.match(chaochaoPrompt, /適合誰/u);
 assert.match(chaochaoPrompt, /商品資訊/u);
@@ -232,7 +232,7 @@ assert.match(chaochaoPrompt, /購買提醒/u);
 assert.match(chaochaoPrompt, /why_we_chose_it/u);
 assert.match(chaochaoPrompt, /product_highlights/u);
 assert.match(chaochaoPrompt, /把雨季變可愛一點/u, "owner rain-coat sample missing");
-assert.match(chaochaoPrompt, /滑雪服/u, "owner ski-suit highlight sample missing");
+assert.match(chaochaoPrompt, /滑雪服主題造型/u, "owner ski-suit highlight sample missing");
 assert.doesNotMatch(chaochaoPrompt, /先寫買家真正在意的痛點/u, "pain-point-only opener returned");
 assert.doesNotMatch(chaochaoPrompt, /不要停在「不僅是收藏品」/u, "empty-phrase ban pool returned");
 assert.doesNotMatch(prompt, /CHAOCHAO_VOICE_ANCHOR/u, "brand-manifesto voice overlay returned");

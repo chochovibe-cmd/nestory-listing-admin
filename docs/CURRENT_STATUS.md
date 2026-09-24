@@ -3,16 +3,20 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-24（潮巢欄位文案已推 Preview `b6fc4d7`；正式站不含本包）
+更新基準：2026-09-24（接手的標題三段已退回；預覽回到 `dee2ee7`；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：`b6fc4d7`（預覽分支 `agent/chaochao-tone-on-live`）
+Git source 目前 HEAD：預覽分支 `agent/chaochao-tone-on-live`，文案程式同 `dee2ee7`／`b6fc4d7`
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
 現役 Preview：`https://nestory-listing-admin-git-agent-chaochao-6460e3-chocho-nestory.vercel.app`
 不要用：上一版 CC-6 `2u2u3lg60`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
 
 ## 2026-09-24 潮巢欄位文案（Preview，Owner 實測中）
 
-本機規則已推上預覽，正式站沒換。測文案請用上面的現役 Preview。語氣好不好由 Owner 看生成結果；自動檢查已過，兩次模型對照還沒跑。詳細：`docs/audits/COPY-EDITORIAL-2026-09-24.md`。
+Owner 要求退回接手的那一步，等 Codex 確認。已 revert `130dea4`、`8490d51`。預覽網址不變，程式回到 Codex 未完成包 `b6fc4d7`。正式站沒換。重新生成視窗這次沒有改過程式。
+
+曾做過、已撤回的內容：標題拆成「品牌 × IP | 角色＋商品種類 | 造型」；名創優品／萬代／樂高直接用英文；正文說明句若被抄進欄位就刪掉。沒有加第二次模型呼叫。
+
+Owner 重測草稿 `8b3a323e-366d-4cde-a83e-ea4ab79dda35`（2026-09-24 13:34）已寫進資料庫，退程式不會自動改回舊文案。當時標題是 `MINISO × 七龍珠 DRAGON BALL Z | 孫悟空 擺件 | Q版萌粒鍵帽`，少了「盲盒」。問答仍寫成只有孫悟空。商品資訊有 PVC 與約 11 公分。重新生成視窗打開時語氣停在「黑膠文藝收藏感」。詳細仍見 `docs/audits/COPY-EDITORIAL-2026-09-24.md`。
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
 
 ## 2026-09-23 潮巢導購寫手拆層（CC-7）— Owner 不喜歡，已撤回

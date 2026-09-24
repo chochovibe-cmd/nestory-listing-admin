@@ -127,7 +127,7 @@ await check("systemPromptBase: shared title contract, Chaochao skips conflicting
   assert.match(titlePrompt, /商品標題契約｜所有語氣共用/);
   assert.match(src, /SHARED_PRODUCT_TITLE_PROMPT/);
   assert.match(src, /多角色用「・」/);
-  assert.match(titlePrompt, /造型或款式差異/);
+  assert.match(titlePrompt, /持續有效的商品特色/);
   assert.doesNotMatch(src, /官網會再收成 60/);
   assert.doesNotMatch(src, /最長不超過 60 字（後端規則引擎另有 80/);
   assert.doesNotMatch(src, /最長 75 字/);

@@ -7,7 +7,7 @@ export const CHAOCHAO_TONE_DESCRIPTION =
   "潮巢商品小編：自然、具體、有人味，可愛裡帶一點會心一笑的幽默";
 
 // Short, distinct voice cues: learn the observation and warmth, not a fixed skit.
-export const CHAOCHAO_OWNER_VOICE_SAMPLES = `【語氣參考｜只學觀察方式，不要抄這些商品】
+export const CHAOCHAO_OWNER_VOICE_SAMPLES = `【語氣參考｜觀察方式與溫度】
 雨衣吊飾：把雨季變可愛一點；黃色雨衣像一張小小封面照，掛在包上，灰濛天氣也留得住明亮心情。
 衝浪吊飾：曬傷造型把海邊度假感帶進日常，柔軟毛感像多了一位輕鬆的小旅伴。
 滑雪布丁狗：滑雪服把冬日氣氛帶出門；掛上小包，像在日常裡加了一段雪地散步。
@@ -28,20 +28,20 @@ const LENGTH_RULES: Record<CopyLength, { description: string; faq: string }> = {
   },
 };
 
-const CHAOCHAO_SEO_COVERAGE = "商品介紹、收藏亮點、SEO 標題、SEO 描述各自然寫入一次辨識詞：IP、角色、造型名、商品種類。保留具體規格，不複製同一句，不加同義詞堆疊。";
+const CHAOCHAO_SEO_COVERAGE = "自然融入正確 IP、角色、精準品項與款式差異等搜尋辨識詞，依句意帶入核心名詞。";
 
 const FIELD_RULES: Record<CopyRegenField, string> = {
   enriched_title: SHARED_PRODUCT_TITLE_PROMPT,
-  generated_description_html: "生成純文字五段。商品介紹從本品造型連到生活；收藏亮點寫已知事實和對買家的意義；適合誰寫具體的人與場合；商品資訊只條列已確認事實；購買提醒寫本品的照顧或選款條件。說明句不要原句輸出。",
-  generated_faq_html: "寫選款、使用、送禮或照顧的實際問題。先回答再補細節，每題可獨立閱讀。是盲盒就依資料說明隨機或款式範圍，盲盒不要寫成只能指定某一個角色。",
-  seo_title: "自然搜尋標題，辨識詞靠前：IP、角色、造型名、商品種類。最多 80 字。不要沿用商品標題的直線分段，品牌尾綴由後端加。",
-  meta_description: "1–2 句寫商品身份、一個具體特點和適用情境，含同一組辨識詞，最多 80 字。",
-  why_we_chose_it: "2–3 句寫這件商品的選品觀察，保留角色、造型或規格，不要用空泛的收藏價值代替事實。",
-  product_highlights: "3–5 條短句，每條一行、以「・」開頭。每條含一個已確認事實，例如造型、尺寸、材質或盲盒形式。",
+  generated_description_html: "生成五段正文：商品介紹用造型細節連到生活；收藏亮點說明可見事實及其對買家的意義；適合誰寫具體的人與場合；商品資訊完整整理本次已知事實；購買提醒提供適用的照顧或選款條件。",
+  generated_faq_html: "提出買家選款、使用、送禮或照顧時會遇到的具體問題，答案自然、先答後補，並提供正文尚未說清的資訊增量；每題獨立可讀。依本品資料換寫語氣例：「可以選角色嗎？本款可指定 Hello Kitty／大耳狗／美樂蒂，挑常陪你出門的那一位就好。」",
+  seo_title: "以商品常用名稱、IP／角色身份、精準品項和款式差異形成可讀標題，最多 80 字；品牌尾綴由後端加。例：「[IP／角色][品項]｜[款式差異]」。",
+  meta_description: "1–2 句說明商品身份、具體特點和適用情境，最多 80 字。依本品資料換寫語氣例：「Hello Kitty 黃雨衣絨毛吊飾，替通勤包添一點明亮，也適合送給喜歡 Kitty 的朋友。」",
+  why_we_chose_it: "2–3 句呈現具體選品觀察與潮巢重視的價值。依本品資料換寫語氣例：「雨衣把角色的可愛留住，也替通勤包添了一小塊晴天。這種每天帶得出門的造型，是我們選它的理由。」",
+  product_highlights: "3–5 條短句，從外觀、用途、收藏特色等不同角度掃讀；每條一行，以「・」開頭。例：「[已知造型]：讓[具體用途／風格]更有辨識度。」",
 };
 
 export function buildChaochaoDescriptionFormat(copyLength: CopyLength = "標準"): string {
-  return `【正文怎麼寫｜說明不要原句輸出】\n以純文字五段呈現，標題與次序固定，段落間空一行。\n商品介紹：${LENGTH_RULES[copyLength].description} 從這件商品看得見的造型寫到使用畫面。\n收藏亮點：每點先寫已知事實，再說對買家的意義；各點角度不同。\n適合誰：寫具體的人與場合。\n商品資訊：只條列本次已確認的 IP、角色、品項、尺寸、材質、款式、內容物與配件。\n購買提醒：寫這件商品適用的照顧或選款條件；有預購資訊時說明等待安排。`;
+  return `generated_description_html 以純文字五段呈現，標題與次序固定；段落間空一行。\n\n商品介紹\n${LENGTH_RULES[copyLength].description} 例如由黃色雨衣造型帶到雨天包袋的明亮心情。\n\n收藏亮點\n每點先寫看得見或已知的事實，再說它對買家的意義；各點角度有別，例如外觀、用途、收藏特色。\n\n適合誰\n寫具體的人與場合，例如通勤包搭配、角色收藏或生日送禮。\n\n商品資訊\n逐行整理 IP、角色、品項，以及本次資料可確認的尺寸、材質、款式、內容物與配件。\n\n購買提醒\n提供本商品適用的照顧方式或選款條件；有預購資訊時自然說明等待安排。`;
 }
 
 export function buildChaochaoFactUseBlock(): string {
@@ -49,15 +49,15 @@ export function buildChaochaoFactUseBlock(): string {
 }
 
 export function buildChaochaoMetafieldRules(): string {
-  return `why_we_chose_it：2–3 句選品觀察，保留本品的角色、造型或規格。\nproduct_highlights：3–5 條短句，每條一行、以「・」開頭，每條一個已確認事實。\nspec：台灣繁體，一項一行；整理輸入中可靠且完整的規格，款式規格保持一致，資料不足時寫「（無）」。`;
+  return `why_we_chose_it：2–3 句，具體選品觀察＋潮巢重視的價值。依本品資料換寫語氣例：「雨衣把角色的可愛留住，也替通勤包添了一小塊晴天。這種每天帶得出門的造型，是我們選它的理由。」\nproduct_highlights：3–5 條短而有差異的掃讀點，每條一行、以「・」開頭。\nspec：台灣繁體，一項一行；整理輸入中可靠且完整的規格，款式規格保持一致，資料不足時寫「（無）」。`;
 }
 
 export function buildChaochaoFaqRules(copyLength: CopyLength = "標準"): string {
-  return `【FAQ】\n${LENGTH_RULES[copyLength].faq}問題涵蓋選款、使用、送禮或照顧。格式：<h3><strong>問題</strong></h3><p>回答</p>。先回答，再補本品細節。是盲盒就依資料說明隨機或款式範圍，盲盒不要寫成只能指定某一個角色。`;
+  return `【FAQ】\n${LENGTH_RULES[copyLength].faq}問題增加選款、使用、送禮或照顧資訊。格式：<h3><strong>問題</strong></h3><p>回答</p>。先回答，再補充具體細節；每題獨立完整。依本品資料換寫語氣例：「可以選角色嗎？本款可指定 Hello Kitty／大耳狗／美樂蒂，挑常陪你出門的那一位就好。」`;
 }
 
 export function buildChaochaoSeoRules(): string {
-  return `【SEO】\nseo_title：自然搜尋標題，辨識詞靠前：IP、角色、造型名、商品種類。不要沿用商品標題的直線分段。最長 80 字；「｜潮巢 Nestory」由後端加。\nmeta_description：1–2 句，商品身份＋一個具體特點＋適用情境，含同一組辨識詞，最長 80 字。`;
+  return `【SEO】\nseo_title：商品常用名稱＋身份差異，清楚易讀，最長 80 字；「｜潮巢 Nestory」由後端加。\nmeta_description：商品身份＋有用特點＋適用情境，1–2 句，最長 80 字。依本品資料換寫語氣例：「Hello Kitty 黃雨衣絨毛吊飾，替通勤包添一點明亮，也適合送給喜歡 Kitty 的朋友。」`;
 }
 
 export function buildChaochaoVoiceChecklist(): string {
@@ -65,7 +65,7 @@ export function buildChaochaoVoiceChecklist(): string {
 }
 
 export function buildChaochaoFieldRegenDescriptionRule(copyLength: CopyLength = "標準"): string {
-  return `${buildChaochaoDescriptionFormat(copyLength)}\n可換說法，必須保留已確認的角色、商品種類、造型、尺寸與材質。`;
+  return `${buildChaochaoDescriptionFormat(copyLength)}\n挑一個與其他稿不同的商品觀察角度，五段各提供新資訊。`;
 }
 
 const CHAOCHAO_OPS = `【必要欄位與格式】
@@ -78,6 +78,7 @@ ${buildChaochaoFactUseBlock()}
 用詞採台灣繁體：手办→公仔／模型、钥匙扣→鑰匙圈、亚克力→壓克力、挂件→吊飾、毛绒→毛絨、三丽鸥→三麗鷗、宝贝→商品。
 ${buildChaochaoSeoRules()}
 ${buildChaochaoMetafieldRules()}
+欄位寫法例：why_we_chose_it「我們選入這款，是因為[造型觀察]帶來[收藏或日常價值]。」product_highlights「[已知造型]：讓[用途／風格]更有辨識度。」spec 逐項整理可靠規格。
 ${CHAOCHAO_SEO_COVERAGE}
 emoji 可自然使用 0–2 個；標題與 SEO 不使用。`;
 
@@ -97,15 +98,7 @@ CHO-...-...-...-001
 [[title_item]]
 [[title_diff]]
 [[generated_description_html]]
-商品介紹
-
-收藏亮點
-
-適合誰
-
-商品資訊
-
-購買提醒
+商品介紹、收藏亮點、適合誰、商品資訊、購買提醒，純文字
 [[generated_faq_html]]
 [[seo_title]]
 [[meta_description]]

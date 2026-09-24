@@ -49,7 +49,7 @@ assert.match(faqPrompts[2], /4 題/);
 const fieldCases = [
   ["generated_description_html", /純文字五段/, /選品觀察/],
   ["generated_faq_html", /選款、使用、送禮或照顧/, /product_highlights/],
-  ["seo_title", /造型名/, /generated_faq_html/],
+  ["seo_title", /款式差異/, /generated_faq_html/],
   ["meta_description", /適用情境/, /product_highlights/],
   ["why_we_chose_it", /選品觀察/, /generated_faq_html/],
   ["product_highlights", /3–5 條短句/, /seo_title/],
@@ -74,11 +74,6 @@ assert.equal(output.length, 18, "renderer contract must keep 18 markers");
 assert.match(full["標準"], /最多 80 字/);
 assert.match(full["標準"], /採用本次輸入或已確認資料中的事實/);
 assert.match(full["標準"], /供擷取商品資訊/);
-assert.match(full["標準"], /不要原句輸出/);
-assert.match(full["標準"], /盲盒不要寫成只能指定某一個角色/);
-assert.match(full["標準"], /MINISO × 七龍珠 DRAGON BALL Z \| 孫悟空 盲盒擺件 \| Q版萌粒鍵帽/);
-const outputBlock = full["標準"].slice(outputStart);
-assert.doesNotMatch(outputBlock, /逐行整理/);
 
 console.log(`verify-chaochao-editorial: all checks passed`);
 console.log(`full prompt chars: ${lengths.map((length) => `${length}=${full[length].length}`).join(", ")}`);

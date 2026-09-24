@@ -165,7 +165,7 @@ const chaochaoPrompt = read("src/lib/providers/chaochaoPrompt.ts");
 assert.match(titlePrompt, /商品標題契約｜所有語氣共用/, "shared title contract missing");
 assert.match(titlePrompt, /品牌 × IP中文＋英文/, "IP-first brand-second title order missing");
 assert.match(titlePrompt, /Bandai × 三麗鷗 Sanrio \| 家族米粒公仔吊飾盲盒 \| 隨機單盒/, "owner title example missing");
-assert.match(titlePrompt, /不要填標準款/, "filler 標準款 rule missing");
+assert.match(titlePrompt, /資料只夠兩段時留空/, "filler 標準款 rule missing");
 assert.match(promptBase, /SHARED_PRODUCT_TITLE_PROMPT/, "base prompt no longer injects the shared title contract");
 assert.doesNotMatch(prompt, /COPY C5A 潮巢導購版 Title Writer/, "Chaochao-only title overlay returned");
 assert.doesNotMatch(prompt, /CHAOCHAO_BOSS_LAYOUT/, "stacked Chaochao layout overlay returned");

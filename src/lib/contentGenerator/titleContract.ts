@@ -25,8 +25,6 @@ export type ProductTitleParts = {
   titleDiff?: string | null;
   detectedIpDisplay?: string | null;
   detectedBrand?: string | null;
-  /** Source title plus existing search text. English brand is used only when this evidence contains it. */
-  brandEvidence?: string | null;
   maxLen?: number;
 };
 
@@ -90,72 +88,6 @@ export function preferEnglishBrandName(value: string | null | undefined): string
     return latinToken[0];
   }
   return brand;
-}
-
-/** Official English names. Applied only when brandEvidence already contains that English token. */
-const CONFIRMED_ENGLISH_BRANDS: Array<{ zh: RegExp; en: string }> = [
-  { zh: /名創優品|名创优品/u, en: "MINISO" },
-  { zh: /萬代|万代/u, en: "Bandai" },
-  { zh: /樂高|乐高/u, en: "LEGO" },
-];
-
-export function resolveBrandWithEvidence(
-  brand: string | null | undefined,
-  evidence: string | null | undefined,
-): string {
-  const preferred = preferEnglishBrandName(brand);
-  if (!preferred) return "";
-  if (!/[\u3400-\u9fff]/u.test(preferred)) return preferred;
-  const blob = `${preferred}\n${evidence ?? ""}`;
-  for (const row of CONFIRMED_ENGLISH_BRANDS) {
-    if (row.zh.test(blob)) return row.en;
-  }
-  return preferred;
-}
-
-const PRODUCT_KIND_SUFFIXES = [
-  "公仔吊飾盲盒",
-  "盲盒擺件",
-  "吊飾盲盒",
-  "公仔吊飾",
-  "盲盒",
-  "擺件",
-  "吊飾",
-  "公仔",
-  "模型",
-  "手辦",
-  "立牌",
-  "徽章",
-  "娃娃",
-  "鑰匙圈",
-];
-
-const STYLE_TOKENS = ["黏土人", "Q版", "萌粒", "鍵帽", "盒玩", "軟膠", "景品", "坐姿", "站姿"];
-
-/** Move sculpt words out of「角色＋商品種類」and into the third segment. */
-export function splitStyleFromItem(item: string, diff: string): { item: string; diff: string } {
-  const text = normalizeText(item);
-  const existingDiff = normalizeText(diff);
-  const suffix = PRODUCT_KIND_SUFFIXES.find((kind) => text.endsWith(kind));
-  if (!suffix || text === suffix) return { item: text, diff: existingDiff };
-  let rest = text.slice(0, text.length - suffix.length).trim();
-  const styles: string[] = [];
-  for (let guard = 0; guard < STYLE_TOKENS.length + 2; guard += 1) {
-    let best: { index: number; token: string } | null = null;
-    for (const token of STYLE_TOKENS) {
-      const index = rest.indexOf(token);
-      if (index >= 0 && (!best || index < best.index)) best = { index, token };
-    }
-    if (!best) break;
-    styles.push(best.token);
-    rest = `${rest.slice(0, best.index)} ${rest.slice(best.index + best.token.length)}`.replace(/\s+/g, " ").trim();
-  }
-  if (styles.length === 0) return { item: text, diff: existingDiff };
-  const stylePhrase = styles.join("");
-  const nextDiff = !existingDiff || existingDiff.includes(stylePhrase)
-    ? existingDiff || stylePhrase
-    : `${stylePhrase} ${existingDiff}`;
-  return { item: [rest, suffix].filter(Boolean).join(" "), diff: nextDiff };
 }
 
 export function assembleIpBrandSegment(ip: string, brand: string): string {
@@ -299,16 +231,10 @@ export function finalizeProductTitle(parts: ProductTitleParts): string {
   const maxLen = parts.maxLen ?? PRODUCT_TITLE_MAX_LENGTH;
   const rawSegs = parseTitleSegments(parts.rawTitle);
   const ip = firstNonEmpty(parts.titleIp, parts.detectedIpDisplay);
-  const brand = resolveBrandWithEvidence(
-    firstNonEmpty(parts.titleBrand, parts.detectedBrand),
-    parts.brandEvidence,
-  );
+  const brand = preferEnglishBrandName(firstNonEmpty(parts.titleBrand, parts.detectedBrand));
   const structuredSeg1 = assembleIpBrandSegment(ip, brand);
-  const rawItem = firstNonEmpty(parts.titleItem, rawSegs.length >= 2 ? rawSegs[1] : "");
-  const rawDiff = scrubDiff(firstNonEmpty(parts.titleDiff, rawSegs.length >= 3 ? rawSegs.slice(2).join(" | ") : ""));
-  const split = splitStyleFromItem(rawItem, rawDiff);
-  const item = split.item;
-  const diff = scrubDiff(split.diff);
+  const item = firstNonEmpty(parts.titleItem, rawSegs.length >= 2 ? rawSegs[1] : "");
+  const diff = scrubDiff(firstNonEmpty(parts.titleDiff, rawSegs.length >= 3 ? rawSegs.slice(2).join(" | ") : ""));
 
   let assembled = "";
   if (structuredSeg1) {

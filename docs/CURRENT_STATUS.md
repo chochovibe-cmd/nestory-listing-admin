@@ -3,33 +3,42 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-24（潮巢導購優化＋重生彈窗 portal；正式站不含本包）
+更新基準：2026-09-24（潮巢導購優化 `0410016`＋重生彈窗 portal `89fe098`；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source：預覽分支 `agent/chaochao-tone-on-live`
+Git source：預覽分支 `agent/chaochao-tone-on-live` HEAD `89fe098`
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
 現役 Preview：`https://nestory-listing-admin-git-agent-chaochao-6460e3-chocho-nestory.vercel.app`
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-09-24 本 session 兩包（都已 push 預覽分支，正式站沒換）
+
+1. **文案優化** `0410016`：Downloads 實作清單對齊 CC-6。維持潮巢五段；只改潮巢 prompt 具體度／文青可愛／示範句；看圖可寫畫面感、數字不猜。E 知識包、F 角色搜尋沒做。詳細：`docs/audits/COPY-CHAOCHAO-SALES-OPT-2026-09-24.md`。
+2. **重生彈窗** `89fe098`：Owner 截圖第一張卡被「修改方向」蓋住。文案包沒動版面；舊的 `RegenCopyModal` 被卡片 overflow／hover transform 關住。已比照文案預覽 portal 到 body。詳細：`docs/audits/COPY-REGEN-MODAL-PORTAL-2026-09-24.md`。
+
+E／F 當日建議（尚未拍板）：E 先補常賣卻沒包的 IP，不要一次寫 80 個；F 維持有包就不搜角色世界觀，不要每次都搜。
 
 ## 2026-09-24 重生彈窗被卡在第一張卡片裡
 
 Owner 截圖：結果列第一張卡片裡出現語氣下拉與「修改方向」，標題／按鈕被切掉，下面卡片看起來正常。
 
-這輪文案優化沒有動 CSS／ResultCard。原因是舊的：`RegenCopyModal` 畫在卡片內部，卡片有 `overflow: hidden` 和 hover `transform`，`position: fixed` 被關在卡片裡。文案預覽以前已經用 portal 修好。重生窗現在比照 `LockedCopyPreview` 掛到 `document.body`。語氣、欄位、生成邏輯沒改。
+這輪文案優化沒有動 CSS／ResultCard。原因是舊的：`RegenCopyModal` 畫在卡片內部，卡片有 `overflow: hidden` 和 hover `transform`，`position: fixed` 被關在卡片裡。文案預覽以前已經用 portal 修好（UX-B2-P01 `341795e`）。重生窗 commit `89fe098` 比照 `LockedCopyPreview` 掛到 `document.body`。語氣、欄位、生成邏輯沒改。卡片內「發布／匯出」兩個 modal 尚未 portal。
 
-## 2026-09-24 潮巢導購文案優化（對齊實作清單，本機）
+## 2026-09-24 潮巢導購文案優化（對齊實作清單）
 
 Downloads 清單是舊 `systemPromptBase.ts` 行號。現役潮巢已走獨立五段 prompt，所以：
 
 - A1：維持商品介紹／收藏亮點／適合誰／商品資訊／購買提醒，不改回導購小標三段。
 - B／C：只改潮巢 prompt（文青可愛、示範句、選品理由／賣點／FAQ 要換掉商品名就不成立）。
 - D：看圖可寫畫面感，數字仍不亂猜；模型仍是 gpt-4o-mini。
-- E 知識包盤點、F 有知識包就跳過搜尋：本包沒做，等拍板。
+- E 知識包盤點、F 有知識包就跳過搜尋：本包沒做；建議已寫進 audit，等拍板。
 
-詳細：`docs/audits/COPY-CHAOCHAO-SALES-OPT-2026-09-24.md`。未 push、未部署正式站。
+commit `0410016` 已 push 預覽分支。未部署正式站。詳細：`docs/audits/COPY-CHAOCHAO-SALES-OPT-2026-09-24.md`。
 
 ## 2026-09-24 潮巢文案未完成包已從預覽撤回
 
-Owner 要求退回 Codex 還沒做完的那一層，不是只退接手的後一步。已 revert `b6fc4d7`。正式站沒換。重新生成視窗這次沒有改過程式。
+Owner 要求退回 Codex 還沒做完的那一層，不是只退接手的後一步。已 revert `b6fc4d7`。正式站沒換。當時重生視窗程式還沒改。
+
+同日稍後 Owner 截圖第一張卡被重生窗蓋住，才在 `89fe098` 把 `RegenCopyModal` portal 到 body。不要把上面「當時沒改重生視窗」讀成現況。
 
 `8490d51` 的標題三段也已撤回。Owner 仍要的標題例句是 `MINISO × 七龍珠 DRAGON BALL Z | 孫悟空 盲盒擺件 | Q版萌粒鍵帽`，等 Codex 確認再做。
 
@@ -660,6 +669,11 @@ UI / regression：
 - `docs/audits/RELEASE-HEALTH-AUDIT-2026-08-20.md`
 - `docs/audits/PRE-SHOPIFY-UI-FINAL-2026-08-21.md`（D3.5 latest UI freeze）
 - `docs/audits/RELEASE-TRUTH-RECONCILE-2026-09-01.md`（本輪 canonical release truth）
+- `docs/audits/COPY-CHAOCHAO-SALES-OPT-2026-09-24.md`（2026-09-24 潮巢清單對齊 CC-6；`0410016`）
+- `docs/audits/COPY-REGEN-MODAL-PORTAL-2026-09-24.md`（重生窗 portal；`89fe098`）
+- `docs/audits/COPY-EDITORIAL-2026-09-24.md`（未完成包，已撤回，不是現役）
+- `docs/audits/COPY-CHAOCHAO-REWRITE-2026-09-23.md`
+- `docs/audits/COPY-CHAOCHAO-WRITER-2026-09-23.md`（CC-7，已撤回）
 
 DB / security：
 

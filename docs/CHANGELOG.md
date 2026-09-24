@@ -324,3 +324,20 @@ reconcile 已成 tracked migration。未來若需回復，不能只手動跑舊 
 - Temporary R3 patch-runner workflows were removed after source was verified.
 - No uploader, Variant, Supabase, Shopify, API, role, archive-semantic,
   long-press timing, or swipe-math changes.
+
+## 2026-09-24 — Chaochao copy specificity + regen modal portal
+
+狀態：**已 push `agent/chaochao-tone-on-live`；正式站未換。**
+
+### 文案優化 `0410016`
+- Downloads 實作清單對齊現役 CC-6 五段，不改回導購小標三段。
+- 只改潮巢 `chaochaoPrompt.ts`：文青可愛、示範句、選品理由／賣點／FAQ／描述要「換掉商品名就不成立」。
+- `visionProvider.ts`：外觀可寫畫面感，300–500 字，`max_tokens` 1000；數字仍不猜。模型仍 gpt-4o-mini。
+- E 知識包、F 角色搜尋未做；建議寫在 `docs/audits/COPY-CHAOCHAO-SALES-OPT-2026-09-24.md`。
+
+### 重生彈窗 `89fe098`
+- Owner 截圖：重生窗被關在第一張結果卡裡。
+- `RegenCopyModal` 比照 UX-B2-P01 `LockedCopyPreview` portal 到 `document.body`。
+- 未改卡片排版、篩選、核准、生成 API。卡片內 Station3／Export modal 尚未 portal。
+
+詳細：`docs/audits/COPY-CHAOCHAO-SALES-OPT-2026-09-24.md`、`docs/audits/COPY-REGEN-MODAL-PORTAL-2026-09-24.md`。

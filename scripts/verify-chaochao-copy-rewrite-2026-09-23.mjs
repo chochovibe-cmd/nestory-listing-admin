@@ -79,6 +79,15 @@ check("all tones share one title prompt, Chaochao uses a short dedicated voice p
   assert.doesNotMatch(chaochao, /像懂收藏的選物店主/);
   assert.doesNotMatch(chaochao, /不要停在「不僅是收藏品」/);
   assert.match(chaochao, /商品小編/);
+  assert.match(chaochao, /文青可愛/);
+  assert.match(chaochao, /粉絲才會點頭/);
+  assert.match(chaochao, /至少 1 題是這個角色／IP 粉絲才會問/);
+  assert.match(chaochao, /這哪買的/);
+  assert.doesNotMatch(chaochao, /痛點導購/);
+  assert.doesNotMatch(chaochao, /商品介紹＋收藏亮點＋導購小標三段/);
+  assert.match(vinyl, /為什麼這個商品值得在潮巢出現/);
+  assert.doesNotMatch(vinyl, /連小八慵懶歪頭/);
+  assert.doesNotMatch(vinyl, /粉絲才會點頭/);
   assert.ok(chaochao.length < vinyl.length, `Chaochao prompt should be shorter than shared tones (${chaochao.length} vs ${vinyl.length})`);
 });
 

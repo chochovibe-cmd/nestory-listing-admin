@@ -251,6 +251,11 @@ check("vision DESCRIBE + RECOGNIZE both expanded", () => {
       `${name} missing promo/gift family`,
     );
   }
+  assert.match(describeBlock, /畫面感/);
+  assert.match(describeBlock, /300-500 字/);
+  assert.match(describeBlock, /絕對不要憑外觀猜測/);
+  assert.doesNotMatch(describeBlock, /不要形容詞堆疊/);
+  assert.match(vision, /max_tokens: 1000/);
 });
 
 // --- titleGenerator / UI untouched (source-level smoke) ---

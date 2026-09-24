@@ -235,6 +235,10 @@ assert.match(chaochaoPrompt, /把雨季變可愛一點/u, "owner rain-coat sampl
 assert.match(chaochaoPrompt, /滑雪服主題造型/u, "owner ski-suit highlight sample missing");
 assert.doesNotMatch(chaochaoPrompt, /先寫買家真正在意的痛點/u, "pain-point-only opener returned");
 assert.doesNotMatch(chaochaoPrompt, /不要停在「不僅是收藏品」/u, "empty-phrase ban pool returned");
+assert.match(chaochaoPrompt, /文青可愛/u, "Chaochao tone description lost 文青可愛");
+assert.match(chaochaoPrompt, /粉絲才會點頭/u, "Chaochao description lost IP-fan resonance rule");
+assert.match(chaochaoPrompt, /換成別件就問不出來/u, "Chaochao FAQ lost IP-specific question rule");
+assert.doesNotMatch(chaochaoPrompt, /商品介紹＋收藏亮點＋導購小標三段/u, "legacy 3-section format instruction returned");
 assert.doesNotMatch(prompt, /CHAOCHAO_VOICE_ANCHOR/u, "brand-manifesto voice overlay returned");
 assert.match(promptBase, /buildChaochaoCopySystemPrompt/u, "Chaochao is not assembled from the dedicated contract");
 assert.match(promptBase, /if \(tone === CHAOCHAO_SALES_TONE\) \{\s*return buildChaochaoCopySystemPrompt/u,

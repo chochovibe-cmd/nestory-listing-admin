@@ -3,12 +3,23 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-24（預覽文案退回 Codex 動手前的 CC-6 `368e1dc`；正式站不含本包）
+更新基準：2026-09-24（潮巢導購優化本機包；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source 目前 HEAD：預覽分支 `agent/chaochao-tone-on-live`，文案程式同 `368e1dc`／`4c66745`／`14f27c4`
+Git source：預覽分支 `agent/chaochao-tone-on-live`
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
-現役 Preview：`https://nestory-listing-admin-git-agent-chaochao-6460e3-chocho-nestory.vercel.app`
+現役 Preview：`https://nestory-listing-admin-git-agent-chaochao-6460e3-chocho-nestory.vercel.app`（尚未含本包，需另推）
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-09-24 潮巢導購文案優化（對齊實作清單，本機）
+
+Downloads 清單是舊 `systemPromptBase.ts` 行號。現役潮巢已走獨立五段 prompt，所以：
+
+- A1：維持商品介紹／收藏亮點／適合誰／商品資訊／購買提醒，不改回導購小標三段。
+- B／C：只改潮巢 prompt（文青可愛、示範句、選品理由／賣點／FAQ 要換掉商品名就不成立）。
+- D：看圖可寫畫面感，數字仍不亂猜；模型仍是 gpt-4o-mini。
+- E 知識包盤點、F 有知識包就跳過搜尋：本包沒做，等拍板。
+
+詳細：`docs/audits/COPY-CHAOCHAO-SALES-OPT-2026-09-24.md`。未 push、未部署正式站。
 
 ## 2026-09-24 潮巢文案未完成包已從預覽撤回
 

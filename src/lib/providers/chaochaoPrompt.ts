@@ -4,7 +4,7 @@ import type { CopyLength, CopyRegenField } from "./copy";
 import { SHARED_PRODUCT_TITLE_PROMPT, SHARED_PRODUCT_TITLE_REGEN_RULE } from "./titlePrompt";
 
 export const CHAOCHAO_TONE_DESCRIPTION =
-  "潮巢商品小編：自然、具體、有人味，可愛裡帶一點會心一笑的幽默";
+  "潮巢商品小編：自然、具體、有人味；文青可愛裡帶一點會心一笑的幽默，講清楚這件為什麼好，但不叫賣、不空泛";
 
 export const CHAOCHAO_OWNER_VOICE_SAMPLES = `【寫法樣板｜只學觀察方式與語氣，商品事實以本次輸入為準】
 
@@ -38,13 +38,15 @@ export const CHAOCHAO_OWNER_VOICE_SAMPLES = `【寫法樣板｜只學觀察方�
 ・商品顏色可能因螢幕顯示與拍攝光源而略有差異，請以實物為準`;
 
 export function buildChaochaoDescriptionFormat(): string {
-  return `generated_description_html 只輸出純文字，不要 HTML。第一行是「商品介紹」。段落之間空一行。
+  return `generated_description_html 只輸出純文字，不要 HTML、不要「◈」標題。第一行是「商品介紹」。段落之間空一行。
 
 商品介紹
-先讓人看見這件商品：一個具體造型或場景，再接到可以帶出門、擺著或送人的生活畫面。篇幅跟上面樣板差不多。
+先讓人看見這件商品：一個具體造型或場景，再接到可以帶出門、擺著或送人的生活畫面。篇幅跟上面樣板差不多。每次換一個切入角度。
+這一段或收藏亮點至少有一句，是這個角色／IP 粉絲才會點頭的心理或使用畫面；不能整篇只剩物理特徵。
 
 收藏亮點
 ・3–5 點。每一點先寫一個看得見的細節，接著說它怎麼用、怎麼搭配、為什麼想帶出門。
+・至少一點換成別的角色就不成立。
 
 適合誰
 ・2–3 種對得上自己或要送禮的人，寫具體場合。
@@ -53,7 +55,7 @@ export function buildChaochaoDescriptionFormat(): string {
 ・IP、角色、品項，以及本次資料裡有的尺寸、材質、款式、內容物、配件。一項一行。
 
 購買提醒
-・依這件材質或型態寫照顧方式，例如毛絨拍鬆、壓克力防刮。預購就自然帶到貨需要等待。`;
+・依這件材質或型態寫照顧方式，例如毛絨拍鬆、壓克力防刮。預購就自然帶到貨需要等待。不要在這裡寫售價。`;
 }
 
 export function buildChaochaoFactUseBlock(): string {
@@ -65,15 +67,28 @@ export function buildChaochaoFactUseBlock(): string {
 生活情境、搭配、幽默從這件商品長出來。`;
 }
 
+export function buildChaochaoWhyRule(): string {
+  return `why_we_chose_it：2–3 句。用一個只有這件才成立的觀察，說潮巢為什麼放進店裡。
+可以寫角色神韻、粉絲會心動的日常儀式，或這件解決了哪種收藏心情。
+換掉商品名稱還說得通，就再寫一次、寫得更貼這件。
+語感參考（不要照抄）：「連小八慵懶歪頭的神韻都捕捉到了，這種細節，是潮巢挑選品的門檻。」`;
+}
+
+export function buildChaochaoHighlightsRule(): string {
+  return `product_highlights：3–5 條短句，每條一行、用「・」開頭，讓人快速掃讀。三個面向盡量都帶到：看得見的細節、怎麼用、跟同類差在哪或收藏心情。不要五點都在講同一種材質。
+換成別件商品還全部成立，就還沒寫到這一件。`;
+}
+
 export function buildChaochaoMetafieldRules(): string {
-  return `why_we_chose_it：用一個具體觀察，說潮巢為什麼把這件放進店裡，2–3 句。
-product_highlights：3–5 條短句，讓人快速掃讀主要差異，每條一行、用「・」開頭。
+  return `${buildChaochaoWhyRule()}
+${buildChaochaoHighlightsRule()}
 spec：一項一行、台灣繁中。款式裡有的規格要對得上。沒有可寫的規格時寫「（無）」。`;
 }
 
 export function buildChaochaoFaqRules(): string {
   return `【FAQ】
 3–5 題，寫會影響選款、使用、送禮或照顧的問題。
+至少 1 題是這個角色／IP 粉絲才會問、換成別件就問不出來的。
 每題 <h3><strong>問題</strong></h3><p>回答</p>。先回答，再補細節；單獨看也完整。`;
 }
 
@@ -155,6 +170,10 @@ export function buildChaochaoCopySystemPrompt(
 ${CHAOCHAO_OWNER_VOICE_SAMPLES}
 
 請用同樣的觀察方式寫這次的商品：先看見一個具體細節，再接到生活裡怎麼用。每一段給新的資訊。
+句子可以同時具體又有一點可愛幽默，例如（不要照抄）：
+「這款小八吊飾摸起來比想像中還軟，掛在包包上剛好是會被朋友問「這哪買的」那種存在感。」
+「不是隨便一款收納袋——側邊縫線做得很扎實，裝了平板出門也不用擔心角撞到。」
+「如果你也是看到角落生物就會不自覺笑出來的人，這款絨毛玩偶大概會在你桌上待很久。」
 
 ${buildChaochaoDescriptionFormat()}
 ${secondhandSection}
@@ -172,8 +191,8 @@ const CHAOCHAO_REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
   generated_faq_html: buildChaochaoFaqRules(),
   seo_title: buildChaochaoSeoRules(),
   meta_description: buildChaochaoSeoRules(),
-  why_we_chose_it: buildChaochaoMetafieldRules(),
-  product_highlights: buildChaochaoMetafieldRules(),
+  why_we_chose_it: buildChaochaoWhyRule(),
+  product_highlights: buildChaochaoHighlightsRule(),
 };
 
 export function buildChaochaoFieldRegenSystemPrompt(

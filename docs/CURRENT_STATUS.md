@@ -3,12 +3,18 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-24（潮巢導購優化本機包；正式站不含本包）
+更新基準：2026-09-24（潮巢導購優化＋重生彈窗 portal；正式站不含本包）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source：預覽分支 `agent/chaochao-tone-on-live`
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
-現役 Preview：`https://nestory-listing-admin-git-agent-chaochao-6460e3-chocho-nestory.vercel.app`（尚未含本包，需另推）
+現役 Preview：`https://nestory-listing-admin-git-agent-chaochao-6460e3-chocho-nestory.vercel.app`
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-09-24 重生彈窗被卡在第一張卡片裡
+
+Owner 截圖：結果列第一張卡片裡出現語氣下拉與「修改方向」，標題／按鈕被切掉，下面卡片看起來正常。
+
+這輪文案優化沒有動 CSS／ResultCard。原因是舊的：`RegenCopyModal` 畫在卡片內部，卡片有 `overflow: hidden` 和 hover `transform`，`position: fixed` 被關在卡片裡。文案預覽以前已經用 portal 修好。重生窗現在比照 `LockedCopyPreview` 掛到 `document.body`。語氣、欄位、生成邏輯沒改。
 
 ## 2026-09-24 潮巢導購文案優化（對齊實作清單，本機）
 

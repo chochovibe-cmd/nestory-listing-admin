@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { COPY_TONES, type CopyTone } from "@/lib/providers/copy";
 
 /**
  * R2 §4: 重新生成彈窗 — 語氣／修改方向／預估成本。
  * Shell matches ApproveSummaryModal (modal-overlay / modal-box / mobile drawer).
  * UX-I T54/T57: modal-hdr shell + Esc (busy 禁關).
+ * Portal to body like LockedCopyPreview: ResultCard has overflow + hover
+ * transform, which would otherwise trap position:fixed inside the first card.
  */
 export function RegenCopyModal({
   open,
@@ -51,8 +54,9 @@ export function RegenCopyModal({
   }, [open]);
 
   if (!open) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
       className="modal-overlay open"
       onClick={(event) => {
@@ -127,6 +131,7 @@ export function RegenCopyModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

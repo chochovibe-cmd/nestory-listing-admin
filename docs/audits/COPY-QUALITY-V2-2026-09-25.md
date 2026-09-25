@@ -1,5 +1,15 @@
 # Nestory Copy Quality V2 — 2026-09-25 handoff
 
+## 2026-09-25 Preview release checkpoint
+
+- Owner explicitly authorized pushing the branch, deploying Preview, and comparing real model output on 2026-09-25. Do not interpret this as approval to merge to production or publish to Shopify.
+- GitHub branch `codex/copy-quality-v2` remote commit `b0a4f0457afebd022864738f367e40067d1a864e` has tree `b018b021a04f7afcd27abba65cf892ea0c632ccb`, identical to locally verified `386c272^{tree}`. The differing commit IDs are due to connector creation of the same tree.
+- Vercel Preview `dpl_A8vXHRxYDrUVwYjiS9E5TPCyirDy` is `READY` at `https://nestory-listing-admin-git-codex-copy-quality-v2-chocho-nestory.vercel.app`, commit `b0a4f045`. The earlier comparison Preview is `dpl_6pc3PeLBG1L6Z2n7usZoWhQwYk2p`, commit `5203e4a`. Production remains on `a3b3c57`.
+- Draft PR #11 targets `agent/chaochao-tone-on-live`: `https://github.com/chochovibe-cmd/nestory-listing-admin/pull/11`. Keep it draft until real-model comparison and owner review.
+- The Preview app was opened and the team login worked on the new branch. Both Previews share the production Supabase database, so compare using isolated test drafts and do not overwrite existing products.
+- Browser test on new Preview: an isolated draft `c4cbd56d-e09e-4795-bf39-848d7b71be5b` was created from the Dragon Ball seller title and manually entered seller params. The form reached `pending_copy`, then a structured `{code,message}` response triggered React error #31 before any `generation_runs` entry or completed copy. The test draft was archived; no Shopify action occurred. Vercel runtime logs for the deployment showed no request, and a protected `/api/generate` fetch returned a Vercel SSO redirect. This is consistent with Preview deployment protection intercepting the API, but the exact POST response was not captured; do not claim that the Writer ran or that the copy improved. A follow-up UI guard turns structured API errors into a string for full and field regeneration so this failure cannot crash the progress card.
+- Old Preview team login was not established in this session. No same-input real-model A/B was completed. Use an access method that authorizes `/api/generate` POST on both Preview deployments, then repeat with isolated test drafts.
+
 ## Authority and release state
 
 - Owner request: fix the causes of drifting/generic Chaochao copy and leave a durable, model-independent handoff. Preserve the owner-approved five-section Chaochao layout and latest 2026-09-24 Preview behavior.

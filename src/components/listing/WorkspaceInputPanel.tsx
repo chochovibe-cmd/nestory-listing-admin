@@ -1915,7 +1915,14 @@ export function WorkspaceInputPanel({
     setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
 
     if (!response.ok) {
-      const errorText = payload.error ?? "生成失敗";
+      // Protected Preview gateways may return { error: { code, message } }.
+      // Keep the progress card renderable even when the response is not ours.
+      const responseError = payload.error;
+      const errorText = typeof responseError === "string"
+        ? responseError
+        : responseError && typeof responseError.message === "string"
+          ? responseError.message
+          : `生成失敗（HTTP ${response.status}）`;
       setFlowPhase("fill");
       showToast(errorText + "，可以到右側卡片按「重新生成」再試一次", "error");
       emitProgress(stepModel(cardTitle, ["done", step2, "error", "pending"], errorText, timingNote));

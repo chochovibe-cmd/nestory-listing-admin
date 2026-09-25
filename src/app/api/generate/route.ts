@@ -67,6 +67,9 @@ import {
   finalizeCustomerTextList,
 } from "@/lib/providers/customerFacingFinalizer";
 import { resolveCopyTone } from "@/lib/providers/systemPrompt";
+import { buildCaptureEvidence, captureVariantSummary, originalCaptureSpec } from "@/lib/providers/captureEvidence";
+import { copyRuntimeVersion } from "@/lib/providers/copyVersion";
+import { reviewChaochaoCopy } from "@/lib/providers/copyQuality";
 import { resolveCanonicalCharacterName } from "@/lib/characters/resolveCanonicalCharacter";
 import {
   mergeWebSearchCacheLayers,
@@ -106,6 +109,13 @@ function uniqueMessages(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function persistentCaptureWarnings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string =>
+        typeof item === "string" && /款式(?:補寫|寫入|組合).*失敗|多維規格|raw_capture.*截斷|擷取款式中/.test(item))
+    : [];
+}
+
 function tidySpecLines(spec: string): string {
   const seen = new Set<string>();
   const lines: string[] = [];
@@ -118,13 +128,6 @@ function tidySpecLines(spec: string): string {
     lines.push(line);
   }
   return lines.join("\n");
-}
-
-/** A7: reuse draft-cached search text without spending another Tavily call. */
-function parseCachedWebSearchSummary(raw: unknown): string | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const summary = (raw as { summary?: unknown }).summary;
-  return typeof summary === "string" && summary.trim() ? summary : undefined;
 }
 
 type StoredVariantEvidenceRow = {
@@ -326,6 +329,7 @@ async function handleFieldRegen(params: {
   scenarioKeywordMap: Record<string, string[]>;
   ipToneMap: ReturnType<typeof mergeIpToneMap>;
   clientCurrentValues?: unknown;
+  useWebSearch: boolean;
 }): Promise<Response> {
   const {
     regenField,
@@ -341,8 +345,10 @@ async function handleFieldRegen(params: {
     scenarioKeywordMap,
     ipToneMap,
     clientCurrentValues,
+    useWebSearch,
   } = params;
   const currentValues = mergeRegenCurrentValues(draft, clientCurrentValues);
+  const runStartedAt = new Date().toISOString();
   const scenarioTerms = pickScenarioKeywords(
     [normalizeProductTypeForDisplay(draft.product_type ?? "")],
     scenarioKeywordMap,
@@ -362,6 +368,15 @@ async function handleFieldRegen(params: {
     regenPackBlock?.block ??
     (draft.ip_name ? IP_BACKGROUND_NEUTRAL_INSTRUCTION : undefined);
 
+  // Regeneration must revalidate query/version/TTL instead of replaying any old summary.
+  const search = await resolveWebSearchForGenerate({
+    useWebSearch,
+    rawTitle: draft.taobao_title ?? draft.original_title ?? "",
+    specText: originalCaptureSpec(draft.raw_capture),
+    note: draft.note,
+    existingCache: draft.web_search_cache,
+  });
+
   let raw: CopyProviderOutput;
   try {
     raw = await COPY_PROVIDERS[providerKey].generate({
@@ -374,7 +389,8 @@ async function handleFieldRegen(params: {
       note: draft.note,
       imageDescription: draft.image_description ?? undefined,
       specText: draft.spec_text ?? undefined,
-      webSearchSummary: parseCachedWebSearchSummary(draft.web_search_cache),
+      captureEvidence: buildCaptureEvidence(draft.raw_capture),
+      webSearchSummary: search.result?.summary,
       ipKnowledgePromptBlock: regenIpKnowledgePromptBlock,
       tone,
       copyLength,
@@ -399,6 +415,7 @@ async function handleFieldRegen(params: {
   }
 
   const update: Record<string, unknown> = {};
+  update.generation_rule_version = copyRuntimeVersion();
   let responseHighlights: string[] | undefined;
   let historyContent: string;
 
@@ -471,6 +488,11 @@ async function handleFieldRegen(params: {
   if (updateError) {
     return Response.json({ error: updateError.message }, { status: 500 });
   }
+  if (search.cacheToPersist) {
+    await serviceSupabase.from("product_drafts")
+      .update({ web_search_cache: mergeWebSearchCacheLayers({ existing: draft.web_search_cache, productCache: search.cacheToPersist }) })
+      .eq("id", draftId);
+  }
 
   if (historyContent.trim()) {
     await serviceSupabase.from("generation_history").insert({
@@ -482,10 +504,19 @@ async function handleFieldRegen(params: {
       created_by: userId,
     });
   }
+  await serviceSupabase.from("generation_runs").insert({
+    draft_id: draftId, mode: "api_llm", provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
+    rule_version: copyRuntimeVersion(), model: raw.model, status: "completed", created_by: userId,
+    started_at: runStartedAt, completed_at: new Date().toISOString(),
+    input_payload: { field: regenField, tone, copyLength, sellerEvidence: buildCaptureEvidence(draft.raw_capture), searchQuery: search.result?.query ?? null, searchFromCache: search.result?.fromCache ?? null },
+    output_payload: { raw: getCopyFieldValue(raw, regenField), final: historyContent },
+    cost_estimate: raw.usage?.costUsd ?? null,
+  });
 
   return Response.json({
     ok: true,
     regeneratedField: regenField,
+    runtimeVersion: copyRuntimeVersion(),
     result: {
       field: regenField,
       value: regenField === "product_highlights" ? responseHighlights : historyContent,
@@ -589,6 +620,7 @@ export async function POST(request: NextRequest) {
   }
 
   const draft = draftRow as ProductDraft;
+  const runStartedAt = new Date().toISOString();
   const serviceSupabase = createServiceSupabaseClient();
 
   // COPY C5A: ResultCard whole regen / single-field regen do not send form variants.
@@ -604,6 +636,7 @@ export async function POST(request: NextRequest) {
       variantSummary = buildStoredVariantSummary(storedVariantRows as StoredVariantEvidenceRow[]);
     }
   }
+  if (!variantSummary) variantSummary = captureVariantSummary(draft.raw_capture);
 
   const [scenarioSettingsResult, ipToneSettingsResult] = await Promise.all([
     serviceSupabase
@@ -644,6 +677,7 @@ export async function POST(request: NextRequest) {
       scenarioKeywordMap,
       ipToneMap,
       clientCurrentValues: body.currentValues,
+      useWebSearch,
     });
   }
 
@@ -731,10 +765,8 @@ export async function POST(request: NextRequest) {
     const productTask = resolveWebSearchForGenerate({
       useWebSearch,
       rawTitle: rawTitleForSearch,
-      ipName: draft.ip_name ?? candidateIpForPack,
-      characterName: draft.character_name,
-      productType: draft.product_type,
-      specText: draft.spec_text,
+      // spec_text is AI-edited display copy after generation; never search with it.
+      specText: originalCaptureSpec(draft.raw_capture),
       note: draft.note,
       imageDescription: draft.image_description,
       existingCache: draft.web_search_cache,
@@ -812,6 +844,7 @@ export async function POST(request: NextRequest) {
         note: noteForRun,
         imageDescription: draft.image_description ?? undefined,
         specText: draft.spec_text ?? undefined,
+        captureEvidence: buildCaptureEvidence(draft.raw_capture),
         webSearchSummary,
         ipKnowledgePromptBlock,
         knownIpNames,
@@ -1058,7 +1091,9 @@ export async function POST(request: NextRequest) {
   }
 
   const allWarnings = uniqueMessages(
-    [...localizedOutput.validation_warnings, ...extraWarnings].filter(
+    [...persistentCaptureWarnings(draft.warnings), ...localizedOutput.validation_warnings, ...extraWarnings,
+      ...(generationTone === "潮巢導購版" ? reviewChaochaoCopy(providerOutput, [rawTitleForSearch, variantSummary, draft.note, draft.image_description, buildCaptureEvidence(draft.raw_capture)].filter(Boolean).join("\n")) : []),
+    ].filter(
       (message) => !isLegacyTagRuleMappingMessage(message),
     ),
   );
@@ -1087,6 +1122,7 @@ export async function POST(request: NextRequest) {
     generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
     generation_status: successStatus.generation_status,
     generation_model: providerOutput.model,
+    generation_rule_version: copyRuntimeVersion(),
     generation_cost_estimate: providerOutput.usage?.costUsd ?? null,
     generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
     generation_output_tokens: providerOutput.usage?.outputTokens ?? null,
@@ -1215,10 +1251,20 @@ export async function POST(request: NextRequest) {
   if (historyRows.length > 0) {
     await serviceSupabase.from("generation_history").insert(historyRows);
   }
+  if (runMode !== "test") await serviceSupabase.from("generation_runs").insert({
+    draft_id: draftId, mode: "api_llm",
+    provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
+    rule_version: copyRuntimeVersion(), model: providerOutput.model, status: "completed", created_by: user.id,
+    started_at: runStartedAt, completed_at: new Date().toISOString(),
+    input_payload: { tone, copyLength, rawTitle: rawTitleForSearch, sellerEvidence: buildCaptureEvidence(draft.raw_capture), variantSummary, searchQuery: productCacheToPersist?.query ?? null, searchFromCache: Boolean(webSearchSummary && !productCacheToPersist) },
+    output_payload: { raw: providerOutput, final: { title: localizedOutput.display_title, description: localizedOutput.generated_description_html, faq: localizedOutput.generated_faq_html, seoTitle: localizedOutput.seo_title, metaDescription: localizedOutput.meta_description, why: cleanedWhyWeChoseIt, highlights: cleanedProductHighlights }, warnings: allWarnings },
+    cost_estimate: providerOutput.usage?.costUsd ?? null,
+  });
   stageMs.persist = Date.now() - persistStarted;
 
   return Response.json({
     ok: true,
+    runtimeVersion: copyRuntimeVersion(),
     stageMs,
     draftState: localizedOutput.draft_state,
     validationErrors: localizedOutput.validation_errors,

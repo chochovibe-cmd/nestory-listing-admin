@@ -1029,7 +1029,7 @@ export function ResultCard({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        showToast(payload.error ?? "單欄重生失敗", "error");
+        showToast(typeof payload.error === "string" ? payload.error : typeof payload.error?.message === "string" ? payload.error.message : "單欄重生失敗", "error");
         setMessage("");
         return;
       }
@@ -1093,7 +1093,7 @@ export function ResultCard({
         await markShopifyDirty();
       } else {
         setMessage("");
-        showToast(payload.error ?? "重新生成失敗", "error");
+        showToast(typeof payload.error === "string" ? payload.error : typeof payload.error?.message === "string" ? payload.error.message : "重新生成失敗", "error");
       }
       if (expanded) await loadHistory();
       router.refresh();

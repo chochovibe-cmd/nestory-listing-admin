@@ -81,8 +81,8 @@ check("all tones share one title prompt, Chaochao uses a short dedicated voice p
   assert.match(chaochao, /商品小編/);
   assert.match(chaochao, /文青可愛/);
   assert.match(chaochao, /粉絲才會點頭/);
-  assert.match(chaochao, /至少 1 題是這個角色／IP 粉絲才會問/);
-  assert.match(chaochao, /這哪買的/);
+  assert.match(chaochao, /資料少可以只有 1–2 題/);
+  assert.doesNotMatch(chaochao, /摸起來比想像中還軟/);
   assert.doesNotMatch(chaochao, /痛點導購/);
   assert.doesNotMatch(chaochao, /商品介紹＋收藏亮點＋導購小標三段/);
   assert.match(vinyl, /為什麼這個商品值得在潮巢出現/);
@@ -249,7 +249,7 @@ check("Chaochao SEO drops 首選 stacking; other tones keep it; brand suffix is 
   assert.doesNotMatch(chaochaoMeta, /首選/);
 });
 
-check("search supplements keep later sources after a long spec", () => {
+check("search supplements use seller evidence and manual note without AI vision claims", () => {
   const query = buildWebSearchQuery({
     rawTitle: "Hello Kitty 馬克杯",
     specText: "這段規格非常長而且會把額度吃光如果還是從頭截到尾不管後面的備註與圖片文字一二三四五六七八九十",
@@ -257,7 +257,7 @@ check("search supplements keep later sources after a long spec", () => {
     imageDescription: "白色陶瓷杯身",
   });
   assert.match(query, /含杯蓋/);
-  assert.match(query, /白色陶瓷/);
+  assert.doesNotMatch(query, /白色陶瓷/);
   const excerpt = extractRelevantExcerpt(
     "前言廣告促銷滿減包郵。本款尺寸約 10cm，材質絨毛，內含記憶卡槽。後面還有更多無關文字。",
     80,

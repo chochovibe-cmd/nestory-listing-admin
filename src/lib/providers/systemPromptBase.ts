@@ -576,6 +576,7 @@ function buildChaochaoCopyUserMessage(
   if (input.specText) {
     lines.push(`商品規格原始資料（整理進 [[spec]]，寫成一份台灣繁體）：${input.specText}`);
   }
+  if (input.captureEvidence) lines.push(`【原始賣家擷取證據｜優先於網搜與 AI 既有文案】\n${input.captureEvidence}`);
   if (input.webSearchSummary) {
     lines.push(`網路搜尋補充資訊（判斷同款後可直接使用）：\n${input.webSearchSummary}`);
   }
@@ -648,6 +649,7 @@ export function buildCopyUserMessage(input: CopyProviderInput, options?: { omitK
       `商品規格原始資料（外掛或表單帶入，可能含簡體與重複；整理進 [[spec]]，不要原樣照抄）：${specText}`,
     );
   }
+  if (input.captureEvidence) lines.push(`【原始賣家擷取證據｜優先於網搜與 AI 既有文案】\n${input.captureEvidence}`);
   if (webSearchSummary) {
     lines.push(
       `網路搜尋補充資訊（合理判斷與本商品同款時，可直接把搜尋到的規格、功能、系列背景當作可用事實自信寫進文案，不必加保留語氣；判斷不是同款或與賣家自標矛盾時才捨棄；顧客文案禁止標「來源：網路」或附 URL；紅線項目沒依據不要寫，體驗式內容請放手寫）：\n${webSearchSummary}`,
@@ -791,6 +793,7 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
   if (input.specText) {
     lines.push(`商品規格原始資料（可能含簡體與重複，引用時用整理後的台灣繁體）：${input.specText}`);
   }
+  if (input.captureEvidence) lines.push(`【原始賣家擷取證據｜優先於網搜與 AI 既有文案】\n${input.captureEvidence}`);
   // COPY-FIX-1 B: single-field regen previously dropped the cached search
   // evidence entirely; inject it with the same framing as full generation.
   if (input.webSearchSummary?.trim()) {

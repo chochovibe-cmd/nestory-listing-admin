@@ -1,5 +1,7 @@
 # Nestory — Current Status
 
+> 2026-09-25 Copy Quality V2 work on `codex/copy-quality-v2`, based on 9/24 Preview `5203e4a`. Raw capture evidence, safe identical variant dedupe, self-grounding search removal, cache version/TTL, Chaochao prompt shortening, provenance and approval snapshots are implemented locally; production `a3b3c57` and old zero-variant drafts have **not** changed. Full details, verification, release gates and remaining architecture work: `docs/audits/COPY-QUALITY-V2-2026-09-25.md`. Do not report quality improvement until five real-model A/B cases are judged.
+
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 

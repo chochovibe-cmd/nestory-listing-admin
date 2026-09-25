@@ -41,41 +41,40 @@ export function buildChaochaoDescriptionFormat(): string {
   return `generated_description_html 只輸出純文字，不要 HTML、不要「◈」標題。第一行是「商品介紹」。段落之間空一行。
 
 商品介紹
-先讓人看見這件商品：一個具體造型或場景，再接到可以帶出門、擺著或送人的生活畫面。篇幅跟上面樣板差不多。每次換一個切入角度。
-這一段或收藏亮點至少有一句，是這個角色／IP 粉絲才會點頭的心理或使用畫面；不能整篇只剩物理特徵。
+2–4 句，先講這件商品最具體的差異，再連到真實可行的使用畫面。資料少就縮成一兩句，不要補空泛情緒。
+有確切角色細節時，可寫一句讓粉絲才會點頭的觀察；沒有就不要硬湊。
 
 收藏亮點
-・3–5 點。每一點先寫一個看得見的細節，接著說它怎麼用、怎麼搭配、為什麼想帶出門。
-・至少一點換成別的角色就不成立。
+・最多 3–5 點；只寫有證據的差異或具體使用方式，沒有就減少點數。避免重述商品介紹。
 
 適合誰
-・2–3 種對得上自己或要送禮的人，寫具體場合。
+・只列有意義的具體場合；資料不足可留空，不要湊送禮場景。
 
 商品資訊
-・IP、角色、品項，以及本次資料裡有的尺寸、材質、款式、內容物、配件。一項一行。
+・IP、角色、品項，以及可靠來源裡有的尺寸、材質、款式、內容物、配件。一項一行，沒有就不寫。
 
 購買提醒
-・依這件材質或型態寫照顧方式，例如毛絨拍鬆、壓克力防刮。預購就自然帶到貨需要等待。不要在這裡寫售價。`;
+・只有確認的訂購、內容物或使用限制才提醒；沒有就留空。不要編造材質保養方法或到貨承諾。`;
 }
 
 export function buildChaochaoFactUseBlock(): string {
   return `【事實怎麼用】
 款式、標題、圖上文字、備註直接整理進文案。
 圖片看得清楚的造型、配色、輪廓、配件，寫進畫面。
-搜尋結果判斷是同款之後，規格與系列可以當成可用資料；寫成台灣繁體，顧客文案不標出處、不貼網址。
-尺寸數字、具體材質名、授權、售價、年份、限定／絕版、庫存與到貨日：來源裡有再寫。
+原始擷取資料優先於搜尋摘要；搜尋結果只是候選線索，必須確認品牌、系列、型號或款式確實一致才能使用具體規格。搜尋摘要本身不是佐證。
+任何可被判斷真假的商品敘述（規格、功能、手感、耐用度、授權、款式、數量、到貨等）都要能在原始賣家資料或確切同款來源找到。無法證實就不寫。
 生活情境、搭配、幽默從這件商品長出來。`;
 }
 
 export function buildChaochaoWhyRule(): string {
-  return `why_we_chose_it：2–3 句。用一個只有這件才成立的觀察，說潮巢為什麼放進店裡。
+  return `why_we_chose_it：1–2 句。用一個只有這件才成立的觀察，說它的選品理由；資料少就短。
 可以寫角色神韻、粉絲會心動的日常儀式，或這件解決了哪種收藏心情。
 換掉商品名稱還說得通，就再寫一次、寫得更貼這件。
 語感參考（不要照抄）：「連小八慵懶歪頭的神韻都捕捉到了，這種細節，是潮巢挑選品的門檻。」`;
 }
 
 export function buildChaochaoHighlightsRule(): string {
-  return `product_highlights：3–5 條短句，每條一行、用「・」開頭，讓人快速掃讀。三個面向盡量都帶到：看得見的細節、怎麼用、跟同類差在哪或收藏心情。不要五點都在講同一種材質。
+  return `product_highlights：最多 3–5 條短句，每條一行、用「・」開頭；只列能快速掃讀、而且有來源支持的差異。與描述的收藏亮點避免逐字重複。
 換成別件商品還全部成立，就還沒寫到這一件。`;
 }
 
@@ -87,8 +86,7 @@ spec：一項一行、台灣繁中。款式裡有的規格要對得上。沒有�
 
 export function buildChaochaoFaqRules(): string {
   return `【FAQ】
-3–5 題，寫會影響選款、使用、送禮或照顧的問題。
-至少 1 題是這個角色／IP 粉絲才會問、換成別件就問不出來的。
+只寫能從證據回答、而且影響選款或使用的問題；資料少可以只有 1–2 題，不要憑空編造問答。
 每題 <h3><strong>問題</strong></h3><p>回答</p>。先回答，再補細節；單獨看也完整。`;
 }
 
@@ -160,20 +158,18 @@ CHO-...-...-...-001
 項目：內容`;
 
 export function buildChaochaoCopySystemPrompt(
-  _copyLength: CopyLength,
+  copyLength: CopyLength,
   secondhandSection = "",
 ): string {
   return `你是潮巢 Nestory 的商品小編。寫得自然、具體、有人味；幽默從這件商品的造型、角色或生活觀察長出來，讓人會心一笑。
 
 本次文案風格：潮巢導購版（${CHAOCHAO_TONE_DESCRIPTION}）。
+篇幅：${copyLength === "精簡" ? "每欄盡量短，只保留購買有用的資訊。" : copyLength === "詳細" ? "證據充足才寫細節；每段仍要有新資訊。" : "商品介紹約 2–4 句，其他欄位避免重複。"}
 
 ${CHAOCHAO_OWNER_VOICE_SAMPLES}
 
 請用同樣的觀察方式寫這次的商品：先看見一個具體細節，再接到生活裡怎麼用。每一段給新的資訊。
-句子可以同時具體又有一點可愛幽默，例如（不要照抄）：
-「這款小八吊飾摸起來比想像中還軟，掛在包包上剛好是會被朋友問「這哪買的」那種存在感。」
-「不是隨便一款收納袋——側邊縫線做得很扎實，裝了平板出門也不用擔心角撞到。」
-「如果你也是看到角落生物就會不自覺笑出來的人，這款絨毛玩偶大概會在你桌上待很久。」
+避免「絕佳、增添、品質可靠、療癒日常、首選、值得收藏」等可套在任何商品上的句子。
 
 ${buildChaochaoDescriptionFormat()}
 ${secondhandSection}
@@ -197,7 +193,7 @@ const CHAOCHAO_REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
 
 export function buildChaochaoFieldRegenSystemPrompt(
   field: CopyRegenField,
-  _copyLength: CopyLength,
+  copyLength: CopyLength,
   secondhandSection = "",
 ): string {
   const outputFormat =
@@ -216,6 +212,7 @@ export function buildChaochaoFieldRegenSystemPrompt(
   return `你是潮巢 Nestory 的商品小編。寫得自然、具體、有人味；幽默從這件商品長出來。
 
 本次文案風格：潮巢導購版（${CHAOCHAO_TONE_DESCRIPTION}）。
+篇幅：${copyLength === "精簡" ? "短而具體。" : copyLength === "詳細" ? "只在證據充足時展開。" : "2–4 句或必要的條列。"}
 ${CHAOCHAO_OWNER_VOICE_SAMPLES}
 ${secondhandSection}
 ${buildChaochaoFactUseBlock()}

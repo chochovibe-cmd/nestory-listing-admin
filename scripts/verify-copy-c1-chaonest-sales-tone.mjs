@@ -237,7 +237,7 @@ assert.doesNotMatch(chaochaoPrompt, /先寫買家真正在意的痛點/u, "pain-
 assert.doesNotMatch(chaochaoPrompt, /不要停在「不僅是收藏品」/u, "empty-phrase ban pool returned");
 assert.match(chaochaoPrompt, /文青可愛/u, "Chaochao tone description lost 文青可愛");
 assert.match(chaochaoPrompt, /粉絲才會點頭/u, "Chaochao description lost IP-fan resonance rule");
-assert.match(chaochaoPrompt, /換成別件就問不出來/u, "Chaochao FAQ lost IP-specific question rule");
+assert.match(chaochaoPrompt, /資料少可以只有 1–2 題/u, "Chaochao FAQ must allow fewer questions when evidence is thin");
 assert.doesNotMatch(chaochaoPrompt, /商品介紹＋收藏亮點＋導購小標三段/u, "legacy 3-section format instruction returned");
 assert.doesNotMatch(prompt, /CHAOCHAO_VOICE_ANCHOR/u, "brand-manifesto voice overlay returned");
 assert.match(promptBase, /buildChaochaoCopySystemPrompt/u, "Chaochao is not assembled from the dedicated contract");

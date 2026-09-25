@@ -15,6 +15,7 @@ import type {
   CaptureImportBody,
   CaptureVariantFlat
 } from "@/lib/import/captureTypes";
+import { normalizeOptionValueForMerge } from "@/lib/variants/variantCrossExpand";
 import {
   formatMultiDimStoredInfo,
   PRICE_PLACEHOLDER_CNY,
@@ -420,6 +421,28 @@ function mapVariantRows(
   return { rows, dimensions, variantImageUrls: imageUrls };
 }
 
+/** Marketplace captures sometimes repeat the same SKU for every duplicate axis.
+ * Collapse only identical commercial rows. Conflicting price/SKU/image rows remain
+ * visible so persistVariantsSafe rejects them rather than silently choosing one. */
+export function collapseIdenticalCaptureVariants(rows: Array<Record<string, unknown>>): {
+  rows: Array<Record<string, unknown>>;
+  removed: number;
+} {
+  const seen = new Set<string>();
+  const unique: Array<Record<string, unknown>> = [];
+  for (const row of rows) {
+    const key = JSON.stringify([
+      ...(["option1_value", "option2_value", "option3_value"] as const)
+        .map((name) => normalizeOptionValueForMerge(String(row[name] ?? ""))),
+      row.sku ?? null, row.cny_price ?? null, row.image_url ?? null,
+    ]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ ...row, sort_order: unique.length });
+  }
+  return { rows: unique, removed: rows.length - unique.length };
+}
+
 /**
  * Map capture body → draft insert fields + variants + raw_capture shell (without server image log).
  */
@@ -464,10 +487,12 @@ export function mapCaptureToDraftFields(
 
   const flats = Array.isArray(body.variants_flat) ? body.variants_flat : [];
   const {
-    rows: variantRows,
+    rows: mappedVariantRows,
     dimensions: variantDimensions,
     variantImageUrls
   } = mapVariantRows(flats, body.sku_table, price);
+  const { rows: variantRows, removed } = collapseIdenticalCaptureVariants(mappedVariantRows);
+  if (removed > 0) warnings.push(`擷取款式中 ${removed} 列完全重複，已保留原順序的唯一款式；原表保存在 raw_capture。`);
 
   // PKG2A: multi-dim with flat rows already stored → info (axis count × actual rows).
   // No flat → honest warning; never invent cartesian.

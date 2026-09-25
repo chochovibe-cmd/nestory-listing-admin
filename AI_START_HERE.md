@@ -1,5 +1,7 @@
 # Nestory — AI Start Here
 
+> 2026-09-25 Copy Quality V2 handoff: read `docs/audits/COPY-QUALITY-V2-2026-09-25.md` before copy generation changes. It distinguishes local code, old production, missing live backfill and real-model acceptance gates.
+
 > 給任何新 Codex / Claude Code / ChatGPT / 其他 AI coding session 的最短入口。
 > 目標：不用掃完整 repo，也能在 1–3 分鐘內知道專案在哪、什麼已上 production、什麼仍只在 branch、下一步是什麼。
 

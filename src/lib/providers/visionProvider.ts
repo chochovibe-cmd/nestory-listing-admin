@@ -79,7 +79,13 @@ export function buildVisionSourceFingerprint(
     hash ^= source.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `v1-${(hash >>> 0).toString(16).padStart(8, "0")}-${source.length}`;
+  // Prompt/model changes must invalidate existing descriptions of identical URLs.
+  const version = `v2:${DEFAULT_VISION_MODEL}:${DESCRIBE_SYSTEM_PROMPT}`;
+  for (let index = 0; index < version.length; index += 1) {
+    hash ^= version.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `v2-${(hash >>> 0).toString(16).padStart(8, "0")}-${source.length}`;
 }
 
 // B1 (Mockup差異備忘 差異2): 規格圖 OCR 廢棄後，詳情圖是圖上文字的主要來源。除了外觀

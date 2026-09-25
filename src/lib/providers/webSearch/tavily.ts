@@ -45,7 +45,7 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
         query: trimmed,
         search_depth: "advanced",
         max_results: 8,
-        include_answer: true,
+        include_answer: false,
       }),
     });
 
@@ -81,8 +81,7 @@ function formatTavilySummary(
 ): string {
   const lines: string[] = [
     `【網路搜尋結果｜查詢：${query}】`,
-    // COPY-FIX-1：搜尋結果升級為「同款判斷後可正面使用」的證據；防幻覺紅線不變。
-    "合理判斷與本商品同款時，可以把以下搜尋到的規格、功能、系列背景當作可用事實寫進文案；判斷不是同款或與賣家自標資訊矛盾時才捨棄。顧客文案不要標「來源：網路」或貼 URL；查無依據的精確規格數字仍不要寫進商品規格。",
+    "下方是未驗證候選頁，僅供內部參考。只有品牌、系列與型號或款式明確一致時才引用商品規格；相似商品和搜尋摘要不能當確切同款證據。與賣家擷取衝突時以原始擷取優先。顧客文案不要標「來源：網路」。",
   ];
 
   const answerText = (answer ?? "").trim();

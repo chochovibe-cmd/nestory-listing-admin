@@ -52,7 +52,7 @@ const query = buildWebSearchQuery({
 assert(query.includes("Hello Kitty"), "query keeps the title");
 assert(query.includes("陶瓷"), "query includes spec text");
 assert(query.includes("含杯蓋"), "query includes note");
-assert(query.includes("白色陶瓷"), "query includes image description");
+assert(!query.includes("白色陶瓷"), "query excludes model-derived image description");
 assert(query.includes("商品規格"), "query still asks for product specs");
 
 const sparse = buildWebSearchQuery({

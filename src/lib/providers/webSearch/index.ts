@@ -36,7 +36,12 @@ export function createWebSearchProvider(
 }
 
 /** NFKC + trim + collapse whitespace — cache key for D2-A. */
-const WEB_SEARCH_CACHE_VERSION = "adv8eq3";
+const WEB_SEARCH_CACHE_VERSION = "seller-evidence-v2";
+const WEB_SEARCH_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export function isFreshWebSearchCache(fetchedAt: string, now = Date.now()): boolean {
+  const at = Date.parse(fetchedAt);
+  return Number.isFinite(at) && at <= now && now - at < WEB_SEARCH_CACHE_TTL_MS;
+}
 export function fingerprintWebSearchQuery(query: string): string {
   const normalized = query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
   return `${WEB_SEARCH_CACHE_VERSION}:${normalized}`;
@@ -128,8 +133,7 @@ export function buildWebSearchQuery(input: {
   let title = (input.rawTitle ?? "").normalize("NFKC").trim();
   // Drop common marketplace noise so the search focuses on the product.
   title = title
-    .replace(/【[^】]*】/g, " ")
-    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/[【】\[\]]/g, " ")
     .replace(/(包邮|包郵|现货|現貨|免运|免運|618|双11|雙11|促销|促銷)/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -140,7 +144,7 @@ export function buildWebSearchQuery(input: {
     .filter(Boolean)
     .filter((v) => !titleHead.includes(v));
   const extras = extractSupplementKeywords(
-    [input.specText, input.note, input.imageDescription],
+    [input.specText, input.note],
     120,
   );
 
@@ -330,7 +334,7 @@ export async function resolveIpBackgroundSearchForGenerate(params: {
   const query = buildIpBackgroundSearchQuery(ipName);
   const fingerprint = fingerprintWebSearchQuery(query);
   const cachedIp = parseIpBackgroundCacheEntry(params.existingCache);
-  if (cachedIp && cachedIp.queryFingerprint === fingerprint && cachedIp.summary.trim()) {
+  if (cachedIp && cachedIp.queryFingerprint === fingerprint && isFreshWebSearchCache(cachedIp.fetchedAt) && cachedIp.summary.trim()) {
     return {
       summary: cachedIp.summary,
       cacheToPersist: null,
@@ -445,7 +449,7 @@ export async function resolveWebSearchForGenerate(params: {
 
   const fingerprint = fingerprintWebSearchQuery(query);
   const cached = parseWebSearchCache(params.existingCache);
-  if (cached && cached.queryFingerprint === fingerprint && cached.summary.trim()) {
+  if (cached && cached.queryFingerprint === fingerprint && isFreshWebSearchCache(cached.fetchedAt) && cached.summary.trim()) {
     return {
       result: {
         summary: cached.summary,

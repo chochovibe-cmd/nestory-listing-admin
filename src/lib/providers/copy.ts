@@ -71,6 +71,8 @@ export interface CopyProviderInput {
   note?: string | null;
   imageDescription?: string;
   specText?: string;
+  /** Immutable capture snapshot: original seller title/spec/options, not model output. */
+  captureEvidence?: string;
   webSearchSummary?: string;
   /**
    * P5 層2／3：已組好的 IP 背景區塊（含誠實邊界文案），直接進 user 事實區。

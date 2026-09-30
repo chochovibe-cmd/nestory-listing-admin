@@ -43,8 +43,8 @@ assert.match(route, /await buildProductBrief\(/u, "generate route does not build
 assert.match(route, /productBrief: productBriefResult\?\.writerText/u, "generate route does not pass brief to Writer");
 assert.match(route, /applyProductBriefToCopyOutput\(writerOutput, productBriefResult\)/u,
   "upstream identity/spec/title are not merged back after Writer");
-assert.match(route, /generation_rule_version: tone === "潮巢導購版"/u,
-  "Product Brief recipe version is not persisted");
+assert.match(route, /generation_rule_version: productBriefApplied \? `chaochao-\$\{PRODUCT_BRIEF_VERSION\}`/u,
+  "Product Brief recipe version is not persisted only after a successful brief");
 
 assert.equal(fixtures.length, 4, "golden set must keep four representative products");
 for (const fixture of fixtures) {

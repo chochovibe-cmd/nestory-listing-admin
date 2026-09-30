@@ -252,6 +252,11 @@ export function ImageSkillStudio({
             <legend className="station3-legend">
               參考圖 {requiresSingleReference(task) ? "（選 1 張）" : "（最多 4 張）"}
             </legend>
+            {!requiresSingleReference(task) ? (
+              <p className="muted">
+                省錢建議：通常選 1–2 張就夠；參考圖越多，圖片 input token 成本越高。
+              </p>
+            ) : null}
             <div className="imgmark-list imgmark-strip image-skill-reference-strip">
               {candidates.map((image) => {
                 const checked = selectedIds.includes(image.id);

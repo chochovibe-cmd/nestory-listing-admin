@@ -29,6 +29,28 @@ Owner 要直接補齊 2026-07-17 計畫中的商品影片自動化，不等待 C
 
 **尚未完成／不得誤報已上線：**尚未 merge 預設分支、尚未 Vercel deploy、尚未設定 Google Cloud OAuth env、尚未由 Owner 完成首次 YouTube consent、尚未做真實影片 E2E。CI/typecheck/build 證據完成後才可標 source ready。
 
+## 2026-09-30 Image Skill Studio｜省 API 圖片處理（獨立分支，未部署）
+
+Owner 要改善現有圖片 AI 處理，但預設不要用 AI 自動判斷任務，以免多燒 API。施工分支：`gpt/image-skill-low-api-20260930`，詳細交接：`docs/IMAGE-SKILL-LOW-API-2026-09-30.md`。
+
+目前 source / Preview MVP：
+
+- 人工選任務，Skill 執行；不額外跑 Planner／第二次 Vision；
+- 新增「免費補成方形／AI 延展方形／主圖優化／創意主圖／AI 廣告圖」；
+- 免費方圖純 Sharp、不裁商品、不拉伸，圖片 API 成本 0；
+- AI 任務預設 GPT Image 2 + low，每次只生成 1 張；需要精修才手動切 medium；
+- 主圖/創意圖用 reference edit，不再用舊 `regenerate` 的文字重畫邏輯；舊 regenerate 仍保留 backend 相容但從新標記 UI 隱藏；
+- 去字改為只清非商品 overlay／促銷字；簡轉繁以資訊 overlay 為主，兩者都改 reference edit 並依原圖比例輸出；
+- 廣告圖使用「AI 無字視覺底 + Nestory 自己疊繁中字」，舊固定 SVG 改稱資訊詳情圖並保留；
+- Station 2 分成主圖／規格圖／詳情素材／AI 產出；raw detail 明確只作參考，不直接進 Shopify media；generated_detail 優先成為 description embed；
+- 無 DB migration：用既有 `image_flags["image_skill_source:<imageId>"]` 防止送圖 Sharp 把 Skill 結果覆蓋回原圖；
+- 人工重新選「保留原圖／簡轉繁／去字」會退出 Skill source，避免 UI 與實際送圖來源不一致；
+- 新增 `verify:image-skill` source contract。
+
+**刻意未做／下一包：**自動 fidelity QA（省一次模型呼叫）、程式化 mask/local region detector、主圖 V1/V2/V3 正式版本表、Review 頁直接「留言→重生 V2」閉環。現在要迭代可回 Station 2 Image Skill Studio 改補充要求後只生 1 張。
+
+CI 提醒：本分支 base 本來就帶有 `verify-copy-c1-chaonest-sales-tone.mjs` 的 `Boss hierarchy wrapper disappeared` 失敗；不是本圖片包新增。不可為了讓本分支綠而越 scope 修改文案線。圖片包以專用 verifier + Vercel Preview build 分開驗證。
+
 ## 2026-09-23 潮巢語氣與加深搜尋已上主線
 
 Owner 看過預覽，覺得有比較好、仍不夠。要求把這輪先推上主線，交給 GPT 協作精修。

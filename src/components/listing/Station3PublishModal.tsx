@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { SchedulePublishPlanner } from "@/components/listing/SchedulePublishPlanner";
 import {
   countSelectedActions,
   DEFAULT_STATION3_SELECTION,
@@ -34,11 +35,13 @@ export function Station3PublishModal({
   const primaryRef = useRef<HTMLButtonElement>(null);
   const [selection, setSelection] = useState<Station3PublishSelection>(DEFAULT_STATION3_SELECTION);
   const [singleWarn, setSingleWarn] = useState(false);
+  const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setSelection(readStoredStation3Selection());
     setSingleWarn(false);
+    setSchedulePreviewOpen(false);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     // UX-E T32: destructive publish modal → focus 取消 first
@@ -142,6 +145,19 @@ export function Station3PublishModal({
               />
               API 正式上架
             </label>
+
+            <button
+              className="station3-schedule-preview-btn"
+              type="button"
+              aria-expanded={schedulePreviewOpen}
+              onClick={() => setSchedulePreviewOpen((current) => !current)}
+            >
+              <span>📅 排程正式上架</span>
+              <span className="schip schip--run">Preview</span>
+            </button>
+            {schedulePreviewOpen ? (
+              <SchedulePublishPlanner draftCount={draftCount} compact />
+            ) : null}
           </fieldset>
 
           <fieldset className="station3-fieldset" disabled={busy}>

@@ -13,6 +13,7 @@ import {
 } from "@/lib/shopify/productLifecycle";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
+import { ensureDraftVideosOnYouTube } from "@/lib/youtube/ensureDraftVideos";
 import {
   findDuplicateProductVariantRows,
   toBulkVariantInput,
@@ -401,7 +402,25 @@ export async function publishDraft(
     .select("*, product_images(*)")
     .eq("id", id)
     .single();
-  const draftForPayload = draftFresh ?? draft;
+  let draftForPayload = draftFresh ?? draft;
+  const youtubeAutomationWarnings: string[] = [];
+  if (!mockMode) {
+    try {
+      const preparedVideos = await ensureDraftVideosOnYouTube({
+        serviceSupabase,
+        draft: draftForPayload
+      });
+      draftForPayload = {
+        ...draftForPayload,
+        video_urls: preparedVideos.videoUrls
+      };
+      youtubeAutomationWarnings.push(...preparedVideos.warnings);
+    } catch (error) {
+      youtubeAutomationWarnings.push(
+        `YouTube 自動轉存發生未預期錯誤：${stringifyError(error)}；本次影片先略過，不阻擋其他商品資料發布。`
+      );
+    }
+  }
 
   const { data: variantRows } = await serviceSupabase
     .from("product_variants")
@@ -450,7 +469,10 @@ export async function publishDraft(
     publish_status: "publishing",
     request_payload: payload
   };
-  const videoWarnings = Array.isArray(payload.videoWarnings) ? (payload.videoWarnings as string[]) : [];
+  const payloadVideoWarnings = Array.isArray(payload.videoWarnings)
+    ? (payload.videoWarnings as string[])
+    : [];
+  const videoWarnings = [...new Set([...youtubeAutomationWarnings, ...payloadVideoWarnings])];
 
   if (!mockMode && !hasShopifyAdminCredentials() && !deps.callGraphQL) {
     const message =

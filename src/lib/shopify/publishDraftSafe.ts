@@ -404,7 +404,7 @@ export async function publishDraft(
     .single();
   let draftForPayload = draftFresh ?? draft;
   const youtubeAutomationWarnings: string[] = [];
-  if (!mockMode) {
+  if (!mockMode && (hasShopifyAdminCredentials() || deps.callGraphQL)) {
     try {
       const preparedVideos = await ensureDraftVideosOnYouTube({
         serviceSupabase,

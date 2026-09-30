@@ -40,7 +40,11 @@ assert.match(promptBase, /不要重新分類、不要重新查證/u, "Writer bou
 assert.match(openai, /productBriefMode: Boolean\(input\.productBrief\?\.trim\(\)\)/u,
   "OpenAI provider is not switching to brief writer");
 assert.match(route, /await buildProductBrief\(/u, "generate route does not build Product Brief");
-assert.match(route, /productBrief: productBriefResult\?\.writerText/u, "generate route does not pass brief to Writer");
+assert.match(
+  route,
+  /productBrief: productBriefResult && !productBriefResult\.fallback \? productBriefResult\.writerText : undefined/u,
+  "generate route does not pass only a successful brief to Writer",
+);
 assert.match(route, /applyProductBriefToCopyOutput\(writerOutput, productBriefResult\)/u,
   "upstream identity/spec/title are not merged back after Writer");
 assert.match(route, /generation_rule_version: productBriefApplied \? `chaochao-\$\{PRODUCT_BRIEF_VERSION\}`/u,

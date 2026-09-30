@@ -194,6 +194,62 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
     void issueCaptureToken("reset");
   }
 
+  const loadYouTubeStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings/youtube", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "status" }),
+        cache: "no-store"
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.ok) {
+        setYoutubeStatus(null);
+        return;
+      }
+      setYoutubeStatus({
+        envConfigured: Boolean(payload.envConfigured),
+        connected: Boolean(payload.connected),
+        connectedAt: typeof payload.connectedAt === "string" ? payload.connectedAt : null,
+        missingEnv: Array.isArray(payload.missingEnv) ? payload.missingEnv : [],
+        scope: typeof payload.scope === "string" ? payload.scope : ""
+      });
+    } catch {
+      setYoutubeStatus(null);
+    }
+  }, []);
+
+  async function disconnectYouTube() {
+    if (!admin || youtubeBusy) return;
+    if (!youtubeDisconnectArm) {
+      setYoutubeDisconnectArm(true);
+      return;
+    }
+    setYoutubeBusy(true);
+    try {
+      const res = await fetch("/api/settings/youtube", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "disconnect" })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.ok) {
+        showToast(
+          typeof payload.message === "string" ? payload.message : "YouTube 解除連線失敗",
+          "error"
+        );
+        return;
+      }
+      setYoutubeDisconnectArm(false);
+      showToast("YouTube 授權已解除", "success");
+      await loadYouTubeStatus();
+    } catch {
+      showToast("YouTube 解除連線失敗", "error");
+    } finally {
+      setYoutubeBusy(false);
+    }
+  }
+
   async function copyCaptureToken() {
     if (!capturePlainOnce) return;
     try {

@@ -36,6 +36,11 @@ import {
 import { listActiveListingTagRules } from "@/lib/tagRules";
 import { ClaudeCopyProvider } from "@/lib/providers/claude-copy-provider";
 import { OpenAICopyProvider } from "@/lib/providers/openai-copy-provider";
+import {
+  applyProductBriefToCopyOutput,
+  buildProductBrief,
+  PRODUCT_BRIEF_VERSION,
+} from "@/lib/providers/productBrief";
 import { buildForbiddenTermWarning } from "@/lib/providers/forbiddenTerms";
 import {
   COPY_OUTPUT_TRUNCATED_WARNING,
@@ -802,7 +807,32 @@ export async function POST(request: NextRequest) {
         ? [draft.note?.trim() || null, `【重新生成方向】${regenNotes}`].filter(Boolean).join("\n")
         : draft.note;
       const copyStarted = Date.now();
-      const raw = await COPY_PROVIDERS[providerKey].generate({
+      const productBriefResult =
+        tone === "潮巢導購版"
+          ? await buildProductBrief({
+              rawTitle: rawTitleForSearch,
+              saleStatus: draft.sale_status,
+              source,
+              variantSummary,
+              note: noteForRun,
+              imageDescription: draft.image_description,
+              specText: draft.spec_text,
+              webSearchSummary,
+              ipKnowledgePromptBlock,
+              knownIpNames,
+              existingIp: draft.ip_name ?? candidateIpForPack,
+              existingCharacter: draft.character_name,
+              existingProductType: draft.product_type,
+              existingBrand: draft.product_brand,
+              existingSku: draft.sku,
+            })
+          : null;
+
+      if (productBriefResult?.warning) {
+        extraWarnings.push(productBriefResult.warning);
+      }
+
+      const writerOutput = await COPY_PROVIDERS[providerKey].generate({
         rawTitle: rawTitleForSearch,
         saleStatus: draft.sale_status,
         source,
@@ -813,6 +843,7 @@ export async function POST(request: NextRequest) {
         imageDescription: draft.image_description ?? undefined,
         specText: draft.spec_text ?? undefined,
         webSearchSummary,
+        productBrief: productBriefResult?.writerText,
         ipKnowledgePromptBlock,
         knownIpNames,
         tone,
@@ -824,6 +855,12 @@ export async function POST(request: NextRequest) {
         detectedIpName: draft.ip_name ?? candidateIpForPack,
         ipToneMap,
       });
+      const raw = productBriefResult
+        ? applyProductBriefToCopyOutput(writerOutput, productBriefResult)
+        : writerOutput;
+      if (productBriefResult) {
+        stageMs.productBrief = Date.now() - copyStarted;
+      }
       stageMs.copy = Date.now() - copyStarted;
       afterCopyAt = Date.now();
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
@@ -1087,6 +1124,7 @@ export async function POST(request: NextRequest) {
     generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
     generation_status: successStatus.generation_status,
     generation_model: providerOutput.model,
+    generation_rule_version: tone === "潮巢導購版" ? `chaochao-${PRODUCT_BRIEF_VERSION}` : draft.generation_rule_version,
     generation_cost_estimate: providerOutput.usage?.costUsd ?? null,
     generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
     generation_output_tokens: providerOutput.usage?.outputTokens ?? null,

@@ -3450,6 +3450,30 @@ textarea {
   font-size: 13.5px;
   cursor: pointer;
 }
+
+/* UIUX2 schedule Preview: visually a fourth Shopify path, but does not write yet. */
+.station3-schedule-preview-btn {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--accent3) 7%, var(--surface));
+  color: var(--text);
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+.station3-schedule-preview-btn:hover,
+.station3-schedule-preview-btn:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
 .station3-single-warn {
   margin: 0 0 12px;
   font-size: 13px;

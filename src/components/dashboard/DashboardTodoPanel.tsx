@@ -453,8 +453,8 @@ export function DashboardTodoPanel() {
           aria-labelledby="dash-todo-title"
         >
           <div className="panel-header">
-            <h2 id="dash-todo-title">今日待辦</h2>
-            <span className="dash-todo-hint">積壓待辦 · 不限今天</span>
+            <h2 id="dash-todo-title">現在要處理</h2>
+            <span className="dash-todo-hint">依目前流程整理 · 不限今天</span>
           </div>
           <div className="panel-body dash-todo-body">
             {loading ? (

@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
   if (!authorizedDraft.ok) return authorizedDraft.response;
   const canonicalDraftId = authorizedDraft.id;
 
-  let service;
+  let service: ReturnType<typeof createServiceSupabaseClient>;
   try {
     service = createServiceSupabaseClient();
   } catch (error) {
@@ -134,11 +134,11 @@ export async function POST(request: NextRequest) {
     .select(
       "id, draft_id, image_type, original_file_url, processed_file_url, generated_file_url, sort_order"
     )
-    .eq("draft_id", canonicalDraftId)
-    .in("id", imageIds);
+    .eq("draft_id", canonicalDraftId);
 
   if (imageError) return jsonError(imageError.message, 500);
-  const byId = new Map(((rows ?? []) as SkillImageRow[]).map((row) => [row.id, row]));
+  const allRows = (rows ?? []) as SkillImageRow[];
+  const byId = new Map(allRows.map((row) => [row.id, row]));
   const images = imageIds.map((id) => byId.get(id)).filter(Boolean) as SkillImageRow[];
   if (images.length !== imageIds.length) return jsonError("One or more imageIds were not found", 404);
 
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
     const { data: publicData } = service.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(storagePath);
     const publicUrl = publicData.publicUrl;
 
-    const maxSort = ((rows ?? []) as SkillImageRow[]).reduce(
+    const maxSort = allRows.reduce(
       (max, row) => Math.max(max, Number(row.sort_order) || 0),
       0
     );
@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
       original_file_url: primaryUrl,
       processed_file_url: publicUrl,
       generated_file_url: publicUrl,
-      sort_order: maxSort + 100,
+      sort_order: maxSort + 10,
       processing_status: "done",
       processing_error: null,
       process_intent: null,

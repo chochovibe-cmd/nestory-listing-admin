@@ -197,11 +197,41 @@ Product Brief 是增量層，不是 hard dependency。
 
 ## 12. 驗證紀錄
 
-建立本文件時：
-- branch 相對 base：ahead 16 / behind 0；
-- Draft PR #13 已建立；
-- PR CI run #507 已排隊；
-- Vercel 已開始替最新 commits 建 Preview；
-- Production 未動。
+最終驗證的**程式碼 SHA**：`ae110bd96e57e52ee34ac7d8c5b2b089a92bc7af`
 
-CI / Preview 最終結果應由完成本包的 session 回填本節，不可把「已觸發」寫成「已通過」。
+### 最終結果
+
+- GitHub Draft PR：#13，base `agent/chaochao-tone-on-live@5203e4a5`，mergeable = true，仍保持 Draft。
+- GitHub CI：run **#519**（`36702474412`）✅
+  - `pnpm run verify:all` ✅
+  - TypeScript typecheck ✅
+  - Next.js build ✅
+- Vercel deployment：`dpl_BcAfEnzM9BzxSFXYkMcDKqEcECvj` ✅ READY
+- branch Preview：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`
+- Preview HTTP smoke：登入頁回 200，對應 deployment id `dpl_BcAfEnzM9BzxSFXYkMcDKqEcECvj`。
+- Production：**未 deploy、未 merge、未做 Shopify write、未做 DB migration**。
+
+### 這輪實際踩到並修掉的 CI 問題
+
+1. CI #507：舊 P4 verifier 假設 `buildCopySystemPrompt` 必須永遠直接 delegate Production base；新 focused Writer 有合法分支後，source-shape check 先失敗。
+   - 沒有刪安全檢查。
+   - Product Brief 新增賣家服務排除：保固／售後／退換／贈品／滿額／店鋪活動／客服承諾／物流時效不得進商品事實欄。
+   - Focused Writer 再加顧客文案「來源：網路／URL」禁令與 seller-service guard。
+   - P4 verifier 改成同時確認 Production fallback **以及** COPY-PB1 focused path 的安全條件。
+
+2. CI #517：COPY-PB1 自己的 verifier 還期待 `productBriefResult?.writerText` 直接傳 Writer，與後來加入的 safe fallback 不一致。
+   - verifier 改成明確要求：只有 `productBriefResult && !productBriefResult.fallback` 才能把 Brief 傳進 focused Writer。
+   - 這把「半成品 Brief 不得送進 Writer」鎖成 regression contract。
+
+3. CI #519：上述修正後，verify / typecheck / build 全數通過。
+
+### 仍未完成的品質 gate
+
+技術 gate 綠 **不等於 Owner 已認可文案**。下一步仍是 Preview 上用真實 5–10 商品做舊版 vs COPY-PB1 A/B，記錄：
+- 商品理解是否正確；
+- 文案具體度與潮巢語感；
+- hallucination／generic 搜尋污染；
+- input/output tokens、成本與 latency。
+
+Owner 沒明確說「這版文案可以」以前，PR #13 保持 Draft，Production 不動。
+

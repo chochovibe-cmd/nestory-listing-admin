@@ -12,7 +12,11 @@ export type ImageProviderTask =
   | "generate"
   | "translate_text"
   | "remove_bg"
-  | "outpaint_square";
+  | "outpaint_square"
+  | "square_ai"
+  | "hero_enhance"
+  | "creative_hero"
+  | "ad_creative";
 
 export interface ImageProviderInput {
   /** Source image public URLs (de_text needs ≥1; regenerate may use as style hint only). */
@@ -21,8 +25,12 @@ export interface ImageProviderInput {
   task: ImageProviderTask;
   prompt?: string;
   imageDescription?: string | null;
-  /** Product title for regenerate prompt (Q5-A). */
+  /** Product title for regenerate / skill context. */
   title?: string | null;
+  /** Optional per-request output size override (studio skills). */
+  size?: string;
+  /** Optional per-request quality override (studio skills). */
+  quality?: "low" | "medium" | "high";
 }
 
 export interface ImageProviderOutput {

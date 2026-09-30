@@ -65,7 +65,7 @@ export function formatUnmarkedBlockMessage(images: ProductImage[]): string | nul
     return imageSlotLabel(image, position);
   });
 
-  return `還有 ${unmarked.length} 張沒標記：${labels.join("、")}。請先為每張選「保留原圖／簡轉繁／去字／重生」後再審核。`;
+  return `還有 ${unmarked.length} 張沒標記：${labels.join("、")}。請先為每張選「保留原圖／簡轉繁／去字」；要做方圖、主圖優化或創意主圖請用「圖片 AI 工具」。`;
 }
 
 /**
@@ -91,12 +91,16 @@ export const PROCESS_INTENT_LABELS: Record<ImageProcessIntent, string> = {
   regenerate: "重生",
 };
 
-/** Full station② mark options (order for UI). */
+/**
+ * Station② visible legacy marks.
+ * "regenerate" stays in the domain/backend for historical rows and retries,
+ * but is intentionally hidden from new picks because it redraws from text.
+ * Reference-preserving hero work now lives in ImageSkillStudio.
+ */
 export const PROCESS_INTENT_OPTIONS: ImageProcessIntent[] = [
   "keep",
   "to_trad",
   "de_text",
-  "regenerate",
 ];
 
 /**

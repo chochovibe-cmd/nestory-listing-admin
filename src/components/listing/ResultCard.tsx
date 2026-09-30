@@ -2397,13 +2397,13 @@ export function ResultCard({
             {detectTagsEl}
             {detectWarnsEl}
           </span>
-        </span>
-        <span className="rc-card-summary-row">
           {nextActionText ? (
             <span className={blockWarnCount > 0 ? "rc-next-action is-block" : "rc-next-action"}>
               {nextActionText}
             </span>
           ) : null}
+        </span>
+        <span className="rc-card-summary-row">
           {isImageStation ? (
             <span className="rc-card-mark-summary muted">
               {formatMarkSummaryLine(markSummary)}

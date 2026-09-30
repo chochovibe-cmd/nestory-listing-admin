@@ -543,6 +543,21 @@ export function ResultCard({
   const failReasonSummary = formatDraftFailSummary(draft);
   // UX-B4-P02: sale status short badge after title (display only).
   const saleStatusBadge = formatSaleStatusBadge(draft.sale_status);
+  const nextActionText = isArchived
+    ? null
+    : blockWarnCount > 0
+      ? `先處理：${warningSummary.block[0]?.text ?? "必填資料"}`
+      : isCopyStation
+        ? confirmWarnCount > 0
+          ? `下一步：確認 ${confirmWarnCount} 項資訊後核准`
+          : "下一步：確認文案"
+        : isImageStation
+          ? unmarkedImages.length > 0
+            ? `下一步：標示 ${unmarkedImages.length} 張圖片`
+            : "下一步：確認圖片分流"
+          : isReadyStation
+            ? "下一步：發布／匯出"
+            : null;
 
   // fix(B12): commit notice first; defer refresh so UI isn't racing RSC.
   async function archiveOne() {
@@ -2382,6 +2397,11 @@ export function ResultCard({
             {detectTagsEl}
             {detectWarnsEl}
           </span>
+          {nextActionText ? (
+            <span className={blockWarnCount > 0 ? "rc-next-action is-block" : "rc-next-action"}>
+              {nextActionText}
+            </span>
+          ) : null}
         </span>
         <span className="rc-card-summary-row">
           {isImageStation ? (

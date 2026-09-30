@@ -102,7 +102,10 @@ export function ImageSkillStudio({
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [open, initialTask, primaryImageId, candidates]);
+  // Reset only when opening/switching the requested entry point. Refreshing
+  // product_images after a successful run must not erase the just-produced preview.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialTask, primaryImageId]);
 
   useEffect(() => {
     if (!open) return;

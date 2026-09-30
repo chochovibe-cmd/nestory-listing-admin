@@ -15,6 +15,7 @@
  * Never invents fake image bytes/URLs.
  */
 
+import sharp from "sharp";
 import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import type { ImageProvider, ImageProviderInput, ImageProviderOutput } from "@/lib/providers/image";
 
@@ -59,9 +60,11 @@ export function modelSupportsImageEdit(model?: string): boolean {
 
 export function buildDeTextPrompt(extra?: string | null): string {
   const base =
-    "Remove all on-image text overlays, watermarks, Chinese simplified characters, " +
-    "promotional badges, and price stickers. Keep the product itself, colors, shape, " +
-    "and composition unchanged. Do not add new logos or text. Photorealistic product photo.";
+    "Remove ONLY non-product overlay text, seller watermarks, promotional badges, and price stickers. " +
+    "Do not erase or redraw logos, labels, or typography physically printed on the real product or its packaging. " +
+    "Fill only the removed overlay regions naturally from the surrounding background. Preserve the product, " +
+    "colors, shape, count, proportions, lighting, camera angle, and composition as exactly as possible. " +
+    "Do not add new objects, logos, or text.";
   const extraTrim = extra?.trim();
   return extraTrim ? `${base} Additional note: ${extraTrim.slice(0, 200)}` : base;
 }
@@ -71,10 +74,11 @@ export function buildDeTextPrompt(extra?: string | null): string {
  */
 export function buildToTradPrompt(extra?: string | null): string {
   const base =
-    "Convert ALL Simplified Chinese characters on this product image to Traditional Chinese " +
-    "(Taiwan 繁體中文). Keep every other visual element unchanged: product shape, colors, " +
-    "layout, logos, photos, and composition. Do not remove text — only convert 简体→繁體. " +
-    "Do not add new badges, watermarks, or decorative text. Photorealistic product photo.";
+    "Convert informational Simplified Chinese overlay text, labels, captions, and tables to Traditional Chinese " +
+    "(Taiwan 繁體中文). Preserve the wording meaning and approximate layout. Keep brand logos, trademarks, " +
+    "decorative product artwork, and typography physically printed on the product itself unchanged. " +
+    "Keep product shape, colors, count, proportions, photos, background, and composition unchanged. " +
+    "Do not add badges, watermarks, or decorative text.";
   const extraTrim = extra?.trim();
   return extraTrim ? `${base} Additional note: ${extraTrim.slice(0, 200)}` : base;
 }
@@ -139,6 +143,35 @@ async function fetchSourceImage(url: string): Promise<{ buffer: Buffer; mimeType
   const fetched = await fetchServerImage(url, { maxBytes: 25 * 1024 * 1024 });
   if (!fetched.ok) throw new Error(fetched.message);
   return { buffer: fetched.bytes, mimeType: fetched.contentType };
+}
+
+async function deriveGptImage2EditSize(buffer: Buffer): Promise<string> {
+  try {
+    const meta = await sharp(buffer, { failOn: "none" }).metadata();
+    const w = meta.width ?? 0;
+    const h = meta.height ?? 0;
+    if (!w || !h) return "1024x1024";
+
+    const landscape = w >= h;
+    const ratioRaw = landscape ? w / h : h / w;
+    const ratio = Math.min(3, Math.max(1, ratioRaw));
+    const minPixels = 655_360;
+
+    let longEdge = 1024;
+    let shortEdge = Math.max(16, Math.round(longEdge / ratio / 16) * 16);
+    if (longEdge * shortEdge < minPixels) {
+      longEdge = Math.ceil(Math.sqrt(minPixels * ratio) / 16) * 16;
+      shortEdge = Math.ceil(longEdge / ratio / 16) * 16;
+    }
+    longEdge = Math.min(1536, Math.max(16, longEdge));
+    shortEdge = Math.min(1536, Math.max(16, shortEdge));
+
+    return landscape
+      ? `${longEdge}x${shortEdge}`
+      : `${shortEdge}x${longEdge}`;
+  } catch {
+    return "1024x1024";
+  }
 }
 
 function pickExtension(mimeType: string): string {
@@ -272,9 +305,12 @@ export class OpenAiImageProvider implements ImageProvider {
       task === "hero_enhance" ||
       task === "creative_hero" ||
       task === "ad_creative";
-    const model = isAdvancedSkill ? getOpenAiImageSkillModel() : getOpenAiImageModel();
-    const size = input.size?.trim() || getOpenAiImageSize();
-    const quality = input.quality?.trim() || getOpenAiImageQuality();
+    const isReferenceEdit = task === "de_text" || task === "to_trad" || isAdvancedSkill;
+    const model = isReferenceEdit ? getOpenAiImageSkillModel() : getOpenAiImageModel();
+    const requestedSize = input.size?.trim() || "";
+    const quality =
+      input.quality?.trim() ||
+      (task === "de_text" ? "low" : task === "to_trad" ? "medium" : getOpenAiImageQuality());
 
     if (
       task === "de_text" ||
@@ -294,6 +330,11 @@ export class OpenAiImageProvider implements ImageProvider {
         throw new Error(`${task} requires at least one source image`);
       }
       const sources = await Promise.all(sourceUrls.map((url) => fetchSourceImage(url)));
+      const size =
+        requestedSize ||
+        ((task === "de_text" || task === "to_trad") && model.toLowerCase().startsWith("gpt-image-2")
+          ? await deriveGptImage2EditSize(sources[0]!.buffer)
+          : getOpenAiImageSize());
       let prompt: string;
       if (task === "to_trad") {
         prompt = buildToTradPrompt(input.prompt);
@@ -321,6 +362,7 @@ export class OpenAiImageProvider implements ImageProvider {
     }
 
     if (task === "regenerate") {
+      const size = requestedSize || getOpenAiImageSize();
       const built = buildRegeneratePrompt({
         title: input.title,
         imageDescription: input.imageDescription,

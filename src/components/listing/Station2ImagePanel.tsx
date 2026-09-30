@@ -23,7 +23,11 @@ import {
   type Station2ImageSubtab,
 } from "@/lib/images/station2ImageTabs";
 import type { ImageProcessIntent, ProductImage } from "@/types/domain";
-import type { ImageSkillTask } from "@/lib/images/imageSkills";
+import {
+  clearImageSkillSource,
+  hasImageSkillSource,
+  type ImageSkillTask
+} from "@/lib/images/imageSkills";
 
 /** Merge-only write for draft image_flags.generate_detail (SYN-1 UI). */
 function mergeGenerateDetailFlag(
@@ -118,13 +122,41 @@ export function Station2ImagePanel({
     const patch = patchForProcessIntentPick(intent, image.is_spec_process);
     setLocalMsg("");
     setBusyId(image.id);
+
+    // A manual legacy mark is an explicit override of a prior advanced Skill result.
+    // Read the latest flags from DB so a just-generated Skill marker cannot survive
+    // because this panel's draft props are stale.
+    const { data: flagRow } = await supabase
+      .from("product_drafts")
+      .select("image_flags")
+      .eq("id", draftId)
+      .maybeSingle();
+    const latestFlags = flagRow?.image_flags ?? imageFlags;
+    const hadSkillSource = hasImageSkillSource(latestFlags, image.id);
+
+    const imagePatch: Record<string, unknown> = {
+      process_intent: patch.process_intent,
+      is_spec_process: patch.is_spec_process,
+    };
+    if (intent === "keep" && hadSkillSource && image.original_file_url) {
+      // "保留原圖" must mean the actual source image, not the prior Skill output.
+      imagePatch.processed_file_url = image.original_file_url;
+    }
+
     const { error } = await supabase
       .from("product_images")
-      .update({
-        process_intent: patch.process_intent,
-        is_spec_process: patch.is_spec_process,
-      })
+      .update(imagePatch)
       .eq("id", image.id);
+
+    if (!error && hadSkillSource) {
+      const nextFlags = clearImageSkillSource(latestFlags, image.id);
+      const { error: flagError } = await supabase
+        .from("product_drafts")
+        .update({ image_flags: nextFlags })
+        .eq("id", draftId);
+      if (!flagError) onImageFlagsChange?.(nextFlags);
+    }
+
     setBusyId(null);
     if (error) {
       setLocalMsg(`標記失敗：${error.message}`);
@@ -134,7 +166,14 @@ export function Station2ImagePanel({
     onImagesChange(
       images.map((row) =>
         row.id === image.id
-          ? { ...row, process_intent: patch.process_intent, is_spec_process: patch.is_spec_process }
+          ? {
+              ...row,
+              process_intent: patch.process_intent,
+              is_spec_process: patch.is_spec_process,
+              ...(intent === "keep" && hadSkillSource && image.original_file_url
+                ? { processed_file_url: image.original_file_url }
+                : {})
+            }
           : row
       )
     );

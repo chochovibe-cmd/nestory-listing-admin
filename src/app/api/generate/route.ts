@@ -810,23 +810,28 @@ export async function POST(request: NextRequest) {
       const copyStarted = Date.now();
       const productBriefResult =
         tone === "潮巢導購版"
-          ? await buildProductBrief({
-              rawTitle: rawTitleForSearch,
-              saleStatus: draft.sale_status,
-              source,
-              variantSummary,
-              note: noteForRun,
-              imageDescription: draft.image_description,
-              specText: draft.spec_text,
-              webSearchSummary,
-              ipKnowledgePromptBlock,
-              knownIpNames,
-              existingIp: draft.ip_name ?? candidateIpForPack,
-              existingCharacter: draft.character_name,
-              existingProductType: draft.product_type,
-              existingBrand: draft.product_brand,
-              existingSku: draft.sku,
-            })
+          ? await (async () => {
+              const briefStarted = Date.now();
+              const result = await buildProductBrief({
+                rawTitle: rawTitleForSearch,
+                saleStatus: draft.sale_status,
+                source,
+                variantSummary,
+                note: noteForRun,
+                imageDescription: draft.image_description,
+                specText: draft.spec_text,
+                webSearchSummary,
+                ipKnowledgePromptBlock,
+                knownIpNames,
+                existingIp: draft.ip_name ?? candidateIpForPack,
+                existingCharacter: draft.character_name,
+                existingProductType: draft.product_type,
+                existingBrand: draft.product_brand,
+                existingSku: draft.sku,
+              });
+              stageMs.productBrief = Date.now() - briefStarted;
+              return result;
+            })()
           : null;
 
       if (productBriefResult?.warning) {
@@ -861,9 +866,6 @@ export async function POST(request: NextRequest) {
           ? applyProductBriefToCopyOutput(writerOutput, productBriefResult)
           : writerOutput;
       productBriefApplied = Boolean(productBriefResult && !productBriefResult.fallback);
-      if (productBriefResult) {
-        stageMs.productBrief = Date.now() - copyStarted;
-      }
       stageMs.copy = Date.now() - copyStarted;
       afterCopyAt = Date.now();
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);

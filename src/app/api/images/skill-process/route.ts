@@ -251,6 +251,7 @@ export async function POST(request: NextRequest) {
       original_file_url: primaryUrl,
       processed_file_url: publicUrl,
       generated_file_url: publicUrl,
+      alt_text: `${title || "潮巢商品"} 廣告詳情圖`,
       sort_order: maxSort + 10,
       processing_status: "done",
       processing_error: null,

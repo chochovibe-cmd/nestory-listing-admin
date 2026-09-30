@@ -357,6 +357,33 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
     if (!open.automation) setCaptureResetArm(false);
   }, [open.automation]);
 
+  useEffect(() => {
+    if (!open.connection) {
+      setYoutubeDisconnectArm(false);
+      return;
+    }
+    void loadYouTubeStatus();
+  }, [open.connection, loadYouTubeStatus]);
+
+  useEffect(() => {
+    if (youtubeFeedbackShownRef.current) return;
+    const feedback = searchParams.get("youtube");
+    if (!feedback) return;
+    youtubeFeedbackShownRef.current = true;
+    if (feedback === "connected") {
+      showToast("YouTube 已連接，淘寶影片可在發布前自動轉存", "success");
+      void loadYouTubeStatus();
+    } else if (feedback === "env_missing") {
+      showToast("YouTube OAuth 伺服器設定尚未完成", "warn");
+    } else if (feedback === "denied") {
+      showToast("你取消了 YouTube 授權", "warn");
+    } else if (feedback === "admin_required") {
+      showToast("只有 Admin 可以設定 YouTube 授權", "error");
+    } else {
+      showToast("YouTube 授權沒有完成，請再試一次", "error");
+    }
+  }, [searchParams, loadYouTubeStatus]);
+
   /** C6: fetch via server /api/fx/cny-twd only — never browser→open.er-api direct. */
   const fetchLiveRate = useCallback(async () => {
     setLiveRateLoading(true);

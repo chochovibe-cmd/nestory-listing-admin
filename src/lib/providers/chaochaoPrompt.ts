@@ -213,7 +213,7 @@ ${buildChaochaoWhyRule()}
 ${buildChaochaoHighlightsRule()}
 
 【標題】
-[[enriched_title]] 以 Product Brief 的「建議商品標題」為準，只做台灣用詞與可讀性微調，不新增 Brief 沒有的規格／系列資訊。
+[[enriched_title]] 原樣抄 Product Brief 的「建議商品標題」。不要重寫、不要補詞；標題責任在上游 Product Brief。
 
 【輸出格式】
 只輸出以下 7 組分段標記，不要 JSON、不要程式碼區塊、不要額外說明：

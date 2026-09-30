@@ -17,6 +17,8 @@ const tabs = read("src/lib/images/station2ImageTabs.ts");
 const sharpBatch = read("src/lib/images/runSharpBatch.ts");
 const marks = read("src/lib/images/processMarks.ts");
 const env = read(".env.example");
+const shopifyPayload = read("src/lib/shopify/payload.ts");
+const descriptionEmbed = read("src/lib/contentGenerator/descriptionEmbed.ts");
 
 console.log("verify-image-skill-low-api:");
 
@@ -73,5 +75,15 @@ assert.match(marks, /regenerate: "重生"/, "historical regenerate compatibility
 console.log("  ✓ unsafe legacy regenerate hidden from new picks but backward compatibility remains");
 
 assert.match(env, /OPENAI_IMAGE_SKILL_MODEL=gpt-image-2/, "skill model env example missing");
+
+assert.match(
+  shopifyPayload,
+  /image\.image_type !== "detail"/,
+  "raw detail reference images must not leak into Shopify media"
+);
+const generatedIndex = descriptionEmbed.indexOf('const scene = byType("generated_detail")');
+const detailIndex = descriptionEmbed.indexOf('const detail = byType("detail")');
+assert.ok(generatedIndex >= 0 && detailIndex > generatedIndex, "generated creative must beat raw detail in description embed");
+console.log("  ✓ Shopify uses generated creatives, not raw detail references");
 
 console.log("ALL image skill low-API checks passed");

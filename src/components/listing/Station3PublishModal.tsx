@@ -66,7 +66,7 @@ export function Station3PublishModal({
 
   if (!open) return null;
 
-  const canSubmit = hasAnyAction(selection) && !busy;
+  const canSubmit = hasAnyAction(selection) && !busy && !schedulePreviewOpen;
 
   function setShopify(value: Station3ShopifyChoice) {
     setSelection((prev) => ({ ...prev, shopify: value }));
@@ -219,11 +219,13 @@ export function Station3PublishModal({
             >
               {busy
                 ? "處理中…"
-                : singleWarn
-                  ? "仍只做這項"
-                  : selection.shopify === "active"
-                    ? "確認上架／匯出"
-                    : "確認執行"}
+                : schedulePreviewOpen
+                  ? "Preview 不會執行"
+                  : singleWarn
+                    ? "仍只做這項"
+                    : selection.shopify === "active"
+                      ? "確認上架／匯出"
+                      : "確認執行"}
             </button>
           </div>
         </div>

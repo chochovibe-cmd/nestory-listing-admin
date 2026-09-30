@@ -14,6 +14,7 @@ import { StageFilterPills } from "@/components/drafts/StageFilterPills";
 import { FactoryBridgeStrip } from "@/components/listing/FactoryBridgeStrip";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
+import { WorkbenchProductSearch } from "@/components/listing/WorkbenchProductSearch";
 import { buildFactoryBridgeSummary } from "@/lib/images/factoryBridge";
 import {
   GENERATION_DONE_MAX_MS,
@@ -1443,7 +1444,7 @@ export function DraftResultsPanel({
   return (
     <section className="panel results-panel">
       <div className="panel-header rc-panel-header">
-        <h2>◈ 生成結果（三站工作佇列）</h2>
+        <h2>◈ 待處理商品</h2>
         {/* Header keeps only the station-specific sequential action. */}
         <div className="rc-header-actions">
           {isCopyStation || isImageStation ? (
@@ -1469,6 +1470,7 @@ export function DraftResultsPanel({
         </div>
       </div>
       <div className="panel-body results-panel-body">
+        <WorkbenchProductSearch />
         {progress ? (
           <div className="gen-card">
             <div className="gen-card-head">

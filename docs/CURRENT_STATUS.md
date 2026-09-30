@@ -18,6 +18,13 @@ Preview branch：`agent/uiux2-preview-20260930`。
 
 詳細 what / why / affected files / risks / rollback：`docs/audits/UIUX2-PREVIEW-2026-09-30.md`。
 
+同一 Preview branch 已追加 **智慧排程上架 UI Preview**（仍未接 production backend）：
+
+- 「發布／匯出」內可展開排程預覽，以實際選取件數計算開始日／每日件數／星期／完成日。
+- `/records` 使用者名稱改為「發布中心」，新增「📅 排程」分頁與 100→20×5 可操作示例。
+- 排程演算法已抽純函式，但沒有 schedule DB、migration、Cron、Shopify ACTIVE write。
+- 正式接線時維持既有三站 pipeline；排程屬發布層，不新增第四工作站。
+- 正式方案預定 DRAFT staging + sync dirty/conflict gate + atomic claim + per-item retry。
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 

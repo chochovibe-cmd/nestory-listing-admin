@@ -5,7 +5,7 @@
 
 import type { ProductImage } from "@/types/domain";
 
-export type Station2ImageSubtab = "main" | "spec" | "detail";
+export type Station2ImageSubtab = "main" | "spec" | "detail" | "generated";
 
 export const STATION2_IMAGE_SUBTABS: {
   id: Station2ImageSubtab;
@@ -13,7 +13,8 @@ export const STATION2_IMAGE_SUBTABS: {
 }[] = [
   { id: "main", label: "主圖" },
   { id: "spec", label: "規格圖" },
-  { id: "detail", label: "詳情圖" },
+  { id: "detail", label: "詳情素材" },
+  { id: "generated", label: "AI 產出" },
 ];
 
 export function isSpecImage(
@@ -34,13 +35,18 @@ export function isDetailSubtabImage(image: Pick<ProductImage, "image_type">): bo
   return image.image_type === "detail";
 }
 
+export function isGeneratedSubtabImage(image: Pick<ProductImage, "image_type">): boolean {
+  return image.image_type === "generated_detail";
+}
+
 export function filterStation2SubtabImages<
   T extends Pick<ProductImage, "image_type" | "is_spec_process" | "sort_order" | "created_at">
 >(images: T[], tab: Station2ImageSubtab): T[] {
   const filtered = images.filter((img) => {
     if (tab === "main") return isMainSubtabImage(img);
     if (tab === "spec") return isSpecImage(img);
-    return isDetailSubtabImage(img);
+    if (tab === "detail") return isDetailSubtabImage(img);
+    return isGeneratedSubtabImage(img);
   });
   return filtered.slice().sort((a, b) => {
     const orderA = a.sort_order ?? 0;
@@ -57,7 +63,8 @@ export function station2SubtabCount(
   return images.filter((img) => {
     if (tab === "main") return isMainSubtabImage(img);
     if (tab === "spec") return isSpecImage(img);
-    return isDetailSubtabImage(img);
+    if (tab === "detail") return isDetailSubtabImage(img);
+    return isGeneratedSubtabImage(img);
   }).length;
 }
 

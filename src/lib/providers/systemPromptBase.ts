@@ -563,6 +563,14 @@ function buildChaochaoCopyUserMessage(
   input: CopyProviderInput,
   options?: { omitKnownIpList?: boolean },
 ): string {
+  if (input.productBrief?.trim()) {
+    return [
+      input.productBrief.trim(),
+      `銷售狀態：${input.saleStatus}`,
+      "請把 Product Brief 當成已完成的商品理解。不要重新分類、不要重新查證、不要從 unknowns 補猜；只依 system prompt 完成顧客文案。",
+    ].join("\n\n");
+  }
+
   const lines = [
     `商品來源：${input.source || "淘寶"}`,
     `原始標題：${input.rawTitle || "（未提供，請盡量從其他資訊判斷）"}`,

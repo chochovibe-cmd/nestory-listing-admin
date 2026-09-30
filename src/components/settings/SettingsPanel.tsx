@@ -43,6 +43,14 @@ type StatusPayload = {
   shopifyMock: boolean;
 };
 
+type YouTubeStatusPayload = {
+  envConfigured: boolean;
+  connected: boolean;
+  connectedAt: string | null;
+  missingEnv: string[];
+  scope: string;
+};
+
 const THEMES: { value: ThemeId; icon: string; title: string }[] = [
   { value: "dark", icon: "🌑", title: "夜色" },
   { value: "nordic", icon: "🐱", title: "奶茶" },
@@ -99,6 +107,11 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
   const [captureBusy, setCaptureBusy] = useState(false);
   const [captureResetArm, setCaptureResetArm] = useState(false);
   const [captureLoaded, setCaptureLoaded] = useState(false);
+
+  const [youtubeStatus, setYoutubeStatus] = useState<YouTubeStatusPayload | null>(null);
+  const [youtubeBusy, setYoutubeBusy] = useState(false);
+  const [youtubeDisconnectArm, setYoutubeDisconnectArm] = useState(false);
+  const youtubeFeedbackShownRef = useRef(false);
 
   const admin = isAdmin(role);
   const allowed = canAccessSettings(role);

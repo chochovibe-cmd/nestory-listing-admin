@@ -40,7 +40,7 @@ export function qualityForSkill(
 }
 
 export function sizeForSkill(task: ImageSkillTask): string {
-  return task === "ad_creative" ? "1024x1536" : "1024x1024";
+  return task === "ad_creative" ? "1024x1280" : "1024x1024";
 }
 
 export function approximateOutputCostUsd(

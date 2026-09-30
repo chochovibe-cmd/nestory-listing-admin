@@ -139,9 +139,9 @@ function pickDescriptionEmbedImages(images, titleFallback, max = DESCRIPTION_EMB
   else take(candidates.slice().sort(preferCdn));
 
   if (picked.length >= max) return picked;
-  take(byType("detail"));
-  if (picked.length >= max) return picked;
   take(byType("generated_detail"));
+  if (picked.length >= max) return picked;
+  take(byType("detail"));
   if (picked.length >= max) return picked;
   take(
     candidates
@@ -291,25 +291,25 @@ const sampleImages = [
   }
 ];
 
-await check("pick: skips spec; main + detail; max 2", () => {
+await check("pick: skips spec; main + generated creative; max 2", () => {
   const picks = pickDescriptionEmbedImages(sampleImages, "商品標題");
   assert.equal(picks.length, 2);
   assert.equal(picks[0].id, "m1");
-  assert.equal(picks[1].id, "d1");
+  assert.equal(picks[1].id, "g1");
   assert.ok(!picks.some((p) => p.id === "s1"));
 });
 
-await check("pick: detail missing → generated_detail", () => {
-  const imgs = sampleImages.filter((i) => i.image_type !== "detail");
+await check("pick: generated creative missing → raw detail fallback", () => {
+  const imgs = sampleImages.filter((i) => i.image_type !== "generated_detail");
   const picks = pickDescriptionEmbedImages(imgs, "T");
   assert.equal(picks[0].id, "m1");
-  assert.equal(picks[1].id, "g1");
+  assert.equal(picks[1].id, "d1");
 });
 
 await check("pick: alt prefers alt_text else title", () => {
   const picks = pickDescriptionEmbedImages(sampleImages, "商品標題");
   assert.equal(picks[0].alt, "主圖 ALT");
-  assert.equal(picks[1].alt, "商品標題");
+  assert.equal(picks[1].alt, "情境");
 });
 
 await check("pick: empty / no url → empty", () => {

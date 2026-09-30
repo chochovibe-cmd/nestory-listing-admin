@@ -45,9 +45,12 @@ assert.match(providerContract, /"creative_hero"/, "provider contract missing cre
 assert.match(providerContract, /"ad_creative"/, "provider contract missing ad_creative");
 assert.match(provider, /DEFAULT_SKILL_MODEL = "gpt-image-2"/, "advanced skill model must default to gpt-image-2");
 assert.match(provider, /OPENAI_IMAGE_SKILL_MODEL/, "skill model env isolation missing");
+assert.match(provider, /task === "de_text" \|\| task === "to_trad" \|\| isAdvancedSkill/, "reference edits must use skill model");
+assert.match(provider, /deriveGptImage2EditSize/, "aspect-safe edit sizing missing");
+assert.match(provider, /task === "de_text" \? "low" : task === "to_trad" \? "medium"/, "cost-aware de_text/to_trad quality routing missing");
 assert.match(provider, /"image\[\]"/, "multiple reference image[] edit upload missing");
 assert.match(provider, /task === "square_ai"/, "advanced tasks not routed through edits");
-console.log("  ✓ GPT Image 2 skill provider isolated from legacy image model");
+console.log("  ✓ GPT Image 2 reference edits are cost-aware and aspect-safe");
 
 assert.match(endpoint, /task === "square_pad"/, "zero API task endpoint missing");
 assert.match(endpoint, /padImageToSquare/, "square_pad must use Sharp helper");

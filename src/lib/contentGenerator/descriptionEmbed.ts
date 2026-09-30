@@ -3,7 +3,7 @@
  * Shopify boundary (payload / Matrixify). Never write back to DB.
  *
  * Q1-A: env DESCRIPTION_EMBED_IMAGES — unset/empty = on; 0/false/off = off
- * Q2-A: second image detail → generated_detail → other non-main
+ * Image Skill Studio: second image generated_detail → raw detail fallback → other non-main
  * Q4-A: Showmore default off (SHOWMORE_DESCRIPTION_EMBED_IMAGES)
  * Q6-A: any usable URL embeds (CDN preferred when choosing among equals)
  */
@@ -172,13 +172,13 @@ export function pickDescriptionEmbedImages(
 
   if (picked.length >= max) return picked;
 
-  // 2) detail → generated_detail → other non-main (variant last)
-  const detail = byType("detail");
-  take(detail);
-  if (picked.length >= max) return picked;
-
+  // 2) Prefer reviewed/generated creative over raw Taobao detail evidence.
   const scene = byType("generated_detail");
   take(scene);
+  if (picked.length >= max) return picked;
+
+  const detail = byType("detail");
+  take(detail);
   if (picked.length >= max) return picked;
 
   const others = candidates

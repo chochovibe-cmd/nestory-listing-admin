@@ -793,6 +793,7 @@ export async function POST(request: NextRequest) {
   });
 
   let providerOutput: CopyProviderOutput | null = null;
+  let productBriefApplied = false;
   let detected: DetectedClassification = {
     ip: draft.ip_name ?? "",
     character: draft.character_name ?? "",
@@ -843,7 +844,7 @@ export async function POST(request: NextRequest) {
         imageDescription: draft.image_description ?? undefined,
         specText: draft.spec_text ?? undefined,
         webSearchSummary,
-        productBrief: productBriefResult?.writerText,
+        productBrief: productBriefResult && !productBriefResult.fallback ? productBriefResult.writerText : undefined,
         ipKnowledgePromptBlock,
         knownIpNames,
         tone,
@@ -855,9 +856,11 @@ export async function POST(request: NextRequest) {
         detectedIpName: draft.ip_name ?? candidateIpForPack,
         ipToneMap,
       });
-      const raw = productBriefResult
-        ? applyProductBriefToCopyOutput(writerOutput, productBriefResult)
-        : writerOutput;
+      const raw =
+        productBriefResult && !productBriefResult.fallback
+          ? applyProductBriefToCopyOutput(writerOutput, productBriefResult)
+          : writerOutput;
+      productBriefApplied = Boolean(productBriefResult && !productBriefResult.fallback);
       if (productBriefResult) {
         stageMs.productBrief = Date.now() - copyStarted;
       }
@@ -1124,7 +1127,7 @@ export async function POST(request: NextRequest) {
     generation_provider: PROVIDER_TO_GENERATION_PROVIDER[providerKey],
     generation_status: successStatus.generation_status,
     generation_model: providerOutput.model,
-    generation_rule_version: tone === "潮巢導購版" ? `chaochao-${PRODUCT_BRIEF_VERSION}` : draft.generation_rule_version,
+    generation_rule_version: productBriefApplied ? `chaochao-${PRODUCT_BRIEF_VERSION}` : draft.generation_rule_version,
     generation_cost_estimate: providerOutput.usage?.costUsd ?? null,
     generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
     generation_output_tokens: providerOutput.usage?.outputTokens ?? null,

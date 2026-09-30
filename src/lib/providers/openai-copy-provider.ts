@@ -32,7 +32,9 @@ export class OpenAICopyProvider implements CopyProvider {
       : null;
     const system = regenField
       ? buildFieldRegenSystemPrompt(regenField, resolvedTone, input.copyLength, secondhandInfo)
-      : buildCopySystemPrompt(resolvedTone, input.copyLength, secondhandInfo);
+      : buildCopySystemPrompt(resolvedTone, input.copyLength, secondhandInfo, {
+          productBriefMode: Boolean(input.productBrief?.trim()),
+        });
     const user = regenField ? buildFieldRegenUserMessage(input) : buildCopyUserMessage(input);
 
     // A8: parse-failure retry runs the request at most twice; the second pass

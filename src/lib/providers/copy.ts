@@ -73,6 +73,12 @@ export interface CopyProviderInput {
   specText?: string;
   webSearchSummary?: string;
   /**
+   * COPY-PB1: compact internal product understanding for 潮巢導購版.
+   * When present, the Writer receives this instead of raw search/spec/vision dumps.
+   * Identity/spec/title ops are produced upstream and merged back after writing.
+   */
+  productBrief?: string;
+  /**
    * P5 層2／3：已組好的 IP 背景區塊（含誠實邊界文案），直接進 user 事實區。
    * 來源為 knowledge_pack 或冷門 IP 網搜／中性指示；規格事實仍走 webSearchSummary／spec。
    */

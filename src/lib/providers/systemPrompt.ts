@@ -1,4 +1,5 @@
 import type { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
+import { buildChaochaoBriefWriterSystemPrompt } from "./chaochaoPrompt";
 import {
   EMOJI_TONES,
   buildCopySystemPrompt as buildProductionCopySystemPrompt,
@@ -24,8 +25,24 @@ export function buildCopySystemPrompt(
   tone: CopyTone,
   copyLength: CopyLength,
   secondhandInfo?: Parameters<typeof buildProductionCopySystemPrompt>[2],
+  options?: { productBriefMode?: boolean },
 ): string {
-  return `${buildProductionCopySystemPrompt(tone, copyLength, secondhandInfo)}\n\n${TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT}`;
+  const base =
+    tone === "潮巢導購版" && options?.productBriefMode
+      ? buildChaochaoBriefWriterSystemPrompt(
+          copyLength,
+          secondhandInfo
+            ? [
+                "【二手／中古商品】",
+                "本商品為二手／中古；文案要如實描述品況，不可寫成全新品。",
+                secondhandInfo.grade ? `等級：${secondhandInfo.grade}` : "",
+                secondhandInfo.condition ? `品況：${secondhandInfo.condition}` : "",
+                secondhandInfo.notes ? `備註：${secondhandInfo.notes}` : "",
+              ].filter(Boolean).join("\n")
+            : "",
+        )
+      : buildProductionCopySystemPrompt(tone, copyLength, secondhandInfo);
+  return `${base}\n\n${TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT}`;
 }
 
 export function buildFieldRegenSystemPrompt(

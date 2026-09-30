@@ -564,7 +564,9 @@ export function Station2ImagePanel({
                     </span>
                   ) : (
                     <span className="muted s2-detail-hint">
-                      {subtab === "generated" ? "AI 產出，送圖後可在圖審確認" : "詳情素材僅供辨識／參考，無需標記"}
+                      {subtab === "generated"
+                        ? "AI 產出會作為可上架素材；不要的版本請先刪除"
+                        : "詳情素材僅供辨識／參考，不會直接上架"}
                     </span>
                   )}
                   {subtab !== "generated" ? (
@@ -595,7 +597,7 @@ export function Station2ImagePanel({
               : subtab === "detail"
                 ? "尚無詳情素材。可用下方補圖上傳（不上架）。"
                 : subtab === "generated"
-                  ? "還沒有 AI 產出。可用上方「圖片 AI 工具」建立廣告圖。"
+                  ? "還沒有 AI 產出。可用上方「圖片 AI 工具」建立廣告圖；保留下來的產出會作為可上架素材。"
                   : "尚無主圖。可用下方補圖上傳."}
           </div>
         )}

@@ -17,7 +17,7 @@
 import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import type { ImageProvider, ImageProviderInput, ImageProviderOutput } from "@/lib/providers/image";
 
-const DEFAULT_MODEL = "gpt-image-1";
+const DEFAULT_MODEL = "gpt-image-2";
 const DEFAULT_SIZE = "1024x1024";
 const DEFAULT_QUALITY = "medium";
 
@@ -104,12 +104,23 @@ export function buildRegeneratePrompt(input: {
 }
 
 /** Rough USD estimate for logging only (not billing). Env can override unit costs later. */
-export function estimateImageCostUsd(model: string, quality: string): number {
+export function estimateImageCostUsd(model: string, quality: string, size = "1024x1024"): number {
   const m = model.toLowerCase();
+  if (m.startsWith("gpt-image-2")) {
+    const portraitLike = size !== "1024x1024";
+    if (quality === "high") return portraitLike ? 0.165 : 0.211;
+    if (quality === "low") return portraitLike ? 0.005 : 0.006;
+    return portraitLike ? 0.041 : 0.053;
+  }
+  if (m.includes("gpt-image-1-mini")) {
+    if (quality === "high") return 0.036;
+    if (quality === "low") return 0.005;
+    return 0.011;
+  }
   if (m.includes("gpt-image")) {
-    if (quality === "high") return 0.2;
-    if (quality === "low") return 0.02;
-    return 0.07;
+    if (quality === "high") return 0.167;
+    if (quality === "low") return 0.011;
+    return 0.042;
   }
   if (m.includes("dall-e-3")) return 0.04;
   return 0.04;
@@ -184,8 +195,7 @@ async function callImagesEdits(input: {
   prompt: string;
   size: string;
   quality: string;
-  imageBuffer: Buffer;
-  mimeType: string;
+  images: Array<{ buffer: Buffer; mimeType: string }>;
 }): Promise<{ bytes: Buffer; mimeType: string }> {
   const form = new FormData();
   form.append("model", input.model);
@@ -198,11 +208,20 @@ async function callImagesEdits(input: {
     form.append("response_format", "b64_json");
   }
 
-  const ext = pickExtension(input.mimeType);
-  const blob = new Blob([new Uint8Array(input.imageBuffer)], {
-    type: input.mimeType.startsWith("image/") ? input.mimeType : "image/png"
+  if (input.images.length === 0) {
+    throw new Error("OpenAI images/edits requires at least one source image");
+  }
+  input.images.slice(0, 4).forEach((source, index) => {
+    const ext = pickExtension(source.mimeType);
+    const blob = new Blob([new Uint8Array(source.buffer)], {
+      type: source.mimeType.startsWith("image/") ? source.mimeType : "image/png"
+    });
+    const field =
+      input.model.toLowerCase().startsWith("gpt-image-2") || input.images.length > 1
+        ? "image[]"
+        : "image";
+    form.append(field, blob, `source-${index + 1}.${ext}`);
   });
-  form.append("image", blob, `source.${ext}`);
 
   const response = await fetch("https://api.openai.com/v1/images/edits", {
     method: "POST",
@@ -239,41 +258,51 @@ export class OpenAiImageProvider implements ImageProvider {
     }
 
     const model = getOpenAiImageModel();
-    const size = getOpenAiImageSize();
-    const quality = getOpenAiImageQuality();
+    const size = input.size?.trim() || getOpenAiImageSize();
+    const quality = input.quality?.trim() || getOpenAiImageQuality();
     const task = input.task === "generate" ? "regenerate" : input.task;
 
-    if (task === "de_text" || task === "to_trad") {
+    if (
+      task === "de_text" ||
+      task === "to_trad" ||
+      task === "square_ai" ||
+      task === "hero_enhance" ||
+      task === "creative_hero" ||
+      task === "ad_creative"
+    ) {
       if (!modelSupportsImageEdit(model)) {
         throw new Error(
-          `${task} requires an edit-capable model (images/edits). Current OPENAI_IMAGE_MODEL=${model} cannot edit. ` +
-            `Use gpt-image-1 (or set OPENAI_IMAGE_EDIT_SUPPORTED=true only if the model truly supports edits).`
+          `${task} requires an edit-capable model (images/edits). Current OPENAI_IMAGE_MODEL=${model} cannot edit.`
         );
       }
-      const sourceUrl = input.sourceImages[0]?.trim();
-      if (!sourceUrl) {
-        throw new Error(`${task} requires sourceImages[0] (original_file_url)`);
+      const sourceUrls = input.sourceImages.map((url) => url.trim()).filter(Boolean).slice(0, 4);
+      if (!sourceUrls.length) {
+        throw new Error(`${task} requires at least one source image`);
       }
-      const source = await fetchSourceImage(sourceUrl);
-      const prompt =
-        task === "to_trad"
-          ? buildToTradPrompt(input.prompt)
-          : buildDeTextPrompt(input.prompt);
+      const sources = await Promise.all(sourceUrls.map((url) => fetchSourceImage(url)));
+      let prompt: string;
+      if (task === "to_trad") {
+        prompt = buildToTradPrompt(input.prompt);
+      } else if (task === "de_text") {
+        prompt = buildDeTextPrompt(input.prompt);
+      } else {
+        prompt = input.prompt?.trim() || "";
+        if (!prompt) throw new Error(`${task} requires a skill prompt`);
+      }
       const out = await callImagesEdits({
         apiKey,
         model,
         prompt,
         size,
         quality,
-        imageBuffer: source.buffer,
-        mimeType: source.mimeType
+        images: sources
       });
       return {
         resultBytes: out.bytes,
         mimeType: out.mimeType,
         provider: this.name,
         model,
-        cost: estimateImageCostUsd(model, quality)
+        cost: estimateImageCostUsd(model, quality, size)
       };
     }
 
@@ -295,7 +324,7 @@ export class OpenAiImageProvider implements ImageProvider {
         mimeType: out.mimeType,
         provider: this.name,
         model,
-        cost: estimateImageCostUsd(model, quality),
+        cost: estimateImageCostUsd(model, quality, size),
         warning: built.warning
       };
     }

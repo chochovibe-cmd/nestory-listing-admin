@@ -3,12 +3,32 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-24（潮巢導購優化 `0410016`＋重生彈窗 portal `89fe098`；正式站不含本包）
+更新基準：2026-09-30（COPY-PB1 Product Brief 文案重構；**Draft / Preview-only / 正式站未動**）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
-Git source：預覽分支 `agent/chaochao-tone-on-live` HEAD `89fe098`
-已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含本包）
-現役 Preview：`https://nestory-listing-admin-git-agent-chaochao-6460e3-chocho-nestory.vercel.app`
+Git source：`gpt/copy-product-brief-refactor-20260930`；fork base `agent/chaochao-tone-on-live@5203e4a5`；Draft PR #13
+已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含 COPY-PB1）
+COPY-PB1 Preview：以 PR #13 最新 Vercel deployment 為準；正式驗證結果見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
+舊 9/24 Preview 線：`agent/chaochao-tone-on-live`
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-09-30 COPY-PB1｜Evidence → Product Brief → Focused Writer
+
+Owner 要的不是再修一次 prompt，而是把原本 ChatGPT「先理解商品再寫」的能力搬回 PWA。
+
+本包已建立獨立 branch + Draft PR #13，**不碰 Production**。核心變更：
+
+- 新增 `src/lib/providers/productBrief.ts`：先整理商品身份、確認事實、差異點、使用情境、粉絲角度、可安全規格、unknowns 與 rejected evidence。
+- 潮巢 full generate 成功拿到 Brief 時，Writer 不再吃原始 web/spec/vision 大包，也不再負責 IP／角色／分類／SKU／spec。
+- Focused Writer 只寫 description / FAQ / SEO / why / highlights；商品標題照抄 Brief authority。
+- 泛同 IP、非同款搜尋不得成為規格事實；高風險資訊無證據就進 unknowns。
+- Brief 預設用便宜模型 `gpt-4o-mini`；Writer 模型沒有在本包偷換。
+- Brief 失敗自動回 legacy generation；只有真的走新路徑才記 `generation_rule_version=chaochao-pb1-20260930`。
+- 4 個 golden fixtures：Miffy 台燈、Pingu 相機、MINISO×七龍珠鍵帽盲盒、Sanrio×Bandai 吊飾盲盒。
+- 單欄 regen 暫時不改，避免每次按重生都再付一筆 Brief API；Owner 通過 full-generation A/B 後再決定是否持久化 Brief cache。
+
+**重要歷史差異**：9/23 的 CC-7 Writer split 曾被 Owner 明確退回；COPY-PB1 不是恢復 CC-7，而是先建立 Product Brief/evidence distillation，再縮 Writer 工作範圍。未來模型不可把兩者混為一談。
+
+詳細設計、rollback、檔案、驗收與未做項目：`docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`。
 
 ## 2026-09-24 本 session 兩包（都已 push 預覽分支，正式站沒換）
 

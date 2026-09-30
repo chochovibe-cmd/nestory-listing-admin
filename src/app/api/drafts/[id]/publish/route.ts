@@ -10,7 +10,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/s
 import type { PublishMode, UserRole } from "@/types/domain";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// YouTube Phase 2 can download + upload one product video before Shopify.\nexport const maxDuration = 300;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

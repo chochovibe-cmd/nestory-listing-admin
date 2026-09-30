@@ -14,6 +14,7 @@ import {
 } from "@/lib/images/imagePipeline";
 import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import { processImageBuffer, SHARP_BATCH_MAX_IMAGES } from "@/lib/images/sharpProcess";
+import { hasImageSkillSource } from "@/lib/images/imageSkills";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
@@ -129,7 +130,7 @@ export async function runSharpBatchForDraft(
 
   const { data: draft, error: draftError } = await serviceSupabase
     .from("product_drafts")
-    .select("id, image_status")
+    .select("id, image_status, image_flags")
     .eq("id", draftId)
     .maybeSingle();
 
@@ -244,12 +245,23 @@ export async function runSharpBatchForDraft(
         .update({ processing_status: "processing", processing_error: null })
         .eq("id", img.id);
 
-      // afterAi: source = generated_file_url; else original
+      // afterAi: source = D4 generated output.
+      // Advanced image skills are no-migration: draft.image_flags records which
+      // existing row should use generated_file_url as its source when intent=keep.
+      const skillSource =
+        !afterAi &&
+        img.process_intent === "keep" &&
+        hasImageSkillSource(draft.image_flags, img.id) &&
+        Boolean(img.generated_file_url?.trim());
       const sourceUrl = afterAi
         ? (img.generated_file_url || "").trim()
-        : (img.original_file_url || "").trim();
+        : skillSource
+          ? (img.generated_file_url || "").trim()
+          : (img.original_file_url || "").trim();
       if (!sourceUrl) {
-        throw new Error(afterAi ? "missing generated_file_url" : "missing original_file_url");
+        throw new Error(
+          afterAi || skillSource ? "missing generated_file_url" : "missing original_file_url"
+        );
       }
       const buffer = await fetchOriginalBuffer(sourceUrl);
       const out = await processImageBuffer(buffer, { square: false });

@@ -94,7 +94,14 @@ export function buildShopifyProductPayload(
   internalLinkMap: InternalLinkMap = {}
 ) {
   const sortedImages = (draft.product_images ?? [])
-    .filter((image) => image.image_type !== "spec")
+    // Raw detail images are evidence/reference material only (Station 2 "詳情素材").
+    // Publish main/variant plus approved/generated creative assets; never leak
+    // Taobao detail reference images into the Shopify media gallery.
+    .filter(
+      (image) =>
+        image.image_type !== "spec" &&
+        image.image_type !== "detail"
+    )
     .sort((a, b) => a.sort_order - b.sort_order);
   const imageTypeCounts = new Map<string, number>();
   for (const image of sortedImages) {

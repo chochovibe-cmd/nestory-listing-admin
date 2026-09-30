@@ -939,6 +939,70 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
                     : "未設定 OPENAI_API_KEY"
               }
             />
+            <ConnRow
+              label="YouTube 商品影片"
+              ok={
+                !youtubeStatus
+                  ? null
+                  : !youtubeStatus.envConfigured
+                    ? false
+                    : youtubeStatus.connected
+                      ? true
+                      : null
+              }
+              text={
+                !youtubeStatus
+                  ? "未檢查"
+                  : !youtubeStatus.envConfigured
+                    ? "後端 OAuth 設定未完成"
+                    : youtubeStatus.connected
+                      ? "已授權 · 發布前自動轉存淘寶影片"
+                      : "待授權"
+              }
+            />
+            {youtubeStatus?.connectedAt ? (
+              <p className="settings-muted">
+                YouTube 授權時間：{new Date(youtubeStatus.connectedAt).toLocaleString("zh-TW")}
+              </p>
+            ) : null}
+            {admin ? (
+              <div className="settings-actions">
+                <Button
+                  size="sm"
+                  disabled={!youtubeStatus?.envConfigured || youtubeBusy}
+                  onClick={() => {
+                    window.location.assign("/api/settings/youtube/connect");
+                  }}
+                  type="button"
+                >
+                  {youtubeStatus?.connected ? "重新授權 YouTube" : "連接 YouTube"}
+                </Button>
+                {youtubeStatus?.connected ? (
+                  <Button
+                    size="sm"
+                    variant={youtubeDisconnectArm ? "danger" : "ghost"}
+                    loading={youtubeBusy}
+                    onClick={() => void disconnectYouTube()}
+                    type="button"
+                  >
+                    {youtubeDisconnectArm ? "確定解除？" : "解除授權"}
+                  </Button>
+                ) : null}
+                {youtubeDisconnectArm ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={youtubeBusy}
+                    onClick={() => setYoutubeDisconnectArm(false)}
+                    type="button"
+                  >
+                    取消
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <p className="settings-muted">YouTube 授權僅 Admin 可變更。</p>
+            )}
             <p className="settings-muted">
               獨立 Image Provider 連線檢查尚未接（需後端補 status 欄）
             </p>
@@ -947,7 +1011,10 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             <Button
               size="sm"
               loading={statusChecking}
-              onClick={() => void checkStatus()}
+              onClick={() => {
+                void checkStatus();
+                void loadYouTubeStatus();
+              }}
               type="button"
             >
               重新檢查連線

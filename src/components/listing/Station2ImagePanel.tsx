@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { ImageSkillStudio } from "@/components/listing/ImageSkillStudio";
 import { createClient } from "@/lib/supabase/client";
 import { showToast } from "@/components/Toast";
 import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
@@ -22,6 +23,7 @@ import {
   type Station2ImageSubtab,
 } from "@/lib/images/station2ImageTabs";
 import type { ImageProcessIntent, ProductImage } from "@/types/domain";
+import type { ImageSkillTask } from "@/lib/images/imageSkills";
 
 /** Merge-only write for draft image_flags.generate_detail (SYN-1 UI). */
 function mergeGenerateDetailFlag(
@@ -89,6 +91,9 @@ export function Station2ImagePanel({
   const [uploading, setUploading] = useState(false);
   const [flagBusy, setFlagBusy] = useState(false);
   const [localMsg, setLocalMsg] = useState("");
+  const [skillOpen, setSkillOpen] = useState(false);
+  const [skillPrimaryId, setSkillPrimaryId] = useState<string | null>(null);
+  const [skillInitialTask, setSkillInitialTask] = useState<ImageSkillTask>("hero_enhance");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   /** UX-H T49: soft-remove fade */
@@ -102,6 +107,12 @@ export function Station2ImagePanel({
   );
   const canUpload = station2UploadImageType(subtab) != null;
   const showMarks = subtab === "main" || subtab === "spec";
+
+  function openImageSkill(imageId?: string | null, task: ImageSkillTask = "hero_enhance") {
+    setSkillPrimaryId(imageId ?? images.find((img) => img.image_type !== "generated_detail")?.id ?? null);
+    setSkillInitialTask(task);
+    setSkillOpen(true);
+  }
 
   async function setProcessIntent(image: ProductImage, intent: ImageProcessIntent) {
     const patch = patchForProcessIntentPick(intent, image.is_spec_process);
@@ -344,17 +355,31 @@ export function Station2ImagePanel({
 
   return (
     <div className="s2-img-panel">
-      {/* SYN-1: per-draft 生成詳情圖 — default ON; writes image_flags.generate_detail */}
+      <div className="s2-skill-launch-row">
+        <div>
+          <strong>✨ 圖片 AI 工具</strong>
+          <span className="muted"> 人選任務；免費處理優先，AI 預設只生 1 張。</span>
+        </div>
+        <Button
+          size="sm"
+          onClick={() => openImageSkill(null, "hero_enhance")}
+          type="button"
+        >
+          開啟圖片工具
+        </Button>
+      </div>
+
+      {/* SYN-1: legacy deterministic detail compose — keep as info/spec card. */}
       <div className="s2-compose-row">
         <div className="s2-compose-copy">
-          <span className="s2-compose-title">生成詳情圖</span>
+          <span className="s2-compose-title">生成資訊詳情圖</span>
           <span className="s2-compose-hint">
-            預設開啟：標圖通過後合成 1 張繁中詳情長圖（可關）
+            舊版固定排版：規格／賣點整理卡。AI 廣告圖請用上方圖片工具。
           </span>
         </div>
         <label className="toggle" title={generateDetailOn ? "點一下關閉" : "點一下開啟"}>
           <input
-            aria-label="生成詳情圖"
+            aria-label="生成資訊詳情圖"
             checked={generateDetailOn}
             disabled={flagBusy}
             onChange={(event) => void setGenerateDetail(event.target.checked)}
@@ -392,7 +417,9 @@ export function Station2ImagePanel({
             ? "主圖標記與排序（拖曳縮圖可改順序）"
             : subtab === "spec"
               ? "規格圖（在主圖標「規格圖」後會出現在此）"
-              : "詳情圖（供 AI 參考，不上架）"}
+              : subtab === "detail"
+                ? "詳情素材（供 Vision／廣告圖參考，不直接上架）"
+                : "AI 產出（廣告型詳情圖與合成圖）"}
         </div>
 
         {list.length > 0 ? (
@@ -498,9 +525,26 @@ export function Station2ImagePanel({
                     </span>
                   ) : (
                     <span className="muted s2-detail-hint">
-                      詳情圖僅供辨識，無需標記
+                      {subtab === "generated" ? "AI 產出，送圖後可在圖審確認" : "詳情素材僅供辨識／參考，無需標記"}
                     </span>
                   )}
+                  {subtab !== "generated" ? (
+                    <button
+                      className="img-mark-btn image-skill-card-btn"
+                      disabled={busyId === image.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openImageSkill(
+                          image.id,
+                          subtab === "detail" ? "ad_creative" : "hero_enhance"
+                        );
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      type="button"
+                    >
+                      ✨ {subtab === "detail" ? "做廣告圖" : "進階處理"}
+                    </button>
+                  ) : null}
                 </div>
               );
             })}
@@ -510,8 +554,10 @@ export function Station2ImagePanel({
             {subtab === "spec"
               ? "目前沒有規格圖。請到「主圖」把需要的圖標成「規格圖」。"
               : subtab === "detail"
-                ? "尚無詳情圖。可用下方補圖上傳（不上架）。"
-                : "尚無主圖。可用下方補圖上傳。"}
+                ? "尚無詳情素材。可用下方補圖上傳（不上架）。"
+                : subtab === "generated"
+                  ? "還沒有 AI 產出。可用上方「圖片 AI 工具」建立廣告圖。"
+                  : "尚無主圖。可用下方補圖上傳."}
           </div>
         )}
 
@@ -534,9 +580,11 @@ export function Station2ImagePanel({
               {uploading ? "上傳中…" : subtab === "main" ? "＋ 補主圖" : "＋ 補詳情圖"}
             </Button>
           </div>
-        ) : (
+        ) : subtab === "spec" ? (
           <p className="muted s2-img-spec-hint">規格圖請在主圖分頁標記，不另開上傳。</p>
-        )}
+        ) : subtab === "generated" ? (
+          <p className="muted s2-img-spec-hint">AI 產出由圖片工具建立，不需手動上傳。</p>
+        ) : null}
 
         {unmarkedBlockMessage && (subtab === "main" || subtab === "spec") ? (
           <div className="img-mark-warn" role="status">
@@ -549,6 +597,16 @@ export function Station2ImagePanel({
           </div>
         ) : null}
       </div>
+
+      <ImageSkillStudio
+        draftId={draftId}
+        images={images}
+        initialTask={skillInitialTask}
+        onClose={() => setSkillOpen(false)}
+        onImagesChange={onImagesChange}
+        open={skillOpen}
+        primaryImageId={skillPrimaryId}
+      />
     </div>
   );
 }

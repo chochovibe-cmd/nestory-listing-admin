@@ -43,6 +43,8 @@ const scripts = [
   "scripts/verify-cap1.mjs",
   "scripts/verify-cap2.mjs",
   "scripts/verify-cap25.mjs",
+  // Image Skill Studio: low-API cost/fidelity/source-preservation contract.
+  "scripts/verify-image-skill-low-api.mjs",
   // SYN-1 detail compose + to_trad + P4 regression
   "scripts/verify-syn1.mjs",
   "scripts/verify-p4-source-and-seller.mjs",

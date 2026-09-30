@@ -7,7 +7,7 @@
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source：`gpt/copy-product-brief-refactor-20260930`；fork base `agent/chaochao-tone-on-live@5203e4a5`；Draft PR #13
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含 COPY-PB1）
-COPY-PB1 Preview：以 PR #13 最新 Vercel deployment 為準；正式驗證結果見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
+COPY-PB1 Preview：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`；validated code `ae110bd9`；CI #519 verify/typecheck/build 全綠；Vercel `dpl_BcAfEnzM9BzxSFXYkMcDKqEcECvj` READY。完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
 舊 9/24 Preview 線：`agent/chaochao-tone-on-live`
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
 

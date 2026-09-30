@@ -142,3 +142,79 @@ export function buildImageSkillPrompt(input: {
 
   return common.join("\n");
 }
+
+
+export const IMAGE_SKILL_SOURCE_FLAG_PREFIX = "image_skill_source:";
+
+export function isImageSkillTask(value: unknown): value is ImageSkillTask {
+  return (
+    value === "square_pad" ||
+    value === "square_ai" ||
+    value === "hero_enhance" ||
+    value === "creative_hero" ||
+    value === "ad_creative"
+  );
+}
+
+export function isImageSkillQuality(value: unknown): value is ImageSkillQuality {
+  return value === "economy" || value === "standard";
+}
+
+export function isImageSkillStyle(value: unknown): value is ImageSkillStyle {
+  return (
+    value === "chocho" ||
+    value === "clean" ||
+    value === "cute" ||
+    value === "tech" ||
+    value === "lifestyle"
+  );
+}
+
+export function imageSkillUsesApi(task: ImageSkillTask): boolean {
+  return task !== "square_pad";
+}
+
+export function imageSkillSourceFlagKey(imageId: string): string {
+  return `${IMAGE_SKILL_SOURCE_FLAG_PREFIX}${imageId}`;
+}
+
+function stringFlags(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === "string") result[key] = value;
+    else if (value != null && typeof value !== "object") result[key] = String(value);
+  }
+  return result;
+}
+
+export function markImageSkillSource(
+  flags: unknown,
+  imageId: string,
+  task: Exclude<ImageSkillTask, "ad_creative">
+): Record<string, string> {
+  return {
+    ...stringFlags(flags),
+    [imageSkillSourceFlagKey(imageId)]: task
+  };
+}
+
+export function clearImageSkillSource(
+  flags: unknown,
+  imageId: string
+): Record<string, string> {
+  const next = stringFlags(flags);
+  delete next[imageSkillSourceFlagKey(imageId)];
+  return next;
+}
+
+export function hasImageSkillSource(flags: unknown, imageId: string): boolean {
+  return Boolean(stringFlags(flags)[imageSkillSourceFlagKey(imageId)]);
+}
+
+export function imageSkillSourceTask(
+  flags: unknown,
+  imageId: string
+): string | null {
+  return stringFlags(flags)[imageSkillSourceFlagKey(imageId)] ?? null;
+}

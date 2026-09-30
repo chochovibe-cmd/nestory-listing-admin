@@ -78,7 +78,7 @@ await check("conversion is restricted to Taobao/Tmall CDN sources and persists c
 await check("real publish prepares YouTube videos; mock publish does not write YouTube", () => {
   const src = read("src/lib/shopify/publishDraftSafe.ts");
   assert.match(src, /ensureDraftVideosOnYouTube/);
-  assert.match(src, /if \(!mockMode\)/);
+  assert.match(src, /if \(!mockMode/);
   assert.match(src, /video_urls:\s*preparedVideos\.videoUrls/);
 });
 

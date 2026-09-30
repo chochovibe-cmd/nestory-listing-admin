@@ -10,6 +10,7 @@
 3. `AGENTS.md`
 4. 做穩定化再讀 `docs/STABILIZATION_PLAN.md` + 對應 `docs/audits/*.md`
 5. 要判斷 release / deploy：讀 `docs/RELEASE_READINESS.md`
+6. **要碰潮巢文案 full-generation：先讀 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`。目前 COPY-PB1 在 Draft PR #13／Preview-only；不要把 9/23 被退回的 CC-7 當現役設計，也不要未經 Owner 驗收就 deploy Production。**
 
 碰 production Supabase / migration / RLS，**必讀**：
 - `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`

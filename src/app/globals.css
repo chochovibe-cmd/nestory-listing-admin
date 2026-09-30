@@ -7036,6 +7036,30 @@ textarea {
   min-width: 0;
 }
 
+/* UIUX2 P1: actionable hint is not a status chip; keep it quiet but visible. */
+.rc-next-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  max-width: 100%;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.rc-next-action::before {
+  content: "→";
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.rc-next-action.is-block {
+  color: var(--danger);
+}
+.rc-next-action.is-block::before {
+  content: "!";
+  color: var(--danger);
+}
+
 /* UX-B4-P04: mobile regen + price share display:contents; desktop hide regen slot */
 .rc-m-row3 {
   display: contents;

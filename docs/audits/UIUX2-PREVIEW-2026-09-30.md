@@ -20,6 +20,31 @@ Owner 要把 Astra 的實務 UI/UX 建議與既有 Nestory 架構稽核合併，
 
 ## 2. 本包改動
 
+### E. 智慧排程上架 Preview（同一條 UIUX2 Preview 線）
+
+Owner 補充需求：大量商品可一次整理完成，但網站希望分天穩定公開；此功能的價值定位為「發布中控台」，不是宣稱固定 20 件／天會直接提高 SEO 排名。
+
+本 Preview 已加入：
+
+- `publishSchedulePreview.ts`：純函式排程演算法；輸入商品數、開始日、每日件數、上架星期，輸出每天批次與預計完成日。
+- `SchedulePublishPlanner`：桌機／手機可操作；預設 20 件／天、Asia/Taipei 呈現；可改日期、件數、上架星期。
+- `Station3PublishModal`：在既有 Shopify 發布選項內加入「📅 排程正式上架 Preview」入口；只展示，不改 `Station3PublishSelection`，因此不會誤送 API。
+- `/records` 改為「發布中心」，增加「📅 排程」Preview tab。
+- `ScheduleCenterPreview`：展示正式預定流程：完成 → Shopify DRAFT → 排程池 → 發布前同步檢查 → 正式公開／寫入 publish batch。
+- Desktop / Mobile navigation 的「發布紀錄」改為「發布中心」。
+
+本 Preview 刻意**沒有**新增 schedule table／migration、Cron、Shopify ACTIVE mutation，也沒有假造排程成功狀態。
+
+正式版預定 guard：
+
+1. 先建立 Shopify DRAFT 做 staging。
+2. schedule（計畫）與 publish batch（實際執行紀錄）分開資料模型。
+3. 同一商品只允許一個有效排程。
+4. 到期前若 `shopify_sync_status` 是 dirty／conflict／error，不自動公開舊版。
+5. 執行時 atomic claim，避免 Cron 重複上架。
+6. 單件失敗不阻斷同日其他商品；失敗件沿用發布中心 retry。
+7. 熱門新品支援「插隊今天」與「立即上架」；一般新增商品預設接在 queue 尾端，不洗牌既有日期。
+
 ### A. 全庫商品搜尋
 
 新增：

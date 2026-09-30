@@ -5,7 +5,8 @@
  * - regenerate → POST /v1/images/generations (title + image_description)
  *
  * Env (all optional except OPENAI_API_KEY via process):
- *   OPENAI_IMAGE_MODEL          default gpt-image-1
+ *   OPENAI_IMAGE_MODEL          legacy pipeline model (default gpt-image-1)
+ *   OPENAI_IMAGE_SKILL_MODEL    advanced low-cost skills (default gpt-image-2)
  *   OPENAI_IMAGE_SIZE           default 1024x1024
  *   OPENAI_IMAGE_QUALITY        default medium (gpt-image-1)
  *   OPENAI_IMAGE_EDIT_SUPPORTED true|false — force edit capability; default inferred from model
@@ -17,7 +18,8 @@
 import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import type { ImageProvider, ImageProviderInput, ImageProviderOutput } from "@/lib/providers/image";
 
-const DEFAULT_MODEL = "gpt-image-2";
+const DEFAULT_MODEL = "gpt-image-1";
+const DEFAULT_SKILL_MODEL = "gpt-image-2";
 const DEFAULT_SIZE = "1024x1024";
 const DEFAULT_QUALITY = "medium";
 
@@ -26,6 +28,13 @@ const EDIT_UNSUPPORTED_MODELS = new Set(["dall-e-3", "dall-e-3-hd"]);
 
 export function getOpenAiImageModel(): string {
   return (process.env.OPENAI_IMAGE_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
+}
+
+export function getOpenAiImageSkillModel(): string {
+  return (
+    process.env.OPENAI_IMAGE_SKILL_MODEL ||
+    DEFAULT_SKILL_MODEL
+  ).trim() || DEFAULT_SKILL_MODEL;
 }
 
 export function getOpenAiImageSize(): string {
@@ -257,10 +266,15 @@ export class OpenAiImageProvider implements ImageProvider {
       throw new Error("OPENAI_API_KEY is not configured on the server.");
     }
 
-    const model = getOpenAiImageModel();
+    const task = input.task === "generate" ? "regenerate" : input.task;
+    const isAdvancedSkill =
+      task === "square_ai" ||
+      task === "hero_enhance" ||
+      task === "creative_hero" ||
+      task === "ad_creative";
+    const model = isAdvancedSkill ? getOpenAiImageSkillModel() : getOpenAiImageModel();
     const size = input.size?.trim() || getOpenAiImageSize();
     const quality = input.quality?.trim() || getOpenAiImageQuality();
-    const task = input.task === "generate" ? "regenerate" : input.task;
 
     if (
       task === "de_text" ||
@@ -272,7 +286,7 @@ export class OpenAiImageProvider implements ImageProvider {
     ) {
       if (!modelSupportsImageEdit(model)) {
         throw new Error(
-          `${task} requires an edit-capable model (images/edits). Current OPENAI_IMAGE_MODEL=${model} cannot edit.`
+          `${task} requires an edit-capable model (images/edits). Current image model=${model} cannot edit.`
         );
       }
       const sourceUrls = input.sourceImages.map((url) => url.trim()).filter(Boolean).slice(0, 4);

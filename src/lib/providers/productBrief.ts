@@ -1,7 +1,7 @@
 import { estimateCopyCostUsd, type CopyUsage, type RawUsage } from "./copy";
 import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
 
-export const PRODUCT_BRIEF_VERSION = "pb1.3-20261006";
+export const PRODUCT_BRIEF_VERSION = "pb1.4-20261006";
 
 export type ProductBrief = {
   version: string;
@@ -197,8 +197,8 @@ const SYSTEM_PROMPT = `你是 Nestory 商品資料編輯，不是文案寫手。
 
 只輸出 JSON。工作目標：
 1. 從賣家標題、款式、圖片、規格、備註辨認商品身份。
-2. 網搜不是自動可信：只有能合理判斷為同款／同系列同規格的內容才可進 confirmedFacts 或 specLines；只有同 IP、同類型但不是同款的結果放 rejectedEvidence。
-3. 網搜的「綜合摘要」只是搜尋服務整理出的候選線索，不是證據本身。任何尺寸、材質、配件、系列等商品事實，都要能在後面的來源標題／來源摘錄中看到同款身份線索（至少要對得上品牌／聯名方、品項或系列名稱）。如果來源標題明顯是另一品牌、另一系列或另一種商品，即使綜合摘要把它寫成目標商品，也必須丟 rejectedEvidence，不能拿那個來源的規格。
+2. 潮巢 Product Brief 收到的商品網搜，已先經程式做同款硬性比對；即使如此，也只能使用「可信來源摘錄」實際寫出的事實，不可把沒寫在摘錄裡的規格自行補齊。
+3. 尺寸、材質、配件、適用年齡、系列等高風險商品事實，只能來自通過同款硬性比對的來源摘錄；同 IP、同類型但不是同款的資料不可補進 confirmedFacts 或 specLines。
 4. 當次直接證據優先：賣家標題／款式／操作備註／圖中文字 > 明確同款官方或零售資料 > 草稿既有分類與規格（legacy candidate） > 圖片可見外觀 > 泛網搜。
 5. 草稿既有 IP、角色、品項、品牌與規格可能是前一次 AI／舊網搜留下的資料，只能當提示，不能蓋過當次賣家證據。若衝突，以當次直接證據為準；多角色／隨機盲盒不可只因草稿既有角色就縮成單一角色。既有 SKU 仍維持既有 authority。
 6. 尺寸、材質、授權、年份、限定、庫存、到貨等高風險事實：草稿既有規格單獨出現不算直接證據；必須能由當次賣家標題／款式／操作備註／圖中文字，或明確同款官方／零售資料交叉支持。否則放 unknowns 或 rejectedEvidence，不得進 confirmedFacts／specLines。

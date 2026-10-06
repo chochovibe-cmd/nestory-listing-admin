@@ -1071,7 +1071,10 @@ export async function POST(request: NextRequest) {
     stripCustomerSourceMarkers(localizeToTaiwanTraditionalText(providerOutput.spec ?? "").trim()),
   );
   const autoSpecIsBlank = !autoSpec || autoSpec === "（無）" || autoSpec === "(無)";
-  let finalSpecText: string | null = draft.spec_text ?? null;
+  // COPY-PB1.3: on a source-only rebuild, a blank newly-verified spec must
+  // clear stale AI-generated spec instead of preserving it. Otherwise the card
+  // can show new facts while spec_text silently keeps an older generation.
+  let finalSpecText: string | null = rebuildChaochaoBriefFromSource ? null : (draft.spec_text ?? null);
   if (!autoSpecIsBlank) {
     finalSpecText = autoSpec;
     if (existingSpec !== autoSpec) {

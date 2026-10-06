@@ -7060,9 +7060,9 @@ textarea {
   min-width: 0;
 }
 
-/* UIUX2 P1: actionable hint is not a status chip; keep it quiet but visible. */
+/* UIUX2 P1/R1: next-action gets separate desktop/mobile composition.
+   Desktop stays one-line inside title column; mobile gets its own full-width row. */
 .rc-next-action {
-  display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
   max-width: 100%;
@@ -7082,6 +7082,37 @@ textarea {
 .rc-next-action.is-block::before {
   content: "!";
   color: var(--danger);
+}
+.rc-next-action--desktop {
+  display: inline-flex;
+  min-width: 0;
+  width: fit-content;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
+.rc-next-action--mobile {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .rc-next-action--desktop {
+    display: none;
+  }
+  .rc-next-action--mobile {
+    display: flex;
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface2);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* UX-B4-P04: mobile regen + price share display:contents; desktop hide regen slot */

@@ -6,10 +6,11 @@
 ## 1. 新 session 先讀
 
 1. `AI_START_HERE.md`（本檔）
-2. `docs/CURRENT_STATUS.md`
-3. `AGENTS.md`
-4. 做穩定化再讀 `docs/STABILIZATION_PLAN.md` + 對應 `docs/audits/*.md`
-5. 要判斷 release / deploy：讀 `docs/RELEASE_READINESS.md`
+2. `docs/AI_WORKING_RULES.md`（永久合作規則；包含 scope、Race Guard、Owner 驗收、Vercel deployment 節流）
+3. `docs/CURRENT_STATUS.md`
+4. `AGENTS.md`
+5. 做穩定化再讀 `docs/STABILIZATION_PLAN.md` + 對應 `docs/audits/*.md`
+6. 要判斷 release / deploy：讀 `docs/RELEASE_READINESS.md`
 
 碰 production Supabase / migration / RLS，**必讀**：
 - `docs/audits/PRODUCTION-SUPABASE-RECONCILE-2026-08-18.md`
@@ -149,6 +150,7 @@ Migration baseline verifier：`scripts/verify-supabase-migration-baseline.mjs`�
 - 不為了 Security Advisor 綠燈而一刀切 SECURITY DEFINER / RLS helper EXECUTE。
 - service-role API 不可信任前端傳來的 IDs。
 - 不 merge / 不 Vercel production deploy，除非使用者明確同意。
+- Vercel Preview 不要每個 commit 都部署；預設是一個 package 完成、CI / diff 通過後才做 1 次 Owner Preview。完整規則見 `docs/AI_WORKING_RULES.md` §23。
 - 使用者要求 Supabase 免費方案；不要建立付費 branch。
 
 ## 9. 新 session 開場指令

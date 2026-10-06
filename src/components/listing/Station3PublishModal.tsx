@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { SchedulePublishPlanner } from "@/components/listing/SchedulePublishPlanner";
+import {
+  SchedulePublishPlanner,
+  type SchedulePlannerValue
+} from "@/components/listing/SchedulePublishPlanner";
 import {
   countSelectedActions,
   DEFAULT_STATION3_SELECTION,
@@ -20,15 +23,24 @@ import {
 export function Station3PublishModal({
   open,
   draftCount,
+  draftIds = [],
   busy = false,
   onCancel,
-  onConfirm
+  onConfirm,
+  onScheduleCreated
 }: {
   open: boolean;
   draftCount: number;
+  draftIds?: string[];
   busy?: boolean;
   onCancel: () => void;
   onConfirm: (selection: Station3PublishSelection) => void;
+  onScheduleCreated?: (result: {
+    groupId: string;
+    total: number;
+    finishDate: string | null;
+    message: string;
+  }) => void;
 }) {
   const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -36,12 +48,18 @@ export function Station3PublishModal({
   const [selection, setSelection] = useState<Station3PublishSelection>(DEFAULT_STATION3_SELECTION);
   const [singleWarn, setSingleWarn] = useState(false);
   const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
+  const [scheduleValue, setScheduleValue] = useState<SchedulePlannerValue | null>(null);
+  const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setSelection(readStoredStation3Selection());
     setSingleWarn(false);
     setSchedulePreviewOpen(false);
+    setScheduleValue(null);
+    setScheduleBusy(false);
+    setScheduleMessage("");
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     // UX-E T32: destructive publish modal → focus 取消 first
@@ -55,18 +73,18 @@ export function Station3PublishModal({
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape" && !busy) {
+      if (event.key === "Escape" && !busy && !scheduleBusy) {
         event.preventDefault();
         onCancel();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, busy, onCancel]);
+  }, [open, busy, onCancel, scheduleBusy]);
 
   if (!open) return null;
 
-  const canSubmit = hasAnyAction(selection) && !busy && !schedulePreviewOpen;
+  const canSubmit = hasAnyAction(selection) && !busy && !scheduleBusy && !schedulePreviewOpen;
 
   function setShopify(value: Station3ShopifyChoice) {
     setSelection((prev) => ({ ...prev, shopify: value }));
@@ -88,13 +106,54 @@ export function Station3PublishModal({
     onConfirm(selection);
   }
 
+  async function handleScheduleCreate() {
+    if (!scheduleValue || !draftIds.length || scheduleBusy) return;
+    setScheduleBusy(true);
+    setScheduleMessage("");
+    try {
+      const response = await fetch("/api/publish-schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draftIds,
+          startDate: scheduleValue.startDate,
+          dailyLimit: scheduleValue.dailyLimit,
+          activeWeekdays: scheduleValue.activeWeekdays
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = [payload.error, payload.hint].filter(Boolean).join(" — ") || "建立排程失敗";
+        setScheduleMessage(message);
+        return;
+      }
+
+      const result = {
+        groupId: String(payload.groupId ?? ""),
+        total: Number(payload.total ?? draftIds.length),
+        finishDate: typeof payload.finishDate === "string" ? payload.finishDate : null,
+        message:
+          typeof payload.message === "string"
+            ? payload.message
+            : "測試排程已建立；Shopify 安全鎖維持關閉"
+      };
+      setScheduleMessage(result.message);
+      onScheduleCreated?.(result);
+      onCancel();
+    } catch {
+      setScheduleMessage("建立排程連線失敗");
+    } finally {
+      setScheduleBusy(false);
+    }
+  }
+
   return (
     <div
       aria-labelledby={titleId}
       aria-modal="true"
       className="modal-overlay open"
       onClick={(event) => {
-        if (event.target === event.currentTarget && !busy) onCancel();
+        if (event.target === event.currentTarget && !busy && !scheduleBusy) onCancel();
       }}
       role="dialog"
     >
@@ -104,7 +163,7 @@ export function Station3PublishModal({
           <button
             aria-label="關閉"
             className="modal-close"
-            disabled={busy}
+            disabled={busy || scheduleBusy}
             onClick={onCancel}
             type="button"
           >
@@ -116,7 +175,7 @@ export function Station3PublishModal({
             已選 <strong>{draftCount}</strong> 件 · 可同時勾多種格式
           </p>
 
-          <fieldset className="station3-fieldset" disabled={busy}>
+          <fieldset className="station3-fieldset" disabled={busy || scheduleBusy}>
             <legend className="station3-legend">Shopify（二選一）</legend>
             <label className="check-row">
               <input
@@ -153,14 +212,33 @@ export function Station3PublishModal({
               onClick={() => setSchedulePreviewOpen((current) => !current)}
             >
               <span>📅 排程正式上架</span>
-              <span className="schip schip--run">Preview</span>
+              <span className="schip schip--run">Test</span>
             </button>
             {schedulePreviewOpen ? (
-              <SchedulePublishPlanner draftCount={draftCount} compact />
+              <>
+                <SchedulePublishPlanner
+                  draftCount={draftCount}
+                  compact
+                  onChange={setScheduleValue}
+                />
+                <button
+                  className="nb-btn nb-btn--primary"
+                  disabled={scheduleBusy || !scheduleValue || draftIds.length === 0}
+                  onClick={() => void handleScheduleCreate()}
+                  type="button"
+                >
+                  {scheduleBusy ? "建立排程中…" : `建立測試排程（${draftCount} 件）`}
+                </button>
+                {scheduleMessage ? (
+                  <p className="station3-single-warn" role="status">
+                    {scheduleMessage}
+                  </p>
+                ) : null}
+              </>
             ) : null}
           </fieldset>
 
-          <fieldset className="station3-fieldset" disabled={busy}>
+          <fieldset className="station3-fieldset" disabled={busy || scheduleBusy}>
             <legend className="station3-legend">CSV 匯出（可並存）</legend>
             <label className="check-row">
               <input

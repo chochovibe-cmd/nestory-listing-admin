@@ -10,7 +10,8 @@ const expectedActive = [
   "20260818142919_production_reconcile_20260818.sql",
   "20260822223100_variant_split_override_semantics.sql",
   "20260902090000_guard_current_image_batch_pointer.sql",
-  "20260903100000_shopify_full_sync_state.sql"
+  "20260903100000_shopify_full_sync_state.sql",
+  "20261006181500_publish_schedule_core.sql"
 ];
 
 function fail(message) {
@@ -160,6 +161,9 @@ if (!workflow.includes("cp supabase/migrations/20260822223100_variant_split_over
 }
 if (!workflow.includes("cp supabase/migrations/20260903100000_shopify_full_sync_state.sql /tmp/nestory-forward-migrations/")) {
   fail("G4 full-sync migration must be staged explicitly for the local reversible gate");
+}
+if (!workflow.includes("cp supabase/migrations/20261006181500_publish_schedule_core.sql /tmp/nestory-forward-migrations/")) {
+  fail("scheduled publish migration must be staged explicitly for the isolated local DB gate");
 }
 
 const productionPackageTest = fs.readFileSync(path.join(root, "scripts", "test-supabase-production-package-local.sh"), "utf8");

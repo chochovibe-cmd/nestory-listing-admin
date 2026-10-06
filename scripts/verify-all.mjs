@@ -56,6 +56,7 @@ const scripts = [
   "scripts/verify-shopify-live-test-guard.mjs",
   "scripts/verify-shopify-full-sync.mjs",
   "scripts/verify-shopify-sync-ux.mjs",
+  "scripts/verify-publish-schedule-safety.mjs",
   "scripts/verify-websearch-copy-path.mjs"
 ];
 

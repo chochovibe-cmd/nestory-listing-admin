@@ -3022,10 +3022,17 @@ export function ResultCard({
       <Station3PublishModal
         busy={station3Busy}
         draftCount={1}
+        draftIds={[draft.id]}
         onCancel={() => {
           if (!station3Busy) setStation3Open(false);
         }}
         onConfirm={(sel) => void runStation3CardFlow(sel)}
+        onScheduleCreated={(result) => {
+          showToast(
+            `📅 ${result.message}${result.finishDate ? ` · ${result.finishDate} 完成` : ""}`,
+            "success"
+          );
+        }}
         open={station3Open}
       />
 

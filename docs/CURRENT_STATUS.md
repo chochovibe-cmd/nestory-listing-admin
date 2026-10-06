@@ -3,13 +3,23 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-10-06（COPY-PB1.2 Owner QA 小修；**Draft / Preview-only / 正式站未動**）
+更新基準：2026-10-06（COPY-PB1.3 Why 回調 + evidence integrity；**Draft / Preview-only / 正式站未動**）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source：`gpt/copy-product-brief-refactor-20260930`；fork base `agent/chaochao-tone-on-live@5203e4a5`；Draft PR #13
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含 COPY-PB1.x）
-COPY-PB1.2 Preview：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`；validated runtime code `1eece231`；CI #588 verify/typecheck/build 全綠；Vercel `dpl_22TL66PD6j2XLc7SnWNKP1JmM4b6` READY。最新 docs checkpoint 以 branch HEAD 為準；完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
+COPY-PB1.3 Preview：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`；validated runtime code `1722b3dc`；CI #612 verify/typecheck/build 全綠；Vercel `dpl_BdSzosWX52u2oKYwbpDgbS4w1LQq` READY。最新 docs checkpoint 以 branch HEAD 為準；完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
 舊 9/24 Preview 線：`agent/chaochao-tone-on-live`
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-10-06 COPY-PB1.3｜Why 回調 + evidence integrity
+
+Owner 實測 PB1.2 後覺得「沒有上一版好的感覺」。Supabase 實際歷史確認 PB1.2 Why 反而形成新的「我們喜歡的是…不僅…還…」模板；因此 PB1.3 拿掉固定開頭與「日常／送禮／小驚喜」必備節奏，只保留一個自然問題：「你看到這件時，為什麼會想把它選進潮巢？」要求從這件才成立的細節回答，不能只是商品介紹濃縮版。
+
+同時查明七龍珠規格異常有兩層：Tavily 綜合摘要把另一款 MegaHouse Petitrama DRACAP 的 `75mm / 55mm / PVC+ABS` 誤歸給 MINISO 萌粒鍵帽盲盒；而 DB `spec_text` 又因舊規則「新 spec 空白不清舊值」保留更早的 `11公分`。PB1.3 因此要求 web 規格必須由來源標題／摘錄證明同款；PB source-only full rebuild 若沒有新的可信 spec，會清掉上一輪 AI spec，不再讓卡片與 DB 規格分裂。
+
+Recipe：`chaochao-pb1.3-20261006`。Validated runtime code：`1722b3dcfe262e3d95e344c851ce6535e5bf9190`；CI #612 ✅；Vercel `dpl_BdSzosWX52u2oKYwbpDgbS4w1LQq` READY / Preview。PR #13 仍 Draft / OPEN / NOT MERGED；Production / Shopify / DB schema 未動。
+
+Owner 下一步仍只需重測七龍珠鍵帽盲盒 + Pingu 吹風機，再由 Commander 用 Supabase 核對 `chaochao-pb1.3-20261006`。
 
 ## 2026-10-06 COPY-PB1.2｜Why 選物語氣 + source-only full regen
 

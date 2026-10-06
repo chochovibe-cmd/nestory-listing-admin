@@ -1,7 +1,7 @@
 import { estimateCopyCostUsd, type CopyUsage, type RawUsage } from "./copy";
 import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
 
-export const PRODUCT_BRIEF_VERSION = "pb1-20260930";
+export const PRODUCT_BRIEF_VERSION = "pb1.1-20261006";
 
 export type ProductBrief = {
   version: string;
@@ -181,7 +181,7 @@ function evidenceMessage(input: ProductBriefInput): string {
     input.variantSummary ? `款式：${clamp(input.variantSummary, 1200)}` : "",
     input.note ? `操作備註：${clamp(input.note, 800)}` : "",
     input.imageDescription ? `圖片辨識：${clamp(input.imageDescription, 1400)}` : "",
-    input.specText ? `原始規格：${clamp(input.specText, 1800)}` : "",
+    input.specText ? `草稿既有規格（legacy candidate；可能由舊生成寫入，不能單獨證明尺寸／材質等高風險事實）：${clamp(input.specText, 1800)}` : "",
     input.webSearchSummary ? `網搜素材：\n${clamp(input.webSearchSummary, 3000)}` : "",
     input.ipKnowledgePromptBlock ? `IP 背景：\n${clamp(input.ipKnowledgePromptBlock, 900)}` : "",
     input.existingIp ? `草稿既有 IP：${clamp(input.existingIp, 100)}` : "",
@@ -198,15 +198,16 @@ const SYSTEM_PROMPT = `你是 Nestory 商品資料編輯，不是文案寫手。
 只輸出 JSON。工作目標：
 1. 從賣家標題、款式、圖片、規格、備註辨認商品身份。
 2. 網搜不是自動可信：只有能合理判斷為同款／同系列同規格的內容才可進 confirmedFacts 或 specLines；只有同 IP、同類型但不是同款的結果放 rejectedEvidence。
-3. 資料優先順序：賣家款式／標題／圖中文字／既有規格 > 明確同款官方或零售資料 > 圖片可見外觀 > 泛網搜。
-4. 尺寸、材質、授權、年份、限定、庫存、到貨等高風險事實，沒有直接證據就放 unknowns，不可猜。
-5. 賣家服務／店鋪促銷不是商品物理事實：保固、售後、退換、贈品、滿額、店鋪活動、客服承諾、物流時效等不要放進 confirmedFacts、differentiators、useCases、fanHooks 或 specLines。
-6. differentiators 只留 3–6 個「換成同 IP 另一件商品就不一定成立」的差異。
-7. fanHooks 是角色／主題造成的收藏心理或畫面，不可杜撰劇情設定。
-8. 不要寫銷售文案、形容詞堆疊、SEO 句子。
-9. 台灣繁中。手办→公仔／模型、钥匙扣→鑰匙圈、亚克力→壓克力、挂件→吊飾、毛绒→毛絨。
-10. title.enrichedTitle 依「IP中文＋必要英文 × 品牌 | 精準品項 | 重要差異」整理；沒有品牌就省略，不硬塞。
-11. SKU：既有 SKU 優先；沒有才依 CHO-{型態縮寫}-{IP縮寫}-{角色縮寫}-001 產生，縮寫 2–3 碼大寫英文。無法可靠縮寫可留空。
+3. 當次直接證據優先：賣家標題／款式／操作備註／圖中文字 > 明確同款官方或零售資料 > 草稿既有分類與規格（legacy candidate） > 圖片可見外觀 > 泛網搜。
+4. 草稿既有 IP、角色、品項、品牌與規格可能是前一次 AI／舊網搜留下的資料，只能當提示，不能蓋過當次賣家證據。若衝突，以當次直接證據為準；多角色／隨機盲盒不可只因草稿既有角色就縮成單一角色。既有 SKU 仍維持既有 authority。
+5. 尺寸、材質、授權、年份、限定、庫存、到貨等高風險事實：草稿既有規格單獨出現不算直接證據；必須能由當次賣家標題／款式／操作備註／圖中文字，或明確同款官方／零售資料交叉支持。否則放 unknowns 或 rejectedEvidence，不得進 confirmedFacts／specLines。
+6. 賣家服務／店鋪促銷不是商品物理事實：保固、售後、退換、贈品、滿額、店鋪活動、客服承諾、物流時效等不要放進 confirmedFacts、differentiators、useCases、fanHooks 或 specLines。
+7. differentiators 只留 3–6 個「換成同 IP 另一件商品就不一定成立」的差異。
+8. fanHooks 是角色／主題造成的收藏心理或畫面，不可杜撰劇情設定。
+9. 不要寫銷售文案、形容詞堆疊、SEO 句子。
+10. 台灣繁中。手办→公仔／模型、钥匙扣→鑰匙圈、亚克力→壓克力、挂件→吊飾、毛绒→毛絨。
+11. title.enrichedTitle 依「IP中文＋必要英文 × 品牌 | 精準品項 | 重要差異」整理；沒有品牌就省略，不硬塞。
+12. SKU：既有 SKU 優先；沒有才依 CHO-{型態縮寫}-{IP縮寫}-{角色縮寫}-001 產生，縮寫 2–3 碼大寫英文。無法可靠縮寫可留空。
 
 JSON schema:
 {

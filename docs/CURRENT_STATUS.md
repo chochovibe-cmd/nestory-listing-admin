@@ -3,13 +3,25 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-30（COPY-PB1 Product Brief 文案重構；**Draft / Preview-only / 正式站未動**）
+更新基準：2026-10-06（COPY-PB1.2 Owner QA 小修；**Draft / Preview-only / 正式站未動**）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source：`gpt/copy-product-brief-refactor-20260930`；fork base `agent/chaochao-tone-on-live@5203e4a5`；Draft PR #13
-已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含 COPY-PB1）
-COPY-PB1 Preview：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`；validated code `ae110bd9`；CI #519 verify/typecheck/build 全綠；Vercel `dpl_BcAfEnzM9BzxSFXYkMcDKqEcECvj` READY。完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
+已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含 COPY-PB1.x）
+COPY-PB1.2 Preview：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`；validated runtime code `1eece231`；CI #588 verify/typecheck/build 全綠；Vercel `dpl_22TL66PD6j2XLc7SnWNKP1JmM4b6` READY。最新 docs checkpoint 以 branch HEAD 為準；完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
 舊 9/24 Preview 線：`agent/chaochao-tone-on-live`
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-10-06 COPY-PB1.2｜Why 選物語氣 + source-only full regen
+
+Owner 實測 PB1/PB1.1 後確認整體文案已明顯改善，但「為什麼潮巢選他」仍像 AI／品牌公關稿；Owner 指定 `https://littlesecret.showmore.cc/` 作風格參考。只採用其可觀察到的「物件 → 日常小驚喜／送禮心意」溫柔選物節奏，不照抄句子、不改成別店口吻。
+
+Supabase 唯讀核對也確認 PB1.1 七龍珠重測仍回流舊錯誤 `PVC / 約11公分 / 單一孫悟空`。PB1.2 因此不再只靠 prompt 降權，而是在潮巢 full regenerate 時直接忽略上一輪 AI 寫回的 spec / character / product type / brand / product-search cache，重新從原始 title / variants / note / image / fresh search 建 Product Brief。IP / SKU authority 保留。
+
+Recipe：`chaochao-pb1.2-20261006`。Why 改為 1–2 句真實選物者視角，明確排除「滿足收藏需求／潮巢希望／角色魅力／帶入生活空間」等企業式句子。其他 tone、single-field regen、Description / Highlights / FAQ 既有規則都沒動。
+
+Validated runtime code：`1eece231bdab6ae03eff01a9736296a130f9635e`；CI #588 ✅；Vercel `dpl_22TL66PD6j2XLc7SnWNKP1JmM4b6` READY / Preview。PR #13 仍 Draft / OPEN / NOT MERGED；Production / Shopify / DB 未動。
+
+Owner 下一步只需重測七龍珠鍵帽盲盒 + Pingu 吹風機，之後 Commander 用 Supabase 檢查 `chaochao-pb1.2-20261006` live output。
 
 ## 2026-09-30 COPY-PB1｜Evidence → Product Brief → Focused Writer
 

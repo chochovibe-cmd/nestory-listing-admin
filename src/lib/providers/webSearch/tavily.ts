@@ -1,5 +1,5 @@
 import { externalTimeoutSignal, WEB_SEARCH_TIMEOUT_MS } from "../externalTimeout";
-import type { WebSearchProvider, WebSearchSource } from "./types";
+import type { WebSearchEvidence, WebSearchProvider, WebSearchSource } from "./types";
 
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
 
@@ -23,6 +23,7 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
   async search(query: string): Promise<{
     summary: string;
     sources: WebSearchSource[];
+    evidence: WebSearchEvidence[];
     provider: "tavily";
     query: string;
   }> {
@@ -33,7 +34,7 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
 
     const trimmed = query.trim();
     if (!trimmed) {
-      return { summary: "", sources: [], provider: "tavily", query: trimmed };
+      return { summary: "", sources: [], evidence: [], provider: "tavily", query: trimmed };
     }
 
     const response = await fetch(TAVILY_ENDPOINT, {
@@ -61,15 +62,22 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
       throw new Error(`Tavily error: ${data.error}`);
     }
 
-    const sources: WebSearchSource[] = (data.results ?? [])
-      .map((row) => ({
-        title: (row.title ?? "").trim() || (row.url ?? "").trim(),
-        url: (row.url ?? "").trim(),
-      }))
-      .filter((row) => row.url);
+    const evidence: WebSearchEvidence[] = (data.results ?? [])
+      .map((row) => {
+        const title = (row.title ?? "").trim() || (row.url ?? "").trim();
+        const url = (row.url ?? "").trim();
+        if (!url) return null;
+        return {
+          title,
+          url,
+          excerpt: extractRelevantExcerpt(row.content ?? "", 400),
+        };
+      })
+      .filter((row): row is WebSearchEvidence => row !== null);
+    const sources: WebSearchSource[] = evidence.map(({ title, url }) => ({ title, url }));
 
     const summary = formatTavilySummary(trimmed, data.answer, data.results ?? [], sources);
-    return { summary, sources, provider: "tavily", query: trimmed };
+    return { summary, sources, evidence, provider: "tavily", query: trimmed };
   }
 }
 

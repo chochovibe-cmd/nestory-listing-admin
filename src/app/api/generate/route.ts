@@ -755,6 +755,7 @@ export async function POST(request: NextRequest) {
       note: draft.note,
       imageDescription: draft.image_description,
       existingCache: trustedProductSearchCache,
+      strictProductIdentity: tone === "潮巢導購版",
     }).finally(() => {
       stageMs.webSearch = Date.now() - productStarted;
     });

@@ -365,3 +365,91 @@ Validated runtime code SHA：
 2. Pingu 吹風機：Why 應更像真心選物理由，而不是「滿足需求／潮巢希望／角色魅力」式公關稿。
 
 測完後 Commander 再用 Supabase 唯讀核對 `chaochao-pb1.2-20261006` 實際結果；Owner 明確接受前不 merge、不上 Production。
+
+## 15. COPY-PB1.3｜Why 回調 + evidence integrity｜2026-10-06
+
+Owner 實測 PB1.2 後明確回報：「沒有上一版好的感覺」。Commander 隨即用 Supabase 唯讀比對 PB1.1 / PB1.2 實際 `generation_history`，確認不是主觀錯覺：
+
+- PB1.2 Why 開始反覆出現「我們喜歡的是…不僅…還…讓日常…」等新模板，實際上只是把舊企業式模板換成另一套模板。
+- 七龍珠 PB1.2 最新搜尋把不相干的 MegaHouse `Petitrama DX DRACAP` 七龍珠商品當成尺寸／材質線索；Tavily 綜合摘要錯把該來源的 `75mm / 55mm / PVC+ABS` 歸到 MINISO 萌粒鍵帽盲盒。
+- 同一筆 draft 的 `spec_text` 仍停在更舊的 `PVC / 約11公分`。根因是 full-generation 寫回邏輯原本刻意遵守「新 spec 空白時不覆蓋舊 spec」，但對 PB1.x source-only rebuild 來說，這反而會保留上一輪 AI 產生的 stale spec，造成卡片新文案與 DB 規格不一致。
+
+### Authority / scope
+
+- Branch：`gpt/copy-product-brief-refactor-20260930`
+- Draft PR：#13
+- Start HEAD：`8ae0e28abd45ac3a26d70e9c682006a324068ee9`
+- Allowed adjustments（最多 3 個）：
+  1. Why 取消 PB1.2 過度模板化，回到自然選物者回答。
+  2. PB source-only full rebuild 若沒有新的可信 spec，就清掉舊 AI spec，不得默默保留。
+  3. Product Brief 不得把 web-search 綜合摘要本身當證據；尺寸／材質等必須能由來源標題／摘錄確認同款身份。
+- Forbidden：Description / Highlights / FAQ 既有規則、其他 tone、single-field regen、Shopify、DB schema、Production、merge。
+
+### PB1.3 implementation
+
+Recipe version：`pb1.3-20261006`；成功路徑寫入：
+
+`generation_rule_version=chaochao-pb1.3-20261006`
+
+#### 1. Why 回調
+
+移除 PB1.2 的固定示範句型與「日常／送禮／小驚喜」節奏要求。
+
+現在只問 Writer 一個自然問題：
+
+> 你看到這件時，為什麼會想把它選進潮巢？
+
+要求從一個只有這件才成立的細節回答，再自然說明那個細節為什麼讓人想留下。沒有固定開頭、沒有必備情緒詞；如果讀起來只是商品介紹的濃縮版就重寫。企業式抽象句與角色頌歌仍禁止。
+
+#### 2. stale spec consistency
+
+PB1.2 已有 source-only rebuild guard。PB1.3 再補寫回規則：
+
+- 一般流程仍維持「model spec 空白不擦掉既有手填／既有規格」的舊安全行為。
+- 只有在 `rebuildChaochaoBriefFromSource=true` 的 PB full regenerate：若新的 verified `providerOutput.spec` 為空，就把 `finalSpecText` 設為 null，不再保存上一輪 AI spec。
+- 若新 Brief 有可信 `specLines`，仍正常寫回新 spec。
+
+#### 3. web evidence integrity
+
+Product Brief 新增 source-level guard：
+
+- 搜尋供應商的「綜合摘要」只算候選線索，不是證據。
+- 尺寸、材質、配件、系列等商品事實必須在來源標題／來源摘錄看到同款身份線索，至少對得上品牌／聯名方、品項或系列。
+- 來源若明顯是另一品牌、另一系列或另一種商品，即使綜合摘要聲稱是目標商品，也必須進 `rejectedEvidence`，不能拿該來源規格。
+
+這條就是針對本次觀察到的「MINISO 萌粒鍵帽盲盒 ← MegaHouse Petitrama DRACAP 75mm」污染類型，但規則本身是一般化的，不綁死單一商品。
+
+### Diff gate
+
+PB1.3 runtime code 只動：
+
+- `src/lib/providers/chaochaoPrompt.ts`
+- `src/lib/providers/productBrief.ts`
+- `src/app/api/generate/route.ts`
+- `scripts/verify-copy-product-brief.mjs`
+
+### Validation
+
+Validated runtime code SHA：
+
+`1722b3dcfe262e3d95e344c851ce6535e5bf9190`
+
+- GitHub CI run #612：`verify:all` ✅ / typecheck ✅ / build ✅
+- Vercel deployment：`dpl_BdSzosWX52u2oKYwbpDgbS4w1LQq` ✅ READY
+- Vercel target：Preview（不是 Production）
+- PR #13：Draft / OPEN / NOT MERGED
+- Production / Shopify / DB schema：未動
+
+### 下一個 Owner gate
+
+只需再用相同 Preview 做兩筆 full generation：
+
+1. 七龍珠 MINISO 萌粒鍵帽盲盒：
+   - 不應再拿 MegaHouse Petitrama 的 `75mm / 55mm / PVC+ABS`；
+   - 舊 `11公分` 若本次沒有可信規格，也應從 `spec_text` 清掉；
+   - 角色不得縮成單一孫悟空。
+2. Pingu 吹風機：
+   - Why 不應再固定成「我們喜歡的是…不僅…還…」；
+   - 應像自然回答「為什麼我會挑這件」，而不是商品介紹濃縮版。
+
+測完後用 Supabase 唯讀檢查 `chaochao-pb1.3-20261006` 實際結果。Owner 明確接受前不 merge、不上 Production。

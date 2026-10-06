@@ -3,13 +3,25 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-10-06（COPY-PB1.3 Why 回調 + evidence integrity；**Draft / Preview-only / 正式站未動**）
+更新基準：2026-10-06（COPY-PB1.4 hard product evidence gate + simpler Why；**HOLD / Preview blocked / 正式站未動**）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source：`gpt/copy-product-brief-refactor-20260930`；fork base `agent/chaochao-tone-on-live@5203e4a5`；Draft PR #13
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含 COPY-PB1.x）
-COPY-PB1.3 Preview：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`；validated runtime code `1722b3dc`；CI #612 verify/typecheck/build 全綠；Vercel `dpl_BdSzosWX52u2oKYwbpDgbS4w1LQq` READY。最新 docs checkpoint 以 branch HEAD 為準；完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
+COPY-PB1.4 validated code：`a30aa29b`；CI #660 verify/typecheck/build 全綠。**PB1.4 Preview 尚不存在**：Vercel Free 今日 API deployment 已達 100/100，`api-deployments-free-per-day` remaining=0；舊 branch Preview 仍是較舊版本，不能拿來驗收 PB1.4。完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
 舊 9/24 Preview 線：`agent/chaochao-tone-on-live`
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-10-06 COPY-PB1.4｜hard product evidence gate + simpler Why
+
+Owner 同意把「網搜是不是同款」從 Prompt 判斷改成程式 gate。Tavily 現在保留來源 excerpt；潮巢 full generation 先用 deterministic 同款比對，只把通過的來源重建成「可信來源摘錄」給 Product Brief，而且完全不採用 Tavily 綜合 answer。沒有來源通過時，網搜規格整包不進模型，寧願不寫尺寸／材質。
+
+Regression test 已鎖住兩個真實事故：MegaHouse Petitrama 的 `75mm / 55mm / PVC+ABS` 不得污染 MINISO 七龍珠萌粒鍵帽盲盒；PINGU 貪吃的小鵝公仔的 `PVC/ABS / 10.5cm` 不得污染 Pingu 吹風機。
+
+Why 同時縮成單一問題：「這件商品有哪一個只有它才有的點，讓你真的想把它選進潮巢？」不再提供固定開頭或必備情緒詞，也禁止替潮巢虛構童年／回憶／會心一笑等感受。
+
+Recipe：`chaochao-pb1.4-20261006`。Validated code：`a30aa29ba713189b989c11418dd4fb2733dad16a`；GitHub CI #660 ✅ verify / typecheck / build。
+
+**Current gate：HOLD。** Vercel 今日 Free deployment API 配額已滿（100/100，remaining=0；`api-deployments-free-per-day`），所以 PB1.4 尚無 Preview。PR #13 仍 Draft / OPEN / NOT MERGED；Production / Shopify / DB schema 未動。額度重置後先建同一 branch 最新 HEAD 的 Preview，再讓 Owner 重測七龍珠 + Pingu，之後 Supabase 唯讀驗收 `chaochao-pb1.4-20261006`。
 
 ## 2026-10-06 COPY-PB1.3｜Why 回調 + evidence integrity
 

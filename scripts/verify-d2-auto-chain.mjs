@@ -83,37 +83,40 @@ function mergeAutoChainWarning(existing, line) {
 function aggregateBatchStatusAfterChain(summaries) {
   let doneCount = 0;
   let failedCount = 0;
-  let awaitingOnly = 0;
-  let timeBudget = 0;
-  let emptySkip = 0;
+  let processingCount = 0;
+  let queuedCount = 0;
 
   for (const s of summaries) {
-    if (s.outcome === "done" || s.outcome === "skipped_empty") {
-      doneCount += 1;
-      if (s.outcome === "skipped_empty") emptySkip += 1;
-    } else if (s.outcome === "failed") {
-      failedCount += 1;
-    } else if (s.outcome === "awaiting_d4") {
-      awaitingOnly += 1;
-    } else if (s.outcome === "time_budget") {
-      timeBudget += 1;
-    }
+    const itemStatus =
+      s.itemStatus ??
+      (s.outcome === "done" || s.outcome === "skipped_empty"
+        ? "done"
+        : s.outcome === "failed"
+          ? "failed"
+          : "queued");
+    if (itemStatus === "done" || itemStatus === "skipped") doneCount += 1;
+    else if (itemStatus === "failed") failedCount += 1;
+    else if (itemStatus === "processing") processingCount += 1;
+    else queuedCount += 1;
   }
 
-  const n = summaries.length;
-  if (n === 0) return { batchStatus: "queued", doneCount: 0, failedCount: 0 };
-  if (awaitingOnly === n) return { batchStatus: "queued", doneCount: 0, failedCount: 0 };
-  if (timeBudget === n) return { batchStatus: "queued", doneCount: 0, failedCount: 0 };
-  if (failedCount === n) return { batchStatus: "failed", doneCount: 0, failedCount };
-  if (doneCount === n) return { batchStatus: "completed", doneCount, failedCount: 0 };
-  if (failedCount === 0 && timeBudget === 0 && doneCount + awaitingOnly + emptySkip === n) {
+  const total = summaries.length;
+  if (total === 0) return { batchStatus: "queued", doneCount: 0, failedCount: 0 };
+
+  const hasUnfinished = queuedCount > 0 || processingCount > 0;
+  if (hasUnfinished) {
     return {
-      batchStatus: doneCount > 0 ? "completed" : "queued",
+      batchStatus:
+        processingCount > 0 || doneCount > 0 || failedCount > 0
+          ? "processing"
+          : "queued",
       doneCount,
-      failedCount: 0
+      failedCount
     };
   }
-  return { batchStatus: "partial_failed", doneCount, failedCount };
+  if (failedCount === total) return { batchStatus: "failed", doneCount: 0, failedCount };
+  if (failedCount > 0) return { batchStatus: "partial_failed", doneCount, failedCount };
+  return { batchStatus: "completed", doneCount, failedCount: 0 };
 }
 
 console.log("\nD2-open auto chain verify\n");
@@ -207,19 +210,28 @@ await check("time budget: remaining < 8s stops", () => {
   assert.ok(remainingBudgetMs(started, started + 10_000) === 50_000);
 });
 
-await check("aggregateBatchStatus: all awaiting_d4 → queued (Q5a-A)", () => {
+await check("aggregateBatchStatus: untouched awaiting_d4 → queued", () => {
   const agg = aggregateBatchStatusAfterChain([
-    { outcome: "awaiting_d4" },
-    { outcome: "awaiting_d4" }
+    { outcome: "awaiting_d4", itemStatus: "queued" },
+    { outcome: "awaiting_d4", itemStatus: "queued" }
   ]);
   assert.equal(agg.batchStatus, "queued");
   assert.equal(agg.doneCount, 0);
 });
 
+await check("aggregateBatchStatus: partial progress awaiting_d4 → processing", () => {
+  const agg = aggregateBatchStatusAfterChain([
+    { outcome: "awaiting_d4", itemStatus: "processing" }
+  ]);
+  assert.equal(agg.batchStatus, "processing");
+  assert.equal(agg.doneCount, 0);
+  assert.equal(agg.failedCount, 0);
+});
+
 await check("aggregateBatchStatus: all done → completed", () => {
   const agg = aggregateBatchStatusAfterChain([
-    { outcome: "done" },
-    { outcome: "done" }
+    { outcome: "done", itemStatus: "done" },
+    { outcome: "done", itemStatus: "done" }
   ]);
   assert.equal(agg.batchStatus, "completed");
   assert.equal(agg.doneCount, 2);
@@ -227,11 +239,21 @@ await check("aggregateBatchStatus: all done → completed", () => {
 
 await check("aggregateBatchStatus: mix fail → partial_failed", () => {
   const agg = aggregateBatchStatusAfterChain([
-    { outcome: "done" },
-    { outcome: "failed" },
-    { outcome: "time_budget" }
+    { outcome: "done", itemStatus: "done" },
+    { outcome: "failed", itemStatus: "failed" },
+    { outcome: "time_budget", itemStatus: "processing" }
+  ]);
+  assert.equal(agg.batchStatus, "processing");
+});
+
+await check("aggregateBatchStatus: terminal done+failed → partial_failed", () => {
+  const agg = aggregateBatchStatusAfterChain([
+    { outcome: "done", itemStatus: "done" },
+    { outcome: "failed", itemStatus: "failed" }
   ]);
   assert.equal(agg.batchStatus, "partial_failed");
+  assert.equal(agg.doneCount, 1);
+  assert.equal(agg.failedCount, 1);
 });
 
 await check("mergeAutoChainWarning dedupes and caps", () => {

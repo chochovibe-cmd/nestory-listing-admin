@@ -12,7 +12,7 @@ const route = read("src/app/api/generate/route.ts");
 const openai = read("src/lib/providers/openai-copy-provider.ts");
 const fixtures = JSON.parse(read("scripts/fixtures/chaochao-product-brief-golden.json"));
 
-assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb1-20260930"/u);
+assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb1\\.1-20261006"/u);
 assert.match(brief, /gpt-4o-mini/u, "brief stage lost cheap-model default");
 assert.match(brief, /rejectedEvidence/u, "brief no longer records rejected web evidence");
 assert.match(brief, /賣家款式／標題／圖中文字／既有規格 > 明確同款官方或零售資料/u,
@@ -20,6 +20,12 @@ assert.match(brief, /賣家款式／標題／圖中文字／既有規格 > 明�
 assert.match(brief, /只有同 IP、同類型但不是同款的結果放 rejectedEvidence/u,
   "generic same-IP search rejection rule missing");
 assert.match(brief, /unknowns/u, "unknown-fact boundary missing");
+assert.match(brief, /草稿既有 IP、角色、品項、品牌與規格可能是前一次 AI／舊網搜留下的資料/u,
+  "legacy draft classification/spec trust boundary missing");
+assert.match(brief, /草稿既有規格單獨出現不算直接證據/u,
+  "legacy spec can still become a high-risk fact without corroboration");
+assert.match(brief, /多角色／隨機盲盒不可只因草稿既有角色就縮成單一角色/u,
+  "legacy character can still collapse a multi-character blind box");
 assert.match(brief, /webSearchSummary, 3000/u, "raw web evidence cap changed; review token cost");
 
 const writerStart = chaochao.indexOf("export function buildChaochaoBriefWriterSystemPrompt");
@@ -34,6 +40,16 @@ for (const required of ["[[enriched_title]]", "[[generated_description_html]]", 
 }
 assert.match(writer, /不要用「品質有保證、絕佳收藏、經久耐用、不可錯過」/u,
   "generic-copy regression guard missing");
+assert.match(writer, /Product Brief 沒有明確寫出的效果、耐用性、比較優勢或保證性結論/u,
+  "focused Writer can still infer unsupported product effects");
+assert.match(writer, /why_we_chose_it 只寫 1–2 句/u,
+  "PB1.1 Why rule did not switch to value-first 1–2 sentence contract");
+assert.match(writer, /不要把選品理由寫成角色頌歌、人生感悟或抽象療癒散文/u,
+  "PB1.1 Why anti-poetic guard missing");
+assert.match(writer, /只能問 Product Brief 有足夠資料回答的題目/u,
+  "PB1.1 FAQ evidence-answerability guard missing");
+assert.match(writer, /不能擴成「比一般吹風機更安靜」/u,
+  "PB1.1 FAQ comparison certainty guard missing");
 
 assert.match(promptBase, /input\.productBrief\?\.trim\(\)/u, "Chaochao user message does not prefer Product Brief");
 assert.match(promptBase, /不要重新分類、不要重新查證/u, "Writer boundary instruction missing");

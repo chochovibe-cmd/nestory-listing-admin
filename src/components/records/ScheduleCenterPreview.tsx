@@ -76,6 +76,8 @@ export function ScheduleCenterPreview() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [cancelArmId, setCancelArmId] = useState<string | null>(null);
+  const [dryRunBusy, setDryRunBusy] = useState(false);
+  const [dryRunMessage, setDryRunMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -170,6 +172,36 @@ export function ScheduleCenterPreview() {
     }
   }
 
+  async function runDryRun() {
+    if (dryRunBusy) return;
+    setDryRunBusy(true);
+    setDryRunMessage(null);
+    try {
+      const response = await fetch("/api/publish-schedules/dry-run", {
+        cache: "no-store"
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = payload.error ?? payload.hint ?? "Dry-run 檢查失敗";
+        setDryRunMessage(message);
+        showToast(message, "error");
+        return;
+      }
+      const dueCount = Number(payload.dueCount ?? 0);
+      const message =
+        dueCount > 0
+          ? `Dry-run：今天理論上會處理 ${dueCount} 件；本次沒有 claim，也沒有 Shopify write。`
+          : "Dry-run：今天目前沒有到期排程；沒有 claim，也沒有 Shopify write。";
+      setDryRunMessage(message);
+      showToast(message, "info");
+    } catch {
+      setDryRunMessage("Dry-run 檢查連線失敗");
+      showToast("Dry-run 檢查連線失敗", "error");
+    } finally {
+      setDryRunBusy(false);
+    }
+  }
+
   const safetySafe = !safety.stagingEnabled && !safety.executionEnabled;
 
   return (
@@ -183,6 +215,14 @@ export function ScheduleCenterPreview() {
           </p>
         </div>
         <div className={styles.heroActions}>
+          <Button
+            size="sm"
+            onClick={() => void runDryRun()}
+            disabled={dryRunBusy || safety.executionEnabled}
+            type="button"
+          >
+            {dryRunBusy ? "檢查中…" : "Dry-run 今日排程"}
+          </Button>
           <Button size="sm" onClick={() => void load()} disabled={loading} type="button">
             ↻ 重新整理
           </Button>
@@ -198,6 +238,12 @@ export function ScheduleCenterPreview() {
         <span>Shopify ACTIVE：{safety.executionEnabled ? "ON" : "OFF"}</span>
         <span>Cron：{safety.executionEnabled ? "可執行" : "DRY-RUN"}</span>
       </div>
+
+      {dryRunMessage ? (
+        <div className="notice" role="status">
+          {dryRunMessage}
+        </div>
+      ) : null}
 
       <div className={styles.summary}>
         <div>

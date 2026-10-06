@@ -15,7 +15,7 @@ const fixtures = JSON.parse(read("scripts/fixtures/chaochao-product-brief-golden
 assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb1\.1-20261006"/u);
 assert.match(brief, /gpt-4o-mini/u, "brief stage lost cheap-model default");
 assert.match(brief, /rejectedEvidence/u, "brief no longer records rejected web evidence");
-assert.match(brief, /賣家款式／標題／圖中文字／既有規格 > 明確同款官方或零售資料/u,
+assert.match(brief, /當次直接證據優先：賣家標題／款式／操作備註／圖中文字 > 明確同款官方或零售資料 > 草稿既有分類與規格/u,
   "evidence authority order missing");
 assert.match(brief, /只有同 IP、同類型但不是同款的結果放 rejectedEvidence/u,
   "generic same-IP search rejection rule missing");

@@ -12,13 +12,19 @@ const route = read("src/app/api/generate/route.ts");
 const openai = read("src/lib/providers/openai-copy-provider.ts");
 const fixtures = JSON.parse(read("scripts/fixtures/chaochao-product-brief-golden.json"));
 
-assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb1\.2-20261006"/u);
+assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb1\.3-20261006"/u);
 assert.match(brief, /gpt-4o-mini/u, "brief stage lost cheap-model default");
 assert.match(brief, /rejectedEvidence/u, "brief no longer records rejected web evidence");
 assert.match(brief, /當次直接證據優先：賣家標題／款式／操作備註／圖中文字 > 明確同款官方或零售資料 > 草稿既有分類與規格/u,
   "evidence authority order missing");
 assert.match(brief, /只有同 IP、同類型但不是同款的結果放 rejectedEvidence/u,
   "generic same-IP search rejection rule missing");
+assert.match(brief, /「綜合摘要」只是搜尋服務整理出的候選線索，不是證據本身/u,
+  "PB1.3 still trusts synthesized web-search summary as evidence");
+assert.match(brief, /來源標題／來源摘錄中看到同款身份線索/u,
+  "PB1.3 source-level identity matching guard missing");
+assert.match(brief, /來源標題明顯是另一品牌、另一系列或另一種商品/u,
+  "PB1.3 unrelated-source rejection guard missing");
 assert.match(brief, /unknowns/u, "unknown-fact boundary missing");
 assert.match(brief, /草稿既有 IP、角色、品項、品牌與規格可能是前一次 AI／舊網搜留下的資料/u,
   "legacy draft classification/spec trust boundary missing");
@@ -43,15 +49,17 @@ assert.match(writer, /不要用「品質有保證、絕佳收藏、經久耐用�
 assert.match(writer, /Product Brief 沒有明確寫出的效果、耐用性、比較優勢或保證性結論/u,
   "focused Writer can still infer unsupported product effects");
 assert.match(chaochao, /why_we_chose_it 只寫 1–2 句/u,
-  "PB1.2 Why rule lost 1–2 sentence contract");
-assert.match(chaochao, /真的想把它挑進店裡/u,
-  "PB1.2 Why lost genuine curation viewpoint");
-assert.match(chaochao, /物件 → 日常小驚喜／送禮心意/u,
-  "PB1.2 Why lost warm curation rhythm");
-assert.match(chaochao, /滿足收藏需求.*潮巢希望.*展現角色魅力.*帶入生活空間/u,
-  "PB1.2 Why enterprise-copy guard missing");
-assert.match(chaochao, /不要把理由寫成角色頌歌、人生感悟或抽象療癒散文/u,
-  "PB1.2 Why anti-poetic guard missing");
+  "PB1.3 Why rule lost 1–2 sentence contract");
+assert.match(chaochao, /你看到這件時，為什麼會想把它選進潮巢/u,
+  "PB1.3 Why lost genuine curator question");
+assert.match(chaochao, /不要固定任何開頭句型/u,
+  "PB1.3 Why regained a fixed opening template");
+assert.match(chaochao, /不要每篇都硬塞「日常、送禮、小驚喜、療癒」/u,
+  "PB1.3 Why regained mandatory mood keywords");
+assert.match(chaochao, /滿足收藏需求、潮巢希望、展現角色魅力、帶入生活空間/u,
+  "PB1.3 Why enterprise-copy guard missing");
+assert.match(chaochao, /如果讀起來只是把商品介紹濃縮一次/u,
+  "PB1.3 Why summary-duplication guard missing");
 assert.match(chaochao, /只能問 Product Brief 有足夠資料回答的題目/u,
   "PB1.1 FAQ evidence-answerability guard missing");
 assert.match(chaochao, /不能擴成「比一般吹風機更安靜」/u,
@@ -80,6 +88,11 @@ assert.match(route, /existingProductType: trustedProductTypeForBrief/u,
   "PB1.2 can still reuse prior AI product type classification");
 assert.match(route, /existingBrand: trustedBrandForBrief/u,
   "PB1.2 can still reuse prior AI brand classification");
+assert.match(
+  route,
+  /let finalSpecText: string \| null = rebuildChaochaoBriefFromSource \? null : \(draft\.spec_text \?\? null\)/u,
+  "PB1.3 source rebuild can still preserve stale spec when no new verified spec exists",
+);
 assert.match(
   route,
   /productBrief: productBriefResult && !productBriefResult\.fallback \? productBriefResult\.writerText : undefined/u,

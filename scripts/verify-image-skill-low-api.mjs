@@ -15,6 +15,8 @@ const studio = read("src/components/listing/ImageSkillStudio.tsx");
 const station = read("src/components/listing/Station2ImagePanel.tsx");
 const tabs = read("src/lib/images/station2ImageTabs.ts");
 const sharpBatch = read("src/lib/images/runSharpBatch.ts");
+const runAi = read("src/lib/images/runAiProcess.ts");
+const autoChain = read("src/lib/images/sendImagesAutoChain.ts");
 const marks = read("src/lib/images/processMarks.ts");
 const env = read(".env.example");
 const shopifyPayload = read("src/lib/shopify/payload.ts");
@@ -69,6 +71,33 @@ assert.match(
   "subset Sharp must not complete the whole draft"
 );
 console.log("  ✓ send-images Sharp preserves selected skill result without false whole-draft completion");
+
+assert.match(
+  runAi,
+  /reconcileDraftImagePipelineState/,
+  "AI process must reconcile draft status from the full pipeline"
+);
+assert.match(
+  runAi,
+  /!pipelineState\.allTerminal[\s\S]*"processing"/,
+  "unfinished AI pipeline must remain processing"
+);
+assert.match(
+  runAi,
+  /completed_at:\s*hasUnfinished \? null : nowIso/,
+  "batch completed_at must follow terminal state"
+);
+assert.match(
+  autoChain,
+  /itemStatus = hasProgress \? "processing" : "queued"/,
+  "partial D4 progress must be processing, not queued"
+);
+assert.match(
+  autoChain,
+  /completed_at:\s*batchIsTerminal \? batchUpdatedAt : null/,
+  "auto-chain completed_at must be independent from notification delivery"
+);
+console.log("  ✓ draft and image-batch status stay aligned with real pipeline progress");
 
 assert.match(studio, /省錢版 · low（預設）/, "economy mode is not visible/default");
 assert.match(studio, /只會生成 <strong>1 張<\/strong>/, "single-output cost guard missing");

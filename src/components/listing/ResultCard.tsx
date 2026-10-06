@@ -1908,7 +1908,7 @@ export function ResultCard({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 959px)");
+    const mq = window.matchMedia("(max-width: 959px) and (hover: none) and (pointer: coarse)");
     const sync = () => setIsNarrow(mq.matches);
     sync();
     mq.addEventListener("change", sync);

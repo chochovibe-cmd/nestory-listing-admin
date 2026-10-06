@@ -28,7 +28,7 @@ import type { ImageProvider } from "@/lib/providers/image";
 import { safeTryNotifyImageBatchIfComplete } from "@/lib/notifications/tryNotifyImageBatchIfComplete";
 import { isShopifyCdnUrl } from "@/lib/shopify/filesUpload";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
-import type { ImageProcessIntent, ImageType } from "@/types/domain";
+import type { ImageProcessIntent, ImageStatus, ImageType } from "@/types/domain";
 
 const PRODUCT_IMAGES_BUCKET = "product-images";
 
@@ -233,6 +233,72 @@ function isImageTerminal(r: {
   return false;
 }
 
+type DraftImagePipelineState = {
+  status: ImageStatus;
+  allTerminal: boolean;
+  anyFailed: boolean;
+  allFailed: boolean;
+  pipelineCount: number;
+};
+
+async function reconcileDraftImagePipelineState(
+  serviceSupabase: AiProcessServiceClient,
+  draftId: string,
+  fallbackStatus: ImageStatus
+): Promise<DraftImagePipelineState | null> {
+  const { data: images, error: imageError } = await serviceSupabase
+    .from("product_images")
+    .select(
+      "id, image_type, process_intent, processing_status, processed_file_url, generated_file_url"
+    )
+    .eq("draft_id", draftId);
+
+  if (imageError) return null;
+
+  const rows = (images ?? []) as Array<{
+    id: string;
+    image_type: string;
+    process_intent: string | null;
+    processing_status: string;
+    processed_file_url: string | null;
+    generated_file_url: string | null;
+  }>;
+  const pipeline = rows.filter((r) => isPipelineImageType(r.image_type));
+
+  if (pipeline.length === 0) {
+    return {
+      status: fallbackStatus,
+      allTerminal: false,
+      anyFailed: false,
+      allFailed: false,
+      pipelineCount: 0
+    };
+  }
+
+  const allTerminal = pipeline.every(isImageTerminal);
+  const anyFailed = pipeline.some((r) => r.processing_status === "failed");
+  const allFailed = pipeline.every((r) => r.processing_status === "failed");
+  const status: ImageStatus = !allTerminal
+    ? "processing"
+    : allFailed
+      ? "failed"
+      : "done";
+
+  const { error: updateError } = await serviceSupabase
+    .from("product_drafts")
+    .update({ image_status: status })
+    .eq("id", draftId);
+  if (updateError) return null;
+
+  return {
+    status,
+    allTerminal,
+    anyFailed,
+    allFailed,
+    pipelineCount: pipeline.length
+  };
+}
+
 /**
  * After AI (and optional sharp/finalize), refresh batch item + header if draft has a current batch.
  */
@@ -243,9 +309,18 @@ export async function updateBatchStatusAfterAiProcess(
   try {
     const { data: draft } = await serviceSupabase
       .from("product_drafts")
-      .select("id, current_image_batch_id")
+      .select("id, current_image_batch_id, image_status")
       .eq("id", draftId)
       .maybeSingle();
+
+    const fallbackStatus =
+      (draft?.image_status as ImageStatus | null | undefined) ?? "pending";
+    const pipelineState = await reconcileDraftImagePipelineState(
+      serviceSupabase,
+      draftId,
+      fallbackStatus
+    );
+    if (!pipelineState) return false;
 
     const batchId = draft?.current_image_batch_id as string | null | undefined;
     if (!batchId) return false;
@@ -261,55 +336,20 @@ export async function updateBatchStatusAfterAiProcess(
       .maybeSingle();
     if (membershipError || !membership) return false;
 
-    const { data: images } = await serviceSupabase
-      .from("product_images")
-      .select("id, image_type, process_intent, processing_status, processed_file_url, generated_file_url")
-      .eq("draft_id", draftId);
-
-    const rows = (images ?? []) as Array<{
-      id: string;
-      image_type: string;
-      process_intent: string | null;
-      processing_status: string;
-      processed_file_url: string | null;
-      generated_file_url: string | null;
-    }>;
-
-    const pipeline = rows.filter((r) => isPipelineImageType(r.image_type));
-
-    if (pipeline.length === 0) {
-      await serviceSupabase
-        .from("image_batch_items")
-        .update({ item_status: "done" })
-        .eq("batch_id", batchId)
-        .eq("draft_id", draftId);
-    } else {
-      const allTerminal = pipeline.every(isImageTerminal);
-      const d4 = pipeline.filter((r) => isD4ProcessIntent(r.process_intent));
-      const allD4Failed =
-        d4.length > 0 && d4.every((r) => r.processing_status === "failed");
-      const anyFailed = pipeline.some((r) => r.processing_status === "failed");
-
-      if (!allTerminal) {
-        await serviceSupabase
-          .from("image_batch_items")
-          .update({ item_status: "queued" })
-          .eq("batch_id", batchId)
-          .eq("draft_id", draftId);
-      } else {
-        const itemStatus =
-          allD4Failed && pipeline.every((r) => r.processing_status === "failed")
+    const itemStatus =
+      pipelineState.pipelineCount === 0
+        ? "done"
+        : !pipelineState.allTerminal
+          ? "processing"
+          : pipelineState.status === "failed"
             ? "failed"
-            : anyFailed && d4.length === pipeline.length && allD4Failed
-              ? "failed"
-              : "done";
-        await serviceSupabase
-          .from("image_batch_items")
-          .update({ item_status: itemStatus })
-          .eq("batch_id", batchId)
-          .eq("draft_id", draftId);
-      }
-    }
+            : "done";
+
+    await serviceSupabase
+      .from("image_batch_items")
+      .update({ item_status: itemStatus })
+      .eq("batch_id", batchId)
+      .eq("draft_id", draftId);
 
     const { data: items } = await serviceSupabase
       .from("image_batch_items")
@@ -331,13 +371,14 @@ export async function updateBatchStatusAfterAiProcess(
     }
 
     let batchStatus: string;
-    if (queuedCount > 0 || processingCount > 0) {
+    const hasUnfinished = queuedCount > 0 || processingCount > 0;
+    if (hasUnfinished) {
       batchStatus =
-        doneCount === 0 && failedCount === 0
-          ? processingCount > 0
+        failedCount > 0
+          ? "partial_failed"
+          : processingCount > 0 || doneCount > 0
             ? "processing"
-            : "queued"
-          : "partial_failed";
+            : "queued";
     } else if (failedCount === statuses.length) {
       batchStatus = "failed";
     } else if (failedCount > 0) {
@@ -346,13 +387,15 @@ export async function updateBatchStatusAfterAiProcess(
       batchStatus = "completed";
     }
 
+    const nowIso = new Date().toISOString();
     await serviceSupabase
       .from("image_batches")
       .update({
         status: batchStatus,
         done_count: doneCount,
         failed_count: failedCount,
-        updated_at: new Date().toISOString()
+        completed_at: hasUnfinished ? null : nowIso,
+        updated_at: nowIso
       })
       .eq("id", batchId);
 
@@ -733,25 +776,17 @@ export async function runAiProcessForDraft(
     }
   }
 
-  // Aggregate draft image_status
-  let imageStatus: string = (draft.image_status as string) ?? "pending";
-  if (processed > 0 && failed === 0 && timeBudget === 0) {
-    imageStatus = "done";
-  } else if (processed > 0 && (failed > 0 || timeBudget > 0)) {
-    imageStatus = "done"; // partial success still reviewable
-  } else if (failed > 0 && processed === 0) {
-    imageStatus = "failed";
-  } else if (timeBudget > 0 && processed === 0 && failed === 0) {
-    // nothing finished — leave processing or pending
-    imageStatus = "pending";
-  }
-  if (processed > 0 || failed > 0) {
-    await serviceSupabase.from("product_drafts").update({ image_status: imageStatus }).eq("id", draftId);
-  }
-
   let batchUpdated = false;
-  if (updateBatch && (processed > 0 || failed > 0 || timeBudget > 0)) {
-    batchUpdated = await updateBatchStatusAfterAiProcess(serviceSupabase, draftId);
+  if (processed > 0 || failed > 0 || timeBudget > 0) {
+    if (updateBatch) {
+      batchUpdated = await updateBatchStatusAfterAiProcess(serviceSupabase, draftId);
+    } else {
+      await reconcileDraftImagePipelineState(
+        serviceSupabase,
+        draftId,
+        ((draft.image_status as ImageStatus | null | undefined) ?? "pending")
+      );
+    }
   }
 
   if (failed > 0 && processed === 0 && timeBudget === 0) {

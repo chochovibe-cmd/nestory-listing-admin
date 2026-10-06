@@ -6566,7 +6566,7 @@ textarea {
   position: absolute;
   inset: -12px;
 }
-@media (max-width: 960px) {
+@media (max-width: 959px) and (hover: none) and (pointer: coarse) {
   .rc-checkbox {
     width: 20px;
     height: 20px;
@@ -6653,7 +6653,7 @@ textarea {
 .rc-status-chips .schip--run {
   color: color-mix(in srgb, var(--warn) 55%, var(--text));
 }
-@media (max-width: 960px) {
+@media (max-width: 959px) and (hover: none) and (pointer: coarse) {
   .rc-quick .nb-btn,
   .rc-collapsed-notice .nb-btn {
     min-height: 44px;
@@ -6723,8 +6723,9 @@ textarea {
   border-color: var(--accent);
 }
 
-/* UX-AC T118 + UX-B2-P07 7-2/7-3 + UX-B3-fix: mobile card touch; quick-row keeps ×▸ */
-@media (max-width: 960px) {
+/* UX-AC T118 + UX-B2-P07 7-2/7-3 + UX-B3-fix: phone/touch card only.
+   Narrow desktop must keep desktop card composition. */
+@media (max-width: 959px) and (hover: none) and (pointer: coarse) {
   .rc-header {
     padding: 12px;
     gap: 10px;
@@ -7096,7 +7097,7 @@ textarea {
   display: none;
 }
 
-@media (max-width: 959px) {
+@media (max-width: 959px) and (hover: none) and (pointer: coarse) {
   .rc-next-action--desktop {
     display: none;
   }
@@ -8595,8 +8596,8 @@ body[data-theme="nordic"] {
 /* UX-B4-P04: 手機結果卡三排骨架
    1 標題(+銷售小標/失敗紅字)  2 縮圖|chips  3 重生|售價
    chrome：checkbox／核准列／×／▸ 隱藏；重生在第 3 排左
-   Scope .result-card > .rc-header，避免誤傷 queue-card。 */
-@media (max-width: 959px) {
+   Only real touch-mobile gets this layout; narrow desktop keeps desktop card. */
+@media (max-width: 959px) and (hover: none) and (pointer: coarse) {
   .workbench-panes,
   .workbench-pane,
   .workbench-pane-results,

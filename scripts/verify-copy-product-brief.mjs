@@ -12,7 +12,7 @@ const route = read("src/app/api/generate/route.ts");
 const openai = read("src/lib/providers/openai-copy-provider.ts");
 const fixtures = JSON.parse(read("scripts/fixtures/chaochao-product-brief-golden.json"));
 
-assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb1\\.1-20261006"/u);
+assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb1\.1-20261006"/u);
 assert.match(brief, /gpt-4o-mini/u, "brief stage lost cheap-model default");
 assert.match(brief, /rejectedEvidence/u, "brief no longer records rejected web evidence");
 assert.match(brief, /賣家款式／標題／圖中文字／既有規格 > 明確同款官方或零售資料/u,

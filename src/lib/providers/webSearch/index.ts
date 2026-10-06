@@ -2,12 +2,13 @@ import { externalTimeoutMessage, isExternalTimeout } from "../externalTimeout";
 import { TavilyWebSearchProvider } from "./tavily";
 import type {
   WebSearchCache,
+  WebSearchEvidence,
   WebSearchProvider,
   WebSearchProviderName,
   WebSearchResult,
 } from "./types";
 
-export type { WebSearchCache, WebSearchProvider, WebSearchProviderName, WebSearchResult, WebSearchSource } from "./types";
+export type { WebSearchCache, WebSearchEvidence, WebSearchProvider, WebSearchProviderName, WebSearchResult, WebSearchSource } from "./types";
 
 /**
  * Factory: WEB_SEARCH_PROVIDER=tavily|serper (default tavily).
@@ -36,10 +37,132 @@ export function createWebSearchProvider(
 }
 
 /** NFKC + trim + collapse whitespace — cache key for D2-A. */
-const WEB_SEARCH_CACHE_VERSION = "adv8eq3";
+const WEB_SEARCH_CACHE_VERSION = "adv8eq4";
 export function fingerprintWebSearchQuery(query: string): string {
   const normalized = query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
   return `${WEB_SEARCH_CACHE_VERSION}:${normalized}`;
+}
+
+const IDENTITY_STOP_TERMS = [
+  "聯名", "联名", "正版", "實用", "实用", "生日", "禮物", "礼物", "家用",
+  "新婚", "閨蜜", "闺蜜", "商品", "規格", "规格", "尺寸", "材質", "材质",
+  "可愛", "可爱", "卡通", "動漫", "动漫", "收藏", "人物", "設計", "设计", "系列",
+];
+
+const IDENTITY_CHAR_FOLD: Record<string, string> = {
+  風: "风", 機: "机", 龍: "龙", 聯: "联", 優: "优", 創: "创", 禮: "礼",
+  實: "实", 護: "护", 離: "离", 靜: "静", 乾: "干", 擺: "摆", 飾: "饰",
+  鑰: "钥", 絨: "绒", 麗: "丽", 電: "电", 燈: "灯", 貓: "猫", 樂: "乐",
+  髮: "发", 賣: "卖", 買: "买", 體: "体", 歲: "岁",
+};
+
+function foldIdentityText(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .split("")
+    .map((char) => IDENTITY_CHAR_FOLD[char] ?? char)
+    .join("");
+}
+
+function identityCjkCore(value: string, ipName?: string | null): string {
+  let text = foldIdentityText(value).replace(/[a-z0-9]+/g, "");
+  const ip = foldIdentityText(ipName).replace(/[^\u4e00-\u9fff]+/g, "");
+  if (ip) text = text.split(ip).join("");
+  for (const term of IDENTITY_STOP_TERMS) {
+    const folded = foldIdentityText(term).replace(/[^\u4e00-\u9fff]+/g, "");
+    if (folded) text = text.split(folded).join("");
+  }
+  return text.replace(/[^\u4e00-\u9fff]+/g, "");
+}
+
+function identityLatinTokens(value: string, ipName?: string | null): string[] {
+  const text = foldIdentityText(value);
+  const ipTokens = new Set(foldIdentityText(ipName).match(/[a-z][a-z0-9]{2,}/g) ?? []);
+  const stop = new Set(["product", "item", "official", "gift", "anime", "figure", "model", "collectible"]);
+  return Array.from(new Set(text.match(/[a-z][a-z0-9]{2,}/g) ?? []))
+    .filter((token) => !ipTokens.has(token) && !stop.has(token));
+}
+
+function ngramSet(value: string, size: number): Set<string> {
+  const output = new Set<string>();
+  for (let i = 0; i <= value.length - size; i += 1) output.add(value.slice(i, i + size));
+  return output;
+}
+
+function overlapRatio(target: Set<string>, evidence: Set<string>): number {
+  if (target.size === 0) return 0;
+  let matches = 0;
+  for (const token of target) if (evidence.has(token)) matches += 1;
+  return matches / target.size;
+}
+
+/**
+ * PB1.4 hard gate: high-risk product web evidence must look like the same item
+ * before it is even shown to Product Brief. Same-IP / same-category is not enough.
+ */
+export function isTrustedProductWebEvidence(params: {
+  rawTitle: string;
+  ipName?: string | null;
+  title: string;
+  excerpt?: string | null;
+}): boolean {
+  const targetCjk = identityCjkCore(params.rawTitle, params.ipName);
+  const evidenceCjk = identityCjkCore(`${params.title} ${params.excerpt ?? ""}`, params.ipName);
+
+  if (targetCjk.length >= 4 && evidenceCjk.length >= 2) {
+    const targetGrams = new Set([...ngramSet(targetCjk, 2), ...ngramSet(targetCjk, 3)]);
+    const evidenceGrams = new Set([...ngramSet(evidenceCjk, 2), ...ngramSet(evidenceCjk, 3)]);
+    if (overlapRatio(targetGrams, evidenceGrams) >= 0.42) return true;
+  }
+
+  const targetLatin = identityLatinTokens(params.rawTitle, params.ipName);
+  if (targetLatin.length >= 2) {
+    const evidenceLatin = new Set(identityLatinTokens(`${params.title} ${params.excerpt ?? ""}`, params.ipName));
+    const matches = targetLatin.filter((token) => evidenceLatin.has(token)).length;
+    if (matches >= 3 || matches / targetLatin.length >= 0.6) return true;
+  }
+
+  return false;
+}
+
+function buildTrustedProductSearchSummary(
+  query: string,
+  evidence: WebSearchEvidence[],
+): string {
+  if (evidence.length === 0) return "";
+  const lines = [
+    `【網路搜尋結果｜同款硬性比對後｜查詢：${query}】`,
+    "以下只保留程式已通過同款身份比對的來源。沒有出現在這裡的搜尋結果，不可拿來補尺寸、材質、配件、年齡或其他商品規格。",
+    "",
+    "【可信來源摘錄】",
+  ];
+  for (const row of evidence) {
+    lines.push(`- ${row.title}${row.url ? `（${row.url}）` : ""}`);
+    if (row.excerpt) lines.push(`  ${row.excerpt}`);
+  }
+  return lines.join("\n");
+}
+
+function applyStrictProductIdentityGate(
+  result: Omit<WebSearchResult, "fromCache"> | WebSearchResult,
+  params: { rawTitle: string; ipName?: string | null },
+): Omit<WebSearchResult, "fromCache"> | WebSearchResult | null {
+  const trusted = (result.evidence ?? []).filter((row) =>
+    isTrustedProductWebEvidence({
+      rawTitle: params.rawTitle,
+      ipName: params.ipName,
+      title: row.title,
+      excerpt: row.excerpt,
+    }),
+  );
+  if (trusted.length === 0) return null;
+  return {
+    ...result,
+    summary: buildTrustedProductSearchSummary(result.query, trusted),
+    sources: trusted.map(({ title, url }) => ({ title, url })),
+    evidence: trusted,
+  };
 }
 
 function uniqueKeywordPieces(text: string): string[] {
@@ -155,6 +278,7 @@ function parseWebSearchCacheEntry(raw: unknown): {
   queryFingerprint: string;
   summary: string;
   sources: { title: string; url: string }[];
+  evidence?: WebSearchEvidence[];
   provider: string;
   fetchedAt: string;
 } | null {
@@ -181,11 +305,26 @@ function parseWebSearchCacheEntry(raw: unknown): {
         .filter((row): row is { title: string; url: string } => row !== null)
     : [];
 
+  const evidence = Array.isArray(obj.evidence)
+    ? obj.evidence
+        .map((row) => {
+          if (!row || typeof row !== "object") return null;
+          const r = row as Record<string, unknown>;
+          const title = typeof r.title === "string" ? r.title : "";
+          const url = typeof r.url === "string" ? r.url : "";
+          const excerpt = typeof r.excerpt === "string" ? r.excerpt : "";
+          if (!url) return null;
+          return { title, url, excerpt };
+        })
+        .filter((row): row is WebSearchEvidence => row !== null)
+    : undefined;
+
   return {
     query,
     queryFingerprint,
     summary,
     sources,
+    ...(evidence ? { evidence } : {}),
     provider: typeof obj.provider === "string" ? obj.provider : "tavily",
     fetchedAt: typeof obj.fetchedAt === "string" ? obj.fetchedAt : "",
   };
@@ -247,6 +386,7 @@ export function mergeWebSearchCacheLayers(params: {
         ? "（無商品規格搜尋）"
         : "",
     sources: product?.sources ?? [],
+    ...(product?.evidence ? { evidence: product.evidence } : {}),
     provider: product?.provider ?? ipBackground?.provider ?? "tavily",
     fetchedAt:
       product?.fetchedAt || ipBackground?.fetchedAt || new Date().toISOString(),
@@ -358,6 +498,7 @@ export async function resolveIpBackgroundSearchForGenerate(params: {
       queryFingerprint: fingerprint,
       summary: live.summary,
       sources: live.sources,
+      ...(live.evidence ? { evidence: live.evidence } : {}),
       provider: live.provider,
       fetchedAt: new Date().toISOString(),
     };
@@ -409,6 +550,8 @@ export async function resolveWebSearchForGenerate(params: {
   imageDescription?: string | null;
   existingCache?: unknown;
   provider?: WebSearchProvider;
+  /** PB1.4: only same-product source evidence may reach the Product Brief. */
+  strictProductIdentity?: boolean;
 }): Promise<{
   result: WebSearchResult | null;
   cacheToPersist: WebSearchCache | null;
@@ -446,18 +589,26 @@ export async function resolveWebSearchForGenerate(params: {
   const fingerprint = fingerprintWebSearchQuery(query);
   const cached = parseWebSearchCache(params.existingCache);
   if (cached && cached.queryFingerprint === fingerprint && cached.summary.trim()) {
-    return {
-      result: {
-        summary: cached.summary,
-        sources: cached.sources,
-        provider: (cached.provider as WebSearchProviderName) || provider.name,
-        query: cached.query || query,
-        fromCache: true,
-      },
-      cacheToPersist: null, // already on draft
-      warnings,
-      didLiveSearch: false,
+    const cachedResult: WebSearchResult = {
+      summary: cached.summary,
+      sources: cached.sources,
+      ...(cached.evidence ? { evidence: cached.evidence } : {}),
+      provider: (cached.provider as WebSearchProviderName) || provider.name,
+      query: cached.query || query,
+      fromCache: true,
     };
+    const usableCached = params.strictProductIdentity
+      ? applyStrictProductIdentityGate(cachedResult, params)
+      : cachedResult;
+    if (usableCached) {
+      return {
+        result: usableCached as WebSearchResult,
+        cacheToPersist: null, // already on draft
+        warnings,
+        didLiveSearch: false,
+      };
+    }
+    // Old/unstructured cache cannot satisfy the strict gate; do a fresh search.
   }
 
   try {
@@ -467,17 +618,28 @@ export async function resolveWebSearchForGenerate(params: {
       return { result: null, cacheToPersist: null, warnings, didLiveSearch: true };
     }
 
+    const usableLive = params.strictProductIdentity
+      ? applyStrictProductIdentityGate(live, params)
+      : live;
+    if (!usableLive) {
+      warnings.push(
+        "Web Search 有結果，但沒有來源通過同款硬性比對；本次不把網搜規格交給文案模型。",
+      );
+      return { result: null, cacheToPersist: null, warnings, didLiveSearch: true };
+    }
+
     const cache: WebSearchCache = {
-      query: live.query,
+      query: usableLive.query,
       queryFingerprint: fingerprint,
-      summary: live.summary,
-      sources: live.sources,
-      provider: live.provider,
+      summary: usableLive.summary,
+      sources: usableLive.sources,
+      ...(usableLive.evidence ? { evidence: usableLive.evidence } : {}),
+      provider: usableLive.provider,
       fetchedAt: new Date().toISOString(),
     };
 
     return {
-      result: { ...live, fromCache: false },
+      result: { ...usableLive, fromCache: false },
       cacheToPersist: cache,
       warnings,
       didLiveSearch: true,

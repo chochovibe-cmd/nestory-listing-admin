@@ -453,3 +453,99 @@ Validated runtime code SHA：
    - 應像自然回答「為什麼我會挑這件」，而不是商品介紹濃縮版。
 
 測完後用 Supabase 唯讀檢查 `chaochao-pb1.3-20261006` 實際結果。Owner 明確接受前不 merge、不上 Production。
+
+## 16. COPY-PB1.4｜hard product evidence gate + simpler Why｜2026-10-06
+
+Owner 同意 PB1.4：不要再靠 Prompt 請模型自己判斷「是不是同款」，而是先用程式把不相干的商品搜尋結果擋掉；Why 也不再繼續堆風格模板。
+
+### Authority / scope
+
+- Branch：`gpt/copy-product-brief-refactor-20260930`
+- Draft PR：#13
+- Start HEAD：`ef0a1b6c7e6c6595d79c75f1e3bfca38f386a6c0`
+- Allowed adjustments：
+  1. 商品規格網搜在進 Product Brief 前做 deterministic（程式固定規則）同款硬性比對。
+  2. Why 縮成單一選物問題，取消固定句型／必備情緒詞。
+- Forbidden：其他 tone、single-field regen、Shopify、DB schema、Production、merge。
+
+### PB1.4 implementation
+
+Recipe：`chaochao-pb1.4-20261006`
+
+#### 1. 商品網搜先由程式過濾
+
+Tavily 現在除了摘要，也保留每個來源的 title / URL / excerpt。潮巢 full generation 會啟用 `strictProductIdentity`：
+
+- 先把原始商品標題與每個來源 title + excerpt 做文字身份比對；
+- 會折疊常見繁簡字、移除泛用促銷／情緒詞與 IP 本身後，再比較商品特有中文 n-gram；英文商品則用非泛用英文 token overlap；
+- 同 IP、同類型但不是同款，不足以通過；
+- 通過後重新建立一份「同款硬性比對後」摘要，**完全不使用 Tavily 的綜合 answer**；
+- Product Brief 只看這份可信來源摘錄；
+- 沒任何來源通過時，網搜結果直接不交給文案模型，寧願少寫規格。
+
+實際 regression test 固定鎖住本次兩個事故：
+
+- MINISO 七龍珠萌粒鍵帽盲盒：MegaHouse Petitrama DRACAP 的 `75mm / 55mm / PVC+ABS` 必須被拒絕。
+- Pingu 吹風機：`PINGU 貪吃的小鵝` 公仔系列的 `PVC/ABS / 約10.5cm` 必須被拒絕；原始淘寶吹風機同款標題可通過。
+
+這個 strict gate 只在 `tone === "潮巢導購版"` 的 full generation 開啟，其他 tone 不改。
+
+#### 2. Why 再簡化
+
+不再提供「我們喜歡的是…」「日常／送禮／小驚喜」等模板。
+
+只保留：
+
+> 這件商品有哪一個「只有它才有」的點，讓你真的想把它選進潮巢？
+
+再加三條底線：
+
+- 不要把商品介紹／功能清單濃縮重講；
+- 不固定開頭，不硬塞日常／送禮／療癒；
+- 不替潮巢虛構「想起童年、會心一笑、充滿回憶」等品牌感受。
+
+### Diff gate
+
+PB1.4 runtime / test 變更：
+
+- `src/lib/providers/webSearch/types.ts`
+- `src/lib/providers/webSearch/tavily.ts`
+- `src/lib/providers/webSearch/index.ts`
+- `src/app/api/generate/route.ts`
+- `src/lib/providers/productBrief.ts`
+- `src/lib/providers/chaochaoPrompt.ts`
+- `scripts/verify-websearch-copy-path.mjs`
+- `scripts/verify-copy-product-brief.mjs`
+
+### Validation
+
+Validated runtime/test HEAD：
+
+`a30aa29ba713189b989c11418dd4fb2733dad16a`
+
+GitHub CI run #660：
+
+- verify contracts / regressions ✅
+- typecheck ✅
+- build ✅
+- overall SUCCESS ✅
+
+Vercel Preview：**BLOCKED（平台額度，不是 code failure）**
+
+- Git-triggered Vercel check 回報 build-rate-limit。
+- Commander 再用 Vercel deployment API 對同一 SHA 建 Preview，Vercel 明確回 `402 payment_required`：
+  `api-deployments-free-per-day`
+- 今日上限：100 / 100，remaining=0。
+- Vercel 回傳 reset timestamp：`1791376617188`。
+- 因此現在沒有 PB1.4 可供 Owner 實機測的 Preview；舊 branch Preview 不可拿來當 PB1.4 驗收。
+
+### Current gate
+
+**HOLD**
+
+- Code / CI：PASS。
+- Preview：BLOCKED by Vercel daily deployment quota。
+- Owner acceptance：尚未做，因為沒有 PB1.4 Preview。
+- PR #13 必須保持 Draft；不可 merge、不可 Production deploy。
+
+額度重置後，下一步是對同一 feature branch 最新 HEAD 建 Preview，再讓 Owner 只測七龍珠鍵帽盲盒 + Pingu 吹風機，最後用 Supabase 唯讀確認 `chaochao-pb1.4-20261006` 實際結果。

@@ -49,6 +49,7 @@ jobs:
           cp supabase/history/pre_tracking_migrations/*.sql /tmp/nestory-migrations/
           cp supabase/migrations/20260822223100_variant_split_override_semantics.sql /tmp/nestory-forward-migrations/
           cp supabase/migrations/20260903100000_shopify_full_sync_state.sql /tmp/nestory-forward-migrations/
+          cp supabase/migrations/20261006181500_publish_schedule_core.sql /tmp/nestory-forward-migrations/
 
           # Migration 032 relies on pg_temp objects declared ON COMMIT DROP.
           # The hosted migration runner executes a migration transactionally;
@@ -84,6 +85,9 @@ jobs:
 
       - name: Test production precheck/apply/rollback/postcheck package
         run: bash scripts/test-supabase-production-package-local.sh
+
+      - name: Test scheduled publish migration and runtime guards
+        run: bash scripts/test-publish-schedule-local.sh
 
       - name: Stop local database
         if: always()

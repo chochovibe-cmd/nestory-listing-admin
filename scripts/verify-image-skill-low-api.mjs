@@ -63,14 +63,24 @@ console.log("  ✓ endpoint separates free vs one-edit AI execution and logs cos
 
 assert.match(sharpBatch, /hasImageSkillSource/, "send pipeline does not preserve skill output");
 assert.match(sharpBatch, /skillSource[\s\S]*generated_file_url/, "skill output must feed downstream Sharp");
-console.log("  ✓ send-images Sharp preserves selected skill result");
+assert.match(
+  sharpBatch,
+  /const managesWholeDraftStatus = !explicitImageIds/,
+  "subset Sharp must not complete the whole draft"
+);
+console.log("  ✓ send-images Sharp preserves selected skill result without false whole-draft completion");
 
 assert.match(studio, /省錢版 · low（預設）/, "economy mode is not visible/default");
 assert.match(studio, /只會生成 <strong>1 張<\/strong>/, "single-output cost guard missing");
 assert.match(studio, /參考圖越多，圖片 input token 成本越高/, "reference input cost warning missing");
 assert.match(station, /圖片 AI 工具/, "Station2 studio launcher missing");
 assert.match(tabs, /"generated", label: "AI 產出"/, "AI output tab missing");
-console.log("  ✓ Station2 exposes cost-aware studio + AI output tab");
+assert.doesNotMatch(
+  endpoint,
+  /update\(\{ image_flags: nextFlags, image_status: "done" \}\)/,
+  "standalone Image Skill must not mark the whole draft done"
+);
+console.log("  ✓ Station2 exposes cost-aware studio without false draft completion");
 
 const visibleIntentBlock = marks.match(/export const PROCESS_INTENT_OPTIONS[\s\S]*?\];/)?.[0] ?? "";
 assert.doesNotMatch(visibleIntentBlock, /"regenerate"/, "unsafe text-only regenerate still exposed in new picks");

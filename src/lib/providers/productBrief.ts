@@ -1,7 +1,7 @@
 import { estimateCopyCostUsd, type CopyUsage, type RawUsage } from "./copy";
 import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
 
-export const PRODUCT_BRIEF_VERSION = "pb1.1-20261006";
+export const PRODUCT_BRIEF_VERSION = "pb1.2-20261006";
 
 export type ProductBrief = {
   version: string;

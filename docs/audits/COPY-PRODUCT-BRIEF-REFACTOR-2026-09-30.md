@@ -235,3 +235,56 @@ Product Brief 是增量層，不是 hard dependency。
 
 Owner 沒明確說「這版文案可以」以前，PR #13 保持 Draft，Production 不動。
 
+## 13. COPY-PB1.1｜Owner live QA follow-up｜2026-10-06
+
+Owner 在 PR #13 Preview 實測後回報：**文案明顯比舊版好很多**，代表 Product Brief → focused Writer 方向成立；但仍希望小修。
+
+Commander 隨後用 Supabase 正式測試專案 `nestory-listing-tool-test` 唯讀核對實際生成紀錄，確認 2026-10-05 至少有兩筆 `generation_rule_version=chaochao-pb1-20260930` 的 live COPY-PB1 full generation：
+
+- Pingu × 您萌吹風機；
+- MINISO × DRAGON BALL Z Q 版萌粒鍵帽盲盒。
+
+實際輸出暴露三個窄缺口：
+
+1. **legacy draft evidence 污染**：七龍珠舊 draft 的 `spec_text`／角色分類仍把「PVC、約 11 公分、孫悟空單一角色」帶進新版，即使當次商品標題本身是多角色／隨機盲盒。
+2. **Why 太抒情**：選品理由仍會跑出「不變的夢想、溫柔治癒」這類抽象句，商品價值反而被稀釋。
+3. **FAQ／效果過度肯定**：例如沒有明確證據卻回答「圖案不會褪色」、把「靜音設計」擴成「比一般吹風機更安靜」，或從材質／功能名自行推導耐用、清潔、髮質效果。
+
+### PB1.1 調整
+
+Product Brief 版本由 `pb1-20260930` 升為 `pb1.1-20261006`；成功走新路徑時新的 recipe trace 為：
+
+`generation_rule_version=chaochao-pb1.1-20261006`
+
+只做三個 adjustment：
+
+- `productBrief.ts`：當次賣家標題／款式／操作備註／圖中文字高於舊 draft；草稿既有 IP／角色／品項／品牌／規格只當 legacy candidate。高風險尺寸／材質等若只存在舊 `spec_text`，不得直接進 confirmed facts/spec；多角色／隨機盲盒也不得只因舊 character 縮成單一角色。既有 SKU authority 不變。
+- `chaochaoPrompt.ts`：只在 Product Brief focused Writer 增加 value-first Why 規則；`why_we_chose_it` 改成 1–2 句，先講商品具體價值，再補潮巢觀察，禁止用抽象角色頌歌代替理由。
+- 同一 focused Writer 增加 FAQ／效果 evidence boundary：Brief 沒明講的耐用性、比較優勢、保證性結論不可靠常識延伸；FAQ 只問 Brief 有資料能回答的問題。單欄 regen／其他 tone 沒有改。
+
+Diff gate 最終只出現：
+
+- `src/lib/providers/productBrief.ts`
+- `src/lib/providers/chaochaoPrompt.ts`
+- `scripts/verify-copy-product-brief.mjs`
+
+### PB1.1 驗證證據
+
+Validated runtime code SHA：
+
+`71c49f2cfccf4673392d7e12d09fdc536986446d`
+
+- GitHub CI run #567：`verify:all` ✅、typecheck ✅。第一次 build 在 `next/font` Google loader 發生環境型錯誤；同一 SHA 直接 rerun failed job 後整個 workflow **SUCCESS**，沒有用 noop commit 觸發。
+- Vercel deployment：`dpl_BBS9k3QRvB7BcJ4RaxXvXPYcf5DV`，state=`READY`、target=`Preview`（不是 Production）、git SHA=`71c49f2...`。
+- stable branch Preview 仍是：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`
+- PR #13 仍 Draft / OPEN / NOT MERGED。
+- Production / Shopify / DB：未寫入、未 deploy、未 migration。
+
+### 下一個 Owner gate
+
+不需要再大範圍 A/B。優先用同一個 Preview 重測：
+
+1. MINISO × 七龍珠萌粒鍵帽盲盒：確認舊 `11 公分 / PVC / 單一孫悟空` 不再無證據回流。
+2. Pingu 吹風機：確認 Why 更像選品理由；FAQ 不再保證不褪色，也不把「靜音」擴寫成「比一般更安靜」。
+
+Owner 明確接受前，PR #13 繼續 Draft，不 merge、不上 Production。

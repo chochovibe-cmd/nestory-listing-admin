@@ -288,3 +288,80 @@ Validated runtime code SHA：
 2. Pingu 吹風機：確認 Why 更像選品理由；FAQ 不再保證不褪色，也不把「靜音」擴寫成「比一般更安靜」。
 
 Owner 明確接受前，PR #13 繼續 Draft，不 merge、不上 Production。
+
+## 14. COPY-PB1.2｜Why 選物語氣 + source-only full regen｜2026-10-06
+
+Owner 覺得 PB1.1 的「為什麼潮巢選他」仍差一點，並指定 `https://littlesecret.showmore.cc/` 作為風格參考。Commander 只取其首頁可觀察到的語氣原則：把「物件」接到「日常的小驚喜／送禮心意」，語氣像真正在替人挑東西的選物者；**不複製對方句子、不把潮巢改成別店口吻**。
+
+同時，PB1.1 實機重測後 Supabase 仍看到七龍珠舊錯誤 `PVC / 約11公分 / 單一孫悟空` 回流。這證明只靠 prompt 說「legacy candidate」不夠，因為 full regenerate 仍把上一輪 AI 寫回 draft 的 spec / character / product type / brand / cached product search 再餵回研究流程，形成 self-confirming loop。
+
+### Authority / scope
+
+- Branch：`gpt/copy-product-brief-refactor-20260930`
+- Draft PR：#13
+- Start HEAD：`58574e993da13fb5678eabf39b912e9f64eaf916`
+- Allowed：潮巢 full-generation 的 source-evidence rebuild、Product Brief recipe version、focused Writer 的 Why 規則、對應 verifier / docs。
+- Forbidden：其他 tone、Description / Highlights / FAQ 的既有品質規則、single-field regen、DB migration、Shopify write、Production deploy、merge。
+- Owner acceptance：
+  1. Why 像真實選物者分享「我看到哪個細節，所以想把它挑進店裡」，不是品牌公關稿。
+  2. 同一個已生成 draft 再做 full regenerate 時，不再把上一輪 AI 產生的 spec / character / type / brand / product-search cache 當來源重新證明自己。
+
+### PB1.2 implementation
+
+Recipe version：`pb1.2-20261006`；成功路徑寫入：
+
+`generation_rule_version=chaochao-pb1.2-20261006`
+
+#### 1. Why 語氣
+
+Focused Writer 的 `why_we_chose_it` 仍只寫 1–2 句，但改成：
+
+- 先抓「這件才成立」的小細節、反差、功能或角色巧思；
+- 再落到它進入日常／送禮時多出的感受；
+- 可以自然用「我們喜歡的是…／會把它挑進來，是因為…／比起又一個___，我們更喜歡它___」的選物者視角，但不能固定套模板；
+- 明確排除企業式句子：`滿足收藏需求 / 潮巢希望 / 展現角色魅力 / 帶入生活空間 / 兼具收藏與實用價值 / 值得收藏 / 充分滿足`；
+- 仍禁止抽象角色頌歌、人生感悟與無商品根據的療癒抒情。
+
+#### 2. Full regenerate 改成 source-only evidence rebuild
+
+如果目前 draft 的 `generation_rule_version` 已經是 `chaochao-pb*`，下一次「完整生成」會視為 rebuild：
+
+- 不把舊 `spec_text` 送進 product web search；
+- 不把舊 character / product type / brand 送進 Product Brief 當 fallback evidence；
+- 不重用舊 product-search cache；
+- legacy fallback Writer 也不再吃舊 `spec_text`；
+- existing IP 與 SKU 仍保留 authority；
+- 原始 title / variants / operator note / image evidence / fresh exact-product web search 仍正常使用。
+
+這個 guard 只影響「潮巢導購版」full regenerate。其他 tone 與 single-field regen 不改。
+
+### Diff gate
+
+PB1.2 runtime code 只動：
+
+- `src/app/api/generate/route.ts`
+- `src/lib/providers/productBrief.ts`
+- `src/lib/providers/chaochaoPrompt.ts`
+- `scripts/verify-copy-product-brief.mjs`
+
+### Validation
+
+Validated runtime code SHA：
+
+`1eece231bdab6ae03eff01a9736296a130f9635e`
+
+- GitHub CI run #588：`verify:all` ✅ / typecheck ✅ / build ✅
+- Vercel deployment：`dpl_22TL66PD6j2XLc7SnWNKP1JmM4b6` ✅ READY
+- Vercel target：Preview（`target=null`），不是 Production
+- Stable branch Preview：`https://nestory-listing-admin-git-gpt-copy-produc-c2532b-chocho-nestory.vercel.app`
+- PR #13：Draft / OPEN / NOT MERGED
+- Production / Shopify / DB：未寫入、未 deploy、未 migration
+
+### 下一個 Owner gate
+
+只需重測 2 筆：
+
+1. MINISO × 七龍珠萌粒鍵帽盲盒：舊 `PVC / 11公分 / 單一孫悟空` 不應再自我回流。
+2. Pingu 吹風機：Why 應更像真心選物理由，而不是「滿足需求／潮巢希望／角色魅力」式公關稿。
+
+測完後 Commander 再用 Supabase 唯讀核對 `chaochao-pb1.2-20261006` 實際結果；Owner 明確接受前不 merge、不上 Production。

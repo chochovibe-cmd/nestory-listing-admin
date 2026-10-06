@@ -75,7 +75,7 @@ export async function runDuePublishSchedules(input: {
     group_id: string;
     draft_id: string;
     scheduled_for: string;
-    position: number;
+    queue_position: number;
   }>;
 
   if (!claimedItems.length) {

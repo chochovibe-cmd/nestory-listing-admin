@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
     const nextFlags = clearImageReviewApproved(draft.image_flags);
     await service
       .from("product_drafts")
-      .update({ image_flags: nextFlags, image_status: "done" })
+      .update({ image_flags: nextFlags })
       .eq("id", canonicalDraftId);
 
     if (costUsd > 0) await appendGenerationCostUsd(service, canonicalDraftId, costUsd);
@@ -317,7 +317,7 @@ export async function POST(request: NextRequest) {
   );
   const { error: draftUpdateError } = await service
     .from("product_drafts")
-    .update({ image_flags: nextFlags, image_status: "done" })
+    .update({ image_flags: nextFlags })
     .eq("id", canonicalDraftId);
   if (draftUpdateError) return jsonError(draftUpdateError.message, 500);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildSchedulePreview,
   defaultScheduleStartDate,
@@ -18,17 +18,34 @@ const WEEKDAYS = [
   { key: 0, label: "日" }
 ] as const;
 
+export type SchedulePlannerValue = {
+  startDate: string;
+  dailyLimit: number;
+  activeWeekdays: number[];
+  finishDate: string | null;
+  dayCount: number;
+};
+
 export function SchedulePublishPlanner({
   draftCount,
-  compact = false
+  compact = false,
+  bannerText = "TEST · 只建立排程資料，不碰 Shopify",
+  onChange
 }: {
   draftCount: number;
   compact?: boolean;
+  bannerText?: string;
+  onChange?: (value: SchedulePlannerValue) => void;
 }) {
   const [startDate, setStartDate] = useState(defaultScheduleStartDate);
   const [dailyLimit, setDailyLimit] = useState(20);
   const [weekdays, setWeekdays] = useState<Set<number>>(
     () => new Set(WEEKDAYS.map((day) => day.key))
+  );
+
+  const activeWeekdays = useMemo(
+    () => [...weekdays].sort((a, b) => a - b),
+    [weekdays]
   );
 
   const preview = useMemo(
@@ -37,10 +54,20 @@ export function SchedulePublishPlanner({
         total: draftCount,
         dailyLimit,
         startDate,
-        activeWeekdays: [...weekdays]
+        activeWeekdays
       }),
-    [draftCount, dailyLimit, startDate, weekdays]
+    [activeWeekdays, draftCount, dailyLimit, startDate]
   );
+
+  useEffect(() => {
+    onChange?.({
+      startDate,
+      dailyLimit,
+      activeWeekdays,
+      finishDate: preview.finishDate,
+      dayCount: preview.days.length
+    });
+  }, [activeWeekdays, dailyLimit, onChange, preview.days.length, preview.finishDate, startDate]);
 
   function toggleWeekday(day: number) {
     setWeekdays((current) => {
@@ -57,7 +84,7 @@ export function SchedulePublishPlanner({
 
   return (
     <section className={compact ? styles.compact : styles.planner} aria-label="排程上架預覽">
-      <div className={styles.previewFlag}>PREVIEW · 不會真的排程或上架</div>
+      <div className={styles.previewFlag}>{bannerText}</div>
 
       <div className={styles.controls}>
         <label className={styles.field}>
@@ -144,8 +171,8 @@ export function SchedulePublishPlanner({
       </div>
 
       <div className={styles.safety}>
-        <strong>正式版預定安全規則：</strong>
-        先建立 Shopify DRAFT；排程前檢查同步狀態；dirty／conflict 不自動公開；單件失敗不阻斷其他商品。
+        <strong>目前安全規則：</strong>
+        這個環境只建立排程資料；Shopify DRAFT／ACTIVE 安全鎖預設關閉。未來放行後仍會在執行前檢查 dirty／conflict，單件失敗也不阻斷其他商品。
       </div>
     </section>
   );

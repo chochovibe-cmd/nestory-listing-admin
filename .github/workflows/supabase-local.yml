@@ -10,6 +10,7 @@ on:
       - "scripts/test-supabase-role-rls-local.sh"
       - "scripts/test-supabase-function-hardening-local.sh"
       - "scripts/test-supabase-production-package-local.sh"
+      - "scripts/test-publish-schedule-local.sh"
       - ".github/workflows/supabase-local.yml"
       - "scripts/verify-requirements.mjs"
   workflow_dispatch:

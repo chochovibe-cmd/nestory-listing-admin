@@ -10202,6 +10202,103 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
     height: 64px;
   }
 }
+/* UIUX2 R2 — ResultCard desktop uses its own container width, not viewport width.
+   Workbench desktop always reserves the 420px input column, so the results column
+   can be compact even when the browser itself is desktop-wide. Keep desktop
+   interaction semantics, but give wide and compact desktop two explicit grids. */
+.rc-swipe-wrap {
+  container-type: inline-size;
+  container-name: result-card-shell;
+}
+
+@media (min-width: 960px) {
+  .result-card > .rc-header {
+    display: grid;
+    grid-template-columns: 16px 72px minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "check thumb main price quick"
+      "check thumb summary price quick";
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
+    flex-wrap: initial;
+  }
+
+  .result-card > .rc-header > .rc-checkbox {
+    grid-area: check;
+    align-self: center;
+  }
+
+  .result-card > .rc-header > .rc-thumb {
+    grid-area: thumb;
+    align-self: center;
+  }
+
+  .result-card > .rc-header > .rc-headmain {
+    grid-area: main;
+    min-width: 0;
+  }
+
+  .result-card > .rc-header > .rc-card-summary-row {
+    grid-area: summary;
+    min-width: 0;
+  }
+
+  .result-card > .rc-header > .rc-m-row3 {
+    grid-area: price;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .result-card > .rc-header > .rc-quick-row {
+    grid-area: quick;
+    margin-left: 0;
+    justify-self: end;
+    min-width: 0;
+  }
+
+  @container result-card-shell (max-width: 760px) {
+    .result-card > .rc-header {
+      grid-template-columns: 16px 72px minmax(0, 1fr);
+      grid-template-areas:
+        "check thumb main"
+        "check thumb summary"
+        ". . price"
+        ". . quick";
+      align-items: start;
+      row-gap: 8px;
+    }
+
+    .result-card > .rc-header > .rc-m-row3 {
+      justify-content: flex-start;
+      width: 100%;
+    }
+
+    .result-card > .rc-header .rc-price-mini,
+    .result-card > .rc-header .rc-price-stack {
+      align-items: flex-start;
+    }
+
+    .result-card > .rc-header .rc-price-mini-sub {
+      justify-content: flex-start;
+    }
+
+    .result-card > .rc-header > .rc-quick-row {
+      justify-self: start;
+      margin-left: 0;
+      max-width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .result-card > .rc-header .rc-quick {
+      max-width: 100%;
+      flex-wrap: wrap;
+    }
+  }
+}
+
 /* 測試／正式生成 chip 放 panel-header「新增商品」旁 */
 .workspace-input-panel .panel-header {
   display: flex;

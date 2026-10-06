@@ -2398,11 +2398,28 @@ export function ResultCard({
             {detectWarnsEl}
           </span>
           {nextActionText ? (
-            <span className={blockWarnCount > 0 ? "rc-next-action is-block" : "rc-next-action"}>
+            <span
+              className={
+                blockWarnCount > 0
+                  ? "rc-next-action rc-next-action--desktop is-block"
+                  : "rc-next-action rc-next-action--desktop"
+              }
+            >
               {nextActionText}
             </span>
           ) : null}
         </span>
+        {nextActionText ? (
+          <span
+            className={
+              blockWarnCount > 0
+                ? "rc-next-action rc-next-action--mobile is-block"
+                : "rc-next-action rc-next-action--mobile"
+            }
+          >
+            {nextActionText}
+          </span>
+        ) : null}
         <span className="rc-card-summary-row">
           {isImageStation ? (
             <span className="rc-card-mark-summary muted">

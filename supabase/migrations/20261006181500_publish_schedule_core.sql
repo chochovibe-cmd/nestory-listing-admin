@@ -59,7 +59,7 @@ returns table (
   group_id uuid,
   draft_id uuid,
   scheduled_for date,
-  position integer
+  queue_position integer
 )
 language plpgsql
 security definer
@@ -88,7 +88,7 @@ begin
     where psi.id = picked.id
     returning psi.id, psi.group_id, psi.draft_id, psi.scheduled_for, psi.position
   )
-  select c.id, c.group_id, c.draft_id, c.scheduled_for, c.position
+  select c.id, c.group_id, c.draft_id, c.scheduled_for, c.position as queue_position
   from claimed c
   order by c.scheduled_for asc, c.position asc;
 end;

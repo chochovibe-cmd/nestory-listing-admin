@@ -208,8 +208,13 @@ export async function runSharpBatchForDraft(
     return d.action === "process_sharp";
   });
 
-  if (willProcess) {
-    await serviceSupabase.from("product_drafts").update({ image_status: "processing" }).eq("id", draftId);
+  const managesWholeDraftStatus = !explicitImageIds;
+
+  if (willProcess && managesWholeDraftStatus) {
+    await serviceSupabase
+      .from("product_drafts")
+      .update({ image_status: "processing" })
+      .eq("id", draftId);
   }
 
   const results: SharpBatchPerImageResult[] = [];
@@ -339,8 +344,11 @@ export async function runSharpBatchForDraft(
 
   const nextImageStatus = aggregateImageStatusAfterSharp({ processed, failed, skipped });
   let imageStatus = (draft.image_status as string) ?? "pending";
-  if (nextImageStatus) {
-    await serviceSupabase.from("product_drafts").update({ image_status: nextImageStatus }).eq("id", draftId);
+  if (nextImageStatus && managesWholeDraftStatus) {
+    await serviceSupabase
+      .from("product_drafts")
+      .update({ image_status: nextImageStatus })
+      .eq("id", draftId);
     imageStatus = nextImageStatus;
   }
 

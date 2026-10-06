@@ -42,14 +42,18 @@ assert.match(writer, /不要用「品質有保證、絕佳收藏、經久耐用�
   "generic-copy regression guard missing");
 assert.match(writer, /Product Brief 沒有明確寫出的效果、耐用性、比較優勢或保證性結論/u,
   "focused Writer can still infer unsupported product effects");
-assert.match(writer, /why_we_chose_it 只寫 1–2 句/u,
+assert.match(chaochao, /why_we_chose_it 只寫 1–2 句/u,
   "PB1.1 Why rule did not switch to value-first 1–2 sentence contract");
-assert.match(writer, /不要把選品理由寫成角色頌歌、人生感悟或抽象療癒散文/u,
+assert.match(chaochao, /不要把選品理由寫成角色頌歌、人生感悟或抽象療癒散文/u,
   "PB1.1 Why anti-poetic guard missing");
-assert.match(writer, /只能問 Product Brief 有足夠資料回答的題目/u,
+assert.match(chaochao, /只能問 Product Brief 有足夠資料回答的題目/u,
   "PB1.1 FAQ evidence-answerability guard missing");
-assert.match(writer, /不能擴成「比一般吹風機更安靜」/u,
+assert.match(chaochao, /不能擴成「比一般吹風機更安靜」/u,
   "PB1.1 FAQ comparison certainty guard missing");
+assert.match(writer, /\$\{buildChaochaoBriefFaqRules\(\)\}/u,
+  "focused Writer stopped applying PB1.1 FAQ evidence rules");
+assert.match(writer, /\$\{buildChaochaoBriefWhyRule\(\)\}/u,
+  "focused Writer stopped applying PB1.1 Why rules");
 
 assert.match(promptBase, /input\.productBrief\?\.trim\(\)/u, "Chaochao user message does not prefer Product Brief");
 assert.match(promptBase, /不要重新分類、不要重新查證/u, "Writer boundary instruction missing");

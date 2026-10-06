@@ -713,6 +713,18 @@ export async function POST(request: NextRequest) {
   if (imageWarnings.length > 0) extraWarnings.push(...imageWarnings);
 
   const rawTitleForSearch = draft.taobao_title ?? draft.original_title ?? "";
+  const rebuildChaochaoBriefFromSource =
+    tone === "潮巢導購版" &&
+    typeof draft.generation_rule_version === "string" &&
+    draft.generation_rule_version.startsWith("chaochao-pb");
+  // COPY-PB1.2: a full re-generation must not feed the previous AI result back
+  // into research as if it were seller evidence. This prevents stale spec /
+  // classification / cached-search contamination from becoming self-confirming.
+  const trustedSpecTextForRun = rebuildChaochaoBriefFromSource ? null : draft.spec_text;
+  const trustedCharacterForBrief = rebuildChaochaoBriefFromSource ? null : draft.character_name;
+  const trustedProductTypeForBrief = rebuildChaochaoBriefFromSource ? null : draft.product_type;
+  const trustedBrandForBrief = rebuildChaochaoBriefFromSource ? null : draft.product_brand;
+  const trustedProductSearchCache = rebuildChaochaoBriefFromSource ? null : draft.web_search_cache;
   let webSearchSummary: string | undefined;
   let productCacheToPersist: WebSearchCache | null = null;
   let ipBackgroundCacheToPersist: WebSearchCache | null = null;
@@ -737,12 +749,12 @@ export async function POST(request: NextRequest) {
       useWebSearch,
       rawTitle: rawTitleForSearch,
       ipName: draft.ip_name ?? candidateIpForPack,
-      characterName: draft.character_name,
-      productType: draft.product_type,
-      specText: draft.spec_text,
+      characterName: trustedCharacterForBrief,
+      productType: trustedProductTypeForBrief,
+      specText: trustedSpecTextForRun,
       note: draft.note,
       imageDescription: draft.image_description,
-      existingCache: draft.web_search_cache,
+      existingCache: trustedProductSearchCache,
     }).finally(() => {
       stageMs.webSearch = Date.now() - productStarted;
     });
@@ -819,14 +831,14 @@ export async function POST(request: NextRequest) {
                 variantSummary,
                 note: noteForRun,
                 imageDescription: draft.image_description,
-                specText: draft.spec_text,
+                specText: trustedSpecTextForRun,
                 webSearchSummary,
                 ipKnowledgePromptBlock,
                 knownIpNames,
                 existingIp: draft.ip_name ?? candidateIpForPack,
-                existingCharacter: draft.character_name,
-                existingProductType: draft.product_type,
-                existingBrand: draft.product_brand,
+                existingCharacter: trustedCharacterForBrief,
+                existingProductType: trustedProductTypeForBrief,
+                existingBrand: trustedBrandForBrief,
                 existingSku: draft.sku,
               });
               stageMs.productBrief = Date.now() - briefStarted;
@@ -847,7 +859,7 @@ export async function POST(request: NextRequest) {
         compareAtPrice: draft.compare_at_price,
         note: noteForRun,
         imageDescription: draft.image_description ?? undefined,
-        specText: draft.spec_text ?? undefined,
+        specText: trustedSpecTextForRun ?? undefined,
         webSearchSummary,
         productBrief: productBriefResult && !productBriefResult.fallback ? productBriefResult.writerText : undefined,
         ipKnowledgePromptBlock,
@@ -931,7 +943,8 @@ export async function POST(request: NextRequest) {
   const detectedBrand = providerOutput
     ? normalizeDetectedProductBrand(providerOutput.detectedProductBrand)
     : null;
-  const effectiveProductBrand = detectedBrand ?? draft.product_brand ?? null;
+  const effectiveProductBrand =
+    detectedBrand ?? (rebuildChaochaoBriefFromSource ? null : draft.product_brand) ?? null;
   const generationTone = resolvedGenerationTone(tone, detected.ip || draft.ip_name, ipToneMap);
 
   const listingInput = toListingDraftInput(draft, detected, variantSummary, effectiveProductBrand);

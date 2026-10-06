@@ -32,6 +32,15 @@
     grid-row: 2;
     align-self: start;
   }
+  .result-card > .rc-header .rc-head-chips > .rc-next-action--desktop {
+    flex: 1 0 100%;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .result-card > .rc-header .rc-card-summary-row {
     grid-column: 3;
     grid-row: 2;

@@ -162,68 +162,56 @@ export function buildAutoChainWarning(
   return `${base}${extra}`.slice(0, 200);
 }
 
-/** Aggregate batch header status after per-draft outcomes (Q5a-A / Q6-A / SYN-1). */
+/** Aggregate batch header from actual item progress, not only the latest outcome label. */
 export function aggregateBatchStatusAfterChain(
   summaries: DraftChainSummary[]
 ): { batchStatus: ImageBatchStatus; doneCount: number; failedCount: number } {
   let doneCount = 0;
   let failedCount = 0;
-  let awaitingOnly = 0;
-  let timeBudget = 0;
-  let emptySkip = 0;
+  let processingCount = 0;
+  let queuedCount = 0;
 
-  for (const s of summaries) {
-    if (s.outcome === "done" || s.outcome === "skipped_empty") {
+  for (const summary of summaries) {
+    if (summary.itemStatus === "done" || summary.itemStatus === "skipped") {
       doneCount += 1;
-      if (s.outcome === "skipped_empty") emptySkip += 1;
-    } else if (s.outcome === "failed") {
+    } else if (summary.itemStatus === "failed") {
       failedCount += 1;
-    } else if (s.outcome === "awaiting_d4" || s.outcome === "awaiting_compose") {
-      awaitingOnly += 1;
-    } else if (s.outcome === "time_budget") {
-      timeBudget += 1;
+    } else if (summary.itemStatus === "processing") {
+      processingCount += 1;
+    } else {
+      queuedCount += 1;
     }
   }
 
-  const n = summaries.length;
-  if (n === 0) {
+  const total = summaries.length;
+  if (total === 0) {
     return { batchStatus: "queued", doneCount: 0, failedCount: 0 };
   }
 
-  if (awaitingOnly === n) {
-    return { batchStatus: "queued", doneCount: 0, failedCount: 0 };
-  }
-
-  if (timeBudget === n) {
-    return { batchStatus: "queued", doneCount: 0, failedCount: 0 };
-  }
-
-  if (failedCount === n) {
-    return { batchStatus: "failed", doneCount: 0, failedCount };
-  }
-
-  if (doneCount === n) {
-    return { batchStatus: "completed", doneCount, failedCount: 0 };
-  }
-
-  if (failedCount === 0 && timeBudget === 0 && doneCount + awaitingOnly + emptySkip === n) {
+  const hasUnfinished = queuedCount > 0 || processingCount > 0;
+  if (hasUnfinished) {
     return {
-      batchStatus: doneCount > 0 ? (awaitingOnly > 0 ? "partial_failed" : "completed") : "queued",
+      batchStatus:
+        processingCount > 0 || doneCount > 0 || failedCount > 0
+          ? "processing"
+          : "queued",
       doneCount,
-      failedCount: 0
+      failedCount
     };
   }
 
-  return {
-    batchStatus: "partial_failed",
-    doneCount,
-    failedCount
-  };
+  if (failedCount === total) {
+    return { batchStatus: "failed", doneCount: 0, failedCount };
+  }
+  if (failedCount > 0) {
+    return { batchStatus: "partial_failed", doneCount, failedCount };
+  }
+  return { batchStatus: "completed", doneCount, failedCount: 0 };
 }
 
 /**
  * SYN-1: after pipeline, try compose generated_detail when snapshot says so.
- * Time budget → awaiting_compose (item stays queued). Failure → warning, still done.
+ * Time budget → awaiting_compose (item stays processing once work has started). Failure → warning, still done.
  */
 export async function tryComposeDetailInChain(input: {
   serviceSupabase: SharpBatchServiceClient;
@@ -329,6 +317,31 @@ function snapshotD4Ids(snap: ImageBatchSnapshotDraft | undefined): string[] {
         img.imageId
     )
     .map((img) => img.imageId as string);
+}
+
+async function syncDraftImageStatusFromBatchItem(
+  serviceSupabase: SharpBatchServiceClient,
+  draftId: string,
+  itemStatus: ImageBatchItemStatus
+): Promise<void> {
+  const nextStatus =
+    itemStatus === "done"
+      ? "done"
+      : itemStatus === "failed"
+        ? "failed"
+        : itemStatus === "processing"
+          ? "processing"
+          : null;
+  if (!nextStatus) return;
+
+  try {
+    await serviceSupabase
+      .from("product_drafts")
+      .update({ image_status: nextStatus })
+      .eq("id", draftId);
+  } catch {
+    // Best-effort status mirror; batch item remains the workflow authority.
+  }
 }
 
 /** R2: all-keep chain done → station③ ready (still dual-write status=approved). */
@@ -640,6 +653,11 @@ export async function runSendImagesAutoChain(
           .update({ item_status: "failed" })
           .eq("batch_id", batchId)
           .eq("draft_id", plan.draftId);
+        await syncDraftImageStatusFromBatchItem(
+          serviceSupabase,
+          plan.draftId,
+          "failed"
+        );
         summaries.push({
           draftId: plan.draftId,
           title: baseTitle,
@@ -679,7 +697,7 @@ export async function runSendImagesAutoChain(
         composeStatus = c.compose;
         if (c.awaiting) {
           outcome = "awaiting_compose";
-          itemStatus = "queued";
+          itemStatus = "processing";
           stoppedEarly = true;
         }
       }
@@ -689,6 +707,11 @@ export async function runSendImagesAutoChain(
         .update({ item_status: itemStatus })
         .eq("batch_id", batchId)
         .eq("draft_id", plan.draftId);
+      await syncDraftImageStatusFromBatchItem(
+        serviceSupabase,
+        plan.draftId,
+        itemStatus
+      );
 
       // R2 Q3-B path complete → station③ (all-keep does not need 生圖工廠 review)
       // SYN-1: only advance when not awaiting compose
@@ -802,7 +825,12 @@ export async function runSendImagesAutoChain(
       itemStatus = "failed";
     } else if (unfinishedD4) {
       outcome = "awaiting_d4";
-      itemStatus = "queued";
+      const hasProgress =
+        keepRun.sharpProcessed > 0 ||
+        keepRun.finalizeUploaded > 0 ||
+        d4Processed > 0 ||
+        d4Failed > 0;
+      itemStatus = hasProgress ? "processing" : "queued";
     } else if (
       (keepRun.sharpFailed > 0 && keepIds.length > 0 && keepRun.sharpProcessed === 0) ||
       (d4Status === "failed" && d4Processed === 0 && keepIds.length === 0)
@@ -846,6 +874,11 @@ export async function runSendImagesAutoChain(
       .update({ item_status: itemStatus })
       .eq("batch_id", batchId)
       .eq("draft_id", plan.draftId);
+    await syncDraftImageStatusFromBatchItem(
+      serviceSupabase,
+      plan.draftId,
+      itemStatus
+    );
 
     summaries.push({
       draftId: plan.draftId,
@@ -876,13 +909,20 @@ export async function runSendImagesAutoChain(
   const agg = aggregateBatchStatusAfterChain(summaries);
   const elapsedMs = now() - startedAt;
 
+  const batchUpdatedAt = new Date().toISOString();
+  const batchIsTerminal =
+    agg.batchStatus === "completed" ||
+    agg.batchStatus === "partial_failed" ||
+    agg.batchStatus === "failed";
+
   await serviceSupabase
     .from("image_batches")
     .update({
       status: agg.batchStatus,
       done_count: agg.doneCount,
       failed_count: agg.failedCount,
-      updated_at: new Date().toISOString()
+      completed_at: batchIsTerminal ? batchUpdatedAt : null,
+      updated_at: batchUpdatedAt
     })
     .eq("id", batchId);
 

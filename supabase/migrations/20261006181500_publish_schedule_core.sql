@@ -94,5 +94,5 @@ begin
 end;
 $$;
 
-revoke all on function public.claim_due_publish_schedule_items(date, integer) from public;
+revoke all on function public.claim_due_publish_schedule_items(date, integer) from public, anon, authenticated;
 grant execute on function public.claim_due_publish_schedule_items(date, integer) to service_role;

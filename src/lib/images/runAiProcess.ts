@@ -373,12 +373,12 @@ export async function updateBatchStatusAfterAiProcess(
     let batchStatus: string;
     const hasUnfinished = queuedCount > 0 || processingCount > 0;
     if (hasUnfinished) {
+      // Unfinished work is still processing, even when another item already failed.
+      // Reserve partial_failed for a terminal batch so stuck scanning still applies.
       batchStatus =
-        failedCount > 0
-          ? "partial_failed"
-          : processingCount > 0 || doneCount > 0
-            ? "processing"
-            : "queued";
+        processingCount > 0 || doneCount > 0 || failedCount > 0
+          ? "processing"
+          : "queued";
     } else if (failedCount === statuses.length) {
       batchStatus = "failed";
     } else if (failedCount > 0) {

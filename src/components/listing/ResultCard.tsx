@@ -2396,18 +2396,18 @@ export function ResultCard({
             {headMetaEl}
             {detectTagsEl}
             {detectWarnsEl}
+            {nextActionText ? (
+              <span
+                className={
+                  blockWarnCount > 0
+                    ? "rc-next-action rc-next-action--desktop is-block"
+                    : "rc-next-action rc-next-action--desktop"
+                }
+              >
+                {nextActionText}
+              </span>
+            ) : null}
           </span>
-          {nextActionText ? (
-            <span
-              className={
-                blockWarnCount > 0
-                  ? "rc-next-action rc-next-action--desktop is-block"
-                  : "rc-next-action rc-next-action--desktop"
-              }
-            >
-              {nextActionText}
-            </span>
-          ) : null}
         </span>
         {nextActionText ? (
           <span

@@ -98,6 +98,24 @@ seo_title：常用商品名稱＋主要差異，自然好讀，最長 80 字。�
 meta_description：商品是什麼、一個有用特點、適合什麼情境，1–2 句，最長 80 字。`;
 }
 
+function buildChaochaoBriefWhyRule(): string {
+  return `【Product Brief 專用｜為什麼潮巢選他】
+why_we_chose_it 只寫 1–2 句。
+第一句先講這件商品真正值得選的具體理由：功能、造型差異、使用方式或粉絲才懂的細節；第二句才可以補一點潮巢觀察。
+不要把選品理由寫成角色頌歌、人生感悟或抽象療癒散文；像「不變的夢想、溫柔治癒、心靈小旅行、滿滿能量」這類句子不能取代商品理由。
+換掉商品名稱還成立，就重寫。`;
+}
+
+function buildChaochaoBriefFaqRules(): string {
+  return `【Product Brief 專用｜FAQ 證據界線】
+3–5 題，優先問真正影響購買、使用、選款、送禮或照顧的問題；只能問 Product Brief 有足夠資料回答的題目。
+不要為了湊題數問一個資料裡沒有答案的問題。若答案需要靠常識、材質印象或同類商品經驗推測，就換題。
+「不會、一定、保證、完全、比一般更、比較安靜／耐用／不褪色」等絕對或比較結論，只有 Product Brief 明確支持時才能寫。
+若 Brief 只寫「靜音設計」，最多寫「商品資料標示為靜音設計」，不能擴成「比一般吹風機更安靜」。
+材質本身也不能自動推出耐用、不褪色、易清潔或戶外適用。
+每題 <h3><strong>問題</strong></h3><p>回答</p>。先回答，再補細節；單獨看也完整。`;
+}
+
 export function buildChaochaoVoiceChecklist(): string {
   return `寫完對一下：正文是否跟樣板一樣具體、有畫面、會心一笑；標題是否 IP 在前。`;
 }
@@ -198,6 +216,7 @@ ${CHAOCHAO_OWNER_VOICE_SAMPLES}
 【Writer 工作邊界】
 - Product Brief 裡的「已確認事實／差異點／使用情境／粉絲角度」是本次素材。
 - 「仍未知」一律不要補猜；不要自己發明尺寸、材質、授權、限定、年份、庫存或到貨日。
+- Product Brief 沒有明確寫出的效果、耐用性、比較優勢或保證性結論，也不要靠常識延伸。例如「負離子」不能自行寫成豐盈／修復／不傷髮；「PVC」不能自行寫成耐用／不褪色／易清潔。
 - 不需要輸出 IP 判斷、角色判斷、品項分類、品牌判斷、category、SKU、spec 或 title 拆分；那些由 Product Brief／後端處理。
 - 每一段至少抓住一個這件商品才成立的細節；不要用「品質有保證、絕佳收藏、經久耐用、不可錯過」這類拿掉商品名仍成立的空句。
 - 主文 2–4 句即可，但要同時讓人知道「它是什麼、長什麼樣／有什麼特色、怎麼進入日常、為什麼會想留著」。
@@ -209,9 +228,9 @@ ${CHAOCHAO_OWNER_VOICE_SAMPLES}
 ${buildChaochaoDescriptionFormat()}
 ${secondhandSection}
 
-${buildChaochaoFaqRules()}
+${buildChaochaoBriefFaqRules()}
 ${buildChaochaoSeoRules()}
-${buildChaochaoWhyRule()}
+${buildChaochaoBriefWhyRule()}
 ${buildChaochaoHighlightsRule()}
 
 【標題】

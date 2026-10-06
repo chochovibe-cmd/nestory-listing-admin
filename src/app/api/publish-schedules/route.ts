@@ -5,6 +5,7 @@ import {
   isMissingScheduleTablesError,
   normalizeScheduleDraftIds,
   SCHEDULE_MIGRATION_HINT,
+  scheduleExecutionEnabled,
   scheduleStagingEnabled
 } from "@/lib/drafts/publishScheduleCore";
 import { runPublishBatch } from "@/lib/shopify/runPublishBatch";
@@ -47,7 +48,7 @@ export async function GET() {
   }
 
   const ids = (groups ?? []).map((group) => group.id as string);
-  let items: any[] = [];
+  let items: Array<Record<string, unknown>> = [];
   if (ids.length) {
     const { data, error: itemError } = await service
       .from("publish_schedule_items")
@@ -59,10 +60,63 @@ export async function GET() {
     if (itemError) {
       return Response.json({ error: itemError.message }, { status: 500 });
     }
-    items = data ?? [];
+
+    const rawItems = (data ?? []) as Array<Record<string, unknown>>;
+    const draftIds = [...new Set(rawItems.map((item) => String(item.draft_id ?? "")).filter(Boolean))];
+    let draftById = new Map<string, {
+      title: string;
+      pipelineStage: string | null;
+      syncStatus: string | null;
+      shopifyProductId: string | null;
+    }>();
+
+    if (draftIds.length) {
+      const { data: draftRows, error: draftError } = await service
+        .from("product_drafts")
+        .select("id,title_zh,taobao_title,original_title,pipeline_stage,shopify_sync_status,shopify_product_id")
+        .in("id", draftIds);
+      if (draftError) {
+        return Response.json({ error: draftError.message }, { status: 500 });
+      }
+      draftById = new Map(
+        (draftRows ?? []).map((draft) => [
+          String(draft.id),
+          {
+            title:
+              String(draft.title_zh ?? "").trim() ||
+              String(draft.taobao_title ?? "").trim() ||
+              String(draft.original_title ?? "").trim() ||
+              "未命名商品",
+            pipelineStage: typeof draft.pipeline_stage === "string" ? draft.pipeline_stage : null,
+            syncStatus: typeof draft.shopify_sync_status === "string" ? draft.shopify_sync_status : null,
+            shopifyProductId:
+              typeof draft.shopify_product_id === "string" ? draft.shopify_product_id : null
+          }
+        ])
+      );
+    }
+
+    items = rawItems.map((item) => {
+      const draft = draftById.get(String(item.draft_id ?? ""));
+      return {
+        ...item,
+        title: draft?.title ?? "商品",
+        pipeline_stage: draft?.pipelineStage ?? null,
+        shopify_sync_status: draft?.syncStatus ?? null,
+        shopify_product_id: draft?.shopifyProductId ?? null
+      };
+    });
   }
 
-  return Response.json({ ok: true, groups: groups ?? [], items });
+  return Response.json({
+    ok: true,
+    groups: groups ?? [],
+    items,
+    safety: {
+      stagingEnabled: scheduleStagingEnabled(),
+      executionEnabled: scheduleExecutionEnabled()
+    }
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -88,6 +142,32 @@ export async function POST(request: NextRequest) {
   }
 
   const service = createServiceSupabaseClient();
+
+  const { data: selectedDrafts, error: selectedDraftsError } = await service
+    .from("product_drafts")
+    .select("id,pipeline_stage,status")
+    .in("id", draftIds);
+
+  if (selectedDraftsError) {
+    return Response.json({ error: selectedDraftsError.message }, { status: 500 });
+  }
+
+  const foundIds = new Set((selectedDrafts ?? []).map((draft) => String(draft.id)));
+  const missingIds = draftIds.filter((id) => !foundIds.has(id));
+  const notReadyIds = (selectedDrafts ?? [])
+    .filter((draft) => draft.pipeline_stage !== "ready")
+    .map((draft) => String(draft.id));
+
+  if (missingIds.length || notReadyIds.length) {
+    return Response.json(
+      {
+        error: "只有「完成待發布」商品可以加入排程",
+        missingDraftIds: missingIds,
+        notReadyDraftIds: notReadyIds
+      },
+      { status: 409 }
+    );
+  }
 
   let scheduleIds = draftIds;
   let staging:
@@ -189,8 +269,12 @@ export async function POST(request: NextRequest) {
     total: assignments.length,
     finishDate: preview.finishDate,
     staging,
+    safety: {
+      stagingEnabled: scheduleStagingEnabled(),
+      executionEnabled: scheduleExecutionEnabled()
+    },
     message: scheduleStagingEnabled()
       ? "Shopify 草稿已建立；成功件已加入排程"
-      : "排程已建立；Shopify staging 安全鎖目前關閉，未送出任何 Shopify 寫入"
+      : "測試排程已建立；Shopify DRAFT／ACTIVE 安全鎖目前關閉，未送出任何 Shopify 寫入"
   });
 }

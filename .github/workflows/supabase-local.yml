@@ -11,6 +11,10 @@ on:
       - "scripts/test-supabase-function-hardening-local.sh"
       - "scripts/test-supabase-production-package-local.sh"
       - "scripts/test-publish-schedule-local.sh"
+      - "scripts/test-publish-schedule-api-e2e.mjs"
+      - "src/app/api/publish-schedules/**"
+      - "src/lib/drafts/publishScheduleCore.ts"
+      - "src/lib/shopify/runDuePublishSchedules.ts"
       - ".github/workflows/supabase-local.yml"
       - "scripts/verify-requirements.mjs"
   workflow_dispatch:
@@ -35,6 +39,22 @@ jobs:
         uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install app dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Initialize local-only Supabase config
         shell: bash
@@ -89,6 +109,48 @@ jobs:
 
       - name: Test production precheck/apply/rollback/postcheck package
         run: bash scripts/test-supabase-production-package-local.sh
+
+      - name: Export local-only app environment
+        shell: bash
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "SCHEDULE_E2E_BASE_URL=http://127.0.0.1:3019"
+            echo "PUBLISH_SCHEDULE_DB_WRITE_ENABLED=true"
+            echo "PUBLISH_SCHEDULE_STAGING_ENABLED=false"
+            echo "PUBLISH_SCHEDULE_EXECUTION_ENABLED=false"
+            echo "SHOPIFY_PUBLISH_MOCK=true"
+            echo "NEXT_TELEMETRY_DISABLED=1"
+          } >> "$GITHUB_ENV"
+
+      - name: Start local Next.js schedule API
+        shell: bash
+        run: |
+          nohup pnpm exec next dev --hostname 127.0.0.1 --port 3019 > /tmp/nestory-schedule-e2e-next.log 2>&1 &
+          echo $! > /tmp/nestory-schedule-e2e-next.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3019/login >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/nestory-schedule-e2e-next.log || true
+          exit 1
+
+      - name: Test authenticated schedule HTTP API E2E
+        run: pnpm run test:publish-schedule-api-e2e
+
+      - name: Stop local Next.js schedule API
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/nestory-schedule-e2e-next.pid ]]; then
+            kill "$(cat /tmp/nestory-schedule-e2e-next.pid)" 2>/dev/null || true
+          fi
+          cat /tmp/nestory-schedule-e2e-next.log || true
 
       - name: Stop local database
         if: always()

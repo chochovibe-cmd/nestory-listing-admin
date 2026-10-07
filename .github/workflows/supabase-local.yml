@@ -113,8 +113,10 @@ jobs:
       - name: Export local-only app environment
         shell: bash
         run: |
-          supabase status --env --output-format text \
-            --override-name API_URL=NEXT_PUBLIC_SUPABASE_URL,ANON_KEY=NEXT_PUBLIC_SUPABASE_ANON_KEY,SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY \
+          supabase status -o env \
+            --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
+            --override-name auth.anon_key=NEXT_PUBLIC_SUPABASE_ANON_KEY \
+            --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY \
             > /tmp/nestory-supabase-local.env
           set -a
           source /tmp/nestory-supabase-local.env

@@ -34,8 +34,10 @@ export class ClaudeCopyProvider implements CopyProvider {
       : null;
     const system = regenField
       ? buildFieldRegenSystemPrompt(regenField, resolvedTone, input.copyLength, secondhandInfo)
-      : buildCopySystemPrompt(resolvedTone, input.copyLength, secondhandInfo);
-    const ipBlock = regenField ? null : buildKnownIpBlock(input.knownIpNames);
+      : buildCopySystemPrompt(resolvedTone, input.copyLength, secondhandInfo, {
+          productBriefMode: Boolean(input.productBrief?.trim()),
+        });
+    const ipBlock = regenField || input.productBrief?.trim() ? null : buildKnownIpBlock(input.knownIpNames);
     // A5: the IP list lives in a cached system block, not the user message, so
     // the per-product user message stays fully variable.
     const user = regenField
@@ -108,6 +110,7 @@ export class ClaudeCopyProvider implements CopyProvider {
           cachedInputTokens: Number(u.cache_read_input_tokens) || 0,
           cacheCreationTokens: Number(u.cache_creation_input_tokens) || 0,
         },
+        truncated: payload?.stop_reason === "max_tokens",
       };
     }, "claude", DEFAULT_MODEL, isEmpty);
   }

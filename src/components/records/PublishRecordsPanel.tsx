@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
 import { isAdmin } from "@/lib/auth/roles";
@@ -89,6 +90,14 @@ export function PublishRecordsPanel() {
   const [libraryHits, setLibraryHits] = useState<LibraryDraftRow[]>([]);
   const [librarySearching, setLibrarySearching] = useState(false);
   const [promoteBusyId, setPromoteBusyId] = useState<string | null>(null);
+  const [activeConfirm, setActiveConfirm] = useState<{
+    ids: string[];
+    count: number;
+  } | null>(null);
+  const [promoteConfirm, setPromoteConfirm] = useState<{
+    draftId: string;
+    title: string;
+  } | null>(null);
 
   const admin = isAdmin(role);
 
@@ -387,33 +396,61 @@ export function PublishRecordsPanel() {
 
   async function retrySelectedFailed() {
     if (failedSelected.size === 0) return;
-    setFailedRetryBusy(true);
-    try {
-      // Default draft mode for mixed history; active if any selected from active batch
-      let mode: PublishMode = "draft";
-      for (const draftId of failedSelected) {
-        const hit = flatFailed.find((f) => f.draftId === draftId);
-        if (!hit) continue;
-        const batch = rows.find((r) => r.id === hit.batchId);
-        if (batch?.publish_mode === "active") {
-          mode = "active";
-          break;
-        }
+
+    const draftIds = [...failedSelected];
+    const draftGroup: string[] = [];
+    const activeGroup: string[] = [];
+
+    for (const draftId of draftIds) {
+      const hit = flatFailed.find((f) => f.draftId === draftId);
+      const batch = hit ? rows.find((r) => r.id === hit.batchId) : undefined;
+      if (batch?.publish_mode === "active") {
+        activeGroup.push(draftId);
+      } else {
+        draftGroup.push(draftId);
       }
-      await runRetryPublish([...failedSelected], mode);
-    } finally {
-      setFailedRetryBusy(false);
+    }
+
+    if (draftGroup.length > 0) {
+      setFailedRetryBusy(true);
+      try {
+        await runRetryPublish(draftGroup, "draft");
+      } finally {
+        setFailedRetryBusy(false);
+      }
+    }
+
+    if (activeGroup.length > 0) {
+      setActiveConfirm({ ids: activeGroup, count: activeGroup.length });
     }
   }
 
-  async function promoteDraft(draftId: string) {
-    setPromoteBusyId(draftId);
+  async function executeActiveRetry() {
+    if (!activeConfirm) return;
+    setFailedRetryBusy(true);
+    try {
+      await runRetryPublish(activeConfirm.ids, "active");
+    } finally {
+      setFailedRetryBusy(false);
+      setActiveConfirm(null);
+    }
+  }
+
+  function promoteDraft(draftId: string) {
+    const row = productRows.find((r) => r.id === draftId);
+    setPromoteConfirm({ draftId, title: row ? recordsProductTitle(row) : "未命名" });
+  }
+
+  async function executePromote() {
+    if (!promoteConfirm) return;
+    setPromoteBusyId(promoteConfirm.draftId);
     setNotice(null);
     try {
-      await runRetryPublish([draftId], "active");
+      await runRetryPublish([promoteConfirm.draftId], "active");
       if (tab === "shopify_drafts") await loadProducts("shopify_drafts");
     } finally {
       setPromoteBusyId(null);
+      setPromoteConfirm(null);
     }
   }
 
@@ -723,6 +760,32 @@ export function PublishRecordsPanel() {
           librarySearching={librarySearching}
         />
       ) : null}
+
+      <ConfirmModal
+        open={activeConfirm !== null}
+        title="確認重新正式上架"
+        confirmLabel="確認上架"
+        busy={failedRetryBusy}
+        onCancel={() => setActiveConfirm(null)}
+        onConfirm={() => void executeActiveRetry()}
+      >
+        <p>
+          其中 <strong>{activeConfirm?.count ?? 0}</strong> 件將重新正式公開上架到 Shopify，顧客可直接看到與購買。
+        </p>
+      </ConfirmModal>
+
+      <ConfirmModal
+        open={promoteConfirm !== null}
+        title="確認轉正式上架"
+        confirmLabel="確認上架"
+        busy={promoteBusyId === promoteConfirm?.draftId}
+        onCancel={() => setPromoteConfirm(null)}
+        onConfirm={() => void executePromote()}
+      >
+        <p>
+          「{promoteConfirm?.title ?? "未命名"}」將正式公開上架到 Shopify，顧客可直接看到與購買。
+        </p>
+      </ConfirmModal>
     </div>
   );
 }
@@ -966,5 +1029,105 @@ function ProductListSection({
         </>
       )}
     </div>
+  );
+}
+
+function ConfirmModal({
+  open,
+  title,
+  children,
+  confirmLabel = "確認",
+  cancelLabel = "取消",
+  busy = false,
+  danger = true,
+  onCancel,
+  onConfirm
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  busy?: boolean;
+  danger?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const titleId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const t = window.setTimeout(() => cancelRef.current?.focus(), 30);
+    return () => {
+      document.body.style.overflow = prev;
+      window.clearTimeout(t);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) {
+        event.preventDefault();
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, busy, onCancel]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      aria-labelledby={titleId}
+      aria-modal="true"
+      className="modal-overlay open"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !busy) onCancel();
+      }}
+      role="dialog"
+    >
+      <div className="modal-box">
+        <div className="modal-hdr">
+          <span id={titleId}>{title}</span>
+          <button
+            aria-label="關閉"
+            className="modal-close"
+            disabled={busy}
+            onClick={onCancel}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+        <div className="modal-body">
+          {children}
+          <div className="approve-sum-actions">
+            <button
+              className="approve-sum-btn"
+              disabled={busy}
+              onClick={onCancel}
+              ref={cancelRef}
+              type="button"
+            >
+              {cancelLabel}
+            </button>
+            <button
+              className={`primary approve-sum-btn${danger ? " danger" : ""}`}
+              disabled={busy}
+              onClick={onConfirm}
+              type="button"
+            >
+              {busy ? "處理中…" : confirmLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }

@@ -6,7 +6,9 @@
 - Owner 驗收對應 runtime/test authority：`a30aa29ba713189b989c11418dd4fb2733dad16a`（原 PR #13 CI #660 success）。
 - 本 Release 只移植文案 generate／provider／Product Brief／web-search identity gate／title & format finalizer 與對應 verifier/fixtures；未移植 PR #13 歷史 docs、UI、排程、影片、圖片功能。
 - Production / Shopify / Supabase schema：未觸碰。
-- Gate：**HOLD**，等待此乾淨 Release PR 自己的 CI；沒有 Owner 明確「可以合併」前不得 merge；Production deploy 仍是下一個獨立 package。
+- GitHub CI #755：verifier ✅ / typecheck ✅ / build ✅，validated runtime/test HEAD `db3e6f1b2be6aab5eab2130a073927c4d18a366c`。
+- Vercel 最新 HEAD Preview：**未建立**，GitHub Vercel status 明確回報 `Deployment rate limited — retry in 24 hours.`；這是免費部署額度限制，不是 build/runtime failure。
+- Gate：**SOURCE PASS / MERGE HOLD**。PR #17 保持 Draft；沒有 Owner 明確「可以合併」前不得 merge；Production deploy 仍是下一個獨立 package。
 
 # Nestory — Current Status
 

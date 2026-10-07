@@ -549,3 +549,36 @@ Vercel Preview：**BLOCKED（平台額度，不是 code failure）**
 - PR #13 必須保持 Draft；不可 merge、不可 Production deploy。
 
 額度重置後，下一步是對同一 feature branch 最新 HEAD 建 Preview，再讓 Owner 只測七龍珠鍵帽盲盒 + Pingu 吹風機，最後用 Supabase 唯讀確認 `chaochao-pb1.4-20261006` 實際結果。
+
+## 17. COPY-PB1.4 local QA + Owner release decision｜2026-10-07
+
+Vercel Hobby deployment quota 阻擋新 Preview 後，Owner 改請 Codex 從正確 feature branch 本地啟動 PB1.4。先前曾誤測另一條 local copy-quality 工作線；那次結果不算 PB1.4 驗收。
+
+Supabase 唯讀確認後續三筆 live full generation 都為：
+
+`generation_rule_version = chaochao-pb1.4-20261006`
+
+實測商品：
+- MINISO × 七龍珠 Q版人物萌粒鍵帽盲盒；
+- Pingu × 您萌吹風機；
+- WildChildClub × 蠟筆小新羽毛球拍。
+
+結果：
+- 七龍珠舊污染 `75mm / 55mm / PVC+ABS` 已消失；
+- Pingu 舊污染 `10.5cm / PVC/ABS` 已消失；
+- 七龍珠現有 `PVC / 均碼` 可回溯到賣家原始 params；
+- Pingu 的負離子、15 秒速乾、降噪、磁吸風嘴、支架、貼紙可回溯到賣家原始款式資料；
+- PB1.4 的 deterministic same-product web evidence gate 達到本包核心目的。
+
+Owner 補充產品文案原則：不要因 hallucination 防護而過度保守。像「材質 → 耐用」「磁吸風嘴 → 使用方便」這種合理自然 benefit 可保留；真正要嚴格擋的是別款硬規格、錯誤精確數字、無依據授權／安全／醫療或保證性效果。
+
+Owner 決策：目前文案已明顯優於正式版；Why / 語氣仍可之後微調，但不再阻擋整體上線。**COPY-PB1.4 進入 Release 收尾。**
+
+### Merge handoff
+
+PR #13 不可直接被誤認為「對 default 的主線 PR」：
+- feature：`gpt/copy-product-brief-refactor-20260930`
+- PR #13 base：`agent/chaochao-tone-on-live@5203e4a5b85bd645ba33840f90df6a94c45bff31`
+- 真正 default：`codex/nestory-v0.1-safety-skeleton`
+
+下一個 Commander 要先重新查兩邊最新 HEAD，再開 Copy Release package，把 PB1 → PB1.4 必要 runtime/test 變更乾淨整合進真正 default；不要把歷史 docs、舊未採用 package 或其他 branch 工作一起帶入。Source merge 與 Production deploy 是兩個不同 package。

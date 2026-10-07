@@ -20,6 +20,11 @@ import {
 } from "@/lib/variants/shopifyVariants";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductVariantRow, PublishMode } from "@/types/domain";
+import {
+  ensurePersistedVariantSkus,
+  fillMissingVariantSkus,
+  resolveShopifySkuBase
+} from "@/lib/shopify/variantSku";
 
 export type PublishDraftResult =
   | { ok: true; mock: true; payload: unknown; productId?: string; adminUrl?: string | null }
@@ -418,6 +423,20 @@ export async function publishDraft(
     };
   }
 
+  const skuBase = resolveShopifySkuBase(draftForPayload);
+  const skuPrepared =
+    !mockMode && !deps.callGraphQL
+      ? await ensurePersistedVariantSkus(serviceSupabase, id, typedVariantRows, skuBase)
+      : { ok: true as const, ...fillMissingVariantSkus(typedVariantRows, skuBase) };
+  if (!skuPrepared.ok) {
+    return {
+      ok: false,
+      status: skuPrepared.status,
+      error: skuPrepared.error
+    };
+  }
+  const publishVariantRows = skuPrepared.rows;
+
   const { data: linkSettingsRow } = await serviceSupabase
     .from("team_settings")
     .select("value")
@@ -429,7 +448,7 @@ export async function publishDraft(
 
   // SAFE STAGING: the create payload is DRAFT for both requested modes.
   const builtPayload = buildShopifyProductPayload(
-    { ...draftForPayload, product_variants: typedVariantRows },
+    { ...draftForPayload, product_variants: publishVariantRows },
     publishMode,
     internalLinkMap
   ) as any;

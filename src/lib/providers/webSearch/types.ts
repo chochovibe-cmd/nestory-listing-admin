@@ -8,10 +8,16 @@ export interface WebSearchSource {
   url: string;
 }
 
+export interface WebSearchEvidence extends WebSearchSource {
+  /** Short provider excerpt used for deterministic same-product matching. */
+  excerpt: string;
+}
+
 export interface WebSearchResult {
   /** Plain-text summary for the copy LLM (繁中重點 + 來源標註). */
   summary: string;
   sources: WebSearchSource[];
+  evidence?: WebSearchEvidence[];
   provider: WebSearchProviderName;
   query: string;
   /** True when this result came from draft cache, not a live API call. */
@@ -24,6 +30,7 @@ export interface WebSearchCacheEntry {
   queryFingerprint: string;
   summary: string;
   sources: WebSearchSource[];
+  evidence?: WebSearchEvidence[];
   provider: WebSearchProviderName | string;
   fetchedAt: string;
 }

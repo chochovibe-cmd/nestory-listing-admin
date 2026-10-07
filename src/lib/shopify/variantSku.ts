@@ -88,7 +88,7 @@ export function fillMissingVariantSkus(
 
 export type EnsurePersistedVariantSkusResult =
   | { ok: true; rows: ProductVariantRow[]; generated: GeneratedVariantSkuAssignment[] }
-  | { ok: false; error: string };
+  | { ok: false; status: 409 | 500; error: string };
 
 /**
  * Persist fallback SKUs before any real Shopify mutation.
@@ -126,12 +126,14 @@ export async function ensurePersistedVariantSkus(
     if (error) {
       return {
         ok: false,
+        status: 500,
         error: `寫入款式 SKU 失敗（Shopify 尚未變更）：${error.message}`
       };
     }
     if (!data?.id || data.sku !== assignment.sku) {
       return {
         ok: false,
+        status: 409,
         error: "款式 SKU 在發布前被其他操作修改；已停止 Shopify 寫入，請重新載入後再試"
       };
     }

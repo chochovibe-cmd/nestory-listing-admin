@@ -124,17 +124,35 @@ Actions:
 
 Retry resets blocked/failed items to queued and defaults to today's Asia/Taipei date.
 
-## Two independent safety locks
+## Three independent safety locks
 
-1. `PUBLISH_SCHEDULE_STAGING_ENABLED`
+1. `PUBLISH_SCHEDULE_DB_WRITE_ENABLED`
+   - OFF by default
+   - prevents schedule table mutations: create / pause / resume / cancel / retry / claim
+
+2. `PUBLISH_SCHEDULE_STAGING_ENABLED`
    - OFF by default
    - prevents real Shopify DRAFT staging
 
-2. `PUBLISH_SCHEDULE_EXECUTION_ENABLED`
+3. `PUBLISH_SCHEDULE_EXECUTION_ENABLED`
    - OFF by default
-   - prevents claim + ACTIVE execution
+   - prevents due-item claim + ACTIVE execution
 
-Both must be explicitly enabled in a future authorized environment before schedule automation can mutate Shopify.
+Preview stays read-only/dry-run while DB_WRITE is OFF, even if another flag is misconfigured. All three Vercel env keys were confirmed absent on 2026-10-07.
+
+## Final safety checkpoint — 2026-10-07
+
+- Owner desktop ResultCard QA: PASS.
+- Owner schedule UI QA: PASS.
+- source migration filenames aligned to hosted ledger:
+  - `20261006121816_publish_schedule_core.sql`
+  - `20261006122416_shopify_full_sync_state.sql`
+- production schedule tables remain empty (0 groups / 0 items).
+- latest schedule-specific CI gate: PASS.
+- Supabase Local Reconcile #124: PASS.
+- latest Vercel branch build: READY.
+- full CI remains red only because the separate copy-line verifier fails before typecheck/build.
+- no Production merge, deploy, schedule row write, Cron registration, Shopify DRAFT, or Shopify ACTIVE was authorized by this package.
 
 ## Not done yet
 

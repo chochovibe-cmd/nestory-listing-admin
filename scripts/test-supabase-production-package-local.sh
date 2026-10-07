@@ -95,7 +95,7 @@ psql_local < /tmp/nestory-forward-migrations/20260822223100_variant_split_overri
 verify_d310a_columns
 
 echo "==> G4: apply additive Shopify full-sync migration"
-psql_local < /tmp/nestory-forward-migrations/20260903100000_shopify_full_sync_state.sql >/dev/null
+psql_local < /tmp/nestory-forward-migrations/20261006122416_shopify_full_sync_state.sql >/dev/null
 verify_shopify_full_sync_columns
 
 echo "==> G4: rollback Shopify full-sync migration and verify reversibility"
@@ -105,7 +105,7 @@ assert_scalar "$(query_local -c "select count(*) from information_schema.columns
 assert_scalar "$(query_local -c "select to_regclass('public.shopify_sync_jobs') is null;")" t "G4 rollback Shopify sync ledger table"
 
 echo "==> G4: re-apply forward migration"
-psql_local < /tmp/nestory-forward-migrations/20260903100000_shopify_full_sync_state.sql >/dev/null
+psql_local < /tmp/nestory-forward-migrations/20261006122416_shopify_full_sync_state.sql >/dev/null
 verify_shopify_full_sync_columns
 
 after_counts="$(snapshot_counts)"

@@ -5,6 +5,7 @@ import {
   isMissingScheduleTablesError,
   normalizeScheduleDraftIds,
   SCHEDULE_MIGRATION_HINT,
+  scheduleDbWriteEnabled,
   scheduleExecutionEnabled,
   scheduleStagingEnabled
 } from "@/lib/drafts/publishScheduleCore";
@@ -113,6 +114,7 @@ export async function GET() {
     groups: groups ?? [],
     items,
     safety: {
+      dbWriteEnabled: scheduleDbWriteEnabled(),
       stagingEnabled: scheduleStagingEnabled(),
       executionEnabled: scheduleExecutionEnabled()
     }
@@ -122,6 +124,16 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const auth = await requirePublisher();
   if (!auth.ok) return auth.response;
+
+  if (!scheduleDbWriteEnabled()) {
+    return Response.json(
+      {
+        error: "排程資料寫入安全鎖目前關閉；Preview 只能讀取與 dry-run，不會寫入 Production schedule tables。",
+        code: "SCHEDULE_DB_WRITE_DISABLED"
+      },
+      { status: 409 }
+    );
+  }
 
   const body = await request.json().catch(() => ({}));
   const draftIds = normalizeScheduleDraftIds(body.draftIds);
@@ -270,6 +282,7 @@ export async function POST(request: NextRequest) {
     finishDate: preview.finishDate,
     staging,
     safety: {
+      dbWriteEnabled: scheduleDbWriteEnabled(),
       stagingEnabled: scheduleStagingEnabled(),
       executionEnabled: scheduleExecutionEnabled()
     },

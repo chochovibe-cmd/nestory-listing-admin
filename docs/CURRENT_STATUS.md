@@ -1,3 +1,13 @@
+## 2026-10-07 — Copy PB1.4 Release Candidate
+
+- Owner 已接受 PB1.4 核心文案品質，不再因 Why／語氣微調阻擋 release。
+- 真正 default authority：`codex/nestory-v0.1-safety-skeleton@eac309b5fffc7f3f5a7effdfffedd22792ad74a0`。
+- 乾淨 Release branch：`release/copy-pb14-20261007`，從上述 default HEAD 建立。
+- Owner 驗收對應 runtime/test authority：`a30aa29ba713189b989c11418dd4fb2733dad16a`（原 PR #13 CI #660 success）。
+- 本 Release 只移植文案 generate／provider／Product Brief／web-search identity gate／title & format finalizer 與對應 verifier/fixtures；未移植 PR #13 歷史 docs、UI、排程、影片、圖片功能。
+- Production / Shopify / Supabase schema：未觸碰。
+- Gate：**HOLD**，等待此乾淨 Release PR 自己的 CI；沒有 Owner 明確「可以合併」前不得 merge；Production deploy 仍是下一個獨立 package。
+
 # Nestory — Current Status
 
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。

@@ -12,6 +12,7 @@ Read-only production verification on 2026-10-07 found:
 - source filenames on this branch were reconciled to those exact hosted ledger versions
 - production `publish_schedule_groups` rows: **0**
 - production `publish_schedule_items` rows: **0**
+- Vercel does **not** define `PUBLISH_SCHEDULE_DB_WRITE_ENABLED`
 - Vercel does **not** define `PUBLISH_SCHEDULE_STAGING_ENABLED`
 - Vercel does **not** define `PUBLISH_SCHEDULE_EXECUTION_ENABLED`
 - `vercel.json` does **not** register `/api/cron/scheduled-publish`
@@ -122,6 +123,14 @@ Actions:
 - cancel
 - retry_blocked
 
+State guards:
+- only `active` can pause
+- only `paused` can resume
+- canceled/completed schedules cannot retry
+- completed schedules cannot cancel
+- cancel is idempotent once already canceled
+- retry while paused keeps the group paused; it never silently resumes the schedule
+
 Retry resets blocked/failed items to queued and defaults to today's Asia/Taipei date.
 
 ## Three independent safety locks
@@ -149,10 +158,43 @@ Preview stays read-only/dry-run while DB_WRITE is OFF, even if another flag is m
   - `20261006122416_shopify_full_sync_state.sql`
 - production schedule tables remain empty (0 groups / 0 items).
 - latest schedule-specific CI gate: PASS.
-- Supabase Local Reconcile #124: PASS.
-- latest Vercel branch build: READY.
+- Supabase Local Reconcile #144: **PASS**.
+- authenticated schedule HTTP API E2E: **PASS** on a full local-only Supabase stack + local Next.js.
+- E2E verified unauthenticated 401, operator 403, reviewer create, duplicate protection, pause/resume, paused retry preservation, dry-run no-claim, cancel, terminal-state guards, cleanup, and zero Shopify batch/sync-job delta.
+- latest schedule-specific CI gate: PASS.
 - full CI remains red only because the separate copy-line verifier fails before typecheck/build.
 - no Production merge, deploy, schedule row write, Cron registration, Shopify DRAFT, or Shopify ACTIVE was authorized by this package.
+
+## Isolated HTTP API E2E — 2026-10-07
+
+Workflow authority: Supabase Local Reconcile #144.
+
+Environment:
+- full local-only Supabase stack via `supabase start`
+- local Next.js on `127.0.0.1:3019`
+- `PUBLISH_SCHEDULE_DB_WRITE_ENABLED=true` **only inside the local CI job**
+- `PUBLISH_SCHEDULE_STAGING_ENABLED=false`
+- `PUBLISH_SCHEDULE_EXECUTION_ENABLED=false`
+- `SHOPIFY_PUBLISH_MOCK=true`
+- E2E script refuses non-local Supabase/App hosts
+
+HTTP flow that passed:
+1. unauthenticated GET → 401
+2. operator GET → 403
+3. reviewer GET → 200
+4. create two-item schedule
+5. duplicate active draft → 409 with no orphan group
+6. pause
+7. retry a blocked item while paused → item requeued, group remains paused
+8. resume
+9. dry-run → due item visible, no claim
+10. cancel
+11. canceled schedule cannot resume or retry
+12. repeat cancel is idempotent
+13. `publish_batches` and `shopify_sync_jobs` counts unchanged
+14. cleanup restores test schedule groups/items to zero
+
+Production was read-only rechecked afterward: schedule groups/items remain 0 and all three Vercel schedule safety flags remain absent.
 
 ## Not done yet
 
@@ -167,7 +209,7 @@ These are deliberate safety gates, not hidden TODOs.
 
 ## Rollback
 
-No Production rollback is authorized or required by this source package. Production schema is already present, but the schedule tables are empty and both runtime write flags remain off.
+No Production rollback is authorized or required by this source package. Production schema is already present, but the schedule tables are empty and all three runtime safety flags remain off.
 
 If rejected:
 - close the Draft PR

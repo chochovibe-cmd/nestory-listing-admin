@@ -1,5 +1,6 @@
 import { canPublish } from "@/lib/auth/roles";
 import {
+  scheduleDbWriteEnabled,
   scheduleExecutionEnabled
 } from "@/lib/drafts/publishScheduleCore";
 import { runDuePublishSchedules } from "@/lib/shopify/runDuePublishSchedules";
@@ -32,7 +33,7 @@ export async function GET() {
     return Response.json({ error: "Reviewer role is required" }, { status: 403 });
   }
 
-  if (scheduleExecutionEnabled()) {
+  if (scheduleDbWriteEnabled() && scheduleExecutionEnabled()) {
     return Response.json(
       {
         error:

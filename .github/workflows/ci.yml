@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify scheduled publish safety
+        run: pnpm run verify:publish-schedule
+
       - name: Verify contracts and regressions
         run: pnpm run verify:all
 

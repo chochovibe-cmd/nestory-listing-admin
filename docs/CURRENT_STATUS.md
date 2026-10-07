@@ -1,5 +1,42 @@
 # Nestory — Current Status
 
+## 2026-10-07 Controlled Real Shopify DRAFT E2E（Owner-authorized）
+
+**PASS / HOLD**
+
+Owner 已明確批准只做 1 件真 Shopify DRAFT。已完成，而且仍未公開上架：
+
+- Nestory draft：`8b3a35b9-2a9b-4b14-84d3-5c7e84f9b8f8`
+- 商品：`馬克圖布 × Miffy | 米菲 70週年典藏臺燈 | 蘋果樹設計`
+- Shopify product：`gid://shopify/Product/15417952698553`
+- Shopify status：**DRAFT**
+- Shopify `publishedAt`：**null**
+- 10 張圖片：PASS
+- 2 個 variants：PASS
+- 兩款售價：NT$4,480
+- 兩款 compare-at：NT$5,480
+- 成本：NT$1,644 / NT$1,705
+- inventory policy：CONTINUE / 不追庫存
+- SEO：PASS
+- Nestory 四個 custom metafields：PASS
+- Nestory 本地 linkage：PASS，狀態已 `draft_created`，Shopify ID 對齊
+- controlled publish job：exactly 1，execution path 明確標為 `controlled_shopify_connector_draft_test`
+
+這次真寫入是透過已連線的 Shopify Connector，依目前 Nestory payload contract 建立並獨立讀回驗證；**沒有直接證明 Vercel Preview 自己的 Client ID + Client Secret token exchange**。Vercel MCP 不提供解密後 secret，project-bound sandbox 也不自動繼承 project env；不可把 connector PASS 說成 Nestory Vercel runtime PASS。
+
+在 Nestory linkage 時，第一個 direct SQL update 被 Production trigger 正確擋下並完全 rollback；之後先用 rollback-only 測試證明 trigger 認得 `service_role` context，再以單一 transaction + CAS guard 完成 linkage 與 audit row。沒有部分寫入。
+
+下一步 blocker：
+
+- 多款式 row-level SKU 目前為 null，真 Shopify 兩個 variants 因而都是無 SKU；這是現行 Nestory multi-variant contract 的真實缺口，**本包只記錄、不順手 redesign**。
+- 草稿仍有「網搜規格需核實」warning；DRAFT 可保留，但 ACTIVE 前要 Owner / Copy 線核實。
+- 潮巢 formatter 目前把四個 bullets 後的長段落也渲染成第五個 bullet；屬 Copy/UI content scope，本包不改。
+- 在任何 5 件 batch / ACTIVE 前，建議先獨立證明 Nestory 自己的 Vercel client-credentials runtime。
+
+明確未做：ACTIVE、Online Store publication、第二件商品、batch、scheduled execution、Cron、Production deploy、merge、copy/prompt redesign。
+
+詳細證據：`docs/audits/SHOPIFY-DRAFT-CONTROLLED-E2E-2026-10-07.md`。
+
 ## 2026-10-07 Schedule Core / Migration Ledger Reconcile（Draft PR #15）
 
 Owner 已完成本輪 UI 驗收：
@@ -48,7 +85,7 @@ Source 已把兩個已套用 migration 檔名對齊 hosted ledger；另外兩筆
 - 全專案 CI 仍 FAIL 在另一條文案線 `verify-copy-c1-chaonest-sales-tone.mjs` 的 `Boss hierarchy wrapper disappeared`；本 Schedule package 不越界修改文案。
 - Production 只讀複核：`publish_schedule_groups = 0`、`publish_schedule_items = 0`；三個 Vercel schedule safety flags 都未設定。
 
-Schedule Core 現在是 **PASS / HOLD**：功能與隔離 E2E 已通過，但 PR #15 維持 Draft，不 merge。下一步若要做真 Shopify，需 Owner 另行明確批准「1 件真 Shopify DRAFT」受控 Go-Live package；未批准前不做 Production DB write、不開 staging/execution、不註冊 Cron。
+Schedule Core 現在是 **PASS / HOLD**：功能與隔離 E2E 已通過，但 PR #15 維持 Draft，不 merge。Owner 後續已另行批准並完成上方「1 件真 Shopify DRAFT」受控測試；這不會開啟 schedule staging/execution，三個 schedule safety flags 仍維持關閉，Cron 仍未註冊。
 
 詳細：`docs/audits/SCHEDULE-CORE-2026-10-06.md`。
 

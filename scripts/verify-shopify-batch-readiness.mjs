@@ -40,5 +40,6 @@ assert.match(route, /callShopifyAdminGraphQL/);
 assert.match(route, /tokenExchange: "pass"/);
 assert.doesNotMatch(route, /SHOPIFY_CLIENT_SECRET[^\n]*Response/);
 assert.doesNotMatch(route, /SHOPIFY_CLIENT_ID[^\n]*Response/);
+assert.doesNotMatch(route, /error\.message/);
 
 console.log("Shopify batch-readiness checks passed: preview auth self-test guard + deterministic multi-variant SKU fallback");

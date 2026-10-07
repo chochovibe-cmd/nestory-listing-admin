@@ -1,13 +1,13 @@
 import { extractFeatureTerms } from './featureTerms';
+import type { DisplayLabelContext } from './displayLabels';
 import {
-  DisplayLabelContext,
   formatCharacterDisplayNameFromContext,
   formatCharacterShortNameFromContext,
   formatListingIpDisplayNameFromContext,
   isCharacterRedundantWithIpDisplay,
   removeDuplicateDisplayTerms,
 } from './displayLabels';
-import { ListingDraftInput } from './types';
+import type { ListingDraftInput } from './types';
 import { collectCharacterNames } from './titleGenerator';
 import type { IpCatalogEntry, IpCharacter } from './sourceTypes';
 import { normalizeProductTypeForDisplay } from '../productTypeLabels';
@@ -208,10 +208,29 @@ function fitMetaDescription(value: string): string {
   const chars = Array.from(sanitized);
 
   if (chars.length <= META_DESCRIPTION_MAX_LENGTH) {
-    return sanitized.endsWith('。') ? sanitized : sanitized + '。';
+    return sanitized.endsWith('。') || sanitized.endsWith('！') || sanitized.endsWith('？')
+      ? sanitized
+      : sanitized + '。';
   }
 
-  return chars.slice(0, META_DESCRIPTION_MAX_LENGTH - 1).join('').replace(/[，、；]$/g, '') + '。';
+  const budget = META_DESCRIPTION_MAX_LENGTH - 1;
+  const window = chars.slice(0, budget);
+  const joined = window.join('');
+  const stops = ['。', '！', '？', '；', '，', '、'];
+  let cut = budget;
+  for (let i = window.length - 1; i >= Math.floor(budget * 0.55); i -= 1) {
+    if (stops.includes(window[i])) {
+      cut = window[i] === '，' || window[i] === '、' ? i : i + 1;
+      break;
+    }
+  }
+  let clipped = chars.slice(0, cut).join('').replace(/[，、；]+$/g, '').trim();
+  if (!/[。！？]$/.test(clipped)) clipped += '。';
+  return clipped;
+}
+
+export function clampMetaDescription(value: string): string {
+  return fitMetaDescription(value);
 }
 
 function buildMetaDescription(
@@ -320,20 +339,30 @@ function injectTermsWithinBudget(text: string, terms: string[], maxLength: numbe
 // deterministic post-process on the model's own output, the same way
 // appendNestoryBrandSuffix already handles the brand suffix. Runs BEFORE
 // appendNestoryBrandSuffix, so the budget reserves room for that suffix.
-export function injectScenarioKeywordsIntoSeoTitle(seoTitle: string, scenarioTerms: string[]): string {
+export function injectScenarioKeywordsIntoSeoTitle(
+  seoTitle: string,
+  scenarioTerms: string[],
+  options: { stackSynonyms?: boolean } = {},
+): string {
   const trimmed = seoTitle.trim();
-  if (!trimmed || scenarioTerms.length === 0) return trimmed;
+  if (!trimmed || scenarioTerms.length === 0 || options.stackSynonyms === false) return trimmed;
 
   const budget = SEO_TITLE_MAX_LENGTH - textLength(BRAND_SUFFIX);
   return injectTermsWithinBudget(trimmed, scenarioTerms, budget);
 }
 
-export function injectScenarioKeywordsIntoMetaDescription(metaDescription: string, scenarioTerms: string[]): string {
+export function injectScenarioKeywordsIntoMetaDescription(
+  metaDescription: string,
+  scenarioTerms: string[],
+  options: { appendFirstChoice?: boolean } = {},
+): string {
   const trimmed = metaDescription.trim();
-  if (!trimmed || scenarioTerms.length === 0) return trimmed;
+  if (!trimmed) return trimmed;
+  if (options.appendFirstChoice === false) return clampMetaDescription(trimmed);
+  if (scenarioTerms.length === 0) return clampMetaDescription(trimmed);
 
   const picked = scenarioTerms.filter((term) => term && !trimmed.includes(term)).slice(0, 2);
-  if (picked.length === 0) return trimmed;
+  if (picked.length === 0) return clampMetaDescription(trimmed);
 
   const base = trimmed.endsWith('。') ? trimmed.slice(0, -1) : trimmed;
   for (let take = picked.length; take > 0; take -= 1) {
@@ -341,5 +370,30 @@ export function injectScenarioKeywordsIntoMetaDescription(metaDescription: strin
     if (textLength(candidate) <= META_DESCRIPTION_MAX_LENGTH) return candidate;
   }
 
-  return trimmed;
+  return clampMetaDescription(trimmed);
+}
+
+export function finalizeSeoTitleForTone(
+  seoTitle: string,
+  scenarioTerms: string[],
+  tone?: string | null,
+): string {
+  const stacked = injectScenarioKeywordsIntoSeoTitle(
+    seoTitle,
+    scenarioTerms,
+    { stackSynonyms: tone !== '潮巢導購版' },
+  );
+  return appendNestoryBrandSuffix(stacked);
+}
+
+export function finalizeMetaDescriptionForTone(
+  metaDescription: string,
+  scenarioTerms: string[],
+  tone?: string | null,
+): string {
+  return injectScenarioKeywordsIntoMetaDescription(
+    metaDescription,
+    scenarioTerms,
+    { appendFirstChoice: tone !== '潮巢導購版' },
+  );
 }

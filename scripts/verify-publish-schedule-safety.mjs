@@ -38,6 +38,10 @@ assert.match(runner, /publishMode: "active"/);
 
 assert.match(controlRoute, /scheduleDbWriteEnabled\(\)/);
 assert.match(controlRoute, /SCHEDULE_DB_WRITE_DISABLED/);
+assert.match(controlRoute, /Only an active schedule can be paused/);
+assert.match(controlRoute, /Only a paused schedule can be resumed/);
+assert.match(controlRoute, /Canceled\/completed schedules cannot be retried/);
+assert.match(controlRoute, /group\.status === "paused" \? "paused" : "active"/);
 assert.match(envExample, /PUBLISH_SCHEDULE_DB_WRITE_ENABLED=false/);
 
 assert.match(modal, /\/api\/publish-schedules/);

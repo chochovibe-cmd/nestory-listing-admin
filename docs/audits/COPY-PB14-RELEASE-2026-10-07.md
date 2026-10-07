@@ -20,5 +20,12 @@ This branch was created fresh from the real default and ports only the accepted 
 
 Explicitly excluded: UI packages, schedule, video, image work, DB migration, Shopify write, Production deploy, and historical feature-branch documentation not needed for release.
 
+## Validation
+- Clean Release runtime/test HEAD: `db3e6f1b2be6aab5eab2130a073927c4d18a366c`
+- GitHub CI #755: verifier ✅ / typecheck ✅ / build ✅
+- First CI run exposed one omitted required JSON test fixture; only that fixture was added, then the clean branch passed.
+- Vercel did not build the latest HEAD because the account returned: `Deployment rate limited — retry in 24 hours.` This is a platform quota gate, not a source build failure.
+- Production / Shopify / Supabase schema remained untouched.
+
 ## Current gate
-**HOLD** until this clean Release branch passes its own GitHub CI. Even after CI PASS, merge requires explicit Owner approval. Production deployment is a separate package.
+**SOURCE PASS / MERGE HOLD.** PR #17 stays Draft. Merge requires explicit Owner approval. A fresh Vercel Preview can be retried after quota reset if desired; Production deployment remains a separate package.

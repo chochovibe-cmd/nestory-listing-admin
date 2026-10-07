@@ -113,11 +113,21 @@ jobs:
       - name: Export local-only app environment
         shell: bash
         run: |
-          eval "$(supabase status -o env)"
+          supabase status --env --output-format text \
+            --override-name API_URL=NEXT_PUBLIC_SUPABASE_URL,ANON_KEY=NEXT_PUBLIC_SUPABASE_ANON_KEY,SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY \
+            > /tmp/nestory-supabase-local.env
+          set -a
+          source /tmp/nestory-supabase-local.env
+          set +a
+
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+
           {
-            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
-            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
-            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
             echo "SCHEDULE_E2E_BASE_URL=http://127.0.0.1:3019"
             echo "PUBLISH_SCHEDULE_DB_WRITE_ENABLED=true"
             echo "PUBLISH_SCHEDULE_STAGING_ENABLED=false"

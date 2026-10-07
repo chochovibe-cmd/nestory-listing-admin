@@ -78,12 +78,11 @@ export async function POST(request: NextRequest) {
         currencyCode: shop.currencyCode ?? null
       }
     });
-  } catch (error) {
+  } catch {
     return Response.json(
       {
         ok: false,
-        code: "SHOPIFY_AUTH_SELFTEST_EXCEPTION",
-        message: error instanceof Error ? error.message.replace(/shpat_[A-Za-z0-9_-]+/g, "[redacted]") : "Unknown error"
+        code: "SHOPIFY_AUTH_SELFTEST_EXCEPTION"
       },
       { status: 502 }
     );

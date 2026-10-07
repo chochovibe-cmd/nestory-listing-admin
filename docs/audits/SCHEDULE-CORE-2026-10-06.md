@@ -17,7 +17,7 @@ Read-only production verification on 2026-10-07 found:
 - `vercel.json` does **not** register `/api/cron/scheduled-publish`
 - therefore schema exists in production, but scheduled Shopify staging/execution remains disabled
 - production claim RPC privilege is restricted to `service_role`; `authenticated` and `anon` cannot execute it
-- Supabase Local Reconcile #113 passed the schedule migration/runtime gate before ledger filename reconciliation
+- Supabase Local Reconcile #124 passed the reconciled migration/runtime gate
 
 Known production-ledger pending migrations remain:
 
@@ -158,8 +158,8 @@ Preview stays read-only/dry-run while DB_WRITE is OFF, even if another flag is m
 
 - production schedule migration is already present in the hosted ledger; do not replay it
 - `vercel.json` cron registration has NOT been added
-- existing publish modal still shows Preview scheduler; it is not yet wired to POST selected draft IDs into the new API
-- publishing-center schedule tab is still the Owner-approved Preview UI, not yet live DB data
+- publish modal and publishing-center schedule UI are wired to the schedule API, but mutation endpoints are blocked while `PUBLISH_SCHEDULE_DB_WRITE_ENABLED` is OFF
+- GET / dry-run remain available for safe inspection; create / pause / resume / cancel / retry are intentionally locked in Preview
 - Online Store publication verification is not yet added; current existing publish lifecycle only confirms Shopify product status
 - no Production/Shopify smoke test
 

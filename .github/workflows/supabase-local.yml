@@ -90,8 +90,8 @@ jobs:
           rm supabase/migrations/*.sql
           echo "Pre-tracking SQL and forward migrations staged for controlled local replay."
 
-      - name: Start isolated local database
-        run: supabase db start
+      - name: Start isolated local Supabase stack
+        run: supabase start
 
       - name: Rebuild production-like baseline and test reconciliation
         env:

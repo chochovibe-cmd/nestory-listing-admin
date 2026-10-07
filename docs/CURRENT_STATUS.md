@@ -3,13 +3,54 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-10-06（COPY-PB1.4 hard product evidence gate + simpler Why；**HOLD / Preview blocked / 正式站未動**）
+更新基準：2026-10-07（COPY-PB1.4 本地實測通過核心 gate；**Owner 決定進 Release 收尾 / 正式站未動**）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source：`gpt/copy-product-brief-refactor-20260930`；fork base `agent/chaochao-tone-on-live@5203e4a5`；Draft PR #13
 已知 Vercel production：公開網址 `https://nestory-listing-admin.vercel.app`（不含 COPY-PB1.x）
-COPY-PB1.4 validated code：`a30aa29b`；CI #660 verify/typecheck/build 全綠。**PB1.4 Preview 尚不存在**：Vercel Free 今日 API deployment 已達 100/100，`api-deployments-free-per-day` remaining=0；舊 branch Preview 仍是較舊版本，不能拿來驗收 PB1.4。完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
+COPY-PB1.4 validated runtime code：`a30aa29b`；CI #660 verify/typecheck/build 全綠。Vercel 當時因 Hobby deployment quota 無法建立新 Preview，但 2026-10-07 Owner 已請 Codex 直接從正確 feature branch 本地啟動 PB1.4，並完成真實重新生成。Supabase 唯讀確認三筆 live output 都是 `generation_rule_version=chaochao-pb1.4-20261006`。Owner 接受目前品質進入 Release 收尾，不再以 Why 文風微調阻擋上線。完整證據見 `docs/audits/COPY-PRODUCT-BRIEF-REFACTOR-2026-09-30.md`
 舊 9/24 Preview 線：`agent/chaochao-tone-on-live`
 不要用：Codex 未完成包 `b6fc4d7`、接手標題三段 `8490d51`、CC-7 `mrdilc17v`、CC-5 `8i15ggzf2`
+
+## 2026-10-07 COPY-PB1.4｜Owner local QA + release decision
+
+Owner 因 Vercel Hobby 當日 deployment quota 已滿，改請 Codex 直接從正確 branch `gpt/copy-product-brief-refactor-20260930` 本地啟動測試；先前誤測到 `copy-quality-v2 ... @local` 的結果不算 PB1.4 驗收。
+
+Commander 之後用 Supabase 唯讀確認新的三筆真實重新生成全部寫入：
+
+- MINISO × 七龍珠 Q版萌粒鍵帽盲盒：`chaochao-pb1.4-20261006`
+- Pingu × 您萌吹風機：`chaochao-pb1.4-20261006`
+- WildChildClub × 蠟筆小新羽毛球拍：`chaochao-pb1.4-20261006`
+
+核心驗收：
+
+- 七龍珠先前錯混入另一款商品的 `75mm / 55mm / PVC+ABS` 已消失。
+- Pingu 先前沒有本商品支持的 `10.5cm / PVC/ABS` 已消失。
+- 七龍珠目前的 `PVC / 均碼` 可回溯到賣家原始 params，不是 PB1.4 網搜硬 gate 漏掉的別款規格。
+- Pingu 目前的 `20億水潤負離子 / 15秒速乾 / 降噪 / 磁吸風嘴 / 支架 / 貼紙` 可回溯到賣家原始款式資料。
+- Owner 明確表示不要把一般商品文案的合理自然延伸過度收緊；例如材質→耐用、功能→使用方便這類自然 benefit 不應因「絕對有逐字來源」被全面禁止。真正要擋的是別款硬規格、精確數字、授權／安全／醫療等高風險無依據資訊。
+
+Owner 決策：**目前文案已明顯優於正式版，停止繼續為 Why / 語氣小幅度差異阻擋整體上線。PB1.4 進入 Copy Release 收尾。**
+
+### Release 注意
+
+不要直接把 PR #13 當成「對 default 的主線 PR」按 merge。
+
+PR #13 現況：
+- head：`gpt/copy-product-brief-refactor-20260930`
+- head 在本 checkpoint 前：`69b9c1b4d5c137646cb6487bd6784276c581a28d`
+- base：`agent/chaochao-tone-on-live@5203e4a5b85bd645ba33840f90df6a94c45bff31`
+- Draft / OPEN / NOT MERGED
+
+真正 default：
+- `codex/nestory-v0.1-safety-skeleton`
+- 2026-10-07 live-check HEAD：`eac309b5fffc7f3f5a7effdfffedd22792ad74a0`
+
+下一個 Commander 應開 **Copy Release package**：
+1. 重新 live-check default HEAD / feature HEAD / PR #13。
+2. 先讀 default branch 的 `AI_START_HERE.md` + `docs/AI_WORKING_RULES.md`。
+3. 比對 feature 對真正 default 的差異；不要把歷史 docs / 無關舊 package 一起誤帶。
+4. 只整合 Owner 已接受的 COPY-PB1 → PB1.4 runtime/test 必要變更與必要 audit/status 紀錄。
+5. CI 全綠後再由 Owner 授權合併；Production deploy 仍是另一個明確 package，不因 source merge 自動等於 Production 上線。
 
 ## 2026-10-06 COPY-PB1.4｜hard product evidence gate + simpler Why
 

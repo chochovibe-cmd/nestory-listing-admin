@@ -60,11 +60,18 @@ Production 在這次之前沒有 migration ledger；live DB 卻已包含歷史 `
 因此正式策略是：**tracking 從 2026-08-18 現有 audited state 開始**，不是假裝 001–039 曾被 Supabase CLI 管理。
 
 Active queue：`supabase/migrations/`
+
+**Production ledger 已套用（2026-10-07 只讀核對）：**
 - `20260818142712_baseline_existing_schema_20260818.sql`
 - `20260818142919_production_reconcile_20260818.sql`
-- `20260822223100_variant_split_override_semantics.sql`（2026-09-02 已由正式 migration ledger 核對為**尚未套用**）
-- `20260902090000_guard_current_image_batch_pointer.sql`（PR #10 source hardening 新增；尚未套用 production，須依 ledger 規劃）
-- 未來 tracked migrations 往後 append。
+- `20261006121816_publish_schedule_core.sql`
+- `20261006122416_shopify_full_sync_state.sql`
+
+**Source 已知、Production ledger 仍未套用：**
+- `20260822223100_variant_split_override_semantics.sql`
+- `20260902090000_guard_current_image_batch_pointer.sql`
+
+重要：後兩筆 timestamp 早於已套用的 2026-10-06 migrations。未來不可用一般無人看管的 `supabase db push` 猜順序；必須先做 live ledger precheck，另開 Owner 授權的 migration package，再決定 explicit include-all / controlled apply。不要因為檔名較舊就推論已套用。
 
 Pre-tracking history：
 - `supabase/history/pre_tracking_migrations/001…039`
@@ -153,4 +160,4 @@ Migration baseline verifier：`scripts/verify-supabase-migration-baseline.mjs`�
 
 ## 9. 新 session 開場指令
 
-> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。確認 PR #10 的 CI／Preview、Vercel production SHA 與 production migration ledger；不要用 Git source 猜 Vercel／Supabase 現況。碰 DB 必讀四份 Supabase audits與 active `supabase/migrations/`。2026-08-18 reconcile 已正式成功套用；第三及第四個 tracked migration 尚未套用。
+> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。確認 PR #10 的 CI／Preview、Vercel production SHA 與 production migration ledger；不要用 Git source 猜 Vercel／Supabase 現況。碰 DB 必讀四份 Supabase audits與 active `supabase/migrations/`。2026-08-18 reconcile 已正式成功套用；2026-10-07 production ledger 另有 schedule core + Shopify full-sync 兩筆已套用；variant split / batch-pointer 兩筆仍 pending。

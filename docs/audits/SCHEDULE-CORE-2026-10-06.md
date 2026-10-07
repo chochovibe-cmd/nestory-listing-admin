@@ -1,6 +1,32 @@
 # SCHEDULE CORE — 2026-10-06
 
-> Status: feature branch only / not merged / no Production migration / no live Shopify ACTIVE.
+## 2026-10-07 authority correction
+
+This section supersedes the historical assumptions below where they conflict.
+
+Read-only production verification on 2026-10-07 found:
+
+- production Supabase: `nestory-listing-tool-test / tbgtqwvuohmdxnxisrgr`
+- production ledger already contains `20261006121816 publish_schedule_core`
+- production ledger already contains `20261006122416 shopify_full_sync_state`
+- source filenames on this branch were reconciled to those exact hosted ledger versions
+- production `publish_schedule_groups` rows: **0**
+- production `publish_schedule_items` rows: **0**
+- Vercel does **not** define `PUBLISH_SCHEDULE_STAGING_ENABLED`
+- Vercel does **not** define `PUBLISH_SCHEDULE_EXECUTION_ENABLED`
+- `vercel.json` does **not** register `/api/cron/scheduled-publish`
+- therefore schema exists in production, but scheduled Shopify staging/execution remains disabled
+- production claim RPC privilege is restricted to `service_role`; `authenticated` and `anon` cannot execute it
+- Supabase Local Reconcile #113 passed the schedule migration/runtime gate before ledger filename reconciliation
+
+Known production-ledger pending migrations remain:
+
+- `20260822223100_variant_split_override_semantics.sql`
+- `20260902090000_guard_current_image_batch_pointer.sql`
+
+Because those pending versions sort before the already-applied 2026-10-06 ledger entries, no unattended production `db push` is allowed. A future apply requires a separate Owner-authorized migration package and explicit ledger precheck.
+
+> Status: feature branch only / not merged / production schema already present per hosted ledger / live scheduled Shopify execution still disabled.
 
 ## Authority
 
@@ -37,7 +63,7 @@ Owner approved moving past the UI Preview, with one explicit design rule:
 ### Persistence
 
 Migration:
-`supabase/migrations/20261006181500_publish_schedule_core.sql`
+`supabase/migrations/20261006121816_publish_schedule_core.sql`
 
 Adds:
 - `publish_schedule_groups`
@@ -112,7 +138,7 @@ Both must be explicitly enabled in a future authorized environment before schedu
 
 ## Not done yet
 
-- migration has NOT been applied to Production
+- production schedule migration is already present in the hosted ledger; do not replay it
 - `vercel.json` cron registration has NOT been added
 - existing publish modal still shows Preview scheduler; it is not yet wired to POST selected draft IDs into the new API
 - publishing-center schedule tab is still the Owner-approved Preview UI, not yet live DB data
@@ -123,7 +149,7 @@ These are deliberate safety gates, not hidden TODOs.
 
 ## Rollback
 
-No Production rollback is needed because nothing in this package is applied to Production.
+No Production rollback is authorized or required by this source package. Production schema is already present, but the schedule tables are empty and both runtime write flags remain off.
 
 If rejected:
 - close the Draft PR

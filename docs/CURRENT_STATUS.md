@@ -1,5 +1,33 @@
 # Nestory — Current Status
 
+## 2026-10-07 Shopify Batch Readiness（SKU fix + Vercel auth runtime）
+
+**PARTIAL PASS / HOLD**
+
+Owner 已批准批量前最後整備。兩個目標：
+
+- 多款式 SKU 空白問題：**source fix 已完成**
+- Nestory Vercel Preview Client ID + Secret runtime 真實驗證：**尚未完成，HOLD**
+
+SKU 修正規則：手填 variant SKU 永遠優先；空白 row 才從既有 generated product SKU 衍生。若 base 是 `...-001`，依 sort order 產生 `...-001 / ...-002 / ...-003`。單款式 SKU contract 不改，也沒有 Production DB backfill。
+
+新增 Preview-only `/api/shopify/auth-self-test`：
+
+- 只允許 `VERCEL_ENV=preview`
+- 專用 Bearer token
+- 只查 `shop { name myshopifyDomain currencyCode }`
+- 不做任何 Shopify mutation
+- 不回 token / Client ID / Client Secret
+- Production 404
+
+目前外部 blocker：Vercel Free deployment API 回 `402 api-deployments-free-per-day`，今日已超過 100 次 deployment，約 24 小時後再試。**因此不可把 Shopify Connector PASS 當成 Vercel client-credentials runtime PASS。**
+
+第一輪 CI 曾因 self-test route 內出現 legacy token prefix 字樣被 repo security verifier 正確擋下；已改成完全不回 upstream error text。最新 package HEAD 在本節寫入前為 `8aaf7a0884e6ca532730afab1022282aad70c7f4`，最新 CI 當時仍 queued/pending，需重新查 GitHub。
+
+下一步：Vercel 額度恢復後，以最新 HEAD 重新部署 Preview → POST auth self-test → 核對 Nestory 商店 identity → 確認 0 Shopify mutation → 移除 temporary branch-only self-test env → 文件收尾。未完成前不進 5 件 batch / ACTIVE。
+
+詳細：`docs/audits/SHOPIFY-BATCH-READINESS-2026-10-07.md`。
+
 ## 2026-10-07 Controlled Real Shopify DRAFT E2E（Owner-authorized）
 
 **PASS / HOLD**

@@ -1,5 +1,56 @@
 # Nestory — Current Status
 
+## 2026-10-07 Schedule Core / Migration Ledger Reconcile（Draft PR #15）
+
+Owner 已完成本輪 UI 驗收：
+
+- Desktop ResultCard：**PASS**
+- Schedule UI / 發布中心：**PASS**
+- Mobile / desktop 必須分開設計，不能只靠同一套版型硬縮。
+
+目前施工線：
+
+- branch：`agent/schedule-core-20261006`
+- Draft PR：#15
+- base：`agent/uiux2-preview-20260930`
+- 未 merge、未 Production deploy、未啟用真實 Shopify schedule execution。
+
+Production Supabase 2026-10-07 只讀核對：
+
+- project：`nestory-listing-tool-test / tbgtqwvuohmdxnxisrgr`
+- ledger 已有 `20261006121816 publish_schedule_core`
+- ledger 已有 `20261006122416 shopify_full_sync_state`
+- `publish_schedule_groups = 0`
+- `publish_schedule_items = 0`
+- claim RPC 只允許 `service_role`，`authenticated / anon` 無 EXECUTE。
+
+Source 已把兩個已套用 migration 檔名對齊 hosted ledger；另外兩筆仍是 **known pending**：
+
+- `20260822223100_variant_split_override_semantics.sql`
+- `20260902090000_guard_current_image_batch_pointer.sql`
+
+因 pending timestamp 早於已套用的 2026-10-06 migration，**禁止 unattended `supabase db push`**；之後要套必須另開 Owner 授權 migration package，先查 live ledger 再 controlled apply。
+
+排程目前有三道 server-side 安全鎖，Vercel 三者都**沒有設定**：
+
+- `PUBLISH_SCHEDULE_DB_WRITE_ENABLED`：控制 schedule table 建立／暫停／取消／重試／claim。
+- `PUBLISH_SCHEDULE_STAGING_ENABLED`：控制真 Shopify DRAFT staging。
+- `PUBLISH_SCHEDULE_EXECUTION_ENABLED`：控制到期排程真實執行。
+
+所以目前 Preview 只能 read / dry-run；**不能寫 Production schedule tables，也不能動 Shopify DRAFT / ACTIVE**。另外 `vercel.json` 仍沒有註冊 `/api/cron/scheduled-publish`。
+
+驗證：
+
+- Supabase Local Reconcile #124：**PASS**（ledger rename 後 migration / RLS / unique guard / atomic claim / rollback / production-package 全通過）。
+- 最新排程專屬 CI step：**PASS**。
+- 最新 Vercel Preview build：**READY**。
+- 全專案 CI 仍 FAIL 在另一條文案線 `verify-copy-c1-chaonest-sales-tone.mjs` 的 `Boss hierarchy wrapper disappeared`；本 Schedule package 不越界修改文案。
+- GitHub CI 因上述文案 verifier fail 會跳過後續 typecheck/build；Vercel latest HEAD build 已成功。
+
+下一步建議：在**不連 Production DB write** 的隔離環境做 schedule API E2E（create → pause → resume → cancel → retry → dry-run）。要做真 Shopify 前，仍需 Owner 另開 Go-Live package。
+
+詳細：`docs/audits/SCHEDULE-CORE-2026-10-06.md`。
+
 ## 2026-09-30 UI/UX 2.0 P1 Preview（未 merge／未 production）
 
 Owner 要把 Astra 的日常操作建議與 Nestory 既有架構稽核合併；文案生成線另有工作，不在本包。

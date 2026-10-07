@@ -4,7 +4,7 @@ import {
 } from "@/lib/drafts/publishSchedulePreview";
 
 export const SCHEDULE_MIGRATION_HINT =
-  "排程資料表尚未建立。此功能目前只能在 Preview 看介面；Production migration 需要 Owner 另外批准。";
+  "目前環境缺少排程資料表。請先核對該環境的 migration ledger；不要把缺表狀態當成可以直接套 Production migration。";
 
 export type ScheduleItemState =
   | "queued"

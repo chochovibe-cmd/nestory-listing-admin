@@ -1,5 +1,6 @@
 import {
   isMissingScheduleTablesError,
+  scheduleDbWriteEnabled,
   scheduleExecutionEnabled,
   SCHEDULE_MIGRATION_HINT,
   taipeiDateOnly
@@ -27,7 +28,7 @@ export async function runDuePublishSchedules(input: {
   const dueDate = input.dueDate ?? taipeiDateOnly();
   const claimLimit = Math.max(1, Math.min(input.claimLimit ?? 50, 200));
 
-  if (!scheduleExecutionEnabled()) {
+  if (!scheduleDbWriteEnabled() || !scheduleExecutionEnabled()) {
     const { data, error } = await input.serviceSupabase
       .from("publish_schedule_items")
       .select("id,group_id,draft_id,scheduled_for,position,status")
@@ -52,7 +53,7 @@ export async function runDuePublishSchedules(input: {
       dueDate,
       dueCount: (data ?? []).length,
       items: data ?? [],
-      message: "PUBLISH_SCHEDULE_EXECUTION_ENABLED is not true; no items were claimed and no Shopify write was sent."
+      message: "Schedule DB-write/execution safety gates are not both enabled; no items were claimed and no Shopify write was sent."
     };
   }
 

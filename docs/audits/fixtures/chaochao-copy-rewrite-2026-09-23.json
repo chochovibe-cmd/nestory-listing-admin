@@ -1,0 +1,146 @@
+{
+  "kind": "非真實模型生成",
+  "note": "固定輸入＋依新契約手寫的結構示範。用來核對標題組裝、四段 HTML、SEO 後處理與欄位分工，不代表真實模型品質。",
+  "generatedAt": "2026-09-23",
+  "cases": [
+    {
+      "id": "plush-bread",
+      "label": "可愛絨毛／麵包吊飾",
+      "input": {
+        "rawTitle": "三丽鸥 Hello Kitty 面包造型毛绒挂件 可伸縮",
+        "variantSummary": "Hello Kitty／大耳狗／美樂蒂",
+        "note": "指定角色",
+        "specText": "材质：毛绒 尺寸：约10cm 填充：PP棉",
+        "imageDescription": "圓滾滾麵包輪廓，淺咖配白色糖霜感絨毛，角色臉在麵包中央。",
+        "webSearchSummary": "同系列為麵包造型絨毛吊飾，約 10cm，掛繩可伸縮。"
+      },
+      "titleParts": {
+        "titleIp": "三麗鷗 Sanrio",
+        "titleBrand": "",
+        "titleItem": "家族麵包造型絨毛吊飾",
+        "titleDiff": "指定角色"
+      },
+      "expectedTitle": "三麗鷗 Sanrio | 家族麵包造型絨毛吊飾 | 指定角色",
+      "description": "商品介紹\n\n今天的麵包坊由 Hello Kitty 和朋友們值班！角色變成圓滾滾的麵包造型，柔軟絨毛配上蓬鬆輪廓，看起來像剛出爐一樣香甜，早餐還沒吃先被可愛餵飽。\n\n收藏亮點\n・圓滾滾麵包輪廓：遠看像剛出爐的餐包，掛在包包上會先被認成食物再被認成角色。\n・可伸縮掛繩：要拍照時拉長、走路時收回，不會一直甩來甩去。\n・約 10cm 絨毛：單手可握，通勤掛包也不佔位置。\n\n適合誰\n・想在通勤路上先被可愛餵飽的人\n・要送朋友一份會心一笑、又不佔空間的小禮物\n\n商品資訊\n・角色：Hello Kitty／大耳狗／美樂蒂（指定角色）\n・材質：絨毛，填充 PP棉\n・尺寸：約 10cm\n・功能：掛繩可伸縮",
+      "whyWeChoseIt": "角色做成剛出爐的麵包，可愛來自造型本身，不是另加一句口號。潮巢收它，是因為掛上包包後，路人會先笑再問這是誰。",
+      "productHighlights": [
+        "麵包輪廓絨毛吊飾",
+        "掛繩可伸縮",
+        "約 10cm，指定角色"
+      ],
+      "seoTitle": "三麗鷗 Hello Kitty 麵包絨毛吊飾 可伸縮",
+      "metaDescription": "三麗鷗麵包造型絨毛吊飾，約10cm可伸縮掛繩，適合掛包或當小禮物。"
+    },
+    {
+      "id": "single-character",
+      "label": "單角色周邊",
+      "input": {
+        "rawTitle": "史努比 多功能三明治机 华夫饼机 附烤盘",
+        "variantSummary": "",
+        "note": "附3種烤盤",
+        "specText": "功率：700W 盘片：三明治／华夫／热压",
+        "imageDescription": "米白機身，蓋上有史努比浮雕，附三片可換烤盤。",
+        "webSearchSummary": "三明治機可換烤盤，常見為三明治、華夫、熱壓三種。"
+      },
+      "titleParts": {
+        "titleIp": "史努比 Snoopy",
+        "titleBrand": "",
+        "titleItem": "多功能三明治機／華夫餅機",
+        "titleDiff": "附3種烤盤"
+      },
+      "expectedTitle": "史努比 Snoopy | 多功能三明治機／華夫餅機 | 附3種烤盤",
+      "description": "商品介紹\n\n蓋子一闔上，史努比就趴在熱騰騰的早餐上面值班。這台不是只能壓土司：換烤盤就能做華夫或熱壓，廚房小、想吃不同口感時，不用再佔一個角落。\n\n收藏亮點\n・蓋面史努比浮雕：加熱時角色就在眼前，煎早餐比較有儀式感。\n・三片烤盤：三明治、華夫、熱壓各司其職，週末想換口味直接換盤。\n・標示功率 700W：小家庭早餐夠用，預熱不用等很久。\n\n適合誰：早餐想被角色盯梢的人\n・一個人住、廚房只有一個插座的人\n・想送「真的會拿來用」的角色禮物，而不是只擺著看\n\n商品資訊\n・角色：史努比\n・功能：三明治／華夫／熱壓，附 3 種烤盤\n・功率：700W",
+      "whyWeChoseIt": "角色在蓋面上，功能又分得出三種烤盤。潮巢選它，是因為這件周邊會進廚房，不只進展示櫃。",
+      "productHighlights": [
+        "蓋面史努比浮雕",
+        "附三明治／華夫／熱壓烤盤",
+        "700W"
+      ],
+      "seoTitle": "史努比 三明治機 華夫餅機 附烤盤",
+      "metaDescription": "史努比多功能三明治機，附3種烤盤可做華夫與熱壓，適合小廚房早餐。"
+    },
+    {
+      "id": "multi-blindbox",
+      "label": "多角色盲盒",
+      "input": {
+        "rawTitle": "三丽鸥 x 万代 家族米粒公仔吊饰盲盒 8款",
+        "variantSummary": "Hello Kitty／美樂蒂／庫洛米／大耳狗／布丁狗／帕恰狗／大寶／凱蒂貓復古",
+        "note": "隨機單盒",
+        "specText": "品牌：BANDAI 款数：8 材质：PVC",
+        "imageDescription": "米粒般小小公仔，頭身比例圓，吊鍊細。",
+        "webSearchSummary": "Bandai 三麗鷗米粒公仔吊飾盲盒，一盒一隻，端盒可見全款。"
+      },
+      "titleParts": {
+        "titleIp": "三麗鷗 Sanrio",
+        "titleBrand": "Bandai",
+        "titleItem": "家族米粒公仔吊飾盲盒",
+        "titleDiff": "隨機單盒"
+      },
+      "expectedTitle": "三麗鷗 Sanrio × Bandai | 家族米粒公仔吊飾盲盒 | 隨機單盒",
+      "description": "商品介紹\n\n這盒的樂趣在「拆之前不知道是誰」。角色被收成米粒般的小公仔，頭圓身短，掛上鑰匙才發現整串家族可以排隊。\n\n收藏亮點\n・米粒比例：比常見吊飾更迷你，一串掛好幾隻也不笨重。\n・Bandai 塑膠件：線條清楚，臉部比較不容易壓扁。\n・8 款家族：想指定看端盒，想賭手氣就拿單盒。\n\n適合誰\n・已經有兩隻、還差一個角色補齊的人\n・想送「拆開當下會叫出聲」的小禮物\n\n商品資訊\n・IP：三麗鷗 × Bandai\n・內容：隨機單盒，系列共 8 款\n・材質：PVC\n・完整角色：Hello Kitty、美樂蒂、庫洛米、大耳狗、布丁狗、帕恰狗、大寶、凱蒂貓復古",
+      "whyWeChoseIt": "迷你到可以一串掛一家族，拆盒又有指定／隨機兩種玩法。潮巢收盲盒，是因為款式差在角色，不是差在一句「收藏價值」。",
+      "productHighlights": [
+        "Bandai 米粒公仔吊飾",
+        "8 款家族角色",
+        "隨機單盒，端盒可指定"
+      ],
+      "seoTitle": "三麗鷗 Bandai 米粒公仔吊飾盲盒 8款",
+      "metaDescription": "三麗鷗×Bandai米粒公仔吊飾盲盒，8款角色隨機單盒，也適合端盒指定。"
+    },
+    {
+      "id": "functional-camera",
+      "label": "有功能的商品",
+      "input": {
+        "rawTitle": "Pingu 迷你CCD相机挂件 可拍照录像 需记忆卡",
+        "variantSummary": "紅／黃／黑／白",
+        "note": "需自行準備記憶卡才會拍照",
+        "specText": "功能：拍照／录像 电源：电池 存储：TF卡",
+        "imageDescription": "企鵝造型機身，鏡頭在肚子，吊飾環在頭上。",
+        "webSearchSummary": "迷你相機吊飾需插入 TF 卡才能存檔；可拍照與短片。"
+      },
+      "titleParts": {
+        "titleIp": "Pingu",
+        "titleBrand": "",
+        "titleItem": "迷你CCD相機吊飾",
+        "titleDiff": "可拍照錄影"
+      },
+      "expectedTitle": "Pingu | 迷你CCD相機吊飾 | 可拍照錄影",
+      "description": "商品介紹\n\n第一眼像普通吊飾，拿到手才發現它真的能拍照。Pingu 掛在包包上是角色，打開來是一台要裝記憶卡才會動的迷你相機——可愛歸可愛，實際使用條件要講清楚。\n\n收藏亮點\n・真的能拍照錄影：不是只有造型，短途出門可以隨手拍。\n・需自行準備 TF 卡：沒卡就只是吊飾，下單前先確認自己有卡。\n・四色機身：紅黃黑白，可以跟包包配色。\n\n適合誰\n・想在吊飾裡藏一個真正能用的小相機的人\n・願意多準備一張記憶卡，換角色在身邊值班\n\n商品資訊\n・角色：Pingu\n・功能：拍照／錄影\n・儲存：需 TF 卡\n・電源：電池\n・款式：紅／黃／黑／白",
+      "whyWeChoseIt": "它把角色吊飾做成真的相機，但 candid 地要求記憶卡。潮巢選它，是因為功能寫得清，才不會變成拆開才失望的可愛空殼。",
+      "productHighlights": [
+        "可拍照錄影的吊飾相機",
+        "需自行準備 TF 卡",
+        "紅黃黑白四色"
+      ],
+      "seoTitle": "Pingu 迷你相機吊飾 可拍照錄影",
+      "metaDescription": "Pingu迷你CCD相機吊飾可拍照錄影，需TF卡，四色可選，適合掛包隨身拍。"
+    },
+    {
+      "id": "sparse-data",
+      "label": "資料較少商品",
+      "input": {
+        "rawTitle": "米菲 钥匙圈",
+        "variantSummary": "",
+        "note": "",
+        "specText": "",
+        "imageDescription": "白色兔子頭金屬鑰匙圈，耳朵是環。",
+        "webSearchSummary": ""
+      },
+      "titleParts": {
+        "titleIp": "米菲 Miffy",
+        "titleBrand": "",
+        "titleItem": "金屬鑰匙圈",
+        "titleDiff": ""
+      },
+      "expectedTitle": "米菲 Miffy | 金屬鑰匙圈",
+      "description": "商品介紹\n\n米菲的耳朵直接變成鑰匙環。金屬冷一點、線條單純，丟進包包底也還找得到那兩隻耳朵。\n\n收藏亮點\n・耳朵即環：少一個零件，開鎖時角色就在指節旁邊。\n・金屬件：比絨毛耐日常刮碰，適合天天掛著。\n\n適合誰\n・鑰匙已經很多、只想加一個認得出的小標記的人\n\n商品資訊\n・角色：米菲\n・類型：金屬鑰匙圈\n・外觀：白色兔子頭，耳朵為環",
+      "whyWeChoseIt": "資料不多，就讓耳朵當環這件事自己說話。潮巢收它，是因為認得出、耐用、不必編一段沒依據的規格故事。",
+      "productHighlights": [
+        "耳朵即鑰匙環",
+        "金屬日常款"
+      ],
+      "seoTitle": "米菲 鑰匙圈",
+      "metaDescription": "米菲金屬鑰匙圈，耳朵做成環，適合天天掛著當辨識小標記。"
+    }
+  ]
+}

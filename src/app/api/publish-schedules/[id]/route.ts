@@ -3,6 +3,7 @@ import { canPublish } from "@/lib/auth/roles";
 import {
   isMissingScheduleTablesError,
   SCHEDULE_MIGRATION_HINT,
+  scheduleDbWriteEnabled,
   taipeiDateOnly
 } from "@/lib/drafts/publishScheduleCore";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
@@ -25,6 +26,16 @@ export async function PATCH(
 ) {
   const auth = await requirePublisher();
   if (!auth.ok) return auth.response;
+
+  if (!scheduleDbWriteEnabled()) {
+    return Response.json(
+      {
+        error: "排程資料寫入安全鎖目前關閉；Preview 不會修改 Production schedule tables。",
+        code: "SCHEDULE_DB_WRITE_DISABLED"
+      },
+      { status: 409 }
+    );
+  }
 
   const { id } = await params;
   const body = await request.json().catch(() => ({}));

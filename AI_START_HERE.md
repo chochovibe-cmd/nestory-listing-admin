@@ -26,6 +26,17 @@ Nestory 是潮巢玩居內部 Shopify 商品上架 PWA：商品輸入、圖片/�
 
 ## 2.1 2026-10-07 最新接手點
 
+### 批量前最後整備 — 最新狀態
+
+- multi-variant blank SKU：source fix 已完成；空白 row 由 generated product SKU 依序衍生 `001 / 002 / 003...`，手填 row SKU 優先。
+- Preview-only Shopify auth self-test endpoint 已完成；只讀 shop identity，不做 mutation。
+- Vercel Free 今日 deployment API 已達 >100/day，最新完整 HEAD 目前無法建立新的 Preview deployment。
+- 因此 Nestory 自己的 Client ID + Client Secret runtime：**HOLD，不是 PASS**。
+- 最新 package checkpoint（文件寫入前）：`8aaf7a0884e6ca532730afab1022282aad70c7f4`；之後仍有 docs commits，最新 HEAD 必須重新查 GitHub。
+- 5 件 DRAFT batch / ACTIVE 仍禁止，直到 runtime self-test + clean CI 完成。
+
+詳細：`docs/audits/SHOPIFY-BATCH-READINESS-2026-10-07.md`。
+
 目前 UI/排程主施工線：
 
 - feature branch：`agent/schedule-core-20261006`

@@ -61,6 +61,20 @@ export async function PATCH(
   if (!group) return Response.json({ error: "Schedule group not found" }, { status: 404 });
 
   if (action === "pause" || action === "resume") {
+    const expectedCurrent = action === "pause" ? "active" : "paused";
+    if (group.status !== expectedCurrent) {
+      return Response.json(
+        {
+          error:
+            action === "pause"
+              ? "Only an active schedule can be paused"
+              : "Only a paused schedule can be resumed",
+          status: group.status
+        },
+        { status: 409 }
+      );
+    }
+
     const nextStatus = action === "pause" ? "paused" : "active";
     const { error } = await service
       .from("publish_schedule_groups")
@@ -71,6 +85,16 @@ export async function PATCH(
   }
 
   if (action === "cancel") {
+    if (group.status === "completed") {
+      return Response.json(
+        { error: "Completed schedules cannot be canceled", status: group.status },
+        { status: 409 }
+      );
+    }
+    if (group.status === "canceled") {
+      return Response.json({ ok: true, status: "canceled", alreadyCanceled: true });
+    }
+
     const { error: itemError } = await service
       .from("publish_schedule_items")
       .update({ status: "canceled", updated_at: now })
@@ -87,6 +111,13 @@ export async function PATCH(
   }
 
   if (action === "retry_blocked") {
+    if (group.status === "canceled" || group.status === "completed") {
+      return Response.json(
+        { error: "Canceled/completed schedules cannot be retried", status: group.status },
+        { status: 409 }
+      );
+    }
+
     const scheduledFor =
       typeof body.scheduledFor === "string" && body.scheduledFor
         ? body.scheduledFor
@@ -108,15 +139,17 @@ export async function PATCH(
 
     if (error) return Response.json({ error: error.message }, { status: 500 });
 
+    const nextGroupStatus = group.status === "paused" ? "paused" : "active";
     await service
       .from("publish_schedule_groups")
-      .update({ status: "active", updated_at: now })
+      .update({ status: nextGroupStatus, updated_at: now })
       .eq("id", id);
 
     return Response.json({
       ok: true,
       retried: (data ?? []).length,
-      scheduledFor
+      scheduledFor,
+      status: nextGroupStatus
     });
   }
 

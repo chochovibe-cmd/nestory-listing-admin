@@ -31,7 +31,7 @@ Nestory 是潮巢玩居內部 Shopify 商品上架 PWA：商品輸入、圖片/�
 - feature branch：`agent/schedule-core-20261006`
 - Draft PR：#15（base = `agent/uiux2-preview-20260930`）
 - Owner 實機驗收：Desktop ResultCard **PASS**；Schedule UI **PASS**
-- isolated API E2E code checkpoint：`5296104e1b397ca6e3736f3897a4d92f14537396`；此後還會有 handoff/docs commits，**最新 HEAD 必須重新查 GitHub，不要只信本檔 SHA**。
+- isolated API E2E code checkpoint：`5296104e1b397ca6e3736f3897a4d92f14537396`；controlled Shopify DRAFT package 的 source authority 是後續 `85cc2d6424c8ff589febc32ff1d7268d31be2e59`，此後還有 audit/docs commits，**最新 HEAD 必須重新查 GitHub，不要只信本檔 SHA**。
 - 未 merge、未 Production deploy、未註冊 scheduled-publish Cron。
 
 Production read-only truth：
@@ -63,7 +63,20 @@ Production read-only truth：
 - full CI 仍被另一條 copy verifier `Boss hierarchy wrapper disappeared` 擋紅；本 Schedule package 不處理文案。
 - Production 只讀複核：schedule groups/items 仍 0；三個 Vercel schedule safety flags 仍未設定。
 
-目前下一步：**HOLD，等待 Owner 決定是否開下一個「1 件真 Shopify DRAFT」受控 Go-Live package。** 未獲明確授權前，不開 DB write / staging / execution，不註冊 Cron，不做任何真 Shopify write。
+Owner 後續已明確批准並完成「1 件真 Shopify DRAFT」受控 Go-Live package：
+
+- Shopify product：`gid://shopify/Product/15417952698553`
+- 商品：`馬克圖布 × Miffy | 米菲 70週年典藏臺燈 | 蘋果樹設計`
+- remote status：**DRAFT**
+- `publishedAt=null`
+- 10 images / 2 variants / SEO / custom metafields：PASS
+- Nestory draft 已 linkage 為 `draft_created`
+- controlled publish job exactly 1，marker = `controlled_shopify_connector_draft_test`
+- no ACTIVE / no second product / no batch / no Cron / no merge / no Production deploy
+
+重要限制：這次真寫入透過已連線 Shopify Connector 完成，**不能視為 Nestory Vercel Client ID + Client Secret runtime 已通過**。另外兩個 persisted variant rows 的 SKU 都是 null，因此 Shopify 兩款也沒有 SKU；在任何 5 件 batch / ACTIVE 前，建議先處理／明確決策這個 row-level SKU gap，並另外證明 Nestory 自己的 Vercel client-credentials runtime。
+
+詳細：`docs/audits/SHOPIFY-DRAFT-CONTROLLED-E2E-2026-10-07.md`。目前維持 **HOLD**，等待下一個 Owner 明確 package。
 
 ## 3. 重要：現在已經有一部分真正上 production
 

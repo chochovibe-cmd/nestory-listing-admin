@@ -1,5 +1,12 @@
 # Nestory — AI Start Here
 
+> **2026-10-07 狀態注記（主線 release truth）**
+> - PB1.4 文案已由 PR #17 合進主線（merge commit `585c99b`），主線 CI 綠；店主已驗收文案品質。
+> - 舊文案線 PR #13、#11 已關閉（被取代）；本機舊分支 `codex/copy-quality-v2` 末尾有 wip 封存 commit（`db172df`），僅供歷史查詢；其中 `mapCaptureFields` 多色白名單與 `zhTwLocalizer` 適閤修正為待 cherry-pick 的通用小修。
+> - 正式站目前仍是 `eac309b`（10/6）；`585c99b` 的自動部署已從 Vercel Dashboard 取消，PB1.4 尚未上正式站，部署需店主明確批准。
+> - 正式 Supabase 仍有 3 個 migration 未套：`20260822223100`、`20260902090000`、`20260903100000`。
+> - 下一步順序：發布安全二修（混合 retry 整批 ACTIVE、轉正式無強確認）→ 店主批准後套 migration → 正式站部署 → 單一真商品 Shopify DRAFT E2E → 全新商品全流程驗收。
+
 > 給任何新 Codex / Claude Code / ChatGPT / 其他 AI coding session 的最短入口。
 > 目標：不用掃完整 repo，也能在 1–3 分鐘內知道專案在哪、什麼已上 production、什麼仍只在 branch、下一步是什麼。
 

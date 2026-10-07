@@ -1,18 +1,20 @@
 import { extractFeatureTerms } from './featureTerms';
+import type { DisplayLabelContext } from './displayLabels';
 import {
-  DisplayLabelContext,
+  formatCharacterDisplayNameFromContext,
   formatCharacterShortNameFromContext,
   formatListingIpDisplayNameFromContext,
   isCharacterRedundantWithIpDisplay,
 } from './displayLabels';
-import { ListingDraftInput } from './types';
+import type { ListingDraftInput } from './types';
 import { normalizeProductTypeForDisplay } from '../productTypeLabels';
 import { pickScenarioKeywords } from './scenarioKeywords';
 
-// P2-83（2026-07-18 老闆定案，覆寫夜工統一 80）：
-// 官網 title_zh ≤60；enriched_title／seo_title ≤80。
-export const OFFICIAL_TITLE_MAX_LENGTH = 60;
-export const ENRICHED_TITLE_MAX_LENGTH = 80;
+import { clampTitleByPhrases, joinTitleSegments, PRODUCT_TITLE_MAX_LENGTH } from './titleContract';
+
+// 2026-09-23：商品標題與官網 title_zh 共用 80 字，不再先產 80 再砍 60。
+export const OFFICIAL_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH;
+export const ENRICHED_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH;
 /** @deprecated use OFFICIAL_TITLE_MAX_LENGTH — kept name only for older verify mirrors */
 const TITLE_MAX_LENGTH = OFFICIAL_TITLE_MAX_LENGTH;
 
@@ -217,12 +219,11 @@ export function collectCharacterNames(
   return names;
 }
 
-/** 老闆工具骨架：1 個直接放、2 個「・」連接、3 個以上取前三＋「等角色」。 */
+/** 1 個直接放、2 個以上「・」連接；超過 3 個只留前三，款數交給第三段。 */
 export function formatCharacterText(characters: string[]): string {
   if (characters.length === 0) return '';
   if (characters.length === 1) return characters[0];
-  if (characters.length === 2) return characters.join('・');
-  return characters.slice(0, 3).join('・') + '等角色';
+  return characters.slice(0, 3).join('・');
 }
 
 // 老闆工具的重複詞收斂（吊飾吊飾→吊飾掛件 這類）；煙霧測試 2026-07-18 抓到後補港。
@@ -253,7 +254,15 @@ function buildCoreName(
   characters: string[],
 ): string {
   const productTypes = inferProductTypes(draft);
-  const characterText = formatCharacterText(characters);
+  let characterText =
+    characters.length === 1
+      ? formatCharacterDisplayNameFromContext(characters[0], draft.ip, context) || characters[0]
+      : formatCharacterText(characters);
+  if (characterText && isCharacterRedundantWithIpDisplay(characterText, ipDisplayName)) {
+    characterText = characters.length === 1 ? "" : formatCharacterText(
+      characters.filter((name) => !isCharacterRedundantWithIpDisplay(name, ipDisplayName)),
+    );
+  }
   const typeText = dedupeRepeatedTitleTerms(
     productTypes.filter((type) => !typeAlreadyPresentIn(type, characterText)).join('')
   );
@@ -404,7 +413,7 @@ function getShortFeatureText(draft: ListingDraftInput, hasMultipleCharacters = f
 
   if (hasMultipleCharacters) return '款式可選';
 
-  return getSelectableText(sourceText) ?? '標準款';
+  return getSelectableText(sourceText) ?? '';
 }
 
 function textLen(value: string): number {
@@ -469,58 +478,21 @@ export function enforceSkeletonTitleLength(
 }
 
 function enforceTitleLength(ip: string, coreName: string, featureText: string): string {
-  return enforceSkeletonTitleLength(ip, coreName, featureText, OFFICIAL_TITLE_MAX_LENGTH);
+  return clampTitleByPhrases(
+    joinTitleSegments(ip, coreName, featureText),
+    OFFICIAL_TITLE_MAX_LENGTH,
+  );
 }
 
 /**
- * P2-83: clamp any free-form title (LLM enriched) down to official title_zh ≤60.
- * - With " | " / "｜" separators: skeleton-aware (prefer cut seg3, never cut seg1).
- * - Without separators: safe truncate — do not cut mid-word when possible; keep head.
+ * Clamp any free-form title to the shared product-title cap.
+ * Prefers whole phrases: drop filler third segment, then aliases, never mid-word.
  */
 export function clampOfficialTitle(
   title: string | null | undefined,
   maxLen: number = OFFICIAL_TITLE_MAX_LENGTH,
 ): string {
-  const raw = normalizeText(title ?? '');
-  if (!raw) return '';
-  if (textLen(raw) <= maxLen) return raw;
-
-  // Prefer pipe separators (ASCII or fullwidth)
-  const pipeSplit = raw.includes(' | ')
-    ? raw.split(' | ').map((p) => p.trim()).filter(Boolean)
-    : raw.includes('｜')
-      ? raw.split('｜').map((p) => p.trim()).filter(Boolean)
-      : null;
-
-  if (pipeSplit && pipeSplit.length >= 2) {
-    const seg1 = pipeSplit[0];
-    const seg2 = pipeSplit[1] ?? '';
-    const seg3 = pipeSplit.slice(2).join(' | ');
-    return enforceSkeletonTitleLength(seg1, seg2, seg3, maxLen);
-  }
-
-  // No pipe: try to keep a leading brand×IP-ish head before first multi-space or middle-dot run
-  const headMatch = raw.match(/^(.+?(?:×.+?)?)(?:\s{2,}|\s+\/\s+)([\s\S]+)$/);
-  if (headMatch) {
-    return enforceSkeletonTitleLength(headMatch[1], headMatch[2], '', maxLen);
-  }
-
-  // Safe truncate: prefer cut at last space/、/・ before limit
-  const chars = Array.from(raw);
-  if (chars.length <= maxLen) return raw;
-  const window = chars.slice(0, maxLen);
-  const joined = window.join('');
-  const breakPoints = [' ', '、', '・', '，', ',', '/', '-', '－'];
-  let cut = maxLen;
-  for (let i = window.length - 1; i >= Math.floor(maxLen * 0.55); i -= 1) {
-    if (breakPoints.includes(window[i])) {
-      cut = i;
-      break;
-    }
-  }
-  // Avoid empty / tiny result
-  if (cut < Math.floor(maxLen * 0.4)) cut = maxLen;
-  return chars.slice(0, cut).join('').trim();
+  return clampTitleByPhrases(title ?? '', maxLen);
 }
 
 /** P2-80: post-process LLM enriched title third segment (blacklist scrub). */
@@ -543,8 +515,8 @@ export function scrubEnrichedTitleSegment3(title: string | null | undefined): st
   const seg2 = parts[1].trim();
   let seg3 = parts.slice(2).join(raw.includes('｜') ? '｜' : ' | ').trim();
   seg3 = sanitizeTitleSegment3(seg3);
-  if (!seg3 || isTitleSegment3Blacklisted(seg3)) {
-    seg3 = '標準款';
+  if (!seg3 || isTitleSegment3Blacklisted(seg3) || seg3 === '標準款') {
+    seg3 = '';
   }
   const sep = raw.includes('｜') && !raw.includes(' | ') ? '｜' : ' | ';
   return [seg1, seg2, seg3].filter(Boolean).join(sep);
@@ -565,9 +537,13 @@ export function generateDisplayTitle(draft: ListingDraftInput, context: DisplayL
     return null;
   }
 
-  // 夜工包（回饋 27 老闆定案）：有聯名品牌 → 「品牌 × IP」；品牌優先於 IP，統一規則。
   const productBrand = normalizeText(draft.product_brand);
-  const ipSegment = productBrand ? productBrand + ' × ' + ipDisplayName : ipDisplayName;
+  const ipSegment = productBrand ? ipDisplayName + ' × ' + productBrand : ipDisplayName;
+  let featureText = getShortFeatureText(draft, characters.length > 1);
+  if (characters.length > 3) {
+    const countHint = `${characters.length}款`;
+    featureText = featureText && featureText !== countHint ? `${countHint}／${featureText}` : countHint;
+  }
 
   if (draft.product_status === 'secondhand') {
     if (!draft.secondhand_grade) {
@@ -577,5 +553,5 @@ export function generateDisplayTitle(draft: ListingDraftInput, context: DisplayL
     return enforceTitleLength('【二手】' + ipSegment, coreName, draft.secondhand_grade);
   }
 
-  return enforceTitleLength(ipSegment, coreName, getShortFeatureText(draft, characters.length > 1));
+  return enforceTitleLength(ipSegment, coreName, featureText);
 }

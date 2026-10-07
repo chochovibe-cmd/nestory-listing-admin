@@ -1,5 +1,3 @@
-import { GeneratedListingContent, ListingDraftInput } from "@/lib/contentGenerator/types";
-
 // COPY C1: seventh manual tone（潮巢導購版）added before 依IP自動匹配.
 // 依IP自動匹配 is NOT a voice the model picks itself -- it's resolved server-side
 // to one of the manual tones via resolveCopyTone() in systemPrompt.ts.
@@ -75,6 +73,12 @@ export interface CopyProviderInput {
   specText?: string;
   webSearchSummary?: string;
   /**
+   * COPY-PB1: compact internal product understanding for 潮巢導購版.
+   * When present, the Writer receives this instead of raw search/spec/vision dumps.
+   * Identity/spec/title ops are produced upstream and merged back after writing.
+   */
+  productBrief?: string;
+  /**
    * P5 層2／3：已組好的 IP 背景區塊（含誠實邊界文案），直接進 user 事實區。
    * 來源為 knowledge_pack 或冷門 IP 網搜／中性指示；規格事實仍走 webSearchSummary／spec。
    */
@@ -147,10 +151,17 @@ export interface CopyProviderOutput {
    * only when the operator left it empty. Optional so non-LLM constructors
    * (test mode) needn't set it. */
   spec?: string;
+  /** Provider-internal title components. Not stored as separate DB columns. */
+  titleIp?: string;
+  titleBrand?: string;
+  titleItem?: string;
+  titleDiff?: string;
   provider: string;
   model: string;
   /** A13: present when the model reported token usage (absent in test mode). */
   usage?: CopyUsage;
+  /** True when the model stopped because the output token cap was hit. */
+  outputTruncated?: boolean;
 }
 
 export interface CopyProvider {
@@ -199,6 +210,10 @@ type ParsedCopyJson = {
   detected_category?: string;
   sku?: string;
   spec?: string;
+  title_ip?: string;
+  title_brand?: string;
+  title_item?: string;
+  title_diff?: string;
 };
 
 /** Both providers ask the model for the same JSON schema; some models wrap it in a ```json fence. */
@@ -221,6 +236,10 @@ export function parseCopyProviderJson(text: string, provider: string, model: str
     detectedCategory: parsed.detected_category ?? "",
     sku: parsed.sku ?? "",
     spec: parsed.spec ?? "",
+    titleIp: parsed.title_ip ?? "",
+    titleBrand: parsed.title_brand ?? "",
+    titleItem: parsed.title_item ?? "",
+    titleDiff: parsed.title_diff ?? "",
     provider,
     model,
   };
@@ -248,13 +267,22 @@ export const COPY_SEGMENT_KEYS = [
   "spec",
 ] as const;
 
-type CopySegmentKey = (typeof COPY_SEGMENT_KEYS)[number];
+export const TITLE_ASSEMBLER_KEYS = [
+  "title_ip",
+  "title_brand",
+  "title_item",
+  "title_diff",
+] as const;
+
+export const COPY_PARSEABLE_KEYS = [...COPY_SEGMENT_KEYS, ...TITLE_ASSEMBLER_KEYS] as const;
+
+type CopySegmentKey = (typeof COPY_PARSEABLE_KEYS)[number];
 
 const SEGMENT_MARKER = /^\s*\[\[([a-z_]+)\]\]\s*$/;
 
 /** True when the text contains at least one recognised `[[key]]` marker. */
 export function hasCopySegmentMarkers(text: string): boolean {
-  return COPY_SEGMENT_KEYS.some((key) => text.includes(`[[${key}]]`));
+  return COPY_PARSEABLE_KEYS.some((key) => text.includes(`[[${key}]]`));
 }
 
 export function parseCopySegments(text: string, provider: string, model: string): CopyProviderOutput {
@@ -263,7 +291,7 @@ export function parseCopySegments(text: string, provider: string, model: string)
 
   for (const line of text.split(/\r?\n/)) {
     const match = line.match(SEGMENT_MARKER);
-    if (match && (COPY_SEGMENT_KEYS as readonly string[]).includes(match[1])) {
+    if (match && (COPY_PARSEABLE_KEYS as readonly string[]).includes(match[1])) {
       currentKey = match[1] as CopySegmentKey;
       if (!buffers.has(currentKey)) buffers.set(currentKey, []);
       continue;
@@ -293,6 +321,10 @@ export function parseCopySegments(text: string, provider: string, model: string)
     detectedCategory: get("detected_category"),
     sku: get("sku"),
     spec: get("spec"),
+    titleIp: get("title_ip"),
+    titleBrand: get("title_brand"),
+    titleItem: get("title_item"),
+    titleDiff: get("title_diff"),
     provider,
     model,
   };
@@ -310,13 +342,18 @@ export function parseCopyProviderOutput(text: string, provider: string, model: s
 
 /** An output is unusable when neither a title nor a description came back. */
 export function isCopyOutputEmpty(output: CopyProviderOutput): boolean {
-  return !output.enrichedTitle.trim() && !output.generatedDescriptionHtml.trim();
+  const hasTitle =
+    Boolean(output.enrichedTitle.trim()) ||
+    Boolean(output.titleItem?.trim()) ||
+    Boolean(output.titleIp?.trim());
+  return !hasTitle && !output.generatedDescriptionHtml.trim();
 }
 
 /** Reads a single regen field's text off a parsed output (highlights joined). */
 export function getCopyFieldValue(output: CopyProviderOutput, field: CopyRegenField): string {
   switch (field) {
-    case "enriched_title": return output.enrichedTitle;
+    case "enriched_title":
+      return output.enrichedTitle || [output.titleIp, output.titleItem, output.titleDiff].filter(Boolean).join(" | ");
     case "generated_description_html": return output.generatedDescriptionHtml;
     case "generated_faq_html": return output.generatedFaqHtml;
     case "seo_title": return output.seoTitle;
@@ -348,7 +385,11 @@ export const COPY_FORMAT_REMINDER =
 export interface CopyModelResult {
   text: string;
   usage?: RawUsage;
+  truncated?: boolean;
 }
+
+export const COPY_OUTPUT_TRUNCATED_WARNING =
+  "文案輸出因長度上限被截斷，後面的欄位可能不完整。這次沒有自動重試；可單欄重生缺漏欄位。";
 
 export async function generateWithParseRetry(
   callModel: (formatReminder: string | null) => Promise<CopyModelResult>,
@@ -360,9 +401,11 @@ export async function generateWithParseRetry(
   // reports the true total spend, not just the successful call's.
   const total: RawUsage = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationTokens: 0 };
   let sawUsage = false;
+  let truncated = false;
 
   const attempt = async (reminder: string | null): Promise<CopyProviderOutput | null> => {
-    const { text, usage } = await callModel(reminder);
+    const { text, usage, truncated: attemptTruncated } = await callModel(reminder);
+    if (attemptTruncated) truncated = true;
     if (usage) {
       sawUsage = true;
       total.inputTokens += usage.inputTokens;
@@ -378,8 +421,10 @@ export async function generateWithParseRetry(
     }
   };
 
-  const withUsage = (output: CopyProviderOutput): CopyProviderOutput =>
-    sawUsage ? { ...output, usage: { ...total, costUsd: estimateCopyCostUsd(model, total) } } : output;
+  const withUsage = (output: CopyProviderOutput): CopyProviderOutput => {
+    const next = sawUsage ? { ...output, usage: { ...total, costUsd: estimateCopyCostUsd(model, total) } } : output;
+    return truncated ? { ...next, outputTruncated: true } : next;
+  };
 
   const first = await attempt(null);
   if (first) return withUsage(first);

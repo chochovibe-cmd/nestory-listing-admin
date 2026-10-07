@@ -39,10 +39,16 @@ function readSystemPromptArchitecture() {
     /buildFieldRegenSystemPrompt as buildProductionFieldRegenSystemPrompt/u,
     "systemPrompt wrapper no longer aliases Production buildFieldRegenSystemPrompt",
   );
+  // COPY-PB1 adds a focused Chaochao branch but keeps Production as fallback.
   assert.match(
     wrapper,
-    /return `\$\{buildProductionCopySystemPrompt\(tone, copyLength, secondhandInfo\)\}/u,
-    "buildCopySystemPrompt no longer delegates to Production base",
+    /buildProductionCopySystemPrompt\(tone, copyLength, secondhandInfo\)/u,
+    "buildCopySystemPrompt no longer retains Production fallback",
+  );
+  assert.match(
+    wrapper,
+    /buildChaochaoBriefWriterSystemPrompt/u,
+    "COPY-PB1 focused Chaochao Writer branch missing",
   );
   assert.match(
     wrapper,
@@ -125,6 +131,17 @@ check("prompt: wrapper delegates and P4 ban + web search honesty kept in base", 
   assert.match(base, /【文案紅線｜只有這些沒依據才不准寫】/);
   assert.match(base, /網路搜尋補充資訊（B19|網路搜尋補充（若有提供）/);
   assert.match(base, /合理判斷同款後，把規格、功能、系列背景當可用事實正面寫入|直接自信地寫進文案/);
+});
+
+check("COPY-PB1 focused path retains source-marker and seller-service guard", () => {
+  const focused = read("src/lib/providers/chaochaoPrompt.ts");
+  const brief = read("src/lib/providers/productBrief.ts");
+  assert.match(focused, /顧客可見欄位禁止出現「來源：網路」、URL 或任何出處註記/u);
+  for (const term of ["保固", "售後", "退換", "贈品", "店鋪活動"]) {
+    assert.ok(focused.includes(term), `focused Writer missing ${term} guard`);
+    assert.ok(brief.includes(term), `Product Brief missing ${term} filter`);
+  }
+  assert.match(brief, /不要放進 confirmedFacts、differentiators、useCases、fanHooks 或 specLines/u);
 });
 
 check("tavily: no 須標來源; internal-only framing", () => {
@@ -251,14 +268,19 @@ check("vision DESCRIBE + RECOGNIZE both expanded", () => {
       `${name} missing promo/gift family`,
     );
   }
+  assert.match(describeBlock, /畫面感/);
+  assert.match(describeBlock, /300-500 字/);
+  assert.match(describeBlock, /絕對不要憑外觀猜測/);
+  assert.doesNotMatch(describeBlock, /不要形容詞堆疊/);
+  assert.match(vision, /max_tokens: 1000/);
 });
 
 // --- titleGenerator / UI untouched (source-level smoke) ---
 check("titleGenerator wrapper delegates to Production base; P4 strip stays out", () => {
   const { base } = readTitleArchitecture();
   assert.ok(!base.includes("stripCustomerSourceMarkers"), "P4 strip helper leaked into title base");
-  assert.match(base, /export const OFFICIAL_TITLE_MAX_LENGTH = 60/);
-  assert.match(base, /export const ENRICHED_TITLE_MAX_LENGTH = 80/);
+  assert.match(base, /export const OFFICIAL_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
+  assert.match(base, /export const ENRICHED_TITLE_MAX_LENGTH = PRODUCT_TITLE_MAX_LENGTH/);
   assert.match(base, /export function generateDisplayTitle/);
   assert.match(base, /export function clampOfficialTitle/);
   assert.match(base, /export function scrubEnrichedTitleSegment3/);

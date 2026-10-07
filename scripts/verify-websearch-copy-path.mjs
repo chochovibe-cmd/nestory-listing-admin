@@ -4,11 +4,8 @@
  * Run: node scripts/verify-websearch-copy-path.mjs
  */
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript";
 
 const root = process.cwd();
 
@@ -26,20 +23,15 @@ if (process.env.NESTORY_TS_IMPORT !== "1") {
   process.exit(result.status ?? 1);
 }
 
-const { buildWebSearchQuery, resolveWebSearchForGenerate } = await import(
+const { buildWebSearchQuery, isTrustedProductWebEvidence, resolveWebSearchForGenerate } = await import(
   "../src/lib/providers/webSearch/index.ts"
 );
 const { selectRepresentativeVisionImages } = await import(
   "../src/lib/providers/visionProvider.ts"
 );
-
-const promptSource = fs.readFileSync(path.join(root, "src/lib/providers/systemPromptBase.ts"), "utf8");
-const transpiled = ts.transpileModule(promptSource, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText.replace(/^\s*import\s.+?;\s*$/gm, "");
-const promptModulePath = path.join(os.tmpdir(), "nestory-system-prompt-check.mjs");
-fs.writeFileSync(promptModulePath, transpiled);
-const { buildCopyUserMessage, buildFieldRegenUserMessage } = await import(pathToFileURL(promptModulePath).href);
+const { buildCopyUserMessage, buildFieldRegenUserMessage } = await import(
+  "../src/lib/providers/systemPrompt.ts"
+);
 
 let failed = 0;
 function assert(cond, msg) {
@@ -90,6 +82,85 @@ const searched = await resolveWebSearchForGenerate({
 assert(searched.didLiveSearch === true, "fake provider is actually called");
 assert(searched.result?.summary === summary, "search summary is returned");
 
+assert(
+  isTrustedProductWebEvidence({
+    rawTitle: "【名創優品X龍珠聯名】DRAGON BALL Z | Q版人物萌粒鍵帽盲盒擺件",
+    ipName: "七龍珠",
+    title: "名創優品 龍珠聯名 萌粒鍵帽盲盒",
+    excerpt: "MINISO 名創優品 × DRAGON BALL Z Q版萌粒鍵帽盲盒。",
+  }),
+  "PB1.4 hard gate accepts a same-brand/same-product Dragon Ball source",
+);
+assert(
+  !isTrustedProductWebEvidence({
+    rawTitle: "【名創優品X龍珠聯名】DRAGON BALL Z | Q版人物萌粒鍵帽盲盒擺件",
+    ipName: "七龍珠",
+    title: "Petitrama DX DRACAP 七龍珠 DragonBall",
+    excerpt: "材質 PVC、ABS；全長約75mm、全高約55mm。",
+  }),
+  "PB1.4 hard gate rejects same-IP but different Dragon Ball product",
+);
+assert(
+  isTrustedProductWebEvidence({
+    rawTitle: "您萌實用新婚禮物pingu吹風機閨蜜女生日負離子護髮靜音速乾家用",
+    ipName: "Pingu",
+    title: "您萌实用新婚礼物pingu吹风机闺蜜女生日负离子护发静音速乾家用",
+    excerpt: "Pingu 吹風機，負離子護髮、靜音速乾。",
+  }),
+  "PB1.4 hard gate accepts exact Pingu hair-dryer source",
+);
+assert(
+  !isTrustedProductWebEvidence({
+    rawTitle: "您萌實用新婚禮物pingu吹風機閨蜜女生日負離子護髮靜音速乾家用",
+    ipName: "Pingu",
+    title: "PINGU貪吃的小鵝系列",
+    excerpt: "材質 PVC/ABS，商品尺寸約10.5cm高。",
+  }),
+  "PB1.4 hard gate rejects unrelated Pingu figure specs",
+);
+
+const strictProvider = {
+  name: "tavily",
+  isConfigured: () => true,
+  search: async (q) => ({
+    summary: "provider answer must not bypass the hard gate",
+    sources: [
+      { title: "Petitrama DX DRACAP 七龍珠", url: "https://bad.example/dbz" },
+      { title: "名創優品 龍珠聯名 萌粒鍵帽盲盒", url: "https://good.example/miniso" },
+    ],
+    evidence: [
+      {
+        title: "Petitrama DX DRACAP 七龍珠",
+        url: "https://bad.example/dbz",
+        excerpt: "PVC、ABS，全長75mm、全高55mm。",
+      },
+      {
+        title: "名創優品 龍珠聯名 萌粒鍵帽盲盒",
+        url: "https://good.example/miniso",
+        excerpt: "名創優品 × DRAGON BALL Z Q版萌粒鍵帽盲盒。",
+      },
+    ],
+    provider: "tavily",
+    query: q,
+  }),
+};
+const strictSearch = await resolveWebSearchForGenerate({
+  useWebSearch: true,
+  rawTitle: "【名創優品X龍珠聯名】DRAGON BALL Z | Q版人物萌粒鍵帽盲盒擺件",
+  ipName: "七龍珠",
+  strictProductIdentity: true,
+  provider: strictProvider,
+});
+assert(strictSearch.result?.sources.length === 1, "strict search keeps only hard-matched product source");
+assert(
+  strictSearch.result?.sources[0]?.url === "https://good.example/miniso",
+  "strict search drops MegaHouse-style unrelated spec source",
+);
+assert(
+  !strictSearch.result?.summary.includes("75mm"),
+  "provider synthesis cannot reintroduce rejected 75mm specs",
+);
+
 const fullPrompt = buildCopyUserMessage({
   rawTitle: "Hello Kitty 馬克杯",
   saleStatus: "現貨",
@@ -105,11 +176,15 @@ const regenPrompt = buildFieldRegenUserMessage({
   rawTitle: "Hello Kitty 馬克杯",
   saleStatus: "現貨",
   source: "淘寶",
+  variantSummary: "粉色／綠色",
+  note: "含杯蓋",
   webSearchSummary: summary,
   regenerateField: "generated_description_html",
   currentValues: { generatedDescriptionHtml: "上一版" },
 });
 assert(regenPrompt.includes(summary), "single-field regen prompt receives cached search summary");
+assert(regenPrompt.includes("粉色／綠色"), "single-field regen prompt receives variant summary");
+assert(regenPrompt.includes("含杯蓋"), "single-field regen prompt receives note");
 
 const failedSearch = await resolveWebSearchForGenerate({
   useWebSearch: true,

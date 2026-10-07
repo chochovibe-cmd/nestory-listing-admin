@@ -1,0 +1,30 @@
+[
+  {
+    "id": "miffy-70th-apple-tree-lamp",
+    "label": "Miffy 70週年蘋果樹矽膠臺燈",
+    "rawTitle": "馬克圖布 × Miffy | 米菲 矽膠臺燈 | 70週年蘋果樹典藏款",
+    "mustKeep": ["Miffy", "米菲", "矽膠臺燈", "70週年", "蘋果樹"],
+    "qualityRisk": "不要退化成通用小夜燈／療癒擺件文案"
+  },
+  {
+    "id": "pingu-mini-ccd-camera-blindbox",
+    "label": "Pingu 迷你 CCD 相機吊飾盲盒",
+    "rawTitle": "MARtube × Pingu | Pingu 迷你CCD相機吊飾 | 可拍照錄影盲盒",
+    "mustKeep": ["Pingu", "迷你CCD相機", "吊飾", "拍照", "錄影", "盲盒"],
+    "qualityRisk": "功能性商品不可只寫可愛；相機功能與吊飾形態都要被理解"
+  },
+  {
+    "id": "miniso-dragon-ball-keycap-blindbox",
+    "label": "MINISO × 七龍珠 Q版萌粒鍵帽盲盒",
+    "rawTitle": "【名創優品X龍珠聯名】DRAGON BALL Z | Q版人物萌粒鍵帽盲盒擺件",
+    "mustKeep": ["名創優品", "DRAGON BALL Z", "Q版", "萌粒", "鍵帽", "盲盒"],
+    "qualityRisk": "網搜常混入泛七龍珠 PVC 公仔；不得把不同商品的尺寸材質灌進來"
+  },
+  {
+    "id": "bandai-sanrio-family-charm-blindbox",
+    "label": "Bandai × Sanrio 家族米粒公仔吊飾盲盒",
+    "rawTitle": "三麗鷗 Sanrio × Bandai | 家族米粒公仔吊飾盲盒 | 隨機單盒",
+    "mustKeep": ["三麗鷗", "Sanrio", "Bandai", "米粒公仔", "吊飾", "盲盒"],
+    "qualityRisk": "不要用『品質有保證／絕佳收藏選擇』取代角色與造型差異"
+  }
+]

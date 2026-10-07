@@ -166,6 +166,8 @@ check("73 long base never truncates the 6-char suffix", () => {
 check("61 RegenCopyModal uses modal-overlay open", () => {
   const src = read("src/components/listing/RegenCopyModal.tsx");
   assert.match(src, /className=["']modal-overlay open["']/);
+  assert.match(src, /createPortal\(/);
+  assert.match(src, /document\.body/);
 });
 
 check("61 LockedCopyPreview uses modal-overlay open", () => {

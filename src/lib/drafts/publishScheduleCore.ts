@@ -66,6 +66,10 @@ export function isMissingScheduleTablesError(message: string | null | undefined)
   );
 }
 
+export function scheduleDbWriteEnabled(): boolean {
+  return process.env.PUBLISH_SCHEDULE_DB_WRITE_ENABLED === "true";
+}
+
 export function scheduleExecutionEnabled(): boolean {
   return process.env.PUBLISH_SCHEDULE_EXECUTION_ENABLED === "true";
 }

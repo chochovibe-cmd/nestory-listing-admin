@@ -20,6 +20,7 @@
     "verify:shopify-live-test-guard": "node scripts/verify-shopify-live-test-guard.mjs",
     "verify:shopify-full-sync": "node scripts/verify-shopify-full-sync.mjs",
     "verify:shopify-sync-ux": "node scripts/verify-shopify-sync-ux.mjs",
+    "verify:shopify-batch-readiness": "node scripts/verify-shopify-batch-readiness.mjs",
     "verify:publish-schedule": "node scripts/verify-publish-schedule-safety.mjs",
     "test:publish-schedule-api-e2e": "node scripts/test-publish-schedule-api-e2e.mjs",
     "verify:secure-image-fetch": "node scripts/verify-secure-server-image-fetch.mjs",

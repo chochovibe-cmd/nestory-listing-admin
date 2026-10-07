@@ -1,4 +1,4 @@
-import { generateSku } from "@/lib/contentGenerator/sku";
+import { resolveShopifySkuBase } from "@/lib/shopify/variantSku";
 import {
   formatChaochaoSalesDescriptionHtml,
   formatPlainTextAsHtml,
@@ -133,11 +133,7 @@ export function buildShopifyProductPayload(
   );
   const mediaWithVideos = [...images, ...videoBuild.media];
 
-  const { sku } = generateSku({
-    productType: draft.product_type ?? "",
-    ipName: draft.ip_name ?? draft.category ?? "",
-    characterName: draft.character_name
-  });
+  const sku = resolveShopifySkuBase(draft);
   const generatedPayload = isRecord(draft.generated_payload_json) ? draft.generated_payload_json : {};
   const generatedProduct = isRecord(generatedPayload.product) ? generatedPayload.product : {};
   const generatedVariantSeed = isRecord(generatedPayload.variantSeed) ? generatedPayload.variantSeed : {};

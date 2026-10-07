@@ -41,13 +41,14 @@ Source 已把兩個已套用 migration 檔名對齊 hosted ledger；另外兩筆
 
 驗證：
 
-- Supabase Local Reconcile #124：**PASS**（ledger rename 後 migration / RLS / unique guard / atomic claim / rollback / production-package 全通過）。
+- Supabase Local Reconcile #144：**PASS**。
+- 真 HTTP schedule API E2E：**PASS**。使用完整本機 Supabase stack + 本機 Next.js，實際驗證登入 session、401/403、reviewer 建立排程、重複防護、pause/resume、paused retry 不偷恢復、dry-run 不 claim、cancel、終止狀態不可 resume/retry、cleanup。
+- E2E 前後 `publish_batches` / `shopify_sync_jobs` 數量不變，證明沒有走 Shopify mutation。
 - 最新排程專屬 CI step：**PASS**。
-- 最新 Vercel Preview build：**READY**。
 - 全專案 CI 仍 FAIL 在另一條文案線 `verify-copy-c1-chaonest-sales-tone.mjs` 的 `Boss hierarchy wrapper disappeared`；本 Schedule package 不越界修改文案。
-- GitHub CI 因上述文案 verifier fail 會跳過後續 typecheck/build；Vercel latest HEAD build 已成功。
+- Production 只讀複核：`publish_schedule_groups = 0`、`publish_schedule_items = 0`；三個 Vercel schedule safety flags 都未設定。
 
-下一步建議：在**不連 Production DB write** 的隔離環境做 schedule API E2E（create → pause → resume → cancel → retry → dry-run）。要做真 Shopify 前，仍需 Owner 另開 Go-Live package。
+Schedule Core 現在是 **PASS / HOLD**：功能與隔離 E2E 已通過，但 PR #15 維持 Draft，不 merge。下一步若要做真 Shopify，需 Owner 另行明確批准「1 件真 Shopify DRAFT」受控 Go-Live package；未批准前不做 Production DB write、不開 staging/execution、不註冊 Cron。
 
 詳細：`docs/audits/SCHEDULE-CORE-2026-10-06.md`。
 

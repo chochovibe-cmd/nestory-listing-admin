@@ -1,9 +1,9 @@
 /**
- * D10-open: YouTube video_urls helpers (string[], max 3).
- * - Form / DB: store trimmed URL strings (no file upload).
- * - Shopify: EXTERNAL_VIDEO CreateMediaInput at productCreate boundary.
- * - Showmore: append plain links at export boundary only (never write DB description).
- * - Phase 2 (YouTube Data API / native upload): out of scope.
+ * D10: video_urls helpers (string[], max 3).
+ * - Form / DB: can hold Taobao source URLs or canonical YouTube URLs.
+ * - D10 Phase 2 converts supported Taobao sources to YouTube before real Shopify publish/sync.
+ * - Shopify: EXTERNAL_VIDEO CreateMediaInput at productCreate/update boundary.
+ * - Showmore: append YouTube links at export boundary only (never write DB description).
  */
 
 export const MAX_VIDEO_URLS = 3;

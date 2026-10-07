@@ -26,6 +26,7 @@ import {
 import type { ShopifyVariantSeed } from "@/lib/variants/types";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductImage, ProductVariantRow } from "@/types/domain";
+import { ensureDraftVideosOnYouTube } from "@/lib/youtube/ensureDraftVideos";
 
 type ServiceSupabase = ReturnType<typeof createServiceSupabaseClient>;
 
@@ -554,6 +555,15 @@ export async function syncShopifyProduct(
     };
   }
 
+  const youtubePrepared = await ensureDraftVideosOnYouTube({
+    serviceSupabase,
+    draft
+  });
+  const draftForPayload = {
+    ...draft,
+    video_urls: youtubePrepared.videoUrls
+  };
+
   const { data: linkSettingsRow } = await serviceSupabase
     .from("team_settings")
     .select("value")
@@ -566,7 +576,7 @@ export async function syncShopifyProduct(
     .filter((image) => image.image_type !== "spec")
     .sort((a, b) => a.sort_order - b.sort_order);
   const built = buildShopifyProductPayload(
-    { ...draft, product_images: draft.product_images ?? [], product_variants: variantRows },
+    { ...draftForPayload, product_images: draft.product_images ?? [], product_variants: variantRows },
     "draft",
     internalLinkMap
   ) as any;
@@ -647,6 +657,11 @@ export async function syncShopifyProduct(
   for (const remote of before.media.nodes) {
     if (remote.mediaContentType === "EXTERNAL_VIDEO" && remote.originUrl && desiredVideoUrls.includes(remote.originUrl)) {
       matchedMediaIds.add(remote.id);
+    }
+  }
+  if (youtubePrepared.hadFailures) {
+    for (const remote of before.media.nodes) {
+      if (remote.mediaContentType === "EXTERNAL_VIDEO") matchedMediaIds.add(remote.id);
     }
   }
   const mediaRemovals = before.media.nodes.filter(
@@ -972,7 +987,12 @@ export async function syncShopifyProduct(
       mediaCount: after.media.nodes.length,
       verified: true
     });
-    return { ok: true, productId, remoteUpdatedAt: after.updatedAt, warnings: [] };
+    return {
+      ok: true,
+      productId,
+      remoteUpdatedAt: after.updatedAt,
+      warnings: youtubePrepared.warnings
+    };
   } catch (error) {
     return fail("sync_exception", error);
   }

@@ -10,7 +10,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/s
 import type { PublishMode, UserRole } from "@/types/domain";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Batch items may each require Taobao -> YouTube conversion before Shopify.\nexport const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));

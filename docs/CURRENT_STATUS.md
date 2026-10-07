@@ -15,11 +15,31 @@
 > 新 AI session 先讀本檔；詳細證據看 `docs/audits/`，release gate 看 `docs/RELEASE_READINESS.md`。
 > Owner hard rule：**不要改 A 時順手改到無關 C；先確認 scope，再改；所有變更要留下可銜接紀錄。**
 
-更新基準：2026-09-23（主線已含潮巢語氣與加深搜尋 `2fb59c0`。文案仍不夠，Owner 要交 GPT 精修，不是再加新功能。）
+更新基準：2026-09-30（D10 Phase 2 商品影片自動化正在獨立分支施工；主線仍以 2026-09-23 狀態為準。）
 預設分支：`codex/nestory-v0.1-safety-skeleton`
 Git source 目前 HEAD：含 `2fb59c08ac2e295373c5897accd2598c25526fc7` 的本紀錄提交
 已知 Vercel production：同上，公開網址 `https://nestory-listing-admin.vercel.app`
 PR #8：已於 2026-08-25 以 `21e9d1c90697797aaa6d982e9454ccd4a6955fd8` 合入預設分支。
+
+## 2026-09-30 D10 Phase 2｜淘寶影片 → YouTube → Shopify（獨立分支，未部署）
+
+Owner 要直接補齊 2026-07-17 計畫中的商品影片自動化，不等待 Codex 額度恢復。
+
+施工分支：`gpt/youtube-video-phase2-20260930`。目前 source 已包含：
+
+- 既有 Chrome 淘寶 adapter 的 `video_urls` 擷取沿用，不重寫擷取器；
+- server-side 淘寶／天貓影片安全下載：URL gate、DNS/private IP 防 SSRF、redirect 逐跳驗證、timeout、64 MiB 上限；
+- Google OAuth 2.0 Admin 一次授權，scope 只取 `youtube.upload`；refresh token 以 AES-256-GCM 加密後存入 `team_settings`，解密 key 僅 server env；
+- YouTube Data API `videos.insert` 上傳，預設 privacy 維持 Owner 2026-07-17 定案的 `public`，可用 env 改 `unlisted/private`；
+- 淘寶來源 URL → YouTube URL 去重映射，成功後回填 `product_drafts.video_urls`；
+- 真實 Shopify 首次發布與 full-sync 會先做影片轉存，再沿用現有 `EXTERNAL_VIDEO` 媒體管線；
+- mock publish 不會寫 YouTube；手動測試 route 也要求 `confirm=true`；
+- YouTube 轉存失敗不阻擋其他商品資料；full-sync 若轉存失敗會保留遠端既有 external video，避免誤刪；
+- Settings 連線區新增 YouTube 連接／重新授權／解除授權狀態。
+
+2026-09-30 依 Google 官方文件校正舊計畫：`videos.insert` 現行 Video Uploads quota 為每日 100 次、每次 1 單位；2020-07-28 後建立且未通過 API audit 的專案，API 上傳會被強制 private。Nestory 對 private 結果會警告且不送 Shopify EXTERNAL_VIDEO，避免前台死影片。
+
+**尚未完成／不得誤報已上線：**尚未 merge 預設分支、尚未 Vercel deploy、尚未設定 Google Cloud OAuth env、尚未由 Owner 完成首次 YouTube consent、尚未做真實影片 E2E。CI/typecheck/build 證據完成後才可標 source ready。
 
 ## 2026-09-23 潮巢語氣與加深搜尋已上主線
 

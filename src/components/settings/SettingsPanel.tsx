@@ -43,6 +43,14 @@ type StatusPayload = {
   shopifyMock: boolean;
 };
 
+type YouTubeStatusPayload = {
+  envConfigured: boolean;
+  connected: boolean;
+  connectedAt: string | null;
+  missingEnv: string[];
+  scope: string;
+};
+
 const THEMES: { value: ThemeId; icon: string; title: string }[] = [
   { value: "dark", icon: "🌑", title: "夜色" },
   { value: "nordic", icon: "🐱", title: "奶茶" },
@@ -99,6 +107,11 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
   const [captureBusy, setCaptureBusy] = useState(false);
   const [captureResetArm, setCaptureResetArm] = useState(false);
   const [captureLoaded, setCaptureLoaded] = useState(false);
+
+  const [youtubeStatus, setYoutubeStatus] = useState<YouTubeStatusPayload | null>(null);
+  const [youtubeBusy, setYoutubeBusy] = useState(false);
+  const [youtubeDisconnectArm, setYoutubeDisconnectArm] = useState(false);
+  const youtubeFeedbackShownRef = useRef(false);
 
   const admin = isAdmin(role);
   const allowed = canAccessSettings(role);
@@ -179,6 +192,62 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
       return;
     }
     void issueCaptureToken("reset");
+  }
+
+  const loadYouTubeStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings/youtube", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "status" }),
+        cache: "no-store"
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.ok) {
+        setYoutubeStatus(null);
+        return;
+      }
+      setYoutubeStatus({
+        envConfigured: Boolean(payload.envConfigured),
+        connected: Boolean(payload.connected),
+        connectedAt: typeof payload.connectedAt === "string" ? payload.connectedAt : null,
+        missingEnv: Array.isArray(payload.missingEnv) ? payload.missingEnv : [],
+        scope: typeof payload.scope === "string" ? payload.scope : ""
+      });
+    } catch {
+      setYoutubeStatus(null);
+    }
+  }, []);
+
+  async function disconnectYouTube() {
+    if (!admin || youtubeBusy) return;
+    if (!youtubeDisconnectArm) {
+      setYoutubeDisconnectArm(true);
+      return;
+    }
+    setYoutubeBusy(true);
+    try {
+      const res = await fetch("/api/settings/youtube", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "disconnect" })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.ok) {
+        showToast(
+          typeof payload.message === "string" ? payload.message : "YouTube 解除連線失敗",
+          "error"
+        );
+        return;
+      }
+      setYoutubeDisconnectArm(false);
+      showToast("YouTube 授權已解除", "success");
+      await loadYouTubeStatus();
+    } catch {
+      showToast("YouTube 解除連線失敗", "error");
+    } finally {
+      setYoutubeBusy(false);
+    }
   }
 
   async function copyCaptureToken() {
@@ -287,6 +356,33 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
   useEffect(() => {
     if (!open.automation) setCaptureResetArm(false);
   }, [open.automation]);
+
+  useEffect(() => {
+    if (!open.connection) {
+      setYoutubeDisconnectArm(false);
+      return;
+    }
+    void loadYouTubeStatus();
+  }, [open.connection, loadYouTubeStatus]);
+
+  useEffect(() => {
+    if (youtubeFeedbackShownRef.current) return;
+    const feedback = searchParams.get("youtube");
+    if (!feedback) return;
+    youtubeFeedbackShownRef.current = true;
+    if (feedback === "connected") {
+      showToast("YouTube 已連接，淘寶影片可在發布前自動轉存", "success");
+      void loadYouTubeStatus();
+    } else if (feedback === "env_missing") {
+      showToast("YouTube OAuth 伺服器設定尚未完成", "warn");
+    } else if (feedback === "denied") {
+      showToast("你取消了 YouTube 授權", "warn");
+    } else if (feedback === "admin_required") {
+      showToast("只有 Admin 可以設定 YouTube 授權", "error");
+    } else {
+      showToast("YouTube 授權沒有完成，請再試一次", "error");
+    }
+  }, [searchParams, loadYouTubeStatus]);
 
   /** C6: fetch via server /api/fx/cny-twd only — never browser→open.er-api direct. */
   const fetchLiveRate = useCallback(async () => {
@@ -843,6 +939,70 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
                     : "未設定 OPENAI_API_KEY"
               }
             />
+            <ConnRow
+              label="YouTube 商品影片"
+              ok={
+                !youtubeStatus
+                  ? null
+                  : !youtubeStatus.envConfigured
+                    ? false
+                    : youtubeStatus.connected
+                      ? true
+                      : null
+              }
+              text={
+                !youtubeStatus
+                  ? "未檢查"
+                  : !youtubeStatus.envConfigured
+                    ? "後端 OAuth 設定未完成"
+                    : youtubeStatus.connected
+                      ? "已授權 · 發布前自動轉存淘寶影片"
+                      : "待授權"
+              }
+            />
+            {youtubeStatus?.connectedAt ? (
+              <p className="settings-muted">
+                YouTube 授權時間：{new Date(youtubeStatus.connectedAt).toLocaleString("zh-TW")}
+              </p>
+            ) : null}
+            {admin ? (
+              <div className="settings-actions">
+                <Button
+                  size="sm"
+                  disabled={!youtubeStatus?.envConfigured || youtubeBusy}
+                  onClick={() => {
+                    window.location.assign("/api/settings/youtube/connect");
+                  }}
+                  type="button"
+                >
+                  {youtubeStatus?.connected ? "重新授權 YouTube" : "連接 YouTube"}
+                </Button>
+                {youtubeStatus?.connected ? (
+                  <Button
+                    size="sm"
+                    variant={youtubeDisconnectArm ? "danger" : "ghost"}
+                    loading={youtubeBusy}
+                    onClick={() => void disconnectYouTube()}
+                    type="button"
+                  >
+                    {youtubeDisconnectArm ? "確定解除？" : "解除授權"}
+                  </Button>
+                ) : null}
+                {youtubeDisconnectArm ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={youtubeBusy}
+                    onClick={() => setYoutubeDisconnectArm(false)}
+                    type="button"
+                  >
+                    取消
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <p className="settings-muted">YouTube 授權僅 Admin 可變更。</p>
+            )}
             <p className="settings-muted">
               獨立 Image Provider 連線檢查尚未接（需後端補 status 欄）
             </p>
@@ -851,7 +1011,10 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             <Button
               size="sm"
               loading={statusChecking}
-              onClick={() => void checkStatus()}
+              onClick={() => {
+                void checkStatus();
+                void loadYouTubeStatus();
+              }}
               type="button"
             >
               重新檢查連線

@@ -24,6 +24,36 @@
 
 Nestory 是潮巢玩居內部 Shopify 商品上架 PWA：商品輸入、圖片/規格、AI 文案、審核、圖片處理、Shopify 發布；Supabase 資料層、Vercel 部署。
 
+## 2.1 2026-10-07 最新接手點
+
+目前 UI/排程主施工線：
+
+- feature branch：`agent/schedule-core-20261006`
+- Draft PR：#15（base = `agent/uiux2-preview-20260930`）
+- Owner 實機驗收：Desktop ResultCard **PASS**；Schedule UI **PASS**
+- code/safety checkpoint：`440a2d220a0891cbb386be785b4ba63d41416a84`；此後還有 handoff/docs commits，**最新 HEAD 必須重新查 GitHub，不要只信本檔 SHA**。
+- 未 merge、未 Production deploy、未註冊 scheduled-publish Cron。
+
+Production read-only truth：
+
+- production ledger 已有 `20261006121816 publish_schedule_core`
+- production ledger 已有 `20261006122416 shopify_full_sync_state`
+- schedule groups/items 目前都是 **0 rows**
+- Vercel 沒有設定：
+  - `PUBLISH_SCHEDULE_DB_WRITE_ENABLED`
+  - `PUBLISH_SCHEDULE_STAGING_ENABLED`
+  - `PUBLISH_SCHEDULE_EXECUTION_ENABLED`
+- 因此目前 Preview 只能 read / dry-run，不能建立/修改 Production schedule rows，也不能 Shopify DRAFT / ACTIVE。
+
+驗證：
+
+- Supabase Local Reconcile #124：PASS
+- latest schedule-specific CI step：PASS
+- latest branch Vercel build（DB-write gate code）：READY
+- full CI 仍被另一條 copy verifier `Boss hierarchy wrapper disappeared` 擋紅；本 Schedule package 不處理文案。
+
+目前下一步：在**不連 Production DB write** 的隔離環境做 schedule API E2E（create → pause → resume → cancel → retry → dry-run）。真 Shopify Go-Live 必須另開 Owner 明確授權 package。
+
 ## 3. 重要：現在已經有一部分真正上 production
 
 ### Production Supabase reconcile — 已完成

@@ -21,8 +21,9 @@ import type {
 
 export const RECORDS_FETCH_LIMIT = 40;
 
-/** R4 §9 four tabs */
+/** R4 §9 tabs + UIUX2 schedule preview */
 export type PublishRecordsTab =
+  | "schedule"
   | "batches"
   | "failed"
   | "shopify_drafts"
@@ -32,6 +33,7 @@ export const PUBLISH_RECORDS_TABS: {
   key: PublishRecordsTab;
   label: string;
 }[] = [
+  { key: "schedule", label: "📅 排程" },
   { key: "batches", label: "批次紀錄" },
   { key: "failed", label: "失敗重試" },
   { key: "shopify_drafts", label: "Shopify 草稿" },
@@ -141,6 +143,7 @@ export function parseRecordsTab(
   raw: string | null | undefined
 ): PublishRecordsTab {
   if (
+    raw === "schedule" ||
     raw === "batches" ||
     raw === "failed" ||
     raw === "shopify_drafts" ||

@@ -3450,6 +3450,30 @@ textarea {
   font-size: 13.5px;
   cursor: pointer;
 }
+
+/* UIUX2 schedule Preview: visually a fourth Shopify path, but does not write yet. */
+.station3-schedule-preview-btn {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--accent3) 7%, var(--surface));
+  color: var(--text);
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+.station3-schedule-preview-btn:hover,
+.station3-schedule-preview-btn:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
 .station3-single-warn {
   margin: 0 0 12px;
   font-size: 13px;
@@ -7034,6 +7058,61 @@ textarea {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+}
+
+/* UIUX2 P1/R1: next-action gets separate desktop/mobile composition.
+   Desktop stays one-line inside title column; mobile gets its own full-width row. */
+.rc-next-action {
+  align-items: center;
+  gap: var(--sp-1);
+  max-width: 100%;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.rc-next-action::before {
+  content: "→";
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.rc-next-action.is-block {
+  color: var(--danger);
+}
+.rc-next-action.is-block::before {
+  content: "!";
+  color: var(--danger);
+}
+.rc-next-action--desktop {
+  display: inline-flex;
+  min-width: 0;
+  width: fit-content;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
+.rc-next-action--mobile {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .rc-next-action--desktop {
+    display: none;
+  }
+  .rc-next-action--mobile {
+    display: flex;
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--surface2);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* UX-B4-P04: mobile regen + price share display:contents; desktop hide regen slot */

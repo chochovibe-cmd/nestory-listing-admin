@@ -37,7 +37,7 @@ export type NavItem = {
 export const SIDEBAR_NAV: readonly NavItem[] = [
   { href: "/drafts/new", icon: "✦", label: "新增商品", shortLabel: "新增" },
   { href: "/review", icon: "🏭", label: "生圖工廠", shortLabel: "生圖" },
-  { href: "/records", icon: "🧾", label: "發布紀錄", shortLabel: "紀錄" },
+  { href: "/records", icon: "🧾", label: "發布中心", shortLabel: "發布" },
   { href: "/dashboard", icon: "📈", label: "儀表板", shortLabel: "儀表板" },
   { href: "/scouting", icon: "🔭", label: "選品情報", shortLabel: "選品" }
 ] as const;
@@ -104,8 +104,8 @@ export const MOBILE_SIDE_TABS: readonly MobileSideTab[] = [
   {
     href: "/records",
     icon: "🧾",
-    label: "發布紀錄",
-    shortLabel: "紀錄",
+    label: "發布中心",
+    shortLabel: "發布",
     side: "right"
   }
 ] as const;

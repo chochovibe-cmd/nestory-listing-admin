@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
+import { ScheduleCenterPreview } from "@/components/records/ScheduleCenterPreview";
 import { isAdmin } from "@/lib/auth/roles";
 import {
   MIGRATION_027_HINT,
@@ -458,9 +459,9 @@ export function PublishRecordsPanel() {
     <div className="rec-page">
       <div className="ir-page-header">
         <div className="ir-title-row">
-          <h1>🧾 發布紀錄</h1>
+          <h1>🧾 發布中心</h1>
           <span className="ir-sub">
-            終點站＋補救站 · 批次／失敗重試／Shopify 草稿／已發布
+            排程上架＋發布紀錄＋失敗補救
           </span>
         </div>
         {roleReady && admin ? (
@@ -499,6 +500,8 @@ export function PublishRecordsPanel() {
           </button>
         ))}
       </div>
+
+      {tab === "schedule" ? <ScheduleCenterPreview /> : null}
 
       {tab === "batches" || tab === "failed" ? (
         <div className="rec-kind-filters" aria-label="通路篩選">

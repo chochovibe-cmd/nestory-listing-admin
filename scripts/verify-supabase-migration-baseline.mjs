@@ -5,14 +5,28 @@ const root = process.cwd();
 const activeDir = path.join(root, "supabase", "migrations");
 const archiveDir = path.join(root, "supabase", "history", "pre_tracking_migrations");
 
-const expectedActive = [
-  "20260818142712_baseline_existing_schema_20260818.sql",
-  "20260818142919_production_reconcile_20260818.sql",
-  "20260822223100_variant_split_override_semantics.sql",
-  "20260902090000_guard_current_image_batch_pointer.sql",
-  "20260903100000_shopify_full_sync_state.sql",
-  "20261006181500_publish_schedule_core.sql"
+const BASELINE_MIGRATION = "20260818142712_baseline_existing_schema_20260818.sql";
+const RECONCILE_MIGRATION = "20260818142919_production_reconcile_20260818.sql";
+const VARIANT_SPLIT_MIGRATION = "20260822223100_variant_split_override_semantics.sql";
+const BATCH_POINTER_MIGRATION = "20260902090000_guard_current_image_batch_pointer.sql";
+const SCHEDULE_MIGRATION = "20261006121816_publish_schedule_core.sql";
+const SHOPIFY_SYNC_MIGRATION = "20261006122416_shopify_full_sync_state.sql";
+
+// Read-only production verification on 2026-10-07:
+// applied ledger = baseline, reconcile, schedule, Shopify full-sync.
+// The two older forward migrations below remain source-known pending and require
+// a separate authorized apply plan; do not infer "older timestamp = applied".
+const productionLedgerApplied = [
+  BASELINE_MIGRATION,
+  RECONCILE_MIGRATION,
+  SCHEDULE_MIGRATION,
+  SHOPIFY_SYNC_MIGRATION
 ];
+const knownPending = [
+  VARIANT_SPLIT_MIGRATION,
+  BATCH_POINTER_MIGRATION
+];
+const expectedActive = [...productionLedgerApplied, ...knownPending].sort();
 
 function fail(message) {
   console.error(`FAIL: ${message}`);
@@ -35,7 +49,7 @@ function withoutDollarQuotedFunctions(sql) {
 
 const active = files(activeDir);
 if (JSON.stringify(active) !== JSON.stringify(expectedActive)) {
-  fail(`active Supabase migration queue must match the tracked production ledger; found ${active.join(", ")}`);
+  fail(`active Supabase migration queue must match the canonical applied+known-pending source set; found ${active.join(", ")}`);
 }
 
 const archived = files(archiveDir);
@@ -54,7 +68,7 @@ if (active.some((name) => /^\d{3}_/.test(name))) {
   fail("historical 001–039 SQL must never re-enter the active migration queue");
 }
 
-const baseline = fs.readFileSync(path.join(activeDir, expectedActive[0]), "utf8");
+const baseline = fs.readFileSync(path.join(activeDir, BASELINE_MIGRATION), "utf8");
 for (const required of [
   "first tracked production migration",
   "admin','operator','reviewer",
@@ -66,7 +80,7 @@ for (const required of [
   }
 }
 
-const reconcile = fs.readFileSync(path.join(activeDir, expectedActive[1]), "utf8");
+const reconcile = fs.readFileSync(path.join(activeDir, RECONCILE_MIGRATION), "utf8");
 const requiredReconcileFragments = [
   "ip_catalog_select_authenticated",
   "ip_catalog_write_admin",
@@ -91,7 +105,7 @@ if (/alter function public\.rls_auto_enable|revoke execute on function public\.r
   fail("hosted-only rls_auto_enable must stay outside the minimal tracked reconcile");
 }
 
-const splitOverrides = fs.readFileSync(path.join(activeDir, expectedActive[2]), "utf8");
+const splitOverrides = fs.readFileSync(path.join(activeDir, VARIANT_SPLIT_MIGRATION), "utf8");
 for (const fragment of [
   "alter table public.product_variants",
   "add column if not exists cost_is_inherited boolean",
@@ -107,7 +121,7 @@ if (/drop\s+column|alter\s+column[^;]+set\s+not\s+null|update\s+public\.product_
   fail("D3.10A variant migration must stay additive/null-preserving for legacy fallback");
 }
 
-const batchPointerGuard = fs.readFileSync(path.join(activeDir, expectedActive[3]), "utf8");
+const batchPointerGuard = fs.readFileSync(path.join(activeDir, BATCH_POINTER_MIGRATION), "utf8");
 for (const fragment of [
   "create or replace function public.guard_sensitive_product_draft_fields()",
   "new.current_image_batch_id is distinct from old.current_image_batch_id",
@@ -122,7 +136,22 @@ if (/drop\s+column|delete\s+from|update\s+public\.product_drafts/i.test(batchPoi
   fail("P1-AUTH batch-pointer migration must only replace the guard function, never mutate draft rows");
 }
 
-const shopifyFullSync = fs.readFileSync(path.join(activeDir, expectedActive[4]), "utf8");
+const scheduleCore = fs.readFileSync(path.join(activeDir, SCHEDULE_MIGRATION), "utf8");
+for (const fragment of [
+  "create table if not exists public.publish_schedule_groups",
+  "create table if not exists public.publish_schedule_items",
+  "create unique index if not exists uq_publish_schedule_active_draft",
+  "create or replace function public.claim_due_publish_schedule_items",
+  "queue_position integer",
+  "from public, anon, authenticated",
+  "grant execute on function public.claim_due_publish_schedule_items(date, integer) to service_role"
+]) {
+  if (!scheduleCore.includes(fragment)) {
+    fail(`scheduled publish migration is missing: ${fragment}`);
+  }
+}
+
+const shopifyFullSync = fs.readFileSync(path.join(activeDir, SHOPIFY_SYNC_MIGRATION), "utf8");
 for (const fragment of [
   "shopify_sync_status",
   "product_drafts_shopify_sync_status_check",
@@ -159,10 +188,10 @@ if (workflow.includes("cp supabase/migrations/*.sql /tmp/nestory-migrations/")) 
 if (!workflow.includes("cp supabase/migrations/20260822223100_variant_split_override_semantics.sql /tmp/nestory-forward-migrations/")) {
   fail("D3.10A forward migration must be staged explicitly for the local reversible gate");
 }
-if (!workflow.includes("cp supabase/migrations/20260903100000_shopify_full_sync_state.sql /tmp/nestory-forward-migrations/")) {
+if (!workflow.includes("cp supabase/migrations/20261006122416_shopify_full_sync_state.sql /tmp/nestory-forward-migrations/")) {
   fail("G4 full-sync migration must be staged explicitly for the local reversible gate");
 }
-if (!workflow.includes("cp supabase/migrations/20261006181500_publish_schedule_core.sql /tmp/nestory-forward-migrations/")) {
+if (!workflow.includes("cp supabase/migrations/20261006121816_publish_schedule_core.sql /tmp/nestory-forward-migrations/")) {
   fail("scheduled publish migration must be staged explicitly for the isolated local DB gate");
 }
 

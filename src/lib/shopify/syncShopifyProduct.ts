@@ -26,6 +26,11 @@ import {
 import type { ShopifyVariantSeed } from "@/lib/variants/types";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductImage, ProductVariantRow } from "@/types/domain";
+import {
+  ensurePersistedVariantSkus,
+  fillMissingVariantSkus,
+  resolveShopifySkuBase
+} from "@/lib/shopify/variantSku";
 
 type ServiceSupabase = ReturnType<typeof createServiceSupabaseClient>;
 
@@ -554,6 +559,21 @@ export async function syncShopifyProduct(
     };
   }
 
+  const skuBase = resolveShopifySkuBase(draft);
+  const skuPrepared =
+    process.env.SHOPIFY_PUBLISH_MOCK === "false" && !deps.callGraphQL
+      ? await ensurePersistedVariantSkus(serviceSupabase, draftId, variantRows, skuBase)
+      : { ok: true as const, ...fillMissingVariantSkus(variantRows, skuBase) };
+  if (!skuPrepared.ok) {
+    return {
+      ok: false,
+      status: skuPrepared.status,
+      error: skuPrepared.error,
+      code: "variant_sku_prepare_failed"
+    };
+  }
+  const syncVariantRows = skuPrepared.rows;
+
   const { data: linkSettingsRow } = await serviceSupabase
     .from("team_settings")
     .select("value")
@@ -566,13 +586,13 @@ export async function syncShopifyProduct(
     .filter((image) => image.image_type !== "spec")
     .sort((a, b) => a.sort_order - b.sort_order);
   const built = buildShopifyProductPayload(
-    { ...draft, product_images: draft.product_images ?? [], product_variants: variantRows },
+    { ...draft, product_images: draft.product_images ?? [], product_variants: syncVariantRows },
     "draft",
     internalLinkMap
   ) as any;
   const core = desiredCore(productId, built.product as Record<string, any>, before.status);
 
-  const rows = localVariantRows(variantRows);
+  const rows = localVariantRows(syncVariantRows);
   const plan = buildVariantPublishPlan(rows, {
     cny_price: draft.cny_price,
     twd_cost: draft.twd_cost,

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 DB_CONTAINER="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -n 1 || true)"
@@ -24,12 +24,12 @@ assert_scalar() {
   local label="$3"
   actual="$(echo "$actual" | tail -n 1 | tr -d '[:space:]')"
   if [[ "$actual" != "$expected" ]]; then
-    echo "ERROR: $label expected $expected, got \${actual:-<empty>}." >&2
+    echo "ERROR: $label expected $expected, got ${actual:-<empty>}." >&2
     exit 1
   fi
 }
 
-MIGRATION="/tmp/nestory-forward-migrations/20261006181500_publish_schedule_core.sql"
+MIGRATION="/tmp/nestory-forward-migrations/20261006121816_publish_schedule_core.sql"
 if [[ ! -f "$MIGRATION" ]]; then
   echo "ERROR: staged schedule migration missing: $MIGRATION" >&2
   exit 1

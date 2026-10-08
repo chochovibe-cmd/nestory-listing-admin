@@ -474,7 +474,7 @@ async function handleFieldRegen(params: {
     .eq("id", draftId);
 
   if (updateError) {
-    return markFullGenerationFailed(updateError.message);
+    return Response.json({ error: updateError.message }, { status: 500 });
   }
 
   if (historyContent.trim()) {

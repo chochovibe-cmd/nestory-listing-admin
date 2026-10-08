@@ -207,6 +207,38 @@ export async function POST(request: NextRequest) {
   if (action === "claim") {
     const requested = Math.min(Math.max(Number(body.limit ?? MAX_CONCURRENCY), 1), MAX_CONCURRENCY);
 
+    // Browser close / navigation can interrupt a client runner after it claimed
+    // a job. Once the DB lock expires, convert that orphan into a visible failed
+    // card instead of letting it consume a queue slot forever.
+    const nowIso = new Date().toISOString();
+    const { data: staleDrafts } = await serviceSupabase
+      .from("product_drafts")
+      .select("id")
+      .eq("status", "processing")
+      .eq("generation_status", "processing")
+      .like("worker_id", "pwa-queue:%")
+      .lt("worker_lock_expires_at", nowIso)
+      .limit(20);
+
+    for (const stale of staleDrafts ?? []) {
+      const { data: staleRuns } = await serviceSupabase
+        .from("generation_runs")
+        .select("id,input_payload")
+        .eq("draft_id", stale.id)
+        .eq("status", "processing")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      const staleRun = (staleRuns ?? []).find((run) => isQueueInput(run.input_payload));
+      if (staleRun) {
+        await markNetworkFailure(
+          serviceSupabase,
+          stale.id,
+          staleRun.id,
+          "生成工作逾時中斷，已保留為失敗，可單件重試。",
+        );
+      }
+    }
+
     const { count: processingCount, error: countError } = await serviceSupabase
       .from("generation_runs")
       .select("id", { count: "exact", head: true })

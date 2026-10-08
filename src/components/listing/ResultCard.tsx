@@ -14,6 +14,7 @@ import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
 import { showToast } from "@/components/Toast";
 import { StatusBadge } from "@/components/listing/StatusBadge";
+import { GENERATION_QUEUE_KICK_EVENT } from "@/components/listing/GenerationQueueRunner";
 import { Button } from "@/components/ui/Button";
 import {
   secondaryStatusForResultCard,
@@ -1066,6 +1067,30 @@ export function ResultCard({
     setDiscardArm(null);
     // UX-L T62: in-progress via modal busy; result → toast
     try {
+      if (draft.status === "failed" && draft.generation_status === "failed") {
+        const retryResponse = await fetch("/api/generation-queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "retry", draftId: draft.id })
+        });
+        const retryPayload = await retryResponse.json().catch(() => ({}));
+        if (retryResponse.ok) {
+          setMessage("");
+          setRegenOpen(false);
+          setRegenNotes("");
+          showToast("已重新排入生成佇列", "success");
+          window.dispatchEvent(new Event(GENERATION_QUEUE_KICK_EVENT));
+          router.refresh();
+          return;
+        }
+        // Legacy/non-queue failures have no V1.1 job to retry. Preserve the
+        // existing direct regenerate path for those drafts.
+        if (retryResponse.status !== 409) {
+          showToast(retryPayload.error ?? "重新排隊失敗", "error");
+          return;
+        }
+      }
+
       // BX10: remember tone for this IP
       rememberToneForIp(
         typeof window !== "undefined" ? window.localStorage : null,

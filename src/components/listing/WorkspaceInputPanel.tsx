@@ -33,8 +33,7 @@ import {
 import {
   GENERATION_PROGRESS_EVENT,
   GENERATION_STEP_LABELS,
-  type GenerationProgress,
-  type StepStatus
+  type GenerationProgress
 } from "@/components/listing/generationProgress";
 import { createClient } from "@/lib/supabase/client";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
@@ -56,6 +55,7 @@ import { VariantEditor, repriceVariants } from "@/components/listing/VariantEdit
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
 import { parseVideoUrlsFromTextarea } from "@/lib/media/videoUrls";
 import { FieldHelp } from "@/components/listing/FieldHelp";
+import { GENERATION_QUEUE_KICK_EVENT } from "@/components/listing/GenerationQueueRunner";
 
 import { showToast } from "@/components/Toast";
 import {
@@ -197,9 +197,6 @@ type VariantImageOption = { id: string; url: string; label: string };
 // (nestory:pricing-settings-changed). Steps map honestly onto our two real
 // network phases (analyze-images then generate); we do NOT fake a streaming
 // animation (that waits for A20).
-function formatSeconds(ms: number): string {
-  return `${(Math.max(0, ms) / 1000).toFixed(1)} 秒`;
-}
 function emitProgress(model: GenerationProgress) {
   window.dispatchEvent(new CustomEvent<GenerationProgress>(GENERATION_PROGRESS_EVENT, { detail: model }));
 }
@@ -1369,53 +1366,6 @@ export function WorkspaceInputPanel({
     return id;
   }
 
-  // Requirement 4: analyze-images must NEVER block generation. On any failure we
-  // return a warning string (surfaced as 黃字 via the draft's warnings) and let
-  // generate run without image info, rather than throwing.
-  async function analyzeImages(id: string): Promise<{ warnings: string[]; cached: boolean }> {
-    try {
-      const response = await fetch("/api/analyze-images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftId: id })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        return {
-          cached: false,
-          warnings: [
-            payload.error
-              ? `圖片辨識未完成（已略過圖片資訊繼續生成）：${payload.error}`
-              : "圖片辨識未完成，已略過圖片資訊繼續生成。"
-          ]
-        };
-      }
-      return {
-        cached: payload.cached === true,
-        warnings: Array.isArray(payload.warnings) ? payload.warnings : []
-      };
-    } catch {
-      return { cached: false, warnings: ["圖片辨識連線失敗，已略過圖片資訊繼續生成。"] };
-    }
-  }
-
-  function stepModel(
-    draftId: string,
-    title: string,
-    statuses: StepStatus[],
-    error?: string,
-    timingNote?: string
-  ): GenerationProgress {
-    return {
-      draftId,
-      visible: true,
-      title,
-      steps: GENERATION_STEP_LABELS.map((label, i) => ({ label, status: statuses[i] })),
-      error,
-      timingNote
-    };
-  }
-
   function resetForNextItem() {
     // 連續上架 (light): keep 來源/銷售狀態/二手模式/語氣/長度/Web Search/priceMode, clear the rest.
     // B13: clear localStorage with the same light-reset rules so refresh won't re-prompt.
@@ -1804,12 +1754,10 @@ export function WorkspaceInputPanel({
       return;
     }
 
-    // UX-J T52: empty grade soft warn only (backend validation still enforces when is_secondhand).
     if (isSecondhand && !secondhandGrade) {
       showToast("請選二手等級", "warn");
     }
 
-    // UX-R T71: test mode still runs the flow — only surface that AI is not called.
     if (readStoredRunMode() === "test") {
       showToast("目前是測試模式：不呼叫 AI", "warn");
     }
@@ -1817,7 +1765,6 @@ export function WorkspaceInputPanel({
     setFieldErrors({});
     setSubmitting(true);
     setSubmitPhase("saving");
-    // T92: step 1 done → step 2 active
     setFlowPhase("generate");
     const cardTitle = title.trim().slice(0, 18);
 
@@ -1833,11 +1780,18 @@ export function WorkspaceInputPanel({
     }
 
     const hasImages = uploadPromisesRef.current.length > 0;
+    emitProgress({
+      draftId: id,
+      visible: true,
+      title: cardTitle,
+      steps: GENERATION_STEP_LABELS.map((label, index) => ({
+        label,
+        status: index === 0 ? "done" : index === 1 && !hasImages ? "done" : "pending"
+      }))
+    });
 
-    // Step 1 done, step 2 (image analysis) active.
-    emitProgress(stepModel(id, cardTitle, ["done", hasImages ? "active" : "done", "pending", "pending"]));
-
-    // Wait for any background image uploads to finish before analysis reads them.
+    // Local uploads belong to this draft. Wait only for those uploads to settle,
+    // then hand image analysis + AI generation to the persistent queue runner.
     let uploadMs = 0;
     if (hasImages) {
       setSubmitPhase("uploading");
@@ -1846,128 +1800,105 @@ export function WorkspaceInputPanel({
       uploadMs = Date.now() - uploadStarted;
     }
 
-    let step2: StepStatus = "done";
-    let visionMs = 0;
-    let visionCached = false;
-    const imageWarnings: string[] = [];
-    if (hasImages) {
-      setSubmitPhase("analyzing");
-      const visionStarted = Date.now();
-      const analyzed = await analyzeImages(id);
-      visionMs = Date.now() - visionStarted;
-      visionCached = analyzed.cached;
-      if (analyzed.warnings.length > 0) {
-        step2 = "warn";
-        imageWarnings.push(...analyzed.warnings);
-      }
-    }
-
-    // Step 3 (copy generation) active.
     setSubmitPhase("generating");
-    emitProgress(stepModel(id, cardTitle, ["done", step2, "active", "pending"]));
-
-    // B8 D3-A: one-shot provider override; after this request falls back to header default.
     const providerForThisRun = sessionProvider ?? readStoredAiProvider();
+    const variantSummary =
+      variants
+        .filter((row) => row.optionValues.some((v) => v.trim()))
+        .map((row) => {
+          const label = row.optionValues.filter((v) => v.trim()).join(" / ");
+          return `${label}${row.sellPrice ? ` 售價${row.sellPrice}` : row.cost ? ` 成本${row.cost}` : ""}`;
+        })
+        .join("、") || undefined;
 
     let response: Response;
-    const generateStarted = Date.now();
     try {
-      response = await fetch("/api/generate", {
+      response = await fetch("/api/generation-queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "enqueue",
           draftId: id,
-          provider: providerForThisRun,
-          mode: readStoredRunMode(),
-          useWebSearch,
-          source,
-          variantSummary:
-            variants
-              .filter((row) => row.optionValues.some((v) => v.trim()))
-              .map((row) => {
-                const label = row.optionValues.filter((v) => v.trim()).join(" / ");
-                return `${label}${row.sellPrice ? ` 售價${row.sellPrice}` : row.cost ? ` 成本${row.cost}` : ""}`;
-              })
-              .join("、") || undefined,
-          tone,
-          copyLength,
-          imageWarnings
+          input: {
+            queueVersion: "v1.1",
+            title: title.trim(),
+            provider: providerForThisRun,
+            mode: readStoredRunMode(),
+            useWebSearch,
+            source,
+            variantSummary,
+            tone,
+            copyLength,
+            hasImages
+          }
         })
       });
     } catch {
       setSubmitting(false);
       setSubmitPhase(null);
       setFlowPhase("fill");
-      setSessionProvider(null);
-      showToast("生成連線失敗，可以到右側卡片按「重新生成」再試一次", "error");
-      emitProgress(stepModel(id, cardTitle, ["done", step2, "error", "pending"], "生成連線失敗"));
+      showToast("排入生成佇列失敗，草稿已保留，可再按一次生成", "error");
+      emitProgress({
+        draftId: id,
+        visible: true,
+        title: cardTitle,
+        steps: GENERATION_STEP_LABELS.map((label, index) => ({
+          label,
+          status: index === 0 ? "done" : index === 1 && !hasImages ? "done" : index === 2 ? "error" : "pending"
+        })),
+        error: "排入生成佇列失敗"
+      });
       router.refresh();
       return;
     }
 
     const payload = await response.json().catch(() => ({}));
-    const generateMs = Date.now() - generateStarted;
-    const serverStage = payload.stageMs && typeof payload.stageMs === "object"
-      ? payload.stageMs as Record<string, unknown>
-      : {};
-    const timingNote = [
-      `存檔 ${formatSeconds(saveMs)}`,
-      hasImages ? `等圖片上傳 ${formatSeconds(uploadMs)}` : null,
-      hasImages ? `圖片辨識 ${formatSeconds(visionMs)}${visionCached ? "（沿用上次）" : ""}` : null,
-      `文案生成 ${formatSeconds(generateMs)}`,
-      typeof serverStage.webSearch === "number" ? `商品搜尋 ${formatSeconds(serverStage.webSearch)}` : null,
-      typeof serverStage.ipSearch === "number" ? `IP 搜尋 ${formatSeconds(serverStage.ipSearch)}` : null,
-      typeof serverStage.copy === "number" ? `文案 AI ${formatSeconds(serverStage.copy)}` : null,
-      typeof serverStage.persist === "number" ? `寫入 ${formatSeconds(serverStage.persist)}` : null,
-    ].filter((part): part is string => Boolean(part)).join(" · ");
-    setSubmitting(false);
-    setSubmitPhase(null);
-    // Always clear one-shot override after the attempt (success or fail) so the
-    // next generate uses the global default unless the operator clicks again.
-    setSessionProvider(null);
-    setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
-
     if (!response.ok) {
-      const errorText = payload.error ?? "生成失敗";
+      const errorText = typeof payload.error === "string" ? payload.error : "排入生成佇列失敗";
+      setSubmitting(false);
+      setSubmitPhase(null);
       setFlowPhase("fill");
-      showToast(errorText + "，可以到右側卡片按「重新生成」再試一次", "error");
-      emitProgress(stepModel(id, cardTitle, ["done", step2, "error", "pending"], errorText, timingNote));
+      showToast(`${errorText}，草稿已保留，可再按一次生成`, "error");
+      emitProgress({
+        draftId: id,
+        visible: true,
+        title: cardTitle,
+        steps: GENERATION_STEP_LABELS.map((label, index) => ({
+          label,
+          status: index === 0 ? "done" : index === 1 && !hasImages ? "done" : index === 2 ? "error" : "pending"
+        })),
+        error: errorText
+      });
       router.refresh();
       return;
     }
 
-    // Requirement 5: success -> all steps done. Card auto-clears once the real
-    // ResultCard lands via router.refresh (handled in DraftResultsPanel).
-    emitProgress(stepModel(id, cardTitle, ["done", step2, "done", "done"], undefined, timingNote));
-    // T92: step 2 done → step 3 active（確認發布）
-    setFlowPhase("review");
+    setSubmitting(false);
+    setSubmitPhase(null);
+    setFlowPhase("fill");
+    setSessionProvider(null);
+    setDefaultProviderLabel(MODEL_LABEL[readStoredAiProvider()]);
 
-    // BX10: remember tone for detected IP (if API returned it)
-    const detectedIp =
-      (typeof payload.detectedIpName === "string" && payload.detectedIpName) ||
-      (typeof payload.ip_name === "string" && payload.ip_name) ||
-      (typeof payload.draft?.ip_name === "string" && payload.draft.ip_name) ||
-      null;
-    if (detectedIp) {
-      rememberToneForIp(
-        typeof window !== "undefined" ? window.localStorage : null,
-        detectedIp,
-        tone
-      );
-    }
+    const queueTiming = [
+      `存檔 ${(saveMs / 1000).toFixed(1)} 秒`,
+      hasImages ? `等圖片上傳 ${(uploadMs / 1000).toFixed(1)} 秒` : null,
+      "已排入背景生成"
+    ].filter((part): part is string => Boolean(part)).join(" · ");
 
-    if (payload.draftState === "blocked") {
-      showToast(
-        "AI 判斷資料不足（多半是 IP 未對到建檔清單）：" +
-          (payload.validationErrors ?? []).join("；") +
-          "。可在右側卡片修正「AI 偵測類型」等欄位後按「重新生成」。",
-        "warn"
-      );
-    } else {
-      showToast("生成完成，右側卡片可繼續編輯文案；表單已清空，可直接填下一筆。", "success");
-      resetForNextItem();
-    }
+    emitProgress({
+      draftId: id,
+      visible: true,
+      title: cardTitle,
+      steps: GENERATION_STEP_LABELS.map((label, index) => ({
+        label,
+        status: index === 0 ? "done" : index === 1 && !hasImages ? "done" : "pending"
+      })),
+      timingNote: queueTiming
+    });
 
+    resetForNextItem();
+    showToast("已排入生成佇列，表單已清空，可以直接填下一件。", "success");
+    window.dispatchEvent(new Event(GENERATION_QUEUE_KICK_EVENT));
     router.refresh();
   }
 

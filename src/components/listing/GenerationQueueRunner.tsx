@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
+import { rememberToneForIp } from "@/lib/drafts/toneMemory";
 import {
   GENERATION_PROGRESS_EVENT,
   GENERATION_STEP_LABELS,
@@ -158,6 +159,29 @@ export function GenerationQueueRunner() {
         showToast(`${title}：${errorText}（可單件重試）`, "error");
         router.refresh();
         return;
+      }
+
+      if (payload.draftState === "blocked") {
+        const validationText = Array.isArray(payload.validationErrors)
+          ? payload.validationErrors.filter((value: unknown): value is string => typeof value === "string").join("；")
+          : "";
+        const errorText = validationText || "AI 判斷資料不足，請人工確認後重試。";
+        emitProgress(job.draftId, title, ["done", imageStep, "error", "pending"], errorText);
+        showToast(`${title}：${errorText}`, "warn");
+        router.refresh();
+        return;
+      }
+
+      const detectedIp =
+        typeof payload.detectedIpName === "string" && payload.detectedIpName.trim()
+          ? payload.detectedIpName.trim()
+          : null;
+      if (detectedIp) {
+        rememberToneForIp(
+          typeof window !== "undefined" ? window.localStorage : null,
+          detectedIp,
+          job.input.tone,
+        );
       }
 
       emitProgress(

@@ -277,7 +277,8 @@ export async function createCaptureDraft(input: {
     server: {
       ...(mapped.rawCapture.server as Record<string, unknown>),
       url_match_key: urlKey || null,
-      image_fetch_status: imageFetchExpected > 0 && input.deferImages ? "pending" : "running",
+      image_fetch_status:
+        imageFetchExpected === 0 ? "complete" : input.deferImages ? "pending" : "running",
       image_fetch_expected: imageFetchExpected,
       image_fetch_started_at: imageFetchExpected > 0 ? new Date().toISOString() : null
     }

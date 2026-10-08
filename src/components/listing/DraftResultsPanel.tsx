@@ -18,7 +18,7 @@ import { buildFactoryBridgeSummary } from "@/lib/images/factoryBridge";
 import {
   GENERATION_DONE_MAX_MS,
   GENERATION_PROGRESS_EVENT,
-  draftMatchesGenerationProgressTitle,
+  draftMatchesGenerationProgress,
   generationProgressAllDone,
   generationProgressHasError,
   getLastGenerationProgress,
@@ -566,12 +566,8 @@ export function DraftResultsPanel({
     if (generationProgressHasError(progress)) return;
     if (!generationProgressAllDone(progress)) return;
 
-    const title = progress.title;
-    const matches = (draft: {
-      title_zh?: string | null;
-      original_title?: string | null;
-      taobao_title?: string | null;
-    }) => draftMatchesGenerationProgressTitle(title, draft);
+    const matches = (draft: { id?: string | null }) =>
+      draftMatchesGenerationProgress(progress.draftId, draft);
 
     const pendingHeld = scopedDrafts.some(
       (draft) => draft.status === "pending_copy" && matches(draft)

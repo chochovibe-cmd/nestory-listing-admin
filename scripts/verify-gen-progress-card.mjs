@@ -25,24 +25,15 @@ function read(rel) {
   return fs.readFileSync(path.join(root, rel), "utf8");
 }
 
-function draftMatchesGenerationProgressTitle(title, draft) {
-  const prefix = title.trim();
-  if (!prefix) return false;
-  for (const raw of [draft.title_zh, draft.original_title, draft.taobao_title]) {
-    if (!raw) continue;
-    const text = raw.trim();
-    if (!text) continue;
-    if (text.includes(prefix) || prefix.includes(text.slice(0, prefix.length))) {
-      return true;
-    }
-  }
-  return false;
+function draftMatchesGenerationProgress(draftId, draft) {
+  return Boolean(draftId && draft?.id && draft.id === draftId);
 }
 
 console.log("B1 generation progress card\n");
 
 check("generationProgress.ts last-value singleton", () => {
   const src = read("src/components/listing/generationProgress.ts");
+  assert.match(src, /draftId: string \| null/);
   assert.match(src, /let lastProgress: GenerationProgress \| null/);
   assert.match(src, /export function getLastGenerationProgress/);
   assert.match(src, /export function setLastGenerationProgress/);
@@ -60,6 +51,7 @@ check("DraftResultsPanel hydrates gen-card (no 1.5s wipe)", () => {
   assert.match(src, /workQueueDrafts\.length === 0 && !progress/);
   assert.match(src, /visibleDrafts\.length === 0 && !progress/);
   assert.match(src, /pending_copy/);
+  assert.match(src, /draftMatchesGenerationProgress\(progress\.draftId, draft\)/);
   assert.match(src, /GENERATION_DONE_MAX_MS/);
   assert.doesNotMatch(src, /setTimeout\(\(\) => setProgress\(null\), 1500\)/);
 });
@@ -104,31 +96,22 @@ check("toast / pricing-settings not rebuilt", () => {
   assert.match(pricing, /localStorage/);
 });
 
-check("title match helper (inline mirror)", () => {
-  assert.equal(
-    draftMatchesGenerationProgressTitle("米菲臺燈", {
-      title_zh: "米菲臺燈 限量",
-      original_title: null,
-      taobao_title: null
-    }),
-    true
-  );
-  assert.equal(
-    draftMatchesGenerationProgressTitle("米菲臺燈特別版標題超長", {
-      original_title: "米菲臺燈特別版標題超長要被截斷",
-      title_zh: null,
-      taobao_title: null
-    }),
-    true
-  );
-  assert.equal(
-    draftMatchesGenerationProgressTitle("獨角獸", {
-      title_zh: "另一件商品",
-      original_title: null,
-      taobao_title: null
-    }),
-    false
-  );
+check("draft id match helper prevents same-title collisions", () => {
+  const first = { id: "draft-a", title_zh: "同名商品" };
+  const second = { id: "draft-b", title_zh: "同名商品" };
+  assert.equal(draftMatchesGenerationProgress("draft-a", first), true);
+  assert.equal(draftMatchesGenerationProgress("draft-a", second), false);
+  assert.equal(draftMatchesGenerationProgress(null, first), false);
+});
+
+check("full generation persists processing and failed states", () => {
+  const src = read("src/app/api/generate/route.ts");
+  assert.match(src, /status: "processing"/);
+  assert.match(src, /generation_status: "processing"/);
+  assert.match(src, /generation_error: null/);
+  assert.match(src, /const markFullGenerationFailed = async/);
+  assert.match(src, /status: "failed"/);
+  assert.match(src, /generation_status: "failed"/);
 });
 
 check("no new !important in touched listing files", () => {

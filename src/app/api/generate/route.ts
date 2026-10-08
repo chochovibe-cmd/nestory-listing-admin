@@ -652,6 +652,38 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const markFullGenerationFailed = async (message: string, status = 500) => {
+    await serviceSupabase
+      .from("product_drafts")
+      .update({
+        status: "failed",
+        pipeline_stage: mapStatusToPipelineStage("failed"),
+        generation_status: "failed",
+        generation_error: message,
+      })
+      .eq("id", draftId);
+
+    return Response.json({ error: message }, { status });
+  };
+
+  const { error: processingError } = await serviceSupabase
+    .from("product_drafts")
+    .update({
+      status: "processing",
+      pipeline_stage: mapStatusToPipelineStage("processing"),
+      generation_status: "processing",
+      generation_error: null,
+    })
+    .eq("id", draftId);
+
+  if (processingError) {
+    return Response.json(
+      { error: `Failed to mark generation processing: ${processingError.message}` },
+      { status: 500 }
+    );
+  }
+
+  try {
   const ipCatalogWithPack = await serviceSupabase
     .from("ip_catalog")
     .select("id,ip_name,aliases,sort_order,is_active,created_at,updated_at,knowledge_pack")
@@ -670,19 +702,18 @@ export async function POST(request: NextRequest) {
   ]);
 
   if (tagRulesResult.status === "rejected") {
-    return Response.json(
-      { error: `Failed to load tag_rules: ${tagRulesResult.reason?.message ?? tagRulesResult.reason}` },
-      { status: 500 }
+    return markFullGenerationFailed(
+      `Failed to load tag_rules: ${tagRulesResult.reason?.message ?? tagRulesResult.reason}`
     );
   }
 
   if (ipCatalogResult.error) {
-    return Response.json({ error: `Failed to load ip_catalog: ${ipCatalogResult.error.message}` }, { status: 500 });
+    return markFullGenerationFailed(`Failed to load ip_catalog: ${ipCatalogResult.error.message}`);
   }
 
   if (ipCharactersResult.status === "rejected" || ipCharactersResult.value.error) {
     const message = ipCharactersResult.status === "rejected" ? ipCharactersResult.reason?.message : ipCharactersResult.value.error?.message;
-    return Response.json({ error: `Failed to load ip_characters: ${message}` }, { status: 500 });
+    return markFullGenerationFailed(`Failed to load ip_characters: ${message}`);
   }
 
   const tagRules = tagRulesResult.value;
@@ -904,18 +935,9 @@ export async function POST(request: NextRequest) {
         );
       }
     } catch (providerError) {
-      await serviceSupabase
-        .from("product_drafts")
-        .update({
-          generation_status: "failed",
-          pipeline_stage: mapStatusToPipelineStage("failed"),
-          generation_error: providerError instanceof Error ? providerError.message : "Copy provider failed",
-        })
-        .eq("id", draftId);
-
-      return Response.json(
-        { error: providerError instanceof Error ? providerError.message : "Copy provider failed" },
-        { status: 502 }
+      return markFullGenerationFailed(
+        providerError instanceof Error ? providerError.message : "Copy provider failed",
+        502
       );
     }
   }
@@ -1297,4 +1319,9 @@ export async function POST(request: NextRequest) {
       model: providerOutput.model,
     },
   });
+  } catch (generationError) {
+    return markFullGenerationFailed(
+      generationError instanceof Error ? generationError.message : "Generation failed"
+    );
+  }
 }

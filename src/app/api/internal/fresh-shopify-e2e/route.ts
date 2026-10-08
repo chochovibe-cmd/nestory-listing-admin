@@ -44,7 +44,18 @@ export async function GET(request: NextRequest) {
   if (step === "finalize") {
     const result = await runFinalizeForDraft({
       serviceSupabase,
-      draftId: TEST_DRAFT_ID
+      draftId: TEST_DRAFT_ID,
+      imageIds: [
+      "5fdca9c8-5c48-45fc-85b5-3e6d9ad29949",
+      "bbf56ebf-0325-4b7e-9b97-6689de6ad403",
+      "b76e01ad-8fa5-4df3-b6b4-8adc72c19896",
+      "78e1ce45-c225-4071-b859-fb190a5b4fe4",
+      "2eafacf9-ad0f-4344-865a-d6069983f58f",
+      "0b0fc8ba-f7e2-464a-8148-0d81fb471006",
+      "da3c91e3-a795-4e72-8e85-26cd5dcec259",
+      "3db20513-b703-494c-8bd7-e7d765a96590",
+      "2d1c457f-292a-449c-845d-f3688aa6e529"
+]
     });
     return Response.json({ step, ...result });
   }

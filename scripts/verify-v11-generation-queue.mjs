@@ -6,6 +6,7 @@ const queueApi = read("src/app/api/generation-queue/route.ts");
 const runner = read("src/components/listing/GenerationQueueRunner.tsx");
 const layout = read("src/app/layout.tsx");
 const workspace = read("src/components/listing/WorkspaceInputPanel.tsx");
+const resultCard = read("src/components/listing/ResultCard.tsx");
 const generate = read("src/app/api/generate/route.ts");
 
 console.log("V1.1 generation queue runner");
@@ -39,6 +40,9 @@ assert.doesNotMatch(
   "new-item form must not synchronously block on /api/generate",
 );
 assert.match(workspace, /已排入生成佇列，表單已清空/, "operator enqueue feedback missing");
+
+assert.match(resultCard, /action: "retry", draftId: draft\.id/, "failed queue card must support single retry");
+assert.match(resultCard, /GENERATION_QUEUE_KICK_EVENT/, "retry must wake the queue runner");
 
 assert.match(generate, /const queueRunId =/, "generate route queue job identity missing");
 assert.match(generate, /Generation queue job is not claim-valid/, "generate route must validate claimed queue job");

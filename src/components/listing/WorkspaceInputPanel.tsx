@@ -2795,7 +2795,7 @@ export function WorkspaceInputPanel({
                   ) : imagesUploading ? (
                     <>
                       <span aria-hidden className="spinner" />
-                      圖片上傳中，請稍候…
+                      圖片背景上傳中，可直接排隊
                     </>
                   ) : (
                     <>

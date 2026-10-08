@@ -8,6 +8,8 @@ export const GENERATION_PROGRESS_EVENT = "nestory:generation-progress";
 export type StepStatus = "pending" | "active" | "done" | "warn" | "error";
 
 export type GenerationProgress = {
+  /** Stable identity for the queued draft. null is only allowed for hidden reset events. */
+  draftId: string | null;
   visible: boolean;
   title: string;
   steps: { label: string; status: StepStatus }[];
@@ -49,23 +51,9 @@ export function generationProgressAllDone(model: GenerationProgress): boolean {
   return model.steps.length > 0 && model.steps.every((step) => step.status === "done");
 }
 
-export function draftMatchesGenerationProgressTitle(
-  title: string,
-  draft: {
-    title_zh?: string | null;
-    original_title?: string | null;
-    taobao_title?: string | null;
-  }
+export function draftMatchesGenerationProgress(
+  draftId: string | null | undefined,
+  draft: { id?: string | null }
 ): boolean {
-  const prefix = title.trim();
-  if (!prefix) return false;
-  for (const raw of [draft.title_zh, draft.original_title, draft.taobao_title]) {
-    if (!raw) continue;
-    const text = raw.trim();
-    if (!text) continue;
-    if (text.includes(prefix) || prefix.includes(text.slice(0, prefix.length))) {
-      return true;
-    }
-  }
-  return false;
+  return Boolean(draftId && draft.id && draft.id === draftId);
 }

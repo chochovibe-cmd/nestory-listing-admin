@@ -312,7 +312,7 @@ check("source: mapCaptureFields honesty + warnings + source_type capture", () =>
   assert.match(src, /if \(!name \|\| !value\) return/);
 });
 
-check("source: createCaptureDraft dedupe excludes archived + no overwrite", () => {
+check("source: createCaptureDraft dedupe + V1.1 background compatibility", () => {
   const src = read("src/lib/import/createCaptureDraft.ts");
   assert.match(src, /status !== ["']archived["']/);
   assert.match(src, /status:\s*["']exists["']/);
@@ -321,19 +321,34 @@ check("source: createCaptureDraft dedupe excludes archived + no overwrite", () =
   assert.match(src, /dimensionsLackValues/);
   assert.match(src, /dimsNeedFill/);
   assert.match(src, /queryDuplicateMatches|extractUrlMatchKey/);
+  assert.match(src, /deferImages\?: boolean/);
+  assert.match(src, /completeCaptureDraftImages/);
   assert.match(src, /fetchAndStoreCaptureImages/);
-  // CAP-2.6: images before variants; applyVariantImageIds
   assert.match(src, /applyVariantImageIds/);
-  // Order of *calls* (ignore import lines): await fetch… then applyVariant… then persistVariants
-  const createFnStart = src.indexOf("export async function createCaptureDraft");
-  assert.ok(createFnStart > 0, "createCaptureDraft export");
-  const createFn = src.slice(createFnStart);
-  const callFetch = createFn.search(/await\s+fetchAndStoreCaptureImages\s*\(/);
-  const callApply = createFn.search(/applyVariantImageIds\s*\(/);
-  const callPersist = createFn.search(/await\s+persistVariantsSafe\s*\(|persistVariantsSafe\s*\(/);
-  assert.ok(callFetch > 0, "must call fetchAndStoreCaptureImages");
-  assert.ok(callApply > callFetch, "applyVariantImageIds after image fetch");
-  assert.ok(callPersist > callApply, "persistVariants after image map");
+
+  // V1.1 deferred path: variants are persisted immediately without image_id
+  // so capture can return before remote image hydration.
+  const deferredStart = src.indexOf("if (input.deferImages)");
+  assert.ok(deferredStart > 0, "deferred image path missing");
+  const deferredEnd = src.indexOf("// CAP-2.6 synchronous compatibility path", deferredStart);
+  assert.ok(deferredEnd > deferredStart, "sync compatibility marker missing");
+  const deferred = src.slice(deferredStart, deferredEnd);
+  assert.match(deferred, /applyVariantImageIds\(mapped\.variantRows, \{\}\)/);
+  assert.match(deferred, /persistVariantsSafe/);
+  assert.doesNotMatch(deferred, /fetchAndStoreCaptureImages/);
+
+  // Legacy/direct callers still retain the old CAP-2.6 order.
+  const sync = src.slice(deferredEnd, src.indexOf("export async function completeCaptureDraftImages"));
+  const callFetch = sync.search(/await\s+fetchAndStoreCaptureImages\s*\(/);
+  const callApply = sync.search(/applyVariantImageIds\s*\(/);
+  const callPersist = sync.search(/persistVariantsSafe\s*\(/);
+  assert.ok(callFetch >= 0, "sync path must call fetchAndStoreCaptureImages");
+  assert.ok(callApply > callFetch, "sync path applies image ids after fetch");
+  assert.ok(callPersist > callApply, "sync path persists variants after image map");
+
+  // Background completion is non-destructive: only empty image_id cells may be filled.
+  const bg = src.slice(src.indexOf("export async function completeCaptureDraftImages"));
+  assert.match(bg, /\.is\("image_id", null\)/);
 });
 
 check("source: image fetch 10s timeout + referer + limits + variant", () => {

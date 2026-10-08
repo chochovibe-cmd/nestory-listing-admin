@@ -133,7 +133,7 @@ export function buildShopifyProductPayload(
   );
   const mediaWithVideos = [...images, ...videoBuild.media];
 
-  const { sku } = generateSku({
+  const { sku: generatedSku } = generateSku({
     productType: draft.product_type ?? "",
     ipName: draft.ip_name ?? draft.category ?? "",
     characterName: draft.character_name
@@ -141,6 +141,11 @@ export function buildShopifyProductPayload(
   const generatedPayload = isRecord(draft.generated_payload_json) ? draft.generated_payload_json : {};
   const generatedProduct = isRecord(generatedPayload.product) ? generatedPayload.product : {};
   const generatedVariantSeed = isRecord(generatedPayload.variantSeed) ? generatedPayload.variantSeed : {};
+  const generatedSeedSku =
+    typeof generatedVariantSeed.sku === "string" && generatedVariantSeed.sku.trim()
+      ? generatedVariantSeed.sku.trim()
+      : generatedSku;
+  const publishSku = draft.sku?.trim() || generatedSeedSku;
   const tags = draft.shopify_tags?.length ? draft.shopify_tags : draft.tags || [];
 
   // COPY C1.1: only 潮巢導購版 changes the Shopify semantic hierarchy.
@@ -195,13 +200,13 @@ export function buildShopifyProductPayload(
     product: productWithOptions,
     media: Array.isArray(generatedPayload.media) ? generatedPayload.media : mediaWithVideos,
     variantSeed: {
-      sku,
       price: draft.twd_price ?? 0,
       cost: draft.twd_cost ?? 0,
       compareAtPrice: draft.compare_at_price ?? null,
       inventoryQuantity: draft.inventory_quantity ?? 0,
       inventoryPolicy: draft.inventory_policy === "deny" ? "DENY" : "CONTINUE",
-      ...generatedVariantSeed
+      ...generatedVariantSeed,
+      sku: publishSku
     },
     variantPlan,
     shopifyCollections: draft.shopify_collections ?? [],

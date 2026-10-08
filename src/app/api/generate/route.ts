@@ -1354,14 +1354,18 @@ export async function POST(request: NextRequest) {
   }
   stageMs.persist = Date.now() - persistStarted;
 
-  await updateQueueRun("completed", {
-    output: {
-      draftState: localizedOutput.draft_state,
-      provider: providerOutput.provider,
-      model: providerOutput.model,
-      title: localizedOutput.display_title,
+  await updateQueueRun(
+    successStatus.generation_status === "failed" ? "failed" : "completed",
+    {
+      error: successStatus.generation_error,
+      output: {
+        draftState: localizedOutput.draft_state,
+        provider: providerOutput.provider,
+        model: providerOutput.model,
+        title: localizedOutput.display_title,
+      },
     },
-  });
+  );
 
   return Response.json({
     ok: true,

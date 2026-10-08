@@ -135,8 +135,8 @@ Do not use Shopify Connector success as a substitute for this runtime proof.
 
 ## CI
 
-The first CI run on `16888e4...` failed because the new self-test route contained the literal
-legacy token prefix `shpat_` in an error-redaction regex. The repository security verifier
+The first CI run on `16888e4...` failed because the new self-test route contained a literal
+legacy Shopify access-token prefix in an error-redaction regex. The repository security verifier
 correctly blocked that source pattern.
 
 Fixed immediately:

@@ -26,6 +26,33 @@ Nestory 是潮巢玩居內部 Shopify 商品上架 PWA：商品輸入、圖片/�
 
 ## 2.1 2026-10-08 最新接手點
 
+### 5 件真 Shopify DRAFT 小批量 — PASS / HOLD
+
+Owner 已授權並完成 5 件真 DRAFT：
+
+- Batch：`0641a514-62a3-41b4-afc5-58400df32c9e`
+- final：**5 done / 0 failed**
+- Shopify IDs：
+  - `15419560001721` 酷洛米吊飾
+  - `15419567800505` Hello Kitty 浴巾禮盒
+  - `15419568423097` 佈歐涼拖鞋
+  - `15419569176761` 七龍珠 MINISO 盲盒擺件
+  - `15419573338297` TOYUKI × Hello Kitty 吊飾
+- 5 件最後 readback 都是 **DRAFT**
+- Nestory 5 筆都為 `draft_created`
+- controlled publish jobs exactly 5
+- schedule groups/items = 0
+- no ACTIVE / no Online Store publication / no Cron / no Production deploy / no merge
+
+第 5 件真實驗證 blank row multi-variant SKU fallback：
+`CHO-CHM-HVE-URV-001 / 002 / 003`，三款 Shopify readback 全部正確。
+
+重要證據邊界：5 件遠端 mutation 是 Shopify Connector path；沒有 Owner browser auth cookie，所以沒有繞過 reviewer session 去假裝呼叫 Nestory HTTP batch route。Vercel Client ID + Secret runtime 已在前一包獨立自測 PASS。
+
+目前下一步：**HOLD，等待 Owner 看這 5 件 DRAFT 或明確指定 release / merge / ACTIVE 的下一包。**
+
+詳細：`docs/audits/SHOPIFY-DRAFT-BATCH-5-2026-10-08.md`。
+
 ### 批量前最後整備 — PASS / HOLD
 
 - multi-variant blank SKU：**PASS**；空白 row 由 generated product SKU 依序衍生 `001 / 002 / 003...`，手填 row SKU 優先。
@@ -35,7 +62,7 @@ Nestory 是潮巢玩居內部 Shopify 商品上架 PWA：商品輸入、圖片/�
 - branch-only self-test secret 已清空；cleanup Preview endpoint 已驗證回 503 / `SELFTEST_TOKEN_MISSING`；臨時 sandbox 已停止。
 - Miffy 受控真商品仍是 **DRAFT**；schedule groups/items 仍 0。
 - full CI 後段仍被另一條 Copy verifier `Boss hierarchy wrapper disappeared` 擋紅，本 Shopify package 不處理文案。
-- 5 件 DRAFT batch / ACTIVE 仍沒有自動授權。下一步若 Owner 要繼續，另開 5 件 DRAFT package；ACTIVE 仍禁止。
+- 5 件 DRAFT batch 已由後續 Owner 授權並完成（見上方）；ACTIVE 仍沒有授權。
 
 詳細：`docs/audits/SHOPIFY-BATCH-READINESS-2026-10-07.md`。
 

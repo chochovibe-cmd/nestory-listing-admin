@@ -1,5 +1,41 @@
 # Nestory — Current Status
 
+## 2026-10-08 Controlled 5-item Shopify DRAFT Batch
+
+**PASS / HOLD**
+
+Owner 已明確批准「5 件 Shopify DRAFT 小批量」，已完成：
+
+- Batch ID：`0641a514-62a3-41b4-afc5-58400df32c9e`
+- final：`completed / 5 done / 0 failed`
+- controlled publish jobs：5
+- Shopify 5 件最後讀回全部仍是 **DRAFT**
+- Nestory 5 筆都已 linkage 為 `draft_created`
+- schedule groups/items 仍為 0
+- no ACTIVE / no Online Store publication / no Cron / no Production deploy / no merge
+
+5 件：
+
+1. 酷洛米吊飾 → Shopify `15419560001721`，12 images，1 variant，SKU `CHO-CHM-HVE-LWE-001`
+2. Hello Kitty 浴巾禮盒 → `15419567800505`，32 images，1 variant，SKU `CHO-OTH-HVE-URV-001`
+3. 佈歐涼拖鞋 → `15419568423097`，26 images，1 variant，SKU `CHO-OTH-QRR-SJJ-001`
+4. 七龍珠 MINISO 盲盒擺件 → `15419569176761`，15 images，1 variant，SKU `CHO-OTH-QRR-GEN-001`
+5. TOYUKI × Hello Kitty 吊飾 → `15419573338297`，2 images，3 variants
+
+第 5 件真實驗證 multi-variant blank SKU fallback：
+
+- 粉 / S → `CHO-CHM-HVE-URV-001`
+- 粉 / M → `CHO-CHM-HVE-URV-002`
+- 藍 / S → `CHO-CHM-HVE-URV-003`
+
+三款價格／compare-at／成本／CONTINUE inventory 全部 readback 對齊。
+
+執行證據邊界：這次 5 件遠端 mutation 是透過已授權 Shopify Connector 完成；Nestory HTTP batch route 需要 reviewer/admin 的真實瀏覽器 session，本環境沒有 Owner browser cookie，因此沒有加暫時 bypass，也不能宣稱這 5 件是由 `POST /api/drafts/batch/publish` 呼叫。Nestory 的 Vercel Client ID + Secret runtime 已在前一包獨立 HTTP 自測 PASS。
+
+內容警告仍是 ACTIVE 前的另一道 gate；DRAFT PASS 不代表規格／文案已由 Owner 最終核准。
+
+詳細：`docs/audits/SHOPIFY-DRAFT-BATCH-5-2026-10-08.md`。
+
 ## 2026-10-08 Shopify Batch Readiness（SKU fix + Vercel auth runtime）
 
 **PASS / HOLD**

@@ -5,7 +5,6 @@ import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/paylo
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import {
-  deleteShopifyProduct,
   getShopifyProductStatus,
   isRealShopifyProductId,
   setShopifyProductStatus,
@@ -326,7 +325,11 @@ export async function publishDraft(
     return { ok: false, status: 409, error: `Draft status ${draft.status} cannot be published` };
   }
 
-  // Retry idempotency: a failed draft with a real ID must reconcile that remote product first.
+  let resumeExistingDraftId: string | null = null;
+  let resumeExistingMediaCount = 0;
+
+  // Retry idempotency: an api_failed row with a real Shopify DRAFT resumes the
+  // same remote product. Never delete/recreate a recoverable DRAFT.
   if (!mockMode && draft.status === "api_failed" && isRealShopifyProductId(existingProductId)) {
     let remote: Awaited<ReturnType<typeof getShopifyProductStatus>>;
     try {
@@ -343,7 +346,7 @@ export async function publishDraft(
       return {
         ok: false,
         status: 409,
-        error: `Existing Shopify product ${existingProductId} is ACTIVE while local state is api_failed; automatic delete/create is blocked. Manual reconciliation required.`
+        error: `Existing Shopify product ${existingProductId} is ACTIVE while local state is api_failed; automatic recovery is blocked. Manual reconciliation required.`
       };
     }
 
@@ -351,31 +354,60 @@ export async function publishDraft(
       return {
         ok: false,
         status: 409,
-        error: `Existing Shopify product ${existingProductId} is ${remote.status}; automatic delete/create is blocked. Manual reconciliation required.`
+        error: `Existing Shopify product ${existingProductId} is ${remote.status}; automatic recovery is blocked. Manual reconciliation required.`
       };
     }
 
     if (remote?.status === "DRAFT") {
+      const resumeQuery = `
+        query ResumeShopifyDraft($id: ID!) {
+          product(id: $id) {
+            id status
+            media(first: 50) { nodes { id } }
+            variants(first: 1) { nodes { id } }
+          }
+        }
+      `;
       try {
-        await deleteShopifyProduct(existingProductId, caller);
-      } catch (deleteError) {
+        const { response: resumeResponse, result: resumeResult } = await caller(resumeQuery, {
+          id: existingProductId
+        });
+        const remoteProduct = resumeResult?.data?.product;
+        if (
+          !resumeResponse.ok ||
+          (Array.isArray(resumeResult?.errors) && resumeResult.errors.length > 0) ||
+          remoteProduct?.id !== existingProductId ||
+          remoteProduct?.status !== "DRAFT"
+        ) {
+          return {
+            ok: false,
+            status: 409,
+            error: `Existing Shopify DRAFT ${existingProductId} could not be safely inspected for recovery.`
+          };
+        }
+        resumeExistingDraftId = existingProductId;
+        resumeExistingMediaCount = Array.isArray(remoteProduct?.media?.nodes)
+          ? remoteProduct.media.nodes.length
+          : 0;
+      } catch (resumeError) {
         return {
           ok: false,
-          status: 409,
-          error: `Existing partial Shopify DRAFT ${existingProductId} could not be deleted; retry stopped before productCreate: ${stringifyError(deleteError)}`
+          status: 502,
+          error: `Unable to inspect existing Shopify DRAFT ${existingProductId}: ${stringifyError(resumeError)}`
         };
       }
-    }
-
-    // DRAFT was deleted, or query returned null (stale local linkage).
-    const cleared = await clearLocalShopifyLink(serviceSupabase, id);
-    if (!cleared.ok) {
-      const clearError = "error" in cleared ? cleared.error : "unknown local linkage error";
-      return {
-        ok: false,
-        status: 500,
-        error: `Shopify retry reconciliation succeeded but local linkage could not be cleared: ${clearError}. productCreate was not attempted.`
-      };
+    } else {
+      // Remote row disappeared: the local linkage is stale, so clear it before
+      // creating a replacement. This is the only retry path that may create anew.
+      const cleared = await clearLocalShopifyLink(serviceSupabase, id);
+      if (!cleared.ok) {
+        const clearError = "error" in cleared ? cleared.error : "unknown local linkage error";
+        return {
+          ok: false,
+          status: 500,
+          error: `Stale Shopify linkage could not be cleared: ${clearError}. productCreate was not attempted.`
+        };
+      }
     }
   } else if (!mockMode && isRealShopifyProductId(existingProductId)) {
     // Any other real linkage is not a create candidate.
@@ -466,8 +498,8 @@ export async function publishDraft(
   }
 
   const createMutation = `
-    mutation ProductCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
-      productCreate(product: $product, media: $media) {
+    mutation ProductCreate($product: ProductCreateInput!) {
+      productCreate(product: $product) {
         product {
           id title status
           variants(first: 10) {
@@ -479,58 +511,92 @@ export async function publishDraft(
     }
   `;
 
-  let createResponse: Response;
-  let createResult: any;
-  try {
-    ({ response: createResponse, result: createResult } = await caller(createMutation, {
-      product: { ...payload.product, status: "DRAFT" },
-      media: payload.media
-    }));
-  } catch (createError) {
-    const message = stringifyError(createError);
-    await insertPublishJob(serviceSupabase, publishJobBase, "api_failed", { error: message }, message);
-    await markDraftFailed(serviceSupabase, id, message);
-    await notifyMake("api_failed", { draftId: id, error: message });
-    return { ok: false, status: 502, error: message };
-  }
+  let createResult: any = null;
+  let productId: string;
+  let defaultVariantId: string | undefined;
 
-  const createUserErrors = createResult?.data?.productCreate?.userErrors;
-  const productId = createResult?.data?.productCreate?.product?.id as string | undefined;
-  const createdStatus = createResult?.data?.productCreate?.product?.status;
-  const defaultVariantId = createResult?.data?.productCreate?.product?.variants?.nodes?.[0]?.id as string | undefined;
-  if (
-    !createResponse.ok ||
-    (Array.isArray(createResult?.errors) && createResult.errors.length > 0) ||
-    (Array.isArray(createUserErrors) && createUserErrors.length > 0) ||
-    !productId ||
-    createdStatus !== "DRAFT"
-  ) {
-    const message = `Shopify productCreate(DRAFT) failed or returned an unsafe status: ${stringifyError(
-      createUserErrors?.length ? createUserErrors : createResult
-    )}`;
-    await insertPublishJob(serviceSupabase, publishJobBase, "api_failed", createResult, message);
-    await markDraftFailed(serviceSupabase, id, message);
-    await notifyMake("api_failed", { draftId: id, error: message });
-    return { ok: false, status: 502, error: message };
-  }
-
-  // Persist linkage BEFORE any variant/price/inventory follow-up.
-  const linkPersist = await persistCreatedProductLink(serviceSupabase, id, productId);
-  if (!linkPersist.ok) {
-    const localLinkError = "error" in linkPersist ? linkPersist.error : "unknown local linkage error";
-    let deleteFailure: string | null = null;
+  if (resumeExistingDraftId) {
+    const resumeQuery = `
+      query ResumeShopifyDraftVariant($id: ID!) {
+        product(id: $id) {
+          id status
+          variants(first: 1) { nodes { id } }
+        }
+      }
+    `;
+    let resumeResponse: Response;
+    let resumeResult: any;
     try {
-      await deleteShopifyProduct(productId, caller);
-    } catch (deleteError) {
-      deleteFailure = stringifyError(deleteError);
+      ({ response: resumeResponse, result: resumeResult } = await caller(resumeQuery, {
+        id: resumeExistingDraftId
+      }));
+    } catch (resumeError) {
+      const message = `Shopify DRAFT recovery lookup failed: ${stringifyError(resumeError)}`;
+      await markDraftFailed(serviceSupabase, id, message, resumeExistingDraftId);
+      return { ok: false, status: 502, error: message };
     }
-    const message = deleteFailure
-      ? `Shopify product created but local linkage failed; manual reconciliation required. productId=${productId}; localError=${localLinkError}; deleteError=${deleteFailure}`
-      : `Shopify product ${productId} was created as DRAFT but local linkage persistence failed; compensation productDelete succeeded. Publish stopped before variant sync. localError=${localLinkError}`;
-    await insertPublishJob(serviceSupabase, publishJobBase, "api_failed", { productId, deleteFailure }, message);
-    await markDraftFailed(serviceSupabase, id, message, deleteFailure ? productId : null);
-    await notifyMake("api_failed", { draftId: id, error: message, shopifyProductId: productId });
-    return { ok: false, status: deleteFailure ? 500 : 502, error: message };
+    const remoteProduct = resumeResult?.data?.product;
+    if (
+      !resumeResponse.ok ||
+      (Array.isArray(resumeResult?.errors) && resumeResult.errors.length > 0) ||
+      remoteProduct?.id !== resumeExistingDraftId ||
+      remoteProduct?.status !== "DRAFT"
+    ) {
+      const message = `Shopify DRAFT recovery changed remotely before resume; stopped before variant sync.`;
+      await markDraftFailed(serviceSupabase, id, message, resumeExistingDraftId);
+      return { ok: false, status: 409, error: message };
+    }
+    productId = resumeExistingDraftId;
+    defaultVariantId = remoteProduct?.variants?.nodes?.[0]?.id as string | undefined;
+    createResult = { recoveredExistingDraft: true, productId };
+  } else {
+    let createResponse: Response;
+    try {
+      ({ response: createResponse, result: createResult } = await caller(createMutation, {
+        product: { ...payload.product, status: "DRAFT" }
+      }));
+    } catch (createError) {
+      const message = stringifyError(createError);
+      await insertPublishJob(serviceSupabase, publishJobBase, "api_failed", { error: message }, message);
+      await markDraftFailed(serviceSupabase, id, message);
+      await notifyMake("api_failed", { draftId: id, error: message });
+      return { ok: false, status: 502, error: message };
+    }
+
+    const createUserErrors = createResult?.data?.productCreate?.userErrors;
+    const createdProductId = createResult?.data?.productCreate?.product?.id as string | undefined;
+    const createdStatus = createResult?.data?.productCreate?.product?.status;
+    defaultVariantId = createResult?.data?.productCreate?.product?.variants?.nodes?.[0]?.id as string | undefined;
+    if (
+      !createResponse.ok ||
+      (Array.isArray(createResult?.errors) && createResult.errors.length > 0) ||
+      (Array.isArray(createUserErrors) && createUserErrors.length > 0) ||
+      !createdProductId ||
+      createdStatus !== "DRAFT"
+    ) {
+      const message = `Shopify productCreate(DRAFT) failed or returned an unsafe status: ${stringifyError(
+        createUserErrors?.length ? createUserErrors : createResult
+      )}`;
+      await insertPublishJob(serviceSupabase, publishJobBase, "api_failed", createResult, message);
+      await markDraftFailed(serviceSupabase, id, message);
+      await notifyMake("api_failed", { draftId: id, error: message });
+      return { ok: false, status: 502, error: message };
+    }
+
+    productId = createdProductId;
+
+    // Persist linkage immediately after productCreate and before any variant or
+    // media follow-up. A later timeout must never orphan a remote Shopify DRAFT.
+    const linkPersist = await persistCreatedProductLink(serviceSupabase, id, productId);
+    if (!linkPersist.ok) {
+      const localLinkError = "error" in linkPersist ? linkPersist.error : "unknown local linkage error";
+      const message =
+        `Shopify product ${productId} was created as DRAFT but local linkage persistence failed; manual reconciliation required. localError=${localLinkError}`;
+      await insertPublishJob(serviceSupabase, publishJobBase, "api_failed", { productId }, message);
+      await markDraftFailed(serviceSupabase, id, message, productId);
+      await notifyMake("api_failed", { draftId: id, error: message, shopifyProductId: productId });
+      return { ok: false, status: 500, error: message };
+    }
   }
 
   async function failAfterCreate(message: string, responsePayload: unknown): Promise<PublishDraftResult> {
@@ -703,6 +769,60 @@ export async function publishDraft(
     }
   } else {
     priceSyncWarning = "Shopify 未回傳預設款式 ID，價格／成本未同步，請至 Shopify 後台手動確認並設定價格。";
+  }
+
+  // Media is deliberately deferred until the product ID and variants are safe.
+  // Before the potentially slow remote-media step, persist an api_failed
+  // checkpoint with the real ID. If the serverless request is killed, retry can
+  // resume this same DRAFT instead of creating a duplicate product.
+  const mediaInputs = Array.isArray(payload.media) ? payload.media : [];
+  if (mediaInputs.length > 0) {
+    if (resumeExistingDraftId && resumeExistingMediaCount > 0 && resumeExistingMediaCount < mediaInputs.length) {
+      return failAfterCreate(
+        `Existing Shopify DRAFT has only ${resumeExistingMediaCount}/${mediaInputs.length} media items; automatic media retry is blocked to avoid duplicates.`,
+        { productId, remoteMediaCount: resumeExistingMediaCount, expectedMediaCount: mediaInputs.length }
+      );
+    }
+
+    if (!resumeExistingDraftId || resumeExistingMediaCount === 0) {
+      await markDraftFailed(
+        serviceSupabase,
+        id,
+        `Shopify DRAFT ${productId} and variants are linked; media sync is pending.`,
+        productId
+      );
+
+      const mediaMutation = `
+        mutation ProductAttachMedia($product: ProductUpdateInput!, $media: [CreateMediaInput!]) {
+          productUpdate(product: $product, media: $media) {
+            product { id status }
+            userErrors { field message }
+          }
+        }
+      `;
+      try {
+        const { response: mediaResponse, result: mediaResult } = await caller(mediaMutation, {
+          product: { id: productId },
+          media: mediaInputs
+        });
+        const mediaErrors = mediaResult?.data?.productUpdate?.userErrors ?? mediaResult?.errors;
+        if (
+          !mediaResponse.ok ||
+          (Array.isArray(mediaErrors) && mediaErrors.length > 0) ||
+          mediaResult?.data?.productUpdate?.product?.id !== productId
+        ) {
+          return failAfterCreate(
+            `商品與價格已建立，但圖片同步失敗：${stringifyError(mediaErrors?.length ? mediaErrors : mediaResult)}`,
+            mediaResult
+          );
+        }
+      } catch (mediaError) {
+        return failAfterCreate(
+          `商品與價格已建立，但圖片同步失敗：${stringifyError(mediaError)}`,
+          null
+        );
+      }
+    }
   }
 
   // ACTIVE is a final promotion only after every follow-up above completed.

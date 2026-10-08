@@ -24,16 +24,18 @@
 
 Nestory 是潮巢玩居內部 Shopify 商品上架 PWA：商品輸入、圖片/規格、AI 文案、審核、圖片處理、Shopify 發布；Supabase 資料層、Vercel 部署。
 
-## 2.1 2026-10-07 最新接手點
+## 2.1 2026-10-08 最新接手點
 
-### 批量前最後整備 — 最新狀態
+### 批量前最後整備 — PASS / HOLD
 
-- multi-variant blank SKU：source fix 已完成；空白 row 由 generated product SKU 依序衍生 `001 / 002 / 003...`，手填 row SKU 優先。
-- Preview-only Shopify auth self-test endpoint 已完成；只讀 shop identity，不做 mutation。
-- Vercel Free 今日 deployment API 已達 >100/day，最新完整 HEAD 目前無法建立新的 Preview deployment。
-- 因此 Nestory 自己的 Client ID + Client Secret runtime：**HOLD，不是 PASS**。
-- 最新 package checkpoint（文件寫入前）：`8aaf7a0884e6ca532730afab1022282aad70c7f4`；之後仍有 docs commits，最新 HEAD 必須重新查 GitHub。
-- 5 件 DRAFT batch / ACTIVE 仍禁止，直到 runtime self-test + clean CI 完成。
+- multi-variant blank SKU：**PASS**；空白 row 由 generated product SKU 依序衍生 `001 / 002 / 003...`，手填 row SKU 優先。
+- Nestory Vercel Preview Client ID + Client Secret runtime：**PASS**。
+- runtime authority：READY deployment `dpl_ANUzbW7jXYGRUxQmYuXEFY3apCfM`，source `bf29ce1e9e1276785d038693494edd182eca0d9c`；HTTP 200 / `tokenExchange=pass`，shop identity = `潮巢 Nestory / e0jg81-qe.myshopify.com / TWD`。
+- Shopify 專項 CI gate：source `771a2b6a5dbf61af8168937c6c4b029b935f2ecf`，`Verify Shopify batch readiness` **PASS**。
+- branch-only self-test secret 已清空；cleanup Preview endpoint 已驗證回 503 / `SELFTEST_TOKEN_MISSING`；臨時 sandbox 已停止。
+- Miffy 受控真商品仍是 **DRAFT**；schedule groups/items 仍 0。
+- full CI 後段仍被另一條 Copy verifier `Boss hierarchy wrapper disappeared` 擋紅，本 Shopify package 不處理文案。
+- 5 件 DRAFT batch / ACTIVE 仍沒有自動授權。下一步若 Owner 要繼續，另開 5 件 DRAFT package；ACTIVE 仍禁止。
 
 詳細：`docs/audits/SHOPIFY-BATCH-READINESS-2026-10-07.md`。
 
@@ -85,7 +87,7 @@ Owner 後續已明確批准並完成「1 件真 Shopify DRAFT」受控 Go-Live p
 - controlled publish job exactly 1，marker = `controlled_shopify_connector_draft_test`
 - no ACTIVE / no second product / no batch / no Cron / no merge / no Production deploy
 
-重要限制：這次真寫入透過已連線 Shopify Connector 完成，**不能視為 Nestory Vercel Client ID + Client Secret runtime 已通過**。另外兩個 persisted variant rows 的 SKU 都是 null，因此 Shopify 兩款也沒有 SKU；在任何 5 件 batch / ACTIVE 前，建議先處理／明確決策這個 row-level SKU gap，並另外證明 Nestory 自己的 Vercel client-credentials runtime。
+後續批量前整備已補齊上述兩個限制：Nestory Vercel Client ID + Client Secret runtime 已在 Preview 真實 read-only 自測 PASS；multi-variant blank SKU source fallback 也已完成並有專項 CI PASS。歷史 Miffy DRAFT 兩個既有 Shopify variants 仍沒有 SKU，因本包沒有回頭改既有遠端商品；新發布才會套用新的 fallback。
 
 詳細：`docs/audits/SHOPIFY-DRAFT-CONTROLLED-E2E-2026-10-07.md`。目前維持 **HOLD**，等待下一個 Owner 明確 package。
 

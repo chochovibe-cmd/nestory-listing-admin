@@ -14,7 +14,11 @@ import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import { readStoredRunMode } from "@/components/ModeSwitcher";
 import { showToast } from "@/components/Toast";
 import { StatusBadge } from "@/components/listing/StatusBadge";
-import { GENERATION_QUEUE_KICK_EVENT } from "@/components/listing/GenerationQueueRunner";
+import {
+  GENERATION_QUEUE_KICK_EVENT,
+  REGEN_QUEUE_STATUS_EVENT,
+  type RegenQueueStatusDetail
+} from "@/components/listing/GenerationQueueRunner";
 import { Button } from "@/components/ui/Button";
 import {
   secondaryStatusForResultCard,
@@ -314,6 +318,7 @@ export function ResultCard({
   const [markMessage, setMarkMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
   const [regeneratingField, setRegeneratingField] = useState<CopyVersionField | null>(null);
+  const [regenQueueStatus, setRegenQueueStatus] = useState<RegenQueueStatusDetail | null>(null);
   const [comboSaving, setComboSaving] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenTone, setRegenTone] = useState<CopyTone>(COPY_TONES[0]);
@@ -745,6 +750,79 @@ export function ResultCard({
   }, [draft.updated_at]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateRegenQueueStatus() {
+      try {
+        const response = await fetch("/api/generation-queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "regen_status", draftId: draft.id })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || cancelled) return;
+
+        const regen = payload.regen as
+          | { status?: string; field?: string | null; error?: string | null }
+          | null
+          | undefined;
+
+        if (!regen) {
+          setRegenQueueStatus(null);
+          setRegenerating(false);
+          setRegeneratingField(null);
+          return;
+        }
+
+        const status =
+          regen.status === "processing" || regen.status === "failed"
+            ? regen.status
+            : "queued";
+        const field =
+          typeof regen.field === "string" && COPY_VERSION_FIELDS.includes(regen.field as CopyVersionField)
+            ? (regen.field as CopyVersionField)
+            : null;
+
+        setRegenQueueStatus({
+          draftId: draft.id,
+          status,
+          field,
+          error: typeof regen.error === "string" ? regen.error : null
+        });
+        setRegenerating(status !== "failed" && field == null);
+        setRegeneratingField(status !== "failed" ? field : null);
+      } catch {
+        // Queue-status hydration is informative only; generation itself remains DB-backed.
+      }
+    }
+
+    function onRegenQueueStatus(event: Event) {
+      const detail = (event as CustomEvent<RegenQueueStatusDetail>).detail;
+      if (!detail || detail.draftId !== draft.id) return;
+      setRegenQueueStatus(detail);
+      if (detail.status === "queued" || detail.status === "processing") {
+        if (detail.field && COPY_VERSION_FIELDS.includes(detail.field as CopyVersionField)) {
+          setRegenerating(false);
+          setRegeneratingField(detail.field as CopyVersionField);
+        } else {
+          setRegenerating(true);
+          setRegeneratingField(null);
+        }
+      } else {
+        setRegenerating(false);
+        setRegeneratingField(null);
+      }
+    }
+
+    void hydrateRegenQueueStatus();
+    window.addEventListener(REGEN_QUEUE_STATUS_EVENT, onRegenQueueStatus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(REGEN_QUEUE_STATUS_EVENT, onRegenQueueStatus);
+    };
+  }, [draft.id, draft.updated_at]);
+
+  useEffect(() => {
     // Normalize before migration 019 is applied (fields may be missing at runtime).
     setImageMarks(
       images.map((image) => ({
@@ -977,7 +1055,13 @@ export function ResultCard({
   }
 
   async function regenerateField(field: CopyVersionField) {
-    if (regenerating || regeneratingField) return;
+    if (
+      regenerating ||
+      regeneratingField ||
+      regenQueueStatus?.status === "queued" ||
+      regenQueueStatus?.status === "processing"
+    ) return;
+
     // UX-L T61: dirty → inline double-confirm (no window.confirm)
     if (copyDirty[field]) {
       const armed = discardArm?.kind === "regen" && discardArm.field === field;
@@ -987,12 +1071,12 @@ export function ResultCard({
         return;
       }
     }
+
     setDiscardArm(null);
     setRegeneratingField(field);
-    // UX-L T62: in-progress via button label only
 
     try {
-      // D6: materialise virtual baseline before the new regen row lands.
+      // D6: materialise virtual baseline before the queued regen row lands.
       const historyCount = historyByField[field]?.length ?? 0;
       const originalContent = displayByField[field] ?? "";
       const { data: authData } = await supabase.auth.getUser();
@@ -1012,60 +1096,70 @@ export function ResultCard({
         if (baseErr) {
           showToast(`寫入原版歷史失敗：${baseErr}`, "error");
           setMessage("");
+          setRegeneratingField(null);
           return;
         }
       }
 
       const currentValues = displayMapToCurrentValues(displayByField, draft);
-      const response = await fetch("/api/generate", {
+      const response = await fetch("/api/generation-queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "enqueue_regen",
           draftId: draft.id,
-          field,
-          provider: readStoredAiProvider(),
-          mode: readStoredRunMode(),
-          currentValues,
+          input: {
+            queueVersion: "v1.1",
+            jobKind: "regen_field",
+            title: draft.title_zh || draft.taobao_title || draft.original_title || "商品草稿",
+            provider: readStoredAiProvider(),
+            mode: readStoredRunMode(),
+            useWebSearch: true,
+            tone: draft.generation_tone || regenTone,
+            copyLength: "標準",
+            hasImages: false,
+            regenField: field,
+            currentValues
+          }
         }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        showToast(payload.error ?? "單欄重生失敗", "error");
-        setMessage("");
+        showToast(payload.error ?? "單欄重生排隊失敗", "error");
+        setRegeneratingField(null);
         return;
       }
 
-      const value = payload?.result?.value;
-      let nextText = "";
-      if (typeof value === "string") {
-        nextText = value;
-        setFieldDisplay(field, value, false);
-      } else if (Array.isArray(value)) {
-        nextText = (value as string[]).join("\n");
-        setFieldDisplay(field, nextText, false);
-      }
-      setCopyDirty((prev) => {
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
+      const detail: RegenQueueStatusDetail = {
+        draftId: draft.id,
+        status: "queued",
+        field
+      };
+      setRegenQueueStatus(detail);
       setMessage("");
-      showToast(`「${COPY_VERSION_FIELD_LABELS[field]}」已重生`, "success");
-      await loadHistory({ [field]: nextText });
-      await markShopifyDirty();
-      router.refresh();
+      showToast(`「${COPY_VERSION_FIELD_LABELS[field]}」已排入背景重生`, "success");
+      window.dispatchEvent(new CustomEvent<RegenQueueStatusDetail>(REGEN_QUEUE_STATUS_EVENT, { detail }));
+      window.dispatchEvent(new Event(GENERATION_QUEUE_KICK_EVENT));
     } catch {
-      showToast("單欄重生連線失敗", "error");
+      showToast("單欄重生排隊連線失敗", "error");
       setMessage("");
-    } finally {
       setRegeneratingField(null);
     }
   }
 
   async function regenerate() {
+    if (
+      regenerating ||
+      regeneratingField ||
+      regenQueueStatus?.status === "queued" ||
+      regenQueueStatus?.status === "processing"
+    ) return;
+
     setRegenerating(true);
     setDiscardArm(null);
-    // UX-L T62: in-progress via modal busy; result → toast
+    // Fable V1.1: close immediately; only enqueue is awaited.
+    setRegenOpen(false);
+
     try {
       if (draft.status === "failed" && draft.generation_status === "failed") {
         const retryResponse = await fetch("/api/generation-queue", {
@@ -1075,58 +1169,71 @@ export function ResultCard({
         });
         const retryPayload = await retryResponse.json().catch(() => ({}));
         if (retryResponse.ok) {
+          setRegenerating(false);
           setMessage("");
-          setRegenOpen(false);
           setRegenNotes("");
           showToast("已重新排入生成佇列", "success");
           window.dispatchEvent(new Event(GENERATION_QUEUE_KICK_EVENT));
           router.refresh();
           return;
         }
-        // Legacy/non-queue failures have no V1.1 job to retry. Preserve the
-        // existing direct regenerate path for those drafts.
         if (retryResponse.status !== 409) {
+          setRegenerating(false);
           showToast(retryPayload.error ?? "重新排隊失敗", "error");
           return;
         }
       }
 
-      // BX10: remember tone for this IP
       rememberToneForIp(
         typeof window !== "undefined" ? window.localStorage : null,
         draft.ip_name,
         regenTone
       );
-      const response = await fetch("/api/generate", {
+
+      const response = await fetch("/api/generation-queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "enqueue_regen",
           draftId: draft.id,
-          provider: readStoredAiProvider(),
-          mode: readStoredRunMode(),
-          tone: regenTone,
-          regenNotes: regenNotes.trim() || undefined
+          input: {
+            queueVersion: "v1.1",
+            jobKind: "regen_full",
+            title: draft.title_zh || draft.taobao_title || draft.original_title || "商品草稿",
+            provider: readStoredAiProvider(),
+            mode: readStoredRunMode(),
+            useWebSearch: true,
+            tone: regenTone,
+            copyLength: "標準",
+            hasImages: false,
+            regenNotes: regenNotes.trim() || undefined
+          }
         })
       });
-      const payload = await response.json();
-      if (response.ok) {
-        setMessage("");
-        showToast("重新生成完成", "success");
-        setCopyDirty(emptyDirtyMap());
-        setRegenOpen(false);
-        setRegenNotes("");
-        await markShopifyDirty();
-      } else {
-        setMessage("");
-        showToast(payload.error ?? "重新生成失敗", "error");
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setRegenerating(false);
+        setRegenOpen(true);
+        showToast(payload.error ?? "重新生成排隊失敗", "error");
+        return;
       }
-      if (expanded) await loadHistory();
-      router.refresh();
-    } catch {
+
+      const detail: RegenQueueStatusDetail = {
+        draftId: draft.id,
+        status: "queued",
+        field: null
+      };
+      setRegenQueueStatus(detail);
       setMessage("");
-      showToast("重新生成連線失敗", "error");
-    } finally {
+      setRegenNotes("");
+      showToast("已排入背景重生，可以繼續操作其他商品", "success");
+      window.dispatchEvent(new CustomEvent<RegenQueueStatusDetail>(REGEN_QUEUE_STATUS_EVENT, { detail }));
+      window.dispatchEvent(new Event(GENERATION_QUEUE_KICK_EVENT));
+    } catch {
       setRegenerating(false);
+      setRegenOpen(true);
+      setMessage("");
+      showToast("重新生成排隊連線失敗", "error");
     }
   }
 
@@ -2084,6 +2191,23 @@ export function ResultCard({
     <span className="rc-title-row">
       <span className="rc-title-flow">
         <span className="rc-title">{draft.title_zh || draft.taobao_title || "商品草稿"}</span>
+        {regenQueueStatus ? (
+          <span
+            className={
+              regenQueueStatus.status === "failed"
+                ? "schip schip--error"
+                : "schip schip--run"
+            }
+            role="status"
+            title={regenQueueStatus.error ?? undefined}
+          >
+            {regenQueueStatus.status === "failed"
+              ? "⚠ 重生失敗"
+              : regenQueueStatus.field
+                ? `↻ ${COPY_VERSION_FIELD_LABELS[regenQueueStatus.field as CopyVersionField] ?? "單欄"}重生中…`
+                : "↻ 重生中…"}
+          </span>
+        ) : null}
         {isNarrow ? (
           <span
             className={

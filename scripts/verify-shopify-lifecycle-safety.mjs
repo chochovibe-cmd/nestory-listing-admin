@@ -18,7 +18,6 @@ assert.match(unpublish, /shopify_product_id \/ shopify_admin_url intentionally p
 assert.match(lifecycle, /mutation ProductUpdateStatus/, "central non-deprecated productUpdate status helper missing");
 assert.match(lifecycle, /product\.id !== productId/, "status helper must validate returned product id");
 assert.match(lifecycle, /product\.status !== status/, "status helper must validate returned status");
-assert.match(lifecycle, /mutation ProductDelete/, "partial-DRAFT cleanup helper missing");
 assert.match(lifecycle, /productId !== "mock-product-id"/, "mock-product-id must be excluded from live lifecycle mutations");
 
 assert.match(safe, /product:\s*\{ \.\.\.payload\.product, status: "DRAFT" \}/, "productCreate must force DRAFT");
@@ -26,21 +25,25 @@ assert.doesNotMatch(safe, /publishableStatuses\s*=\s*\[[^\]]*"publishing"/, "pub
 assert.match(safe, /Draft is already publishing; duplicate publish request blocked/, "double-publish 409 guard missing");
 assert.match(safe, /draft\.status === "api_failed" && isRealShopifyProductId/, "api_failed existing-ID recovery missing");
 assert.match(safe, /remote\?\.status === "ACTIVE"/, "unsafe ACTIVE partial must be blocked");
-assert.match(safe, /await deleteShopifyProduct\(existingProductId, caller\)/, "DRAFT retry cleanup delete missing");
-assert.match(safe, /clearLocalShopifyLink/, "stale/deleted linkage must clear locally before create");
+assert.match(safe, /resumeExistingDraftId/, "api_failed DRAFT must resume existing Shopify product");
+assert.doesNotMatch(safe, /await deleteShopifyProduct\(existingProductId, caller\)/, "recoverable DRAFT must not be deleted");
+assert.match(safe, /clearLocalShopifyLink/, "stale remote linkage must still clear locally before replacement create");
 assert.match(safe, /persistCreatedProductLink/, "created product ID must be persisted before follow-up");
-assert.match(safe, /compensation productDelete succeeded/, "link-persistence compensation result missing");
-assert.match(safe, /Shopify product created but local linkage failed; manual reconciliation required/, "fatal orphan reconciliation message missing");
+assert.match(safe, /local linkage persistence failed; manual reconciliation required/, "fatal orphan reconciliation message missing");
 assert.match(safe, /draft\.status === "draft_created" && isRealShopifyProductId/, "same-ID republish branch missing");
 assert.match(safe, /setShopifyProductStatus\(productId, "ACTIVE", caller\)/, "final ACTIVE promotion missing");
 
 const createIndex = safe.indexOf('product: { ...payload.product, status: "DRAFT" }');
 const persistIndex = safe.indexOf("persistCreatedProductLink(serviceSupabase, id, productId)");
 const variantIndex = safe.indexOf("mutation ProductVariantsBulkUpdate", persistIndex);
+const mediaIndex = safe.indexOf("mutation ProductAttachMedia", variantIndex);
 const activeIndex = safe.lastIndexOf('setShopifyProductStatus(productId, "ACTIVE", caller)');
 assert(createIndex >= 0 && persistIndex > createIndex, "productId persistence must follow create");
 assert(variantIndex > persistIndex, "variant sync must happen after productId persistence");
-assert(activeIndex > variantIndex, "ACTIVE promotion must happen after variant sync");
+assert(mediaIndex > variantIndex, "media sync must happen after variant sync");
+assert(activeIndex > mediaIndex, "ACTIVE promotion must happen after media sync");
+assert.doesNotMatch(safe, /productCreate\(product: \$product, media: \$media\)/, "productCreate must not wait on media");
+assert.match(safe, /media sync is pending/, "pre-media recovery checkpoint missing");
 
 assert.match(recordsPage, /PublishLifecycleActionsBridge/, "records page must wire lifecycle actions");
 assert.match(actions, />\s*Shopify 封存\s*</, "active product archive action missing");
@@ -66,7 +69,6 @@ function runLifecycleModel({
   remoteStatus = null,
   variantFails = false,
   linkFails = false,
-  deleteFails = false,
   unpublish = false
 } = {}) {
   const calls = [];
@@ -94,21 +96,25 @@ function runLifecycleModel({
     return { http: 200, calls, status, productId, remote };
   }
 
+  let resumed = false;
   if (status === "api_failed" && productId) {
     calls.push("queryExisting");
     if (remote === "ACTIVE") return { http: 409, calls, status, productId, remote };
     if (remote === "DRAFT") {
-      calls.push("productDelete");
-      if (deleteFails) return { http: 409, calls, status, productId, remote };
+      calls.push("resumeExisting:DRAFT");
+      resumed = true;
+    } else {
+      calls.push("clearLocalId");
+      productId = null;
     }
-    calls.push("clearLocalId");
-    productId = null;
   }
 
-  calls.push("productCreate:DRAFT");
-  productId = "gid://shopify/Product/101";
-  remote = "DRAFT";
-  calls.push("persistProductId");
+  if (!resumed) {
+    calls.push("productCreate:DRAFT");
+    productId = "gid://shopify/Product/101";
+    remote = "DRAFT";
+    calls.push("persistProductId");
+  }
   if (linkFails) {
     calls.push("productDelete");
     return { http: 502, calls, status: "api_failed", productId, remote: null };
@@ -150,12 +156,14 @@ function runLifecycleModel({
   console.log("PASS TEST 2 — post-create failure remains DRAFT");
 }
 
-// TEST 3 — api_failed retry DRAFT
+// TEST 3 — api_failed retry DRAFT resumes same ID
 {
-  const r = runLifecycleModel({ localStatus: "api_failed", existingId: "gid://shopify/Product/9", remoteStatus: "DRAFT" });
-  assert.deepEqual(r.calls.slice(0, 4), ["queryExisting", "productDelete", "clearLocalId", "productCreate:DRAFT"]);
-  assert.equal(r.calls.filter((c) => c === "productCreate:DRAFT").length, 1);
-  console.log("PASS TEST 3 — api_failed DRAFT recovery creates once");
+  const id = "gid://shopify/Product/9";
+  const r = runLifecycleModel({ localStatus: "api_failed", existingId: id, remoteStatus: "DRAFT" });
+  assert.deepEqual(r.calls.slice(0, 3), ["queryExisting", "resumeExisting:DRAFT", "variantSync"]);
+  assert.equal(r.calls.filter((c) => c === "productCreate:DRAFT").length, 0);
+  assert.equal(r.productId, id);
+  console.log("PASS TEST 3 — api_failed DRAFT recovery reuses same product");
 }
 
 // TEST 4 — unsafe ACTIVE partial

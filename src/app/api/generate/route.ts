@@ -468,6 +468,11 @@ async function handleFieldRegen(params: {
     update.warnings = uniqueMessages([...warnings, COPY_OUTPUT_TRUNCATED_WARNING]);
   }
 
+  if (draft.shopify_product_id) {
+    update.shopify_sync_status = "dirty";
+    update.shopify_sync_error = null;
+  }
+
   const { error: updateError } = await serviceSupabase
     .from("product_drafts")
     .update(update)
@@ -728,32 +733,49 @@ export async function POST(request: NextRequest) {
   }
 
   const markFullGenerationFailed = async (message: string, status = 500) => {
+    const failurePatch =
+      queueJobKind === "regen_full"
+        ? {
+            generation_status: "failed",
+            generation_error: message,
+            worker_id: null,
+            worker_locked_at: null,
+            worker_lock_expires_at: null,
+            next_retry_at: null,
+          }
+        : {
+            status: "failed",
+            pipeline_stage: mapStatusToPipelineStage("failed"),
+            generation_status: "failed",
+            generation_error: message,
+            worker_id: null,
+            worker_locked_at: null,
+            worker_lock_expires_at: null,
+            next_retry_at: null,
+          };
+
     await serviceSupabase
       .from("product_drafts")
-      .update({
-        status: "failed",
-        pipeline_stage: mapStatusToPipelineStage("failed"),
-        generation_status: "failed",
-        generation_error: message,
-        worker_id: null,
-        worker_locked_at: null,
-        worker_lock_expires_at: null,
-        next_retry_at: null,
-      })
+      .update(failurePatch)
       .eq("id", draftId);
 
     await updateQueueRun("failed", { error: message });
     return Response.json({ error: message }, { status });
   };
 
+  const processingPatch =
+    queueJobKind === "regen_full"
+      ? { generation_status: "processing", generation_error: null }
+      : {
+          status: "processing",
+          pipeline_stage: mapStatusToPipelineStage("processing"),
+          generation_status: "processing",
+          generation_error: null,
+        };
+
   const { error: processingError } = await serviceSupabase
     .from("product_drafts")
-    .update({
-      status: "processing",
-      pipeline_stage: mapStatusToPipelineStage("processing"),
-      generation_status: "processing",
-      generation_error: null,
-    })
+    .update(processingPatch)
     .eq("id", draftId);
 
   if (processingError) {
@@ -1258,6 +1280,16 @@ export async function POST(request: NextRequest) {
     worker_lock_expires_at: null,
     next_retry_at: null,
   };
+
+  if (queueJobKind === "regen_full") {
+    // Background regeneration must not move a card to another workflow station.
+    draftUpdate.status = draft.status;
+    draftUpdate.pipeline_stage = draft.pipeline_stage;
+    if (draft.shopify_product_id) {
+      draftUpdate.shopify_sync_status = "dirty";
+      draftUpdate.shopify_sync_error = null;
+    }
+  }
 
   if (detectedBrand) {
     draftUpdate.product_brand = detectedBrand;

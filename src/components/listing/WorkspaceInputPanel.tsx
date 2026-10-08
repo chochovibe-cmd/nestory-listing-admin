@@ -1399,8 +1399,21 @@ export function WorkspaceInputPanel({
     }
   }
 
-  function stepModel(title: string, statuses: StepStatus[], error?: string, timingNote?: string): GenerationProgress {
-    return { visible: true, title, steps: GENERATION_STEP_LABELS.map((label, i) => ({ label, status: statuses[i] })), error, timingNote };
+  function stepModel(
+    draftId: string,
+    title: string,
+    statuses: StepStatus[],
+    error?: string,
+    timingNote?: string
+  ): GenerationProgress {
+    return {
+      draftId,
+      visible: true,
+      title,
+      steps: GENERATION_STEP_LABELS.map((label, i) => ({ label, status: statuses[i] })),
+      error,
+      timingNote
+    };
   }
 
   function resetForNextItem() {
@@ -1815,14 +1828,14 @@ export function WorkspaceInputPanel({
       setSubmitting(false);
       setSubmitPhase(null);
       setFlowPhase("fill");
-      emitProgress({ visible: false, title: "", steps: [] });
+      emitProgress({ draftId: null, visible: false, title: "", steps: [] });
       return;
     }
 
     const hasImages = uploadPromisesRef.current.length > 0;
 
     // Step 1 done, step 2 (image analysis) active.
-    emitProgress(stepModel(cardTitle, ["done", hasImages ? "active" : "done", "pending", "pending"]));
+    emitProgress(stepModel(id, cardTitle, ["done", hasImages ? "active" : "done", "pending", "pending"]));
 
     // Wait for any background image uploads to finish before analysis reads them.
     let uploadMs = 0;
@@ -1851,7 +1864,7 @@ export function WorkspaceInputPanel({
 
     // Step 3 (copy generation) active.
     setSubmitPhase("generating");
-    emitProgress(stepModel(cardTitle, ["done", step2, "active", "pending"]));
+    emitProgress(stepModel(id, cardTitle, ["done", step2, "active", "pending"]));
 
     // B8 D3-A: one-shot provider override; after this request falls back to header default.
     const providerForThisRun = sessionProvider ?? readStoredAiProvider();
@@ -1887,7 +1900,7 @@ export function WorkspaceInputPanel({
       setFlowPhase("fill");
       setSessionProvider(null);
       showToast("生成連線失敗，可以到右側卡片按「重新生成」再試一次", "error");
-      emitProgress(stepModel(cardTitle, ["done", step2, "error", "pending"], "生成連線失敗"));
+      emitProgress(stepModel(id, cardTitle, ["done", step2, "error", "pending"], "生成連線失敗"));
       router.refresh();
       return;
     }
@@ -1918,14 +1931,14 @@ export function WorkspaceInputPanel({
       const errorText = payload.error ?? "生成失敗";
       setFlowPhase("fill");
       showToast(errorText + "，可以到右側卡片按「重新生成」再試一次", "error");
-      emitProgress(stepModel(cardTitle, ["done", step2, "error", "pending"], errorText, timingNote));
+      emitProgress(stepModel(id, cardTitle, ["done", step2, "error", "pending"], errorText, timingNote));
       router.refresh();
       return;
     }
 
     // Requirement 5: success -> all steps done. Card auto-clears once the real
     // ResultCard lands via router.refresh (handled in DraftResultsPanel).
-    emitProgress(stepModel(cardTitle, ["done", step2, "done", "done"], undefined, timingNote));
+    emitProgress(stepModel(id, cardTitle, ["done", step2, "done", "done"], undefined, timingNote));
     // T92: step 2 done → step 3 active（確認發布）
     setFlowPhase("review");
 

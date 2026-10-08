@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       "0b0fc8ba-f7e2-464a-8148-0d81fb471006",
       "da3c91e3-a795-4e72-8e85-26cd5dcec259",
       "3db20513-b703-494c-8bd7-e7d765a96590",
-      "f3bb2edb-74d7-4c5c-9a11-978630470293"
+      "2d1c457f-292a-449c-845d-f3688aa6e529"
 ]
     });
     return Response.json({ step, ...result });

@@ -14,13 +14,17 @@
     position: relative;
     display: grid;
     grid-template-columns: 20px 72px minmax(0, 1fr) auto auto;
-    grid-template-rows: auto minmax(72px, auto);
+    grid-template-rows: auto auto auto;
     align-items: center;
     gap: 8px 10px;
     overflow: visible;
   }
-  .result-card > .rc-header > .rc-checkbox { grid-column: 1; grid-row: 1 / 3; }
-  .result-card > .rc-header > .rc-thumb { grid-column: 2; grid-row: 2; }
+  .result-card > .rc-header > .rc-checkbox { grid-column: 1; grid-row: 1 / 4; }
+  .result-card > .rc-header > .rc-thumb {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    align-self: center;
+  }
   .result-card > .rc-header > .rc-headmain { display: contents; }
   .result-card > .rc-header .rc-title-row {
     grid-column: 2 / -1;
@@ -32,10 +36,19 @@
     grid-row: 2;
     align-self: start;
   }
+  .result-card > .rc-header .rc-head-chips > .rc-next-action--desktop {
+    flex: 1 0 100%;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .result-card > .rc-header .rc-card-summary-row {
     grid-column: 3;
-    grid-row: 2;
-    align-self: end;
+    grid-row: 3;
+    align-self: start;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -44,13 +57,14 @@
   .result-card > .rc-header .rc-card-mark-summary { font-size: 11px; }
   .result-card > .rc-header .rc-m-row3 {
     grid-column: 4;
-    grid-row: 2;
+    grid-row: 2 / 4;
     display: flex;
     align-items: center;
+    align-self: center;
   }
   .result-card > .rc-header > .rc-quick-row {
     grid-column: 5;
-    grid-row: 2;
+    grid-row: 2 / 4;
     align-self: center;
     margin-left: 0;
   }

@@ -1908,7 +1908,7 @@ export function ResultCard({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 959px)");
+    const mq = window.matchMedia("(max-width: 959px) and (hover: none) and (pointer: coarse)");
     const sync = () => setIsNarrow(mq.matches);
     sync();
     mq.addEventListener("change", sync);
@@ -2396,18 +2396,18 @@ export function ResultCard({
             {headMetaEl}
             {detectTagsEl}
             {detectWarnsEl}
+            {nextActionText ? (
+              <span
+                className={
+                  blockWarnCount > 0
+                    ? "rc-next-action rc-next-action--desktop is-block"
+                    : "rc-next-action rc-next-action--desktop"
+                }
+              >
+                {nextActionText}
+              </span>
+            ) : null}
           </span>
-          {nextActionText ? (
-            <span
-              className={
-                blockWarnCount > 0
-                  ? "rc-next-action rc-next-action--desktop is-block"
-                  : "rc-next-action rc-next-action--desktop"
-              }
-            >
-              {nextActionText}
-            </span>
-          ) : null}
         </span>
         {nextActionText ? (
           <span
@@ -3022,10 +3022,17 @@ export function ResultCard({
       <Station3PublishModal
         busy={station3Busy}
         draftCount={1}
+        draftIds={[draft.id]}
         onCancel={() => {
           if (!station3Busy) setStation3Open(false);
         }}
         onConfirm={(sel) => void runStation3CardFlow(sel)}
+        onScheduleCreated={(result) => {
+          showToast(
+            `📅 ${result.message}${result.finishDate ? ` · ${result.finishDate} 完成` : ""}`,
+            "success"
+          );
+        }}
         open={station3Open}
       />
 

@@ -45,6 +45,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify scheduled publish safety
+        run: pnpm run verify:publish-schedule
+
+      - name: Verify Shopify batch readiness
+        run: node scripts/verify-shopify-batch-readiness.mjs
+
       - name: Verify contracts and regressions
         run: pnpm run verify:all
 

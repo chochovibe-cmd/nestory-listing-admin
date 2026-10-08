@@ -1839,10 +1839,17 @@ export function DraftResultsPanel({
       <Station3PublishModal
         busy={station3Busy}
         draftCount={station3DraftIds.length}
+        draftIds={station3DraftIds}
         onCancel={() => {
           if (!station3Busy) setStation3Open(false);
         }}
         onConfirm={(sel) => void runStation3Flow(sel)}
+        onScheduleCreated={(result) => {
+          const text = `📅 ${result.message} · 共 ${result.total} 件${result.finishDate ? ` · 預計 ${result.finishDate} 完成` : ""}`;
+          setMessage(text);
+          showToast(text, "success");
+          setSelectedIds(new Set());
+        }}
         open={station3Open}
       />
 

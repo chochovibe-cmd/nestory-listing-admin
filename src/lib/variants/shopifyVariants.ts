@@ -132,12 +132,35 @@ export function estimateVariantCostTwd(
   return Math.round(sourceCost);
 }
 
+export function deriveVariantSku(
+  baseSku: string | null | undefined,
+  rowSku: string | null | undefined,
+  zeroBasedIndex: number
+): string | null {
+  const explicit = rowSku?.trim();
+  if (explicit) return explicit;
+
+  const base = baseSku?.trim();
+  if (!base) return null;
+
+  const terminalSequence = base.match(/^(.*-)(\d{3})$/);
+  if (terminalSequence) {
+    const sequence = Number(terminalSequence[2]) + Math.max(0, zeroBasedIndex);
+    return `${terminalSequence[1]}${String(sequence).padStart(3, "0")}`;
+  }
+
+  return zeroBasedIndex === 0
+    ? base
+    : `${base}-${String(zeroBasedIndex + 1).padStart(3, "0")}`;
+}
+
 export function buildVariantPublishPlan(
   rows: ProductVariantRow[] | null | undefined,
   draft: {
     cny_price?: number | null;
     twd_cost?: number | null;
     price_mode?: string | null;
+    sku?: string | null;
   }
 ): VariantPublishPlan {
   const sorted = [...(rows ?? [])]
@@ -166,7 +189,7 @@ export function buildVariantPublishPlan(
     return { name, values: ordered.map((n) => ({ name: n })) };
   });
 
-  const seeds: ShopifyVariantSeed[] = sorted.map((row) => {
+  const seeds: ShopifyVariantSeed[] = sorted.map((row, index) => {
     const values = optionValuesFromRow(row, dimNames.length);
     const optionValues = dimNames.map((optionName, i) => ({
       optionName,
@@ -183,7 +206,7 @@ export function buildVariantPublishPlan(
       compareAtPrice:
         draft.price_mode === "single" ? null : row.compare_at_price ?? null,
       cost: estimateVariantCostTwd(row, draft),
-      sku: row.sku,
+      sku: deriveVariantSku(draft.sku, row.sku, index),
       inventoryQuantity: hasFinite ? row.inventory_quantity : null,
       inventoryPolicy: hasFinite ? "DENY" : "CONTINUE",
       imageId: row.image_id

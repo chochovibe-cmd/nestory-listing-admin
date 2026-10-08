@@ -179,7 +179,8 @@ export function buildShopifyProductPayload(
     {
       cny_price: draft.cny_price,
       twd_cost: draft.twd_cost,
-      price_mode: draft.price_mode
+      price_mode: draft.price_mode,
+      sku
     }
   );
 

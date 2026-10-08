@@ -1,6 +1,7 @@
 -- Shopify full-sync state and remote identity tracking.
--- Additive and idempotent: production must apply this migration through the
--- normal tracked migration process; this file is not executed by local work.
+-- Production ledger truth (read-only verified 2026-10-07): applied as
+-- 20261006122416 shopify_full_sync_state. Source filename is aligned to the
+-- hosted ledger; do not replay this migration to Production.
 
 begin;
 

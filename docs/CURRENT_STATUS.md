@@ -1,5 +1,170 @@
 # Nestory — Current Status
 
+## 2026-10-08 Controlled 5-item Shopify DRAFT Batch
+
+**PASS / HOLD**
+
+Owner 已明確批准「5 件 Shopify DRAFT 小批量」，已完成：
+
+- Batch ID：`0641a514-62a3-41b4-afc5-58400df32c9e`
+- final：`completed / 5 done / 0 failed`
+- controlled publish jobs：5
+- Shopify 5 件最後讀回全部仍是 **DRAFT**
+- Nestory 5 筆都已 linkage 為 `draft_created`
+- schedule groups/items 仍為 0
+- no ACTIVE / no Online Store publication / no Cron / no Production deploy / no merge
+
+5 件：
+
+1. 酷洛米吊飾 → Shopify `15419560001721`，12 images，1 variant，SKU `CHO-CHM-HVE-LWE-001`
+2. Hello Kitty 浴巾禮盒 → `15419567800505`，32 images，1 variant，SKU `CHO-OTH-HVE-URV-001`
+3. 佈歐涼拖鞋 → `15419568423097`，26 images，1 variant，SKU `CHO-OTH-QRR-SJJ-001`
+4. 七龍珠 MINISO 盲盒擺件 → `15419569176761`，15 images，1 variant，SKU `CHO-OTH-QRR-GEN-001`
+5. TOYUKI × Hello Kitty 吊飾 → `15419573338297`，2 images，3 variants
+
+第 5 件真實驗證 multi-variant blank SKU fallback：
+
+- 粉 / S → `CHO-CHM-HVE-URV-001`
+- 粉 / M → `CHO-CHM-HVE-URV-002`
+- 藍 / S → `CHO-CHM-HVE-URV-003`
+
+三款價格／compare-at／成本／CONTINUE inventory 全部 readback 對齊。
+
+執行證據邊界：這次 5 件遠端 mutation 是透過已授權 Shopify Connector 完成；Nestory HTTP batch route 需要 reviewer/admin 的真實瀏覽器 session，本環境沒有 Owner browser cookie，因此沒有加暫時 bypass，也不能宣稱這 5 件是由 `POST /api/drafts/batch/publish` 呼叫。Nestory 的 Vercel Client ID + Secret runtime 已在前一包獨立 HTTP 自測 PASS。
+
+內容警告仍是 ACTIVE 前的另一道 gate；DRAFT PASS 不代表規格／文案已由 Owner 最終核准。
+
+詳細：`docs/audits/SHOPIFY-DRAFT-BATCH-5-2026-10-08.md`。
+
+## 2026-10-08 Shopify Batch Readiness（SKU fix + Vercel auth runtime）
+
+**PASS / HOLD**
+
+Owner 已批准的批量前最後整備已完成：
+
+- 多款式 SKU 空白問題：**PASS**
+- Nestory Vercel Preview Client ID + Secret runtime 真實驗證：**PASS**
+- 仍 HOLD：不代表可以自動進 5 件 batch / ACTIVE；下一步需 Owner 另開 package。
+
+SKU 規則：手填 variant SKU 永遠優先；空白 row 才從既有 generated product SKU 衍生。若 base 是 `...-001`，依 sort order 產生 `...-001 / ...-002 / ...-003`。單款式 SKU contract 不改，也沒有 Production DB backfill。
+
+Vercel runtime 真實證據：
+
+- READY deployment：`dpl_ANUzbW7jXYGRUxQmYuXEFY3apCfM`
+- source HEAD：`bf29ce1e9e1276785d038693494edd182eca0d9c`
+- Preview 自己使用現有 Client ID + Secret 成功換 token
+- HTTP 200 / `tokenExchange=pass`
+- Shopify shop identity：`潮巢 Nestory / e0jg81-qe.myshopify.com / TWD`
+- endpoint 只查 shop identity，沒有 Shopify mutation
+
+清理：
+
+- branch-only Preview self-test secret 已清空，供後續 deployment 使用
+- cleanup deployment（source `771a2b6a5dbf61af8168937c6c4b029b935f2ecf`）READY
+- cleanup deployment 的 self-test endpoint 回 HTTP 503 / `SELFTEST_TOKEN_MISSING`
+- 臨時 sandbox 已停止
+- Miffy 真實測試商品重新核對仍是 **DRAFT**，2 variants / 10 images
+- Production schedule groups/items 仍為 0
+
+CI：
+
+- `Verify Shopify batch readiness`：**PASS**
+- 全 CI 後續仍被另一條 Copy verifier `Boss hierarchy wrapper disappeared` 擋紅；本 Shopify package 不越界處理文案。
+- Supabase / schedule 線沒有因本包被打開。
+
+下一步建議：若 Owner 要繼續，另開 **5 件 Shopify DRAFT 小批量** package；ACTIVE / Online Store publication / Cron / merge 仍禁止，除非再明確授權。
+
+詳細：`docs/audits/SHOPIFY-BATCH-READINESS-2026-10-07.md`。
+
+## 2026-10-07 Controlled Real Shopify DRAFT E2E（Owner-authorized）
+
+**PASS / HOLD**
+
+Owner 已明確批准只做 1 件真 Shopify DRAFT。已完成，而且仍未公開上架：
+
+- Nestory draft：`8b3a35b9-2a9b-4b14-84d3-5c7e84f9b8f8`
+- 商品：`馬克圖布 × Miffy | 米菲 70週年典藏臺燈 | 蘋果樹設計`
+- Shopify product：`gid://shopify/Product/15417952698553`
+- Shopify status：**DRAFT**
+- Shopify `publishedAt`：**null**
+- 10 張圖片：PASS
+- 2 個 variants：PASS
+- 兩款售價：NT$4,480
+- 兩款 compare-at：NT$5,480
+- 成本：NT$1,644 / NT$1,705
+- inventory policy：CONTINUE / 不追庫存
+- SEO：PASS
+- Nestory 四個 custom metafields：PASS
+- Nestory 本地 linkage：PASS，狀態已 `draft_created`，Shopify ID 對齊
+- controlled publish job：exactly 1，execution path 明確標為 `controlled_shopify_connector_draft_test`
+
+這次真寫入是透過已連線的 Shopify Connector，依目前 Nestory payload contract 建立並獨立讀回驗證；**沒有直接證明 Vercel Preview 自己的 Client ID + Client Secret token exchange**。Vercel MCP 不提供解密後 secret，project-bound sandbox 也不自動繼承 project env；不可把 connector PASS 說成 Nestory Vercel runtime PASS。
+
+在 Nestory linkage 時，第一個 direct SQL update 被 Production trigger 正確擋下並完全 rollback；之後先用 rollback-only 測試證明 trigger 認得 `service_role` context，再以單一 transaction + CAS guard 完成 linkage 與 audit row。沒有部分寫入。
+
+下一步 blocker：
+
+- 多款式 row-level SKU 目前為 null，真 Shopify 兩個 variants 因而都是無 SKU；這是現行 Nestory multi-variant contract 的真實缺口，**本包只記錄、不順手 redesign**。
+- 草稿仍有「網搜規格需核實」warning；DRAFT 可保留，但 ACTIVE 前要 Owner / Copy 線核實。
+- 潮巢 formatter 目前把四個 bullets 後的長段落也渲染成第五個 bullet；屬 Copy/UI content scope，本包不改。
+- 在任何 5 件 batch / ACTIVE 前，建議先獨立證明 Nestory 自己的 Vercel client-credentials runtime。
+
+明確未做：ACTIVE、Online Store publication、第二件商品、batch、scheduled execution、Cron、Production deploy、merge、copy/prompt redesign。
+
+詳細證據：`docs/audits/SHOPIFY-DRAFT-CONTROLLED-E2E-2026-10-07.md`。
+
+## 2026-10-07 Schedule Core / Migration Ledger Reconcile（Draft PR #15）
+
+Owner 已完成本輪 UI 驗收：
+
+- Desktop ResultCard：**PASS**
+- Schedule UI / 發布中心：**PASS**
+- Mobile / desktop 必須分開設計，不能只靠同一套版型硬縮。
+
+目前施工線：
+
+- branch：`agent/schedule-core-20261006`
+- Draft PR：#15
+- base：`agent/uiux2-preview-20260930`
+- 未 merge、未 Production deploy、未啟用真實 Shopify schedule execution。
+
+Production Supabase 2026-10-07 只讀核對：
+
+- project：`nestory-listing-tool-test / tbgtqwvuohmdxnxisrgr`
+- ledger 已有 `20261006121816 publish_schedule_core`
+- ledger 已有 `20261006122416 shopify_full_sync_state`
+- `publish_schedule_groups = 0`
+- `publish_schedule_items = 0`
+- claim RPC 只允許 `service_role`，`authenticated / anon` 無 EXECUTE。
+
+Source 已把兩個已套用 migration 檔名對齊 hosted ledger；另外兩筆仍是 **known pending**：
+
+- `20260822223100_variant_split_override_semantics.sql`
+- `20260902090000_guard_current_image_batch_pointer.sql`
+
+因 pending timestamp 早於已套用的 2026-10-06 migration，**禁止 unattended `supabase db push`**；之後要套必須另開 Owner 授權 migration package，先查 live ledger 再 controlled apply。
+
+排程目前有三道 server-side 安全鎖，Vercel 三者都**沒有設定**：
+
+- `PUBLISH_SCHEDULE_DB_WRITE_ENABLED`：控制 schedule table 建立／暫停／取消／重試／claim。
+- `PUBLISH_SCHEDULE_STAGING_ENABLED`：控制真 Shopify DRAFT staging。
+- `PUBLISH_SCHEDULE_EXECUTION_ENABLED`：控制到期排程真實執行。
+
+所以目前 Preview 只能 read / dry-run；**不能寫 Production schedule tables，也不能動 Shopify DRAFT / ACTIVE**。另外 `vercel.json` 仍沒有註冊 `/api/cron/scheduled-publish`。
+
+驗證：
+
+- Supabase Local Reconcile #144：**PASS**。
+- 真 HTTP schedule API E2E：**PASS**。使用完整本機 Supabase stack + 本機 Next.js，實際驗證登入 session、401/403、reviewer 建立排程、重複防護、pause/resume、paused retry 不偷恢復、dry-run 不 claim、cancel、終止狀態不可 resume/retry、cleanup。
+- E2E 前後 `publish_batches` / `shopify_sync_jobs` 數量不變，證明沒有走 Shopify mutation。
+- 最新排程專屬 CI step：**PASS**。
+- 全專案 CI 仍 FAIL 在另一條文案線 `verify-copy-c1-chaonest-sales-tone.mjs` 的 `Boss hierarchy wrapper disappeared`；本 Schedule package 不越界修改文案。
+- Production 只讀複核：`publish_schedule_groups = 0`、`publish_schedule_items = 0`；三個 Vercel schedule safety flags 都未設定。
+
+Schedule Core 現在是 **PASS / HOLD**：功能與隔離 E2E 已通過，但 PR #15 維持 Draft，不 merge。Owner 後續已另行批准並完成上方「1 件真 Shopify DRAFT」受控測試；這不會開啟 schedule staging/execution，三個 schedule safety flags 仍維持關閉，Cron 仍未註冊。
+
+詳細：`docs/audits/SCHEDULE-CORE-2026-10-06.md`。
+
 ## 2026-09-30 UI/UX 2.0 P1 Preview（未 merge／未 production）
 
 Owner 要把 Astra 的日常操作建議與 Nestory 既有架構稽核合併；文案生成線另有工作，不在本包。

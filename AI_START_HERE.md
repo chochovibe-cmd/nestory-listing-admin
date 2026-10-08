@@ -24,6 +24,100 @@
 
 Nestory 是潮巢玩居內部 Shopify 商品上架 PWA：商品輸入、圖片/規格、AI 文案、審核、圖片處理、Shopify 發布；Supabase 資料層、Vercel 部署。
 
+## 2.1 2026-10-08 最新接手點
+
+### 5 件真 Shopify DRAFT 小批量 — PASS / HOLD
+
+Owner 已授權並完成 5 件真 DRAFT：
+
+- Batch：`0641a514-62a3-41b4-afc5-58400df32c9e`
+- final：**5 done / 0 failed**
+- Shopify IDs：
+  - `15419560001721` 酷洛米吊飾
+  - `15419567800505` Hello Kitty 浴巾禮盒
+  - `15419568423097` 佈歐涼拖鞋
+  - `15419569176761` 七龍珠 MINISO 盲盒擺件
+  - `15419573338297` TOYUKI × Hello Kitty 吊飾
+- 5 件最後 readback 都是 **DRAFT**
+- Nestory 5 筆都為 `draft_created`
+- controlled publish jobs exactly 5
+- schedule groups/items = 0
+- no ACTIVE / no Online Store publication / no Cron / no Production deploy / no merge
+
+第 5 件真實驗證 blank row multi-variant SKU fallback：
+`CHO-CHM-HVE-URV-001 / 002 / 003`，三款 Shopify readback 全部正確。
+
+重要證據邊界：5 件遠端 mutation 是 Shopify Connector path；沒有 Owner browser auth cookie，所以沒有繞過 reviewer session 去假裝呼叫 Nestory HTTP batch route。Vercel Client ID + Secret runtime 已在前一包獨立自測 PASS。
+
+目前下一步：**HOLD，等待 Owner 看這 5 件 DRAFT 或明確指定 release / merge / ACTIVE 的下一包。**
+
+詳細：`docs/audits/SHOPIFY-DRAFT-BATCH-5-2026-10-08.md`。
+
+### 批量前最後整備 — PASS / HOLD
+
+- multi-variant blank SKU：**PASS**；空白 row 由 generated product SKU 依序衍生 `001 / 002 / 003...`，手填 row SKU 優先。
+- Nestory Vercel Preview Client ID + Client Secret runtime：**PASS**。
+- runtime authority：READY deployment `dpl_ANUzbW7jXYGRUxQmYuXEFY3apCfM`，source `bf29ce1e9e1276785d038693494edd182eca0d9c`；HTTP 200 / `tokenExchange=pass`，shop identity = `潮巢 Nestory / e0jg81-qe.myshopify.com / TWD`。
+- Shopify 專項 CI gate：source `771a2b6a5dbf61af8168937c6c4b029b935f2ecf`，`Verify Shopify batch readiness` **PASS**。
+- branch-only self-test secret 已清空；cleanup Preview endpoint 已驗證回 503 / `SELFTEST_TOKEN_MISSING`；臨時 sandbox 已停止。
+- Miffy 受控真商品仍是 **DRAFT**；schedule groups/items 仍 0。
+- full CI 後段仍被另一條 Copy verifier `Boss hierarchy wrapper disappeared` 擋紅，本 Shopify package 不處理文案。
+- 5 件 DRAFT batch 已由後續 Owner 授權並完成（見上方）；ACTIVE 仍沒有授權。
+
+詳細：`docs/audits/SHOPIFY-BATCH-READINESS-2026-10-07.md`。
+
+目前 UI/排程主施工線：
+
+- feature branch：`agent/schedule-core-20261006`
+- Draft PR：#15（base = `agent/uiux2-preview-20260930`）
+- Owner 實機驗收：Desktop ResultCard **PASS**；Schedule UI **PASS**
+- isolated API E2E code checkpoint：`5296104e1b397ca6e3736f3897a4d92f14537396`；controlled Shopify DRAFT package 的 source authority 是後續 `85cc2d6424c8ff589febc32ff1d7268d31be2e59`，此後還有 audit/docs commits，**最新 HEAD 必須重新查 GitHub，不要只信本檔 SHA**。
+- 未 merge、未 Production deploy、未註冊 scheduled-publish Cron。
+
+Production read-only truth：
+
+- production ledger 已有 `20261006121816 publish_schedule_core`
+- production ledger 已有 `20261006122416 shopify_full_sync_state`
+- schedule groups/items 目前都是 **0 rows**
+- Vercel 沒有設定：
+  - `PUBLISH_SCHEDULE_DB_WRITE_ENABLED`
+  - `PUBLISH_SCHEDULE_STAGING_ENABLED`
+  - `PUBLISH_SCHEDULE_EXECUTION_ENABLED`
+- 因此目前 Preview 只能 read / dry-run，不能建立/修改 Production schedule rows，也不能 Shopify DRAFT / ACTIVE。
+
+驗證：
+
+- Supabase Local Reconcile #144：**PASS**
+- authenticated schedule HTTP API E2E：**PASS**
+  - unauthenticated → 401
+  - operator → 403
+  - reviewer create schedule
+  - duplicate protection
+  - pause / resume
+  - paused retry remains paused
+  - dry-run does not claim
+  - cancel + terminal-state guards
+  - cleanup returns local schedule rows to 0
+  - publish_batches / shopify_sync_jobs counts unchanged
+- latest schedule-specific CI step：PASS
+- full CI 仍被另一條 copy verifier `Boss hierarchy wrapper disappeared` 擋紅；本 Schedule package 不處理文案。
+- Production 只讀複核：schedule groups/items 仍 0；三個 Vercel schedule safety flags 仍未設定。
+
+Owner 後續已明確批准並完成「1 件真 Shopify DRAFT」受控 Go-Live package：
+
+- Shopify product：`gid://shopify/Product/15417952698553`
+- 商品：`馬克圖布 × Miffy | 米菲 70週年典藏臺燈 | 蘋果樹設計`
+- remote status：**DRAFT**
+- `publishedAt=null`
+- 10 images / 2 variants / SEO / custom metafields：PASS
+- Nestory draft 已 linkage 為 `draft_created`
+- controlled publish job exactly 1，marker = `controlled_shopify_connector_draft_test`
+- no ACTIVE / no second product / no batch / no Cron / no merge / no Production deploy
+
+後續批量前整備已補齊上述兩個限制：Nestory Vercel Client ID + Client Secret runtime 已在 Preview 真實 read-only 自測 PASS；multi-variant blank SKU source fallback 也已完成並有專項 CI PASS。歷史 Miffy DRAFT 兩個既有 Shopify variants 仍沒有 SKU，因本包沒有回頭改既有遠端商品；新發布才會套用新的 fallback。
+
+詳細：`docs/audits/SHOPIFY-DRAFT-CONTROLLED-E2E-2026-10-07.md`。目前維持 **HOLD**，等待下一個 Owner 明確 package。
+
 ## 3. 重要：現在已經有一部分真正上 production
 
 ### Production Supabase reconcile — 已完成
@@ -60,11 +154,18 @@ Production 在這次之前沒有 migration ledger；live DB 卻已包含歷史 `
 因此正式策略是：**tracking 從 2026-08-18 現有 audited state 開始**，不是假裝 001–039 曾被 Supabase CLI 管理。
 
 Active queue：`supabase/migrations/`
+
+**Production ledger 已套用（2026-10-07 只讀核對）：**
 - `20260818142712_baseline_existing_schema_20260818.sql`
 - `20260818142919_production_reconcile_20260818.sql`
-- `20260822223100_variant_split_override_semantics.sql`（2026-09-02 已由正式 migration ledger 核對為**尚未套用**）
-- `20260902090000_guard_current_image_batch_pointer.sql`（PR #10 source hardening 新增；尚未套用 production，須依 ledger 規劃）
-- 未來 tracked migrations 往後 append。
+- `20261006121816_publish_schedule_core.sql`
+- `20261006122416_shopify_full_sync_state.sql`
+
+**Source 已知、Production ledger 仍未套用：**
+- `20260822223100_variant_split_override_semantics.sql`
+- `20260902090000_guard_current_image_batch_pointer.sql`
+
+重要：後兩筆 timestamp 早於已套用的 2026-10-06 migrations。未來不可用一般無人看管的 `supabase db push` 猜順序；必須先做 live ledger precheck，另開 Owner 授權的 migration package，再決定 explicit include-all / controlled apply。不要因為檔名較舊就推論已套用。
 
 Pre-tracking history：
 - `supabase/history/pre_tracking_migrations/001…039`
@@ -153,4 +254,4 @@ Migration baseline verifier：`scripts/verify-supabase-migration-baseline.mjs`�
 
 ## 9. 新 session 開場指令
 
-> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。確認 PR #10 的 CI／Preview、Vercel production SHA 與 production migration ledger；不要用 Git source 猜 Vercel／Supabase 現況。碰 DB 必讀四份 Supabase audits與 active `supabase/migrations/`。2026-08-18 reconcile 已正式成功套用；第三及第四個 tracked migration 尚未套用。
+> 先讀 `AI_START_HERE.md`、`docs/CURRENT_STATUS.md`、`AGENTS.md`。確認 PR #10 的 CI／Preview、Vercel production SHA 與 production migration ledger；不要用 Git source 猜 Vercel／Supabase 現況。碰 DB 必讀四份 Supabase audits與 active `supabase/migrations/`。2026-08-18 reconcile 已正式成功套用；2026-10-07 production ledger 另有 schedule core + Shopify full-sync 兩筆已套用；variant split / batch-pointer 兩筆仍 pending。

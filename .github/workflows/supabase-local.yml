@@ -10,6 +10,11 @@ on:
       - "scripts/test-supabase-role-rls-local.sh"
       - "scripts/test-supabase-function-hardening-local.sh"
       - "scripts/test-supabase-production-package-local.sh"
+      - "scripts/test-publish-schedule-local.sh"
+      - "scripts/test-publish-schedule-api-e2e.mjs"
+      - "src/app/api/publish-schedules/**"
+      - "src/lib/drafts/publishScheduleCore.ts"
+      - "src/lib/shopify/runDuePublishSchedules.ts"
       - ".github/workflows/supabase-local.yml"
       - "scripts/verify-requirements.mjs"
   workflow_dispatch:
@@ -35,6 +40,22 @@ jobs:
         with:
           version: latest
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install app dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Initialize local-only Supabase config
         shell: bash
         run: |
@@ -48,7 +69,8 @@ jobs:
           mkdir -p /tmp/nestory-migrations /tmp/nestory-forward-migrations
           cp supabase/history/pre_tracking_migrations/*.sql /tmp/nestory-migrations/
           cp supabase/migrations/20260822223100_variant_split_override_semantics.sql /tmp/nestory-forward-migrations/
-          cp supabase/migrations/20260903100000_shopify_full_sync_state.sql /tmp/nestory-forward-migrations/
+          cp supabase/migrations/20261006122416_shopify_full_sync_state.sql /tmp/nestory-forward-migrations/
+          cp supabase/migrations/20261006121816_publish_schedule_core.sql /tmp/nestory-forward-migrations/
 
           # Migration 032 relies on pg_temp objects declared ON COMMIT DROP.
           # The hosted migration runner executes a migration transactionally;
@@ -68,8 +90,8 @@ jobs:
           rm supabase/migrations/*.sql
           echo "Pre-tracking SQL and forward migrations staged for controlled local replay."
 
-      - name: Start isolated local database
-        run: supabase db start
+      - name: Start isolated local Supabase stack
+        run: supabase start
 
       - name: Rebuild production-like baseline and test reconciliation
         env:
@@ -82,8 +104,65 @@ jobs:
       - name: Test trigger and event-trigger EXECUTE hardening
         run: bash scripts/test-supabase-function-hardening-local.sh
 
+      - name: Test scheduled publish migration and runtime guards
+        run: bash scripts/test-publish-schedule-local.sh
+
       - name: Test production precheck/apply/rollback/postcheck package
         run: bash scripts/test-supabase-production-package-local.sh
+
+      - name: Export local-only app environment
+        shell: bash
+        run: |
+          supabase status -o env \
+            --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
+            --override-name auth.anon_key=NEXT_PUBLIC_SUPABASE_ANON_KEY \
+            --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY \
+            > /tmp/nestory-supabase-local.env
+          set -a
+          source /tmp/nestory-supabase-local.env
+          set +a
+
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
+            echo "SCHEDULE_E2E_BASE_URL=http://127.0.0.1:3019"
+            echo "PUBLISH_SCHEDULE_DB_WRITE_ENABLED=true"
+            echo "PUBLISH_SCHEDULE_STAGING_ENABLED=false"
+            echo "PUBLISH_SCHEDULE_EXECUTION_ENABLED=false"
+            echo "SHOPIFY_PUBLISH_MOCK=true"
+            echo "NEXT_TELEMETRY_DISABLED=1"
+          } >> "$GITHUB_ENV"
+
+      - name: Start local Next.js schedule API
+        shell: bash
+        run: |
+          nohup pnpm exec next dev --hostname 127.0.0.1 --port 3019 > /tmp/nestory-schedule-e2e-next.log 2>&1 &
+          echo $! > /tmp/nestory-schedule-e2e-next.pid
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3019/login >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/nestory-schedule-e2e-next.log || true
+          exit 1
+
+      - name: Test authenticated schedule HTTP API E2E
+        run: pnpm run test:publish-schedule-api-e2e
+
+      - name: Stop local Next.js schedule API
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/nestory-schedule-e2e-next.pid ]]; then
+            kill "$(cat /tmp/nestory-schedule-e2e-next.pid)" 2>/dev/null || true
+          fi
+          cat /tmp/nestory-schedule-e2e-next.log || true
 
       - name: Stop local database
         if: always()

@@ -547,6 +547,7 @@ async function writeImageAltTexts(
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
+  const queueRunId = typeof body.queueRunId === "string" ? body.queueRunId : null;
   const providerKey: "openai" | "claude" = body.provider === "claude" ? "claude" : "openai";
   const runMode: "test" | "llm" = body.mode === "test" ? "test" : "llm";
   const useWebSearch = body.useWebSearch !== false;
@@ -595,6 +596,52 @@ export async function POST(request: NextRequest) {
 
   const draft = draftRow as ProductDraft;
   const serviceSupabase = createServiceSupabaseClient();
+
+  if (queueRunId && regenField) {
+    return Response.json({ error: "Queue jobs only support full generation" }, { status: 400 });
+  }
+
+  if (queueRunId) {
+    const { data: queueRun, error: queueRunError } = await serviceSupabase
+      .from("generation_runs")
+      .select("id,draft_id,status,input_payload")
+      .eq("id", queueRunId)
+      .single();
+
+    const queueVersion =
+      queueRun?.input_payload &&
+      typeof queueRun.input_payload === "object" &&
+      !Array.isArray(queueRun.input_payload)
+        ? (queueRun.input_payload as Record<string, unknown>).queueVersion
+        : null;
+
+    if (
+      queueRunError ||
+      !queueRun ||
+      queueRun.draft_id !== draftId ||
+      queueRun.status !== "processing" ||
+      queueVersion !== "v1.1"
+    ) {
+      return Response.json({ error: "Generation queue job is not claim-valid" }, { status: 409 });
+    }
+  }
+
+  const updateQueueRun = async (
+    status: "completed" | "failed",
+    options?: { error?: string | null; output?: Record<string, unknown> }
+  ) => {
+    if (!queueRunId) return;
+    await serviceSupabase
+      .from("generation_runs")
+      .update({
+        status,
+        error_message: options?.error ?? null,
+        output_payload: options?.output ?? {},
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", queueRunId)
+      .eq("draft_id", draftId);
+  };
 
   // COPY C5A: ResultCard whole regen / single-field regen do not send form variants.
   // Reuse existing normalized product_variants as the same variantSummary evidence when absent.
@@ -660,9 +707,14 @@ export async function POST(request: NextRequest) {
         pipeline_stage: mapStatusToPipelineStage("failed"),
         generation_status: "failed",
         generation_error: message,
+        worker_id: null,
+        worker_locked_at: null,
+        worker_lock_expires_at: null,
+        next_retry_at: null,
       })
       .eq("id", draftId);
 
+    await updateQueueRun("failed", { error: message });
     return Response.json({ error: message }, { status });
   };
 
@@ -677,10 +729,9 @@ export async function POST(request: NextRequest) {
     .eq("id", draftId);
 
   if (processingError) {
-    return Response.json(
-      { error: `Failed to mark generation processing: ${processingError.message}` },
-      { status: 500 }
-    );
+    const message = `Failed to mark generation processing: ${processingError.message}`;
+    await updateQueueRun("failed", { error: message });
+    return Response.json({ error: message }, { status: 500 });
   }
 
   try {
@@ -1174,6 +1225,10 @@ export async function POST(request: NextRequest) {
     generation_output_tokens: providerOutput.usage?.outputTokens ?? null,
     copy_generated_at: new Date().toISOString(),
     generation_error: successStatus.generation_error,
+    worker_id: null,
+    worker_locked_at: null,
+    worker_lock_expires_at: null,
+    next_retry_at: null,
   };
 
   if (detectedBrand) {
@@ -1186,7 +1241,7 @@ export async function POST(request: NextRequest) {
     .eq("id", draftId);
 
   if (updateError) {
-    return Response.json({ error: updateError.message }, { status: 500 });
+    return markFullGenerationFailed(updateError.message);
   }
 
   // PKG2A / 回饋 84：全文 generate 成功路徑才轉款式軸名／值（冪等、不標記）。
@@ -1298,6 +1353,15 @@ export async function POST(request: NextRequest) {
     await serviceSupabase.from("generation_history").insert(historyRows);
   }
   stageMs.persist = Date.now() - persistStarted;
+
+  await updateQueueRun("completed", {
+    output: {
+      draftState: localizedOutput.draft_state,
+      provider: providerOutput.provider,
+      model: providerOutput.model,
+      title: localizedOutput.display_title,
+    },
+  });
 
   return Response.json({
     ok: true,

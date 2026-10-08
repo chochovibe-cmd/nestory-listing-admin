@@ -394,6 +394,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const staleRegenBefore = new Date(Date.now() - LOCK_MINUTES * 60_000).toISOString();
+    const { data: staleRegenRuns } = await serviceSupabase
+      .from("generation_runs")
+      .select("id,draft_id,input_payload,started_at")
+      .eq("status", "processing")
+      .contains("input_payload", { queueVersion: QUEUE_VERSION })
+      .lt("started_at", staleRegenBefore)
+      .limit(20);
+
+    for (const run of staleRegenRuns ?? []) {
+      if (!isQueueInput(run.input_payload) || !isRegenJob(run.input_payload)) continue;
+      await serviceSupabase
+        .from("generation_runs")
+        .update({
+          status: "failed",
+          error_message: "重生工作逾時中斷，原文案保留，可重新送出。",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", run.id)
+        .eq("status", "processing");
+    }
+
     const { count: processingCount, error: countError } = await serviceSupabase
       .from("generation_runs")
       .select("id", { count: "exact", head: true })

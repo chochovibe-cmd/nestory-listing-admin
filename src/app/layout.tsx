@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { HeaderControls } from "@/components/HeaderControls";
 import { ToastHost } from "@/components/Toast";
 import { FailBatchRemoveBridge } from "@/components/listing/FailBatchRemoveBridge";
+import { GenerationQueueRunner } from "@/components/listing/GenerationQueueRunner";
 import { VariantCharacterViewportBridge } from "@/components/listing/VariantCharacterViewportBridge";
 import "./globals.css";
 import "./stabilization.css";
@@ -100,6 +101,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </header>
           <AppShell>{children}</AppShell>
           <FailBatchRemoveBridge />
+          <GenerationQueueRunner />
           <ToastHost />
         </div>
         <script dangerouslySetInnerHTML={{ __html: navInitScript }} />

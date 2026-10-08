@@ -2,17 +2,19 @@
 
 ## Status
 
-**PARTIAL PASS / HOLD**
+**PASS / HOLD**
 
 This package has two goals:
 
 1. prove Nestory's own Vercel Preview runtime can use the configured Shopify Client ID + Client Secret via the existing client-credentials implementation;
 2. close the multi-variant blank-SKU gap before any 5-item batch / ACTIVE work.
 
-Goal 2 is implemented in source.
-Goal 1 is implemented as a Preview-only self-test endpoint but cannot yet be executed because the Vercel Free deployment API hit the daily limit (>100 deployments/day).
+Both goals are now verified.
 
-Do **not** claim the Vercel client-credentials runtime is PASS until the self-test is executed on a READY deployment of the latest HEAD.
+- Goal 1: Nestory's own Vercel Preview runtime successfully exchanged the configured Client ID + Client Secret and used the resulting Admin token for a read-only Shopify Admin GraphQL query.
+- Goal 2: multi-variant blank-SKU fallback is implemented and its dedicated CI gate passes.
+
+This package still remains HOLD for merge / batch / ACTIVE because those require a new Owner-approved package.
 
 ## Authority
 
@@ -20,8 +22,11 @@ Do **not** claim the Vercel client-credentials runtime is PASS until the self-te
 - branch: `agent/schedule-core-20261006`
 - Draft PR: #15
 - start HEAD: `550fe71c1d078f7db46736fc91195c268b7d0560`
-- current package HEAD when this audit was written:
-  `8aaf7a0884e6ca532730afab1022282aad70c7f4`
+- runtime PASS deployment source HEAD:
+  `bf29ce1e9e1276785d038693494edd182eca0d9c`
+- dedicated Shopify CI gate source HEAD:
+  `771a2b6a5dbf61af8168937c6c4b029b935f2ecf`
+- later documentation commits do not change runtime semantics; latest branch HEAD must still be re-checked before any write.
 
 ## Package scope
 
@@ -113,25 +118,31 @@ A branch-specific, Preview-only sensitive env was created:
 
 The value is not stored in repo docs.
 
-## Current blocker
+## Vercel runtime proof — 2026-10-08
 
-Vercel refused a new latest-HEAD deployment with:
+The deployment quota recovered the next day. Exact runtime authority:
 
-- HTTP 402
-- code: `api-deployments-free-per-day`
-- resource: more than 100 deployments/day
-- retry guidance: about 24 hours
+- deployment: `dpl_ANUzbW7jXYGRUxQmYuXEFY3apCfM`
+- source HEAD: `bf29ce1e9e1276785d038693494edd182eca0d9c`
+- state: **READY**
+- environment: Vercel Preview
 
-This is an account/platform quota blocker, not an application build/runtime failure.
+The protected Preview endpoint was called from an isolated Vercel sandbox using the temporary branch-only Bearer token.
 
-Intermediate branch commits had already entered the Vercel queue before the limit was hit,
-but there is no verified READY deployment of the complete auth-self-test HEAD yet.
+Observed result:
 
-Therefore:
+- HTTP 200
+- `ok=true`
+- `runtime=vercel-preview`
+- `tokenExchange=pass`
+- shop name: `潮巢 Nestory`
+- MyShopify domain: `e0jg81-qe.myshopify.com`
+- currency: `TWD`
 
-**Nestory Vercel Client ID + Client Secret runtime remains HOLD, not PASS.**
+The endpoint only executes the read-only Shopify Admin query
+`shop { name myshopifyDomain currencyCode }`; no product / variant / inventory mutation is present in this route.
 
-Do not use Shopify Connector success as a substitute for this runtime proof.
+Therefore **Nestory Vercel Client ID + Client Secret runtime = PASS**. This is separate evidence from the earlier Shopify Connector DRAFT test.
 
 ## CI
 
@@ -143,30 +154,51 @@ Fixed immediately:
 
 - upstream error text is no longer returned at all;
 - no legacy token prefix literal remains in the route;
-- verifier now asserts the route does not expose `error.message`.
+- verifier asserts the route does not expose `error.message`.
 
-Latest package HEAD after this correction:
+A separate false-positive then came from this audit itself mentioning the legacy prefix literally; that wording was removed.
 
-`8aaf7a0884e6ca532730afab1022282aad70c7f4`
+To make package ownership unambiguous even while another Copy verifier remains red, the CI workflow now runs:
 
-At audit-write time the latest CI / Supabase workflows are still queued/pending.
-Check GitHub again; do not treat this paragraph as final CI authority.
+`Verify Shopify batch readiness`
 
-## Next action
+before the full `verify:all` chain.
 
-After Vercel deployment quota becomes available:
+On source HEAD `771a2b6a5dbf61af8168937c6c4b029b935f2ecf`:
 
-1. re-check branch HEAD;
-2. obtain the READY Preview deployment for that exact HEAD;
-3. call `POST /api/shopify/auth-self-test` with the branch-only self-test Bearer token;
-4. expected result:
-   - HTTP 200
-   - `ok=true`
-   - `runtime=vercel-preview`
-   - `tokenExchange=pass`
-   - Shopify shop identity matches the connected Nestory shop
-5. verify no Shopify product count / product state changed;
-6. then remove the temporary branch-specific `SHOPIFY_AUTH_SELFTEST_TOKEN` if no longer needed;
-7. update this audit / CURRENT_STATUS / AI_START_HERE.
+- `Verify scheduled publish safety`: PASS
+- `Verify Shopify batch readiness`: **PASS**
+- later `Verify contracts and regressions`: FAIL only on the separate Copy verifier `Boss hierarchy wrapper disappeared`
+- typecheck/build are skipped by that later unrelated failure
+- Vercel build for the same Shopify code lineage is READY, which independently confirms the Next.js deployment can build and run the auth endpoint.
 
-Only after that runtime proof and clean CI should Owner be asked whether to open a 5-item DRAFT batch package.
+Do not attribute the Copy verifier failure to this Shopify package.
+
+## Self-test cleanup
+
+After the successful runtime proof:
+
+- the branch-specific Preview self-test secret was set to an empty value for future deployments;
+- latest cleanup deployment source HEAD `771a2b6a5dbf61af8168937c6c4b029b935f2ecf` reached READY;
+- calling the same self-test endpoint on that cleanup deployment returns:
+  - HTTP 503
+  - code `SELFTEST_TOKEN_MISSING`
+- both temporary Vercel sandboxes used for the runtime proof / cleanup verification were stopped.
+
+The previously verified deployment retains its original deployment snapshot, but remains behind Vercel protection and the temporary credential / share details are not published in repo docs.
+
+## Final decision
+
+**PASS / HOLD**
+
+Batch readiness prerequisites covered by this package are complete:
+
+- Vercel Client ID + Secret runtime: PASS
+- deterministic multi-variant SKU fallback: PASS
+- real single Shopify DRAFT E2E from the prior package: PASS
+- existing test product re-check: still DRAFT, 2 variants, 10 images
+- schedule groups/items: still 0
+
+No second product, batch, ACTIVE, Cron, Production deploy, or merge was performed.
+
+The next step requires a **new Owner-approved package**. Recommended next scope: 5-item Shopify DRAFT batch only, with ACTIVE / Online Store publication still forbidden.

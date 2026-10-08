@@ -20,6 +20,7 @@ const scripts = [
   "scripts/verify-mobile-layout-regression-restore.mjs",
   "scripts/verify-gen-progress-card.mjs",
   "scripts/verify-v11-generation-queue.mjs",
+  "scripts/verify-v11-image-background.mjs",
   "scripts/verify-mobile-resultcard-owner-refine.mjs",
   "scripts/verify-resultcard-uiux-d2.mjs",
   "scripts/verify-resultcard-uiux-d3.mjs",

@@ -799,7 +799,7 @@ export function ResultCard({
     function onRegenQueueStatus(event: Event) {
       const detail = (event as CustomEvent<RegenQueueStatusDetail>).detail;
       if (!detail || detail.draftId !== draft.id) return;
-      setRegenQueueStatus(detail);
+      setRegenQueueStatus(detail.status === "completed" ? null : detail);
       if (detail.status === "queued" || detail.status === "processing") {
         if (detail.field && COPY_VERSION_FIELDS.includes(detail.field as CopyVersionField)) {
           setRegenerating(false);

@@ -16,6 +16,9 @@ var CAPTURE_FILES = [
   "content/capture.js"
 ];
 
+// Per-tab guard: a slow capture must not be started twice by repeated clicks.
+var captureInFlightByTab = Object.create(null);
+
 function normalizeApiBase(url) {
   var s = String(url || "").trim();
   if (!s) return "";
@@ -106,6 +109,18 @@ async function setBadge(kind, text) {
   }
 }
 
+async function showPageToast(tabId, kind, message) {
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: "NESTORY_CAPTURE_TOAST",
+      kind: kind,
+      message: message
+    });
+  } catch (_e) {
+    // The page helper may not be injected yet; badge/lastResult remain as fallback.
+  }
+}
+
 async function openPopupHint() {
   // MV3: no guaranteed openPopup on all channels; set badge is enough.
   // Try openPopup when available (Chrome 127+).
@@ -188,6 +203,19 @@ async function captureActiveTab() {
     return;
   }
 
+  if (captureInFlightByTab[tab.id]) {
+    await setLastResult({
+      ok: false,
+      line: "擷取中，請稍候",
+      at: new Date().toISOString()
+    });
+    await setBadge("warn", "…");
+    await showPageToast(tab.id, "warn", "擷取中，請稍候");
+    return;
+  }
+
+  captureInFlightByTab[tab.id] = true;
+  try {
   // Page inject relies on activeTab (toolbar click gesture) + pre-granted e‑commerce hosts.
   // Do not request host grants here (no optional-host gesture in SW).
   var injected;
@@ -211,14 +239,19 @@ async function captureActiveTab() {
 
   var payload = injected && injected[0] && injected[0].result;
   if (!payload || payload.__nestory_error) {
+    var payloadError = (payload && payload.message) || "頁面解析失敗";
     await setLastResult({
       ok: false,
-      line: "失敗：" + ((payload && payload.message) || "頁面解析失敗"),
+      line: "失敗：" + payloadError,
       at: new Date().toISOString()
     });
     await setBadge("err", "!");
+    await showPageToast(tab.id, "err", "✗ 擷取失敗：" + payloadError);
     return;
   }
+
+  var capturedTitle = truncate(payload.title || "（無標題）", 36);
+  await showPageToast(tab.id, "loading", "⏳ 擷取中：" + capturedTitle);
 
   var endpoint = settings.apiBaseUrl + "/api/import/product-page";
   var res;
@@ -245,6 +278,11 @@ async function captureActiveTab() {
       at: new Date().toISOString()
     });
     await setBadge("err", "!");
+    await showPageToast(
+      tab.id,
+      "err",
+      "✗ 擷取失敗：" + ((err && err.message) || "網路錯誤")
+    );
     return;
   }
 
@@ -255,6 +293,7 @@ async function captureActiveTab() {
       at: new Date().toISOString()
     });
     await setBadge("err", "!");
+    await showPageToast(tab.id, "err", "✗ 擷取失敗：伺服器回應異常");
     return;
   }
 
@@ -269,6 +308,7 @@ async function captureActiveTab() {
       at: new Date().toISOString()
     });
     await setBadge("ok", "✓");
+    await showPageToast(tab.id, "ok", "✓ 已擷取：" + capturedTitle);
     return;
   }
 
@@ -282,6 +322,11 @@ async function captureActiveTab() {
       at: new Date().toISOString()
     });
     await setBadge("ok", "✓");
+    await showPageToast(
+      tab.id,
+      "warn",
+      "⚠ 這個網址之前已抓過，已補上缺少資料：" + capturedTitle
+    );
     return;
   }
 
@@ -295,6 +340,7 @@ async function captureActiveTab() {
       at: new Date().toISOString()
     });
     await setBadge("warn", "1");
+    await showPageToast(tab.id, "warn", "⚠ 這個網址之前已抓過：" + capturedTitle);
     return;
   }
 
@@ -304,6 +350,14 @@ async function captureActiveTab() {
     at: new Date().toISOString()
   });
   await setBadge("err", "!");
+  await showPageToast(
+    tab.id,
+    "err",
+    "✗ 擷取失敗：" + (json.message || json.error || "未知錯誤")
+  );
+  } finally {
+    delete captureInFlightByTab[tab.id];
+  }
 }
 
 // Toolbar click = capture when no popup is set

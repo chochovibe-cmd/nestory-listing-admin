@@ -1,7 +1,10 @@
-import { NextRequest } from "next/server";
+import { after, NextRequest } from "next/server";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 import { verifyCaptureToken } from "@/lib/import/captureAuth";
-import { createCaptureDraft } from "@/lib/import/createCaptureDraft";
+import {
+  completeCaptureDraftImages,
+  createCaptureDraft
+} from "@/lib/import/createCaptureDraft";
 import type { CaptureImportBody } from "@/lib/import/captureTypes";
 
 /**
@@ -50,7 +53,8 @@ export async function POST(request: NextRequest) {
   const result = await createCaptureDraft({
     serviceSupabase,
     userId: auth.userId,
-    body: body ?? {}
+    body: body ?? {},
+    deferImages: true
   });
 
   if (!result.ok) {
@@ -62,6 +66,23 @@ export async function POST(request: NextRequest) {
 
   if (result.status === "exists") {
     return Response.json(result, { status: 200 });
+  }
+
+  if (result.status === "created") {
+    after(async () => {
+      try {
+        await completeCaptureDraftImages({
+          serviceSupabase,
+          userId: auth.userId,
+          draftId: result.draft_id,
+          body: body ?? {}
+        });
+      } catch {
+        // completeCaptureDraftImages persists its own failure state when possible.
+        // The capture response has already succeeded; do not turn background
+        // image work into a duplicate-triggering request failure.
+      }
+    });
   }
 
   return Response.json(result, { status: 201 });

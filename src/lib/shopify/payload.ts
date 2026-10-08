@@ -94,7 +94,7 @@ export function buildShopifyProductPayload(
   internalLinkMap: InternalLinkMap = {}
 ) {
   const sortedImages = (draft.product_images ?? [])
-    .filter((image) => image.image_type !== "spec")
+    .filter((image) => image.image_type === "main" || image.image_type === "variant")
     .sort((a, b) => a.sort_order - b.sort_order);
   const imageTypeCounts = new Map<string, number>();
   for (const image of sortedImages) {

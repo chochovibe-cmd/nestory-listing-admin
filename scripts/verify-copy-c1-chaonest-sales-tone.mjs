@@ -180,23 +180,24 @@ const regenTitleBlock = section(route, 'if (regenField === "enriched_title")', '
 assert.match(regenTitleBlock, /finalizeProductTitle/u, "single-field title regen bypasses title assembler");
 assert.match(regenTitleBlock, /value = historyContent/u, "single-field title regen history and stored title diverged");
 
-// SKU: Production raw provider SKU wins full generation; field regen has no SKU write.
+// SKU: Full generation still computes/stores the reviewed SKU. Shopify publish
+// then preserves that reviewed draft.sku when present, with generated SKU only
+// as a fallback (Owner-accepted PR #21 authority).
 assert.match(route, /sku: raw\.sku,/u, "raw.sku no longer feeds detected.sku");
 assert.match(route, /sku: detected\.sku \|\| null,/u, "detected.sku no longer feeds draft update");
 assert.doesNotMatch(route, /persistedSku|COPY C1\.3 SKU authority|generateSku/u,
   "C1.3 persisted/generated SKU authority returned to generate route");
 const regenMap = section(route, "const REGEN_FIELD_TO_COLUMN", "async function handleFieldRegen");
 assert.doesNotMatch(regenMap, /sku/u, "single-field regeneration must not write SKU");
-const badPinguDraftSku = "Pingu相機盲盒";
-const rawPinguSku = "CHO-BBX-PNG-PNG-001";
-const detectedPinguSku = rawPinguSku;
-assert.notEqual(detectedPinguSku, badPinguDraftSku, "bad draft SKU incorrectly remains authoritative");
-assert.equal(detectedPinguSku, "CHO-BBX-PNG-PNG-001", "Pingu Production SKU fixture failed");
+const reviewedPinguSku = "CHO-BBX-PNG-PNG-001";
+assert.equal(reviewedPinguSku, "CHO-BBX-PNG-PNG-001", "Pingu reviewed SKU fixture failed");
 
-assert.match(payload, /const \{ sku \} = generateSku\(\{/u, "Shopify Production generateSku authority missing");
-assert.match(payload, /variantSeed:\s*\{\s*sku,/u, "Shopify variant seed no longer uses generated Production SKU");
-assert.doesNotMatch(payload, /draft\.sku\?\.trim\(\)|persistedSku/u,
-  "Shopify payload restored stale persisted-draft SKU precedence");
+assert.match(payload, /const \{ sku: generatedSku \} = generateSku\(\{/u,
+  "Shopify generated SKU fallback missing");
+assert.match(payload, /const publishSku = draft\.sku\?\.trim\(\) \|\| generatedSeedSku;/u,
+  "Shopify payload must preserve reviewed draft SKU before generated fallback");
+assert.match(payload, /\.\.\.generatedVariantSeed,[\s\S]*sku: publishSku/u,
+  "Shopify variant seed must apply reviewed/fallback publishSku after generated payload");
 assert.match(promptBase, /sku：依規則產生 CHO-\{型態縮寫\}-\{IP縮寫\}-\{角色縮寫\}-001/u,
   "Production SKU prompt format missing");
 assert.match(promptBase, /縮寫用 2-3 碼全大寫英文，序號固定 001/u,

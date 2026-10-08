@@ -157,7 +157,18 @@ export async function fetchAndStoreCaptureImages(input: {
   detail.forEach((url, i) => schedule(url, "detail", i));
   variant.forEach((url, i) => schedule(url, "variant", i));
 
-  for (const job of jobs) {
+  // Keep a small fixed pool so one slow remote image does not serialize the whole capture.
+  // Five workers is intentionally conservative for Vercel + Supabase while preserving
+  // the existing per-image timeout / warning semantics.
+  const originalJobOrder = new Map(jobs.map((job, index) => [job.url, index]));
+  let nextJobIndex = 0;
+
+  async function fetchWorker() {
+    while (true) {
+      const jobIndex = nextJobIndex;
+      nextJobIndex += 1;
+      if (jobIndex >= jobs.length) return;
+      const job = jobs[jobIndex];
     const fetched = await fetchOneImageBuffer(job.url, input.sourceUrl);
     if (!fetched.ok) {
       const item: ImageFetchItemResult = {
@@ -236,7 +247,16 @@ export async function fetchAndStoreCaptureImages(input: {
       ok: true,
       image_id: row.id
     });
+    }
   }
+
+  const workerCount = Math.min(5, jobs.length);
+  await Promise.all(Array.from({ length: workerCount }, () => fetchWorker()));
+
+  // Parallel workers can finish out of order; restore the old deterministic log order.
+  results.sort(
+    (a, b) => (originalJobOrder.get(a.url) ?? 0) - (originalJobOrder.get(b.url) ?? 0)
+  );
 
   const okCount = results.filter((r) => r.ok).length;
   const failedCount = results.filter((r) => !r.ok).length;

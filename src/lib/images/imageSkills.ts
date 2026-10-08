@@ -56,16 +56,62 @@ export function approximateOutputCostUsd(
 function styleInstruction(style: ImageSkillStyle): string {
   switch (style) {
     case "clean":
-      return "clean editorial ecommerce, quiet cream or neutral background, restrained props, generous negative space";
+      return [
+        "Clean editorial ecommerce photography.",
+        "Background: warm white, cream, or soft neutral seamless surface.",
+        "Lighting: one large soft key light from upper-left around 45 degrees with very gentle fill from the opposite side.",
+        "Camera: natural 50mm-product-photo perspective, slightly above product level, no dramatic wide-angle distortion.",
+        "Framing: product should occupy roughly 55-68% of frame width with at least 8% clear safe margin on every side.",
+        "Surface and props: matte neutral surface; zero or one small neutral prop only.",
+        "Shadow: soft believable contact shadow directly under the product.",
+        "Avoid: glossy luxury staging, neon, fake bokeh, busy props, floating objects, excessive saturation."
+      ].join(" ");
     case "cute":
-      return "cute but tasteful, soft playful shapes, gentle color accents, not childish or cluttered";
+      return [
+        "Cute but tasteful editorial product photography.",
+        "Background: soft cream or muted pastel, never candy-neon.",
+        "Lighting: broad soft daylight with a gentle warm fill.",
+        "Camera: natural 50mm perspective, slightly elevated, product shape must remain undistorted.",
+        "Framing: product occupies about 55-65% of frame width with generous negative space.",
+        "Props: at most two tiny simple props with rounded shapes; they must never overlap or compete with the product.",
+        "Shadow: subtle soft contact shadow.",
+        "Avoid: childish sticker collage, confetti overload, cartoon scenery, fake text, over-saturated pink."
+      ].join(" ");
     case "tech":
-      return "clean modern tech campaign, controlled contrast, crisp lighting, minimal set design";
+      return [
+        "Modern restrained tech campaign photography.",
+        "Background: charcoal, cool grey, or off-white depending on product contrast.",
+        "Lighting: crisp controlled key light with a soft rim, preserving readable material texture.",
+        "Camera: clean 50-70mm product perspective with straight geometry and no fisheye look.",
+        "Framing: product occupies roughly 58-70% of frame width and stays fully inside safe margins.",
+        "Props: none or one minimal geometric surface only.",
+        "Shadow: controlled soft contact shadow, not a floating glow.",
+        "Avoid: cyberpunk neon, excessive reflections, holographic effects, fake UI graphics, clutter."
+      ].join(" ");
     case "lifestyle":
-      return "warm believable lifestyle photography, natural light, human-scale context, not over-staged";
+      return [
+        "Believable warm lifestyle product photography.",
+        "Background: a real everyday setting such as a light wood desk, shelf, or soft fabric surface, kept simple.",
+        "Lighting: natural window light from one side with realistic soft falloff.",
+        "Camera: human-scale 50mm perspective, slightly above product level.",
+        "Framing: product remains the clear hero at about 55-65% of frame width.",
+        "Props: at most two context props, neutral and partially out of focus, never covering the product.",
+        "Shadow: natural contact shadow matching the window-light direction.",
+        "Avoid: staged influencer set, messy room, dramatic fake sunlight beams, hands unless explicitly requested."
+      ].join(" ");
     case "chocho":
     default:
-      return "Chocho Nestory selection-store style: clean, fresh, a little playful, editorial, warm, minimal colors, not Taobao-promotional";
+      return [
+        "Chocho Nestory selection-store editorial product photography: clean, warm, playful only in small accents, never Taobao-promotional.",
+        "Background: warm ivory or light cream seamless backdrop with a matte pale-wood or linen-like surface when useful.",
+        "Lighting: large soft key light from upper-left around 45 degrees plus very light fill from the right; soft natural contrast.",
+        "Camera: natural 50mm product-photo perspective, roughly 10-15 degrees above product level, no wide-angle distortion.",
+        "Framing: product is clear and centered slightly low, occupying roughly 58-68% of frame width with at least 8% safe margin on all sides.",
+        "Palette: cream, warm neutral, black details, with at most one restrained lime accent when it does not alter the product.",
+        "Props: zero to two small neutral editorial props such as a ceramic tray, plain card, or tiny dried flower; never overlap the product.",
+        "Shadow: soft believable contact shadow under the product.",
+        "Avoid: seller badges, price graphics, neon gradients, fake packaging, excessive props, over-saturation, dramatic AI glow, floating product."
+      ].join(" ");
   }
 }
 
@@ -89,12 +135,12 @@ export function buildImageSkillPrompt(input: {
   const style = styleInstruction(input.style ?? "chocho");
   const note = input.instruction?.trim();
   const title = input.title?.trim();
-  const desc = input.imageDescription?.trim();
 
   const common = [
     PRODUCT_FIDELITY,
-    "No watermarks, price tags, seller badges, fake logos, or promotional stickers.",
-    "Do not render any readable text unless explicitly requested; for ad creative, leave clean space for typography that will be added later by the app.",
+    "Treat the source image itself as the only visual authority for product appearance. Do not infer packaging text, logos, colors, or accessories from descriptive metadata.",
+    "No watermarks, price tags, seller badges, fake logos, promotional stickers, fake packaging copy, or invented readable text.",
+    "Do not render any readable text unless explicitly requested; typography for ad creative is added later by the app.",
     `Art direction: ${style}.`
   ];
 
@@ -109,16 +155,19 @@ export function buildImageSkillPrompt(input: {
   if (input.task === "hero_enhance") {
     common.push(
       "Create a polished ecommerce hero image from the primary reference.",
-      "Keep the product itself faithful; improve only background, spacing, lighting balance, and presentation.",
-      "Prefer a simple studio/editorial composition with generous breathing room."
+      "Keep the product itself faithful; improve only the surrounding background, spacing, lighting balance, and presentation.",
+      "Keep the complete product visible. Target roughly 58-68% frame width and at least 8% clear margin on every edge.",
+      "Prefer a simple studio/editorial composition with generous breathing room and a realistic contact shadow.",
+      "If preserving the exact merchandise conflicts with the requested scene, simplify the scene instead of redrawing the product."
     );
   }
 
   if (input.task === "creative_hero") {
     common.push(
       "Create one refined campaign-style hero image using all references only to understand the same product and its real-life feel.",
-      "The first reference is the identity anchor. Other references may guide angle, texture, or atmosphere but must not change the product.",
-      "Keep the composition suitable as a Shopify primary image: product clear, readable silhouette, uncluttered scene."
+      "The first reference is the identity anchor. Other references may guide texture, scale, and atmosphere but must never contribute new product parts or alternate designs.",
+      "Keep the composition suitable as a Shopify primary image: full product visible, readable silhouette, uncluttered scene, realistic contact with the surface.",
+      "Keep props behind or clearly separated from the product; never cover logos, character faces, accessories, or packaging details."
     );
   }
 
@@ -126,7 +175,8 @@ export function buildImageSkillPrompt(input: {
     common.push(
       "Create a premium 4:5 vertical advertising visual for an ecommerce product detail page.",
       "Use the product as the visual focus and create one strong selling-point composition, not a specification table.",
-      "Reserve a clean negative-space area for Traditional Chinese typography to be added later by the app.",
+      "STRICT LAYOUT: keep the product and every prop entirely within the upper 60% of the frame.",
+      "STRICT LAYOUT: the lower 40% must be a smooth empty continuation of the background with no product parts, props, shadows, badges, or decorative objects because the app will place Traditional Chinese typography there.",
       "Do not draw any text inside the image."
     );
     if (input.adHeadline?.trim()) {
@@ -137,7 +187,6 @@ export function buildImageSkillPrompt(input: {
   }
 
   if (title) common.push(`Product context: ${title.slice(0, 180)}.`);
-  if (desc) common.push(`Verified visual context: ${desc.slice(0, 700)}.`);
   if (note) common.push(`User instruction: ${note.slice(0, 500)}.`);
 
   return common.join("\n");

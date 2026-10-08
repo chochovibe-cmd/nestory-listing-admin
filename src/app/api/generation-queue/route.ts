@@ -6,6 +6,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/s
 const QUEUE_VERSION = "v1.1";
 const MAX_CONCURRENCY = 2;
 const LOCK_MINUTES = 10;
+const IMAGE_READY_TIMEOUT_MS = 2 * 60_000;
 
 type QueueInput = {
   queueVersion: typeof QUEUE_VERSION;
@@ -18,6 +19,8 @@ type QueueInput = {
   tone: string;
   copyLength: "精簡" | "標準" | "詳細";
   hasImages: boolean;
+  expectedImageCount?: number;
+  waitForCaptureImages?: boolean;
 };
 
 type QueueRunRow = {
@@ -45,6 +48,14 @@ function isQueueInput(value: unknown): value is QueueInput {
 
 function generationProvider(provider: QueueInput["provider"]): "openai" | "anthropic" {
   return provider === "claude" ? "anthropic" : "openai";
+}
+
+function captureImageFetchStatus(rawCapture: unknown): string | null {
+  if (!rawCapture || typeof rawCapture !== "object" || Array.isArray(rawCapture)) return null;
+  const server = (rawCapture as Record<string, unknown>).server;
+  if (!server || typeof server !== "object" || Array.isArray(server)) return null;
+  const status = (server as Record<string, unknown>).image_fetch_status;
+  return typeof status === "string" ? status : null;
 }
 
 async function requireOperator() {
@@ -122,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     const { data: draft, error: draftError } = await serviceSupabase
       .from("product_drafts")
-      .select("id,status,generation_status")
+      .select("id,status,generation_status,raw_capture")
       .eq("id", draftId)
       .single();
 
@@ -167,6 +178,8 @@ export async function POST(request: NextRequest) {
       tone: rawInput.tone.trim().slice(0, 120),
       copyLength: rawInput.copyLength,
       hasImages: rawInput.hasImages,
+      expectedImageCount: Math.max(0, Math.min(100, Math.trunc(Number(rawInput.expectedImageCount ?? 0)))),
+      waitForCaptureImages: captureImageFetchStatus(draft.raw_capture) === "pending",
     };
 
     const { data: run, error: runError } = await serviceSupabase
@@ -275,7 +288,7 @@ export async function POST(request: NextRequest) {
 
       const { data: draft, error: draftReadError } = await serviceSupabase
         .from("product_drafts")
-        .select("id,status,generation_status,worker_id,worker_attempts,max_worker_attempts")
+        .select("id,status,generation_status,worker_id,worker_attempts,max_worker_attempts,raw_capture")
         .eq("id", candidate.draft_id)
         .single();
 
@@ -286,6 +299,47 @@ export async function POST(request: NextRequest) {
         draft.worker_id !== null
       ) {
         continue;
+      }
+
+      const queuedAt = Date.parse(candidate.created_at);
+      const queuedAgeMs = Number.isFinite(queuedAt) ? Math.max(0, Date.now() - queuedAt) : 0;
+      const captureStatus = captureImageFetchStatus(draft.raw_capture);
+
+      if (candidate.input_payload.waitForCaptureImages && captureStatus === "pending") {
+        if (queuedAgeMs >= IMAGE_READY_TIMEOUT_MS) {
+          await markNetworkFailure(
+            serviceSupabase,
+            candidate.draft_id,
+            candidate.id,
+            "擷取圖片背景處理逾時，草稿已保留，可補圖後單件重試。",
+          );
+        }
+        continue;
+      }
+
+      const expectedImageCount = Math.max(
+        0,
+        Math.trunc(Number(candidate.input_payload.expectedImageCount ?? 0)),
+      );
+      if (expectedImageCount > 0) {
+        const { count: uploadedImageCount, error: imageCountError } = await serviceSupabase
+          .from("product_images")
+          .select("id", { count: "exact", head: true })
+          .eq("draft_id", candidate.draft_id)
+          .in("image_type", ["main", "detail"]);
+
+        if (imageCountError) continue;
+        if (Number(uploadedImageCount ?? 0) < expectedImageCount) {
+          if (queuedAgeMs >= IMAGE_READY_TIMEOUT_MS) {
+            await markNetworkFailure(
+              serviceSupabase,
+              candidate.draft_id,
+              candidate.id,
+              `圖片背景上傳未完成（${Number(uploadedImageCount ?? 0)}/${expectedImageCount}），草稿已保留，可補圖後單件重試。`,
+            );
+          }
+          continue;
+        }
       }
 
       if (Number(draft.worker_attempts ?? 0) >= Number(draft.max_worker_attempts ?? 3)) {

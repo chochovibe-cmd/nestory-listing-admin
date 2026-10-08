@@ -1779,7 +1779,8 @@ export function WorkspaceInputPanel({
       return;
     }
 
-    const hasImages = uploadPromisesRef.current.length > 0;
+    const expectedImageCount = imageCounts.main + imageCounts.detail;
+    const hasImages = expectedImageCount > 0;
     emitProgress({
       draftId: id,
       visible: true,
@@ -1790,15 +1791,9 @@ export function WorkspaceInputPanel({
       }))
     });
 
-    // Local uploads belong to this draft. Wait only for those uploads to settle,
-    // then hand image analysis + AI generation to the persistent queue runner.
-    let uploadMs = 0;
-    if (hasImages) {
-      setSubmitPhase("uploading");
-      const uploadStarted = Date.now();
-      await Promise.allSettled(uploadPromisesRef.current);
-      uploadMs = Date.now() - uploadStarted;
-    }
+    // V1.1 image backgrounding: local uploads already started when files were
+    // selected. Do not block the form here. The persistent queue waits in DB
+    // until the expected image rows arrive before it claims the generation job.
 
     setSubmitPhase("generating");
     const providerForThisRun = sessionProvider ?? readStoredAiProvider();
@@ -1829,7 +1824,8 @@ export function WorkspaceInputPanel({
             variantSummary,
             tone,
             copyLength,
-            hasImages
+            hasImages,
+            expectedImageCount
           }
         })
       });
@@ -1881,7 +1877,7 @@ export function WorkspaceInputPanel({
 
     const queueTiming = [
       `存檔 ${(saveMs / 1000).toFixed(1)} 秒`,
-      hasImages ? `等圖片上傳 ${(uploadMs / 1000).toFixed(1)} 秒` : null,
+      hasImages ? `圖片背景上傳 ${expectedImageCount} 張` : null,
       "已排入背景生成"
     ].filter((part): part is string => Boolean(part)).join(" · ");
 
@@ -2027,7 +2023,7 @@ export function WorkspaceInputPanel({
             if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
             const target = event.target as HTMLElement | null;
             if (target?.tagName === "TEXTAREA") return;
-            if (submitting || imagesUploading) return;
+            if (submitting) return;
             event.preventDefault();
             event.currentTarget.requestSubmit();
           }}
@@ -2779,7 +2775,7 @@ export function WorkspaceInputPanel({
                 </div>
                 <button
                   className="button primary btn-add btn-gen"
-                  disabled={submitting || imagesUploading}
+                  disabled={submitting}
                   type="submit"
                   title="✦ 生成（規則引擎 → Vision → 文案串流 → 定價）"
                 >
@@ -2799,7 +2795,7 @@ export function WorkspaceInputPanel({
                   ) : imagesUploading ? (
                     <>
                       <span aria-hidden className="spinner" />
-                      圖片上傳中，請稍候…
+                      圖片背景上傳中，可直接排隊
                     </>
                   ) : (
                     <>

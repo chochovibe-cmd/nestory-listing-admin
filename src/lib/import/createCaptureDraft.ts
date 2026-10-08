@@ -46,6 +46,46 @@ function isMissingColumnError(message: string): boolean {
   return /raw_capture|capture_token|column .* does not exist/i.test(message);
 }
 
+function captureImageExpectedCount(mapped: {
+  mainImageUrls: string[];
+  detailImageUrls: string[];
+  variantImageUrls: string[];
+}): number {
+  return new Set([
+    ...mapped.mainImageUrls,
+    ...mapped.detailImageUrls,
+    ...mapped.variantImageUrls
+  ].map((url) => url.trim()).filter(Boolean)).size;
+}
+
+function variantIdentity(row: Record<string, unknown>): string {
+  return JSON.stringify([
+    row.sku ?? null,
+    row.option1_name ?? null,
+    row.option1_value ?? null,
+    row.option2_name ?? null,
+    row.option2_value ?? null,
+    row.option3_name ?? null,
+    row.option3_value ?? null
+  ]);
+}
+
+function mergeWarnings(...groups: unknown[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const group of groups) {
+    if (!Array.isArray(group)) continue;
+    for (const raw of group) {
+      if (typeof raw !== "string") continue;
+      const text = raw.trim();
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      out.push(text);
+    }
+  }
+  return out;
+}
+
 /**
  * Hard-block on same source_url (A12 key), excluding archived drafts.
  */
@@ -171,6 +211,7 @@ export async function createCaptureDraft(input: {
   serviceSupabase: any;
   userId: string;
   body: CaptureImportBody;
+  deferImages?: boolean;
 }): Promise<CreateCaptureDraftResult> {
   const sourceUrl = (input.body.source_url ?? "").trim();
   if (!sourceUrl) {
@@ -230,11 +271,16 @@ export async function createCaptureDraft(input: {
   const urlKey = extractUrlMatchKey(sourceUrl);
 
   // Annotate raw_capture.server with url key before insert
+  const imageFetchExpected = captureImageExpectedCount(mapped);
   const rawCapture = {
     ...mapped.rawCapture,
     server: {
       ...(mapped.rawCapture.server as Record<string, unknown>),
-      url_match_key: urlKey || null
+      url_match_key: urlKey || null,
+      image_fetch_status:
+        imageFetchExpected === 0 ? "complete" : input.deferImages ? "pending" : "running",
+      image_fetch_expected: imageFetchExpected,
+      image_fetch_started_at: imageFetchExpected > 0 ? new Date().toISOString() : null
     }
   };
   const draftRow = { ...mapped.draftRow, raw_capture: rawCapture };
@@ -266,7 +312,42 @@ export async function createCaptureDraft(input: {
   const draftId = inserted.id as string;
   const warnings = [...mapped.warnings];
 
-  // CAP-2.6: images first (main/detail/variant) → url→image_id map → then variants
+  if (input.deferImages) {
+    // Persist variants immediately without image bindings. Background completion
+    // only fills currently-empty image_id values on matching rows.
+    if (mapped.variantRows.length > 0) {
+      const withoutImages = applyVariantImageIds(mapped.variantRows, {}).map((row) => ({
+        ...row,
+        draft_id: draftId
+      }));
+      const vr = await persistVariantsSafe(input.serviceSupabase, draftId, withoutImages);
+      if (!vr.ok) {
+        warnings.push(`款式寫入失敗（草稿已建）：${vr.error}`);
+      }
+    }
+
+    if (warnings.length !== mapped.warnings.length) {
+      await input.serviceSupabase
+        .from("product_drafts")
+        .update({ warnings })
+        .eq("id", draftId)
+        .then(() => null)
+        .catch(() => null);
+    }
+
+    return {
+      ok: true,
+      status: "created",
+      draft_id: draftId,
+      open_path: openPathForDraft(draftId),
+      filled: mapped.filled,
+      warnings,
+      images: { ok: 0, failed: 0 }
+    };
+  }
+
+  // CAP-2.6 synchronous compatibility path: images first
+  // (main/detail/variant) → url→image_id map → then variants
   let imagesOk = 0;
   let imagesFailed = 0;
   let urlToImageId: Record<string, string> = {};
@@ -310,6 +391,8 @@ export async function createCaptureDraft(input: {
       ...rawCapture,
       server: {
         ...(rawCapture.server as Record<string, unknown>),
+        image_fetch_status: "complete",
+        image_fetch_finished_at: new Date().toISOString(),
         image_fetch: imageFetchLog,
         warnings: [
           ...(((rawCapture.server as Record<string, unknown>)?.warnings as string[]) ?? []),
@@ -357,4 +440,113 @@ export async function createCaptureDraft(input: {
     warnings,
     images: { ok: imagesOk, failed: imagesFailed }
   };
+}
+
+
+export async function completeCaptureDraftImages(input: {
+  serviceSupabase: any;
+  userId: string;
+  draftId: string;
+  body: CaptureImportBody;
+}): Promise<void> {
+  const sourceUrl = (input.body.source_url ?? "").trim();
+  if (!sourceUrl) return;
+
+  const mapped = mapCaptureToDraftFields(input.body, { userId: input.userId });
+  let imageFetchLog: unknown[] = [];
+  let backgroundWarnings: string[] = [];
+  let imageStatus: "complete" | "failed" = "complete";
+  let urlToImageId: Record<string, string> = {};
+
+  try {
+    const imgResult = await fetchAndStoreCaptureImages({
+      serviceSupabase: input.serviceSupabase,
+      userId: input.userId,
+      draftId: input.draftId,
+      sourceUrl,
+      mainImageUrls: mapped.mainImageUrls,
+      detailImageUrls: mapped.detailImageUrls,
+      variantImageUrls: mapped.variantImageUrls
+    });
+    imageFetchLog = imgResult.imageFetchLog;
+    backgroundWarnings = imgResult.warnings;
+    urlToImageId = imgResult.urlToImageId ?? {};
+  } catch (err) {
+    imageStatus = "failed";
+    const message = err instanceof Error ? err.message : String(err);
+    backgroundWarnings = [`圖片背景抓取異常：${message}`];
+  }
+
+  if (Object.keys(urlToImageId).length > 0 && mapped.variantRows.length > 0) {
+    const desiredRows = applyVariantImageIds(mapped.variantRows, urlToImageId)
+      .filter((row) => typeof row.image_id === "string")
+      .map((row) => ({ identity: variantIdentity(row), imageId: row.image_id as string }));
+
+    if (desiredRows.length > 0) {
+      const { data: currentVariants, error: currentError } = await input.serviceSupabase
+        .from("product_variants")
+        .select(
+          "id,sku,option1_name,option1_value,option2_name,option2_value,option3_name,option3_value,image_id"
+        )
+        .eq("draft_id", input.draftId);
+
+      if (currentError) {
+        backgroundWarnings.push(`款式圖片補綁讀取失敗：${currentError.message}`);
+      } else {
+        const desiredByIdentity = new Map(desiredRows.map((row) => [row.identity, row.imageId]));
+        for (const current of currentVariants ?? []) {
+          if (current.image_id) continue;
+          const imageId = desiredByIdentity.get(variantIdentity(current as Record<string, unknown>));
+          if (!imageId) continue;
+          const { error: bindError } = await input.serviceSupabase
+            .from("product_variants")
+            .update({ image_id: imageId })
+            .eq("id", current.id)
+            .is("image_id", null);
+          if (bindError) {
+            backgroundWarnings.push(`款式圖片補綁失敗：${bindError.message}`);
+          }
+        }
+      }
+    }
+  }
+
+  const { data: currentDraft } = await input.serviceSupabase
+    .from("product_drafts")
+    .select("raw_capture,warnings")
+    .eq("id", input.draftId)
+    .maybeSingle();
+
+  const currentRaw =
+    currentDraft?.raw_capture &&
+    typeof currentDraft.raw_capture === "object" &&
+    !Array.isArray(currentDraft.raw_capture)
+      ? (currentDraft.raw_capture as Record<string, unknown>)
+      : mapped.rawCapture;
+  const currentServer =
+    currentRaw.server && typeof currentRaw.server === "object" && !Array.isArray(currentRaw.server)
+      ? (currentRaw.server as Record<string, unknown>)
+      : {};
+  const nextWarnings = mergeWarnings(currentDraft?.warnings, mapped.warnings, backgroundWarnings);
+  const serverWarnings = mergeWarnings(
+    currentServer.warnings,
+    backgroundWarnings.filter((warning) => /圖片|代抓|Storage|image/i.test(warning))
+  );
+
+  await input.serviceSupabase
+    .from("product_drafts")
+    .update({
+      warnings: nextWarnings,
+      raw_capture: {
+        ...currentRaw,
+        server: {
+          ...currentServer,
+          image_fetch_status: imageStatus,
+          image_fetch_finished_at: new Date().toISOString(),
+          image_fetch: imageFetchLog,
+          warnings: serverWarnings
+        }
+      }
+    })
+    .eq("id", input.draftId);
 }

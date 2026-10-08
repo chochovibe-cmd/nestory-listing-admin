@@ -8,8 +8,21 @@ const MAX_CONCURRENCY = 2;
 const LOCK_MINUTES = 10;
 const IMAGE_READY_TIMEOUT_MS = 2 * 60_000;
 
+type QueueJobKind = "full" | "regen_full" | "regen_field";
+
+const REGEN_FIELDS = new Set([
+  "enriched_title",
+  "generated_description_html",
+  "generated_faq_html",
+  "seo_title",
+  "meta_description",
+  "why_we_chose_it",
+  "product_highlights",
+]);
+
 type QueueInput = {
   queueVersion: typeof QUEUE_VERSION;
+  jobKind?: QueueJobKind;
   title: string;
   provider: "openai" | "claude";
   mode: "test" | "llm";
@@ -21,6 +34,9 @@ type QueueInput = {
   hasImages: boolean;
   expectedImageCount?: number;
   waitForCaptureImages?: boolean;
+  regenField?: string;
+  regenNotes?: string;
+  currentValues?: Record<string, unknown>;
 };
 
 type QueueRunRow = {
@@ -48,6 +64,14 @@ function isQueueInput(value: unknown): value is QueueInput {
 
 function generationProvider(provider: QueueInput["provider"]): "openai" | "anthropic" {
   return provider === "claude" ? "anthropic" : "openai";
+}
+
+function queueJobKind(input: QueueInput): QueueJobKind {
+  return input.jobKind ?? "full";
+}
+
+function isRegenJob(input: QueueInput): boolean {
+  return queueJobKind(input) !== "full";
 }
 
 function captureImageFetchStatus(rawCapture: unknown): string | null {
@@ -217,6 +241,124 @@ export async function POST(request: NextRequest) {
     return Response.json({ ok: true, queued: true, runId: run.id });
   }
 
+  if (action === "enqueue_regen") {
+    const draftId = typeof body.draftId === "string" ? body.draftId : "";
+    const rawInput = body.input;
+    const jobKind = rawInput?.jobKind;
+    if (
+      !draftId ||
+      !isQueueInput(rawInput) ||
+      (jobKind !== "regen_full" && jobKind !== "regen_field") ||
+      (jobKind === "regen_field" && !REGEN_FIELDS.has(String(rawInput.regenField ?? "")))
+    ) {
+      return Response.json({ error: "draftId and valid regeneration input are required" }, { status: 400 });
+    }
+
+    const { data: draft, error: draftError } = await serviceSupabase
+      .from("product_drafts")
+      .select("id,status")
+      .eq("id", draftId)
+      .single();
+
+    if (draftError || !draft) {
+      return Response.json({ error: draftError?.message ?? "Draft not found" }, { status: 404 });
+    }
+    if (draft.status === "archived") {
+      return Response.json({ error: "Archived draft cannot regenerate" }, { status: 409 });
+    }
+
+    const { data: activeRuns, error: activeError } = await serviceSupabase
+      .from("generation_runs")
+      .select("id,status,input_payload")
+      .eq("draft_id", draftId)
+      .in("status", ["pending", "processing"])
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (activeError) {
+      return Response.json({ error: activeError.message }, { status: 500 });
+    }
+    const existing = (activeRuns ?? []).find((run) => isQueueInput(run.input_payload));
+    if (existing) {
+      return Response.json(
+        { error: "This draft already has a generation job in progress", runId: existing.id },
+        { status: 409 },
+      );
+    }
+
+    const input: QueueInput = {
+      queueVersion: QUEUE_VERSION,
+      jobKind,
+      title: rawInput.title.trim().slice(0, 120),
+      provider: rawInput.provider,
+      mode: rawInput.mode,
+      useWebSearch: rawInput.useWebSearch,
+      tone: rawInput.tone.trim().slice(0, 120),
+      copyLength: rawInput.copyLength,
+      hasImages: false,
+      regenField: jobKind === "regen_field" ? String(rawInput.regenField) : undefined,
+      regenNotes:
+        jobKind === "regen_full" && typeof rawInput.regenNotes === "string"
+          ? rawInput.regenNotes.trim().slice(0, 2000)
+          : undefined,
+      currentValues:
+        jobKind === "regen_field" &&
+        rawInput.currentValues &&
+        typeof rawInput.currentValues === "object" &&
+        !Array.isArray(rawInput.currentValues)
+          ? (rawInput.currentValues as Record<string, unknown>)
+          : undefined,
+    };
+
+    const { data: run, error: runError } = await serviceSupabase
+      .from("generation_runs")
+      .insert({
+        draft_id: draftId,
+        mode: "api_llm",
+        provider: generationProvider(input.provider),
+        rule_version: "nestory-v1.1-regen",
+        status: "pending",
+        input_payload: input,
+        created_by: auth.user.id,
+      })
+      .select("id")
+      .single();
+
+    if (runError || !run) {
+      return Response.json({ error: runError?.message ?? "Failed to enqueue regeneration" }, { status: 500 });
+    }
+    return Response.json({ ok: true, queued: true, runId: run.id });
+  }
+
+  if (action === "regen_status") {
+    const draftId = typeof body.draftId === "string" ? body.draftId : "";
+    if (!draftId) return Response.json({ error: "draftId is required" }, { status: 400 });
+
+    const { data: rows, error } = await serviceSupabase
+      .from("generation_runs")
+      .select("id,status,error_message,input_payload,created_at,started_at,completed_at")
+      .eq("draft_id", draftId)
+      .contains("input_payload", { queueVersion: QUEUE_VERSION })
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    const latest = (rows ?? []).find((row) => isQueueInput(row.input_payload) && isRegenJob(row.input_payload));
+    if (!latest) return Response.json({ ok: true, regen: null });
+    const input = latest.input_payload as QueueInput;
+    return Response.json({
+      ok: true,
+      regen: latest.status === "completed"
+        ? null
+        : {
+            runId: latest.id,
+            status: latest.status,
+            field: input.regenField ?? null,
+            error: latest.error_message ?? null,
+          },
+    });
+  }
+
   if (action === "claim") {
     const requested = Math.min(Math.max(Number(body.limit ?? MAX_CONCURRENCY), 1), MAX_CONCURRENCY);
 
@@ -250,6 +392,28 @@ export async function POST(request: NextRequest) {
           "生成工作逾時中斷，已保留為失敗，可單件重試。",
         );
       }
+    }
+
+    const staleRegenBefore = new Date(Date.now() - LOCK_MINUTES * 60_000).toISOString();
+    const { data: staleRegenRuns } = await serviceSupabase
+      .from("generation_runs")
+      .select("id,draft_id,input_payload,started_at")
+      .eq("status", "processing")
+      .contains("input_payload", { queueVersion: QUEUE_VERSION })
+      .lt("started_at", staleRegenBefore)
+      .limit(20);
+
+    for (const run of staleRegenRuns ?? []) {
+      if (!isQueueInput(run.input_payload) || !isRegenJob(run.input_payload)) continue;
+      await serviceSupabase
+        .from("generation_runs")
+        .update({
+          status: "failed",
+          error_message: "重生工作逾時中斷，原文案保留，可重新送出。",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", run.id)
+        .eq("status", "processing");
     }
 
     const { count: processingCount, error: countError } = await serviceSupabase
@@ -293,6 +457,46 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (draftReadError || !draft) continue;
+      const kind = queueJobKind(candidate.input_payload);
+
+      if (kind !== "full") {
+        if (draft.status === "archived") {
+          await serviceSupabase
+            .from("generation_runs")
+            .update({
+              status: "failed",
+              error_message: "Archived draft cannot regenerate",
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", candidate.id)
+            .eq("status", "pending");
+          continue;
+        }
+
+        const workerId = `pwa-regen:${auth.user.id.slice(0, 8)}:${crypto.randomUUID().slice(0, 8)}`;
+        const { data: lockedRun, error: runLockError } = await serviceSupabase
+          .from("generation_runs")
+          .update({
+            status: "processing",
+            worker_id: workerId,
+            started_at: new Date().toISOString(),
+            error_message: null,
+          })
+          .eq("id", candidate.id)
+          .eq("status", "pending")
+          .select("id")
+          .maybeSingle();
+
+        if (!runLockError && lockedRun) {
+          claimed.push({
+            runId: candidate.id,
+            draftId: candidate.draft_id,
+            input: candidate.input_payload,
+          });
+        }
+        continue;
+      }
+
       if (
         draft.status !== "pending_copy" ||
         draft.generation_status !== "pending" ||
@@ -430,7 +634,27 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "draftId and runId are required" }, { status: 400 });
     }
 
-    await markNetworkFailure(serviceSupabase, draftId, runId, message);
+    const { data: run } = await serviceSupabase
+      .from("generation_runs")
+      .select("input_payload")
+      .eq("id", runId)
+      .eq("draft_id", draftId)
+      .maybeSingle();
+    const input = run && isQueueInput(run.input_payload) ? run.input_payload : null;
+
+    if (input && isRegenJob(input)) {
+      await serviceSupabase
+        .from("generation_runs")
+        .update({
+          status: "failed",
+          error_message: message,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", runId)
+        .eq("draft_id", draftId);
+    } else {
+      await markNetworkFailure(serviceSupabase, draftId, runId, message);
+    }
     return Response.json({ ok: true, status: "failed" });
   }
 

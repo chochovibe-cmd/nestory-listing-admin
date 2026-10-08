@@ -468,6 +468,11 @@ async function handleFieldRegen(params: {
     update.warnings = uniqueMessages([...warnings, COPY_OUTPUT_TRUNCATED_WARNING]);
   }
 
+  if (draft.shopify_product_id) {
+    update.shopify_sync_status = "dirty";
+    update.shopify_sync_error = null;
+  }
+
   const { error: updateError } = await serviceSupabase
     .from("product_drafts")
     .update(update)
@@ -597,9 +602,8 @@ export async function POST(request: NextRequest) {
   const draft = draftRow as ProductDraft;
   const serviceSupabase = createServiceSupabaseClient();
 
-  if (queueRunId && regenField) {
-    return Response.json({ error: "Queue jobs only support full generation" }, { status: 400 });
-  }
+  let queueJobKind: "full" | "regen_full" | "regen_field" = "full";
+  let queuedRegenField: string | null = null;
 
   if (queueRunId) {
     const { data: queueRun, error: queueRunError } = await serviceSupabase
@@ -608,19 +612,31 @@ export async function POST(request: NextRequest) {
       .eq("id", queueRunId)
       .single();
 
-    const queueVersion =
+    const queueInput =
       queueRun?.input_payload &&
       typeof queueRun.input_payload === "object" &&
       !Array.isArray(queueRun.input_payload)
-        ? (queueRun.input_payload as Record<string, unknown>).queueVersion
+        ? (queueRun.input_payload as Record<string, unknown>)
         : null;
+    const queueVersion = queueInput?.queueVersion;
+    const rawJobKind = queueInput?.jobKind;
+    queueJobKind =
+      rawJobKind === "regen_full" || rawJobKind === "regen_field" ? rawJobKind : "full";
+    queuedRegenField =
+      typeof queueInput?.regenField === "string" ? queueInput.regenField : null;
+
+    const regenMismatch =
+      regenField
+        ? queueJobKind !== "regen_field" || queuedRegenField !== regenField
+        : queueJobKind === "regen_field";
 
     if (
       queueRunError ||
       !queueRun ||
       queueRun.draft_id !== draftId ||
       queueRun.status !== "processing" ||
-      queueVersion !== "v1.1"
+      queueVersion !== "v1.1" ||
+      regenMismatch
     ) {
       return Response.json({ error: "Generation queue job is not claim-valid" }, { status: 409 });
     }
@@ -682,7 +698,7 @@ export async function POST(request: NextRequest) {
       (COPY_TONES as readonly string[]).includes(draft.generation_tone)
         ? (draft.generation_tone as CopyTone)
         : tone;
-    return handleFieldRegen({
+    const response = await handleFieldRegen({
       regenField,
       providerKey,
       draft,
@@ -697,35 +713,69 @@ export async function POST(request: NextRequest) {
       ipToneMap,
       clientCurrentValues: body.currentValues,
     });
+
+    if (queueRunId && queueJobKind === "regen_field") {
+      const payload = await response.clone().json().catch(() => ({}));
+      if (response.ok) {
+        await updateQueueRun("completed", {
+          output: {
+            regeneratedField: regenField,
+            result: payload?.result ?? null,
+          },
+        });
+      } else {
+        await updateQueueRun("failed", {
+          error: typeof payload?.error === "string" ? payload.error : "Copy regen failed",
+        });
+      }
+    }
+    return response;
   }
 
   const markFullGenerationFailed = async (message: string, status = 500) => {
+    const failurePatch =
+      queueJobKind === "regen_full"
+        ? {
+            generation_status: "failed",
+            generation_error: message,
+            worker_id: null,
+            worker_locked_at: null,
+            worker_lock_expires_at: null,
+            next_retry_at: null,
+          }
+        : {
+            status: "failed",
+            pipeline_stage: mapStatusToPipelineStage("failed"),
+            generation_status: "failed",
+            generation_error: message,
+            worker_id: null,
+            worker_locked_at: null,
+            worker_lock_expires_at: null,
+            next_retry_at: null,
+          };
+
     await serviceSupabase
       .from("product_drafts")
-      .update({
-        status: "failed",
-        pipeline_stage: mapStatusToPipelineStage("failed"),
-        generation_status: "failed",
-        generation_error: message,
-        worker_id: null,
-        worker_locked_at: null,
-        worker_lock_expires_at: null,
-        next_retry_at: null,
-      })
+      .update(failurePatch)
       .eq("id", draftId);
 
     await updateQueueRun("failed", { error: message });
     return Response.json({ error: message }, { status });
   };
 
+  const processingPatch =
+    queueJobKind === "regen_full"
+      ? { generation_status: "processing", generation_error: null }
+      : {
+          status: "processing",
+          pipeline_stage: mapStatusToPipelineStage("processing"),
+          generation_status: "processing",
+          generation_error: null,
+        };
+
   const { error: processingError } = await serviceSupabase
     .from("product_drafts")
-    .update({
-      status: "processing",
-      pipeline_stage: mapStatusToPipelineStage("processing"),
-      generation_status: "processing",
-      generation_error: null,
-    })
+    .update(processingPatch)
     .eq("id", draftId);
 
   if (processingError) {
@@ -1230,6 +1280,16 @@ export async function POST(request: NextRequest) {
     worker_lock_expires_at: null,
     next_retry_at: null,
   };
+
+  if (queueJobKind === "regen_full") {
+    // Background regeneration must not move a card to another workflow station.
+    draftUpdate.status = draft.status;
+    draftUpdate.pipeline_stage = draft.pipeline_stage;
+    if (draft.shopify_product_id) {
+      draftUpdate.shopify_sync_status = "dirty";
+      draftUpdate.shopify_sync_error = null;
+    }
+  }
 
   if (detectedBrand) {
     draftUpdate.product_brand = detectedBrand;

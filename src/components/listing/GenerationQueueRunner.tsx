@@ -12,6 +12,13 @@ import {
 } from "@/components/listing/generationProgress";
 
 export const GENERATION_QUEUE_KICK_EVENT = "nestory:generation-queue-kick";
+export const REGEN_QUEUE_STATUS_EVENT = "nestory:regen-queue-status";
+export type RegenQueueStatusDetail = {
+  draftId: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  field?: string | null;
+  error?: string | null;
+};
 const MAX_LOCAL_CONCURRENCY = 2;
 const POLL_MS = 4_000;
 
@@ -26,6 +33,10 @@ type QueueInput = {
   tone: string;
   copyLength: "精簡" | "標準" | "詳細";
   hasImages: boolean;
+  jobKind?: "full" | "regen_full" | "regen_field";
+  regenField?: string;
+  regenNotes?: string;
+  currentValues?: Record<string, unknown>;
 };
 
 type ClaimedJob = {
@@ -53,6 +64,10 @@ function emitProgress(
     timingNote,
   };
   window.dispatchEvent(new CustomEvent<GenerationProgress>(GENERATION_PROGRESS_EVENT, { detail: model }));
+}
+
+function emitRegenStatus(detail: RegenQueueStatusDetail) {
+  window.dispatchEvent(new CustomEvent<RegenQueueStatusDetail>(REGEN_QUEUE_STATUS_EVENT, { detail }));
 }
 
 async function reportNetworkFailure(job: ClaimedJob, message: string) {
@@ -87,6 +102,77 @@ export function GenerationQueueRunner() {
     async (job: ClaimedJob) => {
       const title = job.input.title.trim().slice(0, 18) || "未命名商品";
       const startedAt = Date.now();
+      const jobKind = job.input.jobKind ?? "full";
+
+      if (jobKind !== "full") {
+        emitRegenStatus({
+          draftId: job.draftId,
+          status: "processing",
+          field: job.input.regenField ?? null,
+        });
+
+        let regenResponse: Response;
+        try {
+          regenResponse = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              draftId: job.draftId,
+              queueRunId: job.runId,
+              provider: job.input.provider,
+              mode: job.input.mode,
+              useWebSearch: job.input.useWebSearch,
+              tone: job.input.tone,
+              copyLength: job.input.copyLength,
+              regenNotes: job.input.regenNotes,
+              field: job.input.regenField,
+              currentValues: job.input.currentValues,
+            }),
+          });
+        } catch {
+          const message = "重生連線失敗，原文案已保留，可重新送出。";
+          await reportNetworkFailure(job, message);
+          emitRegenStatus({
+            draftId: job.draftId,
+            status: "failed",
+            field: job.input.regenField ?? null,
+            error: message,
+          });
+          showToast(`${title}：${message}`, "error");
+          return;
+        }
+
+        const regenPayload = await regenResponse.json().catch(() => ({}));
+        if (!regenResponse.ok) {
+          const errorText =
+            typeof regenPayload.error === "string" ? regenPayload.error : "重生失敗";
+          emitRegenStatus({
+            draftId: job.draftId,
+            status: "failed",
+            field: job.input.regenField ?? null,
+            error: errorText,
+          });
+          showToast(`${title}：${errorText}`, "error");
+          router.refresh();
+          return;
+        }
+
+        const elapsedSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+        emitRegenStatus({
+          draftId: job.draftId,
+          status: "completed",
+          field: job.input.regenField ?? null,
+        });
+        showToast(
+          jobKind === "regen_field"
+            ? `${title}：單欄重生完成（${elapsedSeconds}s）`
+            : `${title}：重新生成完成（${elapsedSeconds}s）`,
+          "success",
+        );
+        router.refresh();
+        return;
+      }
+
       let imageStep: StepStatus = job.input.hasImages ? "active" : "done";
       const imageWarnings: string[] = [];
 

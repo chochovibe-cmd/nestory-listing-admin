@@ -1,3 +1,19 @@
+> **2026-10-08 V1 Shopify release checkpoint — CURRENT**
+> - Handoff branch code release commit: `8cdc25817a7febfd25c2e555b58a6cf0092031ed`（PR #20–#23 已合併）。
+> - Live production aliases：`nestory-listing-admin.vercel.app`、`nestory-listing-admin-chocho-nestory.vercel.app` → deployment `dpl_9G2KNRABYpSq2MoXvSCN848sJcUE` → Git SHA `8cdc258…`。
+> - Production health：`/api/status` 200；Supabase/Shopify true；`shopifyMock=true`；新 deployment 最近 30 分鐘無 error。
+> - Vercel 2026-10-08 API deployments 免費每日額度已滿；本次 Production release 採 exact READY deployment + 正式 alias reassignment。未來核對正式版本時，要查 alias mapping，不可只看 `target=production` 歷史清單。
+> - Production Supabase 已正式套用並驗證 `variant_split_override_semantics`、`guard_current_image_batch_pointer`；舊的「尚有 3 個 migration 未套」敘述已過期。
+> - 真 Shopify DRAFT E2E：
+>   - recovery 測試：同一 Shopify Product ID 續接成功，不重複 productCreate；
+>   - fresh E2E：Pingu × 您萌｜吹風機 → `gid://shopify/Product/15420026945721`，DRAFT、5 variants、NT$1,680 / compare-at NT$2,280、SKU 正確；
+>   - fresh E2E 發現 detail media 誤入商品圖庫；PR #23 已修 source filter，現有 DRAFT 已刪除 20 張 detail media，最後 9 張 main/variant media 全 READY，description detail embed 保留。
+> - Capture PR #18：仍 Draft/HOLD，Owner 手動 extension 驗收未做，未 merge。
+> - 正式站仍維持 `SHOPIFY_PUBLISH_MOCK=true`；**日常真 Shopify write 尚未正式放行**。若要切 live，需新的 Production live-write package 與 Owner 明確授權。
+> - 下一階段：V1.1 擷取＋生成統一流水線 → COPY-SAFE；PERF P1A 需先決定 PR #14，P1B 併 V1.1；PR #15 排程、PR #12 影片等依 roadmap 後續。
+>
+> **下方舊狀態保留作歷史；若與本區衝突，以本區＋live 系統查詢為準。**
+
 > **2026-10-07 狀態注記（主線 release truth）**
 > - PB1.4 文案已由 PR #17 合進主線（merge commit `585c99b`），主線 CI 綠；店主已驗收文案品質。
 > - 舊文案線 PR #13、#11 已關閉（被取代）；本機舊分支 `codex/copy-quality-v2` 末尾有 wip 封存 commit（`db172df`），僅供歷史查詢；其中 `mapCaptureFields` 多色白名單與 `zhTwLocalizer` 適閤修正為待 cherry-pick 的通用小修。

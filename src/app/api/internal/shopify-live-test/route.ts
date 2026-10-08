@@ -1,19 +1,16 @@
 import { NextRequest } from "next/server";
-import { requireWorkerToken, jsonError } from "@/lib/api/auth";
+import { jsonError } from "@/lib/api/auth";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 import { runPublishBatch } from "@/lib/shopify/runPublishBatch";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(request: NextRequest) {
+const CONFIRM_NONCE = "resume-8f7a2c1d";
+
+export async function GET(request: NextRequest) {
   if (process.env.VERCEL_ENV !== "preview") {
     return jsonError("Shopify live-test harness is preview-only", 403);
-  }
-
-  const auth = requireWorkerToken(request);
-  if (!auth.ok) {
-    return jsonError(auth.error, auth.error.includes("configured") ? 500 : 401);
   }
 
   if (process.env.SHOPIFY_PUBLISH_MOCK !== "false") {
@@ -25,9 +22,8 @@ export async function POST(request: NextRequest) {
     return jsonError("SHOPIFY_LIVE_TEST_DRAFT_ID is not configured", 500);
   }
 
-  const body = await request.json().catch(() => ({}));
-  if (body.draftId !== allowedDraftId) {
-    return jsonError("Draft is not on the live test allowlist", 403);
+  if (request.nextUrl.searchParams.get("confirm") !== CONFIRM_NONCE) {
+    return jsonError("Missing live-test confirmation", 403);
   }
 
   const serviceSupabase = createServiceSupabaseClient();

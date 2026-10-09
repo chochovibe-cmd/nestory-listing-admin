@@ -1,3 +1,27 @@
+> **2026-10-09 ROADMAP ADDENDUM｜補回 Fable 對話中被壓縮掉的文案 / UIUX 主線**
+>
+> 2026-10-09 Owner 指出前一版 active roadmap 把「文案品質策略」與「UIUX / 規格區」壓得太扁。重新對照 Fable 交接內容、既有 UIUX audits 與 current source 後，正式補回以下獨立 packages。這些是 **GO DAILY 後的優化主線**，不可被 COPY-SAFE 或 PERF 幾個名字吃掉。
+>
+> **GO DAILY 前只處理兩包：**
+> 1. `UI-FLOW-STABILIZE`：修待發布卡收合時 Station3 Publish / Export Preflight modal 被卡片 transform / overflow 裁切；成功操作後 Toast 與卡片離場同步，避免「好像沒按到」。
+> 2. `SHOPIFY-DAILY-DRAFT`：一般合格商品可真寫 Shopify DRAFT；ACTIVE 後端 hard-block；Production Owner approval 後跑 1 件 fresh full-flow smoke。PASS = **GO DAILY（DRAFT）**。
+>
+> **GO DAILY 後文案線不是只有 COPY-SAFE，分成兩層：**
+> - `COPY-SAFE`：一致性 / 安全層。單欄重生走 Product Brief、copyLength 真正生效、Miffy Quality Floor 先偵測不自動重跑。
+> - `PB2-COPY-STRATEGY`：品質 / 策略層。承接 Fable 對話原本已明確列出的 Product Strategy Brief：**收藏型 / 功能型分流、老闆版自適應標題、規格價值轉譯 → 品類知識包 → 真實商品 Golden Eval**。目前標題 v2 是 baseline，不直接推翻；PB2 用真商品比較後再調整。
+>
+> **GO DAILY 後 UIUX 也拆成獨立主線：**
+> - `UIUX-SPEC-VARIANT`：規格區 / 維度 / 規格值 / Variant 編輯效率。保留已完成的 mobile D3.4B 行為，重點補 desktop Variant 重排、缺成本/缺圖摘要、批次處理、規格區層次與 mobile/desktop 一致性。
+> - `UIUX-CARD-WORKBENCH`：ResultCard / 工作台資訊層次。照片、標題、下一步第一層；價格與待處理第二層；tags / 時間第三層；保留雙欄與 Sequential Review，不重做成簡化版。
+> - `UIUX-FLOW-STATE`：流程狀態可理解性。警告可跳到欄位、此裝置暫存 / 工具已儲存 / Shopify 待同步分清楚、來源資料 vs 生成稿對照、批次部分失敗可處理、手機入口可發現、Dashboard 待辦優先。
+>
+> 以上三條 UIUX package 都要先 re-audit 最新畫面；PR #14 只當 reference，不整包搬回 current authority。
+>
+> **完整建議順序（2026-10-09）：**
+> `UI-FLOW-STABILIZE → SHOPIFY-DAILY-DRAFT → fresh smoke → GO DAILY → OBS-QUEUE → COPY-SAFE → PB2-COPY-STRATEGY → UIUX-SPEC-VARIANT → UIUX-CARD-WORKBENCH → UIUX-FLOW-STATE → PERF P1A → PERF P1B → CAPTURE-FILTER → Schedule V1.2 / Pricing DB → Video / advanced image → CSS 收斂`
+>
+> 下方較早 roadmap 內容保留作歷史問題庫；若與本 addendum 衝突，以本區為準。
+
 > **2026-10-09 ACTIVE ROADMAP — supersedes 2026-09-30 pending list**
 >
 > 目前不是「V1.1 還沒做」，而是 **V1.1 core 已 PASS，正在進入日常 Shopify DRAFT 開放與後續優化**。舊表格保留作歷史問題庫；任何舊項目施工前都要先對最新 source / runtime 重查，不可照 9/30 狀態直接重做。

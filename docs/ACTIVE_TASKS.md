@@ -1,3 +1,16 @@
+> **2026-10-09 Owner 流程補充**
+> - 為避免 Commander 對話再次撞到長度上限，Owner 希望 **每完成 1–2 個 package 就換新 Commander 對話**。
+> - 換對話前必須先把 Final HEAD / PR / PASS-HOLD / blockers / next package / reserved files 寫回 repo；新對話依 AI_START_HERE → AI_WORKING_RULES → CURRENT_STATUS → ACTIVE_TASKS 接手。
+> - 前一版 planned list 漏列 PB2 與 UIUX / 規格區主線，已在 `docs/COMMANDER-ROADMAP.md` 補正。
+>
+> **GO DAILY 前 current sequence：**
+> 1. `UI-FLOW-STABILIZE` — NOT STARTED
+> 2. `SHOPIFY-DAILY-DRAFT` — NOT STARTED
+> 3. 1 件 fresh full-flow smoke — PASS 後標記 GO DAILY（DRAFT）
+>
+> **GO DAILY 後主線：**
+> `OBS-QUEUE → COPY-SAFE → PB2-COPY-STRATEGY → UIUX-SPEC-VARIANT → UIUX-CARD-WORKBENCH → UIUX-FLOW-STATE → PERF P1A → PERF P1B → CAPTURE-FILTER → Schedule V1.2 / Pricing DB → Video / advanced image → CSS`
+>
 # Nestory — Active Tasks
 
 更新：2026-10-09

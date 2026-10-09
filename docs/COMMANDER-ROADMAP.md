@@ -1,3 +1,8 @@
+> **2026-10-10 RELEASE GATE — DRAFT COMPLETE**
+> - Production DRAFT cutover + one real DRAFT smoke are both PASS.
+> - Do not spend another package on DRAFT validation unless new evidence appears.
+> - Next release step is immediately `SHOPIFY-ACTIVE-GO-LIVE` → one controlled real ACTIVE smoke → free daily DRAFT/ACTIVE choice.
+>
 > **2026-10-10 RELEASE GATE ADVANCED**
 > - Production DRAFT transition completed successfully on `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs` at authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
 > - Current shortest release path is now: **1 fresh real DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → 1 real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.

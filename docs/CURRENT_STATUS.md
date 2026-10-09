@@ -1,3 +1,10 @@
+> **2026-10-09 HANDOFF STATUS — PR #31 merged**
+> - Authority source: `handoff/20261008-golive-spec@9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`.
+> - Production runtime unchanged from PR #29 release: `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`, READY；`/api/status` healthy，`shopifyMock=false` 但仍受 single-draft live-test gate 限制。
+> - V1 / V1.1 core / Capture 1.2 / Queue / nonblocking regen / controlled VICTOR DRAFT E2E：PASS。
+> - Current pre-GO sequence: `UI-FLOW-STABILIZE → SHOPIFY-DAILY-DRAFT → fresh full-flow smoke → GO DAILY（DRAFT）`.
+> - Owner 已要求每完成 1–2 包就換新 Commander；下一個對話先讀 AI_START_HERE / AI_WORKING_RULES / CURRENT_STATUS / ACTIVE_TASKS，再 live-check。
+>
 > **2026-10-09 CURRENT STATUS — V1.1 已完成，等待 SHOPIFY-DAILY-DRAFT**
 > - Authority source：`handoff/20261008-golive-spec@cb4b4d122398e765aa8c2375568756978c649334`；Production deployment：`dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178`，READY，Git SHA `cb4b4d1…`。
 > - Production runtime：`/api/status` 200；Supabase / Shopify true；`shopifyMock=false`。目前仍為 single-draft live-test gate，**不是 unrestricted live write**。

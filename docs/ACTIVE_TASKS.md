@@ -1,3 +1,13 @@
+> **2026-10-09 NEXT-CHAT HANDOFF**
+> - Final authority after PR #31 merge：`9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`
+> - Production：`dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`，READY；PR #30/#31 為 docs-only，runtime 未變。
+> - Current blocker：`UI-FLOW-STABILIZE`（NOT STARTED）。
+> - Following package：`SHOPIFY-DAILY-DRAFT`（NOT STARTED）。
+> - GO DAILY gate：以上兩包 + 1 件 fresh full-flow DRAFT smoke。
+> - Active agents：none。
+> - Reserved files：none until next Commander defines the package.
+> - Owner cadence：完成 1–2 包就 checkpoint + 換新 Commander。
+>
 > **2026-10-09 Owner 流程補充**
 > - 為避免 Commander 對話再次撞到長度上限，Owner 希望 **每完成 1–2 個 package 就換新 Commander 對話**。
 > - 換對話前必須先把 Final HEAD / PR / PASS-HOLD / blockers / next package / reserved files 寫回 repo；新對話依 AI_START_HERE → AI_WORKING_RULES → CURRENT_STATUS → ACTIVE_TASKS 接手。

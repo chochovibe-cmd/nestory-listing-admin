@@ -1,3 +1,13 @@
+## 2026-10-09 — UI-FLOW-STABILIZE / PR #33 PASS
+
+- PR #33 `UI-FLOW: stabilize modals and single-card success feedback` 經 Owner Preview 實測通過後獲准 merge。
+- Merge commit / new authority：`102565df789a035e6b8ae415ce7b694b919d927f`。
+- 完成：Station3 Publish Modal + Export Preflight Modal 使用 body portal，避免收合 ResultCard transform / overflow 裁切；單卡文案核准、標圖分流與 publish/export 成功時重用既有 leaving transition，再 refresh。
+- Diff 僅 4 個既定 runtime 檔；未改 CSS architecture、API / Shopify publish semantics、DB / Supabase。CI / Preview PASS。
+- Production 未部署本包，仍為 `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`。
+- Owner 新提案：成功後流程可更順。Commander 決策是不立刻擴 scope，將「最後一張完成時自動接到下一站、仍有工作就留站、failure/batch/sequential 不亂跳」記入 `UIUX-FLOW-STATE` 的 Smart Station Handoff，排在 GO DAILY 後。
+- Next blocker：`SHOPIFY-DAILY-DRAFT`。
+
 ## 2026-10-09 — PR #31 merged / full roadmap reconciliation
 
 - PR #31 checks 全綠後，Owner 已批准並完成 merge。

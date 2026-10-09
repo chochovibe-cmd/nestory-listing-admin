@@ -1,3 +1,11 @@
+> **2026-10-09 Commander handoff after PR #31 — CURRENT**
+> - Git authority: `handoff/20261008-golive-spec@9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`（PR #31 已 merge）。
+> - Production 仍是 deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / Git SHA `cb4b4d122398e765aa8c2375568756978c649334`，READY；`/api/status` = Supabase true / Shopify true / `shopifyMock=false`。PR #30/#31 都是 docs-only，沒有改 Production runtime。
+> - Owner 新節奏：每完成 1–2 個 package 就換新 Commander 對話；換前做 repo handoff。
+> - 下一個真正施工包：`UI-FLOW-STABILIZE`。完成後做 `SHOPIFY-DAILY-DRAFT` + 1 件 fresh full-flow smoke；PASS = **GO DAILY（DRAFT）**。
+> - 完整後續 roadmap 不只 COPY-SAFE / PERF：另含 PB2 文案策略、規格/Variant UIUX、ResultCard/Workbench UIUX、流程狀態 UIUX、Pricing DB、Schedule V1.2、Shopify ACTIVE/publication、reliability/data hardening、browser E2E/ops hardening、Capture filter、Video/advanced image、CSS/scouting later。詳見 `docs/COMMANDER-ROADMAP.md` 最上方 2026-10-09 FULL RECONCILIATION。
+> - 新對話不得用本段 SHA 當永久真相；第一步仍要 live-check GitHub / Vercel。
+>
 > **2026-10-09 接續節奏與 roadmap 補正**
 > - Owner 改採「每完成 1–2 個 package 就換新 Commander 對話」；每次換對話前必須做 repo handoff，不依賴聊天摘要。
 > - GO DAILY 前現在有兩個窄包：先 `UI-FLOW-STABILIZE`（發布/匯出 modal portal + 成功後卡片離場回饋同步），再 `SHOPIFY-DAILY-DRAFT`（一般商品 DRAFT-only 真寫入、ACTIVE 後端 hard-block）。最後跑 1 件 fresh full-flow smoke；PASS = 可正式每天用 Nestory 上架到 Shopify DRAFT。

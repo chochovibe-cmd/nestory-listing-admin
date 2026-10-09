@@ -1,3 +1,10 @@
+> **2026-10-10 ACTIVE TASK — SHOPIFY-ACTIVE-GO-LIVE**
+> - Production DRAFT transition: PASS.
+> - Real DRAFT smoke: PASS (Pingu mini camera, `gid://shopify/Product/15422660214969`).
+> - No further DRAFT smoke is required.
+> - Next package must explicitly define and verify ACTIVE vs Online Store publication semantics, then enable ACTIVE only under Owner Production approval and run exactly one controlled real ACTIVE smoke.
+> - Until that approval, `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false` remains authoritative.
+>
 > **2026-10-10 ACTIVE GATE — FRESH DRAFT SMOKE**
 > - Production DRAFT transition = **PASS**.
 > - Authority / Production: `5fc18fb02741cca1b5c1c912e1ff668b7a410180` / `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs`.

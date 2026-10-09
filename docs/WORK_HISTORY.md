@@ -1,3 +1,13 @@
+
+## 2026-10-09 — PR #30 merged / roadmap addendum
+
+- Owner 明確批准 PR #30；CI / Vercel checks 全綠後已 merge。
+- Merge commit：`8ac0f2f3a9558c847b5169d60316069a980cede5`。
+- Owner 補充新協作節奏：每完成 1–2 個 package 就換新 Commander 對話，換前做 repo handoff。
+- 重新對照 Fable 交接與 UIUX audits，確認前一版 active roadmap 過度壓縮：
+  - 文案後續除了 COPY-SAFE，另有獨立 PB2-COPY-STRATEGY。
+  - UIUX 後續另有規格 / Variant、ResultCard / Workbench、流程狀態 / Dashboard 三條主線。
+  - 目前已知的 Station3 / Export modal 裁切與成功後卡片離場延遲，列為 GO DAILY 前的 UI-FLOW-STABILIZE。
 # Nestory — Work History
 
 本檔記 milestone / package checkpoint；不是每個小 commit 都記。

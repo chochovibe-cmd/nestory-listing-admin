@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   countSelectedActions,
   DEFAULT_STATION3_SELECTION,
@@ -61,7 +62,7 @@ export function Station3PublishModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, busy, onCancel]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   const canSubmit = hasAnyAction(selection) && !busy;
 
@@ -85,7 +86,7 @@ export function Station3PublishModal({
     onConfirm(selection);
   }
 
-  return (
+  return createPortal(
     <div
       aria-labelledby={titleId}
       aria-modal="true"
@@ -212,6 +213,7 @@ export function Station3PublishModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

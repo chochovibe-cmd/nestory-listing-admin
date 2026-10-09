@@ -1798,6 +1798,7 @@ export function DraftResultsPanel({
                   onGestureStart={() => {
                     setOpenSwipeId((cur) => (cur === draft.id ? cur : null));
                   }}
+                  onLeaveSuccess={() => scheduleLeaveThenRefresh([draft.id])}
                   onSwipeOpenChange={(open) => {
                     setOpenSwipeId(open ? draft.id : null);
                   }}

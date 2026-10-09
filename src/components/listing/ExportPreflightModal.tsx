@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   exportPreflightHeading,
   exportPrimaryLabel,
@@ -360,7 +361,7 @@ export function ExportPreflightModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, busy, onCancel]);
 
-  if (!open || !report) return null;
+  if (!open || !report || typeof document === "undefined") return null;
 
   const heading = exportPreflightHeading(report.kind);
   const primaryLabel = confirmLabel ?? exportPrimaryLabel(report);
@@ -369,7 +370,7 @@ export function ExportPreflightModal({
     report.kind === "showmore" ? SHOWMORE_PREVIEW_HEADERS : MATRIXIFY_PREVIEW_HEADERS;
   const tableRows = fullTableRows ?? [];
 
-  return (
+  return createPortal(
     <div
       aria-labelledby={titleId}
       aria-modal="true"
@@ -593,6 +594,7 @@ export function ExportPreflightModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

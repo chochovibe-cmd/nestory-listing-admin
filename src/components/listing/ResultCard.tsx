@@ -228,6 +228,8 @@ export function ResultCard({
   sequentialStation = "copy",
   /** UX-Q T70: called only after approve / 標圖分流 API succeeds */
   onApproveSuccess,
+  /** UI-FLOW: regular list card fades out after a successful station transition. */
+  onLeaveSuccess,
   /** UX-Q T70: parent increments → 站① 核准 ／ 站② 標圖通過 */
   approveSignal,
   /** UX-Q T70: parent sets tab (1–5 shortcuts); null = no-op */
@@ -259,6 +261,8 @@ export function ResultCard({
   sequentialMode?: boolean;
   sequentialStation?: "copy" | "image";
   onApproveSuccess?: () => void;
+  /** Regular workbench only; sequential overlay falls back to direct refresh. */
+  onLeaveSuccess?: () => void;
   approveSignal?: number;
   externalTab?: ResultCardTabId | null;
   /** 預設 false＝「只看我的」不顯示帳號 */
@@ -549,6 +553,14 @@ export function ResultCard({
   const failReasonSummary = formatDraftFailSummary(draft);
   // UX-B4-P02: sale status short badge after title (display only).
   const saleStatusBadge = formatSaleStatusBadge(draft.sale_status);
+
+  function finishSuccessfulTransition(shouldLeave = true) {
+    if (shouldLeave && onLeaveSuccess) {
+      onLeaveSuccess();
+      return;
+    }
+    router.refresh();
+  }
 
   // fix(B12): commit notice first; defer refresh so UI isn't racing RSC.
   async function archiveOne() {
@@ -1288,7 +1300,7 @@ export function ResultCard({
         });
         // BX1 延伸：逐件標圖成功才前進
         onApproveSuccess?.();
-        router.refresh();
+        finishSuccessfulTransition();
         return;
       }
       const response = await fetch("/api/drafts/batch/send-images", {
@@ -1320,7 +1332,7 @@ export function ResultCard({
       });
       // BX1 延伸：逐件標圖成功才前進
       onApproveSuccess?.();
-      router.refresh();
+      finishSuccessfulTransition();
     } catch {
       setMarkMessage("分流連線失敗");
       showToast("分流連線失敗", "error");
@@ -1403,7 +1415,7 @@ export function ResultCard({
       });
       // UX-Q T70: sequential mode advances only on success
       onApproveSuccess?.();
-      router.refresh();
+      finishSuccessfulTransition();
     } catch {
       setMessage("");
       showToast("核准連線失敗", "error");
@@ -1589,7 +1601,7 @@ export function ResultCard({
         );
         setStation3Selection(null);
         setPendingApiResult(null);
-        router.refresh();
+        finishSuccessfulTransition(left);
         return;
       }
 
@@ -1906,7 +1918,7 @@ export function ResultCard({
       setExportFullTableRows(null);
       setStation3Selection(null);
       setPendingApiResult(null);
-      router.refresh();
+      finishSuccessfulTransition(exportMarkLeave);
     } catch {
       setMessage("");
       showToast("CSV 下載連線失敗", "error");

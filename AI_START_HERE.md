@@ -1,3 +1,14 @@
+> **2026-10-09 SHOPIFY-DAILY-DRAFT checkpoint — SOURCE PASS / PRODUCTION HOLD**
+> - Product authority remains `handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f` until PR #34 is explicitly approved and merged.
+> - Draft PR #34 head: `gpt/shopify-daily-draft-20261009@5cfcc2b0dc492cdde52c5a798369e243cd193919`.
+> - PR #34 changes only 3 files: `src/lib/shopify/liveTestGuard.ts`, `scripts/verify-shopify-live-test-guard.mjs`, `.env.example`.
+> - New contract: when live Shopify is enabled and no single-draft allowlist is configured, normal publishing is **DRAFT-only by default**. ACTIVE stays server-blocked unless `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Existing `SHOPIFY_LIVE_TEST_DRAFT_ID` remains stricter: one draft only + DRAFT-only, even if the future ACTIVE flag is true.
+> - CI verify / typecheck / build = PASS；Vercel Preview `dpl_7ozjq7iJHnr74GwWqfYfWBzvATfD` = READY；Preview `/api/status` confirms `shopifyMock=true`, so this validation did not write real Shopify.
+> - Production is unchanged: `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`；live daily DRAFT is **not yet enabled**.
+> - Agreed release order is now explicit: `SHOPIFY-DAILY-DRAFT → fresh DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → one real ACTIVE smoke → free daily DRAFT/ACTIVE choice`. ACTIVE no longer sits in a distant backlog.
+> - No merge / Production deploy / env switch without explicit Owner approval.
+>
 > **2026-10-09 Commander checkpoint after PR #33 — CURRENT**
 > - Git authority live-checked after merge: `handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f`.
 > - `UI-FLOW-STABILIZE` = **PASS / MERGED**（PR #33）。Owner 已在 Preview 實測：收合卡發布／匯出 modal、Export Preflight modal、單卡成功離場皆通過；失敗不應假消失的 source guard 保留。

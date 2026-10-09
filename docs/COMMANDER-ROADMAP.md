@@ -1,3 +1,9 @@
+> **2026-10-10 RELEASE GATE ADVANCED**
+> - Production DRAFT transition completed successfully on `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs` at authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - Current shortest release path is now: **1 fresh real DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → 1 real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.
+> - The DRAFT smoke is a release gate, not a redesign package: one fresh Owner-approved product only, then verify Shopify DRAFT status, product identity, variants, SKU, price, images/media and local linkage.
+> - ACTIVE remains explicitly OFF until the next package is separately authorized.
+>
 > **2026-10-09 RELEASE CHECKPOINT AFTER PR #34**
 > - `UI-FLOW-STABILIZE` and `SHOPIFY-DAILY-DRAFT` are both completed/merged. Do not reopen them.
 > - Current shortest release path is now: **Owner-approved Production DRAFT transition → 1 fresh DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → 1 real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.

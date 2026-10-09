@@ -1,3 +1,13 @@
+> **2026-10-09 ACTIVE PACKAGE — SHOPIFY-DAILY-DRAFT**
+> - Status: **SOURCE PASS / MERGE HOLD / PRODUCTION HOLD**.
+> - PR #34: `gpt/shopify-daily-draft-20261009@5cfcc2b0dc492cdde52c5a798369e243cd193919` → base `handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f`.
+> - CI + Preview PASS; Preview is mock mode and safe.
+> - Owner acceptance for source: general IDs may live-publish DRAFT when the single-draft allowlist is absent; ACTIVE remains server-blocked by default.
+> - Current required decision: explicit Owner approval to merge PR #34. Do not merge automatically.
+> - After merge: separately request Production approval, remove/disable the single-draft allowlist as part of the approved transition, keep ACTIVE flag false, then run exactly 1 fresh full-flow DRAFT smoke.
+> - Immediate next package after DRAFT smoke PASS: `SHOPIFY-ACTIVE-GO-LIVE`, followed by exactly 1 real ACTIVE smoke before free ACTIVE use.
+> - Reserved runtime files for PR #34: `src/lib/shopify/liveTestGuard.ts`, `scripts/verify-shopify-live-test-guard.mjs`, `.env.example`.
+>
 > **2026-10-09 POST-PR33 ACTIVE HANDOFF**
 > - Final authority：`102565df789a035e6b8ae415ce7b694b919d927f`。
 > - `UI-FLOW-STABILIZE`：✅ PASS / PR #33 merged / Owner runtime accepted。

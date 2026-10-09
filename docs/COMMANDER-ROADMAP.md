@@ -1,3 +1,63 @@
+> **2026-10-09 FULL RECONCILIATION｜Fable 完整規劃重新對表**
+>
+> 這一節是把 Fable 對話、2026-09-30 Commander audit、UIUX audit 與 2026-10-09 current source/runtime 重新對表後的完整剩餘路線。前一版只突出 PB2 + UIUX，仍會讓部分後段 hardening 看不見；以下補齊，但**不代表全部都要在 GO DAILY 前完成**。
+>
+> ### A. GO DAILY 前 — 只剩 2 包 + 1 次 smoke
+>
+> 1. **UI-FLOW-STABILIZE**  
+>    - Station3 Publish / Export Preflight modal portal：收合卡直接開 modal 不得被 transform / overflow 裁切。  
+>    - 成功操作後 Toast 與卡片離場同時發生；API 未成功前不得假消失。  
+>    - 這包只處理已重現的 flow bug；完整 focus trap / accessibility 不在此包擴 scope。
+>
+> 2. **SHOPIFY-DAILY-DRAFT**  
+>    - 一般合格商品可真寫 Shopify DRAFT。  
+>    - ACTIVE 在 server 端 hard-block。  
+>    - 不再依賴單一 VICTOR allowlist 才能工作；保留 role / confirm / idempotency / recovery safety。
+>
+> 3. **Fresh full-flow smoke**  
+>    - 淘寶擷取 → Queue 生成 → 文案審核 → 規格/圖片確認 → Shopify DRAFT → Shopify 回讀。  
+>    - PASS = **GO DAILY（DRAFT）**；不用等下列優化。
+>
+> ### B. GO DAILY 後 — 主要產品優化主線
+>
+> 1. **OBS-QUEUE**：生成中 / 排隊中 / 失敗清單；只讀 existing `generation_runs`，不重做 Runner。
+> 2. **COPY-SAFE**：單欄重生走 Product Brief；copyLength 真正生效；Miffy Quality Floor 先偵測；正文 / spec 使用同一 canonical evidence/spec basis，避免一邊有資料一邊漏；正常生成不預設增加一次 AI。
+> 3. **PB2-COPY-STRATEGY**：Product Strategy Brief；收藏型 / 功能型分流；Owner 版 adaptive title；規格價值轉譯；品類知識包；真實商品 Golden Eval。Market Context 只視需要作 PB2 後段研究層，不先塞進每次生成 prompt。
+> 4. **UIUX-SPEC-VARIANT**：規格維度 / 規格值 / Variant 編輯效率；desktop 重排；缺成本 / 缺圖摘要；批次處理；mobile / desktop 一致性。
+> 5. **UIUX-CARD-WORKBENCH**：ResultCard / Workbench 層級與減法；照片 / 標題 / 下一步第一層，價格 / 待處理第二層，tag / 時間第三層；保留現有雙欄與 Sequential Review。
+> 6. **UIUX-FLOW-STATE**：warning 跳欄位；裝置暫存 / Nestory 儲存 / Shopify sync 狀態分清；來源 vs 生成稿對照；批次部分失敗可處理；手機入口可發現；Dashboard 待辦優先。
+> 7. **PERF P1A**：lazy load 未立即使用的大型 JS；縮圖/原圖與 matchMedia 一併檢查。
+> 8. **PERF P1B**：工作台摘要先載、展開再拿 details；archived 延後；解決 40 active + 50 archived + images + variants 一次搬進瀏覽器。
+> 9. **CAPTURE-FILTER**：只排除高信心推薦 / 活動 / 廣告 DOM 區塊；不確定圖片保留人工刪。
+> 10. **PRICING-DB**：把匯率 / 係數從裝置 localStorage 收斂到 server-side canonical setting，避免桌機 / iPhone 算不同價格。
+> 11. **SCHEDULE V1.2**：從舊 PR #15 取需求 / data model，基於 latest HEAD 重接 scheduling UI / DB / cron / execution。
+>
+> ### C. 後段 reliability / go-live / ops，不得再被短清單漏掉
+>
+> - **SHOPIFY-ACTIVE-GO-LIVE**：DRAFT 日常使用之後才做。驗證 ACTIVE 與 Shopify publication / sales channel 是兩件事；最後以顧客端可見、正確 variants / price / image 為準。
+> - **DATA-RELIABILITY**：施工前重新 audit current source；包括 Variant 儲存原子性/並發衝突、重抓資料要顯示差異並保護人工修改、Shopify 人工修改 conflict、未知網路結果/429/timeout、遠端成功但本地 audit 回寫失敗的誠實狀態。V1 已做的 recovery 不重寫。
+> - **TEST-OPS-HARDENING**：最小 browser E2E 關鍵旅程、斷線/重連提示、備份與 rollback 方法、error/operation ID 可追查、cost/health 告警。這些是可靠性投資，不是 GO DAILY blocker。
+> - **ACCESSIBILITY/POLISH**：完整 focus trap、背景不可操作、鍵盤/長內容/手機抽屜等 modal consistency；與已重現的 portal bug 分開。
+> - **VIDEO / ADVANCED IMAGE**：PR #12 影片與後續圖像工具，依額度分包。
+> - **CSS P2**：逐元件收斂歷史 CSS，先做桌機/手機/三主題 baseline；禁止大掃除。
+> - **SCOUTING / OFFLINE CLOUD QUEUE**：後排產品功能；目前不是日常上架 blocker。
+> - 舊 `db172df` 小修（多色白名單、`適閤→適合`）先查 current HEAD 是否已包含，不盲目 cherry-pick。
+>
+> ### D. 舊計畫已完成 / 被新架構取代，不要重做
+>
+> - generation progress 改 draftId / runId：完成。
+> - persistent generation queue + concurrency：完成。
+> - capture 圖片背景補抓 / extension 防重按 + 商品名回饋：完成。
+> - full / field regeneration 非阻塞 queue：完成。
+> - V1 publish safety / migration gates / controlled DRAFT E2E：完成。
+> - PR #14 / #15：只作 reference，不整包 merge。
+>
+> ### E. 建議順序
+>
+> **UI-FLOW-STABILIZE → SHOPIFY-DAILY-DRAFT → fresh smoke → GO DAILY → OBS-QUEUE → COPY-SAFE → PB2-COPY-STRATEGY → UIUX-SPEC-VARIANT → UIUX-CARD-WORKBENCH → UIUX-FLOW-STATE → PERF P1A → PERF P1B → CAPTURE-FILTER → PRICING-DB / SCHEDULE V1.2 → SHOPIFY-ACTIVE-GO-LIVE → DATA-RELIABILITY / TEST-OPS-HARDENING → VIDEO / advanced image → CSS / scouting later**
+>
+> 以上順序是 default，不是鐵律；真正施工前仍依 Owner 當時痛點與檔案衝突重排。原則是不讓後段完整清單拖住 GO DAILY。
+>
 > **2026-10-09 ROADMAP ADDENDUM｜補回 Fable 對話中被壓縮掉的文案 / UIUX 主線**
 >
 > 2026-10-09 Owner 指出前一版 active roadmap 把「文案品質策略」與「UIUX / 規格區」壓得太扁。重新對照 Fable 交接內容、既有 UIUX audits 與 current source 後，正式補回以下獨立 packages。這些是 **GO DAILY 後的優化主線**，不可被 COPY-SAFE 或 PERF 幾個名字吃掉。

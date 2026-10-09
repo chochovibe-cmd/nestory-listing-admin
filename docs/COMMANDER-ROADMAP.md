@@ -1,3 +1,9 @@
+> **2026-10-09 RELEASE CHECKPOINT AFTER PR #34**
+> - `UI-FLOW-STABILIZE` and `SHOPIFY-DAILY-DRAFT` are both completed/merged. Do not reopen them.
+> - Current shortest release path is now: **Owner-approved Production DRAFT transition → 1 fresh DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → 1 real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.
+> - Production DRAFT transition is operational/configuration work, not a new feature redesign: use merged authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`, remove/disable the old single-draft allowlist, keep ACTIVE flag false, verify live runtime, then smoke one fresh product.
+> - ACTIVE package remains immediately next after DRAFT smoke and stays ahead of OBS-QUEUE / COPY / UIUX / PERF work.
+>
 > **2026-10-09 RELEASE ORDER DECISION — DRAFT THEN ACTIVE**
 > - Owner confirmed the desired end state is not DRAFT-only forever; the target is normal daily freedom to choose Shopify DRAFT or ACTIVE.
 > - Safety sequencing is now fixed as: **SHOPIFY-DAILY-DRAFT → fresh DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → one real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.

@@ -282,6 +282,16 @@ Owner Preview 優先提供 `?_vercel_share=...` 免登入連結。
 
 Commander 要直接提醒 Owner：「這裡適合換新的 Commander 對話。」
 
+### Owner 2026-10-09 對話節奏補充
+
+Owner 希望之後不要等到對話快爆掉才換：
+
+- **每完成 1–2 個 package，Commander 就主動建議換新主對話。**
+- 換之前先完成 checkpoint 文件，至少寫回 Final HEAD、PR、PASS/HOLD、blocker、下一包與 reserved files。
+- 新對話不得要求 Owner 重新講整段背景；先依 §20 的四份文件接手。
+- 若一個 package 本身很大，完成該 package 就可以換，不必硬湊到兩包。
+
+
 ## 20. 換新 Commander 對話前必須做 Handoff
 
 換對話前先更新 `AI_START_HERE.md`，至少包含：

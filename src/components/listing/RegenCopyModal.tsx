@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { COPY_TONES, type CopyTone } from "@/lib/providers/copy";
 
 /**
@@ -50,9 +51,9 @@ export function RegenCopyModal({
     };
   }, [open]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
       className="modal-overlay open"
       onClick={(event) => {
@@ -127,6 +128,7 @@ export function RegenCopyModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

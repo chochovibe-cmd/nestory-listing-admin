@@ -1,3 +1,11 @@
+## 2026-10-09 — PR #31 merged / full roadmap reconciliation
+
+- PR #31 checks 全綠後，Owner 已批准並完成 merge。
+- New authority merge commit：`9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`。
+- Production alias 重新查證仍指向 `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`；docs merge 沒有改 runtime。
+- 完整重讀 Fable 規劃後，確認前一版不只漏 PB2 + UIUX 兩條顯眼主線；還需在 roadmap 明確保留 Pricing DB、Shopify ACTIVE/publication、data reliability、browser E2E/ops hardening、accessibility/focus、offline/scouting 等後段項目。
+- 這些後段項目不是 GO DAILY blocker；Fable 原則仍是先完成最短上線路徑，避免「全部都做」拖住正式使用。
+
 
 ## 2026-10-09 — PR #30 merged / roadmap addendum
 

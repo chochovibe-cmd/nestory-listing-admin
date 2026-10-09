@@ -1,3 +1,9 @@
+> **2026-10-09 接續節奏與 roadmap 補正**
+> - Owner 改採「每完成 1–2 個 package 就換新 Commander 對話」；每次換對話前必須做 repo handoff，不依賴聊天摘要。
+> - GO DAILY 前現在有兩個窄包：先 `UI-FLOW-STABILIZE`（發布/匯出 modal portal + 成功後卡片離場回饋同步），再 `SHOPIFY-DAILY-DRAFT`（一般商品 DRAFT-only 真寫入、ACTIVE 後端 hard-block）。最後跑 1 件 fresh full-flow smoke；PASS = 可正式每天用 Nestory 上架到 Shopify DRAFT。
+> - GO DAILY 後文案拆成 `COPY-SAFE`（一致性/安全）與獨立 `PB2-COPY-STRATEGY`（收藏型/功能型分流、老闆版自適應標題、規格價值轉譯、品類知識包、Golden Eval）。
+> - UIUX 不是只剩舊 PR #14：正式拆成 `UIUX-SPEC-VARIANT`、`UIUX-CARD-WORKBENCH`、`UIUX-FLOW-STATE`，均從最新 HEAD 重做小包，舊 PR 只供 reference。
+>
 > **2026-10-09 V1.1 + Shopify DRAFT 日常上架前 checkpoint（CURRENT AUTHORITY）**
 > - Git authority：`handoff/20261008-golive-spec@cb4b4d122398e765aa8c2375568756978c649334`。PR #29 已合併；Production 現在是 Vercel deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178`，Git SHA 同為 `cb4b4d1…`，狀態 READY。
 > - Production `/api/status` 重新核對：HTTP 200、Supabase=true、Shopify=true、`shopifyMock=false`。**這不等於已全面開放 Shopify 真寫入。** 現在仍是 Owner 核准的單一 DRAFT live-test gate；`checkLiveTestGuard` 在 allowlist 存在時只准一件 draft、且 publish mode 只能是 `draft`。不可直接清空 allowlist 當作「正式開放」，因為沒有 allowlist 反而會失去這層限制。

@@ -1,3 +1,11 @@
+> **2026-10-10 fresh Shopify DRAFT smoke — PASS**
+> - Owner used existing Pingu mini camera draft as the real Production smoke; no second test product is required.
+> - Nestory draft: `5feb9b44-e8c1-46f7-9d06-2c354bfcd0d9`; publish batch completed 1/1 with 0 failures in DRAFT mode.
+> - Shopify readback: `gid://shopify/Product/15422660214969` status **DRAFT**; title matched; SKU `CHO-DS-PIN-PIN-001`; price TWD 799; 1 default variant; 4 main product images present.
+> - Detail images remain excluded from Shopify product media by the already-approved media contract; this is expected, not a missing-image defect.
+> - Local Shopify product linkage is present. No release-blocking issue found.
+> - **Release gate result: DRAFT SMOKE PASS. Next package: SHOPIFY-ACTIVE-GO-LIVE.** ACTIVE still requires explicit Owner Production approval before enabling the server flag or creating a real ACTIVE product.
+>
 > **2026-10-10 Production DRAFT transition — PASS**
 > - Owner explicitly approved the Production DRAFT switch.
 > - Production env transition completed: `SHOPIFY_LIVE_TEST_DRAFT_ID` is empty/disabled; `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false` is explicitly set for Production.

@@ -1,3 +1,13 @@
+## 2026-10-09 — SHOPIFY-DAILY-DRAFT merged / handoff checkpoint
+
+- Owner explicitly approved PR #34 merge after source/CI/Preview PASS.
+- PR #34 merged successfully; new authority: `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+- Production remained unchanged after merge; latest known Production deployment remains `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`.
+- Source contract now safely supports normal live DRAFT publishing without a single-draft allowlist while keeping ACTIVE blocked unless an explicit ACTIVE enable flag is true.
+- Next write boundary requires separate Owner approval: Production DRAFT transition, followed by exactly one fresh full-flow DRAFT smoke.
+- After that PASS, next package is `SHOPIFY-ACTIVE-GO-LIVE` + one real ACTIVE smoke before broad ACTIVE freedom.
+- UI-FLOW + SHOPIFY-DAILY-DRAFT are two completed packages; repo handoff checkpoint created per Owner cadence.
+
 ## 2026-10-09 — SHOPIFY-DAILY-DRAFT source gate
 
 - Opened Draft PR #34 from authority `102565df789a035e6b8ae415ce7b694b919d927f`; head `5cfcc2b0dc492cdde52c5a798369e243cd193919`.

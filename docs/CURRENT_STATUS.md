@@ -1,3 +1,10 @@
+> **2026-10-09 CURRENT — SHOPIFY-DAILY-DRAFT SOURCE PASS**
+> - PR #34 (`5cfcc2b…`) is Draft / HOLD. Diff is limited to live-write guard + verifier + env documentation; no payload / SKU / image / pricing / DB changes.
+> - Machine validation: verify contracts/regressions PASS, typecheck PASS, build PASS, Vercel Preview READY. Preview reports `shopifyMock=true`; no real Shopify mutation occurred in this package validation.
+> - Safety result: removing the old one-draft allowlist will no longer open ACTIVE accidentally. General live publishing defaults to DRAFT-only; ACTIVE requires separate explicit server flag `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Production remains unchanged and still carries the owner-approved single-draft live-test configuration. Next action requires Owner merge approval for PR #34; Production transition is a separate explicit approval after merge.
+> - Confirmed sequence: daily DRAFT → 1 fresh full-flow DRAFT smoke → ACTIVE go-live package → 1 real ACTIVE smoke → only then free DRAFT / ACTIVE daily use.
+>
 > **2026-10-09 CURRENT STATUS — UI-FLOW PASS / next SHOPIFY-DAILY-DRAFT**
 > - Authority source：`handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f`（PR #33 merged）。
 > - `UI-FLOW-STABILIZE`：**PASS**。GitHub CI / Vercel Preview 通過，Owner runtime 驗收通過；Station3 / Export Preflight 已 portal 到卡片外層，單卡成功流程會先做既有 leaving transition 再 refresh。

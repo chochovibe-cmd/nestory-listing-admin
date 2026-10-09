@@ -1,3 +1,11 @@
+## 2026-10-10 — Real Shopify DRAFT smoke PASS
+
+- Owner had already created a Pingu mini camera DRAFT, so Commander used that existing real transaction instead of requiring a redundant second smoke.
+- Draft `5feb9b44-e8c1-46f7-9d06-2c354bfcd0d9` published through Production in DRAFT mode; batch completed 1/1 with 0 failures.
+- Shopify readback confirmed `gid://shopify/Product/15422660214969` is DRAFT, with matching title, SKU `CHO-DS-PIN-PIN-001`, price TWD 799, one default variant, and four main product images.
+- Detail images not appearing as Shopify product media is expected under the approved detail-media contract.
+- No release-blocking issue found. **DRAFT SMOKE PASS.** Next release package is `SHOPIFY-ACTIVE-GO-LIVE`.
+
 ## 2026-10-10 — Production daily Shopify DRAFT cutover
 
 - Owner approved Production DRAFT switch.

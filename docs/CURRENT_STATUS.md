@@ -1,3 +1,10 @@
+> **2026-10-09 CURRENT STATUS — UI-FLOW PASS / next SHOPIFY-DAILY-DRAFT**
+> - Authority source：`handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f`（PR #33 merged）。
+> - `UI-FLOW-STABILIZE`：**PASS**。GitHub CI / Vercel Preview 通過，Owner runtime 驗收通過；Station3 / Export Preflight 已 portal 到卡片外層，單卡成功流程會先做既有 leaving transition 再 refresh。
+> - Production 仍是 `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`，READY；`/api/status` 200、Supabase=true、Shopify=true、`shopifyMock=false`。PR #33 merge 沒有 Production deploy。
+> - Current blocker / next package：`SHOPIFY-DAILY-DRAFT`。完成後再跑 1 件 fresh full-flow DRAFT smoke；PASS = **GO DAILY（DRAFT）**。
+> - 新 UX 決策（非 blocker）：`UIUX-FLOW-STATE` 增加 Smart Station Handoff。不要做「每成功一張就強制跳站」；優先設計成「目前站還有卡就繼續，最後一張成功後才自動帶到下一站並 highlight 該商品」，失敗不跳、批次 / Sequential 不被打斷。
+>
 > **2026-10-09 HANDOFF STATUS — PR #31 merged**
 > - Authority source: `handoff/20261008-golive-spec@9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`.
 > - Production runtime unchanged from PR #29 release: `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`, READY；`/api/status` healthy，`shopifyMock=false` 但仍受 single-draft live-test gate 限制。

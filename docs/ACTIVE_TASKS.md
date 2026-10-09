@@ -1,3 +1,12 @@
+> **2026-10-09 POST-PR33 ACTIVE HANDOFF**
+> - Final authority：`102565df789a035e6b8ae415ce7b694b919d927f`。
+> - `UI-FLOW-STABILIZE`：✅ PASS / PR #33 merged / Owner runtime accepted。
+> - **Current blocker：`SHOPIFY-DAILY-DRAFT` — NOT STARTED.**
+> - Then：1 件 fresh full-flow DRAFT smoke → PASS 後標記 **GO DAILY（DRAFT）**。
+> - Active agents：none；Reserved files：none until Commander opens the SHOPIFY-DAILY-DRAFT package。
+> - Post-GO `UIUX-FLOW-STATE` 新增 Owner idea：Smart Station Handoff（最後一張完成才自動切下一站 + highlight；有剩餘工作則留站；failure / batch / sequential 不亂跳）。
+> - Owner cadence：完成 1–2 包做 repo checkpoint，再換新 Commander。
+>
 > **2026-10-09 NEXT-CHAT HANDOFF**
 > - Final authority after PR #31 merge：`9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`
 > - Production：`dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`，READY；PR #30/#31 為 docs-only，runtime 未變。

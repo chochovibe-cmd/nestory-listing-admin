@@ -1,3 +1,10 @@
+> **2026-10-10 CURRENT — REAL DRAFT SMOKE PASS / ACTIVE NEXT**
+> - Fresh Production Shopify DRAFT smoke passed using Pingu mini camera draft `5feb9b44-e8c1-46f7-9d06-2c354bfcd0d9`.
+> - Shopify product `gid://shopify/Product/15422660214969` read back as DRAFT with correct title, SKU `CHO-DS-PIN-PIN-001`, TWD 799, 1 default variant, and 4 main images.
+> - Publish batch completed 1/1, failed 0. No blocking defect found.
+> - Detail images staying out of product media is expected per the approved media flow.
+> - Current release blocker is now only the separate Owner-approved `SHOPIFY-ACTIVE-GO-LIVE` package.
+>
 > **2026-10-10 CURRENT — PRODUCTION DAILY DRAFT LIVE**
 > - Production: `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs` / Git `5fc18fb02741cca1b5c1c912e1ff668b7a410180` / READY.
 > - Production runtime status: HTTP 200; Supabase true; Shopify true; `shopifyMock=false`.

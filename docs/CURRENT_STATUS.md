@@ -1,3 +1,11 @@
+> **2026-10-09 CURRENT — PR #34 MERGED / PRODUCTION TRANSITION NEXT**
+> - Authority: `5fc18fb02741cca1b5c1c912e1ff668b7a410180` on `handoff/20261008-golive-spec`.
+> - PR #34 `SHOPIFY-DAILY-DRAFT` is merged. Daily live publishing source is now DRAFT-only by default; ACTIVE requires explicit `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Production is still the previous deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`; no Production env or alias switch has occurred from this merge.
+> - Current blocker is no longer source code. It is Owner-authorized Production transition: remove/disable `SHOPIFY_LIVE_TEST_DRAFT_ID`, keep ACTIVE flag false, deploy exact merged authority, then run one fresh full-flow DRAFT smoke.
+> - PASS sequence after that: `SHOPIFY-ACTIVE-GO-LIVE` → one real ACTIVE smoke → free daily DRAFT/ACTIVE use.
+> - This is a Commander handoff checkpoint after two completed packages (UI-FLOW + SHOPIFY-DAILY-DRAFT).
+>
 > **2026-10-09 CURRENT — SHOPIFY-DAILY-DRAFT SOURCE PASS**
 > - PR #34 (`5cfcc2b…`) is Draft / HOLD. Diff is limited to live-write guard + verifier + env documentation; no payload / SKU / image / pricing / DB changes.
 > - Machine validation: verify contracts/regressions PASS, typecheck PASS, build PASS, Vercel Preview READY. Preview reports `shopifyMock=true`; no real Shopify mutation occurred in this package validation.

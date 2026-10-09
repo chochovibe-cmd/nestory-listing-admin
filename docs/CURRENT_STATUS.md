@@ -1,3 +1,11 @@
+> **2026-10-10 CURRENT — PRODUCTION DAILY DRAFT LIVE**
+> - Production: `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs` / Git `5fc18fb02741cca1b5c1c912e1ff668b7a410180` / READY.
+> - Production runtime status: HTTP 200; Supabase true; Shopify true; `shopifyMock=false`.
+> - Single-draft live-test allowlist is disabled. Normal qualifying products are no longer limited to the old VICTOR draft ID.
+> - `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false` is explicitly set; ACTIVE is still server-blocked.
+> - No real Shopify product was created during the transition itself.
+> - Next required release gate: exactly 1 fresh full-flow DRAFT smoke, then `SHOPIFY-ACTIVE-GO-LIVE` + one real ACTIVE smoke.
+>
 > **2026-10-09 CURRENT — PR #34 MERGED / PRODUCTION TRANSITION NEXT**
 > - Authority: `5fc18fb02741cca1b5c1c912e1ff668b7a410180` on `handoff/20261008-golive-spec`.
 > - PR #34 `SHOPIFY-DAILY-DRAFT` is merged. Daily live publishing source is now DRAFT-only by default; ACTIVE requires explicit `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.

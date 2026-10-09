@@ -1,3 +1,12 @@
+> **2026-10-09 Commander handoff after PR #34 — CURRENT**
+> - Git authority live-checked after merge: `handoff/20261008-golive-spec@5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - `UI-FLOW-STABILIZE` = PASS / merged / Owner runtime accepted (PR #33).
+> - `SHOPIFY-DAILY-DRAFT` = PASS / merged (PR #34). Source now guarantees live Shopify publish defaults to DRAFT-only when the old single-draft allowlist is absent; ACTIVE stays server-blocked unless `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Production has **not** been switched to this authority yet. Current production remains `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / Git `cb4b4d122398e765aa8c2375568756978c649334`, READY. A new authority Preview may exist, but it is not Production.
+> - Current next action is a separate **Production DRAFT transition package**: Owner must explicitly approve before changing Production env / deployment. Transition should remove/disable the single-draft allowlist, keep `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false`, deploy exact merged authority, then run exactly 1 fresh full-flow DRAFT smoke.
+> - If that smoke PASS: immediately do `SHOPIFY-ACTIVE-GO-LIVE` → one Owner-approved real ACTIVE smoke → only then free daily DRAFT / ACTIVE choice.
+> - Owner workflow cadence: two packages are now complete; this is the recommended checkpoint to switch to a new Commander chat. New chat first reads AI_START_HERE → AI_WORKING_RULES → CURRENT_STATUS → ACTIVE_TASKS, then live-checks GitHub / Vercel before action.
+>
 > **2026-10-09 SHOPIFY-DAILY-DRAFT checkpoint — SOURCE PASS / PRODUCTION HOLD**
 > - Product authority remains `handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f` until PR #34 is explicitly approved and merged.
 > - Draft PR #34 head: `gpt/shopify-daily-draft-20261009@5cfcc2b0dc492cdde52c5a798369e243cd193919`.

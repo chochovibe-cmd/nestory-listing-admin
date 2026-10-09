@@ -1,3 +1,12 @@
+> **2026-10-09 ROADMAP CHECKPOINT AFTER PR #33**
+> - `UI-FLOW-STABILIZE` 已 PASS 並 merge（PR #33 / authority `102565df789a035e6b8ae415ce7b694b919d927f`）；不要重做。
+> - GO DAILY 前現在只剩：`SHOPIFY-DAILY-DRAFT → 1 fresh full-flow DRAFT smoke → GO DAILY（DRAFT）`。
+> - Owner 新增流程優化想法，正式併入 post-GO `UIUX-FLOW-STATE`：**Smart Station Handoff**。
+>   - 不採「每處理一張就強制跳下一站」，避免多件連續審核時來回跳站。
+>   - 建議規則：目前站仍有其他可處理卡片 → 留在目前站；最後一張成功離站 → 自動切到合理下一站並 highlight 剛移動的商品。
+>   - failure 不切站；batch / Sequential review 不中途切站，完成 queue 後才評估是否 handoff。
+>   - 可重用既有 stage state / session preference / jump + highlight 能力；真正施工前重新 audit current source，另開窄包驗證，不阻擋 GO DAILY。
+>
 > **2026-10-09 FULL RECONCILIATION｜Fable 完整規劃重新對表**
 >
 > 這一節是把 Fable 對話、2026-09-30 Commander audit、UIUX audit 與 2026-10-09 current source/runtime 重新對表後的完整剩餘路線。前一版只突出 PB2 + UIUX，仍會讓部分後段 hardening 看不見；以下補齊，但**不代表全部都要在 GO DAILY 前完成**。

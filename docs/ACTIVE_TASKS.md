@@ -1,3 +1,13 @@
+> **2026-10-09 NEXT-CHAT ACTIVE HANDOFF**
+> - Final product authority: `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - Completed: `UI-FLOW-STABILIZE` ✅；`SHOPIFY-DAILY-DRAFT` ✅ merged PR #34.
+> - **Current next task: Production DRAFT transition — OWNER APPROVAL REQUIRED BEFORE WRITE.**
+> - Allowed after approval: adjust Production Shopify live-test env so normal products are no longer single-draft allowlisted; keep `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false`; deploy the exact merged authority; verify Production status; run exactly 1 fresh DRAFT smoke.
+> - Forbidden without new approval: ACTIVE enablement, real ACTIVE publish, sales-channel publication changes, unrelated Product/UI/DB changes.
+> - If fresh DRAFT smoke PASS, next package is immediately `SHOPIFY-ACTIVE-GO-LIVE` with one controlled real ACTIVE smoke.
+> - Active agents: none. Reserved files: none until next Commander defines the Production transition package.
+> - Owner cadence: two packages complete → recommend new Commander chat now.
+>
 > **2026-10-09 ACTIVE PACKAGE — SHOPIFY-DAILY-DRAFT**
 > - Status: **SOURCE PASS / MERGE HOLD / PRODUCTION HOLD**.
 > - PR #34: `gpt/shopify-daily-draft-20261009@5cfcc2b0dc492cdde52c5a798369e243cd193919` → base `handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f`.

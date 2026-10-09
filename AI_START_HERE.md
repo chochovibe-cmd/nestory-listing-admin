@@ -1,3 +1,11 @@
+> **2026-10-09 Commander checkpoint after PR #33 — CURRENT**
+> - Git authority live-checked after merge: `handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f`.
+> - `UI-FLOW-STABILIZE` = **PASS / MERGED**（PR #33）。Owner 已在 Preview 實測：收合卡發布／匯出 modal、Export Preflight modal、單卡成功離場皆通過；失敗不應假消失的 source guard 保留。
+> - Production 仍未被本包改動：deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / Git `cb4b4d122398e765aa8c2375568756978c649334`，READY；`/api/status` 200、Supabase=true、Shopify=true、`shopifyMock=false`，但日常真寫入仍受現有 live-test gate 限制。
+> - **下一個真正施工包：`SHOPIFY-DAILY-DRAFT`**。完成 source / CI / Preview 後仍需 Owner 明確批准 Production；之後只跑 1 件 fresh full-flow DRAFT smoke，PASS 才標記 **GO DAILY（DRAFT）**。
+> - Owner 2026-10-09 新 UX 想法已排入 `UIUX-FLOW-STATE`：**Smart Station Handoff（聰明接棒）**。暫定規則是「目前站還有其他工作就留在原站；最後一張成功處理完才自動切下一站並 highlight 剛移動的卡；失敗不跳；批次 / Sequential 不在中途亂切」。這是 post-GO 優化，不插隊目前 release gate。
+> - 文件是 handoff，不是 runtime 真相；新 Commander 仍必須先 live-check GitHub / Vercel。
+>
 > **2026-10-09 Commander handoff after PR #31 — CURRENT**
 > - Git authority: `handoff/20261008-golive-spec@9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`（PR #31 已 merge）。
 > - Production 仍是 deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / Git SHA `cb4b4d122398e765aa8c2375568756978c649334`，READY；`/api/status` = Supabase true / Shopify true / `shopifyMock=false`。PR #30/#31 都是 docs-only，沒有改 Production runtime。

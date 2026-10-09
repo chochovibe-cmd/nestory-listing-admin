@@ -1,3 +1,13 @@
+## 2026-10-10 — Production daily Shopify DRAFT cutover
+
+- Owner approved Production DRAFT switch.
+- Rechecked authority before write: `handoff/20261008-golive-spec@5fc18fb02741cca1b5c1c912e1ff668b7a410180` unchanged.
+- Vercel Production env: cleared/disabled `SHOPIFY_LIVE_TEST_DRAFT_ID`; created/confirmed `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false`.
+- Deployed exact Git authority to Production as `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs`; build completed and deployment became READY; `nestory-listing-admin.vercel.app` is assigned to it.
+- Live `/api/status` returned HTTP 200 with Shopify connected and `shopifyMock=false`.
+- No product write occurred during cutover. ACTIVE remains blocked.
+- Status: **PRODUCTION DRAFT TRANSITION PASS**. Next gate is exactly 1 fresh full-flow real DRAFT smoke.
+
 ## 2026-10-09 — SHOPIFY-DAILY-DRAFT merged / handoff checkpoint
 
 - Owner explicitly approved PR #34 merge after source/CI/Preview PASS.

@@ -1,3 +1,19 @@
+> **2026-10-09 V1.1 + Shopify DRAFT 日常上架前 checkpoint（CURRENT AUTHORITY）**
+> - Git authority：`handoff/20261008-golive-spec@cb4b4d122398e765aa8c2375568756978c649334`。PR #29 已合併；Production 現在是 Vercel deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178`，Git SHA 同為 `cb4b4d1…`，狀態 READY。
+> - Production `/api/status` 重新核對：HTTP 200、Supabase=true、Shopify=true、`shopifyMock=false`。**這不等於已全面開放 Shopify 真寫入。** 現在仍是 Owner 核准的單一 DRAFT live-test gate；`checkLiveTestGuard` 在 allowlist 存在時只准一件 draft、且 publish mode 只能是 `draft`。不可直接清空 allowlist 當作「正式開放」，因為沒有 allowlist 反而會失去這層限制。
+> - V1 基礎 Shopify 發布安全已 PASS：recovery / 防重複、SKU、media filter、真 DRAFT 都已有 runtime 證據。
+> - V1.1 核心流水線已 PASS，**不要重做**：PR #24 draftId 進度、#26 持久生成 Queue、#27 圖片背景補抓、#28 非阻塞重生均已合併。Recent Production DB 也已有 Pingu / VICTOR / Miffy 的 completed queue runs。
+> - Capture 1.2 PR #18 已實際合併（merge commit `62e1a412…`）；舊文件寫「Draft/HOLD、未 merge」已過期。
+> - Regen Modal PR #29 已合併，Owner 實機驗收 PASS。
+> - 2026-10-09 VICTOR controlled Shopify DRAFT E2E PASS：Nestory publish batch completed 1/1、0 failed；Shopify product `gid://shopify/Product/15422035853497` 仍為 DRAFT，2 variants，SKU `6131444709110` / `6131444709111`，售價 NT$449 / NT$499。
+> - VICTOR 圖片：原始擷取曾有 22 張；目前 Nestory DB 16 張（5 main + 9 detail + 2 variant）。Owner 已確認少的 6 張 detail 是人工刪除淘寶廣告／錯誤詳情圖，不視為資料遺失 blocker。之後另做 CAPTURE-FILTER，只自動排除高信心廣告區圖片；不確定的仍交人工刪。
+> - TAG authority：舊 Product Assistant DB 實際歷史資料反覆存在 `sale_status=海外代購（約14天）` + `銷售_海外現貨` 的組合，因此目前 VICTOR 的 `銷售_海外現貨` 不是 Shopify API 自行改錯；沿用既有 catalog / Shopify collection 命名 authority，不把 TAG 強改成另一套字。
+> - **下一個唯一阻擋「正式日常完整跑上架流程」的 package：SHOPIFY-DAILY-DRAFT。** 目標是所有合格商品可真建立 Shopify DRAFT，但 ACTIVE 在後端一律禁止。Source/CI/Preview 過後，需 Owner 明確批准 Production 切換；再用 1 件一般新商品跑「擷取 → 生成 → 審核 → 圖片 → Shopify DRAFT」smoke。這件 PASS 後即可宣布 **GO DAILY（DRAFT）**。
+> - Shopify ACTIVE／顧客端公開仍是另一個後續 Gate，**不是開始日常 DRAFT 上架的 blocker**。
+> - 後續優化與原 Fable 計畫剩餘項目，以 `docs/COMMANDER-ROADMAP.md` 頂部 2026-10-09 ACTIVE ROADMAP 為準；當前施工／reserved files 看 `docs/ACTIVE_TASKS.md`。
+>
+> **以下舊 checkpoint 保留作歷史；若與本區衝突，以本區 + GitHub / Vercel / Supabase / Shopify live 查詢為準。**
+
 > **2026-10-08 V1 Shopify 上線收尾（CURRENT AUTHORITY）**
 > - `handoff/20261008-golive-spec` 已合併 PR #20–#23；程式 release commit 為 `8cdc25817a7febfd25c2e555b58a6cf0092031ed`。
 > - 正式網址 `nestory-listing-admin.vercel.app` 與 `nestory-listing-admin-chocho-nestory.vercel.app` 現在都指向 deployment `dpl_9G2KNRABYpSq2MoXvSCN848sJcUE`（Git SHA `8cdc258…`）。`/api/status` = 200、Supabase/Shopify = true、`shopifyMock=true`；該 deployment 最近 30 分鐘 0 error。

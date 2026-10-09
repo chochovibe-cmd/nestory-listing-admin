@@ -1,3 +1,72 @@
+> **2026-10-09 ACTIVE ROADMAP — supersedes 2026-09-30 pending list**
+>
+> 目前不是「V1.1 還沒做」，而是 **V1.1 core 已 PASS，正在進入日常 Shopify DRAFT 開放與後續優化**。舊表格保留作歷史問題庫；任何舊項目施工前都要先對最新 source / runtime 重查，不可照 9/30 狀態直接重做。
+
+## 0. 什麼時候可以正式完整開始跑上架流程？
+
+只剩一個必要 Gate：
+
+**SHOPIFY-DAILY-DRAFT → Owner Production 批准 → 1 件 fresh 全流程 smoke → GO DAILY（DRAFT）**
+
+過關條件：
+1. Production 可讓一般合格商品建立真 Shopify **DRAFT**。
+2. 後端 hard-block `ACTIVE`，不是只靠前端按鈕提醒。
+3. 不靠單一 `SHOPIFY_LIVE_TEST_DRAFT_ID` 才能使用。
+4. CI / Preview PASS 後才動 Production。
+5. Production 切換後，以 1 件一般新商品跑：擷取 → 生成 → 文案審核 → 圖片確認 → Shopify DRAFT。
+6. Shopify 回讀標題、Variants、價格、SKU、庫存策略、圖片正確且不重複建品。
+
+**以上 PASS 後，Owner 可以開始把 Nestory 當日常完整上架工具使用。**  
+這裡的「完整上架」是安全地送到 Shopify DRAFT。直接 ACTIVE／顧客端公開另開 package，不阻擋日常 DRAFT 工作。
+
+## 1. 已完成，不要重做
+
+| 原計畫 | 現況 |
+|---|---|
+| V1 Shopify safety / resumable publish | ✅ PASS |
+| 真 Shopify DRAFT recovery + fresh E2E | ✅ PASS |
+| Capture 1.2 | ✅ PR #18 已 merge |
+| V1.1 draftId progress | ✅ PR #24 |
+| V1.1 persistent generation queue | ✅ PR #26 |
+| V1.1 background image fetch / input release | ✅ PR #27 |
+| V1.1 nonblocking regeneration | ✅ PR #28 |
+| Regen Modal 收合卡錯位 | ✅ PR #29 + Owner PASS |
+| VICTOR 2026-10-09 DRAFT E2E | ✅ Shopify DRAFT、2 variants、SKU / price 回讀 PASS |
+
+## 2. GO DAILY 之後的優化包
+
+### P1 — OBS-QUEUE｜生成佇列狀態中心
+只補 UI，不重做 Queue Runner。顯示「生成中 / 排隊中 / 失敗」總數與商品清單，刷新後仍從 DB `generation_runs` 還原。
+
+### P2 — COPY-SAFE｜文案穩定性
+第一階段保持正常生成速度與費用不變：單欄重生補齊 Product Brief evidence chain、`copyLength` 真正生效、Miffy Golden Eval、Quality Floor 先偵測/標記「資料很多但文案異常薄」。**不預設每篇多跑一次 AI、不堆大量負面 prompt。**
+
+### P3 — PERF P1A｜首載 JS 減肥
+ResultCard / Workspace 的大型 Modal、CSV、Sync、生圖等改 lazy load；檢查縮圖是否誤載原圖與重複 matchMedia。零產品行為改變。
+
+### P4 — PERF P1B｜工作台資料按需載入
+這項 **仍未做**：目前 `/drafts/new` 還會抓最近 40 active + 50 archived，並把這批商品圖片／variants 一次載入。改成摘要先載、展開再抓 details、封存延後載；小操作減少整頁 `router.refresh()`。
+
+### P5 — CAPTURE-FILTER｜淘寶廣告圖高信心過濾
+依 DOM / 來源區塊排除明顯推薦、活動、廣告圖；不確定圖片保留給 Owner 人工刪，避免過濾過頭。
+
+## 3. 原 Fable / 舊 roadmap 後段仍未完成
+
+- **PR #14 UIUX 2.0**：舊 branch 已與 current authority 大幅 diverge。不要整包 merge；改成 reference-only，逐項看仍有價值的 UI 設計，再從最新 HEAD 重做小包。
+- **PR #15 排程上架**：同樣是舊架構疊在 #14 上。保留需求與資料模型想法，未來做 V1.2 Schedule 時從最新 HEAD 重新接線。
+- **Pricing DB**：匯率／係數目前仍有 localStorage 路徑；跨裝置一致性尚未正式收斂到 server setting。
+- **PR #12 影片**：Taobao → YouTube → Shopify 仍是 Draft/reference，後排。
+- **Browser E2E smoke**：repo 仍以 source verifier + typecheck + build + Owner runtime 為主，最小 Playwright/Cypress 關鍵旅程尚未補。
+- **Shopify ACTIVE / sales channel publication**：尚未正式開放；未來需獨立驗證「ACTIVE ≠ 一定已上指定通路」與顧客端可見性。
+- **UI/UX 細修**：Variant 批次操作、Dashboard 待辦優先、ResultCard 減法/層級、mobile/desktop 一致性。先 re-audit 最新畫面，不照舊 PR 直接搬。
+- **PERF P2 / CSS 收斂**：最後逐區做，禁止一次大掃除。
+- **進階圖片 / 影片 / scouting**：後排，不阻擋 Shopify DRAFT 日常使用。
+- 舊 `db172df` 兩組小修（多色白名單、`適閤→適合`）施工前先重查 current HEAD 是否已自然包含，不盲目 cherry-pick。
+
+## 4. 目前建議順序
+
+**DOC-CHECKPOINT（本包） → SHOPIFY-DAILY-DRAFT → fresh smoke → GO DAILY → OBS-QUEUE → COPY-SAFE → PERF P1A → PERF P1B → CAPTURE-FILTER → PR #14/#15 拆解回收 → Pricing DB → Video / CSS / advanced image。**
+
 # Nestory 指揮官總計畫
 
 更新：2026-09-30。店主流程與分工已定案；下列個別改善是待執行／待確認提案，不代表已修復或已通過驗收。

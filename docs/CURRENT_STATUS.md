@@ -1,3 +1,14 @@
+> **2026-10-09 CURRENT STATUS — V1.1 已完成，等待 SHOPIFY-DAILY-DRAFT**
+> - Authority source：`handoff/20261008-golive-spec@cb4b4d122398e765aa8c2375568756978c649334`；Production deployment：`dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178`，READY，Git SHA `cb4b4d1…`。
+> - Production runtime：`/api/status` 200；Supabase / Shopify true；`shopifyMock=false`。目前仍為 single-draft live-test gate，**不是 unrestricted live write**。
+> - Completed：V1 Shopify safety + true DRAFT recovery/fresh E2E；PR #18 Capture 1.2；PR #24/#26/#27/#28 V1.1 pipeline；PR #29 Regen Modal Portal。
+> - 2026-10-09 VICTOR E2E：publish batch completed 1/1、0 failed；Shopify Product `15422035853497` = DRAFT；2 variants；SKU/price 回讀一致。Nestory DB 現有 16 images（5 main / 9 detail / 2 variant）；原先 22 張與現在 16 張的差額由 Owner 確認為人工刪除 6 張錯誤／廣告 detail，不是 pipeline 遺失。
+> - TAG：Product Assistant 歷史資料已證實「海外代購（約14天）」長期搭配 `銷售_海外現貨`；VICTOR 目前 tag 保留此 canonical naming。
+> - Blocker to GO DAILY：實作 + 驗證 `SHOPIFY-DAILY-DRAFT`，讓一般商品能 DRAFT-only 真寫入、ACTIVE hard-block；Owner 批准 Production 後跑 1 件 fresh smoke。通過後可正式日常完整使用 Nestory 上架到 Shopify DRAFT。
+> - Non-blocking post-GO packages：OBS-QUEUE、COPY-SAFE、PERF P1A、PERF P1B、CAPTURE-FILTER；之後才是 stale PR #14 UIUX 內容拆解回收、PR #15 排程 V1.2、pricing DB、PR #12 影片、CSS/進階圖片。
+>
+> **以下 2026-10-08 舊 checkpoint 保留作歷史；若與本區衝突，以本區 + live 查詢為準。**
+
 > **2026-10-08 V1 Shopify release checkpoint — CURRENT**
 > - Handoff branch code release commit: `8cdc25817a7febfd25c2e555b58a6cf0092031ed`（PR #20–#23 已合併）。
 > - Live production aliases：`nestory-listing-admin.vercel.app`、`nestory-listing-admin-chocho-nestory.vercel.app` → deployment `dpl_9G2KNRABYpSq2MoXvSCN848sJcUE` → Git SHA `8cdc258…`。

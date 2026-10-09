@@ -1,3 +1,12 @@
+> **2026-10-10 ACTIVE GATE — FRESH DRAFT SMOKE**
+> - Production DRAFT transition = **PASS**.
+> - Authority / Production: `5fc18fb02741cca1b5c1c912e1ff668b7a410180` / `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs`.
+> - Live mode: `shopifyMock=false`; single-draft allowlist disabled; ACTIVE flag explicitly false.
+> - **Next task:** exactly one Owner-approved fresh product through the full real flow → Shopify DRAFT → read back product/variants/SKU/price/images/status.
+> - Do not use an old partially-published recovery draft as the release smoke. The smoke should be a new product with no existing Shopify linkage.
+> - Forbidden until smoke PASS + new package: ACTIVE enablement, real ACTIVE publish, broad batch live publishing validation, unrelated UI/DB work.
+> - After smoke PASS: start `SHOPIFY-ACTIVE-GO-LIVE` immediately.
+>
 > **2026-10-09 NEXT-CHAT ACTIVE HANDOFF**
 > - Final product authority: `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
 > - Completed: `UI-FLOW-STABILIZE` ✅；`SHOPIFY-DAILY-DRAFT` ✅ merged PR #34.

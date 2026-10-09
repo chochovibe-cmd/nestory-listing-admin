@@ -1,3 +1,11 @@
+> **2026-10-10 Production DRAFT transition — PASS**
+> - Owner explicitly approved the Production DRAFT switch.
+> - Production env transition completed: `SHOPIFY_LIVE_TEST_DRAFT_ID` is empty/disabled; `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false` is explicitly set for Production.
+> - Production deployed exact authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180` as `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs`; deployment is READY and owns `nestory-listing-admin.vercel.app`.
+> - Live `/api/status` returned HTTP 200 with `shopify=true` and `shopifyMock=false`; Shopify is in real mode, not simulation.
+> - ACTIVE remains blocked by the server gate because the explicit ACTIVE flag is false. This package did not publish any product and did not change DB / SKU / price / images / variants.
+> - **Current blocker / next action:** run exactly 1 fresh full-flow real Shopify DRAFT smoke using an Owner-approved test product. After PASS, immediately open `SHOPIFY-ACTIVE-GO-LIVE` and run one controlled real ACTIVE smoke before broad ACTIVE freedom.
+>
 > **2026-10-09 Commander handoff after PR #34 — CURRENT**
 > - Git authority live-checked after merge: `handoff/20261008-golive-spec@5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
 > - `UI-FLOW-STABILIZE` = PASS / merged / Owner runtime accepted (PR #33).

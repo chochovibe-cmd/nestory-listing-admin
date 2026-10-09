@@ -1,3 +1,10 @@
+> **2026-10-09 RELEASE ORDER DECISION — DRAFT THEN ACTIVE**
+> - Owner confirmed the desired end state is not DRAFT-only forever; the target is normal daily freedom to choose Shopify DRAFT or ACTIVE.
+> - Safety sequencing is now fixed as: **SHOPIFY-DAILY-DRAFT → fresh DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → one real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.
+> - `SHOPIFY-ACTIVE-GO-LIVE` moves directly behind the DRAFT smoke and must not be left behind OBS-QUEUE / COPY / UIUX / PERF work.
+> - PR #34 implements the prerequisite server safety gate: live publishing defaults to DRAFT-only when no one-draft test allowlist is present; ACTIVE requires explicit `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - The future ACTIVE package should prefer validation + explicit enablement over rewriting the existing lifecycle. It must verify customer-facing visibility / sales-channel publication, variants, price, inventory, images, and rollback/unpublish behavior with one Owner-approved product before broad ACTIVE freedom.
+>
 > **2026-10-09 ROADMAP CHECKPOINT AFTER PR #33**
 > - `UI-FLOW-STABILIZE` 已 PASS 並 merge（PR #33 / authority `102565df789a035e6b8ae415ce7b694b919d927f`）；不要重做。
 > - GO DAILY 前現在只剩：`SHOPIFY-DAILY-DRAFT → 1 fresh full-flow DRAFT smoke → GO DAILY（DRAFT）`。

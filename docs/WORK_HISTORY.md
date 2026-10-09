@@ -1,3 +1,13 @@
+## 2026-10-09 — SHOPIFY-DAILY-DRAFT source gate
+
+- Opened Draft PR #34 from authority `102565df789a035e6b8ae415ce7b694b919d927f`; head `5cfcc2b0dc492cdde52c5a798369e243cd193919`.
+- Investigation found the old live-test guard returned unrestricted access when `SHOPIFY_LIVE_TEST_DRAFT_ID` was absent, so merely deleting the VICTOR allowlist could have allowed ACTIVE. Package changed that contract instead of touching Shopify payload/lifecycle code.
+- New default: live + no single-draft allowlist = DRAFT-only; ACTIVE requires explicit `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`. Existing single-draft allowlist stays stricter and DRAFT-only.
+- Diff gate: exactly 3 files (`liveTestGuard.ts`, its existing verifier, `.env.example`).
+- GitHub CI verify/typecheck/build PASS. Vercel Preview `dpl_7ozjq7iJHnr74GwWqfYfWBzvATfD` READY; `/api/status` reports `shopifyMock=true`, so no real Shopify write occurred during source validation.
+- Status: **SOURCE PASS / MERGE HOLD / PRODUCTION HOLD**. Production unchanged.
+- Owner decision recorded: after daily DRAFT + fresh smoke, immediately do `SHOPIFY-ACTIVE-GO-LIVE` + one real ACTIVE smoke; only then unlock free ACTIVE daily use.
+
 ## 2026-10-09 — UI-FLOW-STABILIZE / PR #33 PASS
 
 - PR #33 `UI-FLOW: stabilize modals and single-card success feedback` 經 Owner Preview 實測通過後獲准 merge。

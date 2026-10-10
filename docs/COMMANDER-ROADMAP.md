@@ -1,3 +1,9 @@
+> **2026-10-10 ROADMAP — Shopify release gates COMPLETE**
+> - Production DRAFT + real DRAFT smoke + ACTIVE publication repair + real Online Store publication recovery are PASS.
+> - Normal daily DRAFT / ACTIVE choice is released.
+> - Do not keep manufacturing Shopify smoke packages without new evidence.
+> - Resume post-release roadmap. Owner-approved SEO follow-up remains `UIUX-CARD-WORKBENCH → SEO Panel V2`: Google-style preview; visible/editable-but-auto-default Handle; concise descriptive automatic Handle; restore-auto action; actionable URL validation only; redirect-safe handle changes for already-public products.
+>
 > **2026-10-10 RELEASE BLOCKER INSERTED — SHOPIFY-ACTIVE-PUBLICATION-FIX**
 > - ACTIVE status alone is not sufficient. The real smoke proved the product can be ACTIVE in Admin while not published to Online Store.
 > - Release sequence is now: DRAFT PASS → **ACTIVE publication fix** → controlled recovery/smoke on the already-selected product if safe → verify Online Store publication → then release normal daily DRAFT/ACTIVE choice.

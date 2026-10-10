@@ -1,3 +1,13 @@
+## 2026-10-10 — Shopify ACTIVE release PASS
+
+- Owner approved and PR #35 was merged; merged authority became `caae0fa7f4e0d9aba368df961ce714e02a669437`.
+- Production deployment `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` completed READY on the exact merged commit and the primary Vercel alias points to it.
+- Production ACTIVE gate was re-enabled only after the repaired build was deployed.
+- The original controlled smoke product `gid://shopify/Product/15424255262905` was recovered by publishing it to the Online Store publication. Shopify returned no mutation user errors.
+- Independent readback confirmed ACTIVE + `publishedOnPublication=true` + `publishedAt=2026-10-10T14:53:18Z`.
+- 35 variants and 29 product media remained intact; checked SKU/price data remained present.
+- Release result: **PASS**. Normal daily Shopify DRAFT / ACTIVE choice is now authorized. Future ACTIVE transactions are routine monitoring, not a standing release blocker.
+
 ## 2026-10-10 — PR #35 ACTIVE publication repair validated
 
 - Implemented the Owner-approved narrow repair for the missing Shopify Online Store publication step.

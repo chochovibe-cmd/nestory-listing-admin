@@ -1,3 +1,10 @@
+> **2026-10-10 CURRENT — PR #35 validated, awaiting Owner merge approval**
+> - ACTIVE publication blocker has an implemented fix in PR #35; code/CI/Preview validation is PASS.
+> - The fix discovers Shopify Online Store by channel handle, publishes through `publishablePublish`, and independently confirms publication before local ACTIVE success.
+> - Diff remains limited to 3 Shopify lifecycle/test files; DRAFT/payload/SKU/price/variant/media/DB/UI behavior was not changed.
+> - Production remains on the safe pre-fix authority with ACTIVE gate OFF. Do not re-enable ACTIVE or treat the earlier smoke product as storefront-live yet.
+> - Next step: Owner explicitly approves PR #35 merge → Commander rechecks HEAD/CI/Preview → merge → Production deployment → controlled publication recovery/smoke.
+>
 > **2026-10-10 CURRENT — ACTIVE release HOLD**
 > - DRAFT release remains PASS.
 > - First real ACTIVE smoke exposed one release blocker: Admin status becomes ACTIVE, but Online Store publication is missing.

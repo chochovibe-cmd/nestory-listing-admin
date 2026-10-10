@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
+import { GenerationQueueOverview } from "@/components/listing/GenerationQueueOverview";
 import { isArchiveBusyStatus } from "@/lib/drafts/archiveDrafts";
 import { emitJumpToDraft } from "@/lib/drafts/jumpToDraft";
 import { undoArchiveDrafts, UNDO_TOAST_MS } from "@/lib/drafts/quickUndo";
@@ -153,24 +154,29 @@ export function QuickPreviewPanel({
 
   if (groups.length === 0) {
     return (
-      <div className="panel queue-strip quick-preview-panel" aria-label={title}>
-        <div className="queue-strip-head">
-          <span className="qtitle">{title}</span>
-        </div>
-        {/* UX-AB T85: unified empty-state */}
-        <div className="empty-state">
-          <div className="empty-icon" aria-hidden>
-            📋
+      <>
+        <GenerationQueueOverview />
+        <div className="panel queue-strip quick-preview-panel" aria-label={title}>
+          <div className="queue-strip-head">
+            <span className="qtitle">{title}</span>
           </div>
-          <p className="empty-state-title">尚無可預覽的稿件</p>
-          <p className="empty-state-desc">從「新增」開始建立第一筆</p>
+          {/* UX-AB T85: unified empty-state */}
+          <div className="empty-state">
+            <div className="empty-icon" aria-hidden>
+              📋
+            </div>
+            <p className="empty-state-title">尚無可預覽的稿件</p>
+            <p className="empty-state-desc">從「新增」開始建立第一筆</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="panel queue-strip quick-preview-panel" aria-label={title}>
+    <>
+      <GenerationQueueOverview />
+      <div className="panel queue-strip quick-preview-panel" aria-label={title}>
       <div className="queue-strip-head">
         <span className="qtitle">{title}</span>
         <span className="queue-hint">{hint}</span>
@@ -224,6 +230,7 @@ export function QuickPreviewPanel({
           </div>
         </div>
       ))}
-    </div>
+      </div>
+    </>
   );
 }

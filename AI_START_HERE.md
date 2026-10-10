@@ -1,3 +1,13 @@
+> **2026-10-10 Shopify ACTIVE release — PASS / daily DRAFT + ACTIVE released**
+> - Owner explicitly approved PR #35 merge. PR #35 merged successfully into `handoff/20261008-golive-spec`.
+> - New live authority: `caae0fa7f4e0d9aba368df961ce714e02a669437`.
+> - Production deployment `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc`: READY on exact merged authority; alias `nestory-listing-admin.vercel.app`; runtime `/api/status` HTTP 200 with real Shopify mode (`shopifyMock=false`).
+> - Production ACTIVE gate re-enabled under the Owner-approved release flow.
+> - Existing controlled smoke product `gid://shopify/Product/15424255262905` (蠟筆小新 × WildChildClub 羽毛球拍) was recovered through the same Shopify publication contract: `publishablePublish` to Online Store completed with no user errors.
+> - Independent final readback: `status=ACTIVE`, Online Store `publishedOnPublication=true`, `publishedAt=2026-10-10T14:53:18Z`; 35 variants intact; prices/SKUs intact; 29 media intact.
+> - **Release result: PASS. Normal daily Shopify DRAFT / ACTIVE choice is now allowed.** The publication guard in PR #35 remains the required contract: local `active_published` is valid only after Online Store publication readback succeeds; publication failure rolls back to DRAFT.
+> - The next normal ACTIVE listing may be observed as routine monitoring, but it is no longer a release blocker.
+>
 > **2026-10-10 SHOPIFY-ACTIVE-PUBLICATION-FIX — implementation PASS / merge HOLD**
 > - Owner authorized the repair after the real ACTIVE smoke exposed missing Online Store publication.
 > - Repair PR: **#35** `SHOPIFY-ACTIVE-PUBLICATION-FIX: publish ACTIVE products to Online Store`.

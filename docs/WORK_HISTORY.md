@@ -1,3 +1,10 @@
+## 2026-10-10 — Milestone handoff closed
+
+- Shopify DRAFT / ACTIVE release completed and the ACTIVE publication defect was repaired, merged, deployed, and verified against the real Online Store publication state.
+- Owner approved the docs handoff package for merge and a fresh Commander chat is recommended from this checkpoint.
+- New Commander must live-check current GitHub/Vercel state before acting; historical HOLD entries remain for audit context and must not override the newest checkpoint.
+- Post-release work returns to the existing roadmap. Owner-approved queued UI/SEO direction includes SEO Panel V2 / Handle improvements under UIUX-CARD-WORKBENCH.
+
 ## 2026-10-10 — Shopify ACTIVE release PASS
 
 - Owner approved and PR #35 was merged; merged authority became `caae0fa7f4e0d9aba368df961ce714e02a669437`.

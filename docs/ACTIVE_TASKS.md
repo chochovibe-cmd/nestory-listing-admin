@@ -1,3 +1,11 @@
+> **2026-10-10 RELEASE CHECKPOINT — Shopify ACTIVE blocker cleared**
+> - DRAFT release: PASS.
+> - ACTIVE publication fix PR #35: merged.
+> - Production deployment: PASS.
+> - Real Online Store publication recovery/readback: PASS.
+> - **No further Shopify release smoke is required as a blocker.** Daily DRAFT / ACTIVE is now normal operation; observe future ACTIVE publishes routinely and open a narrow bug package only if new evidence appears.
+> - Return Commander priority to the existing post-release roadmap instead of reopening Shopify release work.
+>
 > **2026-10-10 ACTIVE TASK — PR #35 merge decision**
 > - `SHOPIFY-ACTIVE-PUBLICATION-FIX` implementation is complete and validated.
 > - PR #35 head: `508757ecea55517b19f6798951066e2cb480c0b9`; CI #1021 PASS; Preview `dpl_DadBdv5xJAqrmAgKfcmFXwNX2izg` READY; changed files = 3.

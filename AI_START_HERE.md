@@ -1,3 +1,13 @@
+> **2026-10-10 ACTIVE smoke — HOLD: Online Store publication missing**
+> - Owner selected and published real product draft `b4ac2e78-f531-4b64-b61f-a1ca60dec4c0` (蠟筆小新 × WildChildClub 羽毛球拍).
+> - Nestory batch `d240a2db-ef65-47a4-b32a-0c0b7ce57adb`: ACTIVE mode, 1/1 completed, 0 failed.
+> - Shopify product `gid://shopify/Product/15424255262905` readback: status **ACTIVE**, 35 variants, correct title/SKUs/prices, 29 product media (5 main + 24 variant). No unrelated product became ACTIVE in the same 2-hour window.
+> - **Blocker:** Shopify Online Store publication `gid://shopify/Publication/192801177785` reports `publishedOnPublication=false` and product `publishedAt=null`. The product is ACTIVE in Admin but not actually published to the Online Store.
+> - Root cause confirmed in current code: ACTIVE path ends with `setShopifyProductStatus(..., "ACTIVE")` only; it never calls Shopify publication APIs.
+> - Shopify app already has `read_publications` + `write_publications`. Current Shopify docs say single-product channel publishing should use idempotent `publishablePublish` and verify with `publishedOnPublication` / publication readback.
+> - **Safety rollback:** Production ACTIVE gate is being returned to OFF; DRAFT remains supported. Do not run another ACTIVE product until `SHOPIFY-ACTIVE-PUBLICATION-FIX` passes.
+> - The smoke product remains ACTIVE-but-unpublished; do not treat it as storefront-live yet.
+>
 > **2026-10-10 ACTIVE GO-LIVE checkpoint — gate enabled, one smoke remains**
 > - Owner explicitly approved `SHOPIFY-ACTIVE-GO-LIVE`.
 > - Production `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.

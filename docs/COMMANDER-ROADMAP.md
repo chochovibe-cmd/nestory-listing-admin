@@ -1,3 +1,9 @@
+> **2026-10-10 RELEASE BLOCKER INSERTED — SHOPIFY-ACTIVE-PUBLICATION-FIX**
+> - ACTIVE status alone is not sufficient. The real smoke proved the product can be ACTIVE in Admin while not published to Online Store.
+> - Release sequence is now: DRAFT PASS → **ACTIVE publication fix** → controlled recovery/smoke on the already-selected product if safe → verify Online Store publication → then release normal daily DRAFT/ACTIVE choice.
+> - Do not reopen DRAFT work and do not fold SEO Panel V2 into this repair.
+> - Shopify 2026 publishing contract: use `publishablePublish` for single-product publication, and verify publication readback before local success. App scopes already include `read_publications` / `write_publications`.
+>
 > **2026-10-10 ROADMAP UPDATE — ACTIVE final smoke + SEO Panel V2**
 >
 > **Release first:** ACTIVE gate is ON. Run exactly one Owner-chosen real ACTIVE smoke through normal Nestory, verify Shopify readback, then close the Shopify release gate.

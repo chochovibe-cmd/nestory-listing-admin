@@ -359,6 +359,55 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  if (action === "overview") {
+    const { data: rows, error } = await serviceSupabase
+      .from("generation_runs")
+      .select("id,draft_id,status,error_message,input_payload,created_at,started_at,completed_at")
+      .contains("input_payload", { queueVersion: QUEUE_VERSION })
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+
+    // A draft can have many historical runs. The status center should describe
+    // the latest truth for each draft, not keep an old failed run visible after
+    // a later successful retry.
+    const latestByDraft = new Map<string, (typeof rows)[number]>();
+    for (const row of rows ?? []) {
+      if (!latestByDraft.has(row.draft_id)) latestByDraft.set(row.draft_id, row);
+    }
+
+    const active = Array.from(latestByDraft.values())
+      .filter(
+        (row) =>
+          isQueueInput(row.input_payload) &&
+          (row.status === "pending" || row.status === "processing" || row.status === "failed"),
+      )
+      .map((row) => {
+        const input = row.input_payload as QueueInput;
+        return {
+          runId: row.id,
+          draftId: row.draft_id,
+          status: row.status,
+          title: input.title?.trim() || "未命名商品",
+          jobKind: queueJobKind(input),
+          regenField: input.regenField ?? null,
+          error: row.error_message ?? null,
+          createdAt: row.created_at,
+          startedAt: row.started_at ?? null,
+          completedAt: row.completed_at ?? null,
+        };
+      });
+
+    const counts = {
+      pending: active.filter((row) => row.status === "pending").length,
+      processing: active.filter((row) => row.status === "processing").length,
+      failed: active.filter((row) => row.status === "failed").length,
+    };
+
+    return Response.json({ ok: true, counts, items: active.slice(0, 30) });
+  }
+
   if (action === "claim") {
     const requested = Math.min(Math.max(Number(body.limit ?? MAX_CONCURRENCY), 1), MAX_CONCURRENCY);
 

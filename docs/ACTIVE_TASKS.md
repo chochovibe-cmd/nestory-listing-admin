@@ -1,3 +1,9 @@
+> **2026-10-10 ACTIVE TASK — PR #35 merge decision**
+> - `SHOPIFY-ACTIVE-PUBLICATION-FIX` implementation is complete and validated.
+> - PR #35 head: `508757ecea55517b19f6798951066e2cb480c0b9`; CI #1021 PASS; Preview `dpl_DadBdv5xJAqrmAgKfcmFXwNX2izg` READY; changed files = 3.
+> - **Do not merge without Owner explicitly saying it may merge.**
+> - After merge only: deploy merged authority to Production, keep release controlled, re-enable ACTIVE, then use the already-selected Crayon Shin-chan product for recovery/smoke if safe; verify `status=ACTIVE` + Online Store `publishedOnPublication=true` + non-null `publishedAt` before release PASS.
+>
 > **2026-10-10 ACTIVE TASK — SHOPIFY-ACTIVE-PUBLICATION-FIX (HOLD until Owner authorizes repair)**
 > **Authority:** current live release authority + Shopify Admin API publication state observed on the real smoke product.
 > **Allowed scope (max 3 adjustments):**

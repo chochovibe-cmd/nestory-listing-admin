@@ -1,3 +1,13 @@
+## 2026-10-10 — First real ACTIVE smoke found Online Store publication blocker
+
+- Owner published the real 蠟筆小新 × WildChildClub 羽毛球拍 through normal Nestory ACTIVE flow.
+- Nestory batch completed 1/1 with 0 failures and created Shopify product `gid://shopify/Product/15424255262905`.
+- Shopify data readback passed: ACTIVE status, 35 variants, intended SKUs/prices, 29 product media; no unrelated recent ACTIVE product was found.
+- Publication readback failed: Online Store publication `gid://shopify/Publication/192801177785` returned `publishedOnPublication=false`; product `publishedAt=null`.
+- Code inspection confirmed ACTIVE path only changes product status and has no publication mutation.
+- Shopify app already has required publication scopes. Shopify current docs prescribe idempotent `publishablePublish` for a single product and explicit publication readback.
+- Release result: **HOLD**. Production ACTIVE gate rolled back OFF; DRAFT remains available. Next package is narrowly scoped `SHOPIFY-ACTIVE-PUBLICATION-FIX`.
+
 ## 2026-10-10 — SHOPIFY-ACTIVE-GO-LIVE gate enabled
 
 - Owner explicitly approved the Production ACTIVE go-live package.

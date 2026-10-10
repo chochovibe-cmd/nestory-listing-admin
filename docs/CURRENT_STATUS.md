@@ -1,3 +1,11 @@
+> **2026-10-10 CURRENT — ACTIVE release HOLD**
+> - DRAFT release remains PASS.
+> - First real ACTIVE smoke exposed one release blocker: Admin status becomes ACTIVE, but Online Store publication is missing.
+> - Smoke product: `gid://shopify/Product/15424255262905`; Shopify `status=ACTIVE`, `publishedAt=null`, Online Store `publishedOnPublication=false`.
+> - Product data itself passed readback: 35 variants, intended SKUs/prices, 29 main/variant media; batch completed 1/1 with 0 failures.
+> - Production ACTIVE gate is being rolled back OFF. Normal DRAFT usage may continue.
+> - Next required package: `SHOPIFY-ACTIVE-PUBLICATION-FIX` only; no unrelated Shopify/UI/data changes.
+>
 > **2026-10-10 CURRENT — ACTIVE gate ON / one real smoke pending**
 > - Owner approved ACTIVE go-live; Production ACTIVE server gate is ON.
 > - Latest Production deployment: `dpl_4dYpjBqhjpb24wEydmM4cSkDz9QJ`, READY, authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.

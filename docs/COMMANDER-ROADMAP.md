@@ -1,3 +1,16 @@
+> **2026-10-10 ROADMAP UPDATE — ACTIVE final smoke + SEO Panel V2**
+>
+> **Release first:** ACTIVE gate is ON. Run exactly one Owner-chosen real ACTIVE smoke through normal Nestory, verify Shopify readback, then close the Shopify release gate.
+>
+> **Later UIUX package: `UIUX-CARD-WORKBENCH → SEO Panel V2` (Owner-approved direction)**
+> 1. Add a compact Google-style search preview using SEO title + product URL + meta description.
+> 2. Show Shopify Handle in the SEO tab as `domain/products/[handle]`: domain/prefix read-only, handle editable. Default remains automatic; manual editing is optional, not required for every product.
+> 3. Improve automatic Handle generation from the current deterministic IP/character/type + unique suffix toward a concise descriptive identity that may include a reliable core product term (for example `pingu-mini-camera-keychain-xxxxxx`) without stuffing the full SEO title. Keep lowercase ASCII/hyphen normalization, max length, uniqueness suffix, and deterministic fallback.
+> - Provide a small “restore auto suggestion” action after manual override.
+> - Warn only on actionable URL problems (invalid chars, excessive length, collision/duplicate), not generic SEO red-light scoring.
+> - For products already public on Shopify, changing Handle must create/preserve an old→new URL redirect; never silently break existing links.
+> - This is a UIUX/SEO follow-up, **not** a reason to delay the current ACTIVE release smoke.
+>
 > **2026-10-10 RELEASE GATE — DRAFT COMPLETE**
 > - Production DRAFT cutover + one real DRAFT smoke are both PASS.
 > - Do not spend another package on DRAFT validation unless new evidence appears.

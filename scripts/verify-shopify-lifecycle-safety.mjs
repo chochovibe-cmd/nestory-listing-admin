@@ -21,6 +21,11 @@ assert.match(lifecycle, /mutation ProductUpdateStatus/, "central non-deprecated 
 assert.match(lifecycle, /product\.id !== productId/, "status helper must validate returned product id");
 assert.match(lifecycle, /product\.status !== status/, "status helper must validate returned status");
 assert.match(lifecycle, /productId !== "mock-product-id"/, "mock-product-id must be excluded from live lifecycle mutations");
+assert.match(lifecycle, /handle === "online_store"/, "Online Store discovery must use Shopify channel handle, not a store-specific publication ID");
+assert.match(lifecycle, /mutation PublishProductToOnlineStore/, "Online Store publishablePublish helper missing");
+assert.match(lifecycle, /publishablePublish\(id: \$id, input: \$input\)/, "publishablePublish mutation missing");
+assert.match(lifecycle, /publishedOnPublication\(publicationId: \$publicationId\)/, "Online Store publication readback missing");
+assert.match(safe, /publishShopifyProductToOnlineStore\(productId, caller\)/, "ACTIVE flow must publish to Online Store before local success");
 
 assert.match(safe, /product:\s*\{ \.\.\.payload\.product, status: "DRAFT" \}/, "productCreate must force DRAFT");
 assert.doesNotMatch(safe, /publishableStatuses\s*=\s*\[[^\]]*"publishing"/, "publishing must not be publishable");
@@ -40,10 +45,14 @@ const persistIndex = safe.indexOf("persistCreatedProductLink(serviceSupabase, id
 const variantIndex = safe.indexOf("mutation ProductVariantsBulkUpdate", persistIndex);
 const mediaIndex = safe.indexOf("mutation ProductAttachMedia", variantIndex);
 const activeIndex = safe.lastIndexOf('setShopifyProductStatus(productId, "ACTIVE", caller)');
+const publicationIndex = safe.lastIndexOf("publishShopifyProductToOnlineStore(productId, caller)");
+const finalLocalIndex = safe.lastIndexOf("finishLocalSuccess(");
 assert(createIndex >= 0 && persistIndex > createIndex, "productId persistence must follow create");
 assert(variantIndex > persistIndex, "variant sync must happen after productId persistence");
 assert(mediaIndex > variantIndex, "media sync must happen after variant sync");
 assert(activeIndex > mediaIndex, "ACTIVE promotion must happen after media sync");
+assert(publicationIndex > activeIndex, "Online Store publication must happen after ACTIVE status promotion");
+assert(finalLocalIndex > publicationIndex, "local active_published success must happen after publication readback");
 assert.doesNotMatch(safe, /productCreate\(product: \$product, media: \$media\)/, "productCreate must not wait on media");
 assert.match(safe, /media sync is pending/, "pre-media recovery checkpoint missing");
 assert.match(payload, /const publishSku = draft\.sku\?\.trim\(\) \|\| generatedSeedSku;/, "reviewed draft SKU must be authoritative when present");
@@ -79,6 +88,7 @@ function runLifecycleModel({
   remoteStatus = null,
   variantFails = false,
   linkFails = false,
+  publicationFails = false,
   unpublish = false
 } = {}) {
   const calls = [];
@@ -101,6 +111,14 @@ function runLifecycleModel({
     if (requested === "active") {
       calls.push("productChangeStatus:ACTIVE");
       remote = "ACTIVE";
+      calls.push("publishablePublish:online_store");
+      if (publicationFails) {
+        calls.push("productChangeStatus:DRAFT");
+        remote = "DRAFT";
+        status = "api_failed";
+        return { http: 502, calls, status, productId, remote };
+      }
+      calls.push("verifyPublication:online_store");
       status = "active_published";
     }
     return { http: 200, calls, status, productId, remote };
@@ -134,6 +152,14 @@ function runLifecycleModel({
   if (requested === "active") {
     calls.push("productChangeStatus:ACTIVE");
     remote = "ACTIVE";
+    calls.push("publishablePublish:online_store");
+    if (publicationFails) {
+      calls.push("productChangeStatus:DRAFT");
+      remote = "DRAFT";
+      status = "api_failed";
+      return { http: 502, calls, status, productId, remote };
+    }
+    calls.push("verifyPublication:online_store");
     status = "active_published";
   } else {
     status = "draft_created";
@@ -150,6 +176,8 @@ function runLifecycleModel({
     "persistProductId",
     "variantSync",
     "productChangeStatus:ACTIVE",
+    "publishablePublish:online_store",
+    "verifyPublication:online_store",
     "local:active_published"
   ]);
   assert.equal(r.remote, "ACTIVE");
@@ -208,11 +236,27 @@ function runLifecycleModel({
 {
   const id = "gid://shopify/Product/77";
   const r = runLifecycleModel({ localStatus: "draft_created", existingId: id, remoteStatus: "DRAFT", requested: "active" });
-  assert.deepEqual(r.calls, ["productChangeStatus:ACTIVE"]);
+  assert.deepEqual(r.calls, [
+    "productChangeStatus:ACTIVE",
+    "publishablePublish:online_store",
+    "verifyPublication:online_store"
+  ]);
   assert.equal(r.calls.filter((c) => c.startsWith("productCreate")).length, 0);
   assert.equal(r.status, "active_published");
   assert.equal(r.productId, id);
   console.log("PASS TEST 7 — re-publish reuses same product ID");
+}
+
+// TEST 8 — Online Store publication failure must never become local active_published
+{
+  const r = runLifecycleModel({ requested: "active", publicationFails: true });
+  assert.equal(r.http, 502);
+  assert.equal(r.status, "api_failed");
+  assert.equal(r.remote, "DRAFT");
+  assert.ok(r.calls.includes("publishablePublish:online_store"));
+  assert.ok(r.calls.includes("productChangeStatus:DRAFT"));
+  assert.equal(r.calls.filter((c) => c === "local:active_published").length, 0);
+  console.log("PASS TEST 8 — publication failure rolls back DRAFT and blocks local ACTIVE success");
 }
 
 console.log("Shopify lifecycle safety verifier passed (mock/injected model only; network disabled)");

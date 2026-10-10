@@ -1,3 +1,10 @@
+> **2026-10-10 ACTIVE TASK — one controlled real Shopify ACTIVE smoke**
+> - ACTIVE server gate is already ON in Production.
+> - Reserved release scope: exactly one Owner-chosen product, normal Nestory ACTIVE publish, then independent Shopify readback.
+> - Do not use an arbitrary old product and do not bulk-publish.
+> - Acceptance: Shopify status ACTIVE; intended title, SKU, price, variants and main images are correct; Nestory linkage/publish status is correct; no unrelated product is made ACTIVE.
+> - PASS → Shopify release gate closes and daily DRAFT/ACTIVE choice is authorized. Failure → HOLD and open a narrowly scoped repair package.
+>
 > **2026-10-10 ACTIVE TASK — SHOPIFY-ACTIVE-GO-LIVE**
 > - Production DRAFT transition: PASS.
 > - Real DRAFT smoke: PASS (Pingu mini camera, `gid://shopify/Product/15422660214969`).

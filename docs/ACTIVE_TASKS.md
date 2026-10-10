@@ -1,3 +1,14 @@
+> **2026-10-10 ACTIVE TASK — SHOPIFY-ACTIVE-PUBLICATION-FIX (HOLD until Owner authorizes repair)**
+> **Authority:** current live release authority + Shopify Admin API publication state observed on the real smoke product.
+> **Allowed scope (max 3 adjustments):**
+> 1. Add a small Shopify publication helper that discovers the Online Store publication (no hard-coded store ID) and calls idempotent `publishablePublish` for one product.
+> 2. In ACTIVE flow, after staged DRAFT sync + status ACTIVE, publish to Online Store and independently read back `publishedOnPublication=true` (and expected publication timestamp/state) before Nestory writes `active_published`.
+> 3. Add focused tests for success/idempotency/publication failure; DRAFT path must remain unchanged.
+> **Forbidden:** payload/title/copy/images/SKU/pricing/variant/recovery/DB schema/UI/Showmore/Matrixify changes; no broad channel publishing; no hard-coded Online Store publication ID.
+> **Owner acceptance:** one controlled real smoke product is both Shopify ACTIVE and Online Store published, with existing data intact. Failure must not be recorded locally as `active_published`.
+> **Diff gate:** only Shopify lifecycle/publication helper + focused tests/docs if needed.
+> **Publication:** feature branch/PR first; Preview/CI; no merge without Owner approval; Production ACTIVE gate stays OFF until repaired build is accepted.
+>
 > **2026-10-10 ACTIVE TASK — one controlled real Shopify ACTIVE smoke**
 > - ACTIVE server gate is already ON in Production.
 > - Reserved release scope: exactly one Owner-chosen product, normal Nestory ACTIVE publish, then independent Shopify readback.

@@ -1,3 +1,12 @@
+## 2026-10-10 — PR #35 ACTIVE publication repair validated
+
+- Implemented the Owner-approved narrow repair for the missing Shopify Online Store publication step.
+- Runtime design now discovers the Online Store through Shopify channel handle `online_store`, maps to its publication without hard-coding the store-specific publication ID, calls idempotent `publishablePublish`, and reads back publication state before local ACTIVE success.
+- Failure path rolls remote status back to DRAFT and blocks `active_published` persistence.
+- Diff gate: exactly 3 files; no DRAFT, payload, copy, SKU, price, variants, media policy, DB schema, or UI changes.
+- CI #1021 PASS; Preview `dpl_DadBdv5xJAqrmAgKfcmFXwNX2izg` READY on head `508757ecea55517b19f6798951066e2cb480c0b9`.
+- PR #35 remains Draft / unmerged pending explicit Owner merge approval. Production ACTIVE gate remains OFF.
+
 ## 2026-10-10 — First real ACTIVE smoke found Online Store publication blocker
 
 - Owner published the real 蠟筆小新 × WildChildClub 羽毛球拍 through normal Nestory ACTIVE flow.

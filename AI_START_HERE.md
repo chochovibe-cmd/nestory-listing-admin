@@ -1,3 +1,14 @@
+> **2026-10-10 FINAL COMMANDER HANDOFF — milestone closed / new chat recommended**
+> - Owner approved merging the docs handoff package after Shopify DRAFT + ACTIVE release completed.
+> - Latest known live code authority before this docs-only merge: `caae0fa7f4e0d9aba368df961ce714e02a669437`; Production `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` READY; Shopify runtime real; daily DRAFT / ACTIVE released.
+> - PR #35 is merged and the ACTIVE publication contract is now: ACTIVE status + Online Store publication + positive readback before local `active_published`; failure rolls back to DRAFT.
+> - The Crayon Shin-chan smoke/recovery product is confirmed storefront-published; Shopify release is **not** an active blocker anymore.
+> - Older HOLD / smoke / pre-merge sections below are historical checkpoints. **Newest checkpoint wins.**
+> - On a new Commander chat, do not trust this recorded SHA as automatically current: first live-check GitHub branch HEAD, open PRs, Vercel Production, and active agents/reserved files.
+> - Required read order for new Commander: `AI_START_HERE.md` → `docs/AI_WORKING_RULES.md` → `docs/CURRENT_STATUS.md` → `docs/ACTIVE_TASKS.md` → `docs/COMMANDER-ROADMAP.md`.
+> - Resume the post-release roadmap; do not manufacture more Shopify release smokes without new evidence.
+> - Owner-approved queued UI/SEO direction remains `UIUX-CARD-WORKBENCH → SEO Panel V2`: Google-style preview; visible/editable-but-auto-default Handle; concise descriptive auto-handle; restore-auto action; actionable URL validation only; redirect-safe Handle changes for already-public products.
+>
 > **2026-10-10 Shopify ACTIVE release — PASS / daily DRAFT + ACTIVE released**
 > - Owner explicitly approved PR #35 merge. PR #35 merged successfully into `handoff/20261008-golive-spec`.
 > - New live authority: `caae0fa7f4e0d9aba368df961ce714e02a669437`.

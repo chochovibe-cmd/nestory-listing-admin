@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 const read = (path) => readFileSync(path, "utf8");
 const queueApi = read("src/app/api/generation-queue/route.ts");
 const runner = read("src/components/listing/GenerationQueueRunner.tsx");
+const overview = read("src/components/listing/GenerationQueueOverview.tsx");
+const quickPreview = read("src/components/listing/QuickPreviewPanel.tsx");
 const layout = read("src/app/layout.tsx");
 const workspace = read("src/components/listing/WorkspaceInputPanel.tsx");
 const resultCard = read("src/components/listing/ResultCard.tsx");
@@ -18,6 +20,9 @@ assert.match(queueApi, /action === "enqueue"/, "enqueue action missing");
 assert.match(queueApi, /action === "claim"/, "claim action missing");
 assert.match(queueApi, /action === "fail"/, "network-failure action missing");
 assert.match(queueApi, /action === "retry"/, "single retry action missing");
+assert.match(queueApi, /action === "overview"/, "read-only queue overview action missing");
+assert.match(queueApi, /latestByDraft/, "overview must collapse historical runs to the latest per draft");
+assert.match(queueApi, /status === "pending" \|\| row\.status === "processing" \|\| row\.status === "failed"/, "overview must expose pending/processing/failed only");
 assert.match(queueApi, /worker_lock_expires_at/, "draft lock expiry missing");
 assert.match(queueApi, /生成工作逾時中斷/, "stale queue recovery missing");
 assert.match(queueApi, /\.eq\("status", "pending_copy"\)/, "claim must conditionally lock only queued drafts");
@@ -49,5 +54,14 @@ assert.match(generate, /Generation queue job is not claim-valid/, "generate rout
 assert.match(generate, /updateQueueRun\("failed"/, "generate failures must close queue job");
 assert.match(generate, /successStatus\.generation_status === "failed" \? "failed" : "completed"/, "queue outcome must match draft outcome");
 assert.match(generate, /worker_id: null/, "generate completion/failure must release worker lock");
+
+assert.match(overview, /action: "overview"/, "status center must read the persisted queue overview");
+assert.match(overview, /排隊中/, "status center queued label missing");
+assert.match(overview, /生成中/, "status center processing label missing");
+assert.match(overview, /失敗/, "status center failure label missing");
+assert.match(overview, /GENERATION_QUEUE_KICK_EVENT/, "status center must refresh promptly after enqueue");
+assert.doesNotMatch(overview, /action: "claim"/, "status center must never claim queue work");
+assert.doesNotMatch(overview, /action: "retry"/, "OBS-QUEUE must stay read-only");
+assert.match(quickPreview, /<GenerationQueueOverview \/>/, "Quick Preview must surface the queue status center");
 
 console.log("V1.1 generation queue runner checks passed");

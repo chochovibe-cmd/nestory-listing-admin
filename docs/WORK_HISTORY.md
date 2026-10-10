@@ -1,3 +1,13 @@
+## 2026-10-10 — SHOPIFY-ACTIVE-GO-LIVE gate enabled
+
+- Owner explicitly approved the Production ACTIVE go-live package.
+- Race Guard confirmed `handoff/20261008-golive-spec` still exactly matched authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180` before deployment.
+- Production `SHOPIFY_ACTIVE_PUBLISH_ENABLED` changed from `false` to `true`; no code diff and no DB/schema/product-content change.
+- Forced Production deployment `dpl_4dYpjBqhjpb24wEydmM4cSkDz9QJ` built successfully and is READY on the exact same authority commit.
+- Production alias `nestory-listing-admin.vercel.app` is attached to the deployment; runtime `/api/status` returned HTTP 200, Shopify connected, `shopifyMock=false`.
+- No product was auto-published during the gate change. Final release acceptance remains one Owner-chosen real ACTIVE smoke through the normal Nestory flow.
+- Owner also approved the future SEO Panel V2 direction: visible/editable-but-auto-default Handle, search preview, stronger descriptive auto-handle generation, and redirect-safe edits for already-public products.
+
 ## 2026-10-10 — Real Shopify DRAFT smoke PASS
 
 - Owner had already created a Pingu mini camera DRAFT, so Commander used that existing real transaction instead of requiring a redundant second smoke.

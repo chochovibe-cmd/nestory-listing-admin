@@ -1,3 +1,13 @@
+> **2026-10-10 SHOPIFY-ACTIVE-PUBLICATION-FIX — implementation PASS / merge HOLD**
+> - Owner authorized the repair after the real ACTIVE smoke exposed missing Online Store publication.
+> - Repair PR: **#35** `SHOPIFY-ACTIVE-PUBLICATION-FIX: publish ACTIVE products to Online Store`.
+> - Branch: `gpt/shopify-active-publication-fix-20261010`; head `508757ecea55517b19f6798951066e2cb480c0b9`.
+> - Diff gate passed: exactly 3 files — `src/lib/shopify/productLifecycle.ts`, `src/lib/shopify/publishDraftSafe.ts`, `scripts/verify-shopify-lifecycle-safety.mjs`.
+> - New contract: discover Online Store from Shopify channel handle `online_store`; no hard-coded publication ID. ACTIVE success now requires `publishablePublish` plus readback `publishedOnPublication=true` and non-empty `publishedAt` before local `active_published`.
+> - Publication failure rolls remote status back to DRAFT and must not be recorded locally as ACTIVE success.
+> - CI #1021: PASS (regression verifier, typecheck, build). Vercel Preview `dpl_DadBdv5xJAqrmAgKfcmFXwNX2izg`: READY on exact PR head.
+> - **HOLD:** PR #35 is still Draft/unmerged. Production ACTIVE gate remains OFF. Next Owner decision is whether PR #35 may merge. After merge: deploy exact merged authority, re-enable ACTIVE under the already-defined controlled release flow, reconcile/retest the selected Crayon Shin-chan product, and verify Online Store publication before closing the Shopify release gate.
+>
 > **2026-10-10 ACTIVE smoke — HOLD: Online Store publication missing**
 > - Owner selected and published real product draft `b4ac2e78-f531-4b64-b61f-a1ca60dec4c0` (蠟筆小新 × WildChildClub 羽毛球拍).
 > - Nestory batch `d240a2db-ef65-47a4-b32a-0c0b7ce57adb`: ACTIVE mode, 1/1 completed, 0 failed.

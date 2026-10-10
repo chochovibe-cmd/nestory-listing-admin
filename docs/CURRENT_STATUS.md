@@ -1,3 +1,11 @@
+> **2026-10-10 HANDOFF STATUS — clean post-release checkpoint**
+> - Shopify DRAFT / ACTIVE release is complete and no longer blocks the roadmap.
+> - PR #35 is merged; repaired ACTIVE publication behavior is live in Production.
+> - No current Shopify release smoke is required.
+> - Older HOLD entries in this file are retained as history only; use the newest checkpoint at the top for current state.
+> - New Commander must still live-check GitHub/Vercel before acting because documents describe the checkpoint, not guaranteed present-time truth.
+> - Next planning context is the existing post-release roadmap, including the Owner-approved SEO Panel V2 / Handle direction under UIUX-CARD-WORKBENCH.
+>
 > **2026-10-10 CURRENT — Shopify DRAFT / ACTIVE release COMPLETE**
 > - PR #35 merged; authority is now `caae0fa7f4e0d9aba368df961ce714e02a669437`.
 > - Production `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` is READY on the exact merged authority; ACTIVE is enabled.

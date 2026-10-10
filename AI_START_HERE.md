@@ -1,3 +1,11 @@
+> **2026-10-10 ACTIVE GO-LIVE checkpoint — gate enabled, one smoke remains**
+> - Owner explicitly approved `SHOPIFY-ACTIVE-GO-LIVE`.
+> - Production `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Production deployment `dpl_4dYpjBqhjpb24wEydmM4cSkDz9QJ` is READY on exact authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - `nestory-listing-admin.vercel.app/api/status` returned HTTP 200, Shopify connected, `shopifyMock=false`.
+> - No product was auto-published by this gate switch. Release is **HOLD only for exactly one Owner-chosen real ACTIVE smoke via the normal Nestory flow**. After that passes, normal daily DRAFT/ACTIVE choice may open.
+> - **Owner SEO/Handle decision:** later `UIUX-CARD-WORKBENCH → SEO Panel V2` must expose the already-generated Shopify handle inside the card SEO area, keep automatic generation as the default, allow manual override, show a Google-style preview, improve the generator to include a concise core product term where reliable, and preserve uniqueness. Do not make Handle a mandatory manual field. If an already-public product's handle changes, the implementation must preserve old-link behavior through Shopify URL redirect rather than silently breaking the URL.
+>
 > **2026-10-10 fresh Shopify DRAFT smoke — PASS**
 > - Owner used existing Pingu mini camera draft as the real Production smoke; no second test product is required.
 > - Nestory draft: `5feb9b44-e8c1-46f7-9d06-2c354bfcd0d9`; publish batch completed 1/1 with 0 failures in DRAFT mode.

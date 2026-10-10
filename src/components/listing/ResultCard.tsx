@@ -961,7 +961,7 @@ export function ResultCard({
     };
   }
 
-  async function saveComboOnly() {
+  async function saveComboOnly(includeHandle = false) {
     setComboSaving(true);
     setDiscardArm(null);
     // UX-L T62: in-progress via button「儲存中…」only
@@ -972,11 +972,35 @@ export function ResultCard({
         setMessage("");
         return;
       }
-      // UX-A T2 / UX-L T62: transient success → toast only
-      const okMsg = result.didCommitCopy ? "已定案此文案組合" : "文案組合無變更";
-      if (result.didCommitCopy) await markShopifyDirty();
+
+      let handleWasSaved = false;
+      if (includeHandle) {
+        const nextHandle = shopifyHandle.trim();
+        handleWasSaved = nextHandle !== (draft.shopify_handle ?? "").trim();
+        if (handleWasSaved) {
+          const { error: handleError } = await supabase
+            .from("product_drafts")
+            .update({ shopify_handle: nextHandle || null })
+            .eq("id", draft.id);
+          if (handleError) {
+            showToast(handleError.message || "Handle 儲存失敗", "error");
+            setMessage("");
+            return;
+          }
+        }
+      }
+
+      const didSave = result.didCommitCopy || handleWasSaved;
+      const okMsg = didSave
+        ? includeHandle
+          ? "已儲存 SEO 設定"
+          : "已定案此文案組合"
+        : includeHandle
+          ? "SEO 設定無變更"
+          : "文案組合無變更";
+      if (didSave) await markShopifyDirty();
       setMessage("");
-      showToast(okMsg, result.didCommitCopy ? "success" : "info");
+      showToast(okMsg, didSave ? "success" : "info");
       router.refresh();
     } finally {
       setComboSaving(false);
@@ -3001,7 +3025,7 @@ export function ResultCard({
               }}
               onSaveSeoPanel={() => {
                 void checkShopifyHandleDuplicate();
-                void save();
+                void saveComboOnly(true);
               }}
               onSetFieldDisplay={setFieldDisplay}
               onShopifyHandleBlur={() => void checkShopifyHandleDuplicate()}

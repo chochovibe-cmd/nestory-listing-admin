@@ -1,3 +1,11 @@
+> **2026-10-10 CURRENT — Shopify DRAFT / ACTIVE release COMPLETE**
+> - PR #35 merged; authority is now `caae0fa7f4e0d9aba368df961ce714e02a669437`.
+> - Production `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` is READY on the exact merged authority; ACTIVE is enabled.
+> - Real smoke/recovery product `gid://shopify/Product/15424255262905` is confirmed ACTIVE and published to Online Store (`publishedOnPublication=true`, non-null `publishedAt`).
+> - Product data remained intact after recovery: 35 variants and 29 product media; no SKU/price/media regression found.
+> - Shopify release gate is closed. Normal daily user choice between DRAFT and ACTIVE is authorized.
+> - Follow-up UI/SEO work remains separate: `UIUX-CARD-WORKBENCH → SEO Panel V2` with search preview + visible/editable-but-auto-default Handle + improved descriptive auto-handle + redirect-safe public handle edits.
+>
 > **2026-10-10 CURRENT — PR #35 validated, awaiting Owner merge approval**
 > - ACTIVE publication blocker has an implemented fix in PR #35; code/CI/Preview validation is PASS.
 > - The fix discovers Shopify Online Store by channel handle, publishes through `publishablePublish`, and independently confirms publication before local ACTIVE success.

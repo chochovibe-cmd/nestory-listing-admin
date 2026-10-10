@@ -1,3 +1,11 @@
+> **2026-10-10 CURRENT — ACTIVE gate ON / one real smoke pending**
+> - Owner approved ACTIVE go-live; Production ACTIVE server gate is ON.
+> - Latest Production deployment: `dpl_4dYpjBqhjpb24wEydmM4cSkDz9QJ`, READY, authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - Runtime status HTTP 200; Shopify real mode remains enabled (`shopifyMock=false`).
+> - No product was published by the environment change itself.
+> - Remaining release gate: Owner chooses one product that genuinely should go live and publishes it through normal Nestory ACTIVE flow; Commander then independently reads back Shopify status/title/SKU/price/variants/images and confirms no unintended publication.
+> - UI/UX follow-up decision: SEO card redesign includes visible/editable-but-auto-default Shopify Handle and search-result preview; see roadmap.
+>
 > **2026-10-10 CURRENT — REAL DRAFT SMOKE PASS / ACTIVE NEXT**
 > - Fresh Production Shopify DRAFT smoke passed using Pingu mini camera draft `5feb9b44-e8c1-46f7-9d06-2c354bfcd0d9`.
 > - Shopify product `gid://shopify/Product/15422660214969` read back as DRAFT with correct title, SKU `CHO-DS-PIN-PIN-001`, TWD 799, 1 default variant, and 4 main images.

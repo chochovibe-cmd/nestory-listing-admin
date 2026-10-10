@@ -7,6 +7,7 @@ import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import {
   getShopifyProductStatus,
   isRealShopifyProductId,
+  publishShopifyProductToOnlineStore,
   setShopifyProductStatus,
   type ShopifyAdminGraphQLCaller
 } from "@/lib/shopify/productLifecycle";
@@ -247,8 +248,16 @@ async function republishExistingDraft(
 
   try {
     await setShopifyProductStatus(productId, "ACTIVE", caller);
+    await publishShopifyProductToOnlineStore(productId, caller);
   } catch (error) {
-    const message = `Shopify re-publish failed for existing product ${productId}: ${stringifyError(error)}`;
+    let rollbackNote = "";
+    try {
+      await setShopifyProductStatus(productId, "DRAFT", caller);
+    } catch (rollbackError) {
+      rollbackNote = `; DRAFT rollback could not be confirmed: ${stringifyError(rollbackError)}; manual reconciliation required`;
+    }
+    const message =
+      `Shopify re-publish failed for existing product ${productId}: ${stringifyError(error)}${rollbackNote}`;
     await markDraftFailed(serviceSupabase, id, message, productId);
     await notifyMake("api_failed", { draftId: id, error: message, shopifyProductId: productId });
     return { ok: false, status: 502, error: message };
@@ -825,10 +834,12 @@ export async function publishDraft(
     }
   }
 
-  // ACTIVE is a final promotion only after every follow-up above completed.
+  // ACTIVE is successful only after both Admin status promotion and
+  // Online Store publication have been independently confirmed.
   if (publishMode === "active") {
     try {
       await setShopifyProductStatus(productId, "ACTIVE", caller);
+      await publishShopifyProductToOnlineStore(productId, caller);
     } catch (activateError) {
       let rollbackNote = "";
       try {
@@ -837,7 +848,7 @@ export async function publishDraft(
         rollbackNote = `; DRAFT rollback could not be confirmed: ${stringifyError(rollbackError)}; manual reconciliation required`;
       }
       return failAfterCreate(
-        `Shopify ACTIVE promotion failed after staged sync for ${productId}: ${stringifyError(activateError)}${rollbackNote}`,
+        `Shopify ACTIVE/Online Store publication failed after staged sync for ${productId}: ${stringifyError(activateError)}${rollbackNote}`,
         { activationError: stringifyError(activateError), rollbackNote }
       );
     }

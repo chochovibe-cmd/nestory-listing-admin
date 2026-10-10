@@ -1,3 +1,9 @@
+> **2026-10-10 HANDOFF — no active Shopify release blocker**
+> - Shopify release package is closed PASS.
+> - Do not reopen DRAFT/ACTIVE release work unless new live evidence shows a regression.
+> - New Commander should first live-check authority / PRs / Production, then choose the next approved post-release package from the roadmap.
+> - SEO Panel V2 / Handle work is approved as a queued UIUX-CARD-WORKBENCH direction, not yet an implementation package unless Commander defines the six package fields.
+>
 > **2026-10-10 RELEASE CHECKPOINT — Shopify ACTIVE blocker cleared**
 > - DRAFT release: PASS.
 > - ACTIVE publication fix PR #35: merged.

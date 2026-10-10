@@ -296,6 +296,11 @@ export function ResultCard({
   );
   const [seoTitle, setSeoTitle] = useState(draft.seo_title ?? "");
   const [seoDescription, setSeoDescription] = useState(draft.seo_description ?? "");
+  // SEO Panel V2-A: Handle stays automatic by default, but can be edited before sync.
+  const [shopifyHandle, setShopifyHandle] = useState(draft.shopify_handle ?? "");
+  const autoShopifyHandleRef = useRef(draft.shopify_handle ?? "");
+  const [shopifyHandleDuplicateWarning, setShopifyHandleDuplicateWarning] = useState<string | null>(null);
+  const [seoStoreDomain, setSeoStoreDomain] = useState<string | null>(null);
   const [whyWeChoseIt, setWhyWeChoseIt] = useState(draft.why_we_chose_it ?? "");
   const [productHighlights, setProductHighlights] = useState(highlightsToContent(draft.product_highlights));
   const [tags, setTags] = useState(draft.tags?.join(", ") ?? "");
@@ -379,6 +384,17 @@ export function ResultCard({
   }
 
   useEffect(() => () => clearCardArchiveUndoTimer(), []);
+
+  useEffect(() => {
+    if (activeTab !== "seo" || seoStoreDomain) return;
+    let cancelled = false;
+    void resolveShopifyStoreDomain().then((domain) => {
+      if (!cancelled && domain) setSeoStoreDomain(domain);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, seoStoreDomain]);
   const [quickAddingCharacter, setQuickAddingCharacter] = useState<string | null>(null);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
   const [descriptionView, setDescriptionView] = useState<"preview" | "source">("preview");
@@ -945,7 +961,7 @@ export function ResultCard({
     };
   }
 
-  async function saveComboOnly() {
+  async function saveComboOnly(includeHandle = false) {
     setComboSaving(true);
     setDiscardArm(null);
     // UX-L T62: in-progress via button「儲存中…」only
@@ -956,11 +972,35 @@ export function ResultCard({
         setMessage("");
         return;
       }
-      // UX-A T2 / UX-L T62: transient success → toast only
-      const okMsg = result.didCommitCopy ? "已定案此文案組合" : "文案組合無變更";
-      if (result.didCommitCopy) await markShopifyDirty();
+
+      let handleWasSaved = false;
+      if (includeHandle) {
+        const nextHandle = shopifyHandle.trim();
+        handleWasSaved = nextHandle !== (draft.shopify_handle ?? "").trim();
+        if (handleWasSaved) {
+          const { error: handleError } = await supabase
+            .from("product_drafts")
+            .update({ shopify_handle: nextHandle || null })
+            .eq("id", draft.id);
+          if (handleError) {
+            showToast(handleError.message || "Handle 儲存失敗", "error");
+            setMessage("");
+            return;
+          }
+        }
+      }
+
+      const didSave = result.didCommitCopy || handleWasSaved;
+      const okMsg = didSave
+        ? includeHandle
+          ? "已儲存 SEO 設定"
+          : "已定案此文案組合"
+        : includeHandle
+          ? "SEO 設定無變更"
+          : "文案組合無變更";
+      if (didSave) await markShopifyDirty();
       setMessage("");
-      showToast(okMsg, result.didCommitCopy ? "success" : "info");
+      showToast(okMsg, didSave ? "success" : "info");
       router.refresh();
     } finally {
       setComboSaving(false);
@@ -980,6 +1020,32 @@ export function ResultCard({
       // must still work; the sync endpoint will show the migration gate clearly.
       setShopifySyncError(`Shopify 同步狀態尚未啟用：${error.message}`);
     }
+  }
+
+  async function checkShopifyHandleDuplicate() {
+    const value = shopifyHandle.trim();
+    // Format warnings live in the panel. Duplicate checks only run for a valid-looking handle.
+    if (!value || value.length > 80 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
+      setShopifyHandleDuplicateWarning(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("product_drafts")
+      .select("id")
+      .eq("shopify_handle", value)
+      .neq("id", draft.id)
+      .limit(1);
+
+    if (error) {
+      // Duplicate lookup is advisory; never block local editing because a warning lookup failed.
+      setShopifyHandleDuplicateWarning(null);
+      return;
+    }
+
+    setShopifyHandleDuplicateWarning(
+      data && data.length > 0 ? "這個 Handle 已被另一個商品使用，建議換一個網址。" : null
+    );
   }
 
   async function save(): Promise<boolean> {
@@ -1010,6 +1076,7 @@ export function ResultCard({
         description_html: normalizeDescriptionToPlainText(description) || null,
         seo_title: seoTitle || null,
         seo_description: seoDescription || null,
+        shopify_handle: shopifyHandle.trim() || null,
         why_we_chose_it: whyWeChoseIt || null,
         product_highlights: productHighlights
           ? productHighlights
@@ -1515,13 +1582,18 @@ export function ResultCard({
     return specText.trim() !== (draft.spec_text ?? "").trim();
   }
 
-  /** Copy / pricing / specs — any card edit that needs footer save. */
+  function hasUncommittedHandle(): boolean {
+    return shopifyHandle.trim() !== (draft.shopify_handle ?? "").trim();
+  }
+
+  /** Copy / pricing / specs / SEO Handle — any card edit that needs footer save. */
   function hasUncommittedEdits(): boolean {
     return (
       hasUncommittedCopy() ||
       hasUncommittedPricing() ||
       variantsDirty ||
-      hasUncommittedSpecText()
+      hasUncommittedSpecText() ||
+      hasUncommittedHandle()
     );
   }
 
@@ -2938,19 +3010,36 @@ export function ResultCard({
 
           {!isImageStation && activeTab === "seo" ? (
             <ResultCardSeoPanel
+              autoShopifyHandle={autoShopifyHandleRef.current}
               comboSaving={comboSaving}
               copyDirty={copyDirty}
               discardArm={discardArm}
               displayByField={displayByField}
+              handleDuplicateWarning={shopifyHandleDuplicateWarning}
+              hasRealShopifyProduct={hasRealShopifyProduct}
               historyLoaded={historyLoaded}
               onRegenField={(field) => void regenerateField(field)}
-              onSaveCombo={() => void saveComboOnly()}
+              onRestoreAutoHandle={() => {
+                setShopifyHandle(autoShopifyHandleRef.current);
+                setShopifyHandleDuplicateWarning(null);
+              }}
+              onSaveSeoPanel={() => {
+                void checkShopifyHandleDuplicate();
+                void saveComboOnly(true);
+              }}
               onSetFieldDisplay={setFieldDisplay}
+              onShopifyHandleBlur={() => void checkShopifyHandleDuplicate()}
+              onShopifyHandleChange={(value) => {
+                setShopifyHandle(value);
+                setShopifyHandleDuplicateWarning(null);
+              }}
               onSwitchVersion={switchVersion}
               regenerating={regenerating}
               regeneratingField={regeneratingField}
               seoDescription={seoDescription}
               seoTitle={seoTitle}
+              shopifyHandle={shopifyHandle}
+              shopifyStoreDomain={seoStoreDomain}
               versionIndex={versionIndex}
               versionsByField={versionsByField}
             />

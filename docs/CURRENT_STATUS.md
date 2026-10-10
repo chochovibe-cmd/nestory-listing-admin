@@ -1,3 +1,86 @@
+> **2026-10-10 HANDOFF STATUS — clean post-release checkpoint**
+> - Shopify DRAFT / ACTIVE release is complete and no longer blocks the roadmap.
+> - PR #35 is merged; repaired ACTIVE publication behavior is live in Production.
+> - No current Shopify release smoke is required.
+> - Older HOLD entries in this file are retained as history only; use the newest checkpoint at the top for current state.
+> - New Commander must still live-check GitHub/Vercel before acting because documents describe the checkpoint, not guaranteed present-time truth.
+> - Next planning context is the existing post-release roadmap, including the Owner-approved SEO Panel V2 / Handle direction under UIUX-CARD-WORKBENCH.
+>
+> **2026-10-10 CURRENT — Shopify DRAFT / ACTIVE release COMPLETE**
+> - PR #35 merged; authority is now `caae0fa7f4e0d9aba368df961ce714e02a669437`.
+> - Production `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` is READY on the exact merged authority; ACTIVE is enabled.
+> - Real smoke/recovery product `gid://shopify/Product/15424255262905` is confirmed ACTIVE and published to Online Store (`publishedOnPublication=true`, non-null `publishedAt`).
+> - Product data remained intact after recovery: 35 variants and 29 product media; no SKU/price/media regression found.
+> - Shopify release gate is closed. Normal daily user choice between DRAFT and ACTIVE is authorized.
+> - Follow-up UI/SEO work remains separate: `UIUX-CARD-WORKBENCH → SEO Panel V2` with search preview + visible/editable-but-auto-default Handle + improved descriptive auto-handle + redirect-safe public handle edits.
+>
+> **2026-10-10 CURRENT — PR #35 validated, awaiting Owner merge approval**
+> - ACTIVE publication blocker has an implemented fix in PR #35; code/CI/Preview validation is PASS.
+> - The fix discovers Shopify Online Store by channel handle, publishes through `publishablePublish`, and independently confirms publication before local ACTIVE success.
+> - Diff remains limited to 3 Shopify lifecycle/test files; DRAFT/payload/SKU/price/variant/media/DB/UI behavior was not changed.
+> - Production remains on the safe pre-fix authority with ACTIVE gate OFF. Do not re-enable ACTIVE or treat the earlier smoke product as storefront-live yet.
+> - Next step: Owner explicitly approves PR #35 merge → Commander rechecks HEAD/CI/Preview → merge → Production deployment → controlled publication recovery/smoke.
+>
+> **2026-10-10 CURRENT — ACTIVE release HOLD**
+> - DRAFT release remains PASS.
+> - First real ACTIVE smoke exposed one release blocker: Admin status becomes ACTIVE, but Online Store publication is missing.
+> - Smoke product: `gid://shopify/Product/15424255262905`; Shopify `status=ACTIVE`, `publishedAt=null`, Online Store `publishedOnPublication=false`.
+> - Product data itself passed readback: 35 variants, intended SKUs/prices, 29 main/variant media; batch completed 1/1 with 0 failures.
+> - Production ACTIVE gate is being rolled back OFF. Normal DRAFT usage may continue.
+> - Next required package: `SHOPIFY-ACTIVE-PUBLICATION-FIX` only; no unrelated Shopify/UI/data changes.
+>
+> **2026-10-10 CURRENT — ACTIVE gate ON / one real smoke pending**
+> - Owner approved ACTIVE go-live; Production ACTIVE server gate is ON.
+> - Latest Production deployment: `dpl_4dYpjBqhjpb24wEydmM4cSkDz9QJ`, READY, authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - Runtime status HTTP 200; Shopify real mode remains enabled (`shopifyMock=false`).
+> - No product was published by the environment change itself.
+> - Remaining release gate: Owner chooses one product that genuinely should go live and publishes it through normal Nestory ACTIVE flow; Commander then independently reads back Shopify status/title/SKU/price/variants/images and confirms no unintended publication.
+> - UI/UX follow-up decision: SEO card redesign includes visible/editable-but-auto-default Shopify Handle and search-result preview; see roadmap.
+>
+> **2026-10-10 CURRENT — REAL DRAFT SMOKE PASS / ACTIVE NEXT**
+> - Fresh Production Shopify DRAFT smoke passed using Pingu mini camera draft `5feb9b44-e8c1-46f7-9d06-2c354bfcd0d9`.
+> - Shopify product `gid://shopify/Product/15422660214969` read back as DRAFT with correct title, SKU `CHO-DS-PIN-PIN-001`, TWD 799, 1 default variant, and 4 main images.
+> - Publish batch completed 1/1, failed 0. No blocking defect found.
+> - Detail images staying out of product media is expected per the approved media flow.
+> - Current release blocker is now only the separate Owner-approved `SHOPIFY-ACTIVE-GO-LIVE` package.
+>
+> **2026-10-10 CURRENT — PRODUCTION DAILY DRAFT LIVE**
+> - Production: `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs` / Git `5fc18fb02741cca1b5c1c912e1ff668b7a410180` / READY.
+> - Production runtime status: HTTP 200; Supabase true; Shopify true; `shopifyMock=false`.
+> - Single-draft live-test allowlist is disabled. Normal qualifying products are no longer limited to the old VICTOR draft ID.
+> - `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false` is explicitly set; ACTIVE is still server-blocked.
+> - No real Shopify product was created during the transition itself.
+> - Next required release gate: exactly 1 fresh full-flow DRAFT smoke, then `SHOPIFY-ACTIVE-GO-LIVE` + one real ACTIVE smoke.
+>
+> **2026-10-09 CURRENT — PR #34 MERGED / PRODUCTION TRANSITION NEXT**
+> - Authority: `5fc18fb02741cca1b5c1c912e1ff668b7a410180` on `handoff/20261008-golive-spec`.
+> - PR #34 `SHOPIFY-DAILY-DRAFT` is merged. Daily live publishing source is now DRAFT-only by default; ACTIVE requires explicit `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Production is still the previous deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`; no Production env or alias switch has occurred from this merge.
+> - Current blocker is no longer source code. It is Owner-authorized Production transition: remove/disable `SHOPIFY_LIVE_TEST_DRAFT_ID`, keep ACTIVE flag false, deploy exact merged authority, then run one fresh full-flow DRAFT smoke.
+> - PASS sequence after that: `SHOPIFY-ACTIVE-GO-LIVE` → one real ACTIVE smoke → free daily DRAFT/ACTIVE use.
+> - This is a Commander handoff checkpoint after two completed packages (UI-FLOW + SHOPIFY-DAILY-DRAFT).
+>
+> **2026-10-09 CURRENT — SHOPIFY-DAILY-DRAFT SOURCE PASS**
+> - PR #34 (`5cfcc2b…`) is Draft / HOLD. Diff is limited to live-write guard + verifier + env documentation; no payload / SKU / image / pricing / DB changes.
+> - Machine validation: verify contracts/regressions PASS, typecheck PASS, build PASS, Vercel Preview READY. Preview reports `shopifyMock=true`; no real Shopify mutation occurred in this package validation.
+> - Safety result: removing the old one-draft allowlist will no longer open ACTIVE accidentally. General live publishing defaults to DRAFT-only; ACTIVE requires separate explicit server flag `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Production remains unchanged and still carries the owner-approved single-draft live-test configuration. Next action requires Owner merge approval for PR #34; Production transition is a separate explicit approval after merge.
+> - Confirmed sequence: daily DRAFT → 1 fresh full-flow DRAFT smoke → ACTIVE go-live package → 1 real ACTIVE smoke → only then free DRAFT / ACTIVE daily use.
+>
+> **2026-10-09 CURRENT STATUS — UI-FLOW PASS / next SHOPIFY-DAILY-DRAFT**
+> - Authority source：`handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f`（PR #33 merged）。
+> - `UI-FLOW-STABILIZE`：**PASS**。GitHub CI / Vercel Preview 通過，Owner runtime 驗收通過；Station3 / Export Preflight 已 portal 到卡片外層，單卡成功流程會先做既有 leaving transition 再 refresh。
+> - Production 仍是 `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`，READY；`/api/status` 200、Supabase=true、Shopify=true、`shopifyMock=false`。PR #33 merge 沒有 Production deploy。
+> - Current blocker / next package：`SHOPIFY-DAILY-DRAFT`。完成後再跑 1 件 fresh full-flow DRAFT smoke；PASS = **GO DAILY（DRAFT）**。
+> - 新 UX 決策（非 blocker）：`UIUX-FLOW-STATE` 增加 Smart Station Handoff。不要做「每成功一張就強制跳站」；優先設計成「目前站還有卡就繼續，最後一張成功後才自動帶到下一站並 highlight 該商品」，失敗不跳、批次 / Sequential 不被打斷。
+>
+> **2026-10-09 HANDOFF STATUS — PR #31 merged**
+> - Authority source: `handoff/20261008-golive-spec@9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`.
+> - Production runtime unchanged from PR #29 release: `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`, READY；`/api/status` healthy，`shopifyMock=false` 但仍受 single-draft live-test gate 限制。
+> - V1 / V1.1 core / Capture 1.2 / Queue / nonblocking regen / controlled VICTOR DRAFT E2E：PASS。
+> - Current pre-GO sequence: `UI-FLOW-STABILIZE → SHOPIFY-DAILY-DRAFT → fresh full-flow smoke → GO DAILY（DRAFT）`.
+> - Owner 已要求每完成 1–2 包就換新 Commander；下一個對話先讀 AI_START_HERE / AI_WORKING_RULES / CURRENT_STATUS / ACTIVE_TASKS，再 live-check。
+>
 > **2026-10-09 CURRENT STATUS — V1.1 已完成，等待 SHOPIFY-DAILY-DRAFT**
 > - Authority source：`handoff/20261008-golive-spec@cb4b4d122398e765aa8c2375568756978c649334`；Production deployment：`dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178`，READY，Git SHA `cb4b4d1…`。
 > - Production runtime：`/api/status` 200；Supabase / Shopify true；`shopifyMock=false`。目前仍為 single-draft live-test gate，**不是 unrestricted live write**。

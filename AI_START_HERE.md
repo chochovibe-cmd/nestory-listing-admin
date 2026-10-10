@@ -1,3 +1,104 @@
+> **2026-10-10 FINAL COMMANDER HANDOFF — milestone closed / new chat recommended**
+> - Owner approved merging the docs handoff package after Shopify DRAFT + ACTIVE release completed.
+> - Latest known live code authority before this docs-only merge: `caae0fa7f4e0d9aba368df961ce714e02a669437`; Production `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` READY; Shopify runtime real; daily DRAFT / ACTIVE released.
+> - PR #35 is merged and the ACTIVE publication contract is now: ACTIVE status + Online Store publication + positive readback before local `active_published`; failure rolls back to DRAFT.
+> - The Crayon Shin-chan smoke/recovery product is confirmed storefront-published; Shopify release is **not** an active blocker anymore.
+> - Older HOLD / smoke / pre-merge sections below are historical checkpoints. **Newest checkpoint wins.**
+> - On a new Commander chat, do not trust this recorded SHA as automatically current: first live-check GitHub branch HEAD, open PRs, Vercel Production, and active agents/reserved files.
+> - Required read order for new Commander: `AI_START_HERE.md` → `docs/AI_WORKING_RULES.md` → `docs/CURRENT_STATUS.md` → `docs/ACTIVE_TASKS.md` → `docs/COMMANDER-ROADMAP.md`.
+> - Resume the post-release roadmap; do not manufacture more Shopify release smokes without new evidence.
+> - Owner-approved queued UI/SEO direction remains `UIUX-CARD-WORKBENCH → SEO Panel V2`: Google-style preview; visible/editable-but-auto-default Handle; concise descriptive auto-handle; restore-auto action; actionable URL validation only; redirect-safe Handle changes for already-public products.
+>
+> **2026-10-10 Shopify ACTIVE release — PASS / daily DRAFT + ACTIVE released**
+> - Owner explicitly approved PR #35 merge. PR #35 merged successfully into `handoff/20261008-golive-spec`.
+> - New live authority: `caae0fa7f4e0d9aba368df961ce714e02a669437`.
+> - Production deployment `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc`: READY on exact merged authority; alias `nestory-listing-admin.vercel.app`; runtime `/api/status` HTTP 200 with real Shopify mode (`shopifyMock=false`).
+> - Production ACTIVE gate re-enabled under the Owner-approved release flow.
+> - Existing controlled smoke product `gid://shopify/Product/15424255262905` (蠟筆小新 × WildChildClub 羽毛球拍) was recovered through the same Shopify publication contract: `publishablePublish` to Online Store completed with no user errors.
+> - Independent final readback: `status=ACTIVE`, Online Store `publishedOnPublication=true`, `publishedAt=2026-10-10T14:53:18Z`; 35 variants intact; prices/SKUs intact; 29 media intact.
+> - **Release result: PASS. Normal daily Shopify DRAFT / ACTIVE choice is now allowed.** The publication guard in PR #35 remains the required contract: local `active_published` is valid only after Online Store publication readback succeeds; publication failure rolls back to DRAFT.
+> - The next normal ACTIVE listing may be observed as routine monitoring, but it is no longer a release blocker.
+>
+> **2026-10-10 SHOPIFY-ACTIVE-PUBLICATION-FIX — implementation PASS / merge HOLD**
+> - Owner authorized the repair after the real ACTIVE smoke exposed missing Online Store publication.
+> - Repair PR: **#35** `SHOPIFY-ACTIVE-PUBLICATION-FIX: publish ACTIVE products to Online Store`.
+> - Branch: `gpt/shopify-active-publication-fix-20261010`; head `508757ecea55517b19f6798951066e2cb480c0b9`.
+> - Diff gate passed: exactly 3 files — `src/lib/shopify/productLifecycle.ts`, `src/lib/shopify/publishDraftSafe.ts`, `scripts/verify-shopify-lifecycle-safety.mjs`.
+> - New contract: discover Online Store from Shopify channel handle `online_store`; no hard-coded publication ID. ACTIVE success now requires `publishablePublish` plus readback `publishedOnPublication=true` and non-empty `publishedAt` before local `active_published`.
+> - Publication failure rolls remote status back to DRAFT and must not be recorded locally as ACTIVE success.
+> - CI #1021: PASS (regression verifier, typecheck, build). Vercel Preview `dpl_DadBdv5xJAqrmAgKfcmFXwNX2izg`: READY on exact PR head.
+> - **HOLD:** PR #35 is still Draft/unmerged. Production ACTIVE gate remains OFF. Next Owner decision is whether PR #35 may merge. After merge: deploy exact merged authority, re-enable ACTIVE under the already-defined controlled release flow, reconcile/retest the selected Crayon Shin-chan product, and verify Online Store publication before closing the Shopify release gate.
+>
+> **2026-10-10 ACTIVE smoke — HOLD: Online Store publication missing**
+> - Owner selected and published real product draft `b4ac2e78-f531-4b64-b61f-a1ca60dec4c0` (蠟筆小新 × WildChildClub 羽毛球拍).
+> - Nestory batch `d240a2db-ef65-47a4-b32a-0c0b7ce57adb`: ACTIVE mode, 1/1 completed, 0 failed.
+> - Shopify product `gid://shopify/Product/15424255262905` readback: status **ACTIVE**, 35 variants, correct title/SKUs/prices, 29 product media (5 main + 24 variant). No unrelated product became ACTIVE in the same 2-hour window.
+> - **Blocker:** Shopify Online Store publication `gid://shopify/Publication/192801177785` reports `publishedOnPublication=false` and product `publishedAt=null`. The product is ACTIVE in Admin but not actually published to the Online Store.
+> - Root cause confirmed in current code: ACTIVE path ends with `setShopifyProductStatus(..., "ACTIVE")` only; it never calls Shopify publication APIs.
+> - Shopify app already has `read_publications` + `write_publications`. Current Shopify docs say single-product channel publishing should use idempotent `publishablePublish` and verify with `publishedOnPublication` / publication readback.
+> - **Safety rollback:** Production ACTIVE gate is being returned to OFF; DRAFT remains supported. Do not run another ACTIVE product until `SHOPIFY-ACTIVE-PUBLICATION-FIX` passes.
+> - The smoke product remains ACTIVE-but-unpublished; do not treat it as storefront-live yet.
+>
+> **2026-10-10 ACTIVE GO-LIVE checkpoint — gate enabled, one smoke remains**
+> - Owner explicitly approved `SHOPIFY-ACTIVE-GO-LIVE`.
+> - Production `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Production deployment `dpl_4dYpjBqhjpb24wEydmM4cSkDz9QJ` is READY on exact authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - `nestory-listing-admin.vercel.app/api/status` returned HTTP 200, Shopify connected, `shopifyMock=false`.
+> - No product was auto-published by this gate switch. Release is **HOLD only for exactly one Owner-chosen real ACTIVE smoke via the normal Nestory flow**. After that passes, normal daily DRAFT/ACTIVE choice may open.
+> - **Owner SEO/Handle decision:** later `UIUX-CARD-WORKBENCH → SEO Panel V2` must expose the already-generated Shopify handle inside the card SEO area, keep automatic generation as the default, allow manual override, show a Google-style preview, improve the generator to include a concise core product term where reliable, and preserve uniqueness. Do not make Handle a mandatory manual field. If an already-public product's handle changes, the implementation must preserve old-link behavior through Shopify URL redirect rather than silently breaking the URL.
+>
+> **2026-10-10 fresh Shopify DRAFT smoke — PASS**
+> - Owner used existing Pingu mini camera draft as the real Production smoke; no second test product is required.
+> - Nestory draft: `5feb9b44-e8c1-46f7-9d06-2c354bfcd0d9`; publish batch completed 1/1 with 0 failures in DRAFT mode.
+> - Shopify readback: `gid://shopify/Product/15422660214969` status **DRAFT**; title matched; SKU `CHO-DS-PIN-PIN-001`; price TWD 799; 1 default variant; 4 main product images present.
+> - Detail images remain excluded from Shopify product media by the already-approved media contract; this is expected, not a missing-image defect.
+> - Local Shopify product linkage is present. No release-blocking issue found.
+> - **Release gate result: DRAFT SMOKE PASS. Next package: SHOPIFY-ACTIVE-GO-LIVE.** ACTIVE still requires explicit Owner Production approval before enabling the server flag or creating a real ACTIVE product.
+>
+> **2026-10-10 Production DRAFT transition — PASS**
+> - Owner explicitly approved the Production DRAFT switch.
+> - Production env transition completed: `SHOPIFY_LIVE_TEST_DRAFT_ID` is empty/disabled; `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false` is explicitly set for Production.
+> - Production deployed exact authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180` as `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs`; deployment is READY and owns `nestory-listing-admin.vercel.app`.
+> - Live `/api/status` returned HTTP 200 with `shopify=true` and `shopifyMock=false`; Shopify is in real mode, not simulation.
+> - ACTIVE remains blocked by the server gate because the explicit ACTIVE flag is false. This package did not publish any product and did not change DB / SKU / price / images / variants.
+> - **Current blocker / next action:** run exactly 1 fresh full-flow real Shopify DRAFT smoke using an Owner-approved test product. After PASS, immediately open `SHOPIFY-ACTIVE-GO-LIVE` and run one controlled real ACTIVE smoke before broad ACTIVE freedom.
+>
+> **2026-10-09 Commander handoff after PR #34 — CURRENT**
+> - Git authority live-checked after merge: `handoff/20261008-golive-spec@5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - `UI-FLOW-STABILIZE` = PASS / merged / Owner runtime accepted (PR #33).
+> - `SHOPIFY-DAILY-DRAFT` = PASS / merged (PR #34). Source now guarantees live Shopify publish defaults to DRAFT-only when the old single-draft allowlist is absent; ACTIVE stays server-blocked unless `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Production has **not** been switched to this authority yet. Current production remains `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / Git `cb4b4d122398e765aa8c2375568756978c649334`, READY. A new authority Preview may exist, but it is not Production.
+> - Current next action is a separate **Production DRAFT transition package**: Owner must explicitly approve before changing Production env / deployment. Transition should remove/disable the single-draft allowlist, keep `SHOPIFY_ACTIVE_PUBLISH_ENABLED=false`, deploy exact merged authority, then run exactly 1 fresh full-flow DRAFT smoke.
+> - If that smoke PASS: immediately do `SHOPIFY-ACTIVE-GO-LIVE` → one Owner-approved real ACTIVE smoke → only then free daily DRAFT / ACTIVE choice.
+> - Owner workflow cadence: two packages are now complete; this is the recommended checkpoint to switch to a new Commander chat. New chat first reads AI_START_HERE → AI_WORKING_RULES → CURRENT_STATUS → ACTIVE_TASKS, then live-checks GitHub / Vercel before action.
+>
+> **2026-10-09 SHOPIFY-DAILY-DRAFT checkpoint — SOURCE PASS / PRODUCTION HOLD**
+> - Product authority remains `handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f` until PR #34 is explicitly approved and merged.
+> - Draft PR #34 head: `gpt/shopify-daily-draft-20261009@5cfcc2b0dc492cdde52c5a798369e243cd193919`.
+> - PR #34 changes only 3 files: `src/lib/shopify/liveTestGuard.ts`, `scripts/verify-shopify-live-test-guard.mjs`, `.env.example`.
+> - New contract: when live Shopify is enabled and no single-draft allowlist is configured, normal publishing is **DRAFT-only by default**. ACTIVE stays server-blocked unless `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - Existing `SHOPIFY_LIVE_TEST_DRAFT_ID` remains stricter: one draft only + DRAFT-only, even if the future ACTIVE flag is true.
+> - CI verify / typecheck / build = PASS；Vercel Preview `dpl_7ozjq7iJHnr74GwWqfYfWBzvATfD` = READY；Preview `/api/status` confirms `shopifyMock=true`, so this validation did not write real Shopify.
+> - Production is unchanged: `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / `cb4b4d122398e765aa8c2375568756978c649334`；live daily DRAFT is **not yet enabled**.
+> - Agreed release order is now explicit: `SHOPIFY-DAILY-DRAFT → fresh DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → one real ACTIVE smoke → free daily DRAFT/ACTIVE choice`. ACTIVE no longer sits in a distant backlog.
+> - No merge / Production deploy / env switch without explicit Owner approval.
+>
+> **2026-10-09 Commander checkpoint after PR #33 — CURRENT**
+> - Git authority live-checked after merge: `handoff/20261008-golive-spec@102565df789a035e6b8ae415ce7b694b919d927f`.
+> - `UI-FLOW-STABILIZE` = **PASS / MERGED**（PR #33）。Owner 已在 Preview 實測：收合卡發布／匯出 modal、Export Preflight modal、單卡成功離場皆通過；失敗不應假消失的 source guard 保留。
+> - Production 仍未被本包改動：deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / Git `cb4b4d122398e765aa8c2375568756978c649334`，READY；`/api/status` 200、Supabase=true、Shopify=true、`shopifyMock=false`，但日常真寫入仍受現有 live-test gate 限制。
+> - **下一個真正施工包：`SHOPIFY-DAILY-DRAFT`**。完成 source / CI / Preview 後仍需 Owner 明確批准 Production；之後只跑 1 件 fresh full-flow DRAFT smoke，PASS 才標記 **GO DAILY（DRAFT）**。
+> - Owner 2026-10-09 新 UX 想法已排入 `UIUX-FLOW-STATE`：**Smart Station Handoff（聰明接棒）**。暫定規則是「目前站還有其他工作就留在原站；最後一張成功處理完才自動切下一站並 highlight 剛移動的卡；失敗不跳；批次 / Sequential 不在中途亂切」。這是 post-GO 優化，不插隊目前 release gate。
+> - 文件是 handoff，不是 runtime 真相；新 Commander 仍必須先 live-check GitHub / Vercel。
+>
+> **2026-10-09 Commander handoff after PR #31 — CURRENT**
+> - Git authority: `handoff/20261008-golive-spec@9eff0659f4a2c936b550ea5bc72ba69aa1a0567a`（PR #31 已 merge）。
+> - Production 仍是 deployment `dpl_FgaFr9nCf2bHTbpTrbC4cQpCA178` / Git SHA `cb4b4d122398e765aa8c2375568756978c649334`，READY；`/api/status` = Supabase true / Shopify true / `shopifyMock=false`。PR #30/#31 都是 docs-only，沒有改 Production runtime。
+> - Owner 新節奏：每完成 1–2 個 package 就換新 Commander 對話；換前做 repo handoff。
+> - 下一個真正施工包：`UI-FLOW-STABILIZE`。完成後做 `SHOPIFY-DAILY-DRAFT` + 1 件 fresh full-flow smoke；PASS = **GO DAILY（DRAFT）**。
+> - 完整後續 roadmap 不只 COPY-SAFE / PERF：另含 PB2 文案策略、規格/Variant UIUX、ResultCard/Workbench UIUX、流程狀態 UIUX、Pricing DB、Schedule V1.2、Shopify ACTIVE/publication、reliability/data hardening、browser E2E/ops hardening、Capture filter、Video/advanced image、CSS/scouting later。詳見 `docs/COMMANDER-ROADMAP.md` 最上方 2026-10-09 FULL RECONCILIATION。
+> - 新對話不得用本段 SHA 當永久真相；第一步仍要 live-check GitHub / Vercel。
+>
 > **2026-10-09 接續節奏與 roadmap 補正**
 > - Owner 改採「每完成 1–2 個 package 就換新 Commander 對話」；每次換對話前必須做 repo handoff，不依賴聊天摘要。
 > - GO DAILY 前現在有兩個窄包：先 `UI-FLOW-STABILIZE`（發布/匯出 modal portal + 成功後卡片離場回饋同步），再 `SHOPIFY-DAILY-DRAFT`（一般商品 DRAFT-only 真寫入、ACTIVE 後端 hard-block）。最後跑 1 件 fresh full-flow smoke；PASS = 可正式每天用 Nestory 上架到 Shopify DRAFT。

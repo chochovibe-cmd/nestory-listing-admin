@@ -1,3 +1,121 @@
+> **2026-10-10 ROADMAP — Shopify release gates COMPLETE**
+> - Production DRAFT + real DRAFT smoke + ACTIVE publication repair + real Online Store publication recovery are PASS.
+> - Normal daily DRAFT / ACTIVE choice is released.
+> - Do not keep manufacturing Shopify smoke packages without new evidence.
+> - Resume post-release roadmap. Owner-approved SEO follow-up remains `UIUX-CARD-WORKBENCH → SEO Panel V2`: Google-style preview; visible/editable-but-auto-default Handle; concise descriptive automatic Handle; restore-auto action; actionable URL validation only; redirect-safe handle changes for already-public products.
+>
+> **2026-10-10 RELEASE BLOCKER INSERTED — SHOPIFY-ACTIVE-PUBLICATION-FIX**
+> - ACTIVE status alone is not sufficient. The real smoke proved the product can be ACTIVE in Admin while not published to Online Store.
+> - Release sequence is now: DRAFT PASS → **ACTIVE publication fix** → controlled recovery/smoke on the already-selected product if safe → verify Online Store publication → then release normal daily DRAFT/ACTIVE choice.
+> - Do not reopen DRAFT work and do not fold SEO Panel V2 into this repair.
+> - Shopify 2026 publishing contract: use `publishablePublish` for single-product publication, and verify publication readback before local success. App scopes already include `read_publications` / `write_publications`.
+>
+> **2026-10-10 ROADMAP UPDATE — ACTIVE final smoke + SEO Panel V2**
+>
+> **Release first:** ACTIVE gate is ON. Run exactly one Owner-chosen real ACTIVE smoke through normal Nestory, verify Shopify readback, then close the Shopify release gate.
+>
+> **Later UIUX package: `UIUX-CARD-WORKBENCH → SEO Panel V2` (Owner-approved direction)**
+> 1. Add a compact Google-style search preview using SEO title + product URL + meta description.
+> 2. Show Shopify Handle in the SEO tab as `domain/products/[handle]`: domain/prefix read-only, handle editable. Default remains automatic; manual editing is optional, not required for every product.
+> 3. Improve automatic Handle generation from the current deterministic IP/character/type + unique suffix toward a concise descriptive identity that may include a reliable core product term (for example `pingu-mini-camera-keychain-xxxxxx`) without stuffing the full SEO title. Keep lowercase ASCII/hyphen normalization, max length, uniqueness suffix, and deterministic fallback.
+> - Provide a small “restore auto suggestion” action after manual override.
+> - Warn only on actionable URL problems (invalid chars, excessive length, collision/duplicate), not generic SEO red-light scoring.
+> - For products already public on Shopify, changing Handle must create/preserve an old→new URL redirect; never silently break existing links.
+> - This is a UIUX/SEO follow-up, **not** a reason to delay the current ACTIVE release smoke.
+>
+> **2026-10-10 RELEASE GATE — DRAFT COMPLETE**
+> - Production DRAFT cutover + one real DRAFT smoke are both PASS.
+> - Do not spend another package on DRAFT validation unless new evidence appears.
+> - Next release step is immediately `SHOPIFY-ACTIVE-GO-LIVE` → one controlled real ACTIVE smoke → free daily DRAFT/ACTIVE choice.
+>
+> **2026-10-10 RELEASE GATE ADVANCED**
+> - Production DRAFT transition completed successfully on `dpl_Fcx2cdy683zyJwoBMyqmJ8ra7kXs` at authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`.
+> - Current shortest release path is now: **1 fresh real DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → 1 real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.
+> - The DRAFT smoke is a release gate, not a redesign package: one fresh Owner-approved product only, then verify Shopify DRAFT status, product identity, variants, SKU, price, images/media and local linkage.
+> - ACTIVE remains explicitly OFF until the next package is separately authorized.
+>
+> **2026-10-09 RELEASE CHECKPOINT AFTER PR #34**
+> - `UI-FLOW-STABILIZE` and `SHOPIFY-DAILY-DRAFT` are both completed/merged. Do not reopen them.
+> - Current shortest release path is now: **Owner-approved Production DRAFT transition → 1 fresh DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → 1 real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.
+> - Production DRAFT transition is operational/configuration work, not a new feature redesign: use merged authority `5fc18fb02741cca1b5c1c912e1ff668b7a410180`, remove/disable the old single-draft allowlist, keep ACTIVE flag false, verify live runtime, then smoke one fresh product.
+> - ACTIVE package remains immediately next after DRAFT smoke and stays ahead of OBS-QUEUE / COPY / UIUX / PERF work.
+>
+> **2026-10-09 RELEASE ORDER DECISION — DRAFT THEN ACTIVE**
+> - Owner confirmed the desired end state is not DRAFT-only forever; the target is normal daily freedom to choose Shopify DRAFT or ACTIVE.
+> - Safety sequencing is now fixed as: **SHOPIFY-DAILY-DRAFT → fresh DRAFT smoke → SHOPIFY-ACTIVE-GO-LIVE → one real ACTIVE smoke → free daily DRAFT/ACTIVE choice**.
+> - `SHOPIFY-ACTIVE-GO-LIVE` moves directly behind the DRAFT smoke and must not be left behind OBS-QUEUE / COPY / UIUX / PERF work.
+> - PR #34 implements the prerequisite server safety gate: live publishing defaults to DRAFT-only when no one-draft test allowlist is present; ACTIVE requires explicit `SHOPIFY_ACTIVE_PUBLISH_ENABLED=true`.
+> - The future ACTIVE package should prefer validation + explicit enablement over rewriting the existing lifecycle. It must verify customer-facing visibility / sales-channel publication, variants, price, inventory, images, and rollback/unpublish behavior with one Owner-approved product before broad ACTIVE freedom.
+>
+> **2026-10-09 ROADMAP CHECKPOINT AFTER PR #33**
+> - `UI-FLOW-STABILIZE` 已 PASS 並 merge（PR #33 / authority `102565df789a035e6b8ae415ce7b694b919d927f`）；不要重做。
+> - GO DAILY 前現在只剩：`SHOPIFY-DAILY-DRAFT → 1 fresh full-flow DRAFT smoke → GO DAILY（DRAFT）`。
+> - Owner 新增流程優化想法，正式併入 post-GO `UIUX-FLOW-STATE`：**Smart Station Handoff**。
+>   - 不採「每處理一張就強制跳下一站」，避免多件連續審核時來回跳站。
+>   - 建議規則：目前站仍有其他可處理卡片 → 留在目前站；最後一張成功離站 → 自動切到合理下一站並 highlight 剛移動的商品。
+>   - failure 不切站；batch / Sequential review 不中途切站，完成 queue 後才評估是否 handoff。
+>   - 可重用既有 stage state / session preference / jump + highlight 能力；真正施工前重新 audit current source，另開窄包驗證，不阻擋 GO DAILY。
+>
+> **2026-10-09 FULL RECONCILIATION｜Fable 完整規劃重新對表**
+>
+> 這一節是把 Fable 對話、2026-09-30 Commander audit、UIUX audit 與 2026-10-09 current source/runtime 重新對表後的完整剩餘路線。前一版只突出 PB2 + UIUX，仍會讓部分後段 hardening 看不見；以下補齊，但**不代表全部都要在 GO DAILY 前完成**。
+>
+> ### A. GO DAILY 前 — 只剩 2 包 + 1 次 smoke
+>
+> 1. **UI-FLOW-STABILIZE**  
+>    - Station3 Publish / Export Preflight modal portal：收合卡直接開 modal 不得被 transform / overflow 裁切。  
+>    - 成功操作後 Toast 與卡片離場同時發生；API 未成功前不得假消失。  
+>    - 這包只處理已重現的 flow bug；完整 focus trap / accessibility 不在此包擴 scope。
+>
+> 2. **SHOPIFY-DAILY-DRAFT**  
+>    - 一般合格商品可真寫 Shopify DRAFT。  
+>    - ACTIVE 在 server 端 hard-block。  
+>    - 不再依賴單一 VICTOR allowlist 才能工作；保留 role / confirm / idempotency / recovery safety。
+>
+> 3. **Fresh full-flow smoke**  
+>    - 淘寶擷取 → Queue 生成 → 文案審核 → 規格/圖片確認 → Shopify DRAFT → Shopify 回讀。  
+>    - PASS = **GO DAILY（DRAFT）**；不用等下列優化。
+>
+> ### B. GO DAILY 後 — 主要產品優化主線
+>
+> 1. **OBS-QUEUE**：生成中 / 排隊中 / 失敗清單；只讀 existing `generation_runs`，不重做 Runner。
+> 2. **COPY-SAFE**：單欄重生走 Product Brief；copyLength 真正生效；Miffy Quality Floor 先偵測；正文 / spec 使用同一 canonical evidence/spec basis，避免一邊有資料一邊漏；正常生成不預設增加一次 AI。
+> 3. **PB2-COPY-STRATEGY**：Product Strategy Brief；收藏型 / 功能型分流；Owner 版 adaptive title；規格價值轉譯；品類知識包；真實商品 Golden Eval。Market Context 只視需要作 PB2 後段研究層，不先塞進每次生成 prompt。
+> 4. **UIUX-SPEC-VARIANT**：規格維度 / 規格值 / Variant 編輯效率；desktop 重排；缺成本 / 缺圖摘要；批次處理；mobile / desktop 一致性。
+> 5. **UIUX-CARD-WORKBENCH**：ResultCard / Workbench 層級與減法；照片 / 標題 / 下一步第一層，價格 / 待處理第二層，tag / 時間第三層；保留現有雙欄與 Sequential Review。
+> 6. **UIUX-FLOW-STATE**：warning 跳欄位；裝置暫存 / Nestory 儲存 / Shopify sync 狀態分清；來源 vs 生成稿對照；批次部分失敗可處理；手機入口可發現；Dashboard 待辦優先。
+> 7. **PERF P1A**：lazy load 未立即使用的大型 JS；縮圖/原圖與 matchMedia 一併檢查。
+> 8. **PERF P1B**：工作台摘要先載、展開再拿 details；archived 延後；解決 40 active + 50 archived + images + variants 一次搬進瀏覽器。
+> 9. **CAPTURE-FILTER**：只排除高信心推薦 / 活動 / 廣告 DOM 區塊；不確定圖片保留人工刪。
+> 10. **PRICING-DB**：把匯率 / 係數從裝置 localStorage 收斂到 server-side canonical setting，避免桌機 / iPhone 算不同價格。
+> 11. **SCHEDULE V1.2**：從舊 PR #15 取需求 / data model，基於 latest HEAD 重接 scheduling UI / DB / cron / execution。
+>
+> ### C. 後段 reliability / go-live / ops，不得再被短清單漏掉
+>
+> - **SHOPIFY-ACTIVE-GO-LIVE**：DRAFT 日常使用之後才做。驗證 ACTIVE 與 Shopify publication / sales channel 是兩件事；最後以顧客端可見、正確 variants / price / image 為準。
+> - **DATA-RELIABILITY**：施工前重新 audit current source；包括 Variant 儲存原子性/並發衝突、重抓資料要顯示差異並保護人工修改、Shopify 人工修改 conflict、未知網路結果/429/timeout、遠端成功但本地 audit 回寫失敗的誠實狀態。V1 已做的 recovery 不重寫。
+> - **TEST-OPS-HARDENING**：最小 browser E2E 關鍵旅程、斷線/重連提示、備份與 rollback 方法、error/operation ID 可追查、cost/health 告警。這些是可靠性投資，不是 GO DAILY blocker。
+> - **ACCESSIBILITY/POLISH**：完整 focus trap、背景不可操作、鍵盤/長內容/手機抽屜等 modal consistency；與已重現的 portal bug 分開。
+> - **VIDEO / ADVANCED IMAGE**：PR #12 影片與後續圖像工具，依額度分包。
+> - **CSS P2**：逐元件收斂歷史 CSS，先做桌機/手機/三主題 baseline；禁止大掃除。
+> - **SCOUTING / OFFLINE CLOUD QUEUE**：後排產品功能；目前不是日常上架 blocker。
+> - 舊 `db172df` 小修（多色白名單、`適閤→適合`）先查 current HEAD 是否已包含，不盲目 cherry-pick。
+>
+> ### D. 舊計畫已完成 / 被新架構取代，不要重做
+>
+> - generation progress 改 draftId / runId：完成。
+> - persistent generation queue + concurrency：完成。
+> - capture 圖片背景補抓 / extension 防重按 + 商品名回饋：完成。
+> - full / field regeneration 非阻塞 queue：完成。
+> - V1 publish safety / migration gates / controlled DRAFT E2E：完成。
+> - PR #14 / #15：只作 reference，不整包 merge。
+>
+> ### E. 建議順序
+>
+> **UI-FLOW-STABILIZE → SHOPIFY-DAILY-DRAFT → fresh smoke → GO DAILY → OBS-QUEUE → COPY-SAFE → PB2-COPY-STRATEGY → UIUX-SPEC-VARIANT → UIUX-CARD-WORKBENCH → UIUX-FLOW-STATE → PERF P1A → PERF P1B → CAPTURE-FILTER → PRICING-DB / SCHEDULE V1.2 → SHOPIFY-ACTIVE-GO-LIVE → DATA-RELIABILITY / TEST-OPS-HARDENING → VIDEO / advanced image → CSS / scouting later**
+>
+> 以上順序是 default，不是鐵律；真正施工前仍依 Owner 當時痛點與檔案衝突重排。原則是不讓後段完整清單拖住 GO DAILY。
+>
 > **2026-10-09 ROADMAP ADDENDUM｜補回 Fable 對話中被壓縮掉的文案 / UIUX 主線**
 >
 > 2026-10-09 Owner 指出前一版 active roadmap 把「文案品質策略」與「UIUX / 規格區」壓得太扁。重新對照 Fable 交接內容、既有 UIUX audits 與 current source 後，正式補回以下獨立 packages。這些是 **GO DAILY 後的優化主線**，不可被 COPY-SAFE 或 PERF 幾個名字吃掉。

@@ -1,3 +1,33 @@
+> **2026-10-11 ACTIVE TASKS — validation debt + approved reliability insert**
+>
+> **Live authority**
+> - `handoff/20261008-golive-spec@87d759395beb374ab839b7a5265d14cebbb6d1ae`
+> - Production remains `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` / `caae0fa…`; do not treat Preview availability as Production approval.
+>
+> **Open work already started**
+> 1. PR #36 — **SEO Panel V2-A｜Google 預覽 + 可編輯 Handle**
+>    - Draft/Open; no Preview exists yet.
+>    - Next: Vercel Preview → Owner runtime QA → merge decision.
+>    - Reserved runtime files: `src/components/listing/ResultCard.tsx`, `src/components/listing/result-card/ResultCardSeoPanel.tsx`.
+> 2. PR #38 — **OBS-QUEUE｜看得懂哪些 AI 任務排隊、處理中、失敗**
+>    - Draft/Open; no Preview exists yet.
+>    - Vercel blocker is cleared, so Preview can now be created.
+>    - **Merge HOLD:** current underlying status semantics can count “內容已生成、只是缺 IP/tag 待人工補” as generation failure. Fix/clarify that contract in `STATUS-SEMANTICS` before accepting its red failure count as final.
+>    - Reserved runtime files: `src/app/api/generation-queue/route.ts`, `src/components/listing/GenerationQueueOverview.tsx`, `src/components/listing/QuickPreviewPanel.tsx`, `scripts/verify-v11-generation-queue.mjs`.
+>
+> **Owner-approved new implementation sequence (2026-10-11)**
+> - `CAPTURE-TRUTH` — 淘寶/天貓價格要能分清原價、目前可買價、條件優惠價；每個 SKU 的價格來源要誠實；排除「勿拍/資訊說明」等非商品 SKU；重抓時不能讓錯的舊值因為“非空白”永遠留著。
+> - `IMAGE-INTEGRITY` — 刪圖前先處理 Variant 綁定，DB 成功後才刪 Storage；修復/對帳目前已斷掉的款式圖引用。
+> - `PRICING-RULES` — 驗證公式真的套用；修正不合理美化價階（例如 2280→4480 的巨大跳階）並加偏離公式的安全限制。
+> - `STATUS-SEMANTICS` — 分開「AI/API 真失敗」與「生成完成但資料待補」，並理順 IP → 角色 → tag 建檔流程。
+> - `REVIEW-GUARD` — 統一偵測文案版本、Tags、SKU、類型、規格等尚未儲存修改；核准時用「儲存並核准」保護。
+> - `FLOW/PREFS` — 首次預設單一售價 + 潮巢導購版；之後記住上次選擇；設定有明確已儲存回饋；失敗卡可處理；減少生成後整頁閃動。
+> - Then return to planned `COPY-SAFE → PB2-COPY-STRATEGY → UIUX-SPEC-VARIANT → UIUX-CARD-WORKBENCH → UIUX-FLOW-STATE → PERF…`.
+>
+> **Roadmap discipline**
+> - Roadmap is the default sequence, not an immutable law.
+> - Owner may insert new ideas and Commander may recommend reordering, but changes must be written down and surfaced to Owner; never silently skip an existing package.
+>
 > **2026-10-10 HANDOFF — no active Shopify release blocker**
 > - Shopify release package is closed PASS.
 > - Do not reopen DRAFT/ACTIVE release work unless new live evidence shows a regression.

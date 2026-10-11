@@ -11,6 +11,13 @@ export type CaptureVariantFlat = {
   option3_name?: string | null;
   option3_value?: string | null;
   cny_price?: number | null;
+  /** CAPTURE-TRUTH-A: promotional/coupon price is evidence only, never default cost. */
+  promo_price_cny?: number | null;
+  /** Provenance for the non-discount base cost captured for this SKU. */
+  price_source?: string | null;
+  promo_price_source?: string | null;
+  price_confidence?: "high" | "structured_pair" | "structured_primary" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
+  price_candidates?: Array<{ key?: string; source?: string; value: number; kind?: string }>;
   sku?: string | null;
   /** CAP-2.6 / 88: SKU option thumb URL (server fetches → product_images variant + image_id). */
   image_url?: string | null;
@@ -27,6 +34,15 @@ export type CaptureMeta = {
    * 進 raw_capture.client_meta + 白話 warning；price_cny 應為原價。
    */
   promo_price_cny?: number | null;
+  /** Product-level price provenance; stored inside raw_capture.client_meta. */
+  price_source?: string | null;
+  price_confidence?: "high" | "structured_pair" | "structured_primary" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
+  price_candidates?: Array<{ key?: string; source?: string; value: number; kind?: string }>;
+  price_conflict?: {
+    url_price_cny?: number | null;
+    selected_sku?: string | null;
+    message?: string | null;
+  } | null;
 };
 
 /** Incoming body from extension / curl. Missing fields = not captured (do not invent). */

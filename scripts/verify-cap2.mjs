@@ -406,6 +406,59 @@ check("ICE: 2-axis shoe SKU without DOM valueItem still flattens", () => {
   assert.equal(body.params["货号"], "SHOE-001");
 });
 
+check("CAPTURE-TRUTH-A: product price never becomes a fake SKU price", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">unknown sku prices</h1>' +
+    '<div class="originPrice--x">优惠前 ¥39.9</div>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"},{"vid":"b","name":"B"}]}],' +
+    '"skus":[{"propPath":"1:a","skuId":"s1"},{"propPath":"1:b","skuId":"s2"}]},' +
+    '"skuCore":{"sku2info":{"s1":{"quantity":9},"s2":{"quantity":8}}}}}}}}};' +
+    "</script></body></html>";
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://detail.tmall.com/item.htm?id=unknown-sku",
+    host: "detail.tmall.com"
+  });
+  assert.equal(body.price_cny, 39.9);
+  assert.equal(body.variants_flat.length, 2);
+  assert.ok(body.variants_flat.every((v) => v.cny_price == null));
+  assert.ok(
+    body.sku_table.rows.every((row) => row.price == null),
+    "synthetic sku_table must not copy product price into every row"
+  );
+  assert.ok(
+    body.capture_meta.warnings_from_client.some((w) => /個別未優惠價未完整取得/.test(w)),
+    "must explain that per-SKU prices are incomplete"
+  );
+});
+
+check("CAPTURE-TRUTH-A: embedded cartParam JSON can supply per-SKU base and promo", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">embedded sku prices</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"},{"vid":"b","name":"B"}]}],' +
+    '"skus":[{"propPath":"1:a","skuId":"s1"},{"propPath":"1:b","skuId":"s2"}]},' +
+    '"skuCore":{"sku2info":{' +
+    '"s1":{"cartParam":"{\\\"originalPrice\\\":\\\"158\\\",\\\"couponPrice\\\":\\\"143.26\\\"}"},' +
+    '"s2":{"buyExParams":"{\\\"listPrice\\\":\\\"198\\\",\\\"promoPrice\\\":\\\"169\\\"}"}' +
+    '}}}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://detail.tmall.com/item.htm?id=embedded",
+    host: "detail.tmall.com"
+  });
+  const a = body.variants_flat.find((v) => v.sku === "s1");
+  const b = body.variants_flat.find((v) => v.sku === "s2");
+  assert.equal(a.cny_price, 158);
+  assert.equal(a.promo_price_cny, 143.26);
+  assert.match(String(a.price_source), /embedded/);
+  assert.equal(b.cny_price, 198);
+  assert.equal(b.promo_price_cny, 169);
+});
+
 check("CAPTURE-TRUTH-A: ICE per-SKU base + promo prices stay separate", () => {
   const html =
     '<!doctype html><html><body><h1 class="MainTitle--x">dual price item</h1>' +

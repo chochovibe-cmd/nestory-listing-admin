@@ -1,3 +1,9 @@
+> **2026-10-11 CAPTURE-TRUTH-A owner authority**
+> - Stable cost policy: Nestory prices from the seller's non-discount/pre-promo price. Promo, coupon, member, and after-discount prices are retained as reference evidence only and are not the automatic cost basis.
+> - SKU policy: capture each SKU's base/original price plus promo evidence where the loaded Taobao/Tmall page exposes them. When an SKU price is not independently captured, keep the provenance honest (inherited/unknown) rather than copying the product price and presenting it as SKU truth.
+> - Performance policy: improve correctness from data already loaded in DOM / ICE / skuCore. Do not add another network round-trip or AI call just to enrich prices unless Owner later authorizes that tradeoff.
+> - PR #40 implements the first narrow package: price provenance, per-SKU base/promo separation, contradiction detection, and inherited-price semantics. Missing-price DB schema normalization remains a separate package because `product_drafts.cny_price` is currently NOT NULL / >0.
+>
 > **2026-10-11 OBS-QUEUE runtime review — postponed behind P0 correctness**
 > - Owner reviewed PR #38 Preview and rejected the current presentation as merge-ready: placement is awkward, the monitoring block consumes too much space, and long item/error content does not scale well.
 > - Keep PR #38 as reference only for now. Do not polish/merge it before the approved P0 correctness work.

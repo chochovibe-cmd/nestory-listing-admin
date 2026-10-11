@@ -1,3 +1,12 @@
+> **2026-10-11 CAPTURE live-use checkpoint — price truth + Tmall detail images**
+> - PR #40 `CAPTURE-TRUTH-A` is the active price-correctness package. Latest validated head before final smoke: `8fd8026ec07f0ad5740e1947476cd4e696adcf7b`; CI PASS and Preview `dpl_6RaRwCLGGKCWc51c89zZr7o8S94Q` is READY.
+> - Live Hollybox/Eevee testing proved that modern Taobao/Tmall may expose SKU ids/names/images while **not exposing a full per-SKU price table in `skuCore.sku2info`**. Product-level/base price must never be copied into every SKU row and presented as independently captured.
+> - PR #40 now keeps synthetic SKU-table prices empty unless independently captured, parses already-loaded `cartParam / buyExParams` style JSON/query data for explicit base/promo fields, and preserves the no-extra-fetch/XHR/AI performance rule.
+> - Earlier practical capture used the PR #40 extension against the old Production API, so it did not validate the new backend provenance path end-to-end. Final capture smoke must pair the latest test extension with its Preview API.
+> - Hollybox detail-image loss is a separate pre-existing Tmall capture gap, not evidence that PR #40 broke images: the capture payload itself had `detail_image_urls=null` while main + variant images succeeded.
+> - PR #41 `CAPTURE-IMAGE` is stacked on PR #40 to avoid overlapping concurrent writes. It expands modern Tmall detail selectors, unions multiple detail containers, and uses bounded already-loaded ICE rich-detail fallback only when normal DOM detail capture returns zero. No auto-scroll or extra network request.
+> - PR #41 remains Draft / no merge; final CI + real Hollybox smoke are required.
+>
 > **2026-10-11 Owner pricing rule — CAPTURE-TRUTH-A**
 > - Cost basis rule is confirmed: use the **non-discount / pre-promo price** as Nestory default cost. Promo / coupon / after-discount prices may be captured and stored as evidence, but must not automatically drive pricing because they can change.
 > - Multi-variant products should capture each SKU's own base price and promo/coupon evidence whenever available. A missing per-SKU base price must be represented as inherited/unknown, never presented as independently captured.

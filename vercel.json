@@ -1,5 +1,7 @@
 {
-  "regions": ["syd1"],
+  "regions": [
+    "syd1"
+  ],
   "crons": [
     {
       "path": "/api/cron/fx",
@@ -9,5 +11,13 @@
       "path": "/api/cron/stuck-batches",
       "schedule": "0 17 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "gpt/**": false,
+      "feat/**": false,
+      "docs/**": false,
+      "agent/**": false
+    }
+  }
 }

@@ -1143,15 +1143,17 @@
     if (!main_image_urls.length) warnings.push("main_image_urls: 未抓到");
 
     var detailNodes = allMatchesAcrossSelectors(doc, S.detailImages);
-    var detailIceUrls = detailImageUrlsFromIce(iceRes, href, dom);
-    var detail_image_urls = dom.uniqueUrls(
-      detailNodes
-        .map(function (el) {
-          return dom.imgUrlFromEl(el, href);
-        })
-        .concat(detailIceUrls),
+    var detailDomUrls = dom.uniqueUrls(
+      detailNodes.map(function (el) {
+        return dom.imgUrlFromEl(el, href);
+      }),
       20
     );
+    // Preserve capture speed: only scan bounded ICE rich-detail data when the
+    // normal DOM path produced zero usable detail images.
+    var detailIceUrls =
+      detailDomUrls.length === 0 ? detailImageUrlsFromIce(iceRes, href, dom) : [];
+    var detail_image_urls = dom.uniqueUrls(detailDomUrls.concat(detailIceUrls), 20);
     var mset = {};
     main_image_urls.forEach(function (u) {
       mset[u] = true;

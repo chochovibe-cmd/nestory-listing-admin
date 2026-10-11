@@ -419,7 +419,7 @@
     var nodes = 0;
     var MAX_NODES = 4000;
     var MAX_OUT = 20;
-    var DETAIL_PATH_RE = /desc|detail|rich.?text|content/i;
+    var DETAIL_PATH_RE = /desc|detail|description|rich.?text|rich.?content/i;
     var IMAGE_URL_RE = /(?:https?:)?\/\/[^"'\\\s<>]+?\.(?:jpe?g|png|webp|gif)(?:\?[^"'\\\s<>]*)?/gi;
 
     function add(raw) {

@@ -1,3 +1,15 @@
+> **2026-10-11 COMMANDER CHECKPOINT — live-use audit + roadmap insertion approved**
+> - Live Git authority rechecked: `handoff/20261008-golive-spec@87d759395beb374ab839b7a5265d14cebbb6d1ae` (PR #37 merged).
+> - Vercel's prior Hobby build-rate/quota blocker is no longer active: latest handoff Preview `dpl_EnzH362gm6uyAwaaiSbTwJBAsdgh` is `READY` on exact `87d7593…`. Production remains `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` on runtime code `caae0fa…`.
+> - PR #36 `SEO Panel V2-A` is still Draft/Open and has **no Vercel Preview yet**. PR #38 `OBS-QUEUE` is still Draft/Open and also has **no Vercel Preview yet**.
+> - Owner approved inserting the 2026-10-11 live-use reliability findings ahead of COPY work. Do not silently skip old roadmap items: when ordering changes, record the old/new order and reason in Roadmap/Active Tasks.
+> - New implementation priority before COPY: `CAPTURE-TRUTH → IMAGE-INTEGRITY → PRICING-RULES → STATUS-SEMANTICS → REVIEW-GUARD → FLOW/PREFS`, then return to `COPY-SAFE → PB2-COPY-STRATEGY` and the remaining UIUX/PERF/Schedule roadmap.
+> - `CAPTURE-TRUTH` covers price-source confidence, real per-SKU prices, non-sale/info SKU filtering, missing-price honesty, and safe re-capture updates.
+> - `IMAGE-INTEGRITY` covers safe delete ordering / variant bindings plus reconciliation of currently broken image references; the audit found at least three recent variant-image DB rows whose Supabase Storage object is missing.
+> - `STATUS-SEMANTICS` is a dependency for trusting OBS-QUEUE's red failure count: generated content that merely needs IP/tag correction must not be indistinguishable from a true AI/API generation failure.
+> - No P0/P1 repair above has been implemented yet. No Production / Shopify / DB write is authorized by this checkpoint.
+> - Immediate validation debt now that Vercel is available: create Preview(s) for PR #36 and PR #38; PR #36 can proceed to Owner runtime QA, while PR #38 remains merge-HOLD until its displayed failure semantics are reconciled with `STATUS-SEMANTICS`.
+>
 > **2026-10-10 FINAL COMMANDER HANDOFF — milestone closed / new chat recommended**
 > - Owner approved merging the docs handoff package after Shopify DRAFT + ACTIVE release completed.
 > - Latest known live code authority before this docs-only merge: `caae0fa7f4e0d9aba368df961ce714e02a669437`; Production `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` READY; Shopify runtime real; daily DRAFT / ACTIVE released.

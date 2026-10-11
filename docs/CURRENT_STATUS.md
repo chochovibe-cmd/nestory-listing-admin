@@ -1,3 +1,11 @@
+> **2026-10-11 CAPTURE STATUS — code/CI ready, practical smoke next**
+> - CAPTURE-TRUTH-A PR #40: Draft/Open, CI PASS, validated head `8fd8026…`.
+> - CAPTURE-IMAGE PR #41: Draft/Open, stacked on #40, CI PASS, validated head `3ac5c62…`.
+> - Combined Preview `dpl_9pdCVuzm8AJJwR5xoLGQBaZPku9d` is READY and safe for capture testing (`shopifyMock=true`).
+> - Confirmed root cause for repeated SKU prices: modern Tmall may provide SKU identity without a complete per-SKU price table; old synthetic `sku_table` copied the product price into every row. That manufactured completeness has been removed.
+> - Confirmed Hollybox detail-image root cause: the extension payload itself contained no detail URLs while main/variant image fetch succeeded. Tmall selector coverage / lazy loaded-data shape was incomplete; PR #40 did not regress the image-storage pipeline.
+> - Next action: one paired live smoke with latest PR #41 extension pointed at the combined Preview API. Validate SKU-price truth, detail images, capture speed, and backend inherited-price provenance. No Production / merge until Owner accepts.
+>
 > **2026-10-11 CURRENT STATUS — Vercel recovered / live-use audit inserted**
 > - Repository authority: `handoff/20261008-golive-spec@87d759395beb374ab839b7a5265d14cebbb6d1ae`.
 > - PR #37 (SEO Panel V2-B descriptive automatic Handle) is merged.

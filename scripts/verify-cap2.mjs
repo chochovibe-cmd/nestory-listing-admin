@@ -384,7 +384,7 @@ check("CAPTURE-IMAGE: platform + SKU thumbs do not fake detail success", () => {
     "<script>window.__ICE_APP_CONTEXT__=" +
     '{"loaderData":{"home":{"data":{"res":{' +
     '"skuBase":{"props":[{"pid":"1","name":"款式","values":[{"vid":"a","name":"A","image":"' +
-    skuImg.replace("https://", "") +
+    skuImg +
     '"}]}],"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
     '"skuCore":{"sku2info":{"s1":{"quantity":1}}},' +
     '"richDetail":{"description":"<img src=\\\"https://img.alicdn.com/imgextra/i1/2211641406361/O1CN01real-detail.jpg\\\">"}' +

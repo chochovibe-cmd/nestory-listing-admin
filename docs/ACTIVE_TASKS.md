@@ -1,3 +1,9 @@
+> **2026-10-11 Owner runtime decision — OBS-QUEUE deferred**
+> - PR #38 Preview was reviewed by Owner and is **DEFERRED / DO NOT MERGE**.
+> - Reason: the current queue center is visually too heavy / awkwardly placed, long failure content scales poorly, and underlying `failed` semantics are not yet trustworthy.
+> - Do not spend another package polishing PR #38 now. Future redesign should be a compact status strip + expandable details after `STATUS-SEMANTICS`.
+> - Immediate implementation priority is now `CAPTURE-TRUTH` (price / SKU truth) → `IMAGE-INTEGRITY` (safe image deletion + repair), because these can directly corrupt listing price/data.
+>
 > **2026-10-11 ACTIVE TASKS — validation debt + approved reliability insert**
 >
 > **Live authority**

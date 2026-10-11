@@ -567,6 +567,71 @@
     });
   }
 
+  // Diagnostic-only: bounded counts and rejection reasons, without changing filtering.
+  function collectDetailDebug(doc, href, dom, detailNodes, domCandidates, iceCandidates, mainUrls, variants) {
+    var LIMIT = 40;
+    var all = (domCandidates || []).concat(iceCandidates || []).slice(0, LIMIT);
+    var mainKeys = {};
+    var variantKeys = {};
+    (mainUrls || []).forEach(function (u) {
+      var key = canonicalAlibabaImageKey(u, href, dom);
+      if (key) mainKeys[key] = true;
+    });
+    (variants || []).forEach(function (v) {
+      var key = canonicalAlibabaImageKey(v && v.image_url, href, dom);
+      if (key) variantKeys[key] = true;
+    });
+    var ownerCounts = {};
+    all.forEach(function (u) {
+      var m = String(u || "").match(/!!(\d+)/);
+      if (m) ownerCounts[m[1]] = (ownerCounts[m[1]] || 0) + 1;
+    });
+    var dominantOwner = Object.keys(ownerCounts).sort(function (a, b) {
+      return ownerCounts[b] - ownerCounts[a];
+    }).filter(function (id) { return ownerCounts[id] >= 2 && !/^600000000/.test(id); })[0] || null;
+    var rejected = { main_duplicate: 0, variant_duplicate: 0, tps: 0, placeholder: 0, other: 0 };
+    var examples = [];
+    all.forEach(function (u) {
+      var t = String(u || "");
+      var key = canonicalAlibabaImageKey(t, href, dom);
+      var reason = null;
+      if (!t || /^(?:data|blob):/i.test(t)) reason = "other";
+      else if (/transparent|blank|loading|placeholder|spacer|1x1/i.test(t)) reason = "placeholder";
+      else if (/!!600000000\d+-2-tps-/i.test(t)) reason = "tps";
+      else if (key && mainKeys[key]) reason = "main_duplicate";
+      else if (key && variantKeys[key]) reason = "variant_duplicate";
+      else if (dominantOwner) {
+        var owner = t.match(/!!(\d+)/);
+        if (owner && owner[1] !== dominantOwner && /^600000000/.test(owner[1])) reason = "tps";
+      }
+      if (reason) {
+        rejected[reason]++;
+        if (examples.length < 12) examples.push({ source: "detail_candidate", reason: reason, url: t.slice(0, 180) });
+      }
+    });
+    var iframeCount = 0;
+    var bgCount = 0;
+    try {
+      iframeCount = Math.min(doc.querySelectorAll("iframe").length, 200);
+      var nodes = doc.querySelectorAll("[style*='background']");
+      var max = Math.min(nodes.length, 500);
+      for (var i = 0; i < max; i++) {
+        if (/background(?:-image)?\s*:[^;]*url\(/i.test(nodes[i].getAttribute("style") || "")) bgCount++;
+      }
+    } catch (_err) { /* diagnostics must not affect capture */ }
+    return {
+      dom_img_nodes: Math.min((detailNodes || []).length, 5000),
+      before_filter_dom_candidates: (domCandidates || []).length,
+      before_filter_ice_candidates: (iceCandidates || []).length,
+      sampled_candidates: all.length,
+      rejected_by_rule: rejected,
+      rejected_examples: examples,
+      iframe_nodes: iframeCount,
+      inline_background_image_nodes: bgCount,
+      limits: { candidate_sample: LIMIT, examples: 12, background_nodes_scanned: 500 }
+    };
+  }
+
   function extractSkuFromRoot(rootEl, S, dom, baseHref) {
     var axes = [];
     var valuesPerAxis = [];
@@ -1245,6 +1310,7 @@
       }),
       40
     );
+    var detailDomCandidates = detailDomUrls.slice();
     detailDomUrls = filterDetailImageUrls(
       detailDomUrls,
       href,
@@ -1257,6 +1323,7 @@
     // Only run the bounded ICE scan when DOM detail evidence is still sparse.
     var detailIceUrls =
       detailDomUrls.length < 5 ? detailImageUrlsFromIce(iceRes, href, dom) : [];
+    var detailIceCandidates = detailIceUrls.slice();
     detailIceUrls = filterDetailImageUrls(
       detailIceUrls,
       href,
@@ -1265,6 +1332,7 @@
       variants_flat
     );
     var detail_image_urls = dom.uniqueUrls(detailDomUrls.concat(detailIceUrls), 20);
+    var detail_debug = collectDetailDebug(doc, href, dom, detailNodes, detailDomCandidates, detailIceCandidates, main_image_urls, variants_flat);
     if (!detail_image_urls.length) {
       var detailShell = allMatchesAcrossSelectors(doc, [
         "#description",
@@ -1320,6 +1388,7 @@
       variants_flat: variants_flat,
       main_image_urls: main_image_urls,
       detail_image_urls: detail_image_urls,
+      detail_debug: detail_debug,
       video_urls: video_urls,
       params: params,
       warnings: warnings,

@@ -321,19 +321,14 @@ check("DOM: promo fixture → 原價 price_cny + promo meta", () => {
   assert.ok(!green.image_url, "no thumb → no image_url guess");
 });
 
-check("DOM: promo-only → promo evidence only, not default cost", () => {
+check("DOM: unlabeled single display price stays usable but lower confidence", () => {
   const href = "https://item.taobao.com/item.htm?id=111";
   const { document } = loadDoc("scripts/fixtures/taobao-item-promo-only.html", href);
   const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
-  assert.equal(body.price_cny, undefined);
-  assert.equal(body.capture_meta.promo_price_cny, 19.9);
-  assert.equal(body.capture_meta.price_confidence, "needs_confirmation");
-  assert.ok(
-    body.capture_meta.warnings_from_client.some(
-      (w) => /只看到促銷價/.test(w) && /成本請自行確認/.test(w)
-    ),
-    "expected promo-only warning"
-  );
+  // With no explicit promo/original label, the page does not provide enough
+  // evidence to call 19.9 a coupon price. Keep it as a display-only base candidate.
+  assert.equal(body.price_cny, 19.9);
+  assert.equal(body.capture_meta.price_confidence, "display_only");
 });
 
 check("DOM: missing price → omit price_cny + client warning", () => {
@@ -453,7 +448,7 @@ check("CAPTURE-TRUTH-A: large URL/SKU price conflict blocks auto cost", () => {
   assert.equal(body.capture_meta.price_confidence, "conflict");
   assert.ok(body.capture_meta.price_conflict);
   const row = body.variants_flat.find((v) => v.sku === "s1");
-  assert.equal(row.cny_price, undefined);
+  assert.equal(row.cny_price, null);
   assert.equal(row.price_confidence, "conflict");
   assert.ok(
     body.capture_meta.warnings_from_client.some((w) => /價格來源衝突/.test(w)),

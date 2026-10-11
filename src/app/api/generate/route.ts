@@ -1059,6 +1059,9 @@ export async function POST(request: NextRequest) {
       ip: detected.ip,
       character: detected.character,
       productType: normalizeProductTypeForDisplay(detected.productType),
+      // SEO Panel V2-B reuses the structured item identity already produced by
+      // the copy pass. No extra AI call; empty/unknown terms fall back safely.
+      coreProductTerm: providerOutput?.titleItem || null,
       draftId,
     },
     displayContext,

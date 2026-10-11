@@ -1,3 +1,9 @@
+> **2026-10-11 OBS-QUEUE runtime review — postponed behind P0 correctness**
+> - Owner reviewed PR #38 Preview and rejected the current presentation as merge-ready: placement is awkward, the monitoring block consumes too much space, and long item/error content does not scale well.
+> - Keep PR #38 as reference only for now. Do not polish/merge it before the approved P0 correctness work.
+> - When revisited, redesign toward a compact summary/status strip with expandable details, after `STATUS-SEMANTICS` separates true execution failures from generated-but-needs-fix work.
+> - Current execution order therefore starts with `CAPTURE-TRUTH → IMAGE-INTEGRITY`; OBS-QUEUE returns later as a UI/status follow-up and is not allowed to block correctness work.
+>
 > **2026-10-11 OWNER-APPROVED ROADMAP INSERT — live-use data truth before copy quality**
 > - This update intentionally changes the 2026-10-10 default post-release order because real daily use exposed correctness/integrity risks. The older roadmap is **not deleted**; these packages are inserted so existing work cannot be silently lost.
 > - Vercel is available again. Latest handoff Preview `dpl_EnzH362gm6uyAwaaiSbTwJBAsdgh` is `READY` on `87d759395beb374ab839b7a5265d14cebbb6d1ae`.

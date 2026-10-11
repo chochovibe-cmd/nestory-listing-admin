@@ -461,6 +461,31 @@ check("CAPTURE-TRUTH-A: price parsing adds no network request", () => {
   assert.doesNotMatch(adapter, /\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
 });
 
+check("CAPTURE-TRUTH-A: price diagnostics are bounded and local", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">debug item</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{' +
+    '"skuBase":{"props":[{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"}]}],"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
+    '"skuCore":{"sku2info":{"s1":{"foo":"bar","deep":{"originPrice":"158","promoPrice":"143.26"}}}},' +
+    '"priceModule":{"selectedSku":{"skuId":"s1","originalPrice":"158","couponPrice":"143.26"}}' +
+    '}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://item.taobao.com/item.htm?id=debug",
+    host: "item.taobao.com"
+  });
+  const debug = body.capture_meta.price_debug;
+  assert.ok(debug);
+  assert.ok(Array.isArray(debug.price_paths));
+  assert.ok(debug.price_paths.length <= 120);
+  assert.ok(debug.scanned_nodes <= 5000);
+  assert.ok(
+    debug.price_paths.some((row) => /originalPrice/.test(row.path) && String(row.value) === "158"),
+    "expected originalPrice path in bounded diagnostics"
+  );
+});
+
 check("ICE: minified var b={ still parses", () => {
   const html =
     '<!doctype html><html><body><h1 class="MainTitle--x">min shoe</h1>' +

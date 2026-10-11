@@ -187,6 +187,97 @@
     };
   }
 
+  function embeddedPriceKind(path) {
+    var p = String(path || "");
+    if (ORIGIN_LABEL_RE.test(p) || BASE_PRICE_KEY_RE.test(p)) return "base";
+    if (PROMO_LABEL_RE.test(p) || PROMO_PRICE_KEY_RE.test(p)) return "promo";
+    return "unknown";
+  }
+
+  /**
+   * Some Taobao/Tmall pages hide per-SKU values inside already-loaded JSON
+   * strings such as cartParam / buyExParams. Parse only local strings/objects;
+   * never fetch, click, or execute them.
+   */
+  function embeddedSkuPriceCandidates(info) {
+    var out = [];
+    var seen = {};
+    var MAX_NODES = 300;
+    var nodes = 0;
+    var PRICE_KEY_RE = /price|promo|coupon|discount|amount|money|原价|原價|优惠前|優惠前|券后|券後/i;
+
+    function push(path, raw) {
+      var value = NestoryCap.parsePrice(raw);
+      if (value == null) return;
+      var kind = embeddedPriceKind(path);
+      if (kind === "unknown") return;
+      var sig = path + "\u0001" + value + "\u0001" + kind;
+      if (seen[sig]) return;
+      seen[sig] = true;
+      out.push({
+        key: path,
+        source: "skuCore.embedded." + path,
+        value: value,
+        kind: kind
+      });
+    }
+
+    function parseString(raw, path, depth) {
+      var text = String(raw || "").trim();
+      if (!text || text.length > 12000 || depth > 4) return;
+
+      if ((text[0] === "{" && text[text.length - 1] === "}") ||
+          (text[0] === "[" && text[text.length - 1] === "]")) {
+        try {
+          walk(JSON.parse(text), path, depth + 1);
+          return;
+        } catch (_e) {}
+      }
+
+      if (text.indexOf("=") >= 0 && text.length <= 4000) {
+        try {
+          var params = new URLSearchParams(text.replace(/^\?/, ""));
+          params.forEach(function (value, key) {
+            var next = path + "." + key;
+            if (PRICE_KEY_RE.test(key)) push(next, value);
+            if (/param|data|ext|json/i.test(key)) parseString(value, next, depth + 1);
+          });
+        } catch (_e2) {}
+      }
+    }
+
+    function walk(node, path, depth) {
+      if (node == null || depth > 5 || nodes++ >= MAX_NODES || out.length >= 40) return;
+      if (typeof node === "string") {
+        parseString(node, path, depth);
+        return;
+      }
+      if (typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        for (var ai = 0; ai < node.length && ai < 30; ai++) {
+          walk(node[ai], path + "[" + ai + "]", depth + 1);
+        }
+        return;
+      }
+      Object.keys(node).slice(0, 80).forEach(function (key) {
+        var value = node[key];
+        var next = path ? path + "." + key : key;
+        if (PRICE_KEY_RE.test(key) && (typeof value === "string" || typeof value === "number")) {
+          push(next, value);
+        }
+        if (value && typeof value === "object") walk(value, next, depth + 1);
+        else if (typeof value === "string" && /param|data|ext|json/i.test(key)) {
+          parseString(value, next, depth + 1);
+        }
+      });
+    }
+
+    ["cartParam", "buyExParams", "buyParam", "extraParams", "ext"].forEach(function (key) {
+      if (info && info[key] != null) walk(info[key], key, 0);
+    });
+    return out;
+  }
+
   function structuredSkuPrices(info) {
     if (!info || typeof info !== "object") {
       return {
@@ -210,8 +301,14 @@
       var kind = "unknown";
       if (ORIGIN_LABEL_RE.test(combined) || BASE_PRICE_KEY_RE.test(key)) kind = "base";
       if (PROMO_LABEL_RE.test(combined) || PROMO_PRICE_KEY_RE.test(key)) kind = "promo";
-      candidates.push({ key: key, value: value, kind: kind });
+      candidates.push({
+        key: key,
+        source: "skuCore." + key,
+        value: value,
+        kind: kind
+      });
     });
+    candidates = candidates.concat(embeddedSkuPriceCandidates(info));
 
     var primary = priceTextFromUnknown(info.price);
     var secondary = priceTextFromUnknown(info.subPrice);
@@ -225,8 +322,8 @@
 
     var base = explicitBase ? explicitBase.value : null;
     var promo = explicitPromo ? explicitPromo.value : null;
-    var baseSource = explicitBase ? "skuCore." + explicitBase.key : null;
-    var promoSource = explicitPromo ? "skuCore." + explicitPromo.key : null;
+    var baseSource = explicitBase ? explicitBase.source || "skuCore." + explicitBase.key : null;
+    var promoSource = explicitPromo ? explicitPromo.source || "skuCore." + explicitPromo.key : null;
     var confidence = explicitBase ? "high" : "unknown";
 
     if (base == null && primary != null && secondary != null && !pricesClose(primary, secondary)) {
@@ -832,10 +929,12 @@
         imageByValue: iceSku.imageByValue
       };
       sku_dimensions = iceSku.axes.length;
+      // Product-level price is NOT an SKU price. Keep synthetic table price empty;
+      // independently captured SKU prices live only on variants_flat.
       sku_table = NestoryCap.cartesianSkuTable(
         iceSku.axes,
         iceSku.valuesPerAxis,
-        price_cny
+        null
       );
       if (iceSku.variants_flat.length) {
         variants_flat = iceSku.variants_flat;
@@ -853,10 +952,11 @@
         variants_flat = NestoryCap.omitUniformVariantPrices(variants_flat, price_cny);
       }
     } else if (skuParts.axes.length) {
+      // DOM axes without an actual per-SKU price table must stay price-unknown.
       sku_table = NestoryCap.cartesianSkuTable(
         skuParts.axes,
         skuParts.valuesPerAxis,
-        price_cny
+        null
       );
       var flat = NestoryCap.flattenSkuTable(sku_table);
       variants_flat = flat.variants_flat;
@@ -878,6 +978,14 @@
     }
     if (usedIceSku) {
       warnings.push("sku: 使用頁面資料表（ICE）");
+    }
+    if (
+      variants_flat.length &&
+      variants_flat.some(function (row) {
+        return row.cny_price == null;
+      })
+    ) {
+      warnings.push("sku: 個別未優惠價未完整取得；未以商品價假裝 SKU 價格");
     }
 
     // URL price is corroboration only; it never becomes cost by itself.

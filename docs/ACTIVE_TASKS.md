@@ -1,3 +1,9 @@
+> **2026-10-11 TEST ENVIRONMENT CORRECTION — Preview SSO**
+> - Vercel project currently has SSO protection enabled for Preview deployments. The Chrome extension background fetch does not implement a Vercel Preview-bypass credential flow.
+> - Therefore do **not** tell Owner to point the extension API base at a protected Preview as if it were guaranteed to work.
+> - Practical pre-merge smoke for client-side capture uses the latest test extension with the normal existing Nestory API and creates only a draft (no Shopify publish). This validates SKU parsing / detail-image capture / speed.
+> - PR #40 backend provenance (`cost_is_inherited`, confirmation metadata) remains CI/source validated before merge. If strict Preview-API end-to-end is required pre-merge, open a separate explicit test-bypass package; do not disable Vercel protection silently.
+>
 > **2026-10-11 CAPTURE live-use checkpoint — price truth + Tmall detail images**
 > - PR #40 `CAPTURE-TRUTH-A` is the active price-correctness package. Latest validated head before final smoke: `8fd8026ec07f0ad5740e1947476cd4e696adcf7b`; CI PASS and Preview `dpl_6RaRwCLGGKCWc51c89zZr7o8S94Q` is READY.
 > - Live Hollybox/Eevee testing proved that modern Taobao/Tmall may expose SKU ids/names/images while **not exposing a full per-SKU price table in `skuCore.sku2info`**. Product-level/base price must never be copied into every SKU row and presented as independently captured.

@@ -29,7 +29,7 @@ const exists = (rel) => fs.existsSync(path.join(root, rel));
 
 const CAPTURE_TOKEN_PREFIX = "ncap_";
 const PRICE_PLACEHOLDER_CNY = 0.01;
-const WARNING_MISSING_PRICE = "未抓到售價，已用占位值，請在表單填實際成本";
+const WARNING_MISSING_PRICE = "未抓到可採用的未優惠價；草稿暫用系統占位值，請確認成本後再生成或上架";
 /** @deprecated PKG2A — runtime uses formatMultiDimStoredInfo */
 const WARNING_MULTIDIM_SKU =
   "多維規格已壓平為單維／列舉款式，展開待包二；完整表見 raw_capture.sku_table";
@@ -300,7 +300,9 @@ check("route: capture-token only HTTP method exports", () => {
 check("source: mapCaptureFields honesty + warnings + source_type capture", () => {
   const src = read("src/lib/import/mapCaptureFields.ts");
   assert.match(src, /source_type:\s*"capture"/);
-  assert.match(src, /WARNING_MISSING_PRICE|未抓到售價，已用占位值/);
+  assert.match(src, /WARNING_MISSING_PRICE|未抓到可採用的未優惠價/);
+  assert.match(src, /cost_is_inherited/);
+  assert.match(src, /price_requires_confirmation/);
   // PKG2A: multi-dim stored info (axis × actual rows), not 壓平 warning
   assert.match(src, /formatMultiDimStoredInfo|多維已入庫/);
   assert.match(src, /WARNING_MULTIDIM_NO_FLAT|lookupSkuTablePrice/);

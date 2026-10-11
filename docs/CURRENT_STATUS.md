@@ -1,3 +1,13 @@
+> **2026-10-11 CURRENT STATUS — Vercel recovered / live-use audit inserted**
+> - Repository authority: `handoff/20261008-golive-spec@87d759395beb374ab839b7a5265d14cebbb6d1ae`.
+> - PR #37 (SEO Panel V2-B descriptive automatic Handle) is merged.
+> - Vercel can build again: latest Preview `dpl_EnzH362gm6uyAwaaiSbTwJBAsdgh` is `READY` on exact authority `87d7593…`. The 2026-10-10 build-rate/quota HOLD is therefore cleared.
+> - Production is intentionally unchanged: `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` / runtime code `caae0fa7f4e0d9aba368df961ce714e02a669437`.
+> - PR #36 (SEO Panel V2-A) = Draft/Open, source work present, **0 Vercel deployments** for its branch. Needs Preview + Owner practical QA before any merge decision.
+> - PR #38 (OBS-QUEUE status center) = Draft/Open, source/CI work present, **0 Vercel deployments** for its branch. Preview may now be created, but merge remains HOLD because current DB semantics label some generated-but-needs-fix items as `generation_status=failed`.
+> - Live-use audit confirmed reliability work that now outranks copy-quality work: wrong/ambiguous Taobao prices, per-SKU price provenance, non-sale SKU rows, unsafe image delete ordering, broken image references, pricing ladder jumps, incomplete unsaved-change guarding, and failure-vs-needs-revision semantics.
+> - No repair package from that audit has been implemented yet; these are approved roadmap insertions, not completed work.
+>
 > **2026-10-10 HANDOFF STATUS — clean post-release checkpoint**
 > - Shopify DRAFT / ACTIVE release is complete and no longer blocks the roadmap.
 > - PR #35 is merged; repaired ACTIVE publication behavior is live in Production.

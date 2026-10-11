@@ -1,3 +1,12 @@
+> **2026-10-11 DEEP CAPTURE DIAGNOSIS — Owner live retest**
+> - Live Tmall Hollybox detail-image capture improved successfully (latest tested row: 19 detail images).
+> - Live Taobao Miffy detail capture remained incomplete: only 4 "detail" URLs were sent; 2 were Taobao TPS/platform assets and 2 were SKU-thumb derivatives. Root cause: false-positive detail images prevented the fallback from running, plus modern Taobao detail roots/lazy-load timing were incomplete.
+> - PR #41 current head `5f4b133f6c02c10f6affbbc03b2f5b21a96bf589` fixes this with modern detail roots, false-detail filtering, sparse-detail ICE fallback, bounded lazy-load retry only when usable detail count <5, and `capture_meta.extension_build=capture-20261011-r5`. CI PASS; Owner runtime acceptance still pending. DO NOT MERGE.
+> - SKU-price root cause is now narrowed: tested modern Taobao/Tmall pages expose `skuCore.skuItem.hideOtherPrice=true`; initial ICE has SKU ids/names/images but no complete per-SKU `price/subPrice` mapping. It exposes the selected/current SKU price and product-level range/start price only.
+> - Important QA correction: the Owner's latest live Miffy/Hollybox rows still contain the old synthetic same-price `sku_table` and lack PR #40's final missing-SKU-price warning. Therefore those rows came from an **intermediate extension build**, not PR #40 final head. Final `cartParam/buyExParams` parsing has not yet been proven on these exact products.
+> - Do not claim CAPTURE-TRUTH-A complete. Next build-stamped smoke must prove the actual extension runtime. If `hideOtherPrice=true` pages still lack per-SKU prices, open a separate `CAPTURE-SKU-PRICE-SWEEP`: keep normal capture fast, and only for incomplete SKU pricing interactively select SKU combinations in the already-open logged-in page to read each updated pre-promo price. Do not silently slow every capture.
+> - Do not use naive server-side Taobao internal API as the default fallback without a separate design review; the browser's logged-in page context is the safer place to explore any interactive/internal-price retrieval.
+>
 > **2026-10-11 TEST ENVIRONMENT CORRECTION — Preview SSO**
 > - Vercel project currently has SSO protection enabled for Preview deployments. The Chrome extension background fetch does not implement a Vercel Preview-bypass credential flow.
 > - Therefore do **not** tell Owner to point the extension API base at a protected Preview as if it were guaranteed to work.

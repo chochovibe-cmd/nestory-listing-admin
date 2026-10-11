@@ -1047,7 +1047,8 @@
         iceSku.valuesPerAxis,
         null
       );
-      if (iceSku.variants_flat.length) {
+      var hasStructuredIceVariantPrices = iceSku.variants_flat.length > 0;
+      if (hasStructuredIceVariantPrices) {
         variants_flat = iceSku.variants_flat;
       } else {
         var iceFlat = NestoryCap.flattenSkuTable(sku_table);
@@ -1059,7 +1060,10 @@
           iceSku.imageByValue || {}
         );
       }
-      if (NestoryCap.omitUniformVariantPrices) {
+      // Only synthetic/fallback rows may inherit a fake uniform product cost.
+      // Real sku2info evidence stays even when a SKU legitimately equals the
+      // product "起" baseline (e.g. six Pokémon SKUs at 18.9).
+      if (NestoryCap.omitUniformVariantPrices && !hasStructuredIceVariantPrices) {
         variants_flat = NestoryCap.omitUniformVariantPrices(variants_flat, price_cny);
       }
     } else if (skuParts.axes.length) {

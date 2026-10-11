@@ -163,6 +163,10 @@ check("selectors: single catalog has taobao/tmall/shopee/generic", () => {
   assert.ok(Cap.SELECTORS.taobao.skuAxis.includes("[class*='skuItem--']"));
   assert.ok(Cap.SELECTORS.taobao.skuValue.includes("[class*='valueItem--']"));
   assert.ok(Cap.SELECTORS.taobao.paramsTable.includes("[class*='ParamsInfoItem--']"));
+  assert.ok(
+    Cap.SELECTORS.tmall.detailImages.includes("[class*='content--'] img"),
+    "tmall detail image rules must include modern content container"
+  );
 });
 
 check("parsePrice: honest nulls", () => {
@@ -341,6 +345,39 @@ check("DOM: missing price → omit price_cny + client warning", () => {
     "expected price_cny warning"
   );
   assert.ok(body.title);
+});
+
+check("CAPTURE-IMAGE: Tmall detail selectors are unioned across containers", () => {
+  const html =
+    '<!doctype html><html><body><h1>detail union</h1>' +
+    '<div id="description"><img data-src="//img.alicdn.com/imgextra/i1/shop/detail-a.jpg"></div>' +
+    '<div class="content--new"><img data-lazy-src="//img.alicdn.com/imgextra/i2/shop/detail-b.png"></div>' +
+    '</body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://detail.tmall.com/item.htm?id=detail-union",
+    host: "detail.tmall.com"
+  });
+  assert.ok(Array.isArray(body.detail_image_urls));
+  assert.equal(body.detail_image_urls.length, 2);
+  assert.ok(body.detail_image_urls.some((u) => /detail-a\.jpg/.test(u)));
+  assert.ok(body.detail_image_urls.some((u) => /detail-b\.png/.test(u)));
+});
+
+check("CAPTURE-IMAGE: loaded ICE rich-detail images are a local fallback", () => {
+  const html =
+    '<!doctype html><html><body><h1>ice detail</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{' +
+    '"skuBase":{"props":[{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"}]}],"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
+    '"richDetail":{"content":"<p><img src=\\\"https://img.alicdn.com/imgextra/i3/shop/rich-detail.webp\\\"></p>"}' +
+    '}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://detail.tmall.com/item.htm?id=ice-detail",
+    host: "detail.tmall.com"
+  });
+  assert.ok(body.detail_image_urls.some((u) => /rich-detail\.webp/.test(u)));
 });
 
 check("DOM: tmall ssr2025 fixture → 1 SKU axis, multiple values, params", () => {

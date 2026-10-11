@@ -321,16 +321,18 @@ check("DOM: promo fixture → 原價 price_cny + promo meta", () => {
   assert.ok(!green.image_url, "no thumb → no image_url guess");
 });
 
-check("DOM: promo-only → price_cny + 白話 warning", () => {
+check("DOM: promo-only → promo evidence only, not default cost", () => {
   const href = "https://item.taobao.com/item.htm?id=111";
   const { document } = loadDoc("scripts/fixtures/taobao-item-promo-only.html", href);
   const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
-  assert.equal(body.price_cny, 19.9);
+  assert.equal(body.price_cny, undefined);
+  assert.equal(body.capture_meta.promo_price_cny, 19.9);
+  assert.equal(body.capture_meta.price_confidence, "needs_confirmation");
   assert.ok(
     body.capture_meta.warnings_from_client.some(
       (w) => /只看到促銷價/.test(w) && /成本請自行確認/.test(w)
     ),
-    "expected B1 plain-language promo-only warning"
+    "expected promo-only warning"
   );
 });
 
@@ -409,6 +411,61 @@ check("ICE: 2-axis shoe SKU without DOM valueItem still flattens", () => {
   assert.equal(body.params["货号"], "SHOE-001");
 });
 
+check("CAPTURE-TRUTH-A: ICE per-SKU base + promo prices stay separate", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">dual price item</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"},{"vid":"b","name":"B"}]}],' +
+    '"skus":[{"propPath":"1:a","skuId":"s1"},{"propPath":"1:b","skuId":"s2"}]},' +
+    '"skuCore":{"sku2info":{' +
+    '"s1":{"price":{"priceText":"289.00"},"subPrice":{"priceText":"259.00"}},' +
+    '"s2":{"price":{"priceText":"319.00"},"subPrice":{"priceText":"279.00"}}' +
+    '}}}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const href = "https://detail.tmall.com/item.htm?id=dual-price";
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  assert.equal(body.variants_flat.length, 2);
+  const a = body.variants_flat.find((v) => v.sku === "s1");
+  const b = body.variants_flat.find((v) => v.sku === "s2");
+  assert.equal(a.cny_price, 289);
+  assert.equal(a.promo_price_cny, 259);
+  assert.equal(b.cny_price, 319);
+  assert.equal(b.promo_price_cny, 279);
+  assert.ok(a.price_source);
+  assert.ok(a.price_confidence);
+});
+
+check("CAPTURE-TRUTH-A: large URL/SKU price conflict blocks auto cost", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">conflict item</h1>' +
+    '<div class="highlightPrice--x"><span class="text">10.00</span></div>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"}]}],' +
+    '"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
+    '"skuCore":{"sku2info":{"s1":{"price":{"priceText":"10.00"}}}}}}}}};' +
+    "</script></body></html>";
+  const { document } = parseHTML(html);
+  const href = "https://detail.tmall.com/item.htm?id=conflict&skuId=s1&price=289";
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  assert.equal(body.price_cny, undefined);
+  assert.equal(body.capture_meta.price_confidence, "conflict");
+  assert.ok(body.capture_meta.price_conflict);
+  const row = body.variants_flat.find((v) => v.sku === "s1");
+  assert.equal(row.cny_price, undefined);
+  assert.equal(row.price_confidence, "conflict");
+  assert.ok(
+    body.capture_meta.warnings_from_client.some((w) => /價格來源衝突/.test(w)),
+    "conflict warning must be visible"
+  );
+});
+
+check("CAPTURE-TRUTH-A: price parsing adds no network request", () => {
+  const adapter = read("extension/lib/adapters/taobao.js");
+  assert.doesNotMatch(adapter, /\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
+});
+
 check("ICE: minified var b={ still parses", () => {
   const html =
     '<!doctype html><html><body><h1 class="MainTitle--x">min shoe</h1>' +
@@ -465,6 +522,10 @@ check("contract: static assert vs captureTypes.ts field names", () => {
     "cny_price",
     "image_url",
     "promo_price_cny",
+    "price_source",
+    "price_confidence",
+    "price_candidates",
+    "price_conflict",
     "MAX_VARIANT_IMAGES"
   ];
   for (const key of requiredMentions) {
@@ -501,7 +562,7 @@ check("contract: static assert vs captureTypes.ts field names", () => {
     const v = body.variants_flat[0];
     for (const k of Object.keys(v)) {
       assert.ok(
-        /^(option[123]_(name|value)|cny_price|sku|image_url)$/.test(k),
+        /^(option[123]_(name|value)|cny_price|promo_price_cny|price_source|promo_price_source|price_confidence|price_candidates|sku|image_url)$/.test(k),
         `unexpected variant key ${k}`
       );
     }

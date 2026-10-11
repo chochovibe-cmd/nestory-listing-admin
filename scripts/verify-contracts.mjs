@@ -1,7 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const root = process.cwd();
+
+function loadTypeScriptModule(relativePath) {
+  const source = read(relativePath).replace(/^import\s+[^;]+;\s*$/gm, "");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022
+    }
+  }).outputText;
+  const module = { exports: {} };
+  const execute = new Function("module", "exports", output);
+  execute(module, module.exports);
+  return module.exports;
+}
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
@@ -117,6 +132,56 @@ const stateNames = new Set((uiStates.draftCardStates ?? []).map((state) => state
 for (const expectedState of ["pending_copy", "processing", "ready_for_review", "active_published", "csv_ready"]) {
   if (!stateNames.has(expectedState)) {
     errors.push(`fixtures/ui-states.json missing ${expectedState}`);
+  }
+}
+
+// SEO Panel V2-B: execute the real TypeScript Handle generator so CI catches
+// regressions in the descriptive core-term contract instead of only checking text.
+const handleModule = loadTypeScriptModule("src/lib/contentGenerator/handleGenerator.ts");
+const generateShopifyHandleSlug = handleModule.generateShopifyHandleSlug;
+if (typeof generateShopifyHandleSlug !== "function") {
+  errors.push("handleGenerator must export generateShopifyHandleSlug");
+} else {
+  const cases = [
+    {
+      label: "trusted Chinese core term",
+      input: {
+        ip: "Pingu",
+        productType: "吊飾掛件",
+        coreProductTerm: "迷你相機吊飾",
+        draftId: "ABCDEF-1234"
+      },
+      expected: "pingu-mini-camera-keychain-abcdef"
+    },
+    {
+      label: "concise English item strips duplicate product type",
+      input: {
+        ip: "Pingu",
+        productType: "吊飾掛件",
+        coreProductTerm: "Mini Camera Keychain",
+        draftId: "ABCDEF-1234"
+      },
+      expected: "pingu-mini-camera-keychain-abcdef"
+    },
+    {
+      label: "unknown Chinese term safely falls back",
+      input: {
+        ip: "Pingu",
+        productType: "吊飾掛件",
+        coreProductTerm: "神秘限定造型",
+        draftId: "ABCDEF-1234"
+      },
+      expected: "pingu-keychain-abcdef"
+    }
+  ];
+
+  for (const testCase of cases) {
+    const actual = generateShopifyHandleSlug(testCase.input, {});
+    if (actual !== testCase.expected) {
+      errors.push(
+        `handleGenerator ${testCase.label}: expected ${testCase.expected}, received ${actual}`
+      );
+    }
   }
 }
 

@@ -61,12 +61,18 @@
    → 應跳出小視窗（設定畫面）。  
    若沒有跳出、卻直接顯示紅點：到 `chrome://extensions` 找到本擴充，按「**詳細資料**」，或重新載入擴充後再點一次圖示。
 
-### 步驟 6：填兩欄並儲存
+### 步驟 6：填設定並儲存
 
 1. **API 網址**：貼你的 Nestory 網址（見上方「事前準備」）。
 2. **擷取 Token**：貼 `ncap_` 那一串。
-3. 按 **「儲存設定」**。  
+3. **Vercel Preview Bypass（選填）**：
+   - 正式站或未受保護的 Preview：留空。
+   - 要讓外掛直接打有 Deployment Protection 的 Vercel Preview：貼該 Preview 的 **Protection Bypass for Automation secret**。
+   - 外掛只會在這欄有值時，送出 `x-vercel-protection-bypass` header。
+4. 按 **「儲存設定」**。  
    → **權限視窗會在按下「儲存設定」時跳出**（不是之後才跳）。
+
+> 驗收價格／擷取改動時，API 網址應指向**同一個 feature HEAD 的 Vercel Preview**，不要再拿新版外掛去打舊正式後端。
 
 ### 步驟 7：授權視窗按「允許」（重要）
 

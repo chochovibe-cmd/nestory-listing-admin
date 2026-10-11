@@ -32,6 +32,18 @@
     />
     <p class="hint">到上架工具 → 設定 → 產生擷取 token 後貼上</p>
 
+    <label for="vercelProtectionBypass">Vercel Preview Bypass（選填）</label>
+    <input
+      id="vercelProtectionBypass"
+      type="password"
+      placeholder="Preview 有 Deployment Protection 才需要"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <p class="hint">
+      測 Preview 時貼 Protection Bypass for Automation secret；正式站或未保護 Preview 留空。
+    </p>
+
     <button id="saveBtn" type="button">儲存設定</button>
     <p id="saveMsg" class="msg" role="status"></p>
 

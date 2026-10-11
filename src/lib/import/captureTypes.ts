@@ -123,7 +123,7 @@ export type CaptureImportResponse =
 export const PRICE_PLACEHOLDER_CNY = 0.01;
 
 export const WARNING_MISSING_PRICE =
-  "未抓到售價，已用占位值，請在表單填實際成本";
+  "未抓到可採用的未優惠價；草稿暫用系統占位值，請確認成本後再生成或上架";
 
 /**
  * @deprecated PKG2A: multi-dim with variants_flat no longer uses "壓平" wording.

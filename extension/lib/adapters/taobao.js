@@ -19,6 +19,150 @@
 
   var ORIGIN_LABEL_RE = /优惠前|優惠前|划线价|劃線價|原价|原價|吊牌价|吊牌價/;
   var PROMO_LABEL_RE = /店铺优惠后|店鋪優惠後|优惠后|優惠後|券后|券後|到手价|到手價|促销价|促銷價/;
+  var BASE_PRICE_KEY_RE = /origin|original|list|market|tag|reserve|regular|standard|before/i;
+  var PROMO_PRICE_KEY_RE = /promo|promotion|coupon|discount|activity|sale|deal|after/i;
+
+  function pricesClose(a, b) {
+    if (a == null || b == null) return false;
+    var aa = Number(a);
+    var bb = Number(b);
+    if (!Number.isFinite(aa) || !Number.isFinite(bb)) return false;
+    var tolerance = Math.max(0.5, Math.max(Math.abs(aa), Math.abs(bb)) * 0.015);
+    return Math.abs(aa - bb) <= tolerance;
+  }
+
+  function priceHintFromUrl(href) {
+    try {
+      var u = new URL(href);
+      var raw = u.searchParams.get("price");
+      return raw ? NestoryCap.parsePrice(raw) : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function skuHintFromUrl(href) {
+    try {
+      var u = new URL(href);
+      return u.searchParams.get("skuId") || u.searchParams.get("sku_id") || null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function priceTextFromUnknown(value) {
+    if (value == null) return null;
+    if (typeof value === "number" || typeof value === "string") {
+      return NestoryCap.parsePrice(value);
+    }
+    if (typeof value !== "object") return null;
+    var candidates = [
+      value.priceText,
+      value.text,
+      value.value,
+      value.price,
+      value.amount,
+      value.priceValue
+    ];
+    for (var i = 0; i < candidates.length; i++) {
+      var p = NestoryCap.parsePrice(candidates[i]);
+      if (p != null) return p;
+    }
+    return null;
+  }
+
+  function labelTextFromUnknown(value) {
+    if (!value || typeof value !== "object") return "";
+    return [
+      value.label,
+      value.title,
+      value.name,
+      value.desc,
+      value.description,
+      value.prefix,
+      value.suffix
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(" ");
+  }
+
+  /**
+   * CAPTURE-TRUTH-A: classify prices already present inside skuCore.sku2info.
+   * No fetch/XHR: this only reads the ICE object already parsed from the page.
+   * base is the non-discount price used as Nestory cost; promo is evidence only.
+   */
+  function structuredSkuPrices(info) {
+    if (!info || typeof info !== "object") {
+      return {
+        base: null,
+        promo: null,
+        baseSource: null,
+        promoSource: null,
+        confidence: "unknown",
+        candidates: []
+      };
+    }
+
+    var candidates = [];
+    Object.keys(info).forEach(function (key) {
+      if (!/price/i.test(key)) return;
+      var raw = info[key];
+      var value = priceTextFromUnknown(raw);
+      if (value == null) return;
+      var label = labelTextFromUnknown(raw);
+      var combined = key + " " + label;
+      var kind = "unknown";
+      if (ORIGIN_LABEL_RE.test(combined) || BASE_PRICE_KEY_RE.test(key)) kind = "base";
+      if (PROMO_LABEL_RE.test(combined) || PROMO_PRICE_KEY_RE.test(key)) kind = "promo";
+      candidates.push({ key: key, value: value, kind: kind });
+    });
+
+    var primary = priceTextFromUnknown(info.price);
+    var secondary = priceTextFromUnknown(info.subPrice);
+
+    var explicitBase = candidates.find(function (c) {
+      return c.kind === "base";
+    });
+    var explicitPromo = candidates.find(function (c) {
+      return c.kind === "promo";
+    });
+
+    var base = explicitBase ? explicitBase.value : null;
+    var promo = explicitPromo ? explicitPromo.value : null;
+    var baseSource = explicitBase ? "skuCore." + explicitBase.key : null;
+    var promoSource = explicitPromo ? "skuCore." + explicitPromo.key : null;
+    var confidence = explicitBase ? "high" : "unknown";
+
+    if (base == null && primary != null && secondary != null && !pricesClose(primary, secondary)) {
+      base = Math.max(primary, secondary);
+      promo = promo != null ? promo : Math.min(primary, secondary);
+      baseSource = primary >= secondary ? "skuCore.price" : "skuCore.subPrice";
+      promoSource = promoSource || (primary < secondary ? "skuCore.price" : "skuCore.subPrice");
+      confidence = "structured_pair";
+    } else if (base == null && primary != null) {
+      base = primary;
+      baseSource = "skuCore.price";
+      confidence = "structured_primary";
+      if (promo == null && secondary != null && secondary < primary && !pricesClose(primary, secondary)) {
+        promo = secondary;
+        promoSource = "skuCore.subPrice";
+      }
+    } else if (base == null && secondary != null) {
+      promo = promo != null ? promo : secondary;
+      promoSource = promoSource || "skuCore.subPrice";
+      confidence = "needs_confirmation";
+    }
+
+    return {
+      base: base,
+      promo: promo,
+      baseSource: baseSource,
+      promoSource: promoSource,
+      confidence: confidence,
+      candidates: candidates
+    };
+  }
 
   /**
    * Best-effort thumb URL from a SKU value node (img / data-* / background).
@@ -375,6 +519,11 @@
         option3_name: null,
         option3_value: null,
         cny_price: null,
+        promo_price_cny: null,
+        price_source: null,
+        promo_price_source: null,
+        price_confidence: "unknown",
+        price_candidates: [],
         sku: sku.skuId ? String(sku.skuId) : null,
         image_url: null
       };
@@ -390,13 +539,13 @@
       }
       if (!ok || !flat.option1_value) continue;
       var info = infoMap[sku.skuId] || infoMap[String(sku.skuId)] || {};
-      var priceText =
-        (info.price && info.price.priceText) ||
-        (info.subPrice && info.subPrice.priceText) ||
-        null;
-      if (priceText != null) {
-        flat.cny_price = NestoryCap.parsePrice(priceText);
-      }
+      var skuPrices = structuredSkuPrices(info);
+      flat.cny_price = skuPrices.base;
+      flat.promo_price_cny = skuPrices.promo;
+      flat.price_source = skuPrices.baseSource;
+      flat.promo_price_source = skuPrices.promoSource;
+      flat.price_confidence = skuPrices.confidence;
+      flat.price_candidates = skuPrices.candidates;
       variants_flat.push(flat);
     }
 
@@ -473,10 +622,24 @@
     var price_cny = null;
     var promo_price_cny = null;
     var onlyPromo = false;
+    var price_source = null;
+    var price_confidence = "unknown";
+    var price_candidates = [];
+
+    if (original != null) {
+      price_candidates.push({ source: "dom.original", kind: "base", value: original });
+    }
+    if (saleDisplay != null) {
+      price_candidates.push({ source: "dom.display", kind: "display", value: saleDisplay });
+    }
+    if (promo != null) {
+      price_candidates.push({ source: "dom.promo", kind: "promo", value: promo });
+    }
 
     if (original != null && (promo != null || saleDisplay != null)) {
       price_cny = original;
-      // Prefer explicitly labeled promo; else sale display if different from original
+      price_source = "dom.original";
+      price_confidence = "high";
       if (promo != null && Math.abs(promo - original) >= 0.001) {
         promo_price_cny = promo;
       } else if (saleDisplay != null && Math.abs(saleDisplay - original) >= 0.001) {
@@ -486,25 +649,28 @@
       }
     } else if (original != null) {
       price_cny = original;
+      price_source = "dom.original";
+      price_confidence = "high";
       if (promo != null && Math.abs(promo - original) >= 0.001) {
         promo_price_cny = promo;
       }
     } else if (promo != null) {
-      price_cny = promo;
+      promo_price_cny = promo;
       onlyPromo = true;
+      price_confidence = "needs_confirmation";
     } else if (saleDisplay != null) {
-      // No original found: sale display is the only number (may be promo)
       price_cny = saleDisplay;
-      // If sale came from highlight/promo-ish selector, treat as only-promo when
-      // no del/original existed — honest B1 warning when promoRaw matched or
-      // we never saw original selectors.
-      onlyPromo = true;
+      price_source = "dom.display";
+      price_confidence = "display_only";
     }
 
     return {
       price_cny: price_cny,
       promo_price_cny: promo_price_cny,
-      onlyPromo: onlyPromo
+      onlyPromo: onlyPromo,
+      price_source: price_source,
+      price_confidence: price_confidence,
+      price_candidates: price_candidates
     };
   }
 
@@ -527,6 +693,10 @@
     var prices = extractPrices(doc, S, dom);
     var price_cny = prices.price_cny;
     var promo_price_cny = prices.promo_price_cny;
+    var price_source = prices.price_source;
+    var price_confidence = prices.price_confidence;
+    var price_candidates = prices.price_candidates.slice();
+    var price_conflict = null;
     if (price_cny == null) {
       warnings.push("price_cny: 未抓到");
     } else if (prices.onlyPromo) {
@@ -550,6 +720,8 @@
     var variants_flat = [];
     var sku_dimensions = 0;
     var usedIceSku = false;
+    var urlPriceHint = priceHintFromUrl(href);
+    var selectedSkuHint = skuHintFromUrl(href);
     var iceHasValues =
       iceSku &&
       iceSku.axes.length &&
@@ -612,6 +784,69 @@
       warnings.push("sku: 使用頁面資料表（ICE）");
     }
 
+    // URL price is corroboration only; it never becomes cost by itself.
+    if (urlPriceHint != null) {
+      price_candidates.push({ source: "url.price", kind: "hint", value: urlPriceHint });
+      var selectedVariant = null;
+      if (selectedSkuHint) {
+        for (var vi = 0; vi < variants_flat.length; vi++) {
+          if (String(variants_flat[vi].sku || "") === String(selectedSkuHint)) {
+            selectedVariant = variants_flat[vi];
+            break;
+          }
+        }
+      }
+
+      var explained = false;
+      [price_cny, promo_price_cny].forEach(function (v) {
+        if (pricesClose(v, urlPriceHint)) explained = true;
+      });
+      if (selectedVariant) {
+        [selectedVariant.cny_price, selectedVariant.promo_price_cny].forEach(function (v) {
+          if (pricesClose(v, urlPriceHint)) explained = true;
+        });
+      }
+
+      var knownValues = [price_cny, promo_price_cny];
+      if (selectedVariant) {
+        knownValues.push(selectedVariant.cny_price, selectedVariant.promo_price_cny);
+      }
+      var hasKnown = knownValues.some(function (v) {
+        return v != null && Number.isFinite(Number(v)) && Number(v) > 0;
+      });
+      var farApart =
+        hasKnown &&
+        knownValues.some(function (v) {
+          if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return false;
+          var high = Math.max(Number(v), urlPriceHint);
+          var low = Math.min(Number(v), urlPriceHint);
+          return high / low >= 1.5 && high - low >= 10;
+        });
+
+      if (!explained && farApart) {
+        price_conflict = {
+          url_price_cny: urlPriceHint,
+          selected_sku: selectedSkuHint,
+          message: "網址價格與頁面/SKU價格差異過大"
+        };
+        warnings.push(
+          "價格來源衝突：網址顯示 ¥" +
+            urlPriceHint +
+            "，與頁面／SKU價格差異過大；未自動採用成本，請確認"
+        );
+        price_cny = null;
+        price_source = null;
+        price_confidence = "conflict";
+        if (selectedVariant) {
+          selectedVariant.price_confidence = "conflict";
+          selectedVariant.price_candidates = (selectedVariant.price_candidates || []).concat([
+            { key: "url.price", value: urlPriceHint, kind: "hint" }
+          ]);
+          selectedVariant.cny_price = null;
+        }
+      }
+    }
+
     var main_image_urls = dom.uniqueUrls(
       dom.allMatch(doc, S.mainGallery).map(function (el) {
         return dom.imgUrlFromEl(el, href);
@@ -663,6 +898,10 @@
       price_cny: price_cny,
       list_price_cny: list_price_cny,
       promo_price_cny: promo_price_cny,
+      price_source: price_source,
+      price_confidence: price_confidence,
+      price_candidates: price_candidates,
+      price_conflict: price_conflict,
       sku_table: sku_table,
       variants_flat: variants_flat,
       main_image_urls: main_image_urls,

@@ -1,6 +1,7 @@
 "use client";
 
 import { VariantEditor } from "@/components/listing/VariantEditor";
+import { isPricePlaceholderCny } from "@/lib/import/captureTypes";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import {
   isVariantRowFilled,
@@ -31,10 +32,18 @@ export function ResultCardSpecsPanel({
   onRowsChange: (rows: VariantFormRow[]) => void;
   onWarning: (msg: string | null) => void;
 }) {
+  const costMissing = isPricePlaceholderCny(productCost);
+  const effectiveProductCost = costMissing ? null : productCost;
+
   return (
     <div className="rc-tabpanel" role="tabpanel">
       <div className="rc-field rc-span-2">
         <div className="rc-label">規格（款式）</div>
+        {costMissing ? (
+          <p className="price-soft-warn" style={{ margin: "0 0 8px" }}>
+            ⚠ 成本未取得
+          </p>
+        ) : null}
         {variantDimensions.length === 0 && variantRows.filter(isVariantRowFilled).length === 0 ? (
           <p className="muted" style={{ margin: "0 0 8px", fontSize: 12 }}>
             尚未建立款式 — 可新增維度或一列
@@ -50,7 +59,7 @@ export function ResultCardSpecsPanel({
             onWarning={onWarning}
             priceMode={priceMode}
             pricingSettings={getStoredPricingSettings()}
-            productCost={productCost}
+            productCost={effectiveProductCost}
             rows={variantRows}
             warning={variantWarning}
           />

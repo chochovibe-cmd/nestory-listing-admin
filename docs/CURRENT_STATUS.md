@@ -1,3 +1,9 @@
+> **2026-10-11 TEST ENVIRONMENT CORRECTION — Preview SSO**
+> - Vercel project currently has SSO protection enabled for Preview deployments. The Chrome extension background fetch does not implement a Vercel Preview-bypass credential flow.
+> - Therefore do **not** tell Owner to point the extension API base at a protected Preview as if it were guaranteed to work.
+> - Practical pre-merge smoke for client-side capture uses the latest test extension with the normal existing Nestory API and creates only a draft (no Shopify publish). This validates SKU parsing / detail-image capture / speed.
+> - PR #40 backend provenance (`cost_is_inherited`, confirmation metadata) remains CI/source validated before merge. If strict Preview-API end-to-end is required pre-merge, open a separate explicit test-bypass package; do not disable Vercel protection silently.
+>
 > **2026-10-11 CAPTURE STATUS — code/CI ready, practical smoke next**
 > - CAPTURE-TRUTH-A PR #40: Draft/Open, CI PASS, validated head `8fd8026…`.
 > - CAPTURE-IMAGE PR #41: Draft/Open, stacked on #40, CI PASS, validated head `3ac5c62…`.

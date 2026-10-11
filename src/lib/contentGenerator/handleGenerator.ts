@@ -28,6 +28,25 @@ const PRODUCT_TYPE_SLUGS: Record<string, string> = {
   大型娃娃: 'jumbo-plush',
 };
 
+// SEO Panel V2-B: only add a core product term when we can map it confidently.
+// This deliberately stays small and deterministic; unknown terms fall back to
+// the existing IP / character / type handle instead of guessing a translation.
+const CORE_PRODUCT_TERM_RULES: Array<{ match: RegExp; slug: string }> = [
+  { match: /迷你(?:數位)?相機|mini\s+camera/i, slug: 'mini-camera' },
+  { match: /拍立得|instant\s+camera/i, slug: 'instant-camera' },
+  { match: /相機|攝影機|camera/i, slug: 'camera' },
+  { match: /吹風機|吹風筒|hair\s*dryer/i, slug: 'hair-dryer' },
+  { match: /羽毛球拍|badminton\s+racket/i, slug: 'badminton-racket' },
+  { match: /鍵帽|keycap/i, slug: 'keycap' },
+  { match: /卡套|證件套|card\s*holder/i, slug: 'card-holder' },
+  { match: /小夜燈|夜燈|night\s*light/i, slug: 'night-light' },
+  { match: /滑鼠墊|mouse\s*pad/i, slug: 'mouse-pad' },
+  { match: /行動電源|充電寶|power\s*bank/i, slug: 'power-bank' },
+  { match: /收納包|化妝包|pouch/i, slug: 'pouch' },
+  { match: /杯墊|coaster/i, slug: 'coaster' },
+];
+
+
 function normalize(value: string | null | undefined): string {
   return (value ?? '').normalize('NFKC').trim();
 }
@@ -96,6 +115,12 @@ export interface HandleSlugInput {
   character?: string | null | undefined;
   productType?: string | null | undefined;
   /**
+   * SEO Panel V2-B: structured product identity from the existing copy pass
+   * (normally titleItem). It is optional and never triggers another AI call.
+   * Unknown/unreliable values are ignored, preserving the old handle contract.
+   */
+  coreProductTerm?: string | null | undefined;
+  /**
    * P0-73: draft UUID (or any stable id). First 6 hex/alphanum chars become a
    * unique suffix so two chiikawa-hachiware-keychain products never share a
    * Matrixify/Shopify Handle.
@@ -103,10 +128,57 @@ export interface HandleSlugInput {
   draftId?: string | null | undefined;
 }
 
-/** Ordered [ip, character, type] slug words, de-duped when two segments
- * romanize the same (e.g. a character's alias equals its IP's alias).
- * Shared by the Shopify handle (A21-1) and the Shopify Files image filename
- * (A21-4) so both stay built from the same product identity. */
+function stripTrailingTypeSlug(coreSlug: string, typeSlug: string): string {
+  if (!coreSlug || !typeSlug) return coreSlug;
+
+  const coreParts = coreSlug.split('-').filter(Boolean);
+  const typeParts = typeSlug.split('-').filter(Boolean);
+  if (coreParts.length < typeParts.length) return coreSlug;
+
+  const offset = coreParts.length - typeParts.length;
+  const endsWithType = typeParts.every((part, index) => coreParts[offset + index] === part);
+  if (!endsWithType) return coreSlug;
+
+  return coreParts.slice(0, offset).join('-');
+}
+
+/**
+ * Resolve a concise English core product term without free-form translation.
+ * Chinese/mixed text must match the explicit trusted glossary above. Pure
+ * ASCII item labels may pass through directly, capped to four words.
+ */
+export function resolveCoreProductSlug(
+  value: string | null | undefined,
+  productType: string | null | undefined,
+): string {
+  const normalized = normalize(value);
+  if (!normalized) return '';
+
+  const typeSlug = productType ? PRODUCT_TYPE_SLUGS[normalize(productType)] ?? '' : '';
+
+  for (const rule of CORE_PRODUCT_TERM_RULES) {
+    if (rule.match.test(normalized)) {
+      return stripTrailingTypeSlug(rule.slug, typeSlug);
+    }
+  }
+
+  // Structured titleItem sometimes already comes back in concise English.
+  // Accept that only when it contains no CJK and is short enough to stay sane.
+  if (!/[㐀-鿿]/.test(normalized) && /[A-Za-z]/.test(normalized)) {
+    const asciiSlug = slugifyWord(normalized)
+      .split('-')
+      .filter(Boolean)
+      .slice(0, 4)
+      .join('-');
+    return stripTrailingTypeSlug(asciiSlug, typeSlug);
+  }
+
+  return '';
+}
+
+/** Ordered [ip, character, core term, type] slug words, de-duped when two
+ * adjacent segments are identical. The core term is optional and conservative;
+ * if it cannot be resolved reliably the historical handle shape is preserved. */
 export function buildProductSlugSegments(
   input: HandleSlugInput,
   context: DisplayLabelContext = {},
@@ -126,9 +198,10 @@ export function buildProductSlugSegments(
   const characterSlug = input.character ? resolveNameSlug(input.character, characterEntry?.aliases) : '';
 
   const typeSlug = input.productType ? PRODUCT_TYPE_SLUGS[normalize(input.productType)] ?? '' : '';
+  const coreProductSlug = resolveCoreProductSlug(input.coreProductTerm, input.productType);
 
-  const segments = [ipSlug, characterSlug, typeSlug].filter(Boolean);
-  return segments.filter((segment, index) => segments[index - 1] !== segment);
+  const segments = [ipSlug, characterSlug, coreProductSlug, typeSlug].filter(Boolean);
+  return segments.filter((segment, index) => segments.indexOf(segment) === index);
 }
 
 const HANDLE_MAX_LENGTH = 80;

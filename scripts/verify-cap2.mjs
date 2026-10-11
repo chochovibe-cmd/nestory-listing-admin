@@ -167,6 +167,15 @@ check("selectors: single catalog has taobao/tmall/shopee/generic", () => {
     Cap.SELECTORS.tmall.detailImages.includes("[class*='content--'] img"),
     "tmall detail image rules must include modern content container"
   );
+  assert.ok(
+    Cap.SELECTORS.taobao.detailImages.includes("#imageTextInfo-content img"),
+    "taobao detail rules must include modern imageTextInfo container"
+  );
+  assert.ok(
+    Cap.SELECTORS.tmall.detailImages.includes(".desc-root img"),
+    "tmall detail rules must include desc-root"
+  );
+  assert.equal(Cap.CAPTURE_BUILD, "capture-20261011-r5");
 });
 
 check("parsePrice: honest nulls", () => {
@@ -364,6 +373,38 @@ check("CAPTURE-IMAGE: Tmall detail selectors are unioned across containers", () 
   assert.ok(body.detail_image_urls.some((u) => /detail-b\.png/.test(u)));
 });
 
+check("CAPTURE-IMAGE: platform + SKU thumbs do not fake detail success", () => {
+  const skuImg = "https://gw.alicdn.com/bao/uploaded/i2/2211641406361/O1CN01sku.png";
+  const html =
+    '<!doctype html><html><body><h1>false detail</h1>' +
+    '<div class="content--noise">' +
+    '<img src="https://img.alicdn.com/imgextra/i3/O1CN01platform!!6000000000136-2-tps-732-2.png">' +
+    '<img src="' + skuImg + '_.webp">' +
+    "</div>" +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{' +
+    '"skuBase":{"props":[{"pid":"1","name":"款式","values":[{"vid":"a","name":"A","image":"' +
+    skuImg.replace("https://", "") +
+    '"}]}],"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
+    '"skuCore":{"sku2info":{"s1":{"quantity":1}}},' +
+    '"richDetail":{"description":"<img src=\\\"https://img.alicdn.com/imgextra/i1/2211641406361/O1CN01real-detail.jpg\\\">"}' +
+    '}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://item.taobao.com/item.htm?id=false-detail",
+    host: "item.taobao.com"
+  });
+  assert.ok(body.detail_image_urls.some((u) => /real-detail\.jpg/.test(u)));
+  assert.ok(
+    !body.detail_image_urls.some((u) => /6000000000136-2-tps/.test(u)),
+    "platform detail asset must be filtered"
+  );
+  assert.ok(
+    !body.detail_image_urls.some((u) => /O1CN01sku\.png/.test(u)),
+    "variant thumb must not count as detail"
+  );
+});
+
 check("CAPTURE-IMAGE: loaded ICE rich-detail images are a local fallback", () => {
   const html =
     '<!doctype html><html><body><h1>ice detail</h1>' +
@@ -549,6 +590,15 @@ check("CAPTURE-TRUTH-A: large URL/SKU price conflict blocks auto cost", () => {
 check("CAPTURE-TRUTH-A: price parsing adds no network request", () => {
   const adapter = read("extension/lib/adapters/taobao.js");
   assert.doesNotMatch(adapter, /\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
+});
+
+check("CAPTURE-IMAGE: sparse detail retry is bounded and build-stamped", () => {
+  const content = read("extension/content/capture.js");
+  const payload = read("extension/lib/buildPayload.js");
+  assert.match(content, /detailCount\(payload\) < 5/);
+  assert.match(content, /started \+ 2400/);
+  assert.match(content, /detail_wait_ms/);
+  assert.match(payload, /extension_build/);
 });
 
 check("CAPTURE-TRUTH-A: price diagnostics are bounded and local", () => {

@@ -1,6 +1,10 @@
 import { notifyMake } from "@/lib/notifications/make";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { prepareImagesForPublish } from "@/lib/images/prepareImagesForPublish";
+import {
+  hasUnconfirmedPlaceholderCny,
+  MISSING_COST_BLOCK_MESSAGE,
+} from "@/lib/import/captureTypes";
 import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/payload";
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
@@ -302,6 +306,10 @@ export async function publishDraft(
     .single();
   if (error || !draft) {
     return { ok: false, status: 404, error: error?.message ?? "Draft not found" };
+  }
+
+  if (hasUnconfirmedPlaceholderCny(draft)) {
+    return { ok: false, status: 409, error: MISSING_COST_BLOCK_MESSAGE };
   }
 
   const guardError = checkLiveTestGuard({ draftIds: [id], publishMode });

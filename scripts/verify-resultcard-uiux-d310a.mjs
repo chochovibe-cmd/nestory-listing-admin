@@ -101,7 +101,8 @@ assert.match(mapping, /options\?: \{ productCost\?: number \| null \}/);
 for (const token of ["cost_is_inherited?: boolean | null;", "sell_price_locked?: boolean | null;", "compare_at_locked?: boolean | null;"]) {
   assert.ok(mapDraft.includes(token), `draft reload type missing ${token}`);
 }
-assert.match(mapDraft, /dbRowsToForm\(dimsRaw, variants, \{[\s\S]*productCost: draft\.cny_price \?\? null/);
+assert.match(mapDraft, /const productCost = isPricePlaceholderCny\(draft\.cny_price\)[\s\S]*\? null[\s\S]*draft\.cny_price/);
+assert.match(mapDraft, /dbRowsToForm\(dimsRaw, variants, \{[\s\S]*productCost/);
 for (const token of ["cost_is_inherited", "sell_price_locked", "compare_at_locked", "price_locked"]) {
   assert.ok(newPage.includes(token), `draft reload SELECT missing ${token}`);
 }

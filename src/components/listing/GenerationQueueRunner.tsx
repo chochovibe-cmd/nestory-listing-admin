@@ -146,6 +146,7 @@ export function GenerationQueueRunner() {
         if (!regenResponse.ok) {
           const errorText =
             typeof regenPayload.error === "string" ? regenPayload.error : "重生失敗";
+          await reportNetworkFailure(job, errorText);
           emitRegenStatus({
             draftId: job.draftId,
             status: "failed",
@@ -241,6 +242,7 @@ export function GenerationQueueRunner() {
 
       if (!response.ok) {
         const errorText = typeof payload.error === "string" ? payload.error : "生成失敗";
+        await reportNetworkFailure(job, errorText);
         emitProgress(job.draftId, title, ["done", imageStep, "error", "pending"], errorText);
         showToast(`${title}：${errorText}（可單件重試）`, "error");
         router.refresh();

@@ -4,6 +4,7 @@
  */
 
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
+import { isPricePlaceholderCny } from "@/lib/import/captureTypes";
 import { dbRowsToForm } from "@/lib/variants/variantMapping";
 import type { VariantDimension, VariantFormRow } from "@/lib/variants/types";
 import type { ProductDraft, ProductImage } from "@/types/domain";
@@ -209,8 +210,11 @@ export function mapDraftToWorkspaceForm(
   const dimsRaw = Array.isArray(draft.variant_dimensions)
     ? (draft.variant_dimensions as VariantDimension[])
     : [];
+  const productCost = isPricePlaceholderCny(draft.cny_price)
+    ? null
+    : (draft.cny_price ?? null);
   const { dimensions, rows } = dbRowsToForm(dimsRaw, variants, {
-    productCost: draft.cny_price ?? null
+    productCost
   });
 
   const invUnlimited =
@@ -221,8 +225,8 @@ export function mapDraftToWorkspaceForm(
       : "";
 
   const price =
-    draft.cny_price != null && Number.isFinite(Number(draft.cny_price))
-      ? String(draft.cny_price)
+    productCost != null && Number.isFinite(Number(productCost))
+      ? String(productCost)
       : "";
 
   return {

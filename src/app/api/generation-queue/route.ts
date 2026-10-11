@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { canOperate } from "@/lib/auth/roles";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
+import {
+  hasUnconfirmedPlaceholderCny,
+  MISSING_COST_BLOCK_MESSAGE,
+} from "@/lib/import/captureTypes";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 
 const QUEUE_VERSION = "v1.1";
@@ -157,12 +161,18 @@ export async function POST(request: NextRequest) {
 
     const { data: draft, error: draftError } = await serviceSupabase
       .from("product_drafts")
-      .select("id,status,generation_status,raw_capture")
+      .select("id,status,generation_status,raw_capture,cny_price")
       .eq("id", draftId)
       .single();
 
     if (draftError || !draft) {
       return Response.json({ error: draftError?.message ?? "Draft not found" }, { status: 404 });
+    }
+    if (hasUnconfirmedPlaceholderCny(draft)) {
+      return Response.json(
+        { error: MISSING_COST_BLOCK_MESSAGE, code: "capture_cost_unconfirmed" },
+        { status: 409 },
+      );
     }
     if (draft.status !== "pending_copy" || draft.generation_status !== "pending") {
       return Response.json(
@@ -256,12 +266,18 @@ export async function POST(request: NextRequest) {
 
     const { data: draft, error: draftError } = await serviceSupabase
       .from("product_drafts")
-      .select("id,status")
+      .select("id,status,cny_price,raw_capture")
       .eq("id", draftId)
       .single();
 
     if (draftError || !draft) {
       return Response.json({ error: draftError?.message ?? "Draft not found" }, { status: 404 });
+    }
+    if (hasUnconfirmedPlaceholderCny(draft)) {
+      return Response.json(
+        { error: MISSING_COST_BLOCK_MESSAGE, code: "capture_cost_unconfirmed" },
+        { status: 409 },
+      );
     }
     if (draft.status === "archived") {
       return Response.json({ error: "Archived draft cannot regenerate" }, { status: 409 });

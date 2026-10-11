@@ -163,7 +163,10 @@ async function refillEmptyCaptureFields(input: {
   const warnings = [...mapped.warnings];
 
   if (variantsEmpty && hasNewVariants) {
-    const withDraft = mapped.variantRows.map((row) => ({
+    // The refill path must remove temporary image_url just like new-draft capture.
+    // Existing drafts have no new URL-to-product_images mapping here; leave image_id
+    // unset rather than inserting an unsupported column or fabricating an image link.
+    const withDraft = applyVariantImageIds(mapped.variantRows, {}).map((row) => ({
       ...row,
       draft_id: input.draftId
     }));

@@ -43,6 +43,14 @@ export type CaptureMeta = {
     selected_sku?: string | null;
     message?: string | null;
   } | null;
+  /** Bounded local diagnostic for Taobao price-shape discovery; raw page blobs are never stored. */
+  price_debug?: {
+    res_keys?: string[];
+    sku_core_keys?: string[];
+    sample_sku_info?: Array<{ sku: string; keys: string[] }>;
+    price_paths?: Array<{ path: string; value: string | number | boolean | null }>;
+    scanned_nodes?: number;
+  } | null;
 };
 
 /** Incoming body from extension / curl. Missing fields = not captured (do not invent). */

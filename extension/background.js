@@ -73,8 +73,38 @@ async function getSettings() {
   };
 }
 
+var PRODUCTION_API_HOSTS = [
+  "nestory-listing-admin.vercel.app",
+  "nestory-listing-admin-chocho-nestory.vercel.app"
+];
+
+/** 正式站 / 預覽 / 本機 label so the owner always sees where a capture went. */
+function apiTargetInfo(apiBaseUrl) {
+  var host = "";
+  try {
+    host = new URL(apiBaseUrl).hostname.toLowerCase();
+  } catch (_e) {
+    return { label: "未設定", host: "" };
+  }
+  if (PRODUCTION_API_HOSTS.indexOf(host) !== -1) return { label: "正式站", host: host };
+  if (host === "localhost" || host === "127.0.0.1") return { label: "本機", host: host };
+  if (/\.vercel\.app$/.test(host)) return { label: "預覽", host: host };
+  return { label: "其他", host: host };
+}
+
+async function currentApiTarget() {
+  var data = await chrome.storage.local.get(["apiBaseUrl"]);
+  return apiTargetInfo(normalizeApiBase(data.apiBaseUrl || ""));
+}
+
 async function setLastResult(result) {
-  await chrome.storage.local.set({ lastResult: result });
+  var target = await currentApiTarget();
+  await chrome.storage.local.set({
+    lastResult: Object.assign({}, result, {
+      api_target: target.label,
+      api_host: target.host
+    })
+  });
 }
 
 function truncate(s, n) {
@@ -117,10 +147,11 @@ async function setBadge(kind, text) {
 
 async function showPageToast(tabId, kind, message) {
   try {
+    var target = await currentApiTarget();
     await chrome.tabs.sendMessage(tabId, {
       type: "NESTORY_CAPTURE_TOAST",
       kind: kind,
-      message: message
+      message: "［" + target.label + "］" + message
     });
   } catch (_e) {
     // The page helper may not be injected yet; badge/lastResult remain as fallback.

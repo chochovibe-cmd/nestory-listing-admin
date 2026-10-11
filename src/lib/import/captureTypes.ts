@@ -36,7 +36,7 @@ export type CaptureMeta = {
   promo_price_cny?: number | null;
   /** Product-level price provenance; stored inside raw_capture.client_meta. */
   price_source?: string | null;
-  price_confidence?: "high" | "structured_pair" | "structured_primary" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
+  price_confidence?: "high" | "structured_min" | "structured_pair" | "structured_primary" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
   price_candidates?: Array<{ key?: string; source?: string; value: number; kind?: string }>;
   price_conflict?: {
     url_price_cny?: number | null;

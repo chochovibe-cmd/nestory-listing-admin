@@ -212,7 +212,7 @@ check("selectors: single catalog has taobao/tmall/shopee/generic", () => {
     Cap.SELECTORS.tmall.detailImages.includes(".desc-root img"),
     "tmall detail rules must include desc-root"
   );
-  assert.equal(Cap.CAPTURE_BUILD, "capture-20261011-r5");
+  assert.equal(Cap.CAPTURE_BUILD, "capture-20261011-r6");
 });
 
 check("parsePrice: honest nulls", () => {
@@ -873,6 +873,121 @@ check("no third-party script injection in extension", () => {
   const bg = read("extension/background.js");
   const cap = read("extension/content/capture.js");
   assert.ok(!/cdn\.|googleapis|script\.src\s*=/.test(bg + cap));
+});
+
+// 2026-10-11 15:00 live Hollybox (ec18dfd8): sku2info now carries per-SKU prices,
+// while priceVO.price followed the URL-selected combo SKU (79.8, still labelled 起).
+function hollyboxSelectedSkuLiveCase() {
+  const base = livePriceDebugFixture.cases.find((x) => x.draft_prefix === "ff813a4a");
+  const testCase = JSON.parse(JSON.stringify(base));
+  const info = testCase.ice_res.skuCore.sku2info;
+  const price = (text, desc) => ({
+    price: Object.assign({ priceTitle: "优惠前", priceText: text }, desc ? { priceDesc: desc } : {})
+  });
+  for (const id of Object.keys(info)) {
+    const n = Number(id);
+    const text = n === 6141485911090 ? "239" : n >= 6146720591295 ? "79.8" : "39.9";
+    info[id] = Object.assign({}, info[id], price(text));
+  }
+  info["0"] = price("39.9", "起");
+  testCase.ice_res.componentsVO.priceVO.price.priceText = "79.8";
+  testCase.ice_res.componentsVO.priceVO.price.priceMoney = "7980";
+  return testCase;
+}
+
+check("r6 baseline: live Hollybox selected combo → product baseline is cheapest SKU 39.9", () => {
+  const testCase = hollyboxSelectedSkuLiveCase();
+  const body = captureFromLivePriceFixture(testCase);
+  assert.equal(body.price_cny, 39.9);
+  assert.equal(body.capture_meta.price_source, "ice.skuCore.min_sku_price");
+  // extraPrice belongs to the 79.8 priceVO state, so it must not become product promo.
+  assert.equal(body.capture_meta.promo_price_cny ?? null, null);
+  const byPrice = (p) => body.variants_flat.filter((row) => row.cny_price === p).length;
+  assert.equal(body.variants_flat.length, 13);
+  assert.equal(byPrice(39.9), 6);
+  assert.equal(byPrice(79.8), 6);
+  assert.equal(byPrice(239), 1);
+  assert.ok(body.variants_flat.every((row) => row.price_source === "skuCore.price"));
+});
+
+check("r6 baseline: non-sale placeholder SKU (补差价 ¥1) never becomes the product baseline", () => {
+  const base = livePriceDebugFixture.cases.find((x) => x.draft_prefix === "dd6950a3");
+  const testCase = JSON.parse(JSON.stringify(base));
+  const res = testCase.ice_res;
+  const firstProp = res.skuBase.props[0];
+  firstProp.values.push({ vid: "vfee", name: "补差价专拍（勿拍）" });
+  const template = res.skuBase.skus[0];
+  const pathParts = String(template.propPath).split(";");
+  pathParts[0] = `${firstProp.pid}:vfee`;
+  res.skuBase.skus.push({ propPath: pathParts.join(";"), skuId: "9999999999999" });
+  res.skuCore.sku2info["9999999999999"] = { price: { priceTitle: "优惠前", priceText: "1" } };
+  const body = captureFromLivePriceFixture(testCase);
+  assert.equal(body.price_cny, 18.9);
+  const fee = body.variants_flat.find((row) => row.sku === "9999999999999");
+  assert.ok(fee, "placeholder row is still captured for the operator to see");
+  assert.equal(fee.cny_price, 1);
+});
+
+check("r6 baseline: priceVO with URL skuId and no SKU prices is flagged for confirmation", () => {
+  const testCase = livePriceDebugFixture.cases.find((x) => x.draft_prefix === "ff813a4a");
+  const body = captureFromLivePriceFixture(testCase);
+  assert.equal(body.price_cny, 39.9);
+  assert.equal(body.capture_meta.price_confidence, "needs_confirmation");
+  assert.ok(
+    (body.capture_meta.warnings_from_client || []).some((w) => /可能是目前選中款的價格/.test(w)),
+    "selected-SKU baseline risk must be surfaced"
+  );
+});
+
+check("r6 detail_debug: iframe / background-image / ICE desc samples are host+path only", () => {
+  const ice = {
+    loaderData: {
+      home: {
+        data: {
+          res: {
+            item: { descUrl: "//market.m.taobao.com/app/detail-desc/index.html?id=1&secret=s" }
+          }
+        }
+      }
+    }
+  };
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">detail debug</h1>' +
+    '<iframe src="https://desc.alicdn.com/i7/123/desc.htm?token=abc"></iframe>' +
+    '<div style="background-image:url(\'https://img.alicdn.com/imgextra/i1/123/O1CN01detail.jpg?x=1\')"></div>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    JSON.stringify(ice) +
+    ";</script></body></html>";
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://item.taobao.com/item.htm?id=1",
+    host: "item.taobao.com"
+  });
+  const debug = body.capture_meta.detail_debug;
+  assert.deepEqual(debug.iframe_src_samples, ["desc.alicdn.com/i7/123/desc.htm"]);
+  assert.deepEqual(debug.background_image_samples, ["img.alicdn.com/imgextra/i1/123/O1CN01detail.jpg"]);
+  assert.equal(debug.ice_desc_url_keys.length, 1);
+  assert.equal(debug.ice_desc_url_keys[0].url, "market.m.taobao.com/app/detail-desc/index.html");
+  assert.ok(!JSON.stringify(debug).includes("token=abc"));
+  assert.ok(!JSON.stringify(debug).includes("secret=s"));
+  assert.equal(debug.limits.samples, 12);
+});
+
+check("r6 extension UI: API target 正式站／預覽 + host shown in settings, result and toast", () => {
+  const bg = read("extension/background.js");
+  const popupJs = read("extension/popup/popup.js");
+  const popupHtml = read("extension/popup/popup.html");
+  for (const src of [bg, popupJs]) {
+    assert.match(src, /function apiTargetInfo\(apiBaseUrl\)/);
+    assert.match(src, /"nestory-listing-admin\.vercel\.app"/);
+    assert.match(src, /"正式站"/);
+    assert.match(src, /"預覽"/);
+  }
+  assert.match(bg, /api_target: target\.label/);
+  assert.match(bg, /"［" \+ target\.label \+ "］" \+ message/);
+  assert.match(popupHtml, /id="apiTarget"/);
+  assert.match(popupHtml, /id="lastTarget"/);
+  assert.match(popupJs, /"送到：" \+ last\.api_target/);
 });
 
 if (failures.length) {

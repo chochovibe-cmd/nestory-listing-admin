@@ -22,6 +22,7 @@ import {
   WARNING_MISSING_PRICE,
   WARNING_MULTIDIM_NO_FLAT
 } from "@/lib/import/captureTypes";
+import { keepOrInheritVariantCny } from "@/lib/import/captureVariantPrice";
 
 const BRAND_PARAM_KEYS = [
   "品牌",
@@ -363,6 +364,7 @@ function mapVariantRows(
     // Prefer flat.cny_price; if missing, map from sku_table cell only when
     // cell price differs from product cost (CAP-2.6 / 87 D1+C1).
     let cny = asPositiveNumber(v.cny_price);
+    const ownPriceSource = cny != null ? asTrimmedString(v.price_source) : null;
     if (cny == null && skuTable != null) {
       const fromTable = lookupSkuTablePrice(skuTable, {
         option1_name: o1n,
@@ -379,10 +381,9 @@ function mapVariantRows(
         cny = fromTable;
       }
     }
-    // C1: equal to product → leave null (follow form product cost)
-    if (cny != null && product != null && Math.abs(cny - product) < 0.001) {
-      cny = null;
-    }
+    // C1: only an unsourced price equal to product collapses to null (follow
+    // product cost); a SKU's own captured price stays explicit (r6).
+    cny = keepOrInheritVariantCny(cny, product, ownPriceSource);
 
     const imageUrl = asTrimmedString(v.image_url);
     if (imageUrl && !seenImg.has(imageUrl)) {
@@ -535,6 +536,9 @@ export function mapCaptureToDraftFields(
       /** CAPTURE-TRUTH-A: downstream/UI may block auto-pricing until operator confirms. */
       price_requires_confirmation: priceRequiresConfirmation,
       price_confidence: priceConfidence,
+      /** Which backend build handled this capture (Production vs Preview audits). */
+      backend_sha: process.env.VERCEL_GIT_COMMIT_SHA || null,
+      backend_env: process.env.VERCEL_ENV || null,
       image_fetch: [] as unknown[]
     }
   };

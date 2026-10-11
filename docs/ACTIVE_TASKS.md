@@ -1,3 +1,9 @@
+> **2026-10-11 Owner pricing rule — CAPTURE-TRUTH-A**
+> - Cost basis rule is confirmed: use the **non-discount / pre-promo price** as Nestory default cost. Promo / coupon / after-discount prices may be captured and stored as evidence, but must not automatically drive pricing because they can change.
+> - Multi-variant products should capture each SKU's own base price and promo/coupon evidence whenever available. A missing per-SKU base price must be represented as inherited/unknown, never presented as independently captured.
+> - Performance requirement: preserve the current acceptable capture speed. CAPTURE-TRUTH-A must not add a second Taobao fetch, external API call, or AI call.
+> - Runtime work is in Draft PR #40. CI PASS (verify / typecheck / build). No merge yet; real Taobao smoke still required before acceptance.
+>
 > **2026-10-11 Owner runtime decision — OBS-QUEUE deferred**
 > - PR #38 Preview was reviewed by Owner and is **DEFERRED / DO NOT MERGE**.
 > - Reason: the current queue center is visually too heavy / awkwardly placed, long failure content scales poorly, and underlying `failed` semantics are not yet trustworthy.

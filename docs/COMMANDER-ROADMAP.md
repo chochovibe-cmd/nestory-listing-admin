@@ -1,3 +1,10 @@
+> **2026-10-11 CAPTURE-TRUTH / CAPTURE-IMAGE implementation detail**
+> - Data-truth rule: SKU existence is not proof of SKU-price existence. Product base price may be displayed as an inherited fallback in the workbench, but raw capture must not manufacture per-SKU price truth.
+> - Performance rule remains authoritative: first use data already loaded in DOM / ICE / embedded local SKU params. Do not add a second Taobao request, AI call, or automatic full SKU-click sweep to the normal fast path.
+> - If a page still does not expose all SKU prices locally after PR #40, a future optional “補抓各款價格” interaction may be considered separately; do not silently make every capture slower.
+> - Tmall detail-image recovery is separated into PR #41 because it is a different failure domain. Fix selector coverage / local loaded-data fallback first; do not mix it into price logic or use auto-scroll by default.
+> - Final acceptance for these capture packages requires one paired smoke using the matching test extension + Preview API; extension-new/API-old tests are not sufficient for backend provenance acceptance.
+>
 > **2026-10-11 CAPTURE-TRUTH-A owner authority**
 > - Stable cost policy: Nestory prices from the seller's non-discount/pre-promo price. Promo, coupon, member, and after-discount prices are retained as reference evidence only and are not the automatic cost basis.
 > - SKU policy: capture each SKU's base/original price plus promo evidence where the loaded Taobao/Tmall page exposes them. When an SKU price is not independently captured, keep the provenance honest (inherited/unknown) rather than copying the product price and presenting it as SKU truth.

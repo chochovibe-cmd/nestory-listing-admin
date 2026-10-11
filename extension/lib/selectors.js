@@ -240,7 +240,17 @@
     detailImages: [
       "#description img",
       "#J_DivItemDesc img",
-      "[class*='descV8'] img"
+      "[class*='descV8'] img",
+      "[class*='DescV8'] img",
+      "[id*='description'] img",
+      "[id*='desc'] img",
+      ".detail-desc img",
+      "[class*='detailDesc'] img",
+      "[class*='detail-desc'] img",
+      "[class*='description'] img",
+      "[class*='DetailContent'] img",
+      "[class*='detailContent'] img",
+      "[class*='content--'] img"
     ]
   };
 

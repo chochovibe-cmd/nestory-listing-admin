@@ -1,3 +1,44 @@
+> **2026-10-11 OWNER-APPROVED ROADMAP INSERT — live-use data truth before copy quality**
+> - This update intentionally changes the 2026-10-10 default post-release order because real daily use exposed correctness/integrity risks. The older roadmap is **not deleted**; these packages are inserted so existing work cannot be silently lost.
+> - Vercel is available again. Latest handoff Preview `dpl_EnzH362gm6uyAwaaiSbTwJBAsdgh` is `READY` on `87d759395beb374ab839b7a5265d14cebbb6d1ae`.
+> - Existing started work must be closed deliberately: PR #36 (SEO Panel V2-A) still needs Preview + Owner QA; PR #38 (OBS-QUEUE) still needs Preview, but its merge stays HOLD until failure-vs-needs-revision semantics are trustworthy.
+>
+> ### 2026-10-11 inserted sequence
+> 1. **CAPTURE-TRUTH｜淘寶 / 天貓來源資料要先是真的**
+>    - Separate original/list price, current directly-purchasable price, and conditional promo/coupon price.
+>    - Cross-check page display / selected SKU / structured page data / URL hints instead of trusting the first price-looking DOM node.
+>    - Per-SKU price must carry provenance: actually captured vs inherited product cost vs unknown. Never present inherited/unknown as if independently captured.
+>    - Filter or explicitly mark non-sale/info SKU rows such as 「拍下不出貨／勿拍／購買須知／資訊說明」.
+>    - Missing price must stay unknown/blocked, not become a positive `0.01 CNY` value that downstream pricing could mistake for truth.
+>    - Re-capture may refresh trusted source fields while protecting operator-confirmed/manual data; wrong non-empty captured values must not become permanently immutable.
+> 2. **IMAGE-INTEGRITY｜圖片 / Variant 關聯不能再出現半刪除**
+>    - Never delete Storage first. Resolve/confirm Variant image bindings, persist DB change, then remove the object.
+>    - Show clearly when an image is a Variant-bound image rather than an ordinary main image.
+>    - Reconcile existing broken references. 2026-10-11 audit found at least 3 recent variant-image rows still referenced by variants while their Supabase Storage object is missing.
+>    - Later DATA-RELIABILITY may own routine orphan/missing-object reconciliation; this package fixes the current unsafe path and known damage only.
+> 3. **PRICING-RULES｜公式與價格美化不能把正常價格跳成離譜售價**
+>    - Verify product + per-variant output against the stored formula.
+>    - Rework the current high-price ladder that can jump `1680 → 2280 → 4480`.
+>    - Add a guard so cosmetic price beautification cannot deviate excessively from the formula result.
+> 4. **STATUS-SEMANTICS｜真正失敗 vs 待補資料**
+>    - AI/API execution failure is not the same as generated content that needs IP/tag/catalog correction.
+>    - Keep `needs_revision` actionable without poisoning generation-failure metrics.
+>    - Make AI-detected IP, canonical catalog IP, character creation, and tag application a coherent flow.
+>    - OBS-QUEUE's “failed” count is not final-authority until this distinction is implemented.
+> 5. **REVIEW-GUARD｜所有未儲存修改都要攔得住**
+>    - Unify dirty-state detection across copy version selection/manual edits plus Tags, SKU, detected type/spec and variant edits.
+>    - On approval, unresolved edits become an explicit “save and approve” path rather than silently moving on.
+> 6. **FLOW/PREFS｜把日常操作預設與回饋做順**
+>    - First-use defaults: single price + 潮巢導購版.
+>    - Thereafter remember the user's last used price mode and copy tone (do not regress existing continuous-listing behavior).
+>    - Pricing settings need visible persisted-state feedback.
+>    - Failed result cards need a clear dismiss/recovery path; reduce full-page refresh/flicker by preferring local state updates where safe.
+>
+> ### Then resume the pre-existing roadmap
+> `COPY-SAFE → PB2-COPY-STRATEGY → UIUX-SPEC-VARIANT → UIUX-CARD-WORKBENCH → UIUX-FLOW-STATE → PERF P1A → PERF P1B → CAPTURE-FILTER → PRICING-DB / SCHEDULE V1.2 → DATA-RELIABILITY / TEST-OPS-HARDENING → VIDEO / advanced image → CSS / scouting later`
+>
+> **Ordering rule:** this sequence is a maintained plan, not a rigid promise. New Owner ideas may be inserted and Commander may recommend reordering, but every reorder/skip must be surfaced and recorded so an older planned package cannot disappear unnoticed.
+>
 > **2026-10-10 ROADMAP — Shopify release gates COMPLETE**
 > - Production DRAFT + real DRAFT smoke + ACTIVE publication repair + real Online Store publication recovery are PASS.
 > - Normal daily DRAFT / ACTIVE choice is released.

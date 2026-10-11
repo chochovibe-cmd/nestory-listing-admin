@@ -87,6 +87,7 @@
       capture_meta.price_candidates = partial.price_candidates;
     }
     if (partial.price_conflict) capture_meta.price_conflict = partial.price_conflict;
+    if (partial.price_debug) capture_meta.price_debug = partial.price_debug;
     // CAP-2.6 / 86: promo after discount → meta only (not price_cny)
     if (partial.promo_price_cny != null && Number.isFinite(Number(partial.promo_price_cny))) {
       capture_meta.promo_price_cny = Number(partial.promo_price_cny);

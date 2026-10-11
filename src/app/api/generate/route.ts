@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
+import {
+  hasUnconfirmedPlaceholderCny,
+  MISSING_COST_BLOCK_MESSAGE,
+} from "@/lib/import/captureTypes";
 import { generateListingContent } from "@/lib/contentGenerator/generateListingContent";
 import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import {
@@ -600,6 +604,13 @@ export async function POST(request: NextRequest) {
   }
 
   const draft = draftRow as ProductDraft;
+  if (hasUnconfirmedPlaceholderCny(draft)) {
+    return Response.json(
+      { error: MISSING_COST_BLOCK_MESSAGE, code: "capture_cost_unconfirmed" },
+      { status: 409 },
+    );
+  }
+
   const serviceSupabase = createServiceSupabaseClient();
 
   let queueJobKind: "full" | "regen_full" | "regen_field" = "full";

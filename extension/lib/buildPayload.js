@@ -78,6 +78,7 @@
       adapter: det.adapter,
       page_host: host || undefined,
       sku_dimensions: sku_dimensions,
+      extension_build: NestoryCap.CAPTURE_BUILD || undefined,
       warnings_from_client: warnings
     };
     // CAPTURE-TRUTH-A: price evidence/provenance is metadata only; no extra request.

@@ -388,6 +388,89 @@
     return null;
   }
 
+  function allMatchesAcrossSelectors(doc, selectors) {
+    var out = [];
+    var seen = [];
+    var list = Array.isArray(selectors) ? selectors : selectors ? [selectors] : [];
+    for (var i = 0; i < list.length; i++) {
+      var sel = list[i];
+      if (!sel) continue;
+      try {
+        var nodes = doc.querySelectorAll(sel);
+        for (var j = 0; nodes && j < nodes.length; j++) {
+          if (seen.indexOf(nodes[j]) >= 0) continue;
+          seen.push(nodes[j]);
+          out.push(nodes[j]);
+        }
+      } catch (_e) {}
+    }
+    return out;
+  }
+
+  /**
+   * Some modern Tmall pages keep rich-description image URLs inside the
+   * already-loaded ICE payload while the visual description is lazy-rendered.
+   * Read only bounded local data; never fetch the description endpoint here.
+   */
+  function detailImageUrlsFromIce(res, href, dom) {
+    if (!res || typeof res !== "object") return [];
+    var out = [];
+    var seen = {};
+    var nodes = 0;
+    var MAX_NODES = 4000;
+    var MAX_OUT = 20;
+    var DETAIL_PATH_RE = /desc|detail|rich.?text|content/i;
+    var IMAGE_URL_RE = /(?:https?:)?\/\/[^"'\\\s<>]+?\.(?:jpe?g|png|webp|gif)(?:\?[^"'\\\s<>]*)?/gi;
+
+    function add(raw) {
+      if (!raw || out.length >= MAX_OUT) return;
+      var u = dom.absUrl(raw, href);
+      if (!u || seen[u]) return;
+      if (!/\.(?:jpe?g|png|webp|gif)(?:\?|$)/i.test(u)) return;
+      seen[u] = true;
+      out.push(u);
+    }
+
+    function scanString(raw, path) {
+      if (!DETAIL_PATH_RE.test(path || "")) return;
+      var str = String(raw || "");
+      if (!str || str.length > 250000) return;
+      var match;
+      IMAGE_URL_RE.lastIndex = 0;
+      while ((match = IMAGE_URL_RE.exec(str)) && out.length < MAX_OUT) {
+        add(match[0]);
+      }
+    }
+
+    function walk(node, path, depth) {
+      if (node == null || depth > 7 || nodes++ >= MAX_NODES || out.length >= MAX_OUT) return;
+      if (typeof node === "string") {
+        scanString(node, path);
+        return;
+      }
+      if (typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        for (var ai = 0; ai < node.length && ai < 60; ai++) {
+          walk(node[ai], path + "[" + ai + "]", depth + 1);
+          if (nodes >= MAX_NODES || out.length >= MAX_OUT) break;
+        }
+        return;
+      }
+      var keys = Object.keys(node);
+      for (var ki = 0; ki < keys.length && ki < 120; ki++) {
+        var key = keys[ki];
+        var next = path ? path + "." + key : key;
+        var value = node[key];
+        if (typeof value === "string") scanString(value, next);
+        else if (value && typeof value === "object") walk(value, next, depth + 1);
+        if (nodes >= MAX_NODES || out.length >= MAX_OUT) break;
+      }
+    }
+
+    walk(res, "res", 0);
+    return out;
+  }
+
   function extractSkuFromRoot(rootEl, S, dom, baseHref) {
     var axes = [];
     var valuesPerAxis = [];
@@ -1059,10 +1142,14 @@
     );
     if (!main_image_urls.length) warnings.push("main_image_urls: 未抓到");
 
+    var detailNodes = allMatchesAcrossSelectors(doc, S.detailImages);
+    var detailIceUrls = detailImageUrlsFromIce(iceRes, href, dom);
     var detail_image_urls = dom.uniqueUrls(
-      dom.allMatch(doc, S.detailImages).map(function (el) {
-        return dom.imgUrlFromEl(el, href);
-      }),
+      detailNodes
+        .map(function (el) {
+          return dom.imgUrlFromEl(el, href);
+        })
+        .concat(detailIceUrls),
       20
     );
     var mset = {};
@@ -1072,7 +1159,23 @@
     detail_image_urls = detail_image_urls.filter(function (u) {
       return !mset[u];
     });
-    if (!detail_image_urls.length) warnings.push("detail_image_urls: 未抓到");
+    if (!detail_image_urls.length) {
+      var detailShell = allMatchesAcrossSelectors(doc, [
+        "#description",
+        "#J_DivItemDesc",
+        "[id*='description']",
+        "[id*='desc']",
+        "[class*='desc']",
+        "[class*='Desc']",
+        "[class*='detail']",
+        "[class*='Detail']"
+      ]);
+      warnings.push(
+        detailShell.length
+          ? "detail_image_urls: 詳情區已出現但未識別到圖片"
+          : "detail_image_urls: 詳情區尚未載入或此頁型未提供可讀圖片"
+      );
+    }
 
     var video_urls = [];
     dom.allMatch(doc, S.video).forEach(function (el) {

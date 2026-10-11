@@ -152,6 +152,8 @@ check("source: mapDraftToWorkspaceForm exports + CNY + pending_input gate", () =
   const src = read("src/lib/drafts/mapDraftToWorkspaceForm.ts");
   assert.match(src, /export function mapDraftToWorkspaceForm/);
   assert.match(src, /costCurrency:\s*"CNY"/);
+  assert.match(src, /isPricePlaceholderCny/);
+  assert.match(src, /productCost = isPricePlaceholderCny/);
   assert.match(src, /status === "pending_input"/);
   assert.match(src, /resolveNonPendingInputRedirect/);
   assert.match(src, /captureOpenPath/);
@@ -173,6 +175,7 @@ check("source: WorkspaceInputPanel seed props + no B13 auto when seeded", () => 
   assert.match(src, /applyServerFormSeed/);
   assert.match(src, /serverSeedAppliedRef/);
   assert.match(src, /上次未完成的填寫仍在暫存/);
+  assert.match(src, /placeholder=\{draftId && !price \? "成本未取得" : undefined\}/);
   // URL seed path must not show restore bar
   assert.match(src, /if \(initialFromServer\) return/);
   // ensureDraftId short-circuits when draftId set → update same id, no insert

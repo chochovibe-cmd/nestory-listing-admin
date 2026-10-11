@@ -2389,6 +2389,7 @@ export function WorkspaceInputPanel({
               <input
                 min="0"
                 onChange={(e) => handleCostPriceChange(e.target.value)}
+                placeholder={draftId && !price ? "成本未取得" : undefined}
                 ref={priceRef}
                 step="0.01"
                 type="number"

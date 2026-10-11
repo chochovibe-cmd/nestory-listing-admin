@@ -353,6 +353,17 @@ check("source: createCaptureDraft dedupe + V1.1 background compatibility", () =>
   assert.match(bg, /\.is\("image_id", null\)/);
 });
 
+check("CAPTURE refill: temporary image_url never reaches product_variants insert", () => {
+  const src = read("src/lib/import/createCaptureDraft.ts");
+  const start = src.indexOf("async function refillEmptyCaptureFields(");
+  const end = src.indexOf("export async function createCaptureDraft(", start);
+  assert.ok(start >= 0 && end > start, "refill function must exist");
+  const refill = src.slice(start, end);
+  assert.match(refill, /applyVariantImageIds\(mapped\.variantRows, \{\}\)/);
+  assert.match(refill, /persistVariantsSafe\(input\.serviceSupabase, input\.draftId, withDraft\)/);
+  assert.doesNotMatch(refill, /const withDraft = mapped\.variantRows\.map/);
+});
+
 check("source: image fetch 10s timeout + referer + limits + variant", () => {
   const src = read("src/lib/import/fetchRemoteImages.ts");
   assert.match(src, /IMAGE_FETCH_TIMEOUT_MS|10_000|10000/);

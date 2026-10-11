@@ -92,6 +92,101 @@
    * No fetch/XHR: this only reads the ICE object already parsed from the page.
    * base is the non-discount price used as Nestory cost; promo is evidence only.
    */
+  /**
+   * CAPTURE-TRUTH-A diagnostic: summarize price-related fields already loaded
+   * in the Taobao ICE object. Strict caps keep this cheap and prevent raw page
+   * blobs from being persisted. No network / interaction is performed.
+   */
+  function collectPriceDebug(res) {
+    if (!res || typeof res !== "object") return null;
+
+    var skuInfo = (res.skuCore && res.skuCore.sku2info) || {};
+    var skuRows = Array.isArray(res.skuBase && res.skuBase.skus)
+      ? res.skuBase.skus
+      : [];
+    var sampleSkuInfo = [];
+    for (var si = 0; si < skuRows.length && sampleSkuInfo.length < 20; si++) {
+      var skuId = skuRows[si] && skuRows[si].skuId != null ? String(skuRows[si].skuId) : "";
+      if (!skuId) continue;
+      var info = skuInfo[skuId] || {};
+      sampleSkuInfo.push({
+        sku: skuId,
+        keys: info && typeof info === "object" ? Object.keys(info).slice(0, 30) : []
+      });
+    }
+
+    var pricePaths = [];
+    var nodes = 0;
+    var MAX_NODES = 5000;
+    var MAX_PATHS = 120;
+    var PRICEISH = /price|promo|promotion|coupon|discount|activity|amount|sku.?price/i;
+
+    function walk(node, path, depth) {
+      if (
+        node == null ||
+        depth > 6 ||
+        nodes >= MAX_NODES ||
+        pricePaths.length >= MAX_PATHS
+      ) {
+        return;
+      }
+      nodes += 1;
+
+      if (Array.isArray(node)) {
+        for (var ai = 0; ai < node.length && ai < 40; ai++) {
+          walk(node[ai], path + "[" + ai + "]", depth + 1);
+          if (pricePaths.length >= MAX_PATHS || nodes >= MAX_NODES) break;
+        }
+        return;
+      }
+
+      if (typeof node !== "object") return;
+
+      var keys = Object.keys(node);
+      for (var ki = 0; ki < keys.length; ki++) {
+        var key = keys[ki];
+        var value = node[key];
+        var nextPath = path ? path + "." + key : key;
+
+        if (PRICEISH.test(key) || PRICEISH.test(nextPath)) {
+          if (
+            value == null ||
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean"
+          ) {
+            var shown = value;
+            if (typeof shown === "string" && shown.length > 160) {
+              shown = shown.slice(0, 160) + "…";
+            }
+            pricePaths.push({ path: nextPath, value: shown });
+            if (pricePaths.length >= MAX_PATHS) break;
+          }
+        }
+
+        // Keep traversal broad enough to discover alternate Taobao price trees,
+        // but bounded so it remains local and fast.
+        if (value && typeof value === "object") {
+          walk(value, nextPath, depth + 1);
+          if (pricePaths.length >= MAX_PATHS || nodes >= MAX_NODES) break;
+        }
+      }
+    }
+
+    walk(res, "res", 0);
+
+    return {
+      res_keys: Object.keys(res).slice(0, 60),
+      sku_core_keys:
+        res.skuCore && typeof res.skuCore === "object"
+          ? Object.keys(res.skuCore).slice(0, 60)
+          : [],
+      sample_sku_info: sampleSkuInfo,
+      price_paths: pricePaths,
+      scanned_nodes: nodes
+    };
+  }
+
   function structuredSkuPrices(info) {
     if (!info || typeof info !== "object") {
       return {
@@ -716,6 +811,7 @@
     var iceRes = iceResFromContext(ice);
     var iceSku = iceSkuFromRes(iceRes);
     var iceParams = iceParamsFromRes(iceRes);
+    var price_debug = collectPriceDebug(iceRes);
     var sku_table = null;
     var variants_flat = [];
     var sku_dimensions = 0;
@@ -902,6 +998,7 @@
       price_confidence: price_confidence,
       price_candidates: price_candidates,
       price_conflict: price_conflict,
+      price_debug: price_debug,
       sku_table: sku_table,
       variants_flat: variants_flat,
       main_image_urls: main_image_urls,

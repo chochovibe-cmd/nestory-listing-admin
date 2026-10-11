@@ -471,6 +471,102 @@
     return out;
   }
 
+  function detailImageUrlFromEl(el, href, dom) {
+    if (!el) return null;
+    var candidates = [
+      el.getAttribute && el.getAttribute("data-src"),
+      el.getAttribute && el.getAttribute("data-ks-lazyload"),
+      el.getAttribute && el.getAttribute("data-original"),
+      el.getAttribute && el.getAttribute("data-lazy-src"),
+      el.currentSrc || null,
+      el.getAttribute && el.getAttribute("src")
+    ];
+    var srcset =
+      (el.getAttribute && (el.getAttribute("data-srcset") || el.getAttribute("srcset"))) ||
+      "";
+    if (srcset) {
+      var parts = String(srcset)
+        .split(",")
+        .map(function (part) {
+          return part.trim().split(/\s+/)[0];
+        })
+        .filter(Boolean);
+      if (parts.length) candidates.unshift(parts[parts.length - 1]);
+    }
+    for (var i = 0; i < candidates.length; i++) {
+      var u = dom.absUrl(candidates[i], href);
+      if (u) return u;
+    }
+    return null;
+  }
+
+  function canonicalAlibabaImageKey(raw, href, dom) {
+    var u = dom.absUrl(raw, href);
+    if (!u) return null;
+    try {
+      var parsed = new URL(u);
+      var path = parsed.pathname;
+      path = path
+        .replace(/_q\d+(?:\.jpg)?_?\.webp$/i, "")
+        .replace(/_\.webp$/i, "")
+        .replace(/_\d+x\d+(?:q\d+)?\.jpg$/i, "")
+        .replace(/\.jpg_\.webp$/i, ".jpg")
+        .replace(/\.png_\.webp$/i, ".png");
+      return parsed.hostname.toLowerCase() + path;
+    } catch (_e) {
+      return String(u).split("?")[0].replace(/_\.webp$/i, "");
+    }
+  }
+
+  function filterDetailImageUrls(urls, href, dom, mainUrls, variants) {
+    var mainKeys = {};
+    (mainUrls || []).forEach(function (u) {
+      var key = canonicalAlibabaImageKey(u, href, dom);
+      if (key) mainKeys[key] = true;
+    });
+    var variantKeys = {};
+    (variants || []).forEach(function (row) {
+      var key = canonicalAlibabaImageKey(row && row.image_url, href, dom);
+      if (key) variantKeys[key] = true;
+    });
+
+    var ownerCounts = {};
+    (urls || []).forEach(function (u) {
+      var m = String(u || "").match(/!!(\d+)/);
+      if (m) ownerCounts[m[1]] = (ownerCounts[m[1]] || 0) + 1;
+    });
+    var dominantOwner = null;
+    Object.keys(ownerCounts)
+      .sort(function (a, b) {
+        return ownerCounts[b] - ownerCounts[a];
+      })
+      .some(function (owner) {
+        if (ownerCounts[owner] >= 2 && !/^600000000/.test(owner)) {
+          dominantOwner = owner;
+          return true;
+        }
+        return false;
+      });
+
+    return (urls || []).filter(function (u) {
+      if (!u) return false;
+      var text = String(u);
+      if (/^(?:data|blob):/i.test(text)) return false;
+      if (/transparent|blank|loading|placeholder|spacer|1x1/i.test(text)) return false;
+      // Taobao platform separators/badges, not seller detail art.
+      if (/!!600000000\d+-2-tps-/i.test(text)) return false;
+
+      var key = canonicalAlibabaImageKey(u, href, dom);
+      if (key && (mainKeys[key] || variantKeys[key])) return false;
+
+      if (dominantOwner) {
+        var owner = text.match(/!!(\d+)/);
+        if (owner && owner[1] !== dominantOwner && /^600000000/.test(owner[1])) return false;
+      }
+      return true;
+    });
+  }
+
   function extractSkuFromRoot(rootEl, S, dom, baseHref) {
     var axes = [];
     var valuesPerAxis = [];
@@ -1145,22 +1241,30 @@
     var detailNodes = allMatchesAcrossSelectors(doc, S.detailImages);
     var detailDomUrls = dom.uniqueUrls(
       detailNodes.map(function (el) {
-        return dom.imgUrlFromEl(el, href);
+        return detailImageUrlFromEl(el, href, dom);
       }),
-      20
+      40
     );
-    // Preserve capture speed: only scan bounded ICE rich-detail data when the
-    // normal DOM path produced zero usable detail images.
+    detailDomUrls = filterDetailImageUrls(
+      detailDomUrls,
+      href,
+      dom,
+      main_image_urls,
+      variants_flat
+    );
+
+    // A few false-positive platform/SKU images must not suppress the fallback.
+    // Only run the bounded ICE scan when DOM detail evidence is still sparse.
     var detailIceUrls =
-      detailDomUrls.length === 0 ? detailImageUrlsFromIce(iceRes, href, dom) : [];
+      detailDomUrls.length < 5 ? detailImageUrlsFromIce(iceRes, href, dom) : [];
+    detailIceUrls = filterDetailImageUrls(
+      detailIceUrls,
+      href,
+      dom,
+      main_image_urls,
+      variants_flat
+    );
     var detail_image_urls = dom.uniqueUrls(detailDomUrls.concat(detailIceUrls), 20);
-    var mset = {};
-    main_image_urls.forEach(function (u) {
-      mset[u] = true;
-    });
-    detail_image_urls = detail_image_urls.filter(function (u) {
-      return !mset[u];
-    });
     if (!detail_image_urls.length) {
       var detailShell = allMatchesAcrossSelectors(doc, [
         "#description",

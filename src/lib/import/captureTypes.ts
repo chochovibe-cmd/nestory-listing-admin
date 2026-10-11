@@ -129,6 +129,31 @@ export type CaptureImportResponse =
   | CaptureImportError;
 
 export const PRICE_PLACEHOLDER_CNY = 0.01;
+export const MISSING_COST_BLOCK_MESSAGE =
+  "成本未取得；請先確認並填入人民幣成本，再生成或上架";
+
+export function isPricePlaceholderCny(value: unknown): boolean {
+  const n = Number(value);
+  return Number.isFinite(n) && Math.abs(n - PRICE_PLACEHOLDER_CNY) < 0.000001;
+}
+
+/**
+ * Current schema keeps cny_price NOT NULL, so capture-missing price is persisted
+ * as 0.01. Treat it as unconfirmed unless a future explicit manual-confirm flag
+ * says otherwise. Replacing cny_price with a real operator-entered cost also
+ * clears this guard naturally.
+ */
+export function hasUnconfirmedPlaceholderCny(value: {
+  cny_price?: unknown;
+  raw_capture?: unknown;
+}): boolean {
+  if (!isPricePlaceholderCny(value.cny_price)) return false;
+  const raw = value.raw_capture;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
+  const server = (raw as Record<string, unknown>).server;
+  if (!server || typeof server !== "object" || Array.isArray(server)) return true;
+  return (server as Record<string, unknown>).price_manually_confirmed !== true;
+}
 
 export const WARNING_MISSING_PRICE =
   "未抓到可採用的未優惠價；草稿暫用系統占位值，請確認成本後再生成或上架";

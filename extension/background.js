@@ -59,10 +59,16 @@ async function hasHostPermission(matchPattern) {
 }
 
 async function getSettings() {
-  var data = await chrome.storage.local.get(["apiBaseUrl", "captureToken", "lastResult"]);
+  var data = await chrome.storage.local.get([
+    "apiBaseUrl",
+    "captureToken",
+    "vercelProtectionBypass",
+    "lastResult"
+  ]);
   return {
     apiBaseUrl: normalizeApiBase(data.apiBaseUrl || ""),
     captureToken: String(data.captureToken || "").trim(),
+    vercelProtectionBypass: String(data.vercelProtectionBypass || "").trim(),
     lastResult: data.lastResult || null
   };
 }
@@ -256,13 +262,17 @@ async function captureActiveTab() {
   var endpoint = settings.apiBaseUrl + "/api/import/product-page";
   var res;
   var json;
+  var requestHeaders = {
+    "Content-Type": "application/json",
+    Authorization: "Bearer " + settings.captureToken
+  };
+  if (settings.vercelProtectionBypass) {
+    requestHeaders["x-vercel-protection-bypass"] = settings.vercelProtectionBypass;
+  }
   try {
     res = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + settings.captureToken
-      },
+      headers: requestHeaders,
       body: JSON.stringify(payload)
     });
     json = await res.json().catch(function () {
@@ -377,6 +387,7 @@ chrome.runtime.onMessage.addListener(function (msg, _sender, sendResponse) {
         apiBaseUrl: s.apiBaseUrl,
         captureToken: s.captureToken ? "••••" + s.captureToken.slice(-4) : "",
         captureTokenFull: s.captureToken,
+        vercelProtectionBypass: s.vercelProtectionBypass ? "••••" : "",
         lastResult: s.lastResult
       });
     })();

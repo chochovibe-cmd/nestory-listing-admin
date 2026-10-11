@@ -601,6 +601,24 @@ check("CAPTURE-IMAGE: sparse detail retry is bounded and build-stamped", () => {
   assert.match(payload, /extension_build/);
 });
 
+check("CAPTURE-IMAGE: detail_debug retained as bounded capture_meta evidence", () => {
+  const href = "https://detail.tmall.com/item.htm?id=debug-test";
+  const { document } = loadDoc("scripts/fixtures/taobao-item-sample.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  const debug = body.capture_meta.detail_debug;
+  assert.ok(debug, "detail_debug must travel into capture_meta");
+  assert.ok(Number.isInteger(debug.dom_img_nodes));
+  assert.ok(Number.isInteger(debug.before_filter_dom_candidates));
+  assert.ok(Number.isInteger(debug.before_filter_ice_candidates));
+  assert.ok(Number.isInteger(debug.iframe_nodes));
+  assert.ok(Number.isInteger(debug.inline_background_image_nodes));
+  assert.ok(debug.sampled_candidates <= 40);
+  assert.ok(debug.rejected_examples.length <= 12);
+  for (const reason of ["main_duplicate", "variant_duplicate", "tps", "placeholder"]) {
+    assert.ok(Number.isInteger(debug.rejected_by_rule[reason]));
+  }
+});
+
 check("CAPTURE-TRUTH-A: price diagnostics are bounded and local", () => {
   const html =
     '<!doctype html><html><body><h1 class="MainTitle--x">debug item</h1>' +

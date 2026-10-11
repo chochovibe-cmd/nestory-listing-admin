@@ -1,3 +1,9 @@
+> **2026-10-11 SHARED SUPABASE DATABASE / MIGRATION AUTHORITY — live-readonly evidence**
+> - **Database ownership:** nestory-listing-admin and nestory-ops use the same Supabase project. Listing Admin uses product_drafts / product_images / product_variants and related tables; nestory-ops has an `ops` schema for orders, customers, and social posts. Both apps must be checked for migrations that could interact.
+> - **Migration ledger is shared/mixed:** entries including `social_scheduler` and `publish_schedule_core` may belong to other app workflows. Before any future migration, specify `app_owner: nestory-listing-admin | nestory-ops | shared`, target schema, owning repository/PR, dependencies, rollback, existing ledgers, and effects on both apps. A filename or historical status entry is not proof that a migration is required or safe to replay.
+> - **No DB mutation:** Claude's 2026-10-11 evidence is a read-only report; the plan addenda are in `docs/COMMANDER-ROADMAP.md`. IMAGE-INTEGRITY has three reported missing Storage objects with existing referenced rows (prefixes `d5445133`, `05e976d4`, `2adb75a5`), and pricing/data-cleanup findings awaiting independent full-ID verification. No Storage, product_images, product_variants, pricing, Shopify, or migration write is authorized by this note.
+> - **CAPTURE:** PR #40 has narrow source fix to strip temporary `image_url` on same-URL refill; source/CI still require checking latest HEAD and CI result before acceptance. PR #41 remains stacked image Draft and must not be silently rewritten or merged.
+>
 > **2026-10-10 HANDOFF STATUS — clean post-release checkpoint**
 > - Shopify DRAFT / ACTIVE release is complete and no longer blocks the roadmap.
 > - PR #35 is merged; repaired ACTIVE publication behavior is live in Production.

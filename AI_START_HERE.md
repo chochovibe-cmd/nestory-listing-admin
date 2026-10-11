@@ -1,3 +1,10 @@
+> **2026-10-11 CAPTURE CHECKPOINT — implementation finished, real smoke pending**
+> - PR #40 `CAPTURE-TRUTH-A` is implemented and CI PASS at `8fd8026ec07f0ad5740e1947476cd4e696adcf7b`. It stops manufacturing per-SKU prices from the product price, parses already-loaded embedded SKU params for explicit base/promo prices, preserves the Owner rule “未優惠價＝成本基準；優惠/券後價只記錄”, and adds no extra Taobao fetch/XHR/AI.
+> - PR #41 `CAPTURE-IMAGE` is stacked on PR #40 and CI PASS at `3ac5c62bf05a75da384c79114286b0d2cb57c376`. It expands modern Tmall detail-image selectors, unions multiple detail containers, and only falls back to bounded already-loaded ICE rich-detail data when DOM returns zero images.
+> - Final combined Preview: `dpl_9pdCVuzm8AJJwR5xoLGQBaZPku9d` / `nestory-listing-admin-ac5mrythl-chocho-nestory.vercel.app`, READY, `/api/status` 200, `shopifyMock=true`.
+> - Final acceptance is **not yet PASS**: one real smoke is still required using the matching latest test extension + this Preview API. Earlier Hollybox capture mixed new extension with old Production API and therefore did not validate backend provenance end-to-end.
+> - PR #40 / #41 remain Draft and MUST NOT merge without Owner approval.
+>
 > **2026-10-11 COMMANDER CHECKPOINT — live-use audit + roadmap insertion approved**
 > - Live Git authority rechecked: `handoff/20261008-golive-spec@87d759395beb374ab839b7a5265d14cebbb6d1ae` (PR #37 merged).
 > - Vercel's prior Hobby build-rate/quota blocker is no longer active: latest handoff Preview `dpl_EnzH362gm6uyAwaaiSbTwJBAsdgh` is `READY` on exact `87d7593…`. Production remains `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` on runtime code `caae0fa…`.

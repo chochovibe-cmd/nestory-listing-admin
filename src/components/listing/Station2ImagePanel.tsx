@@ -1,9 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import { showToast } from "@/components/Toast";
+import {
+  deleteProductImages,
+  deleteProductImagesFailureMessage,
+  findVariantBindings
+} from "@/lib/images/deleteProductImages";
 import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
 import {
   imageSlotLabel,
@@ -43,12 +49,6 @@ function sortByOrder(a: ProductImage, b: ProductImage): number {
   return (a.created_at ?? "").localeCompare(b.created_at ?? "");
 }
 
-function storagePathFromUrl(url: string): string | null {
-  const marker = "/product-images/";
-  const index = url.indexOf(marker);
-  return index === -1 ? null : url.slice(index + marker.length);
-}
-
 /**
  * UX-F T30: station② 主圖｜規格圖｜詳情圖 + marks + DnD sort + 補圖.
  * Spec tab = mark semantics only (no dedicated upload).
@@ -79,6 +79,7 @@ export function Station2ImagePanel({
   hideSubtabs?: boolean;
 }) {
   const supabase = createClient();
+  const router = useRouter();
   const [subtabLocal, setSubtabLocal] = useState<Station2ImageSubtab>("main");
   const subtab = subtabProp ?? subtabLocal;
   const setSubtab = (tab: Station2ImageSubtab) => {
@@ -93,6 +94,15 @@ export function Station2ImagePanel({
   const [overId, setOverId] = useState<string | null>(null);
   /** UX-H T49: soft-remove fade */
   const [fadingIds, setFadingIds] = useState<Set<string>>(() => new Set());
+  /** IMAGE-INTEGRITY: variant-bound image ✕ needs a second click (arm, auto-disarm ~6s). */
+  const [deleteArm, setDeleteArm] = useState<{ id: string; count: number } | null>(null);
+  const deleteArmTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (deleteArmTimerRef.current != null) window.clearTimeout(deleteArmTimerRef.current);
+    },
+    []
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const generateDetailOn = isGenerateDetailEnabled(imageFlags);
 
@@ -152,34 +162,87 @@ export function Station2ImagePanel({
     );
   }
 
-  async function removeImage(image: ProductImage) {
-    setBusyId(image.id);
-    setFadingIds((prev) => new Set(prev).add(image.id));
-    await new Promise((r) => window.setTimeout(r, 250));
-    const url = image.processed_file_url ?? image.original_file_url;
-    const path = url ? storagePathFromUrl(url) : null;
-    if (path) {
-      await supabase.storage.from("product-images").remove([path]);
+  function clearDeleteArm() {
+    if (deleteArmTimerRef.current != null) {
+      window.clearTimeout(deleteArmTimerRef.current);
+      deleteArmTimerRef.current = null;
     }
-    const { error } = await supabase.from("product_images").delete().eq("id", image.id);
-    setBusyId(null);
-    if (error) {
+    setDeleteArm(null);
+  }
+
+  function armDelete(id: string, count: number) {
+    if (deleteArmTimerRef.current != null) window.clearTimeout(deleteArmTimerRef.current);
+    setDeleteArm({ id, count });
+    deleteArmTimerRef.current = window.setTimeout(() => {
+      deleteArmTimerRef.current = null;
+      setDeleteArm(null);
+    }, 6000);
+  }
+
+  // IMAGE-INTEGRITY: delete goes through deleteProductImages (unbind -> DB -> Storage).
+  async function removeImage(image: ProductImage) {
+    if (busyId === image.id) return;
+    const armed = deleteArm?.id === image.id;
+    setBusyId(image.id);
+    const promptVariantBound = (count: number) => {
+      armDelete(image.id, count);
+      showToast(
+        `這是款式圖，綁定 ${count} 個款式。再按一次 ✕ 會先解除這些款式的圖片綁定，再刪除圖片。`,
+        "warn",
+        6000
+      );
+    };
+    const unfade = () =>
       setFadingIds((prev) => {
         const next = new Set(prev);
         next.delete(image.id);
         return next;
       });
-      setLocalMsg(`刪除圖片失敗：${error.message}`);
-      showToast(`刪除圖片失敗：${error.message}`, "error");
+
+    if (!armed) {
+      const bindings = await findVariantBindings(supabase, [image.id]);
+      if (!bindings.ok) {
+        setBusyId(null);
+        const msg = `無法確認款式綁定，未刪除圖片：${bindings.error}`;
+        setLocalMsg(msg);
+        showToast(msg, "error");
+        return;
+      }
+      if (bindings.total > 0) {
+        setBusyId(null);
+        promptVariantBound(bindings.total);
+        return;
+      }
+    }
+    clearDeleteArm();
+
+    setFadingIds((prev) => new Set(prev).add(image.id));
+    await new Promise((r) => window.setTimeout(r, 250));
+    const result = await deleteProductImages(supabase, [image.id], { unbindVariants: armed });
+    setBusyId(null);
+
+    if (result.blockedByVariants?.length) {
+      // A variant bound to this image appeared after our check -- ask again.
+      unfade();
+      promptVariantBound(result.blockedByVariants.reduce((sum, row) => sum + row.count, 0));
+      return;
+    }
+    if (!result.ok || !result.deletedIds.includes(image.id)) {
+      unfade();
+      const msg = `刪除圖片失敗：${deleteProductImagesFailureMessage(result)}`;
+      setLocalMsg(msg);
+      showToast(msg, "error");
       return;
     }
     onImagesChange(images.filter((row) => row.id !== image.id));
-    setFadingIds((prev) => {
-      const next = new Set(prev);
-      next.delete(image.id);
-      return next;
-    });
-    showToast("已刪除圖片", "success");
+    unfade();
+    const unboundCount = result.unboundVariantIds.length;
+    showToast(
+      unboundCount > 0 ? `已刪除圖片，並解除 ${unboundCount} 個款式的圖片綁定` : "已刪除圖片",
+      "success"
+    );
+    // Parent holds the variant rows (image_id) -- refresh so they drop the unbound image.
+    if (unboundCount > 0) router.refresh();
   }
 
   async function applyReorder(fromId: string, toId: string) {

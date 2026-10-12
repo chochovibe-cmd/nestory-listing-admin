@@ -41,6 +41,7 @@
     "verify:resultcard-uiux-d3": "node scripts/verify-resultcard-uiux-d3.mjs",
     "verify:copy-product-brief": "node scripts/verify-copy-product-brief.mjs",
     "verify:variant-picker-containment": "node scripts/verify-variant-picker-containment.mjs",
+    "verify:image-integrity": "node scripts/verify-image-integrity.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

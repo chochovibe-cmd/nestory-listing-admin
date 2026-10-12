@@ -15,6 +15,11 @@ import {
 } from "@/lib/images/clientImageResize";
 import { intentForSpecToggle } from "@/lib/images/processMarks";
 import { showToast } from "@/components/Toast";
+import {
+  deleteProductImages,
+  deleteProductImagesFailureMessage,
+  findVariantBindings
+} from "@/lib/images/deleteProductImages";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
 // B1 (Mockup差異備忘 差異2): 只有主圖／詳情圖兩框。規格改表單手填欄位，不再上傳規格圖
@@ -69,15 +74,6 @@ export type SeedImageRow = {
   process_intent?: ImageProcessIntent | null;
   is_spec_process?: boolean | null;
 };
-
-function storagePathFromPublicUrl(publicUrl: string): string | null {
-  const marker = "/product-images/";
-  const idx = publicUrl.indexOf(marker);
-  if (idx < 0) return null;
-  const rest = publicUrl.slice(idx + marker.length);
-  const path = rest.split("?")[0] ?? "";
-  return path ? decodeURIComponent(path) : null;
-}
 
 /** UX-D T20: pull image files from paste clipboard (files or items). */
 function imageFilesFromClipboard(data: DataTransfer | null): File[] {
@@ -147,6 +143,16 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
   const [reorderOverKey, setReorderOverKey] = useState<string | null>(null);
   /** UX-H T49: soft-remove fade before drop from strip */
   const [fadingKeys, setFadingKeys] = useState<Set<string>>(() => new Set());
+  /** IMAGE-INTEGRITY: variant-bound image × needs a second click (arm, auto-disarm ~6s). */
+  const [deleteArm, setDeleteArm] = useState<{ id: string; count: number } | null>(null);
+  const deleteArmTimerRef = useRef<number | null>(null);
+  const deleteBusyRef = useRef<Set<string>>(new Set());
+  useEffect(
+    () => () => {
+      if (deleteArmTimerRef.current != null) window.clearTimeout(deleteArmTimerRef.current);
+    },
+    []
+  );
 
   // Latest previews for in-flight upload to pick current sort_order after local reorder (T22).
   const previewsRef = useRef(previews);
@@ -541,48 +547,103 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
     }
   }
 
+  function clearDeleteArm() {
+    if (deleteArmTimerRef.current != null) {
+      window.clearTimeout(deleteArmTimerRef.current);
+      deleteArmTimerRef.current = null;
+    }
+    setDeleteArm(null);
+  }
+
+  function armDelete(id: string, count: number) {
+    if (deleteArmTimerRef.current != null) window.clearTimeout(deleteArmTimerRef.current);
+    setDeleteArm({ id, count });
+    deleteArmTimerRef.current = window.setTimeout(() => {
+      deleteArmTimerRef.current = null;
+      setDeleteArm(null);
+    }, 6000);
+  }
+
+  // IMAGE-INTEGRITY: saved images are deleted through deleteProductImages (unbind -> DB -> Storage).
+  // item.url is only the 320px thumb, so the helper looks the row up by id and removes every size.
   async function deleteImage(item: PreviewItem) {
     setMarkError("");
-    // UX-H T49: brief fade before remove (display only)
-    setFadingKeys((prev) => new Set(prev).add(item.clientKey));
-    await new Promise((r) => window.setTimeout(r, 250));
+    const unfade = () =>
+      setFadingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(item.clientKey);
+        return next;
+      });
 
     if (!item.id) {
+      // UX-H T49: brief fade before remove (display only)
+      setFadingKeys((prev) => new Set(prev).add(item.clientKey));
+      await new Promise((r) => window.setTimeout(r, 250));
       removePreviewLocal(item.clientKey, item.imageType);
-      setFadingKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(item.clientKey);
-        return next;
-      });
+      unfade();
       return;
     }
 
-    // Best-effort storage remove first (path derived from public URL).
-    const path = storagePathFromPublicUrl(item.url);
-    if (path) {
-      await supabase.storage.from("product-images").remove([path]).catch(() => null);
-    }
+    const imageId = item.id;
+    if (deleteBusyRef.current.has(imageId)) return;
+    deleteBusyRef.current.add(imageId);
+    const promptVariantBound = (count: number) => {
+      armDelete(imageId, count);
+      showToast(
+        `這是款式圖，綁定 ${count} 個款式。再按一次 ✕ 會先解除這些款式的圖片綁定，再刪除圖片。`,
+        "warn",
+        6000
+      );
+    };
+    try {
+      const armed = deleteArm?.id === imageId;
+      if (!armed) {
+        const bindings = await findVariantBindings(supabase, [imageId]);
+        if (!bindings.ok) {
+          const msg = `無法確認款式綁定，未刪除圖片：${bindings.error}`;
+          setMarkError(msg);
+          showToast(msg, "error");
+          return;
+        }
+        if (bindings.total > 0) {
+          promptVariantBound(bindings.total);
+          return;
+        }
+      }
+      clearDeleteArm();
 
-    const { error } = await supabase.from("product_images").delete().eq("id", item.id);
-    if (error) {
-      const msg = `刪除失敗：${error.message}`;
-      setMarkError(msg);
-      // UX-D T21: strengthen delete-fail feedback
-      showToast(msg, "error");
-      setFadingKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(item.clientKey);
-        return next;
-      });
-      return;
+      // UX-H T49: brief fade before remove (display only)
+      setFadingKeys((prev) => new Set(prev).add(item.clientKey));
+      await new Promise((r) => window.setTimeout(r, 250));
+      const result = await deleteProductImages(supabase, [imageId], { unbindVariants: armed });
+
+      if (result.blockedByVariants?.length) {
+        // A variant bound to this image appeared after our check -- ask again.
+        unfade();
+        promptVariantBound(result.blockedByVariants.reduce((sum, row) => sum + row.count, 0));
+        return;
+      }
+      if (!result.ok || !result.deletedIds.includes(imageId)) {
+        const msg = `刪除失敗：${deleteProductImagesFailureMessage(result)}`;
+        setMarkError(msg);
+        // UX-D T21: strengthen delete-fail feedback
+        showToast(msg, "error");
+        unfade();
+        return;
+      }
+      removePreviewLocal(item.clientKey, item.imageType);
+      unfade();
+      const unboundCount = result.unboundVariantIds.length;
+      if (unboundCount > 0) {
+        const msg = `已刪除圖片，並解除 ${unboundCount} 個款式的圖片綁定`;
+        setMessage(msg);
+        showToast(msg, "success");
+      } else {
+        setMessage("已刪除圖片");
+      }
+    } finally {
+      deleteBusyRef.current.delete(imageId);
     }
-    removePreviewLocal(item.clientKey, item.imageType);
-    setFadingKeys((prev) => {
-      const next = new Set(prev);
-      next.delete(item.clientKey);
-      return next;
-    });
-    setMessage("已刪除圖片");
   }
 
   // B5: 規格圖 toggle on main-zone thumbs. Writes via existing product_images

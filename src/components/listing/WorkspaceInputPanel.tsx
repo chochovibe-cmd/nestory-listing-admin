@@ -36,6 +36,7 @@ import {
   type GenerationProgress
 } from "@/components/listing/generationProgress";
 import { createClient } from "@/lib/supabase/client";
+import { deleteProductImages } from "@/lib/images/deleteProductImages";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import {
   MAX_SCREENSHOT_IMAGES,
@@ -199,20 +200,6 @@ type VariantImageOption = { id: string; url: string; label: string };
 // animation (that waits for A20).
 function emitProgress(model: GenerationProgress) {
   window.dispatchEvent(new CustomEvent<GenerationProgress>(GENERATION_PROGRESS_EVENT, { detail: model }));
-}
-
-/** Extract Storage object path from a Supabase public URL (bucket product-images). */
-function storagePathFromPublicUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const marker = "/product-images/";
-  const idx = url.indexOf(marker);
-  if (idx === -1) return null;
-  const rest = url.slice(idx + marker.length).split("?")[0];
-  try {
-    return decodeURIComponent(rest);
-  } catch {
-    return rest || null;
-  }
 }
 
 export function WorkspaceInputPanel({
@@ -1699,23 +1686,21 @@ export function WorkspaceInputPanel({
       });
 
       // Best-effort: remove image rows + storage objects (product_images allows delete).
-      // Paths are not stored as a column — extract from public URL (upload layout: userId/draftId/...).
+      // IMAGE-INTEGRITY: helper does unbind -> DB delete -> Storage (never Storage first).
+      // The whole draft is being discarded, so unbinding its own variants needs no prompt.
       const { data: imgs } = await supabase
         .from("product_images")
-        .select("id, original_file_url")
+        .select("id")
         .eq("draft_id", draftToDrop);
       if (imgs?.length) {
-        const paths = imgs
-          .map((row) => storagePathFromPublicUrl(row.original_file_url as string | null))
-          .filter((p): p is string => Boolean(p));
-        if (paths.length) {
-          try {
-            await supabase.storage.from("product-images").remove(paths);
-          } catch {
-            /* ignore storage cleanup failures */
-          }
+        const cleanup = await deleteProductImages(
+          supabase,
+          imgs.map((row) => row.id as string),
+          { unbindVariants: true }
+        );
+        if (!cleanup.ok) {
+          console.warn("[discardRestore] image cleanup incomplete", cleanup);
         }
-        await supabase.from("product_images").delete().eq("draft_id", draftToDrop);
       }
 
       if (draftIdRef.current === draftToDrop) {

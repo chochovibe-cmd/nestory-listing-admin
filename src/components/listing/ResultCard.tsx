@@ -100,8 +100,7 @@ import type { FieldVersionInput } from "@/lib/drafts/approveSummary";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import {
   deleteProductImages,
-  deleteProductImagesFailureMessage,
-  findVariantBindings
+  deleteProductImagesFailureMessage
 } from "@/lib/images/deleteProductImages";
 import {
   formatArchiveResultMessage,
@@ -1771,31 +1770,24 @@ export function ResultCard({
     };
     try {
       const armed = imageDeleteArm?.id === image.id;
-      if (!armed) {
-        const bindings = await findVariantBindings(supabase, [image.id]);
-        if (!bindings.ok) {
-          showToast(`無法確認款式綁定，未刪除圖片：${bindings.error}`, "error");
-          return;
-        }
-        if (bindings.total > 0) {
-          promptVariantBound(bindings.total);
-          return;
-        }
-      }
       clearImageDeleteArm();
 
-      setFadingImageIds((prev) => new Set(prev).add(image.id));
-      await new Promise((r) => window.setTimeout(r, 250));
-      const result = await deleteProductImages(supabase, [image.id], { unbindVariants: armed });
       const unfade = () =>
         setFadingImageIds((prev) => {
           const next = new Set(prev);
           next.delete(image.id);
           return next;
         });
+      setFadingImageIds((prev) => new Set(prev).add(image.id));
+      // The helper itself refuses a variant-bound image (blockedByVariants) unless armed, and the
+      // 250ms fade runs alongside the delete instead of before it. Storage cleanup is left to the background.
+      const [result] = await Promise.all([
+        deleteProductImages(supabase, [image.id], { unbindVariants: armed, backgroundStorageCleanup: true }),
+        new Promise((r) => window.setTimeout(r, 250))
+      ]);
 
       if (result.blockedByVariants?.length) {
-        // A variant bound to this image appeared after our check -- ask again.
+        // First click on a variant-bound image -- ask again (armed second click unbinds).
         unfade();
         promptVariantBound(result.blockedByVariants.reduce((sum, row) => sum + row.count, 0));
         return;
@@ -1806,12 +1798,7 @@ export function ResultCard({
         showToast(`刪除圖片失敗：${deleteProductImagesFailureMessage(result)}`, "error");
         unfade();
       } else {
-        const unboundCount = result.unboundVariantIds.length;
-        showToast(
-          unboundCount > 0 ? `已刪除圖片，並解除 ${unboundCount} 個款式的圖片綁定` : "已刪除圖片",
-          "success"
-        );
-        await markShopifyDirty();
+        // Local UI first: nothing below may delay the thumbnail disappearing.
         setImageMarks((current) => current.filter((row) => row.id !== image.id));
         // Unsaved local variant rows must not keep pointing at the deleted image.
         setVariantRows((rows) =>
@@ -1820,6 +1807,12 @@ export function ResultCard({
             : rows
         );
         unfade();
+        const unboundCount = result.unboundVariantIds.length;
+        showToast(
+          unboundCount > 0 ? `已刪除圖片，並解除 ${unboundCount} 個款式的圖片綁定` : "已刪除圖片",
+          "success"
+        );
+        await markShopifyDirty();
       }
       router.refresh();
     } finally {

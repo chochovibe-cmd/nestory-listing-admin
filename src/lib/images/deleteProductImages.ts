@@ -7,6 +7,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // URL in original_file_url), so a path is only removed when it sits in the deleted row's own
 // draft folder ({owner}/{draftId}/...) AND no remaining row of that draft still references it.
 // Client-safe on purpose: no "@/..." runtime imports, supabase client is a parameter.
+// Speed: the two independent reads run together, and callers that do not need the Storage result
+// can pass backgroundStorageCleanup so the DB answer is not held up by the cleanup (see storageCleanup).
 
 export const PRODUCT_IMAGES_BUCKET = "product-images";
 
@@ -34,9 +36,26 @@ export type DeleteProductImagesResult = {
   /** Variants whose image_id was cleared and stayed cleared. */
   unboundVariantIds: string[];
   blockedByVariants?: { imageId: string; count: number }[];
+  /** Storage cleanup warnings. In background mode this stays empty: read them from storageCleanup. */
   storageWarnings: string[];
+  /**
+   * Resolves to the Storage cleanup warnings once the cleanup is finished. Never rejects.
+   * Already resolved unless backgroundStorageCleanup was set and the delete got that far.
+   */
+  storageCleanup: Promise<string[]>;
   error?: string;
 };
+
+export type DeleteProductImagesOptions = {
+  unbindVariants: boolean;
+  /**
+   * Default false: the Storage cleanup is awaited before returning. When true the cleanup starts
+   * after the DB delete is decided but is NOT awaited (follow it via result.storageCleanup).
+   */
+  backgroundStorageCleanup?: boolean;
+};
+
+type ImageRowInfo = { draftId: string | null; paths: string[] };
 
 type DbError = { message: string; code?: string } | null;
 type DbResult = { data: unknown; error: DbError };
@@ -167,10 +186,69 @@ export function deleteProductImagesFailureMessage(result: DeleteProductImagesRes
   return "未知原因";
 }
 
+/**
+ * Storage cleanup for rows that are really gone. Never throws and never rejects: every failure
+ * becomes a warning (also logged), because the data is already deleted.
+ */
+async function cleanupStorage(
+  supabase: SupabaseClient,
+  deletedIds: readonly string[],
+  rowsById: ReadonlyMap<string, ImageRowInfo>
+): Promise<string[]> {
+  const warnings: string[] = [];
+  const warn = (message: string) => {
+    console.warn("[deleteProductImages]", message);
+    warnings.push(message);
+  };
+  try {
+    // 5a) Folder guard: only paths inside the deleted row's own draft folder are ever candidates.
+    //     Anything else (other draft, foreign layout) is left as an orphan.
+    const candidates = new Set<string>();
+    const draftIds = new Set<string>();
+    for (const id of deletedIds) {
+      const info = rowsById.get(id);
+      if (!info?.draftId) continue;
+      for (const path of info.paths) {
+        if (path.split("/")[1] !== info.draftId) continue;
+        candidates.add(path);
+        draftIds.add(info.draftId);
+      }
+    }
+    if (candidates.size > 0) {
+      // 5b) Reference guard: a path any remaining row of those drafts still uses is a shared file.
+      const remaining = await selectImageRows((columns) =>
+        supabase.from("product_images").select(columns).in("draft_id", Array.from(draftIds))
+      );
+      if (remaining.error) {
+        warn(`無法確認圖片檔案是否仍被使用，已略過檔案清理（資料已刪除）：${remaining.error.message}`);
+      } else {
+        const referenced = new Set<string>();
+        for (const row of Array.isArray(remaining.data) ? remaining.data : []) {
+          for (const path of collectProductImageStoragePaths(row as ProductImageUrlRow)) {
+            referenced.add(path);
+          }
+        }
+        const paths = Array.from(candidates).filter((path) => !referenced.has(path));
+        if (paths.length > 0) {
+          const { data, error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths);
+          if (error) {
+            warn(`圖片檔案清理失敗（資料已刪除）：${error.message}`);
+          } else if (Array.isArray(data) && data.length < paths.length) {
+            warn(`圖片檔案只清掉 ${data.length}/${paths.length} 個（資料已刪除）`);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    warn(`圖片檔案清理失敗（資料已刪除）：${errorText(err)}`);
+  }
+  return warnings;
+}
+
 export async function deleteProductImages(
   supabase: SupabaseClient,
   imageIds: readonly string[],
-  options: { unbindVariants: boolean }
+  options: DeleteProductImagesOptions
 ): Promise<DeleteProductImagesResult> {
   const ids = dedupeIds(imageIds);
   const result: DeleteProductImagesResult = {
@@ -178,7 +256,8 @@ export async function deleteProductImages(
     deletedIds: [],
     failedIds: [],
     unboundVariantIds: [],
-    storageWarnings: []
+    storageWarnings: [],
+    storageCleanup: Promise.resolve([])
   };
   if (ids.length === 0) return result;
 
@@ -189,12 +268,15 @@ export async function deleteProductImages(
     error
   });
 
-  // 1) Read every URL we will need BEFORE touching anything.
-  const selected = await selectImageRows((columns) =>
-    supabase.from("product_images").select(columns).in("id", ids)
-  );
+  // 1) Every URL we will need + 2) variants bound to these images (FK product_variants.image_id
+  //    has no ON DELETE action). Independent read-only queries: run them together, BEFORE touching anything.
+  const [selected, bindings] = await Promise.all([
+    selectImageRows((columns) => supabase.from("product_images").select(columns).in("id", ids)),
+    findVariantBindings(supabase, ids)
+  ]);
   if (selected.error) return fail(`讀取圖片資料失敗：${selected.error.message}`);
-  const rowsById = new Map<string, { draftId: string | null; paths: string[] }>();
+  if (!bindings.ok) return fail(`確認款式綁定失敗：${bindings.error}`);
+  const rowsById = new Map<string, ImageRowInfo>();
   for (const row of Array.isArray(selected.data) ? selected.data : []) {
     const r = row as ProductImageUrlRow & { id?: unknown; draft_id?: unknown };
     if (typeof r.id !== "string") continue;
@@ -203,10 +285,6 @@ export async function deleteProductImages(
       paths: collectProductImageStoragePaths(r)
     });
   }
-
-  // 2) Variants bound to these images (FK product_variants.image_id has no ON DELETE action).
-  const bindings = await findVariantBindings(supabase, ids);
-  if (!bindings.ok) return fail(`確認款式綁定失敗：${bindings.error}`);
   const byImageId = bindings.byImageId;
   const boundVariantIds = Object.values(byImageId).flat();
 
@@ -272,53 +350,15 @@ export async function deleteProductImages(
   }
 
   // 5) Storage LAST, and only for rows that are really gone. Never fails the whole delete.
-  const warn = (message: string) => {
-    console.warn("[deleteProductImages]", message);
-    result.storageWarnings.push(message);
-  };
-  // 5a) Folder guard: only paths inside the deleted row's own draft folder are ever candidates.
-  //     Anything else (other draft, foreign layout) is left as an orphan.
-  const candidates = new Set<string>();
-  const draftIds = new Set<string>();
-  for (const id of result.deletedIds) {
-    const info = rowsById.get(id);
-    if (!info?.draftId) continue;
-    for (const path of info.paths) {
-      if (path.split("/")[1] !== info.draftId) continue;
-      candidates.add(path);
-      draftIds.add(info.draftId);
-    }
-  }
-  if (candidates.size > 0) {
-    try {
-      // 5b) Reference guard: a path any remaining row of those drafts still uses is a shared file.
-      const remaining = await selectImageRows((columns) =>
-        supabase.from("product_images").select(columns).in("draft_id", Array.from(draftIds))
-      );
-      if (remaining.error) {
-        warn(`無法確認圖片檔案是否仍被使用，已略過檔案清理（資料已刪除）：${remaining.error.message}`);
-      } else {
-        const referenced = new Set<string>();
-        for (const row of Array.isArray(remaining.data) ? remaining.data : []) {
-          for (const path of collectProductImageStoragePaths(row as ProductImageUrlRow)) {
-            referenced.add(path);
-          }
-        }
-        const paths = Array.from(candidates).filter((path) => !referenced.has(path));
-        if (paths.length > 0) {
-          const { data, error } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(paths);
-          if (error) {
-            warn(`圖片檔案清理失敗（資料已刪除）：${error.message}`);
-          } else if (Array.isArray(data) && data.length < paths.length) {
-            warn(`圖片檔案只清掉 ${data.length}/${paths.length} 個（資料已刪除）`);
-          }
-        }
-      }
-    } catch (err) {
-      warn(`圖片檔案清理失敗（資料已刪除）：${errorText(err)}`);
-    }
-  }
-
+  //    In background mode it starts here (DB outcome and any binding restores are final) and the
+  //    caller gets the result without waiting for it.
   result.ok = result.failedIds.length === 0;
+  const cleanup = cleanupStorage(supabase, result.deletedIds, rowsById);
+  if (options.backgroundStorageCleanup) {
+    result.storageCleanup = cleanup;
+    return result;
+  }
+  result.storageWarnings.push(...(await cleanup));
+  result.storageCleanup = Promise.resolve(result.storageWarnings);
   return result;
 }

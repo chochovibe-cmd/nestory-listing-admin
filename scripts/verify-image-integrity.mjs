@@ -81,11 +81,14 @@ function makeFake(initial, opts = {}) {
     deleteMode: "ok", // ok | error | noop | partial
     deleteFailIds: [],
     storageMode: "ok", // ok | error | throw
+    // Optional gates (promises) that delay a response, never the call itself, so the log still shows
+    // when a query was issued: rows (product_images by id) | variants | refs (draft_id) | storage (remove).
+    hold: {},
     ...opts
   };
   const log = [];
 
-  function execute(q) {
+  function executeNow(q) {
     const op = `${q.kind} ${q.table}`;
     if (q.table === "product_images" && q.kind === "select") {
       log.push({ op, col: q.filter.col });
@@ -144,6 +147,17 @@ function makeFake(initial, opts = {}) {
     throw new Error(`fake supabase: unexpected ${op}`);
   }
 
+  function execute(q) {
+    const res = executeNow(q);
+    let gate = null;
+    if (q.kind === "select" && q.table === "product_images") {
+      gate = q.filter.col === "draft_id" ? o.hold.refs : o.hold.rows;
+    } else if (q.kind === "select" && q.table === "product_variants") {
+      gate = o.hold.variants;
+    }
+    return gate ? gate.then(() => res) : res;
+  }
+
   function builder(table) {
     const q = { table, kind: null, columns: null, patch: null, returning: false, filter: null };
     const b = {
@@ -187,6 +201,7 @@ function makeFake(initial, opts = {}) {
         return {
           async remove(paths) {
             log.push({ op: "storage.remove", bucket, paths: [...paths] });
+            if (o.hold.storage) await o.hold.storage;
             if (o.storageMode === "throw") throw new Error("network down");
             if (o.storageMode === "error") return { data: null, error: { message: "storage 500" } };
             return { data: paths.map((name) => ({ name })), error: null };
@@ -218,6 +233,27 @@ const fullPaths = (id) => [
   `u1/d1/main/${id}-1280.jpg`
 ];
 const mutating = (ops) => ops.filter((op) => /^(update|delete) |^storage\.remove$/.test(op));
+// The two initial reads (image rows, variant bindings) run concurrently, so their relative order is
+// not part of the contract; only that both come before any update/delete/remove.
+const normOps = (ops) => [...ops.slice(0, 2).sort(), ...ops.slice(2)];
+const READS = ["select product_images", "select product_variants"];
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+};
+// Let every pending microtask and the fake's promise chains run.
+const tick = () => new Promise((r) => setTimeout(r, 0));
+// Fail (instead of hanging the whole run) when a promise that must settle on its own never does.
+const within = (promise, label, ms = 1000) => {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out: ${label}`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+};
 const quiet = async (fn) => {
   const original = console.warn;
   const warnings = [];
@@ -264,7 +300,7 @@ await check("collectProductImageStoragePaths: all five columns, deduped, decoded
   assert.deepEqual(collectProductImageStoragePaths(null), []);
 });
 
-await check("1. no bindings: select rows -> select variants -> delete -> select remaining -> storage remove (all sizes, decoded, no Shopify CDN)", async () => {
+await check("1. no bindings: select rows + select variants (concurrent) -> delete -> select remaining -> storage remove (all sizes, decoded, no Shopify CDN)", async () => {
   const shopifyRow = fullImage("i2", {
     processed_file_url: "https://cdn.shopify.com/s/files/1/0001/products/i2.jpg",
     generated_file_url: null
@@ -276,9 +312,9 @@ await check("1. no bindings: select rows -> select variants -> delete -> select 
   assert.deepEqual(res.failedIds, []);
   assert.deepEqual(res.unboundVariantIds, []);
   assert.deepEqual(res.storageWarnings, []);
-  assert.deepEqual(fake.ops(), [
-    "select product_images",
-    "select product_variants",
+  assert.deepEqual(await res.storageCleanup, [], "default mode: storageCleanup is already resolved");
+  assert.deepEqual(normOps(fake.ops()), [
+    ...READS,
     "delete product_images",
     "select product_images",
     "storage.remove"
@@ -318,7 +354,7 @@ await check("2. bindings + unbindVariants:false -> ok:false, blockedByVariants, 
   assert.deepEqual(res.blockedByVariants, [{ imageId: "i1", count: 2 }]);
   assert.deepEqual(res.deletedIds, []);
   assert.deepEqual(mutating(fake.ops()), []);
-  assert.deepEqual(fake.ops(), ["select product_images", "select product_variants"]);
+  assert.deepEqual(normOps(fake.ops()), READS);
   assert.equal(fake.state.images.length, 1);
   assert.deepEqual(fake.state.variants.map((v) => v.image_id), ["i1", "i1", null]);
   assert.ok(deleteProductImagesFailureMessage(res).length > 0);
@@ -336,9 +372,8 @@ await check("3. bindings + unbindVariants:true -> unbind before delete, delete b
   assert.equal(res.ok, true);
   assert.deepEqual(res.deletedIds, ["i1"]);
   assert.deepEqual(res.unboundVariantIds.sort(), ["v1", "v2"]);
-  assert.deepEqual(fake.ops(), [
-    "select product_images",
-    "select product_variants",
+  assert.deepEqual(normOps(fake.ops()), [
+    ...READS,
     "update product_variants",
     "delete product_images",
     "select product_images",
@@ -490,7 +525,7 @@ await check("11b. folder guard leaves nothing to remove -> no reference query, n
   const fake = makeFake({ images: [row] });
   const res = await deleteProductImages(fake.client, ["i1"], { unbindVariants: false });
   assert.equal(res.ok, true);
-  assert.deepEqual(fake.ops(), ["select product_images", "select product_variants", "delete product_images"]);
+  assert.deepEqual(normOps(fake.ops()), [...READS, "delete product_images"]);
 });
 
 await check("12. reference query errors -> nothing removed, storageWarnings, ok stays true", async () => {
@@ -515,6 +550,7 @@ await check("6a. storage remove returns error -> ok:true, storageWarnings, no th
   assert.equal(res.ok, true);
   assert.deepEqual(res.deletedIds, ["i1"]);
   assert.ok(res.storageWarnings.length > 0);
+  assert.deepEqual(await res.storageCleanup, res.storageWarnings, "default mode: storageCleanup carries the same warnings");
   assert.ok(warnings.length > 0, "console.warn emitted");
 });
 
@@ -594,6 +630,243 @@ await check("9. migration 039 missing (no thumb/mid columns) -> falls back to ba
     new Set(removed.paths),
     new Set([fullPaths("i1")[0], fullPaths("i1")[1], fullPaths("i1")[2]])
   );
+});
+
+await check("13a. concurrency: image-row read and variant-binding read are both issued before either answers; mutations only after both", async () => {
+  const rows = deferred();
+  const variants = deferred();
+  const fake = makeFake(
+    { images: [fullImage("i1")] },
+    { hold: { rows: rows.promise, variants: variants.promise } }
+  );
+  const pending = deleteProductImages(fake.client, ["i1"], { unbindVariants: false });
+  await tick();
+  assert.deepEqual([...fake.ops()].sort(), READS, "both reads in flight, nothing else issued yet");
+  variants.resolve();
+  await tick();
+  assert.deepEqual(fake.ops().length, 2, "one read still pending -> nothing issued after it");
+  assert.deepEqual(mutating(fake.ops()), []);
+  rows.resolve();
+  const res = await pending;
+  assert.equal(res.ok, true);
+  const ops = fake.ops();
+  const lastRead = Math.max(ops.indexOf("select product_images"), ops.indexOf("select product_variants"));
+  assert.ok(ops.indexOf("delete product_images") > lastRead, "delete only after both reads");
+});
+
+await check("13b. background mode: result returns before the reference query / storage remove; cleanup later runs delete -> reference query -> remove", async () => {
+  const refs = deferred();
+  const storage = deferred();
+  const fake = makeFake({ images: [fullImage("i1")] }, { hold: { refs: refs.promise, storage: storage.promise } });
+  const res = await within(
+    deleteProductImages(fake.client, ["i1"], { unbindVariants: false, backgroundStorageCleanup: true }),
+    "helper must return without waiting for the Storage cleanup"
+  );
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.deletedIds, ["i1"]);
+  assert.deepEqual(res.failedIds, []);
+  assert.deepEqual(res.storageWarnings, [], "background mode: warnings arrive through storageCleanup");
+  assert.equal(fake.state.images.length, 0, "DB delete already done when the helper returns");
+  assert.ok(!fake.ops().includes("storage.remove"), "no remove issued yet (reference query still pending)");
+  let settled = false;
+  res.storageCleanup.then(() => {
+    settled = true;
+  });
+  await tick();
+  assert.equal(settled, false);
+  assert.ok(!fake.ops().includes("storage.remove"), "remove waits for the reference query");
+  refs.resolve();
+  await tick();
+  assert.ok(fake.ops().includes("storage.remove"), "remove issued once the reference query answered");
+  assert.equal(settled, false, "storageCleanup waits for the remove itself");
+  storage.resolve();
+  assert.deepEqual(await res.storageCleanup, []);
+  assert.deepEqual(normOps(fake.ops()), [
+    ...READS,
+    "delete product_images",
+    "select product_images",
+    "storage.remove"
+  ]);
+  assert.deepEqual(fake.log.filter((e) => e.op === "select product_images").map((e) => e.col), ["id", "draft_id"]);
+  const removed = fake.log.find((e) => e.op === "storage.remove");
+  assert.equal(removed.bucket, "product-images");
+  assert.deepEqual(new Set(removed.paths), new Set(fullPaths("i1")));
+});
+
+await check("13c. background mode keeps the guards: shared file kept, foreign-folder path skipped, fully-referenced -> no remove", async () => {
+  const main = fullImage("m1");
+  const detail = {
+    id: "g1",
+    draft_id: "d1",
+    original_file_url: main.processed_file_url,
+    processed_file_url: `${SB}/u1/d1/generated/g1-detail.png`,
+    generated_file_url: null,
+    list_thumb_url: null,
+    vision_mid_url: null
+  };
+  const shared = makeFake({ images: [main, detail] });
+  const r1 = await deleteProductImages(shared.client, ["g1"], { unbindVariants: false, backgroundStorageCleanup: true });
+  assert.equal(r1.ok, true);
+  assert.deepEqual(await r1.storageCleanup, []);
+  assert.deepEqual(shared.log.find((e) => e.op === "storage.remove").paths, ["u1/d1/generated/g1-detail.png"]);
+
+  const foreign = fullImage("i1", {
+    original_file_url: `${SB}/u1/OTHER-DRAFT/main/foreign-orig.jpg`,
+    processed_file_url: `${SB}/u1/d1/processed/own.png`,
+    generated_file_url: `${SB}/loose-file-at-root.png`,
+    list_thumb_url: null,
+    vision_mid_url: null
+  });
+  const f2 = makeFake({ images: [foreign] });
+  const r2 = await deleteProductImages(f2.client, ["i1"], { unbindVariants: false, backgroundStorageCleanup: true });
+  assert.equal(r2.ok, true);
+  await r2.storageCleanup;
+  assert.deepEqual(f2.log.find((e) => e.op === "storage.remove").paths, ["u1/d1/processed/own.png"]);
+
+  const allShared = {
+    id: "g2",
+    draft_id: "d1",
+    original_file_url: main.processed_file_url,
+    processed_file_url: main.original_file_url,
+    generated_file_url: null
+  };
+  const f3 = makeFake({ images: [main, allShared] });
+  const r3 = await deleteProductImages(f3.client, ["g2"], { unbindVariants: false, backgroundStorageCleanup: true });
+  assert.equal(r3.ok, true);
+  assert.deepEqual(await r3.storageCleanup, []);
+  assert.ok(!f3.ops().includes("storage.remove"));
+});
+
+await check("13d. background mode with bindings: unbind and delete are awaited (and restores done) before the cleanup starts", async () => {
+  const refs = deferred();
+  const armed = makeFake(
+    {
+      images: [fullImage("i1")],
+      variants: [
+        { id: "v1", image_id: "i1" },
+        { id: "v2", image_id: "i1" }
+      ]
+    },
+    { hold: { refs: refs.promise } }
+  );
+  const res = await within(
+    deleteProductImages(armed.client, ["i1"], { unbindVariants: true, backgroundStorageCleanup: true }),
+    "armed delete must return without waiting for the Storage cleanup"
+  );
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.unboundVariantIds.sort(), ["v1", "v2"]);
+  assert.deepEqual(armed.state.variants.map((v) => v.image_id), [null, null], "unbind already done");
+  assert.equal(armed.state.images.length, 0, "DB delete already done");
+  assert.ok(!armed.ops().includes("storage.remove"));
+  refs.resolve();
+  await res.storageCleanup;
+  assert.deepEqual(normOps(armed.ops()), [
+    ...READS,
+    "update product_variants",
+    "delete product_images",
+    "select product_images",
+    "storage.remove"
+  ]);
+
+  // Partial delete: the failed row's bindings are restored before the helper returns, the cleanup
+  // only touches the row that is really gone.
+  const gate = deferred();
+  const partial = makeFake(
+    {
+      images: [fullImage("i1"), fullImage("i2")],
+      variants: [
+        { id: "v1", image_id: "i1" },
+        { id: "v2", image_id: "i2" }
+      ]
+    },
+    { deleteMode: "partial", deleteFailIds: ["i2"], hold: { refs: gate.promise } }
+  );
+  const pres = await within(
+    deleteProductImages(partial.client, ["i1", "i2"], { unbindVariants: true, backgroundStorageCleanup: true }),
+    "partial delete must return without waiting for the Storage cleanup"
+  );
+  assert.equal(pres.ok, false);
+  assert.deepEqual(pres.deletedIds, ["i1"]);
+  assert.deepEqual(pres.failedIds, ["i2"]);
+  assert.equal(partial.state.variants.find((v) => v.id === "v2").image_id, "i2", "v2 restored before the helper returned");
+  assert.ok(!partial.ops().includes("storage.remove"));
+  gate.resolve();
+  await pres.storageCleanup;
+  const ops = partial.ops();
+  assert.ok(ops.lastIndexOf("update product_variants") < ops.indexOf("storage.remove"), "restore precedes the cleanup");
+  assert.deepEqual(new Set(partial.log.find((e) => e.op === "storage.remove").paths), new Set(fullPaths("i1")));
+});
+
+await check("13e. background mode: storage error / throw / reference-query error -> storageCleanup resolves with warnings, never rejects", async () => {
+  const cases = [
+    [{ storageMode: "error" }, /storage 500/],
+    [{ storageMode: "throw" }, /network down/],
+    [{ remainingSelectError: "refs boom" }, /refs boom/]
+  ];
+  for (const [opts, pattern] of cases) {
+    const fake = makeFake({ images: [fullImage("i1")] }, opts);
+    const { value, warnings } = await quiet(async () => {
+      const res = await deleteProductImages(fake.client, ["i1"], { unbindVariants: false, backgroundStorageCleanup: true });
+      const settled = await res.storageCleanup.then(
+        (w) => ({ resolved: w }),
+        (err) => ({ rejected: err })
+      );
+      return { res, settled };
+    });
+    assert.equal(value.settled.rejected, undefined, `storageCleanup rejected: ${value.settled.rejected}`);
+    assert.ok(value.settled.resolved.length > 0, "warning returned");
+    assert.match(value.settled.resolved[0], pattern);
+    assert.equal(value.res.ok, true, "a Storage problem never fails the delete");
+    assert.deepEqual(value.res.deletedIds, ["i1"]);
+    assert.ok(warnings.length > 0, "console.warn emitted in background mode too");
+    assert.equal(fake.state.images.length, 0);
+  }
+});
+
+await check("13f. blocked (bindings + unbindVariants:false) in background mode -> no update/delete/remove, storageCleanup resolves []", async () => {
+  const fake = makeFake({
+    images: [fullImage("i1")],
+    variants: [
+      { id: "v1", image_id: "i1" },
+      { id: "v2", image_id: "i1" }
+    ]
+  });
+  const res = await deleteProductImages(fake.client, ["i1"], { unbindVariants: false, backgroundStorageCleanup: true });
+  assert.equal(res.ok, false);
+  assert.deepEqual(res.blockedByVariants, [{ imageId: "i1", count: 2 }]);
+  assert.deepEqual(await res.storageCleanup, []);
+  await tick();
+  assert.deepEqual(normOps(fake.ops()), READS);
+  assert.deepEqual(mutating(fake.ops()), []);
+  assert.equal(fake.state.images.length, 1);
+  assert.deepEqual(fake.state.variants.map((v) => v.image_id), ["i1", "i1"]);
+});
+
+await check("13g. background mode: RLS no-op / delete error / unbind failure -> no storage remove, storageCleanup resolves []", async () => {
+  const noop = makeFake({ images: [fullImage("i1")] }, { deleteMode: "noop" });
+  const r1 = await deleteProductImages(noop.client, ["i1"], { unbindVariants: false, backgroundStorageCleanup: true });
+  assert.equal(r1.ok, false);
+  assert.deepEqual(r1.failedIds, ["i1"]);
+  assert.deepEqual(await r1.storageCleanup, []);
+
+  const err = makeFake(
+    { images: [fullImage("i1")], variants: [{ id: "v1", image_id: "i1" }] },
+    { deleteMode: "error" }
+  );
+  const r2 = await deleteProductImages(err.client, ["i1"], { unbindVariants: true, backgroundStorageCleanup: true });
+  assert.equal(r2.ok, false);
+  assert.deepEqual(await r2.storageCleanup, []);
+
+  const unbind = makeFake(
+    { images: [fullImage("i1")], variants: [{ id: "v1", image_id: "i1" }] },
+    { unbindMode: "error" }
+  );
+  const r3 = await deleteProductImages(unbind.client, ["i1"], { unbindVariants: true, backgroundStorageCleanup: true });
+  assert.equal(r3.ok, false);
+  assert.deepEqual(await r3.storageCleanup, []);
+
+  await tick();
+  for (const f of [noop, err, unbind]) assert.ok(!f.ops().includes("storage.remove"));
 });
 
 await check("findVariantBindings: groups by image, counts, surfaces errors", async () => {
@@ -751,7 +1024,14 @@ function findStorageRemoveViolations(files) {
   return bad;
 }
 
-// 3) The entry points must go through the helper; the UI ones must also confirm variant-bound images.
+// Function body without // and /* */ comments (so a comment can never satisfy or trip a guard).
+function stripComments(code) {
+  return code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+// 3) The entry points must go through the helper. The UI ones delete in one click via the helper's own
+//    binding check (no click-time findVariantBindings), let the Storage cleanup run in the background
+//    (never awaited) and still prompt for variant-bound images.
 const ENTRY_POINTS = [
   { file: "src/components/listing/ResultCard.tsx", fn: "removeImage", ui: true },
   { file: "src/components/listing/Station2ImagePanel.tsx", fn: "removeImage", ui: true },
@@ -770,11 +1050,24 @@ function findEntryViolations(files) {
     if (!/\bdeleteProductImages\(/.test(body)) bad.push(`${file} :: ${fn} (no deleteProductImages call)`);
     if (!/unbindVariants\s*:/.test(body)) bad.push(`${file} :: ${fn} (no unbindVariants option)`);
     if (/\.storage\b/.test(body)) bad.push(`${file} :: ${fn} (touches Storage directly)`);
+    const code = stripComments(body);
     if (ui) {
-      if (!/\bfindVariantBindings\(/.test(body)) bad.push(`${file} :: ${fn} (no findVariantBindings call)`);
+      if (!/backgroundStorageCleanup\s*:\s*true/.test(code)) {
+        bad.push(`${file} :: ${fn} (deleteProductImages must be called with backgroundStorageCleanup: true)`);
+      }
+      if (!/\bblockedByVariants\b/.test(code)) bad.push(`${file} :: ${fn} (does not handle blockedByVariants)`);
       if (!body.includes("款式圖")) bad.push(`${file} :: ${fn} (no 款式圖 confirm prompt)`);
-    } else if (!/unbindVariants\s*:\s*true/.test(body)) {
-      bad.push(`${file} :: ${fn} (discard must unbind its own variants)`);
+      if (/\bfindVariantBindings\b/.test(code)) {
+        bad.push(`${file} :: ${fn} (still calls findVariantBindings; the helper checks bindings itself)`);
+      }
+      if (/\bawait\b[^;]*\bstorageCleanup\b/.test(code)) {
+        bad.push(`${file} :: ${fn} (awaits storageCleanup; the UI must not wait for Storage)`);
+      }
+    } else {
+      if (!/unbindVariants\s*:\s*true/.test(code)) bad.push(`${file} :: ${fn} (discard must unbind its own variants)`);
+      if (/\bbackgroundStorageCleanup\b/.test(code)) {
+        bad.push(`${file} :: ${fn} (discard keeps the awaited Storage cleanup)`);
+      }
     }
   }
   return bad;
@@ -791,19 +1084,30 @@ function findFinalizeOrderViolations(files) {
   return update < remove ? [] : [`${rel} (Storage remove runs before DB update)`];
 }
 
-// 5) Inside the helper, Storage remove must come after unbind, DB delete and the draft_id reference query.
+// 5) Inside the helper, the Storage cleanup (reference query -> remove) lives only in cleanupStorage(),
+//    and deleteProductImages() may only start it after unbind and the DB delete.
 function findHelperOrderViolations(src) {
-  const unbind = src.search(/\.update\(\s*\{\s*image_id\s*:\s*null\s*\}\s*\)/);
-  const del = src.search(/\.delete\(\)/);
-  const ref = src.search(/\.in\(\s*["'`]draft_id["'`]/);
-  const remove = src.search(/\.storage\s*\.from\([^)]*\)\s*\.remove\(/);
-  if ([unbind, del, ref, remove].some((i) => i < 0)) {
-    return [`${HELPER_REL} (unbind/delete/draft_id reference query/storage remove marker missing)`];
+  const mainRaw = functionBody(src, "deleteProductImages");
+  const cleanupRaw = functionBody(src, "cleanupStorage");
+  if (mainRaw == null || cleanupRaw == null) {
+    return [`${HELPER_REL} (deleteProductImages/cleanupStorage function not found)`];
+  }
+  const main = stripComments(mainRaw);
+  const cleanup = stripComments(cleanupRaw);
+  const unbind = main.search(/\.update\(\s*\{\s*image_id\s*:\s*null\s*\}\s*\)/);
+  const del = main.search(/\.delete\(\)/);
+  const start = main.search(/\bcleanupStorage\(/);
+  const ref = cleanup.search(/\.in\(\s*["'`]draft_id["'`]/);
+  const remove = cleanup.search(/\.storage\s*\.from\([^)]*\)\s*\.remove\(/);
+  if ([unbind, del, start, ref, remove].some((i) => i < 0)) {
+    return [`${HELPER_REL} (unbind/delete/cleanupStorage call/draft_id reference query/storage remove marker missing)`];
   }
   const bad = [];
   if (!(unbind < del)) bad.push("variant unbind must come before the DB delete");
-  if (!(del < ref)) bad.push("reference query must come after the DB delete");
+  if (!(del < start)) bad.push("the Storage cleanup must start after the DB delete");
   if (!(ref < remove)) bad.push("storage remove must come after the draft_id reference query");
+  if (/\.storage\b/.test(main)) bad.push("deleteProductImages must not touch Storage itself (only cleanupStorage)");
+  if (/\.in\(\s*["'`]draft_id["'`]/.test(main)) bad.push("the draft_id reference query belongs in cleanupStorage");
   return bad;
 }
 
@@ -816,13 +1120,13 @@ await check('no .from("product_images").delete( outside deleteProductImages.ts',
 await check("Storage .remove( in components/app only inside whitelisted functions", () => {
   assert.deepEqual(findStorageRemoveViolations(realFiles), []);
 });
-await check("entry points call deleteProductImages (UI ones also findVariantBindings + 款式圖)", () => {
+await check("entry points call deleteProductImages (UI ones: backgroundStorageCleanup, blockedByVariants + 款式圖, no findVariantBindings, never await storageCleanup)", () => {
   assert.deepEqual(findEntryViolations(realFiles), []);
 });
 await check("runFinalize keeps DB update before Storage remove", () => {
   assert.deepEqual(findFinalizeOrderViolations(realFiles), []);
 });
-await check("helper source order: unbind -> delete -> .in(\"draft_id\") reference query -> storage .remove(", () => {
+await check("helper order: unbind -> delete -> cleanupStorage() start; inside it .in(\"draft_id\") reference query -> storage .remove(", () => {
   assert.deepEqual(findHelperOrderViolations(helperSource), []);
 });
 
@@ -864,14 +1168,47 @@ await check("static guards flag Storage-first delete code (synthetic old-style f
   const newStyle = {
     "src/components/listing/ResultCard.tsx": `
       async function removeImage(image) {
-        const b = await findVariantBindings(supabase, [image.id]);
-        showToast("這是款式圖，綁定 1 個款式");
-        await deleteProductImages(supabase, [image.id], { unbindVariants: armed });
+        const [result] = await Promise.all([
+          deleteProductImages(supabase, [image.id], { unbindVariants: armed, backgroundStorageCleanup: true }),
+          new Promise((r) => setTimeout(r, 250))
+        ]);
+        if (result.blockedByVariants?.length) {
+          showToast("這是款式圖，綁定 1 個款式");
+          return;
+        }
       }`
   };
   assert.deepEqual(findDirectImageRowDeletes(newStyle), []);
   assert.deepEqual(findStorageRemoveViolations(newStyle), []);
   assert.ok(!findEntryViolations(newStyle).some((e) => e.startsWith("src/components/listing/ResultCard.tsx")));
+
+  // Click-time findVariantBindings / foreground cleanup / awaiting storageCleanup / no blocked handling must be flagged.
+  const entryFlags = (body) =>
+    findEntryViolations({
+      "src/components/listing/ResultCard.tsx": `async function removeImage(image) {\n${body}\n}`
+    }).filter((e) => e.startsWith("src/components/listing/ResultCard.tsx"));
+  const goodBody = `
+    const r = await deleteProductImages(supabase, [image.id], { unbindVariants: armed, backgroundStorageCleanup: true });
+    if (r.blockedByVariants?.length) showToast("這是款式圖");`;
+  assert.deepEqual(entryFlags(goodBody), []);
+  assert.ok(entryFlags(`const b = await findVariantBindings(supabase, [image.id]);${goodBody}`).some((e) => e.includes("findVariantBindings")));
+  assert.ok(entryFlags(goodBody.replace("backgroundStorageCleanup: true", "backgroundStorageCleanup: false")).some((e) => e.includes("backgroundStorageCleanup")));
+  assert.ok(entryFlags(goodBody.replace(", backgroundStorageCleanup: true", "")).some((e) => e.includes("backgroundStorageCleanup")));
+  assert.ok(entryFlags(`${goodBody}\n await r.storageCleanup;`).some((e) => e.includes("awaits storageCleanup")));
+  assert.ok(entryFlags(`${goodBody}\n const w = await Promise.all([r.storageCleanup]);`).some((e) => e.includes("awaits storageCleanup")));
+  assert.deepEqual(entryFlags(`${goodBody}\n // never await r.storageCleanup here; findVariantBindings is gone`), []);
+  assert.ok(entryFlags(goodBody.replace("blockedByVariants", "somethingElse")).some((e) => e.includes("blockedByVariants")));
+  assert.ok(entryFlags(goodBody.replace("款式圖", "x")).some((e) => e.includes("款式圖")));
+  const discardFlags = (body) =>
+    findEntryViolations({
+      "src/components/listing/WorkspaceInputPanel.tsx": `async function discardRestore() {\n${body}\n}`
+    }).filter((e) => e.startsWith("src/components/listing/WorkspaceInputPanel.tsx"));
+  assert.deepEqual(discardFlags("await deleteProductImages(s, ids, { unbindVariants: true });"), []);
+  assert.ok(
+    discardFlags("await deleteProductImages(s, ids, { unbindVariants: true, backgroundStorageCleanup: true });").some((e) =>
+      e.includes("backgroundStorageCleanup") || e.includes("awaited Storage cleanup")
+    )
+  );
 
   const finalizeWrongOrder = {
     "src/lib/images/runFinalize.ts": `
@@ -880,17 +1217,61 @@ await check("static guards flag Storage-first delete code (synthetic old-style f
   };
   assert.equal(findFinalizeOrderViolations(finalizeWrongOrder).length, 1);
 
+  const helperGood = `
+    async function cleanupStorage() {
+      await s.from("product_images").select(c).in("draft_id", d);
+      await s.storage.from(B).remove(paths);
+    }
+    async function deleteProductImages() {
+      await s.from("product_variants").update({ image_id: null }).in("id", v);
+      await s.from("product_images").delete().in("id", ids);
+      return cleanupStorage();
+    }`;
+  assert.deepEqual(findHelperOrderViolations(helperGood), []);
   const helperNoRefQuery = `
-    await s.from("product_variants").update({ image_id: null }).in("id", v);
-    await s.from("product_images").delete().in("id", ids);
-    await s.storage.from(B).remove(paths);`;
+    async function cleanupStorage() {
+      await s.storage.from(B).remove(paths);
+    }
+    async function deleteProductImages() {
+      await s.from("product_variants").update({ image_id: null }).in("id", v);
+      await s.from("product_images").delete().in("id", ids);
+      return cleanupStorage();
+    }`;
   assert.equal(findHelperOrderViolations(helperNoRefQuery).length, 1);
   const helperRemoveFirst = `
-    await s.storage.from(B).remove(paths);
-    await s.from("product_variants").update({ image_id: null }).in("id", v);
-    await s.from("product_images").delete().in("id", ids);
-    await s.from("product_images").select(c).in("draft_id", d);`;
+    async function cleanupStorage() {
+      await s.storage.from(B).remove(paths);
+      await s.from("product_images").select(c).in("draft_id", d);
+    }
+    async function deleteProductImages() {
+      await s.from("product_variants").update({ image_id: null }).in("id", v);
+      await s.from("product_images").delete().in("id", ids);
+      return cleanupStorage();
+    }`;
   assert.ok(findHelperOrderViolations(helperRemoveFirst).length >= 1);
+  const helperCleanupBeforeDelete = `
+    async function cleanupStorage() {
+      await s.from("product_images").select(c).in("draft_id", d);
+      await s.storage.from(B).remove(paths);
+    }
+    async function deleteProductImages() {
+      void cleanupStorage();
+      await s.from("product_variants").update({ image_id: null }).in("id", v);
+      await s.from("product_images").delete().in("id", ids);
+    }`;
+  assert.ok(findHelperOrderViolations(helperCleanupBeforeDelete).some((e) => e.includes("after the DB delete")));
+  const helperInlineRemove = `
+    async function cleanupStorage() {
+      await s.from("product_images").select(c).in("draft_id", d);
+      await s.storage.from(B).remove(paths);
+    }
+    async function deleteProductImages() {
+      await s.storage.from(B).remove(paths);
+      await s.from("product_variants").update({ image_id: null }).in("id", v);
+      await s.from("product_images").delete().in("id", ids);
+      return cleanupStorage();
+    }`;
+  assert.ok(findHelperOrderViolations(helperInlineRemove).some((e) => e.includes("must not touch Storage itself")));
 });
 
 await check("whitelist is per file+function (same function name elsewhere is flagged)", () => {

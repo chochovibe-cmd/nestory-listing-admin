@@ -7,8 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { showToast } from "@/components/Toast";
 import {
   deleteProductImages,
-  deleteProductImagesFailureMessage,
-  findVariantBindings
+  deleteProductImagesFailureMessage
 } from "@/lib/images/deleteProductImages";
 import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
 import {
@@ -199,30 +198,19 @@ export function Station2ImagePanel({
         return next;
       });
 
-    if (!armed) {
-      const bindings = await findVariantBindings(supabase, [image.id]);
-      if (!bindings.ok) {
-        setBusyId(null);
-        const msg = `無法確認款式綁定，未刪除圖片：${bindings.error}`;
-        setLocalMsg(msg);
-        showToast(msg, "error");
-        return;
-      }
-      if (bindings.total > 0) {
-        setBusyId(null);
-        promptVariantBound(bindings.total);
-        return;
-      }
-    }
     clearDeleteArm();
 
     setFadingIds((prev) => new Set(prev).add(image.id));
-    await new Promise((r) => window.setTimeout(r, 250));
-    const result = await deleteProductImages(supabase, [image.id], { unbindVariants: armed });
+    // The helper itself refuses a variant-bound image (blockedByVariants) unless armed, and the
+    // 250ms fade runs alongside the delete instead of before it. Storage cleanup is left to the background.
+    const [result] = await Promise.all([
+      deleteProductImages(supabase, [image.id], { unbindVariants: armed, backgroundStorageCleanup: true }),
+      new Promise((r) => window.setTimeout(r, 250))
+    ]);
     setBusyId(null);
 
     if (result.blockedByVariants?.length) {
-      // A variant bound to this image appeared after our check -- ask again.
+      // First click on a variant-bound image -- ask again (armed second click unbinds).
       unfade();
       promptVariantBound(result.blockedByVariants.reduce((sum, row) => sum + row.count, 0));
       return;

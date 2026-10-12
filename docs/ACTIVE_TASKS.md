@@ -1,3 +1,69 @@
+> **2026-10-11 DEEP CAPTURE DIAGNOSIS — Owner live retest**
+> - Live Tmall Hollybox detail-image capture improved successfully (latest tested row: 19 detail images).
+> - Live Taobao Miffy detail capture remained incomplete: only 4 "detail" URLs were sent; 2 were Taobao TPS/platform assets and 2 were SKU-thumb derivatives. Root cause: false-positive detail images prevented the fallback from running, plus modern Taobao detail roots/lazy-load timing were incomplete.
+> - PR #41 current head `5f4b133f6c02c10f6affbbc03b2f5b21a96bf589` fixes this with modern detail roots, false-detail filtering, sparse-detail ICE fallback, bounded lazy-load retry only when usable detail count <5, and `capture_meta.extension_build=capture-20261011-r5`. CI PASS; Owner runtime acceptance still pending. DO NOT MERGE.
+> - SKU-price root cause is now narrowed: tested modern Taobao/Tmall pages expose `skuCore.skuItem.hideOtherPrice=true`; initial ICE has SKU ids/names/images but no complete per-SKU `price/subPrice` mapping. It exposes the selected/current SKU price and product-level range/start price only.
+> - Important QA correction: the Owner's latest live Miffy/Hollybox rows still contain the old synthetic same-price `sku_table` and lack PR #40's final missing-SKU-price warning. Therefore those rows came from an **intermediate extension build**, not PR #40 final head. Final `cartParam/buyExParams` parsing has not yet been proven on these exact products.
+> - Do not claim CAPTURE-TRUTH-A complete. Next build-stamped smoke must prove the actual extension runtime. If `hideOtherPrice=true` pages still lack per-SKU prices, open a separate `CAPTURE-SKU-PRICE-SWEEP`: keep normal capture fast, and only for incomplete SKU pricing interactively select SKU combinations in the already-open logged-in page to read each updated pre-promo price. Do not silently slow every capture.
+> - Do not use naive server-side Taobao internal API as the default fallback without a separate design review; the browser's logged-in page context is the safer place to explore any interactive/internal-price retrieval.
+>
+> **2026-10-11 TEST ENVIRONMENT CORRECTION — Preview SSO**
+> - Vercel project currently has SSO protection enabled for Preview deployments. The Chrome extension background fetch does not implement a Vercel Preview-bypass credential flow.
+> - Therefore do **not** tell Owner to point the extension API base at a protected Preview as if it were guaranteed to work.
+> - Practical pre-merge smoke for client-side capture uses the latest test extension with the normal existing Nestory API and creates only a draft (no Shopify publish). This validates SKU parsing / detail-image capture / speed.
+> - PR #40 backend provenance (`cost_is_inherited`, confirmation metadata) remains CI/source validated before merge. If strict Preview-API end-to-end is required pre-merge, open a separate explicit test-bypass package; do not disable Vercel protection silently.
+>
+> **2026-10-11 CAPTURE live-use checkpoint — price truth + Tmall detail images**
+> - PR #40 `CAPTURE-TRUTH-A` is the active price-correctness package. Latest validated head before final smoke: `8fd8026ec07f0ad5740e1947476cd4e696adcf7b`; CI PASS and Preview `dpl_6RaRwCLGGKCWc51c89zZr7o8S94Q` is READY.
+> - Live Hollybox/Eevee testing proved that modern Taobao/Tmall may expose SKU ids/names/images while **not exposing a full per-SKU price table in `skuCore.sku2info`**. Product-level/base price must never be copied into every SKU row and presented as independently captured.
+> - PR #40 now keeps synthetic SKU-table prices empty unless independently captured, parses already-loaded `cartParam / buyExParams` style JSON/query data for explicit base/promo fields, and preserves the no-extra-fetch/XHR/AI performance rule.
+> - Earlier practical capture used the PR #40 extension against the old Production API, so it did not validate the new backend provenance path end-to-end. Final capture smoke must pair the latest test extension with its Preview API.
+> - Hollybox detail-image loss is a separate pre-existing Tmall capture gap, not evidence that PR #40 broke images: the capture payload itself had `detail_image_urls=null` while main + variant images succeeded.
+> - PR #41 `CAPTURE-IMAGE` is stacked on PR #40 to avoid overlapping concurrent writes. It expands modern Tmall detail selectors, unions multiple detail containers, and uses bounded already-loaded ICE rich-detail fallback only when normal DOM detail capture returns zero. No auto-scroll or extra network request.
+> - PR #41 remains Draft / no merge; final CI + real Hollybox smoke are required.
+>
+> **2026-10-11 Owner pricing rule — CAPTURE-TRUTH-A**
+> - Cost basis rule is confirmed: use the **non-discount / pre-promo price** as Nestory default cost. Promo / coupon / after-discount prices may be captured and stored as evidence, but must not automatically drive pricing because they can change.
+> - Multi-variant products should capture each SKU's own base price and promo/coupon evidence whenever available. A missing per-SKU base price must be represented as inherited/unknown, never presented as independently captured.
+> - Performance requirement: preserve the current acceptable capture speed. CAPTURE-TRUTH-A must not add a second Taobao fetch, external API call, or AI call.
+> - Runtime work is in Draft PR #40. CI PASS (verify / typecheck / build). No merge yet; real Taobao smoke still required before acceptance.
+>
+> **2026-10-11 Owner runtime decision — OBS-QUEUE deferred**
+> - PR #38 Preview was reviewed by Owner and is **DEFERRED / DO NOT MERGE**.
+> - Reason: the current queue center is visually too heavy / awkwardly placed, long failure content scales poorly, and underlying `failed` semantics are not yet trustworthy.
+> - Do not spend another package polishing PR #38 now. Future redesign should be a compact status strip + expandable details after `STATUS-SEMANTICS`.
+> - Immediate implementation priority is now `CAPTURE-TRUTH` (price / SKU truth) → `IMAGE-INTEGRITY` (safe image deletion + repair), because these can directly corrupt listing price/data.
+>
+> **2026-10-11 ACTIVE TASKS — validation debt + approved reliability insert**
+>
+> **Live authority**
+> - `handoff/20261008-golive-spec@87d759395beb374ab839b7a5265d14cebbb6d1ae`
+> - Production remains `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` / `caae0fa…`; do not treat Preview availability as Production approval.
+>
+> **Open work already started**
+> 1. PR #36 — **SEO Panel V2-A｜Google 預覽 + 可編輯 Handle**
+>    - Draft/Open; no Preview exists yet.
+>    - Next: Vercel Preview → Owner runtime QA → merge decision.
+>    - Reserved runtime files: `src/components/listing/ResultCard.tsx`, `src/components/listing/result-card/ResultCardSeoPanel.tsx`.
+> 2. PR #38 — **OBS-QUEUE｜看得懂哪些 AI 任務排隊、處理中、失敗**
+>    - Draft/Open; no Preview exists yet.
+>    - Vercel blocker is cleared, so Preview can now be created.
+>    - **Merge HOLD:** current underlying status semantics can count “內容已生成、只是缺 IP/tag 待人工補” as generation failure. Fix/clarify that contract in `STATUS-SEMANTICS` before accepting its red failure count as final.
+>    - Reserved runtime files: `src/app/api/generation-queue/route.ts`, `src/components/listing/GenerationQueueOverview.tsx`, `src/components/listing/QuickPreviewPanel.tsx`, `scripts/verify-v11-generation-queue.mjs`.
+>
+> **Owner-approved new implementation sequence (2026-10-11)**
+> - `CAPTURE-TRUTH` — 淘寶/天貓價格要能分清原價、目前可買價、條件優惠價；每個 SKU 的價格來源要誠實；排除「勿拍/資訊說明」等非商品 SKU；重抓時不能讓錯的舊值因為“非空白”永遠留著。
+> - `IMAGE-INTEGRITY` — 刪圖前先處理 Variant 綁定，DB 成功後才刪 Storage；修復/對帳目前已斷掉的款式圖引用。
+> - `PRICING-RULES` — 驗證公式真的套用；修正不合理美化價階（例如 2280→4480 的巨大跳階）並加偏離公式的安全限制。
+> - `STATUS-SEMANTICS` — 分開「AI/API 真失敗」與「生成完成但資料待補」，並理順 IP → 角色 → tag 建檔流程。
+> - `REVIEW-GUARD` — 統一偵測文案版本、Tags、SKU、類型、規格等尚未儲存修改；核准時用「儲存並核准」保護。
+> - `FLOW/PREFS` — 首次預設單一售價 + 潮巢導購版；之後記住上次選擇；設定有明確已儲存回饋；失敗卡可處理；減少生成後整頁閃動。
+> - Then return to planned `COPY-SAFE → PB2-COPY-STRATEGY → UIUX-SPEC-VARIANT → UIUX-CARD-WORKBENCH → UIUX-FLOW-STATE → PERF…`.
+>
+> **Roadmap discipline**
+> - Roadmap is the default sequence, not an immutable law.
+> - Owner may insert new ideas and Commander may recommend reordering, but changes must be written down and surfaced to Owner; never silently skip an existing package.
+>
 > **2026-10-10 HANDOFF — no active Shopify release blocker**
 > - Shopify release package is closed PASS.
 > - Do not reopen DRAFT/ACTIVE release work unless new live evidence shows a regression.

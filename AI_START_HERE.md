@@ -1,3 +1,37 @@
+> **2026-10-11 DEEP CAPTURE DIAGNOSIS — Owner live retest**
+> - Live Tmall Hollybox detail-image capture improved successfully (latest tested row: 19 detail images).
+> - Live Taobao Miffy detail capture remained incomplete: only 4 "detail" URLs were sent; 2 were Taobao TPS/platform assets and 2 were SKU-thumb derivatives. Root cause: false-positive detail images prevented the fallback from running, plus modern Taobao detail roots/lazy-load timing were incomplete.
+> - PR #41 current head `5f4b133f6c02c10f6affbbc03b2f5b21a96bf589` fixes this with modern detail roots, false-detail filtering, sparse-detail ICE fallback, bounded lazy-load retry only when usable detail count <5, and `capture_meta.extension_build=capture-20261011-r5`. CI PASS; Owner runtime acceptance still pending. DO NOT MERGE.
+> - SKU-price root cause is now narrowed: tested modern Taobao/Tmall pages expose `skuCore.skuItem.hideOtherPrice=true`; initial ICE has SKU ids/names/images but no complete per-SKU `price/subPrice` mapping. It exposes the selected/current SKU price and product-level range/start price only.
+> - Important QA correction: the Owner's latest live Miffy/Hollybox rows still contain the old synthetic same-price `sku_table` and lack PR #40's final missing-SKU-price warning. Therefore those rows came from an **intermediate extension build**, not PR #40 final head. Final `cartParam/buyExParams` parsing has not yet been proven on these exact products.
+> - Do not claim CAPTURE-TRUTH-A complete. Next build-stamped smoke must prove the actual extension runtime. If `hideOtherPrice=true` pages still lack per-SKU prices, open a separate `CAPTURE-SKU-PRICE-SWEEP`: keep normal capture fast, and only for incomplete SKU pricing interactively select SKU combinations in the already-open logged-in page to read each updated pre-promo price. Do not silently slow every capture.
+> - Do not use naive server-side Taobao internal API as the default fallback without a separate design review; the browser's logged-in page context is the safer place to explore any interactive/internal-price retrieval.
+>
+> **2026-10-11 TEST ENVIRONMENT CORRECTION — Preview SSO**
+> - Vercel project currently has SSO protection enabled for Preview deployments. The Chrome extension background fetch does not implement a Vercel Preview-bypass credential flow.
+> - Therefore do **not** tell Owner to point the extension API base at a protected Preview as if it were guaranteed to work.
+> - Practical pre-merge smoke for client-side capture uses the latest test extension with the normal existing Nestory API and creates only a draft (no Shopify publish). This validates SKU parsing / detail-image capture / speed.
+> - PR #40 backend provenance (`cost_is_inherited`, confirmation metadata) remains CI/source validated before merge. If strict Preview-API end-to-end is required pre-merge, open a separate explicit test-bypass package; do not disable Vercel protection silently.
+>
+> **2026-10-11 CAPTURE CHECKPOINT — implementation finished, real smoke pending**
+> - PR #40 `CAPTURE-TRUTH-A` is implemented and CI PASS at `8fd8026ec07f0ad5740e1947476cd4e696adcf7b`. It stops manufacturing per-SKU prices from the product price, parses already-loaded embedded SKU params for explicit base/promo prices, preserves the Owner rule “未優惠價＝成本基準；優惠/券後價只記錄”, and adds no extra Taobao fetch/XHR/AI.
+> - PR #41 `CAPTURE-IMAGE` is stacked on PR #40 and CI PASS at `3ac5c62bf05a75da384c79114286b0d2cb57c376`. It expands modern Tmall detail-image selectors, unions multiple detail containers, and only falls back to bounded already-loaded ICE rich-detail data when DOM returns zero images.
+> - Final combined Preview: `dpl_9pdCVuzm8AJJwR5xoLGQBaZPku9d` / `nestory-listing-admin-ac5mrythl-chocho-nestory.vercel.app`, READY, `/api/status` 200, `shopifyMock=true`.
+> - Final acceptance is **not yet PASS**: one real smoke is still required using the matching latest test extension + this Preview API. Earlier Hollybox capture mixed new extension with old Production API and therefore did not validate backend provenance end-to-end.
+> - PR #40 / #41 remain Draft and MUST NOT merge without Owner approval.
+>
+> **2026-10-11 COMMANDER CHECKPOINT — live-use audit + roadmap insertion approved**
+> - Live Git authority rechecked: `handoff/20261008-golive-spec@87d759395beb374ab839b7a5265d14cebbb6d1ae` (PR #37 merged).
+> - Vercel's prior Hobby build-rate/quota blocker is no longer active: latest handoff Preview `dpl_EnzH362gm6uyAwaaiSbTwJBAsdgh` is `READY` on exact `87d7593…`. Production remains `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` on runtime code `caae0fa…`.
+> - PR #36 `SEO Panel V2-A` is still Draft/Open and has **no Vercel Preview yet**. PR #38 `OBS-QUEUE` is still Draft/Open and also has **no Vercel Preview yet**.
+> - Owner approved inserting the 2026-10-11 live-use reliability findings ahead of COPY work. Do not silently skip old roadmap items: when ordering changes, record the old/new order and reason in Roadmap/Active Tasks.
+> - New implementation priority before COPY: `CAPTURE-TRUTH → IMAGE-INTEGRITY → PRICING-RULES → STATUS-SEMANTICS → REVIEW-GUARD → FLOW/PREFS`, then return to `COPY-SAFE → PB2-COPY-STRATEGY` and the remaining UIUX/PERF/Schedule roadmap.
+> - `CAPTURE-TRUTH` covers price-source confidence, real per-SKU prices, non-sale/info SKU filtering, missing-price honesty, and safe re-capture updates.
+> - `IMAGE-INTEGRITY` covers safe delete ordering / variant bindings plus reconciliation of currently broken image references; the audit found at least three recent variant-image DB rows whose Supabase Storage object is missing.
+> - `STATUS-SEMANTICS` is a dependency for trusting OBS-QUEUE's red failure count: generated content that merely needs IP/tag correction must not be indistinguishable from a true AI/API generation failure.
+> - No P0/P1 repair above has been implemented yet. No Production / Shopify / DB write is authorized by this checkpoint.
+> - Immediate validation debt now that Vercel is available: create Preview(s) for PR #36 and PR #38; PR #36 can proceed to Owner runtime QA, while PR #38 remains merge-HOLD until its displayed failure semantics are reconciled with `STATUS-SEMANTICS`.
+>
 > **2026-10-10 FINAL COMMANDER HANDOFF — milestone closed / new chat recommended**
 > - Owner approved merging the docs handoff package after Shopify DRAFT + ACTIVE release completed.
 > - Latest known live code authority before this docs-only merge: `caae0fa7f4e0d9aba368df961ce714e02a669437`; Production `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` READY; Shopify runtime real; daily DRAFT / ACTIVE released.

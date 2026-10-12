@@ -1,3 +1,36 @@
+> **2026-10-11 DEEP CAPTURE DIAGNOSIS — Owner live retest**
+> - Live Tmall Hollybox detail-image capture improved successfully (latest tested row: 19 detail images).
+> - Live Taobao Miffy detail capture remained incomplete: only 4 "detail" URLs were sent; 2 were Taobao TPS/platform assets and 2 were SKU-thumb derivatives. Root cause: false-positive detail images prevented the fallback from running, plus modern Taobao detail roots/lazy-load timing were incomplete.
+> - PR #41 current head `5f4b133f6c02c10f6affbbc03b2f5b21a96bf589` fixes this with modern detail roots, false-detail filtering, sparse-detail ICE fallback, bounded lazy-load retry only when usable detail count <5, and `capture_meta.extension_build=capture-20261011-r5`. CI PASS; Owner runtime acceptance still pending. DO NOT MERGE.
+> - SKU-price root cause is now narrowed: tested modern Taobao/Tmall pages expose `skuCore.skuItem.hideOtherPrice=true`; initial ICE has SKU ids/names/images but no complete per-SKU `price/subPrice` mapping. It exposes the selected/current SKU price and product-level range/start price only.
+> - Important QA correction: the Owner's latest live Miffy/Hollybox rows still contain the old synthetic same-price `sku_table` and lack PR #40's final missing-SKU-price warning. Therefore those rows came from an **intermediate extension build**, not PR #40 final head. Final `cartParam/buyExParams` parsing has not yet been proven on these exact products.
+> - Do not claim CAPTURE-TRUTH-A complete. Next build-stamped smoke must prove the actual extension runtime. If `hideOtherPrice=true` pages still lack per-SKU prices, open a separate `CAPTURE-SKU-PRICE-SWEEP`: keep normal capture fast, and only for incomplete SKU pricing interactively select SKU combinations in the already-open logged-in page to read each updated pre-promo price. Do not silently slow every capture.
+> - Do not use naive server-side Taobao internal API as the default fallback without a separate design review; the browser's logged-in page context is the safer place to explore any interactive/internal-price retrieval.
+>
+> **2026-10-11 TEST ENVIRONMENT CORRECTION — Preview SSO**
+> - Vercel project currently has SSO protection enabled for Preview deployments. The Chrome extension background fetch does not implement a Vercel Preview-bypass credential flow.
+> - Therefore do **not** tell Owner to point the extension API base at a protected Preview as if it were guaranteed to work.
+> - Practical pre-merge smoke for client-side capture uses the latest test extension with the normal existing Nestory API and creates only a draft (no Shopify publish). This validates SKU parsing / detail-image capture / speed.
+> - PR #40 backend provenance (`cost_is_inherited`, confirmation metadata) remains CI/source validated before merge. If strict Preview-API end-to-end is required pre-merge, open a separate explicit test-bypass package; do not disable Vercel protection silently.
+>
+> **2026-10-11 CAPTURE STATUS — code/CI ready, practical smoke next**
+> - CAPTURE-TRUTH-A PR #40: Draft/Open, CI PASS, validated head `8fd8026…`.
+> - CAPTURE-IMAGE PR #41: Draft/Open, stacked on #40, CI PASS, validated head `3ac5c62…`.
+> - Combined Preview `dpl_9pdCVuzm8AJJwR5xoLGQBaZPku9d` is READY and safe for capture testing (`shopifyMock=true`).
+> - Confirmed root cause for repeated SKU prices: modern Tmall may provide SKU identity without a complete per-SKU price table; old synthetic `sku_table` copied the product price into every row. That manufactured completeness has been removed.
+> - Confirmed Hollybox detail-image root cause: the extension payload itself contained no detail URLs while main/variant image fetch succeeded. Tmall selector coverage / lazy loaded-data shape was incomplete; PR #40 did not regress the image-storage pipeline.
+> - Next action: one paired live smoke with latest PR #41 extension pointed at the combined Preview API. Validate SKU-price truth, detail images, capture speed, and backend inherited-price provenance. No Production / merge until Owner accepts.
+>
+> **2026-10-11 CURRENT STATUS — Vercel recovered / live-use audit inserted**
+> - Repository authority: `handoff/20261008-golive-spec@87d759395beb374ab839b7a5265d14cebbb6d1ae`.
+> - PR #37 (SEO Panel V2-B descriptive automatic Handle) is merged.
+> - Vercel can build again: latest Preview `dpl_EnzH362gm6uyAwaaiSbTwJBAsdgh` is `READY` on exact authority `87d7593…`. The 2026-10-10 build-rate/quota HOLD is therefore cleared.
+> - Production is intentionally unchanged: `dpl_E7AiRECoiKAbbVm1vHwXJiFcZtLc` / runtime code `caae0fa7f4e0d9aba368df961ce714e02a669437`.
+> - PR #36 (SEO Panel V2-A) = Draft/Open, source work present, **0 Vercel deployments** for its branch. Needs Preview + Owner practical QA before any merge decision.
+> - PR #38 (OBS-QUEUE status center) = Draft/Open, source/CI work present, **0 Vercel deployments** for its branch. Preview may now be created, but merge remains HOLD because current DB semantics label some generated-but-needs-fix items as `generation_status=failed`.
+> - Live-use audit confirmed reliability work that now outranks copy-quality work: wrong/ambiguous Taobao prices, per-SKU price provenance, non-sale SKU rows, unsafe image delete ordering, broken image references, pricing ladder jumps, incomplete unsaved-change guarding, and failure-vs-needs-revision semantics.
+> - No repair package from that audit has been implemented yet; these are approved roadmap insertions, not completed work.
+>
 > **2026-10-10 HANDOFF STATUS — clean post-release checkpoint**
 > - Shopify DRAFT / ACTIVE release is complete and no longer blocks the roadmap.
 > - PR #35 is merged; repaired ACTIVE publication behavior is live in Production.

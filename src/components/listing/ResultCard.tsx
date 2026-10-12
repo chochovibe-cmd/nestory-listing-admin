@@ -99,6 +99,11 @@ import {
 import type { FieldVersionInput } from "@/lib/drafts/approveSummary";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import {
+  deleteProductImages,
+  deleteProductImagesFailureMessage,
+  findVariantBindings
+} from "@/lib/images/deleteProductImages";
+import {
   formatArchiveResultMessage,
   formatUnarchiveResultMessage,
   isArchiveBusyStatus,
@@ -178,15 +183,6 @@ type ResultCardVariantRow = {
   image_id?: string | null;
 };
 
-
-// product_images only stores the public URL, not the storage path -- derive
-// the path Supabase Storage needs for .remove() from it instead of tracking
-// a separate column just for this.
-function storagePathFromUrl(url: string): string | null {
-  const marker = "/product-images/";
-  const index = url.indexOf(marker);
-  return index === -1 ? null : url.slice(index + marker.length);
-}
 
 function emptyVersionIndexMap(): Record<CopyVersionField, number> {
   return Object.fromEntries(COPY_VERSION_FIELDS.map((f) => [f, 0])) as Record<CopyVersionField, number>;
@@ -388,6 +384,10 @@ export function ResultCard({
   const [draftImageFlags, setDraftImageFlags] = useState<unknown>(draft.image_flags);
   /** UX-H T49: soft-remove fade on delete image */
   const [fadingImageIds, setFadingImageIds] = useState<Set<string>>(() => new Set());
+  /** IMAGE-INTEGRITY: variant-bound image ✕ needs a second click (arm, auto-disarm ~6s). */
+  const [imageDeleteArm, setImageDeleteArm] = useState<{ id: string; count: number } | null>(null);
+  const imageDeleteArmTimerRef = useRef<number | null>(null);
+  const imageDeleteBusyRef = useRef<Set<string>>(new Set());
   // B10: generation_history (read-only for ←→; inserts on regen/manual commit)
   const [historyRows, setHistoryRows] = useState<GenerationHistoryRow[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -1733,37 +1733,98 @@ export function ResultCard({
     setExportFullTableRows(fullRows);
   }
 
+  function clearImageDeleteArm() {
+    if (imageDeleteArmTimerRef.current != null) {
+      window.clearTimeout(imageDeleteArmTimerRef.current);
+      imageDeleteArmTimerRef.current = null;
+    }
+    setImageDeleteArm(null);
+  }
+
+  function armImageDelete(id: string, count: number) {
+    if (imageDeleteArmTimerRef.current != null) window.clearTimeout(imageDeleteArmTimerRef.current);
+    setImageDeleteArm({ id, count });
+    imageDeleteArmTimerRef.current = window.setTimeout(() => {
+      imageDeleteArmTimerRef.current = null;
+      setImageDeleteArm(null);
+    }, 6000);
+  }
+
+  useEffect(
+    () => () => {
+      if (imageDeleteArmTimerRef.current != null) window.clearTimeout(imageDeleteArmTimerRef.current);
+    },
+    []
+  );
+
+  // IMAGE-INTEGRITY: delete goes through deleteProductImages (unbind -> DB -> Storage).
   async function removeImage(image: ProductImage) {
-    setFadingImageIds((prev) => new Set(prev).add(image.id));
-    await new Promise((r) => window.setTimeout(r, 250));
-    const url = image.processed_file_url ?? image.original_file_url;
-    const path = url ? storagePathFromUrl(url) : null;
-    if (path) {
-      await supabase.storage.from("product-images").remove([path]);
+    if (imageDeleteBusyRef.current.has(image.id)) return;
+    imageDeleteBusyRef.current.add(image.id);
+    const promptVariantBound = (count: number) => {
+      armImageDelete(image.id, count);
+      showToast(
+        `這是款式圖，綁定 ${count} 個款式。再按一次 ✕ 會先解除這些款式的圖片綁定，再刪除圖片。`,
+        "warn",
+        6000
+      );
+    };
+    try {
+      const armed = imageDeleteArm?.id === image.id;
+      if (!armed) {
+        const bindings = await findVariantBindings(supabase, [image.id]);
+        if (!bindings.ok) {
+          showToast(`無法確認款式綁定，未刪除圖片：${bindings.error}`, "error");
+          return;
+        }
+        if (bindings.total > 0) {
+          promptVariantBound(bindings.total);
+          return;
+        }
+      }
+      clearImageDeleteArm();
+
+      setFadingImageIds((prev) => new Set(prev).add(image.id));
+      await new Promise((r) => window.setTimeout(r, 250));
+      const result = await deleteProductImages(supabase, [image.id], { unbindVariants: armed });
+      const unfade = () =>
+        setFadingImageIds((prev) => {
+          const next = new Set(prev);
+          next.delete(image.id);
+          return next;
+        });
+
+      if (result.blockedByVariants?.length) {
+        // A variant bound to this image appeared after our check -- ask again.
+        unfade();
+        promptVariantBound(result.blockedByVariants.reduce((sum, row) => sum + row.count, 0));
+        return;
+      }
+
+      // UX-L T62: delete image result → toast
+      if (!result.ok || !result.deletedIds.includes(image.id)) {
+        showToast(`刪除圖片失敗：${deleteProductImagesFailureMessage(result)}`, "error");
+        unfade();
+      } else {
+        const unboundCount = result.unboundVariantIds.length;
+        showToast(
+          unboundCount > 0 ? `已刪除圖片，並解除 ${unboundCount} 個款式的圖片綁定` : "已刪除圖片",
+          "success"
+        );
+        await markShopifyDirty();
+        setImageMarks((current) => current.filter((row) => row.id !== image.id));
+        // Unsaved local variant rows must not keep pointing at the deleted image.
+        setVariantRows((rows) =>
+          rows.some((row) => row.imageId === image.id)
+            ? rows.map((row) => (row.imageId === image.id ? { ...row, imageId: null } : row))
+            : rows
+        );
+        unfade();
+      }
+      router.refresh();
+    } finally {
+      imageDeleteBusyRef.current.delete(image.id);
     }
-    const { error } = await supabase.from("product_images").delete().eq("id", image.id);
-    // UX-L T62: delete image result → toast
-    if (error) {
-      showToast(`刪除圖片失敗：${error.message}`, "error");
-    } else {
-      showToast("已刪除圖片", "success");
-      await markShopifyDirty();
-    }
-    if (error) {
-      setFadingImageIds((prev) => {
-        const next = new Set(prev);
-        next.delete(image.id);
-        return next;
-      });
-    } else {
-      setImageMarks((current) => current.filter((row) => row.id !== image.id));
-      setFadingImageIds((prev) => {
-        const next = new Set(prev);
-        next.delete(image.id);
-        return next;
-      });
-    }
-    router.refresh();
   }
 
   // B5: client-side update under existing product_images RLS (owner of

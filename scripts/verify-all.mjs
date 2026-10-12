@@ -61,7 +61,9 @@ const scripts = [
   "scripts/verify-shopify-live-test-guard.mjs",
   "scripts/verify-shopify-full-sync.mjs",
   "scripts/verify-shopify-sync-ux.mjs",
-  "scripts/verify-websearch-copy-path.mjs"
+  "scripts/verify-websearch-copy-path.mjs",
+  // IMAGE-INTEGRITY: unbind -> DB delete -> Storage; no UI path deletes Storage first.
+  "scripts/verify-image-integrity.mjs"
 ];
 
 for (const script of scripts) {

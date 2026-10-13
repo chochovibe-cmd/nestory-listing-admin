@@ -29,7 +29,7 @@ const exists = (rel) => fs.existsSync(path.join(root, rel));
 
 const CAPTURE_TOKEN_PREFIX = "ncap_";
 const PRICE_PLACEHOLDER_CNY = 0.01;
-const WARNING_MISSING_PRICE = "未抓到售價，已用占位值，請在表單填實際成本";
+const WARNING_MISSING_PRICE = "未抓到可採用的未優惠價；草稿暫用系統占位值，請確認成本後再生成或上架";
 /** @deprecated PKG2A — runtime uses formatMultiDimStoredInfo */
 const WARNING_MULTIDIM_SKU =
   "多維規格已壓平為單維／列舉款式，展開待包二；完整表見 raw_capture.sku_table";
@@ -300,7 +300,9 @@ check("route: capture-token only HTTP method exports", () => {
 check("source: mapCaptureFields honesty + warnings + source_type capture", () => {
   const src = read("src/lib/import/mapCaptureFields.ts");
   assert.match(src, /source_type:\s*"capture"/);
-  assert.match(src, /WARNING_MISSING_PRICE|未抓到售價，已用占位值/);
+  assert.match(src, /WARNING_MISSING_PRICE|未抓到可採用的未優惠價/);
+  assert.match(src, /cost_is_inherited/);
+  assert.match(src, /price_requires_confirmation/);
   // PKG2A: multi-dim stored info (axis × actual rows), not 壓平 warning
   assert.match(src, /formatMultiDimStoredInfo|多維已入庫/);
   assert.match(src, /WARNING_MULTIDIM_NO_FLAT|lookupSkuTablePrice/);
@@ -349,6 +351,17 @@ check("source: createCaptureDraft dedupe + V1.1 background compatibility", () =>
   // Background completion is non-destructive: only empty image_id cells may be filled.
   const bg = src.slice(src.indexOf("export async function completeCaptureDraftImages"));
   assert.match(bg, /\.is\("image_id", null\)/);
+});
+
+check("CAPTURE refill: temporary image_url never reaches product_variants insert", () => {
+  const src = read("src/lib/import/createCaptureDraft.ts");
+  const start = src.indexOf("async function refillEmptyCaptureFields(");
+  const end = src.indexOf("export async function createCaptureDraft(", start);
+  assert.ok(start >= 0 && end > start, "refill function must exist");
+  const refill = src.slice(start, end);
+  assert.match(refill, /applyVariantImageIds\(mapped\.variantRows, \{\}\)/);
+  assert.match(refill, /persistVariantsSafe\(input\.serviceSupabase, input\.draftId, withDraft\)/);
+  assert.doesNotMatch(refill, /const withDraft = mapped\.variantRows\.map/);
 });
 
 check("source: image fetch 10s timeout + referer + limits + variant", () => {

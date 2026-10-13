@@ -83,10 +83,14 @@ async function load() {
   var data = await chrome.storage.local.get([
     "apiBaseUrl",
     "captureToken",
+    "vercelProtectionBypass",
     "lastResult"
   ]);
   if (data.apiBaseUrl) $("apiBaseUrl").value = data.apiBaseUrl;
   if (data.captureToken) $("captureToken").value = data.captureToken;
+  if (data.vercelProtectionBypass) {
+    $("vercelProtectionBypass").value = data.vercelProtectionBypass;
+  }
   renderLast(data.lastResult || null);
 }
 
@@ -95,6 +99,9 @@ $("saveBtn").addEventListener("click", async function () {
 
   var apiBaseUrl = normalizeApiBase($("apiBaseUrl").value);
   var captureToken = String($("captureToken").value || "").trim();
+  var vercelProtectionBypass = String(
+    $("vercelProtectionBypass").value || ""
+  ).trim();
 
   if (!apiBaseUrl) {
     setMsg("請填 API 網址（例如 https://你的站.vercel.app）", false);
@@ -122,7 +129,8 @@ $("saveBtn").addEventListener("click", async function () {
 
   await chrome.storage.local.set({
     apiBaseUrl: apiBaseUrl,
-    captureToken: captureToken
+    captureToken: captureToken,
+    vercelProtectionBypass: vercelProtectionBypass
   });
 
   // Prefer toolbar click → capture

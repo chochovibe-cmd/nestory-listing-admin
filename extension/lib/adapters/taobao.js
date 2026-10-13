@@ -19,6 +19,435 @@
 
   var ORIGIN_LABEL_RE = /优惠前|優惠前|划线价|劃線價|原价|原價|吊牌价|吊牌價/;
   var PROMO_LABEL_RE = /店铺优惠后|店鋪優惠後|优惠后|優惠後|券后|券後|到手价|到手價|促销价|促銷價/;
+  var BASE_PRICE_KEY_RE = /origin|original|list|market|tag|reserve|regular|standard|before/i;
+  var PROMO_PRICE_KEY_RE = /promo|promotion|coupon|discount|activity|sale|deal|after/i;
+
+  function pricesClose(a, b) {
+    if (a == null || b == null) return false;
+    var aa = Number(a);
+    var bb = Number(b);
+    if (!Number.isFinite(aa) || !Number.isFinite(bb)) return false;
+    var tolerance = Math.max(0.5, Math.max(Math.abs(aa), Math.abs(bb)) * 0.015);
+    return Math.abs(aa - bb) <= tolerance;
+  }
+
+  function priceHintFromUrl(href) {
+    try {
+      var u = new URL(href);
+      var raw = u.searchParams.get("price");
+      return raw ? NestoryCap.parsePrice(raw) : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function skuHintFromUrl(href) {
+    try {
+      var u = new URL(href);
+      return u.searchParams.get("skuId") || u.searchParams.get("sku_id") || null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function priceTextFromUnknown(value) {
+    if (value == null) return null;
+    if (typeof value === "number" || typeof value === "string") {
+      return NestoryCap.parsePrice(value);
+    }
+    if (typeof value !== "object") return null;
+    var candidates = [
+      value.priceText,
+      value.text,
+      value.value,
+      value.price,
+      value.amount,
+      value.priceValue
+    ];
+    for (var i = 0; i < candidates.length; i++) {
+      var p = NestoryCap.parsePrice(candidates[i]);
+      if (p != null) return p;
+    }
+    return null;
+  }
+
+  function labelTextFromUnknown(value) {
+    if (!value || typeof value !== "object") return "";
+    return [
+      value.label,
+      value.title,
+      value.priceTitle,
+      value.name,
+      value.desc,
+      value.priceDesc,
+      value.description,
+      value.prefix,
+      value.suffix
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(" ");
+  }
+
+  /**
+   * CAPTURE-TRUTH-A: classify prices already present inside skuCore.sku2info.
+   * No fetch/XHR: this only reads the ICE object already parsed from the page.
+   * base is the non-discount price used as Nestory cost; promo is evidence only.
+   */
+  /**
+   * CAPTURE-TRUTH-A diagnostic: summarize price-related fields already loaded
+   * in the Taobao ICE object. Strict caps keep this cheap and prevent raw page
+   * blobs from being persisted. No network / interaction is performed.
+   */
+  function collectPriceDebug(res) {
+    if (!res || typeof res !== "object") return null;
+
+    var skuInfo = (res.skuCore && res.skuCore.sku2info) || {};
+    var skuRows = Array.isArray(res.skuBase && res.skuBase.skus)
+      ? res.skuBase.skus
+      : [];
+    var sampleSkuInfo = [];
+    for (var si = 0; si < skuRows.length && sampleSkuInfo.length < 20; si++) {
+      var skuId = skuRows[si] && skuRows[si].skuId != null ? String(skuRows[si].skuId) : "";
+      if (!skuId) continue;
+      var info = skuInfo[skuId] || {};
+      sampleSkuInfo.push({
+        sku: skuId,
+        keys: info && typeof info === "object" ? Object.keys(info).slice(0, 30) : []
+      });
+    }
+
+    var pricePaths = [];
+    var nodes = 0;
+    var MAX_NODES = 5000;
+    var MAX_PATHS = 120;
+    var PRICEISH = /price|promo|promotion|coupon|discount|activity|amount|sku.?price/i;
+
+    function walk(node, path, depth) {
+      if (
+        node == null ||
+        depth > 6 ||
+        nodes >= MAX_NODES ||
+        pricePaths.length >= MAX_PATHS
+      ) {
+        return;
+      }
+      nodes += 1;
+
+      if (Array.isArray(node)) {
+        for (var ai = 0; ai < node.length && ai < 40; ai++) {
+          walk(node[ai], path + "[" + ai + "]", depth + 1);
+          if (pricePaths.length >= MAX_PATHS || nodes >= MAX_NODES) break;
+        }
+        return;
+      }
+
+      if (typeof node !== "object") return;
+
+      var keys = Object.keys(node);
+      for (var ki = 0; ki < keys.length; ki++) {
+        var key = keys[ki];
+        var value = node[key];
+        var nextPath = path ? path + "." + key : key;
+
+        if (PRICEISH.test(key) || PRICEISH.test(nextPath)) {
+          if (
+            value == null ||
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean"
+          ) {
+            var shown = value;
+            if (typeof shown === "string" && shown.length > 160) {
+              shown = shown.slice(0, 160) + "…";
+            }
+            pricePaths.push({ path: nextPath, value: shown });
+            if (pricePaths.length >= MAX_PATHS) break;
+          }
+        }
+
+        // Keep traversal broad enough to discover alternate Taobao price trees,
+        // but bounded so it remains local and fast.
+        if (value && typeof value === "object") {
+          walk(value, nextPath, depth + 1);
+          if (pricePaths.length >= MAX_PATHS || nodes >= MAX_NODES) break;
+        }
+      }
+    }
+
+    walk(res, "res", 0);
+
+    return {
+      res_keys: Object.keys(res).slice(0, 60),
+      sku_core_keys:
+        res.skuCore && typeof res.skuCore === "object"
+          ? Object.keys(res.skuCore).slice(0, 60)
+          : [],
+      sample_sku_info: sampleSkuInfo,
+      price_paths: pricePaths,
+      scanned_nodes: nodes
+    };
+  }
+
+  function embeddedPriceKind(path) {
+    var p = String(path || "");
+    if (ORIGIN_LABEL_RE.test(p) || BASE_PRICE_KEY_RE.test(p)) return "base";
+    if (PROMO_LABEL_RE.test(p) || PROMO_PRICE_KEY_RE.test(p)) return "promo";
+    return "unknown";
+  }
+
+  /**
+   * Some Taobao/Tmall pages hide per-SKU values inside already-loaded JSON
+   * strings such as cartParam / buyExParams. Parse only local strings/objects;
+   * never fetch, click, or execute them.
+   */
+  function embeddedSkuPriceCandidates(info) {
+    var out = [];
+    var seen = {};
+    var MAX_NODES = 300;
+    var nodes = 0;
+    var PRICE_KEY_RE = /price|promo|coupon|discount|amount|money|原价|原價|优惠前|優惠前|券后|券後/i;
+
+    function push(path, raw) {
+      var value = NestoryCap.parsePrice(raw);
+      if (value == null) return;
+      var kind = embeddedPriceKind(path);
+      if (kind === "unknown") return;
+      var sig = path + "\u0001" + value + "\u0001" + kind;
+      if (seen[sig]) return;
+      seen[sig] = true;
+      out.push({
+        key: path,
+        source: "skuCore.embedded." + path,
+        value: value,
+        kind: kind
+      });
+    }
+
+    function parseString(raw, path, depth) {
+      var text = String(raw || "").trim();
+      if (!text || text.length > 12000 || depth > 4) return;
+
+      if ((text[0] === "{" && text[text.length - 1] === "}") ||
+          (text[0] === "[" && text[text.length - 1] === "]")) {
+        try {
+          walk(JSON.parse(text), path, depth + 1);
+          return;
+        } catch (_e) {}
+      }
+
+      if (text.indexOf("=") >= 0 && text.length <= 4000) {
+        try {
+          var params = new URLSearchParams(text.replace(/^\?/, ""));
+          params.forEach(function (value, key) {
+            var next = path + "." + key;
+            if (PRICE_KEY_RE.test(key)) push(next, value);
+            if (/param|data|ext|json/i.test(key)) parseString(value, next, depth + 1);
+          });
+        } catch (_e2) {}
+      }
+    }
+
+    function walk(node, path, depth) {
+      if (node == null || depth > 5 || nodes++ >= MAX_NODES || out.length >= 40) return;
+      if (typeof node === "string") {
+        parseString(node, path, depth);
+        return;
+      }
+      if (typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        for (var ai = 0; ai < node.length && ai < 30; ai++) {
+          walk(node[ai], path + "[" + ai + "]", depth + 1);
+        }
+        return;
+      }
+      Object.keys(node).slice(0, 80).forEach(function (key) {
+        var value = node[key];
+        var next = path ? path + "." + key : key;
+        if (PRICE_KEY_RE.test(key) && (typeof value === "string" || typeof value === "number")) {
+          push(next, value);
+        }
+        if (value && typeof value === "object") walk(value, next, depth + 1);
+        else if (typeof value === "string" && /param|data|ext|json/i.test(key)) {
+          parseString(value, next, depth + 1);
+        }
+      });
+    }
+
+    ["cartParam", "buyExParams", "buyParam", "extraParams", "ext"].forEach(function (key) {
+      if (info && info[key] != null) walk(info[key], key, 0);
+    });
+    return out;
+  }
+
+  function structuredSkuPrices(info) {
+    if (!info || typeof info !== "object") {
+      return {
+        base: null,
+        promo: null,
+        baseSource: null,
+        promoSource: null,
+        confidence: "unknown",
+        candidates: []
+      };
+    }
+
+    var candidates = [];
+    Object.keys(info).forEach(function (key) {
+      if (!/price/i.test(key)) return;
+      var raw = info[key];
+      var value = priceTextFromUnknown(raw);
+      if (value == null) return;
+      var label = labelTextFromUnknown(raw);
+      var combined = key + " " + label;
+      var kind = "unknown";
+      if (ORIGIN_LABEL_RE.test(combined) || BASE_PRICE_KEY_RE.test(key)) kind = "base";
+      if (PROMO_LABEL_RE.test(combined) || PROMO_PRICE_KEY_RE.test(key)) kind = "promo";
+      candidates.push({
+        key: key,
+        source: "skuCore." + key,
+        value: value,
+        kind: kind
+      });
+    });
+    candidates = candidates.concat(embeddedSkuPriceCandidates(info));
+
+    var primary = priceTextFromUnknown(info.price);
+    var secondary = priceTextFromUnknown(info.subPrice);
+
+    var explicitBase = candidates.find(function (c) {
+      return c.kind === "base";
+    });
+    var explicitPromo = candidates.find(function (c) {
+      return c.kind === "promo";
+    });
+
+    var base = explicitBase ? explicitBase.value : null;
+    var promo = explicitPromo ? explicitPromo.value : null;
+    var baseSource = explicitBase ? explicitBase.source || "skuCore." + explicitBase.key : null;
+    var promoSource = explicitPromo ? explicitPromo.source || "skuCore." + explicitPromo.key : null;
+    var confidence = explicitBase ? "high" : "unknown";
+
+    if (base == null && primary != null && secondary != null && !pricesClose(primary, secondary)) {
+      base = Math.max(primary, secondary);
+      promo = promo != null ? promo : Math.min(primary, secondary);
+      baseSource = primary >= secondary ? "skuCore.price" : "skuCore.subPrice";
+      promoSource = promoSource || (primary < secondary ? "skuCore.price" : "skuCore.subPrice");
+      confidence = "structured_pair";
+    } else if (base == null && primary != null) {
+      base = primary;
+      baseSource = "skuCore.price";
+      confidence = "structured_primary";
+      if (promo == null && secondary != null && secondary < primary && !pricesClose(primary, secondary)) {
+        promo = secondary;
+        promoSource = "skuCore.subPrice";
+      }
+    } else if (base == null && secondary != null) {
+      promo = promo != null ? promo : secondary;
+      promoSource = promoSource || "skuCore.subPrice";
+      confidence = "needs_confirmation";
+    }
+
+    return {
+      base: base,
+      promo: promo,
+      baseSource: baseSource,
+      promoSource: promoSource,
+      confidence: confidence,
+      candidates: candidates
+    };
+  }
+
+  /**
+   * Product-level structured prices already loaded in ICE.
+   * Priority:
+   * 1) componentsVO.priceVO.price / extraPrice
+   * 2) skuCore.sku2info["0"] fallback ("起" baseline)
+   * DOM is handled separately because a URL skuId makes the displayed DOM price
+   * selected-SKU evidence, not product-level cost.
+   */
+  function structuredProductPrices(res) {
+    var out = {
+      base: null,
+      promo: null,
+      baseSource: null,
+      promoSource: null,
+      confidence: "unknown",
+      candidates: []
+    };
+    if (!res || typeof res !== "object") return out;
+
+    var priceVO =
+      res.componentsVO &&
+      res.componentsVO.priceVO &&
+      typeof res.componentsVO.priceVO === "object"
+        ? res.componentsVO.priceVO
+        : null;
+
+    if (priceVO) {
+      var baseNode = priceVO.price;
+      var baseValue = priceTextFromUnknown(baseNode);
+      var baseLabel = labelTextFromUnknown(baseNode);
+      if (baseValue != null && !PROMO_LABEL_RE.test(baseLabel)) {
+        out.base = baseValue;
+        out.baseSource = "ice.componentsVO.priceVO.price";
+        out.confidence = "high";
+        out.candidates.push({
+          key: "componentsVO.priceVO.price",
+          source: out.baseSource,
+          value: baseValue,
+          kind: "base"
+        });
+      }
+
+      var promoNode = priceVO.extraPrice;
+      var promoValue = priceTextFromUnknown(promoNode);
+      var promoLabel = labelTextFromUnknown(promoNode);
+      if (promoValue != null && PROMO_LABEL_RE.test(promoLabel)) {
+        out.promo = promoValue;
+        out.promoSource = "ice.componentsVO.priceVO.extraPrice";
+        out.candidates.push({
+          key: "componentsVO.priceVO.extraPrice",
+          source: out.promoSource,
+          value: promoValue,
+          kind: "promo"
+        });
+      }
+    }
+
+    var infoMap =
+      res.skuCore && res.skuCore.sku2info && typeof res.skuCore.sku2info === "object"
+        ? res.skuCore.sku2info
+        : {};
+    var zeroInfo = infoMap["0"] || infoMap[0] || null;
+    if (zeroInfo) {
+      var zeroPrices = structuredSkuPrices(zeroInfo);
+      if (out.base == null && zeroPrices.base != null) {
+        out.base = zeroPrices.base;
+        out.baseSource = "ice.skuCore.sku2info.0.price";
+        out.confidence =
+          zeroPrices.confidence === "unknown" ? "structured_primary" : zeroPrices.confidence;
+        out.candidates.push({
+          key: "skuCore.sku2info.0.price",
+          source: out.baseSource,
+          value: zeroPrices.base,
+          kind: "base"
+        });
+      }
+      if (out.promo == null && zeroPrices.promo != null) {
+        out.promo = zeroPrices.promo;
+        out.promoSource = "ice.skuCore.sku2info.0.promo";
+        out.candidates.push({
+          key: "skuCore.sku2info.0.promo",
+          source: out.promoSource,
+          value: zeroPrices.promo,
+          kind: "promo"
+        });
+      }
+    }
+
+    return out;
+  }
 
   /**
    * Best-effort thumb URL from a SKU value node (img / data-* / background).
@@ -375,6 +804,11 @@
         option3_name: null,
         option3_value: null,
         cny_price: null,
+        promo_price_cny: null,
+        price_source: null,
+        promo_price_source: null,
+        price_confidence: "unknown",
+        price_candidates: [],
         sku: sku.skuId ? String(sku.skuId) : null,
         image_url: null
       };
@@ -390,13 +824,13 @@
       }
       if (!ok || !flat.option1_value) continue;
       var info = infoMap[sku.skuId] || infoMap[String(sku.skuId)] || {};
-      var priceText =
-        (info.price && info.price.priceText) ||
-        (info.subPrice && info.subPrice.priceText) ||
-        null;
-      if (priceText != null) {
-        flat.cny_price = NestoryCap.parsePrice(priceText);
-      }
+      var skuPrices = structuredSkuPrices(info);
+      flat.cny_price = skuPrices.base;
+      flat.promo_price_cny = skuPrices.promo;
+      flat.price_source = skuPrices.baseSource;
+      flat.promo_price_source = skuPrices.promoSource;
+      flat.price_confidence = skuPrices.confidence;
+      flat.price_candidates = skuPrices.candidates;
       variants_flat.push(flat);
     }
 
@@ -473,10 +907,24 @@
     var price_cny = null;
     var promo_price_cny = null;
     var onlyPromo = false;
+    var price_source = null;
+    var price_confidence = "unknown";
+    var price_candidates = [];
+
+    if (original != null) {
+      price_candidates.push({ source: "dom.original", kind: "base", value: original });
+    }
+    if (saleDisplay != null) {
+      price_candidates.push({ source: "dom.display", kind: "display", value: saleDisplay });
+    }
+    if (promo != null) {
+      price_candidates.push({ source: "dom.promo", kind: "promo", value: promo });
+    }
 
     if (original != null && (promo != null || saleDisplay != null)) {
       price_cny = original;
-      // Prefer explicitly labeled promo; else sale display if different from original
+      price_source = "dom.original";
+      price_confidence = "high";
       if (promo != null && Math.abs(promo - original) >= 0.001) {
         promo_price_cny = promo;
       } else if (saleDisplay != null && Math.abs(saleDisplay - original) >= 0.001) {
@@ -486,25 +934,28 @@
       }
     } else if (original != null) {
       price_cny = original;
+      price_source = "dom.original";
+      price_confidence = "high";
       if (promo != null && Math.abs(promo - original) >= 0.001) {
         promo_price_cny = promo;
       }
     } else if (promo != null) {
-      price_cny = promo;
+      promo_price_cny = promo;
       onlyPromo = true;
+      price_confidence = "needs_confirmation";
     } else if (saleDisplay != null) {
-      // No original found: sale display is the only number (may be promo)
       price_cny = saleDisplay;
-      // If sale came from highlight/promo-ish selector, treat as only-promo when
-      // no del/original existed — honest B1 warning when promoRaw matched or
-      // we never saw original selectors.
-      onlyPromo = true;
+      price_source = "dom.display";
+      price_confidence = "display_only";
     }
 
     return {
       price_cny: price_cny,
       promo_price_cny: promo_price_cny,
-      onlyPromo: onlyPromo
+      onlyPromo: onlyPromo,
+      price_source: price_source,
+      price_confidence: price_confidence,
+      price_candidates: price_candidates
     };
   }
 
@@ -525,17 +976,14 @@
     if (!title) warnings.push("title: 未抓到");
 
     var prices = extractPrices(doc, S, dom);
+    var domSelectedPriceCny = prices.price_cny;
     var price_cny = prices.price_cny;
     var promo_price_cny = prices.promo_price_cny;
-    if (price_cny == null) {
-      warnings.push("price_cny: 未抓到");
-    } else if (prices.onlyPromo) {
-      warnings.push(
-        "只看到促銷價 ¥" +
-          price_cny +
-          "，可能低於原價——成本請自行確認"
-      );
-    }
+    var price_source = prices.price_source;
+    var price_confidence = prices.price_confidence;
+    var price_candidates = prices.price_candidates.slice();
+    var price_conflict = null;
+    var selectedSkuHint = skuHintFromUrl(href);
 
     // A1: list_price_cny optional; do not force when price_cny already holds original
     var list_price_cny = null;
@@ -546,10 +994,38 @@
     var iceRes = iceResFromContext(ice);
     var iceSku = iceSkuFromRes(iceRes);
     var iceParams = iceParamsFromRes(iceRes);
+    var price_debug = collectPriceDebug(iceRes);
+    var productStructuredPrices = structuredProductPrices(iceRes);
+
+    if (productStructuredPrices.base != null) {
+      price_cny = productStructuredPrices.base;
+      price_source = productStructuredPrices.baseSource;
+      price_confidence = productStructuredPrices.confidence;
+      promo_price_cny =
+        productStructuredPrices.promo != null
+          ? productStructuredPrices.promo
+          : selectedSkuHint
+            ? null
+            : prices.promo_price_cny;
+      price_candidates = productStructuredPrices.candidates.slice();
+      if (!selectedSkuHint) {
+        price_candidates = price_candidates.concat(prices.price_candidates);
+      }
+    } else if (selectedSkuHint) {
+      // A URL skuId means the visible DOM price belongs to that selected SKU.
+      // Without structured product price evidence, do not promote it to product cost.
+      price_cny = null;
+      price_source = null;
+      price_confidence = "unknown";
+      promo_price_cny = productStructuredPrices.promo;
+      price_candidates = productStructuredPrices.candidates.slice();
+    }
+
     var sku_table = null;
     var variants_flat = [];
     var sku_dimensions = 0;
     var usedIceSku = false;
+    var urlPriceHint = priceHintFromUrl(href);
     var iceHasValues =
       iceSku &&
       iceSku.axes.length &&
@@ -564,12 +1040,15 @@
         imageByValue: iceSku.imageByValue
       };
       sku_dimensions = iceSku.axes.length;
+      // Product-level price is NOT an SKU price. Keep synthetic table price empty;
+      // independently captured SKU prices live only on variants_flat.
       sku_table = NestoryCap.cartesianSkuTable(
         iceSku.axes,
         iceSku.valuesPerAxis,
-        price_cny
+        null
       );
-      if (iceSku.variants_flat.length) {
+      var hasStructuredIceVariantPrices = iceSku.variants_flat.length > 0;
+      if (hasStructuredIceVariantPrices) {
         variants_flat = iceSku.variants_flat;
       } else {
         var iceFlat = NestoryCap.flattenSkuTable(sku_table);
@@ -581,14 +1060,18 @@
           iceSku.imageByValue || {}
         );
       }
-      if (NestoryCap.omitUniformVariantPrices) {
+      // Only synthetic/fallback rows may inherit a fake uniform product cost.
+      // Real sku2info evidence stays even when a SKU legitimately equals the
+      // product "起" baseline (e.g. six Pokémon SKUs at 18.9).
+      if (NestoryCap.omitUniformVariantPrices && !hasStructuredIceVariantPrices) {
         variants_flat = NestoryCap.omitUniformVariantPrices(variants_flat, price_cny);
       }
     } else if (skuParts.axes.length) {
+      // DOM axes without an actual per-SKU price table must stay price-unknown.
       sku_table = NestoryCap.cartesianSkuTable(
         skuParts.axes,
         skuParts.valuesPerAxis,
-        price_cny
+        null
       );
       var flat = NestoryCap.flattenSkuTable(sku_table);
       variants_flat = flat.variants_flat;
@@ -610,6 +1093,94 @@
     }
     if (usedIceSku) {
       warnings.push("sku: 使用頁面資料表（ICE）");
+    }
+    if (
+      variants_flat.length &&
+      variants_flat.some(function (row) {
+        return row.cny_price == null;
+      })
+    ) {
+      warnings.push("sku: 個別未優惠價未完整取得；未以商品價假裝 SKU 價格");
+    }
+
+    var selectedVariant = null;
+    if (selectedSkuHint) {
+      for (var vi = 0; vi < variants_flat.length; vi++) {
+        if (String(variants_flat[vi].sku || "") === String(selectedSkuHint)) {
+          selectedVariant = variants_flat[vi];
+          break;
+        }
+      }
+    }
+
+    // When skuId is present, the currently visible DOM price is selected-SKU evidence.
+    // Never overwrite a structured sku2info price; only fill a SKU whose base price is unknown.
+    if (
+      selectedVariant &&
+      selectedVariant.cny_price == null &&
+      domSelectedPriceCny != null &&
+      Number.isFinite(Number(domSelectedPriceCny)) &&
+      Number(domSelectedPriceCny) > 0
+    ) {
+      selectedVariant.cny_price = Number(domSelectedPriceCny);
+      selectedVariant.price_source = "dom.selected_sku";
+      selectedVariant.price_confidence = "display_only";
+      selectedVariant.price_candidates = (selectedVariant.price_candidates || []).concat([
+        {
+          key: "dom.selected_sku",
+          source: "dom.selected_sku",
+          value: Number(domSelectedPriceCny),
+          kind: "display"
+        }
+      ]);
+    }
+
+    if (price_cny == null) {
+      warnings.push("price_cny: 未抓到");
+    } else if (prices.onlyPromo && !selectedSkuHint && productStructuredPrices.base == null) {
+      warnings.push("只看到促銷價，可能低於原價——成本請自行確認");
+    }
+
+    // URL price= is Taobao/Tmall list "起" price. It may corroborate the
+    // product structured baseline or the minimum SKU base price, but it is
+    // never selected-SKU truth and never clears structured price evidence.
+    if (urlPriceHint != null) {
+      price_candidates.push({ source: "url.price", kind: "hint", value: urlPriceHint });
+
+      var skuBaseValues = variants_flat
+        .map(function (row) {
+          return row && row.cny_price != null ? Number(row.cny_price) : null;
+        })
+        .filter(function (value) {
+          return value != null && Number.isFinite(value) && value > 0;
+        });
+      var minSkuBase = skuBaseValues.length ? Math.min.apply(Math, skuBaseValues) : null;
+
+      var explained =
+        pricesClose(price_cny, urlPriceHint) || pricesClose(minSkuBase, urlPriceHint);
+      var knownValues = [price_cny, minSkuBase].filter(function (value) {
+        return value != null && Number.isFinite(Number(value)) && Number(value) > 0;
+      });
+      var farApart =
+        knownValues.length > 0 &&
+        knownValues.every(function (value) {
+          var high = Math.max(Number(value), urlPriceHint);
+          var low = Math.min(Number(value), urlPriceHint);
+          return high / low >= 1.5 && high - low >= 10;
+        });
+
+      if (!explained && farApart) {
+        price_conflict = {
+          url_price_cny: urlPriceHint,
+          selected_sku: selectedSkuHint,
+          message: "網址起價與商品基準／最低 SKU 價不一致（僅警告）"
+        };
+        warnings.push(
+          "價格提示不一致：網址起價 ¥" +
+            urlPriceHint +
+            " 與商品基準／最低 SKU 價不同；保留結構化價格，請視需要人工確認"
+        );
+      }
     }
 
     var main_image_urls = dom.uniqueUrls(
@@ -663,6 +1234,11 @@
       price_cny: price_cny,
       list_price_cny: list_price_cny,
       promo_price_cny: promo_price_cny,
+      price_source: price_source,
+      price_confidence: price_confidence,
+      price_candidates: price_candidates,
+      price_conflict: price_conflict,
+      price_debug: price_debug,
       sku_table: sku_table,
       variants_flat: variants_flat,
       main_image_urls: main_image_urls,

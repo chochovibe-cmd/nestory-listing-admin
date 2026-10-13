@@ -11,6 +11,13 @@ export type CaptureVariantFlat = {
   option3_name?: string | null;
   option3_value?: string | null;
   cny_price?: number | null;
+  /** CAPTURE-TRUTH-A: promotional/coupon price is evidence only, never default cost. */
+  promo_price_cny?: number | null;
+  /** Provenance for the non-discount base cost captured for this SKU. */
+  price_source?: string | null;
+  promo_price_source?: string | null;
+  price_confidence?: "high" | "structured_pair" | "structured_primary" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
+  price_candidates?: Array<{ key?: string; source?: string; value: number; kind?: string }>;
   sku?: string | null;
   /** CAP-2.6 / 88: SKU option thumb URL (server fetches → product_images variant + image_id). */
   image_url?: string | null;
@@ -27,6 +34,23 @@ export type CaptureMeta = {
    * 進 raw_capture.client_meta + 白話 warning；price_cny 應為原價。
    */
   promo_price_cny?: number | null;
+  /** Product-level price provenance; stored inside raw_capture.client_meta. */
+  price_source?: string | null;
+  price_confidence?: "high" | "structured_pair" | "structured_primary" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
+  price_candidates?: Array<{ key?: string; source?: string; value: number; kind?: string }>;
+  price_conflict?: {
+    url_price_cny?: number | null;
+    selected_sku?: string | null;
+    message?: string | null;
+  } | null;
+  /** Bounded local diagnostic for Taobao price-shape discovery; raw page blobs are never stored. */
+  price_debug?: {
+    res_keys?: string[];
+    sku_core_keys?: string[];
+    sample_sku_info?: Array<{ sku: string; keys: string[] }>;
+    price_paths?: Array<{ path: string; value: string | number | boolean | null }>;
+    scanned_nodes?: number;
+  } | null;
 };
 
 /** Incoming body from extension / curl. Missing fields = not captured (do not invent). */
@@ -105,9 +129,34 @@ export type CaptureImportResponse =
   | CaptureImportError;
 
 export const PRICE_PLACEHOLDER_CNY = 0.01;
+export const MISSING_COST_BLOCK_MESSAGE =
+  "成本未取得；請先確認並填入人民幣成本，再生成或上架";
+
+export function isPricePlaceholderCny(value: unknown): boolean {
+  const n = Number(value);
+  return Number.isFinite(n) && Math.abs(n - PRICE_PLACEHOLDER_CNY) < 0.000001;
+}
+
+/**
+ * Current schema keeps cny_price NOT NULL, so capture-missing price is persisted
+ * as 0.01. Treat it as unconfirmed unless a future explicit manual-confirm flag
+ * says otherwise. Replacing cny_price with a real operator-entered cost also
+ * clears this guard naturally.
+ */
+export function hasUnconfirmedPlaceholderCny(value: {
+  cny_price?: unknown;
+  raw_capture?: unknown;
+}): boolean {
+  if (!isPricePlaceholderCny(value.cny_price)) return false;
+  const raw = value.raw_capture;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
+  const server = (raw as Record<string, unknown>).server;
+  if (!server || typeof server !== "object" || Array.isArray(server)) return true;
+  return (server as Record<string, unknown>).price_manually_confirmed !== true;
+}
 
 export const WARNING_MISSING_PRICE =
-  "未抓到售價，已用占位值，請在表單填實際成本";
+  "未抓到可採用的未優惠價；草稿暫用系統占位值，請確認成本後再生成或上架";
 
 /**
  * @deprecated PKG2A: multi-dim with variants_flat no longer uses "壓平" wording.

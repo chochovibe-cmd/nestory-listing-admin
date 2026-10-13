@@ -54,6 +54,39 @@ function loadDoc(relHtml, href) {
   return { document, href };
 }
 
+const livePriceDebugFixture = JSON.parse(
+  read("scripts/fixtures/capture-price-debug-20261011.json")
+);
+
+function captureFromLivePriceFixture(testCase) {
+  const originalDom =
+    testCase.dom_original_cny != null
+      ? `<div class="originPrice--fixture">优惠前 ¥${testCase.dom_original_cny}</div>`
+      : "";
+  const ice = {
+    loaderData: {
+      home: {
+        data: {
+          res: testCase.ice_res
+        }
+      }
+    }
+  };
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--fixture">' +
+    testCase.name +
+    "</h1>" +
+    originalDom +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    JSON.stringify(ice) +
+    ";</script></body></html>";
+  const { document } = parseHTML(html);
+  return Cap.buildCapturePayload(document, {
+    href: testCase.source_url,
+    host: testCase.host
+  });
+}
+
 console.log("verify-cap2:");
 
 check("files: extension scaffold present", () => {
@@ -82,7 +115,8 @@ check("files: extension scaffold present", () => {
     "scripts/fixtures/taobao-item-promo.html",
     "scripts/fixtures/taobao-item-promo-only.html",
     "scripts/fixtures/tmall-ssr2025-sku.html",
-    "scripts/fixtures/tmall-ssr2025-ice-sku.html"
+    "scripts/fixtures/tmall-ssr2025-ice-sku.html",
+    "scripts/fixtures/capture-price-debug-20261011.json"
   ];
   for (const f of need) assert.ok(exists(f), `missing ${f}`);
 });
@@ -125,6 +159,7 @@ check("background: Bearer + contains only; no permissions.request", () => {
   );
   assert.match(bg, /Authorization.*Bearer|Bearer.*captureToken/);
   assert.match(bg, /\/api\/import\/product-page/);
+  assert.match(bg, /x-vercel-protection-bypass/);
   assert.match(bg, /action\.onClicked/);
   const man = read("extension/manifest.json");
   assert.ok(!/"content_scripts"\s*:/.test(man), "must not register permanent content_scripts");
@@ -136,6 +171,8 @@ check("popup: permissions.request in save click path (user gesture)", () => {
   assert.match(popup, /permissions\.contains/);
   assert.match(popup, /storage\.local\.set/);
   assert.match(popup, /saveBtn|儲存/);
+  assert.match(popup, /vercelProtectionBypass/);
+  assert.match(read("extension/popup/popup.html"), /Vercel Preview Bypass/);
   assert.doesNotMatch(
     popup,
     /SAVE_SETTINGS/,
@@ -321,17 +358,14 @@ check("DOM: promo fixture → 原價 price_cny + promo meta", () => {
   assert.ok(!green.image_url, "no thumb → no image_url guess");
 });
 
-check("DOM: promo-only → price_cny + 白話 warning", () => {
+check("DOM: unlabeled single display price stays usable but lower confidence", () => {
   const href = "https://item.taobao.com/item.htm?id=111";
   const { document } = loadDoc("scripts/fixtures/taobao-item-promo-only.html", href);
   const body = Cap.buildCapturePayload(document, { href, host: "item.taobao.com" });
+  // With no explicit promo/original label, the page does not provide enough
+  // evidence to call 19.9 a coupon price. Keep it as a display-only base candidate.
   assert.equal(body.price_cny, 19.9);
-  assert.ok(
-    body.capture_meta.warnings_from_client.some(
-      (w) => /只看到促銷價/.test(w) && /成本請自行確認/.test(w)
-    ),
-    "expected B1 plain-language promo-only warning"
-  );
+  assert.equal(body.capture_meta.price_confidence, "display_only");
 });
 
 check("DOM: missing price → omit price_cny + client warning", () => {
@@ -409,6 +443,194 @@ check("ICE: 2-axis shoe SKU without DOM valueItem still flattens", () => {
   assert.equal(body.params["货号"], "SHOE-001");
 });
 
+check("CAPTURE-TRUTH-A: product price never becomes a fake SKU price", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">unknown sku prices</h1>' +
+    '<div class="originPrice--x">优惠前 ¥39.9</div>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"},{"vid":"b","name":"B"}]}],' +
+    '"skus":[{"propPath":"1:a","skuId":"s1"},{"propPath":"1:b","skuId":"s2"}]},' +
+    '"skuCore":{"sku2info":{"s1":{"quantity":9},"s2":{"quantity":8}}}}}}}}};' +
+    "</script></body></html>";
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://detail.tmall.com/item.htm?id=unknown-sku",
+    host: "detail.tmall.com"
+  });
+  assert.equal(body.price_cny, 39.9);
+  assert.equal(body.variants_flat.length, 2);
+  assert.ok(body.variants_flat.every((v) => v.cny_price == null));
+  assert.ok(
+    body.sku_table.rows.every((row) => row.price == null),
+    "synthetic sku_table must not copy product price into every row"
+  );
+  assert.ok(
+    body.capture_meta.warnings_from_client.some((w) => /個別未優惠價未完整取得/.test(w)),
+    "must explain that per-SKU prices are incomplete"
+  );
+});
+
+check("CAPTURE-TRUTH-A: embedded cartParam JSON can supply per-SKU base and promo", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">embedded sku prices</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"},{"vid":"b","name":"B"}]}],' +
+    '"skus":[{"propPath":"1:a","skuId":"s1"},{"propPath":"1:b","skuId":"s2"}]},' +
+    '"skuCore":{"sku2info":{' +
+    '"s1":{"cartParam":"{\\\"originalPrice\\\":\\\"158\\\",\\\"couponPrice\\\":\\\"143.26\\\"}"},' +
+    '"s2":{"buyExParams":"{\\\"listPrice\\\":\\\"198\\\",\\\"promoPrice\\\":\\\"169\\\"}"}' +
+    '}}}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://detail.tmall.com/item.htm?id=embedded",
+    host: "detail.tmall.com"
+  });
+  const a = body.variants_flat.find((v) => v.sku === "s1");
+  const b = body.variants_flat.find((v) => v.sku === "s2");
+  assert.equal(a.cny_price, 158);
+  assert.equal(a.promo_price_cny, 143.26);
+  assert.match(String(a.price_source), /embedded/);
+  assert.equal(b.cny_price, 198);
+  assert.equal(b.promo_price_cny, 169);
+});
+
+check("CAPTURE-TRUTH-A: ICE per-SKU base + promo prices stay separate", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">dual price item</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"},{"vid":"b","name":"B"}]}],' +
+    '"skus":[{"propPath":"1:a","skuId":"s1"},{"propPath":"1:b","skuId":"s2"}]},' +
+    '"skuCore":{"sku2info":{' +
+    '"s1":{"price":{"priceText":"289.00"},"subPrice":{"priceText":"259.00"}},' +
+    '"s2":{"price":{"priceText":"319.00"},"subPrice":{"priceText":"279.00"}}' +
+    '}}}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const href = "https://detail.tmall.com/item.htm?id=dual-price";
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  assert.equal(body.variants_flat.length, 2);
+  const a = body.variants_flat.find((v) => v.sku === "s1");
+  const b = body.variants_flat.find((v) => v.sku === "s2");
+  assert.equal(a.cny_price, 289);
+  assert.equal(a.promo_price_cny, 259);
+  assert.equal(b.cny_price, 319);
+  assert.equal(b.promo_price_cny, 279);
+  assert.ok(a.price_source);
+  assert.ok(a.price_confidence);
+});
+
+check("CAPTURE-TRUTH-A: URL list-price mismatch warns but never clears structured cost", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">conflict item</h1>' +
+    '<div class="originPrice--x">优惠前 ¥10.00</div>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{"skuBase":{"props":[' +
+    '{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"}]}],' +
+    '"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
+    '"skuCore":{"sku2info":{"0":{"price":{"priceTitle":"优惠前","priceText":"10.00","priceDesc":"起"}},"s1":{"price":{"priceTitle":"优惠前","priceText":"10.00"}}}},' +
+    '"componentsVO":{"priceVO":{"price":{"priceTitle":"优惠前","priceText":"10.00","priceDesc":"起"}}}' +
+    '}}}}};' +
+    "</script></body></html>";
+  const { document } = parseHTML(html);
+  const href = "https://detail.tmall.com/item.htm?id=conflict&skuId=s1&price=289";
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  assert.equal(body.price_cny, 10);
+  assert.notEqual(body.capture_meta.price_confidence, "conflict");
+  assert.ok(body.capture_meta.price_conflict);
+  const row = body.variants_flat.find((v) => v.sku === "s1");
+  assert.equal(row.cny_price, 10);
+  assert.notEqual(row.price_confidence, "conflict");
+  assert.ok(
+    body.capture_meta.warnings_from_client.some((w) => /價格提示不一致/.test(w)),
+    "URL mismatch warning must be visible without deleting structured prices"
+  );
+});
+
+check("2026-10-11 live price_debug fixture: Pokémon + Hollybox exact regression", () => {
+  assert.equal(livePriceDebugFixture.extension_build, "capture-20261011-r5");
+  assert.equal(livePriceDebugFixture.cases.length, 2);
+
+  const pokemonCase = livePriceDebugFixture.cases.find((x) => x.draft_prefix === "dd6950a3");
+  const hollyCase = livePriceDebugFixture.cases.find((x) => x.draft_prefix === "ff813a4a");
+  assert.ok(pokemonCase && hollyCase);
+
+  const pokemon = captureFromLivePriceFixture(pokemonCase);
+  assert.equal(pokemon.price_cny, 18.9);
+  assert.equal(pokemon.capture_meta.promo_price_cny, undefined);
+  assert.equal(pokemon.variants_flat.length, 7);
+  const pokemonBundle = pokemon.variants_flat.find(
+    (row) => row.sku === pokemonCase.expected.selected_sku
+  );
+  assert.equal(pokemonBundle.cny_price, 113.9);
+  const pokemonRegular = pokemon.variants_flat.filter(
+    (row) => row.sku !== pokemonCase.expected.selected_sku
+  );
+  assert.equal(pokemonRegular.length, 6);
+  assert.ok(pokemonRegular.every((row) => row.cny_price === 18.9));
+  assert.notEqual(pokemon.price_cny, 0.01);
+  assert.ok(pokemon.variants_flat.every((row) => row.cny_price !== 0.01));
+
+  const holly = captureFromLivePriceFixture(hollyCase);
+  assert.equal(holly.price_cny, 39.9);
+  assert.equal(holly.capture_meta.promo_price_cny, 35.1);
+  assert.equal(holly.variants_flat.length, 13);
+  const hollySelected = holly.variants_flat.find(
+    (row) => row.sku === hollyCase.expected.selected_sku
+  );
+  assert.equal(hollySelected.cny_price, 79.8);
+  assert.equal(hollySelected.price_source, "dom.selected_sku");
+  const hollyOthers = holly.variants_flat.filter(
+    (row) => row.sku !== hollyCase.expected.selected_sku
+  );
+  assert.equal(hollyOthers.length, 12);
+  assert.ok(hollyOthers.every((row) => row.cny_price == null));
+  assert.notEqual(holly.price_cny, 0.01);
+  assert.ok(holly.variants_flat.every((row) => row.cny_price !== 0.01));
+
+  assert.ok(
+    pokemonCase.observed_price_debug.some(
+      (row) => /5907167683446/.test(row.path) && String(row.value) === "113.9"
+    )
+  );
+  assert.ok(
+    hollyCase.observed_price_debug.some(
+      (row) => /extraPrice/.test(row.path) && String(row.value) === "35.1"
+    )
+  );
+});
+
+check("CAPTURE-TRUTH-A: price parsing adds no network request", () => {
+  const adapter = read("extension/lib/adapters/taobao.js");
+  assert.doesNotMatch(adapter, /\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
+});
+
+check("CAPTURE-TRUTH-A: price diagnostics are bounded and local", () => {
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">debug item</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{' +
+    '"skuBase":{"props":[{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"}]}],"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
+    '"skuCore":{"sku2info":{"s1":{"foo":"bar","deep":{"originPrice":"158","promoPrice":"143.26"}}}},' +
+    '"priceModule":{"selectedSku":{"skuId":"s1","originalPrice":"158","couponPrice":"143.26"}}' +
+    '}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://item.taobao.com/item.htm?id=debug",
+    host: "item.taobao.com"
+  });
+  const debug = body.capture_meta.price_debug;
+  assert.ok(debug);
+  assert.ok(Array.isArray(debug.price_paths));
+  assert.ok(debug.price_paths.length <= 120);
+  assert.ok(debug.scanned_nodes <= 5000);
+  assert.ok(
+    debug.price_paths.some((row) => /originalPrice/.test(row.path) && String(row.value) === "158"),
+    "expected originalPrice path in bounded diagnostics"
+  );
+});
+
 check("ICE: minified var b={ still parses", () => {
   const html =
     '<!doctype html><html><body><h1 class="MainTitle--x">min shoe</h1>' +
@@ -465,6 +687,10 @@ check("contract: static assert vs captureTypes.ts field names", () => {
     "cny_price",
     "image_url",
     "promo_price_cny",
+    "price_source",
+    "price_confidence",
+    "price_candidates",
+    "price_conflict",
     "MAX_VARIANT_IMAGES"
   ];
   for (const key of requiredMentions) {
@@ -501,11 +727,32 @@ check("contract: static assert vs captureTypes.ts field names", () => {
     const v = body.variants_flat[0];
     for (const k of Object.keys(v)) {
       assert.ok(
-        /^(option[123]_(name|value)|cny_price|sku|image_url)$/.test(k),
+        /^(option[123]_(name|value)|cny_price|promo_price_cny|price_source|promo_price_source|price_confidence|price_candidates|sku|image_url)$/.test(k),
         `unexpected variant key ${k}`
       );
     }
   }
+});
+
+check("placeholder cost: UI + generation + publish gates are wired", () => {
+  const types = read("src/lib/import/captureTypes.ts");
+  assert.match(types, /PRICE_PLACEHOLDER_CNY = 0\.01/);
+  assert.match(types, /hasUnconfirmedPlaceholderCny/);
+  assert.match(read("src/app/api/generate/route.ts"), /hasUnconfirmedPlaceholderCny/);
+  const queue = read("src/app/api/generation-queue/route.ts");
+  assert.ok((queue.match(/hasUnconfirmedPlaceholderCny/g) || []).length >= 3);
+  assert.match(read("src/lib/shopify/publishDraftSafe.ts"), /hasUnconfirmedPlaceholderCny/);
+  assert.match(
+    read("src/components/listing/result-card/ResultCardSpecsPanel.tsx"),
+    /成本未取得/
+  );
+
+  const proposal = "docs/migration-proposals/20261011-product-drafts-cny-price-nullable.sql";
+  assert.ok(exists(proposal));
+  const sql = read(proposal);
+  assert.match(sql, /alter column cny_price drop not null/i);
+  assert.doesNotMatch(sql, /update\s+public\.product_drafts/i);
+  assert.ok(!proposal.startsWith("supabase/migrations/"));
 });
 
 check("README: numbered install steps + permission allow", () => {

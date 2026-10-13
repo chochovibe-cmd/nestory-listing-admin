@@ -399,6 +399,9 @@ function mapVariantRows(
       option3_value: o3v,
       sku: asTrimmedString(v.sku),
       cny_price: cny,
+      // CAPTURE-TRUTH-A: a blank per-SKU cost means "follow product cost",
+      // not "this SKU independently captured the same price".
+      cost_is_inherited: cny == null && product != null,
       sort_order: index,
       inventory_quantity: 0,
       inventory_policy: "continue",
@@ -434,8 +437,16 @@ export function mapCaptureToDraftFields(
   const listPrice = asPositiveNumber(body.list_price_cny);
   const usedPricePlaceholder = price == null;
   const cnyPrice = price ?? PRICE_PLACEHOLDER_CNY;
+  const priceConfidence = body.capture_meta?.price_confidence ?? null;
+  const priceRequiresConfirmation =
+    usedPricePlaceholder ||
+    priceConfidence === "conflict" ||
+    priceConfidence === "needs_confirmation";
   if (usedPricePlaceholder) {
     warnings.push(WARNING_MISSING_PRICE);
+  }
+  if (priceConfidence === "conflict") {
+    warnings.push("價格來源互相衝突；請確認未優惠成本後再生成或上架");
   }
 
   // CAP-2.6 / 86: promo stays in capture_meta / client_meta; never note / never cost.
@@ -521,6 +532,9 @@ export function mapCaptureToDraftFields(
       sku_multi_dim: multiDim,
       /** @deprecated alias kept for older readers */
       sku_flat_warning: multiDim,
+      /** CAPTURE-TRUTH-A: downstream/UI may block auto-pricing until operator confirms. */
+      price_requires_confirmation: priceRequiresConfirmation,
+      price_confidence: priceConfidence,
       image_fetch: [] as unknown[]
     }
   };

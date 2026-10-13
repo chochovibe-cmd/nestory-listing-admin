@@ -1,0 +1,401 @@
+{
+  "fixture_version": 1,
+  "captured_on": "2026-10-11",
+  "extension_build": "capture-20261011-r5",
+  "source_note": "Minimal ICE/DOM fixture reconstructed from read-only Supabase price_debug for dd6950a3 and ff813a4a.",
+  "cases": [
+    {
+      "name": "pokemon_dd6950a3",
+      "draft_prefix": "dd6950a3",
+      "host": "item.taobao.com",
+      "source_url": "https://item.taobao.com/item.htm?id=891773650115&price=18.9&skuId=5907167683446",
+      "observed_price_debug": [
+        {
+          "path": "res.skuCore.sku2info.0.price.priceText",
+          "value": "18.9"
+        },
+        {
+          "path": "res.skuCore.sku2info.5907167683446.price.priceText",
+          "value": "113.9"
+        },
+        {
+          "path": "res.componentsVO.priceVO.price.priceTitle",
+          "value": "优惠前"
+        },
+        {
+          "path": "res.componentsVO.priceVO.price.priceText",
+          "value": "18.9"
+        },
+        {
+          "path": "res.componentsVO.priceVO.price.priceDesc",
+          "value": "起"
+        }
+      ],
+      "ice_res": {
+        "skuBase": {
+          "props": [
+            {
+              "pid": "1",
+              "name": "款式描述",
+              "values": [
+                {
+                  "vid": "v0",
+                  "name": "正版不倒翁呆火鳄（9cm）"
+                },
+                {
+                  "vid": "v1",
+                  "name": "正版不倒翁皮卡丘（9cm）"
+                },
+                {
+                  "vid": "v2",
+                  "name": "正版不倒翁仙子伊布（9cm）"
+                },
+                {
+                  "vid": "v3",
+                  "name": "正版不倒翁新叶喵（9cm）"
+                },
+                {
+                  "vid": "v4",
+                  "name": "正版不倒翁润水鸭（9cm）"
+                },
+                {
+                  "vid": "v5",
+                  "name": "正版不倒翁耿鬼（9cm）"
+                },
+                {
+                  "vid": "v6",
+                  "name": "正版宝可梦不倒翁一套6款"
+                }
+              ]
+            }
+          ],
+          "skus": [
+            {
+              "propPath": "1:v0",
+              "skuId": "5907167683440"
+            },
+            {
+              "propPath": "1:v1",
+              "skuId": "5907167683441"
+            },
+            {
+              "propPath": "1:v2",
+              "skuId": "5907167683442"
+            },
+            {
+              "propPath": "1:v3",
+              "skuId": "5907167683443"
+            },
+            {
+              "propPath": "1:v4",
+              "skuId": "5907167683444"
+            },
+            {
+              "propPath": "1:v5",
+              "skuId": "5907167683445"
+            },
+            {
+              "propPath": "1:v6",
+              "skuId": "5907167683446"
+            }
+          ]
+        },
+        "skuCore": {
+          "sku2info": {
+            "0": {
+              "price": {
+                "priceTitle": "优惠前",
+                "priceText": "18.9",
+                "priceDesc": "起",
+                "priceMoney": "1890"
+              }
+            },
+            "5907167683440": {
+              "price": {
+                "priceTitle": "优惠前",
+                "priceText": "18.9",
+                "priceMoney": "1890"
+              }
+            },
+            "5907167683441": {
+              "price": {
+                "priceTitle": "优惠前",
+                "priceText": "18.9",
+                "priceMoney": "1890"
+              }
+            },
+            "5907167683442": {
+              "price": {
+                "priceTitle": "优惠前",
+                "priceText": "18.9",
+                "priceMoney": "1890"
+              }
+            },
+            "5907167683443": {
+              "price": {
+                "priceTitle": "优惠前",
+                "priceText": "18.9",
+                "priceMoney": "1890"
+              }
+            },
+            "5907167683444": {
+              "price": {
+                "priceTitle": "优惠前",
+                "priceText": "18.9",
+                "priceMoney": "1890"
+              }
+            },
+            "5907167683445": {
+              "price": {
+                "priceTitle": "优惠前",
+                "priceText": "18.9",
+                "priceMoney": "1890"
+              }
+            },
+            "5907167683446": {
+              "price": {
+                "priceTitle": "优惠前",
+                "priceText": "113.9",
+                "priceMoney": "11390"
+              }
+            }
+          }
+        },
+        "componentsVO": {
+          "priceVO": {
+            "price": {
+              "priceTitle": "优惠前",
+              "priceText": "18.9",
+              "priceDesc": "起",
+              "priceMoney": "1890"
+            }
+          }
+        }
+      },
+      "expected": {
+        "product_base_cny": 18.9,
+        "promo_cny": null,
+        "selected_sku": "5907167683446",
+        "selected_cny": 113.9,
+        "six_regular_cny": 18.9
+      }
+    },
+    {
+      "name": "hollybox_ff813a4a",
+      "draft_prefix": "ff813a4a",
+      "host": "detail.tmall.com",
+      "source_url": "https://detail.tmall.com/item.htm?id=995241858587&price=39.9&skuId=6146720591297",
+      "dom_original_cny": 79.8,
+      "observed_price_debug": [
+        {
+          "path": "res.componentsVO.priceVO.price.priceTitle",
+          "value": "优惠前"
+        },
+        {
+          "path": "res.componentsVO.priceVO.price.priceText",
+          "value": "39.9"
+        },
+        {
+          "path": "res.componentsVO.priceVO.price.priceDesc",
+          "value": "起"
+        },
+        {
+          "path": "res.componentsVO.priceVO.extraPrice.priceTitle",
+          "value": "店铺优惠后"
+        },
+        {
+          "path": "res.componentsVO.priceVO.extraPrice.priceText",
+          "value": "35.1"
+        },
+        {
+          "path": "res.componentsVO.priceVO.extraPrice.priceDesc",
+          "value": "起"
+        }
+      ],
+      "ice_res": {
+        "skuBase": {
+          "props": [
+            {
+              "pid": "1",
+              "name": "款式描述",
+              "values": [
+                {
+                  "vid": "v0",
+                  "name": "凯蒂猫"
+                },
+                {
+                  "vid": "v1",
+                  "name": "库洛米"
+                },
+                {
+                  "vid": "v2",
+                  "name": "美乐蒂"
+                },
+                {
+                  "vid": "v3",
+                  "name": "大耳狗"
+                },
+                {
+                  "vid": "v4",
+                  "name": "帕恰狗"
+                },
+                {
+                  "vid": "v5",
+                  "name": "布丁狗"
+                },
+                {
+                  "vid": "v6",
+                  "name": "全套（6款不重复）"
+                },
+                {
+                  "vid": "v7",
+                  "name": "凯蒂猫组合套装"
+                },
+                {
+                  "vid": "v8",
+                  "name": "库洛米组合套装"
+                },
+                {
+                  "vid": "v9",
+                  "name": "美乐蒂组合套装"
+                },
+                {
+                  "vid": "v10",
+                  "name": "大耳狗组合套装"
+                },
+                {
+                  "vid": "v11",
+                  "name": "帕恰狗组合套装"
+                },
+                {
+                  "vid": "v12",
+                  "name": "布丁狗组合套装"
+                }
+              ]
+            }
+          ],
+          "skus": [
+            {
+              "propPath": "1:v0",
+              "skuId": "6141485911084"
+            },
+            {
+              "propPath": "1:v1",
+              "skuId": "6141485911085"
+            },
+            {
+              "propPath": "1:v2",
+              "skuId": "6141485911086"
+            },
+            {
+              "propPath": "1:v3",
+              "skuId": "6141485911087"
+            },
+            {
+              "propPath": "1:v4",
+              "skuId": "6141485911088"
+            },
+            {
+              "propPath": "1:v5",
+              "skuId": "6141485911089"
+            },
+            {
+              "propPath": "1:v6",
+              "skuId": "6141485911090"
+            },
+            {
+              "propPath": "1:v7",
+              "skuId": "6146720591299"
+            },
+            {
+              "propPath": "1:v8",
+              "skuId": "6146720591298"
+            },
+            {
+              "propPath": "1:v9",
+              "skuId": "6146720591295"
+            },
+            {
+              "propPath": "1:v10",
+              "skuId": "6146720591296"
+            },
+            {
+              "propPath": "1:v11",
+              "skuId": "6146720591300"
+            },
+            {
+              "propPath": "1:v12",
+              "skuId": "6146720591297"
+            }
+          ]
+        },
+        "skuCore": {
+          "sku2info": {
+            "6141485911084": {
+              "quantity": 9
+            },
+            "6141485911085": {
+              "quantity": 9
+            },
+            "6141485911086": {
+              "quantity": 9
+            },
+            "6141485911087": {
+              "quantity": 9
+            },
+            "6141485911088": {
+              "quantity": 9
+            },
+            "6141485911089": {
+              "quantity": 9
+            },
+            "6141485911090": {
+              "quantity": 9
+            },
+            "6146720591299": {
+              "quantity": 9
+            },
+            "6146720591298": {
+              "quantity": 9
+            },
+            "6146720591295": {
+              "quantity": 9
+            },
+            "6146720591296": {
+              "quantity": 9
+            },
+            "6146720591300": {
+              "quantity": 9
+            },
+            "6146720591297": {
+              "quantity": 9
+            }
+          }
+        },
+        "componentsVO": {
+          "priceVO": {
+            "price": {
+              "priceTitle": "优惠前",
+              "priceText": "39.9",
+              "priceDesc": "起",
+              "priceMoney": "3990"
+            },
+            "extraPrice": {
+              "priceTitle": "店铺优惠后",
+              "priceText": "35.1",
+              "priceDesc": "起",
+              "priceMoney": "3510"
+            }
+          }
+        }
+      },
+      "expected": {
+        "product_base_cny": 39.9,
+        "promo_cny": 35.1,
+        "selected_sku": "6146720591297",
+        "selected_cny": 79.8,
+        "unknown_other_sku_count": 12
+      }
+    }
+  ]
+}

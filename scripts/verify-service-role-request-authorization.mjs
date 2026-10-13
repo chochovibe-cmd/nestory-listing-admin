@@ -31,7 +31,9 @@ for (const route of sessionRoutes) {
 
 const batchRoutes = [
   "src/app/api/drafts/batch/advance-ready/route.ts",
-  "src/app/api/drafts/batch/send-images/route.ts"
+  "src/app/api/drafts/batch/send-images/route.ts",
+  // REVIEW-FLOW B2: batch return is RLS-scoped the same way.
+  "src/app/api/drafts/batch/return-stage/route.ts"
 ];
 for (const route of batchRoutes) {
   const source = read(route);

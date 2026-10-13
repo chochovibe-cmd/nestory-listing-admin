@@ -65,7 +65,9 @@ const scripts = [
   // IMAGE-INTEGRITY: unbind -> DB delete -> Storage; no UI path deletes Storage first.
   "scripts/verify-image-integrity.mjs",
   // PUBLISH-GUARD: mock mode = dry run (zero writes) + pre-publish blockers.
-  "scripts/verify-publish-guard.mjs"
+  "scripts/verify-publish-guard.mjs",
+  // REVIEW-FLOW: transition guard, batch return, no-blink leave, approve triage, ⛔ batch, 逐件 skip.
+  "scripts/verify-review-flow.mjs"
 ];
 
 for (const script of scripts) {

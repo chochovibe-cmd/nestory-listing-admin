@@ -3049,6 +3049,52 @@ textarea {
 .seq-review-entry {
   flex-shrink: 0;
 }
+/* REVIEW-FLOW B7: 上一筆／跳過／結束 group + end-of-round summary.
+   Layout only — reuses .seq-review-end buttons, .approve-sum-list rows and
+   .approve-sum-actions (tokens only, no new colors). */
+.seq-review-hdr-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.seq-review-tally {
+  font-weight: 400;
+  font-size: 12px;
+}
+.seq-review-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 4px 8px;
+}
+.seq-review-summary-title {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.seq-review-summary .seq-review-jump {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+@media (max-width: 960px) {
+  .seq-review-hdr {
+    flex-wrap: wrap;
+  }
+  .seq-review-hdr-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .seq-review-summary .seq-review-jump {
+    min-height: 44px;
+  }
+}
 .modal-hdr {
   position: sticky;
   top: 0;

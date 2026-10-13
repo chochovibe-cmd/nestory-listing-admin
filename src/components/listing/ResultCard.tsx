@@ -59,10 +59,16 @@ import { resolveDraftStation } from "@/lib/drafts/stationFilter";
 import { formatDraftFailSummary } from "@/lib/drafts/failReasons";
 import { formatSaleStatusBadge } from "@/lib/saleStatus";
 import {
-  gradeDraftWarnings,
   hasBlockingWarnings,
   countConfirmOnly
 } from "@/lib/drafts/warningTiers";
+import { gradeDraftForApprove } from "@/lib/drafts/approveGate";
+import {
+  APPROVE_RECHECK_MESSAGE,
+  classifyApproveResponse,
+  recheckDraftStages,
+  verdictFromRecheck
+} from "@/lib/drafts/approveTriage";
 import {
   formatAbsoluteLocalTime,
   formatRelativeTime
@@ -258,9 +264,13 @@ export function ResultCard({
   isJumpTarget?: boolean;
   sequentialMode?: boolean;
   sequentialStation?: "copy" | "image";
-  onApproveSuccess?: () => void;
+  /**
+   * Sequential overlay only. `leftStation: false` = the item stays at its station
+   * (e.g. 站② 送生圖工廠) — only 站② items sent to the factory report it.
+   */
+  onApproveSuccess?: (info?: { leftStation?: boolean }) => void;
   /** Regular workbench only; sequential overlay falls back to direct refresh. */
-  onLeaveSuccess?: () => void;
+  onLeaveSuccess?: (info?: { leftStation?: boolean }) => void;
   approveSignal?: number;
   externalTab?: ResultCardTabId | null;
   /** 預設 false＝「只看我的」不顯示帳號 */
@@ -499,18 +509,21 @@ export function ResultCard({
   const isImageStation = station === "image_review";
   const isReadyStation = station === "ready";
   const copyLocked = isImageStation || isReadyStation;
+  /** REVIEW-FLOW B3: station② showing the 規格 (款式) tab instead of the image subtabs. */
+  const s2SpecsOpen = isImageStation && activeTab === "specs";
+  // REVIEW-FLOW B6: shared with the batch strip + approve routes (approveGate) so the
+  // ⛔ 必修 inputs are identical everywhere — all saved draft columns.
   const warningSummary = useMemo(
     () =>
-      gradeDraftWarnings(draft.warnings, {
+      gradeDraftForApprove({
+        warnings: draft.warnings,
         ip_name: draft.ip_name,
         character_name: draft.character_name,
         title_zh: draft.title_zh,
         twd_price: draft.twd_price,
-        twd_cost: draft.twd_cost,
-        missingCharacterInDict: missingCharacters.length > 0,
-        missingIp: !draft.ip_name?.trim(),
+        twd_cost: draft.twd_cost
       }),
-    [draft.warnings, draft.ip_name, draft.character_name, draft.title_zh, draft.twd_price, draft.twd_cost, missingCharacters.length]
+    [draft.warnings, draft.ip_name, draft.character_name, draft.title_zh, draft.twd_price, draft.twd_cost]
   );
   const confirmWarnCount = countConfirmOnly(warningSummary);
   const blockWarnCount = warningSummary.blockCount;
@@ -564,9 +577,9 @@ export function ResultCard({
   // UX-B4-P02: sale status short badge after title (display only).
   const saleStatusBadge = formatSaleStatusBadge(draft.sale_status);
 
-  function finishSuccessfulTransition(shouldLeave = true) {
+  function finishSuccessfulTransition(shouldLeave = true, leftStation = true) {
     if (shouldLeave && onLeaveSuccess) {
-      onLeaveSuccess();
+      onLeaveSuccess({ leftStation });
       return;
     }
     router.refresh();
@@ -1267,6 +1280,12 @@ export function ResultCard({
       setActionArm(null);
       return;
     }
+    // REVIEW-FLOW B3: 款式 can now be edited at 站② — don't let 標圖通過 silently drop them.
+    if (variantsDirty) {
+      setMarkMessage("款式有未儲存的修改，請先按「儲存修改」再標圖通過");
+      setActionArm(null);
+      return;
+    }
     const decision = decideStation2Review({ images: imageMarks });
     if (decision.action === "blocked") {
       setMarkMessage(decision.reason);
@@ -1309,7 +1328,7 @@ export function ResultCard({
           }
         });
         // BX1 延伸：逐件標圖成功才前進
-        onApproveSuccess?.();
+        onApproveSuccess?.({ leftStation: true });
         finishSuccessfulTransition();
         return;
       }
@@ -1341,8 +1360,9 @@ export function ResultCard({
         }
       });
       // BX1 延伸：逐件標圖成功才前進
-      onApproveSuccess?.();
-      finishSuccessfulTransition();
+      // REVIEW-FLOW B4: 送生圖工廠 stays at 站② until the factory finishes → not "left".
+      onApproveSuccess?.({ leftStation: false });
+      finishSuccessfulTransition(true, false);
     } catch {
       setMarkMessage("分流連線失敗");
       showToast("分流連線失敗", "error");
@@ -1363,6 +1383,7 @@ export function ResultCard({
     }
     setActionArm(null);
     setQuickBusy(true);
+    let returned = false;
     try {
       const response = await fetch(`/api/drafts/${draft.id}/return-stage`, {
         method: "POST",
@@ -1375,19 +1396,23 @@ export function ResultCard({
         // UX-L T62: toast only, no dual setMessage
         setMessage("");
         showToast(err, "error");
+        // REVIEW-FLOW B1: stale card → refresh so it shows where the draft really is.
+        if (payload.code === "STAGE_MISMATCH") router.refresh();
         return;
       }
       const okMsg =
         typeof payload.message === "string" ? payload.message : `已退回${label}`;
       setMessage("");
       showToast(okMsg, "success");
-      router.refresh();
+      returned = true;
     } catch {
       setMessage("");
       showToast("退回連線失敗", "error");
     } finally {
       setQuickBusy(false);
     }
+    // REVIEW-FLOW B4: fade out + stay hidden until the refreshed props land (no blink).
+    if (returned) finishSuccessfulTransition();
   }
 
   async function approveOnly() {
@@ -1400,37 +1425,85 @@ export function ResultCard({
     setQuickBusy(true);
     // UX-L T62: in-progress via button busy; result → toast
     setMessage("");
+
+    // REVIEW-FLOW B5: only fetch + parse decide the outcome. The success UI below runs
+    // OUTSIDE this try, so a throwing callback can never surface as 核准連線失敗.
+    let approved = false;
+    let successText = "已核准文案 → 進入標圖（文案已鎖定）";
+    let offerUndo = true;
     try {
-      const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({})
-      });
-      const payload = await approveResponse.json().catch(() => ({}));
-      if (!approveResponse.ok) {
-        setMessage("");
-        showToast(payload.error ?? "核准失敗", "error");
-        return;
+      let status = 0;
+      let payload: unknown = null;
+      let networkError = false;
+      try {
+        const approveResponse = await fetch(`/api/drafts/${draft.id}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        status = approveResponse.status;
+        payload = await approveResponse.json().catch(() => null);
+      } catch {
+        networkError = true;
       }
+      const outcome = classifyApproveResponse({ networkError, status, payload });
+
+      if (outcome.kind === "success") {
+        approved = true;
+        if (outcome.alreadyApproved) {
+          successText = "這筆已經核准過了（已在標圖站）";
+          offerUndo = false;
+        }
+      } else if (outcome.kind === "mismatch") {
+        // B1: stale card — server says where the draft really is; show it and re-sync.
+        setMessage("");
+        showToast(outcome.message, "error");
+        router.refresh();
+      } else if (outcome.kind === "rejected") {
+        if (outcome.message.startsWith("⛔")) {
+          // 阻斷必修留卡內（server-side ⛔ gate agrees with the card）
+          setMessage(outcome.message);
+        } else {
+          setMessage("");
+          showToast(outcome.message, "error");
+        }
+      } else {
+        // Network error / 5xx / unparseable body: the write may or may not have landed.
+        const rows = await recheckDraftStages(supabase, [draft.id]);
+        const verdict = verdictFromRecheck(rows?.get(draft.id));
+        if (verdict === "approved") {
+          approved = true;
+          successText = APPROVE_RECHECK_MESSAGE.approved;
+        } else if (verdict === "not_approved") {
+          showToast(APPROVE_RECHECK_MESSAGE.notApproved, "error");
+        } else {
+          showToast(APPROVE_RECHECK_MESSAGE.unknown, "error");
+        }
+      }
+    } finally {
+      setQuickBusy(false);
+    }
+
+    if (!approved) return;
+    try {
       // UX-A T2 + §2.2 站名：標圖（覆寫「圖片審核」）
       setMessage("");
       // BX2: 10s 復原核准
-      showToast("已核准文案 → 進入標圖（文案已鎖定）", "success", UNDO_TOAST_MS.approve, {
-        actionLabel: "復原",
-        onAction: async () => {
-          const result = await undoApproveDrafts([draft.id]);
-          showToast(result.message, result.ok ? "success" : "error");
-          router.refresh();
-        }
+      showToast(successText, "success", UNDO_TOAST_MS.approve, {
+        actionLabel: offerUndo ? "復原" : undefined,
+        onAction: offerUndo
+          ? async () => {
+              const result = await undoApproveDrafts([draft.id]);
+              showToast(result.message, result.ok ? "success" : "error");
+              router.refresh();
+            }
+          : undefined
       });
       // UX-Q T70: sequential mode advances only on success
-      onApproveSuccess?.();
+      onApproveSuccess?.({ leftStation: true });
       finishSuccessfulTransition();
-    } catch {
-      setMessage("");
-      showToast("核准連線失敗", "error");
-    } finally {
-      setQuickBusy(false);
+    } catch (err) {
+      console.error("approveOnly: post-success UI update failed", err);
     }
   }
 
@@ -1477,6 +1550,7 @@ export function ResultCard({
     setActionArm(null);
     setQuickBusy(true);
     setMessage("");
+    let returned = false;
     try {
       const response = await fetch(`/api/drafts/${draft.id}/request-revision`, {
         method: "POST",
@@ -1489,16 +1563,24 @@ export function ResultCard({
           typeof payload.error === "string" ? payload.error : "退回失敗";
         setMessage("");
         showToast(err, "error");
+        // REVIEW-FLOW B1: stale card → refresh so it shows where the draft really is.
+        if (payload.code === "STAGE_MISMATCH") router.refresh();
         return;
       }
       setMessage("");
       showToast("已退回文案（已解鎖）", "success");
-      router.refresh();
+      returned = true;
     } catch {
       setMessage("");
       showToast("退回連線失敗", "error");
     } finally {
       setQuickBusy(false);
+    }
+    if (returned) {
+      // REVIEW-FLOW B7: a return counts as "done" in 逐件 mode and moves on;
+      // B4: the regular list fades out + stays hidden until the refreshed props land.
+      onApproveSuccess?.({ leftStation: true });
+      finishSuccessfulTransition();
     }
   }
 
@@ -2871,18 +2953,22 @@ export function ResultCard({
 
       {expanded ? (
         <div className="rc-body">
-          {/* R2: station② 分頁＝主圖／規格圖／詳情圖；station① 全文案 tabs；station③ full + publish */}
+          {/* R2: station② 分頁＝主圖／規格圖／詳情圖（＋REVIEW-FLOW B3：款式「規格」）；station① 全文案 tabs；station③ full + publish */}
           {isImageStation ? (
             <div className="rc-tabs" role="tablist" aria-label="圖片類型">
               {STATION2_IMAGE_SUBTABS.map((tab) => {
                 const count = station2SubtabCount(imageMarks, tab.id);
-                const active = s2ImageSubtab === tab.id;
+                const active = !s2SpecsOpen && s2ImageSubtab === tab.id;
                 return (
                   <button
                     aria-selected={active}
                     className={`rc-tab${active ? " active" : ""}`}
                     key={tab.id}
-                    onClick={() => setS2ImageSubtab(tab.id)}
+                    onClick={() => {
+                      setS2ImageSubtab(tab.id);
+                      // leave the 規格 (款式) tab; `images` is what 逐件標圖 uses for 圖片 anyway
+                      if (activeTab === "specs") setActiveTab("images");
+                    }}
                     role="tab"
                     type="button"
                   >
@@ -2893,6 +2979,16 @@ export function ResultCard({
                   </button>
                 );
               })}
+              {/* REVIEW-FLOW B3: 款式（variants）可在站②編輯／刪除——同一個 ResultCardSpecsPanel */}
+              <button
+                aria-selected={s2SpecsOpen}
+                className={`rc-tab${s2SpecsOpen ? " active" : ""}`}
+                onClick={() => selectTab("specs")}
+                role="tab"
+                type="button"
+              >
+                {tabLabelWithWarn("specs", 0)}
+              </button>
             </div>
           ) : (
             <div className="rc-tabs" role="tablist" aria-label="卡片分頁">
@@ -2953,7 +3049,7 @@ export function ResultCard({
             />
           ) : null}
 
-          {!isImageStation && activeTab === "specs" ? (
+          {activeTab === "specs" ? (
             <ResultCardSpecsPanel
               onDimensionsChange={(dims) => {
                 setVariantDimensions(dims);
@@ -2990,6 +3086,7 @@ export function ResultCard({
 
           {/* T7: 站① 永不渲染圖片 tab；站② UX-F T30；站③ 圖片 tab */}
           {isImageStation ? (
+            s2SpecsOpen ? null : (
             <div className="rc-tabpanel" role="tabpanel">
               <Station2ImagePanel
                 draftId={draft.id}
@@ -3005,6 +3102,7 @@ export function ResultCard({
                 }
               />
             </div>
+            )
           ) : !isCopyStation && activeTab === "images" ? (
             <ResultCardImagesPanel
               fadingImageIds={fadingImageIds}
@@ -3155,6 +3253,18 @@ export function ResultCard({
             ) : null}
             {isImageStation ? (
               <span className="rc-actions-group rc-actions-group-review">
+                {/* REVIEW-FLOW B3: 款式在站②改過 → 同站③的儲存入口（save() 不動 stage／status） */}
+                {hasUncommittedEdits() && !hasRealShopifyProduct ? (
+                  <Button
+                    size="sm"
+                    disabled={comboSaving || quickBusy}
+                    loading={comboSaving}
+                    onClick={() => void save()}
+                    type="button"
+                  >
+                    儲存修改
+                  </Button>
+                ) : null}
                 <Button
                   variant={actionArm === "review" ? "danger" : "primary"}
                   size="sm"

@@ -360,13 +360,15 @@
 
   /**
    * Product-level structured prices already loaded in ICE.
-   * Priority:
-   * 1) componentsVO.priceVO.price / extraPrice
-   * 2) skuCore.sku2info["0"] fallback ("起" baseline)
+   * Priority (the minimum structured SKU price is applied later, after SKU rows exist):
+   * 1) skuCore.sku2info["0"] ("起" baseline)
+   * 2) componentsVO.priceVO.price / extraPrice. Live 2026-10-11 evidence: with a
+   *    URL skuId, priceVO can follow the selected SKU (Hollybox 79.8) while still
+   *    labelled "起", so it is only "needs_confirmation" when skuId is present.
    * DOM is handled separately because a URL skuId makes the displayed DOM price
    * selected-SKU evidence, not product-level cost.
    */
-  function structuredProductPrices(res) {
+  function structuredProductPrices(res, selectedSkuHint) {
     var out = {
       base: null,
       promo: null,
@@ -376,6 +378,37 @@
       candidates: []
     };
     if (!res || typeof res !== "object") return out;
+
+    var infoMap =
+      res.skuCore && res.skuCore.sku2info && typeof res.skuCore.sku2info === "object"
+        ? res.skuCore.sku2info
+        : {};
+    var zeroInfo = infoMap["0"] || infoMap[0] || null;
+    if (zeroInfo) {
+      var zeroPrices = structuredSkuPrices(zeroInfo);
+      if (zeroPrices.base != null) {
+        out.base = zeroPrices.base;
+        out.baseSource = "ice.skuCore.sku2info.0.price";
+        out.confidence =
+          zeroPrices.confidence === "unknown" ? "structured_primary" : zeroPrices.confidence;
+        out.candidates.push({
+          key: "skuCore.sku2info.0.price",
+          source: out.baseSource,
+          value: zeroPrices.base,
+          kind: "base"
+        });
+      }
+      if (zeroPrices.promo != null) {
+        out.promo = zeroPrices.promo;
+        out.promoSource = "ice.skuCore.sku2info.0.promo";
+        out.candidates.push({
+          key: "skuCore.sku2info.0.promo",
+          source: out.promoSource,
+          value: zeroPrices.promo,
+          kind: "promo"
+        });
+      }
+    }
 
     var priceVO =
       res.componentsVO &&
@@ -388,65 +421,75 @@
       var baseNode = priceVO.price;
       var baseValue = priceTextFromUnknown(baseNode);
       var baseLabel = labelTextFromUnknown(baseNode);
-      if (baseValue != null && !PROMO_LABEL_RE.test(baseLabel)) {
-        out.base = baseValue;
-        out.baseSource = "ice.componentsVO.priceVO.price";
-        out.confidence = "high";
+      var voBaseUsable = baseValue != null && !PROMO_LABEL_RE.test(baseLabel);
+      if (voBaseUsable) {
         out.candidates.push({
           key: "componentsVO.priceVO.price",
-          source: out.baseSource,
+          source: "ice.componentsVO.priceVO.price",
           value: baseValue,
           kind: "base"
         });
+        if (out.base == null) {
+          out.base = baseValue;
+          out.baseSource = "ice.componentsVO.priceVO.price";
+          out.confidence = selectedSkuHint ? "needs_confirmation" : "high";
+        }
       }
 
+      // extraPrice belongs to the same priceVO state; only trust it as product
+      // promo when that priceVO base agrees with the chosen product baseline.
       var promoNode = priceVO.extraPrice;
       var promoValue = priceTextFromUnknown(promoNode);
       var promoLabel = labelTextFromUnknown(promoNode);
       if (promoValue != null && PROMO_LABEL_RE.test(promoLabel)) {
-        out.promo = promoValue;
-        out.promoSource = "ice.componentsVO.priceVO.extraPrice";
         out.candidates.push({
           key: "componentsVO.priceVO.extraPrice",
-          source: out.promoSource,
+          source: "ice.componentsVO.priceVO.extraPrice",
           value: promoValue,
           kind: "promo"
         });
-      }
-    }
-
-    var infoMap =
-      res.skuCore && res.skuCore.sku2info && typeof res.skuCore.sku2info === "object"
-        ? res.skuCore.sku2info
-        : {};
-    var zeroInfo = infoMap["0"] || infoMap[0] || null;
-    if (zeroInfo) {
-      var zeroPrices = structuredSkuPrices(zeroInfo);
-      if (out.base == null && zeroPrices.base != null) {
-        out.base = zeroPrices.base;
-        out.baseSource = "ice.skuCore.sku2info.0.price";
-        out.confidence =
-          zeroPrices.confidence === "unknown" ? "structured_primary" : zeroPrices.confidence;
-        out.candidates.push({
-          key: "skuCore.sku2info.0.price",
-          source: out.baseSource,
-          value: zeroPrices.base,
-          kind: "base"
-        });
-      }
-      if (out.promo == null && zeroPrices.promo != null) {
-        out.promo = zeroPrices.promo;
-        out.promoSource = "ice.skuCore.sku2info.0.promo";
-        out.candidates.push({
-          key: "skuCore.sku2info.0.promo",
-          source: out.promoSource,
-          value: zeroPrices.promo,
-          kind: "promo"
-        });
+        if (out.promo == null && voBaseUsable && pricesClose(baseValue, out.base)) {
+          out.promo = promoValue;
+          out.promoSource = "ice.componentsVO.priceVO.extraPrice";
+          out.voBase = baseValue;
+        }
       }
     }
 
     return out;
+  }
+
+  // Placeholder rows sellers add for postage/deposits/notes ("补差价专拍 ¥1").
+  // They must never become the product "起" baseline.
+  var NON_SALE_SKU_RE =
+    /勿拍|拍下不[发發]|不[发發][货貨]|[补補]差|差[价價]|[邮郵][费費]|[运運][费費]|定金|[订訂]金|[说說]明|[须須]知|[联聯][系繫]客服/;
+
+  function isNonSaleSkuRow(row) {
+    var text = [row.option1_value, row.option2_value, row.option3_value]
+      .filter(Boolean)
+      .join(" ");
+    return NON_SALE_SKU_RE.test(text);
+  }
+
+  /** Minimum independently captured SKU base price (excludes DOM display-only fills). */
+  function minStructuredSkuBase(variants) {
+    var values = (variants || [])
+      .filter(function (row) {
+        return (
+          row &&
+          row.cny_price != null &&
+          row.price_source &&
+          row.price_source !== "dom.selected_sku" &&
+          !isNonSaleSkuRow(row)
+        );
+      })
+      .map(function (row) {
+        return Number(row.cny_price);
+      })
+      .filter(function (value) {
+        return Number.isFinite(value) && value > 0;
+      });
+    return values.length ? Math.min.apply(Math, values) : null;
   }
 
   /**
@@ -479,6 +522,304 @@
       if (bu) return bu;
     }
     return null;
+  }
+
+  function allMatchesAcrossSelectors(doc, selectors) {
+    var out = [];
+    var seen = [];
+    var list = Array.isArray(selectors) ? selectors : selectors ? [selectors] : [];
+    for (var i = 0; i < list.length; i++) {
+      var sel = list[i];
+      if (!sel) continue;
+      try {
+        var nodes = doc.querySelectorAll(sel);
+        for (var j = 0; nodes && j < nodes.length; j++) {
+          if (seen.indexOf(nodes[j]) >= 0) continue;
+          seen.push(nodes[j]);
+          out.push(nodes[j]);
+        }
+      } catch (_e) {}
+    }
+    return out;
+  }
+
+  /**
+   * Some modern Tmall pages keep rich-description image URLs inside the
+   * already-loaded ICE payload while the visual description is lazy-rendered.
+   * Read only bounded local data; never fetch the description endpoint here.
+   */
+  function detailImageUrlsFromIce(res, href, dom) {
+    if (!res || typeof res !== "object") return [];
+    var out = [];
+    var seen = {};
+    var nodes = 0;
+    var MAX_NODES = 4000;
+    var MAX_OUT = 20;
+    var DETAIL_PATH_RE = /desc|detail|description|rich.?text|rich.?content/i;
+    var IMAGE_URL_RE = /(?:https?:)?\/\/[^"'\\\s<>]+?\.(?:jpe?g|png|webp|gif)(?:\?[^"'\\\s<>]*)?/gi;
+
+    function add(raw) {
+      if (!raw || out.length >= MAX_OUT) return;
+      var u = dom.absUrl(raw, href);
+      if (!u || seen[u]) return;
+      if (!/\.(?:jpe?g|png|webp|gif)(?:\?|$)/i.test(u)) return;
+      seen[u] = true;
+      out.push(u);
+    }
+
+    function scanString(raw, path) {
+      if (!DETAIL_PATH_RE.test(path || "")) return;
+      var str = String(raw || "");
+      if (!str || str.length > 250000) return;
+      var match;
+      IMAGE_URL_RE.lastIndex = 0;
+      while ((match = IMAGE_URL_RE.exec(str)) && out.length < MAX_OUT) {
+        add(match[0]);
+      }
+    }
+
+    function walk(node, path, depth) {
+      if (node == null || depth > 7 || nodes++ >= MAX_NODES || out.length >= MAX_OUT) return;
+      if (typeof node === "string") {
+        scanString(node, path);
+        return;
+      }
+      if (typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        for (var ai = 0; ai < node.length && ai < 60; ai++) {
+          walk(node[ai], path + "[" + ai + "]", depth + 1);
+          if (nodes >= MAX_NODES || out.length >= MAX_OUT) break;
+        }
+        return;
+      }
+      var keys = Object.keys(node);
+      for (var ki = 0; ki < keys.length && ki < 120; ki++) {
+        var key = keys[ki];
+        var next = path ? path + "." + key : key;
+        var value = node[key];
+        if (typeof value === "string") scanString(value, next);
+        else if (value && typeof value === "object") walk(value, next, depth + 1);
+        if (nodes >= MAX_NODES || out.length >= MAX_OUT) break;
+      }
+    }
+
+    walk(res, "res", 0);
+    return out;
+  }
+
+  function detailImageUrlFromEl(el, href, dom) {
+    if (!el) return null;
+    var candidates = [
+      el.getAttribute && el.getAttribute("data-src"),
+      el.getAttribute && el.getAttribute("data-ks-lazyload"),
+      el.getAttribute && el.getAttribute("data-original"),
+      el.getAttribute && el.getAttribute("data-lazy-src"),
+      el.currentSrc || null,
+      el.getAttribute && el.getAttribute("src")
+    ];
+    var srcset =
+      (el.getAttribute && (el.getAttribute("data-srcset") || el.getAttribute("srcset"))) ||
+      "";
+    if (srcset) {
+      var parts = String(srcset)
+        .split(",")
+        .map(function (part) {
+          return part.trim().split(/\s+/)[0];
+        })
+        .filter(Boolean);
+      if (parts.length) candidates.unshift(parts[parts.length - 1]);
+    }
+    for (var i = 0; i < candidates.length; i++) {
+      var u = dom.absUrl(candidates[i], href);
+      if (u) return u;
+    }
+    return null;
+  }
+
+  function canonicalAlibabaImageKey(raw, href, dom) {
+    var u = dom.absUrl(raw, href);
+    if (!u) return null;
+    try {
+      var parsed = new URL(u);
+      var path = parsed.pathname;
+      path = path
+        .replace(/_q\d+(?:\.jpg)?_?\.webp$/i, "")
+        .replace(/_\.webp$/i, "")
+        .replace(/_\d+x\d+(?:q\d+)?\.jpg$/i, "")
+        .replace(/\.jpg_\.webp$/i, ".jpg")
+        .replace(/\.png_\.webp$/i, ".png");
+      return parsed.hostname.toLowerCase() + path;
+    } catch (_e) {
+      return String(u).split("?")[0].replace(/_\.webp$/i, "");
+    }
+  }
+
+  function filterDetailImageUrls(urls, href, dom, mainUrls, variants) {
+    var mainKeys = {};
+    (mainUrls || []).forEach(function (u) {
+      var key = canonicalAlibabaImageKey(u, href, dom);
+      if (key) mainKeys[key] = true;
+    });
+    var variantKeys = {};
+    (variants || []).forEach(function (row) {
+      var key = canonicalAlibabaImageKey(row && row.image_url, href, dom);
+      if (key) variantKeys[key] = true;
+    });
+
+    var ownerCounts = {};
+    (urls || []).forEach(function (u) {
+      var m = String(u || "").match(/!!(\d+)/);
+      if (m) ownerCounts[m[1]] = (ownerCounts[m[1]] || 0) + 1;
+    });
+    var dominantOwner = null;
+    Object.keys(ownerCounts)
+      .sort(function (a, b) {
+        return ownerCounts[b] - ownerCounts[a];
+      })
+      .some(function (owner) {
+        if (ownerCounts[owner] >= 2 && !/^600000000/.test(owner)) {
+          dominantOwner = owner;
+          return true;
+        }
+        return false;
+      });
+
+    return (urls || []).filter(function (u) {
+      if (!u) return false;
+      var text = String(u);
+      if (/^(?:data|blob):/i.test(text)) return false;
+      if (/transparent|blank|loading|placeholder|spacer|1x1/i.test(text)) return false;
+      // Taobao platform separators/badges, not seller detail art.
+      if (/!!600000000\d+-2-tps-/i.test(text)) return false;
+
+      var key = canonicalAlibabaImageKey(u, href, dom);
+      if (key && (mainKeys[key] || variantKeys[key])) return false;
+
+      if (dominantOwner) {
+        var owner = text.match(/!!(\d+)/);
+        if (owner && owner[1] !== dominantOwner && /^600000000/.test(owner[1])) return false;
+      }
+      return true;
+    });
+  }
+
+  // host + path only (no query/hash) so diagnostics never persist tokens.
+  function hostPathSample(raw, href) {
+    if (!raw) return null;
+    try {
+      var u = new URL(String(raw).trim(), href);
+      if (!/^https?:$/i.test(u.protocol)) return null;
+      return (u.hostname + u.pathname).slice(0, 160);
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  // Bounded scan of loaded ICE data for desc/detail keys that carry a URL.
+  function iceDescUrlKeySamples(res, href) {
+    var out = [];
+    var nodes = 0;
+    function walk(node, path, depth) {
+      if (!node || typeof node !== "object" || depth > 6 || out.length >= 12 || nodes++ > 600) return;
+      var keys = Object.keys(node);
+      for (var i = 0; i < keys.length && i < 120 && out.length < 12; i++) {
+        var key = keys[i];
+        var value = node[key];
+        var next = path + "." + key;
+        if (typeof value === "string") {
+          if (/desc|detail/i.test(key) && /^(?:https?:)?\/\//i.test(value.trim())) {
+            var sample = hostPathSample(value, href);
+            if (sample) out.push({ path: next.slice(0, 120), url: sample });
+          }
+        } else if (value && typeof value === "object") {
+          walk(value, next, depth + 1);
+        }
+      }
+    }
+    walk(res, "res", 0);
+    return out;
+  }
+
+  // Diagnostic-only: bounded counts and rejection reasons, without changing filtering.
+  function collectDetailDebug(doc, href, dom, detailNodes, domCandidates, iceCandidates, mainUrls, variants, iceRes) {
+    var LIMIT = 40;
+    var all = (domCandidates || []).concat(iceCandidates || []).slice(0, LIMIT);
+    var mainKeys = {};
+    var variantKeys = {};
+    (mainUrls || []).forEach(function (u) {
+      var key = canonicalAlibabaImageKey(u, href, dom);
+      if (key) mainKeys[key] = true;
+    });
+    (variants || []).forEach(function (v) {
+      var key = canonicalAlibabaImageKey(v && v.image_url, href, dom);
+      if (key) variantKeys[key] = true;
+    });
+    var ownerCounts = {};
+    all.forEach(function (u) {
+      var m = String(u || "").match(/!!(\d+)/);
+      if (m) ownerCounts[m[1]] = (ownerCounts[m[1]] || 0) + 1;
+    });
+    var dominantOwner = Object.keys(ownerCounts).sort(function (a, b) {
+      return ownerCounts[b] - ownerCounts[a];
+    }).filter(function (id) { return ownerCounts[id] >= 2 && !/^600000000/.test(id); })[0] || null;
+    var rejected = { main_duplicate: 0, variant_duplicate: 0, tps: 0, placeholder: 0, other: 0 };
+    var examples = [];
+    all.forEach(function (u) {
+      var t = String(u || "");
+      var key = canonicalAlibabaImageKey(t, href, dom);
+      var reason = null;
+      if (!t || /^(?:data|blob):/i.test(t)) reason = "other";
+      else if (/transparent|blank|loading|placeholder|spacer|1x1/i.test(t)) reason = "placeholder";
+      else if (/!!600000000\d+-2-tps-/i.test(t)) reason = "tps";
+      else if (key && mainKeys[key]) reason = "main_duplicate";
+      else if (key && variantKeys[key]) reason = "variant_duplicate";
+      else if (dominantOwner) {
+        var owner = t.match(/!!(\d+)/);
+        if (owner && owner[1] !== dominantOwner && /^600000000/.test(owner[1])) reason = "tps";
+      }
+      if (reason) {
+        rejected[reason]++;
+        if (examples.length < 12) examples.push({ source: "detail_candidate", reason: reason, url: t.slice(0, 180) });
+      }
+    });
+    var iframeCount = 0;
+    var bgCount = 0;
+    var iframeSamples = [];
+    var backgroundSamples = [];
+    var iceDescSamples = [];
+    try {
+      var frames = doc.querySelectorAll("iframe");
+      iframeCount = Math.min(frames.length, 200);
+      for (var f = 0; f < frames.length && f < 50 && iframeSamples.length < 12; f++) {
+        var frameSrc = hostPathSample(frames[f].getAttribute("src") || frames[f].getAttribute("data-src"), href);
+        if (frameSrc && iframeSamples.indexOf(frameSrc) === -1) iframeSamples.push(frameSrc);
+      }
+      var nodes = doc.querySelectorAll("[style*='background']");
+      var max = Math.min(nodes.length, 500);
+      for (var i = 0; i < max; i++) {
+        var style = nodes[i].getAttribute("style") || "";
+        var bgMatch = style.match(/background(?:-image)?\s*:[^;]*url\(\s*['"]?([^'")]+)/i);
+        if (!bgMatch) continue;
+        bgCount++;
+        var bgSample = backgroundSamples.length < 12 ? hostPathSample(bgMatch[1], href) : null;
+        if (bgSample && backgroundSamples.indexOf(bgSample) === -1) backgroundSamples.push(bgSample);
+      }
+      iceDescSamples = iceDescUrlKeySamples(iceRes, href);
+    } catch (_err) { /* diagnostics must not affect capture */ }
+    return {
+      dom_img_nodes: Math.min((detailNodes || []).length, 5000),
+      before_filter_dom_candidates: (domCandidates || []).length,
+      before_filter_ice_candidates: (iceCandidates || []).length,
+      sampled_candidates: all.length,
+      rejected_by_rule: rejected,
+      rejected_examples: examples,
+      iframe_nodes: iframeCount,
+      inline_background_image_nodes: bgCount,
+      iframe_src_samples: iframeSamples,
+      background_image_samples: backgroundSamples,
+      ice_desc_url_keys: iceDescSamples,
+      limits: { candidate_sample: LIMIT, examples: 12, background_nodes_scanned: 500, samples: 12 }
+    };
   }
 
   function extractSkuFromRoot(rootEl, S, dom, baseHref) {
@@ -995,7 +1336,7 @@
     var iceSku = iceSkuFromRes(iceRes);
     var iceParams = iceParamsFromRes(iceRes);
     var price_debug = collectPriceDebug(iceRes);
-    var productStructuredPrices = structuredProductPrices(iceRes);
+    var productStructuredPrices = structuredProductPrices(iceRes, selectedSkuHint);
 
     if (productStructuredPrices.base != null) {
       price_cny = productStructuredPrices.base;
@@ -1135,6 +1476,36 @@
       ]);
     }
 
+    // The product "起" baseline is the cheapest independently captured SKU price.
+    // This outranks sku2info["0"] / priceVO, which can follow the selected SKU.
+    var skuMinBase = minStructuredSkuBase(variants_flat);
+    if (skuMinBase != null) {
+      if (!pricesClose(price_cny, skuMinBase)) {
+        promo_price_cny =
+          productStructuredPrices.voBase != null &&
+          pricesClose(productStructuredPrices.voBase, skuMinBase)
+            ? productStructuredPrices.promo
+            : null;
+      }
+      price_cny = skuMinBase;
+      price_source = "ice.skuCore.min_sku_price";
+      price_confidence = "structured_min";
+      price_candidates = [
+        {
+          key: "skuCore.min_sku_price",
+          source: "ice.skuCore.min_sku_price",
+          value: skuMinBase,
+          kind: "base"
+        }
+      ].concat(price_candidates);
+    } else if (
+      productStructuredPrices.baseSource === "ice.componentsVO.priceVO.price" &&
+      selectedSkuHint &&
+      price_cny != null
+    ) {
+      warnings.push("商品基準價取自頁面價格區，可能是目前選中款的價格；請確認最便宜那款的成本");
+    }
+
     if (price_cny == null) {
       warnings.push("price_cny: 未抓到");
     } else if (prices.onlyPromo && !selectedSkuHint && productStructuredPrices.base == null) {
@@ -1191,20 +1562,53 @@
     );
     if (!main_image_urls.length) warnings.push("main_image_urls: 未抓到");
 
-    var detail_image_urls = dom.uniqueUrls(
-      dom.allMatch(doc, S.detailImages).map(function (el) {
-        return dom.imgUrlFromEl(el, href);
+    var detailNodes = allMatchesAcrossSelectors(doc, S.detailImages);
+    var detailDomUrls = dom.uniqueUrls(
+      detailNodes.map(function (el) {
+        return detailImageUrlFromEl(el, href, dom);
       }),
-      20
+      40
     );
-    var mset = {};
-    main_image_urls.forEach(function (u) {
-      mset[u] = true;
-    });
-    detail_image_urls = detail_image_urls.filter(function (u) {
-      return !mset[u];
-    });
-    if (!detail_image_urls.length) warnings.push("detail_image_urls: 未抓到");
+    var detailDomCandidates = detailDomUrls.slice();
+    detailDomUrls = filterDetailImageUrls(
+      detailDomUrls,
+      href,
+      dom,
+      main_image_urls,
+      variants_flat
+    );
+
+    // A few false-positive platform/SKU images must not suppress the fallback.
+    // Only run the bounded ICE scan when DOM detail evidence is still sparse.
+    var detailIceUrls =
+      detailDomUrls.length < 5 ? detailImageUrlsFromIce(iceRes, href, dom) : [];
+    var detailIceCandidates = detailIceUrls.slice();
+    detailIceUrls = filterDetailImageUrls(
+      detailIceUrls,
+      href,
+      dom,
+      main_image_urls,
+      variants_flat
+    );
+    var detail_image_urls = dom.uniqueUrls(detailDomUrls.concat(detailIceUrls), 20);
+    var detail_debug = collectDetailDebug(doc, href, dom, detailNodes, detailDomCandidates, detailIceCandidates, main_image_urls, variants_flat, iceRes);
+    if (!detail_image_urls.length) {
+      var detailShell = allMatchesAcrossSelectors(doc, [
+        "#description",
+        "#J_DivItemDesc",
+        "[id*='description']",
+        "[id*='desc']",
+        "[class*='desc']",
+        "[class*='Desc']",
+        "[class*='detail']",
+        "[class*='Detail']"
+      ]);
+      warnings.push(
+        detailShell.length
+          ? "detail_image_urls: 詳情區已出現但未識別到圖片"
+          : "detail_image_urls: 詳情區尚未載入或此頁型未提供可讀圖片"
+      );
+    }
 
     var video_urls = [];
     dom.allMatch(doc, S.video).forEach(function (el) {
@@ -1243,6 +1647,7 @@
       variants_flat: variants_flat,
       main_image_urls: main_image_urls,
       detail_image_urls: detail_image_urls,
+      detail_debug: detail_debug,
       video_urls: video_urls,
       params: params,
       warnings: warnings,

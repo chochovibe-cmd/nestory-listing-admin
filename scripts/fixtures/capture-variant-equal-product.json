@@ -1,0 +1,16 @@
+{
+  "description": "2026-10-11 15:00 live capture d39a4057 (Pokémon). Six SKUs were captured from skuCore.price at 18.9 (= product baseline) and the bundle at 113.9. The old C1 rule stored the six 18.9 rows as NULL. r6 must keep every sourced price explicit; only a legacy unsourced row equal to the product may collapse.",
+  "draft_prefix": "d39a4057",
+  "product_cny": 18.9,
+  "variants_flat": [
+    { "sku": "5907167683440", "option1_value": "正版不倒翁呆火鳄（9cm）", "cny_price": 18.9, "price_source": "skuCore.price" },
+    { "sku": "5907167683441", "option1_value": "正版不倒翁皮卡丘（9cm", "cny_price": 18.9, "price_source": "skuCore.price" },
+    { "sku": "5907167683442", "option1_value": "正版不倒翁仙子伊布（9cm）", "cny_price": 18.9, "price_source": "skuCore.price" },
+    { "sku": "5907167683443", "option1_value": "正版不倒翁新叶喵（9cm）", "cny_price": 18.9, "price_source": "skuCore.price" },
+    { "sku": "5907167683444", "option1_value": "正版不倒翁润水鸭（9cm）", "cny_price": 18.9, "price_source": "skuCore.price" },
+    { "sku": "5907167683445", "option1_value": "正版不倒翁耿鬼（9cm）", "cny_price": 18.9, "price_source": "skuCore.price" },
+    { "sku": "5907167683446", "option1_value": "正版宝可梦不倒翁一套6款", "cny_price": 113.9, "price_source": "skuCore.price" }
+  ],
+  "legacy_unsourced_row": { "option1_value": "舊版外掛同價列", "cny_price": 18.9 },
+  "expected_explicit_prices": [18.9, 18.9, 18.9, 18.9, 18.9, 18.9, 113.9]
+}

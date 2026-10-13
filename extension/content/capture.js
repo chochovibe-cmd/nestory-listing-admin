@@ -61,7 +61,7 @@
   });
 })();
 
-(function () {
+(async function () {
   var NestoryCap = globalThis.NestoryCap;
   if (typeof globalThis.__nestoryShowCaptureToast === "function") {
     globalThis.__nestoryShowCaptureToast("⏳ 擷取中…", "loading");
@@ -74,10 +74,52 @@
     };
   }
   try {
-    return NestoryCap.buildCapturePayload(document, {
-      href: location.href,
-      host: location.hostname
-    });
+    function buildNow() {
+      return NestoryCap.buildCapturePayload(document, {
+        href: location.href,
+        host: location.hostname
+      });
+    }
+
+    function detailCount(payload) {
+      return payload && Array.isArray(payload.detail_image_urls)
+        ? payload.detail_image_urls.length
+        : 0;
+    }
+
+    var payload = buildNow();
+    var isTaobaoFamily =
+      payload &&
+      (payload.source_platform === "taobao" || payload.source_platform === "tmall");
+
+    // Modern Taobao/Tmall descriptions can lazy-render shortly after the rest
+    // of the product page. Do not slow the normal path: only retry when the
+    // first pass has sparse usable detail images.
+    if (isTaobaoFamily && detailCount(payload) < 5) {
+      var started = Date.now();
+      var deadline = started + 2400;
+      while (Date.now() < deadline && detailCount(payload) < 5) {
+        await new Promise(function (resolve) {
+          setTimeout(resolve, 300);
+        });
+        var next = buildNow();
+        if (detailCount(next) > detailCount(payload)) payload = next;
+      }
+      if (payload.capture_meta) {
+        payload.capture_meta.detail_wait_ms = Date.now() - started;
+        if (detailCount(payload) < 5) {
+          var warnings = Array.isArray(payload.capture_meta.warnings_from_client)
+            ? payload.capture_meta.warnings_from_client.slice()
+            : [];
+          warnings.push(
+            "detail_image_urls: 等待 lazy-load 後仍偏少，可能需要頁面互動/捲動才會完整載入"
+          );
+          payload.capture_meta.warnings_from_client = warnings;
+        }
+      }
+    }
+
+    return payload;
   } catch (err) {
     return {
       __nestory_error: "capture_threw",

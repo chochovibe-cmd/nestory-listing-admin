@@ -78,6 +78,7 @@
       adapter: det.adapter,
       page_host: host || undefined,
       sku_dimensions: sku_dimensions,
+      extension_build: NestoryCap.CAPTURE_BUILD || undefined,
       warnings_from_client: warnings
     };
     // CAPTURE-TRUTH-A: price evidence/provenance is metadata only; no extra request.
@@ -88,6 +89,7 @@
     }
     if (partial.price_conflict) capture_meta.price_conflict = partial.price_conflict;
     if (partial.price_debug) capture_meta.price_debug = partial.price_debug;
+    if (partial.detail_debug) capture_meta.detail_debug = partial.detail_debug;
     // CAP-2.6 / 86: promo after discount → meta only (not price_cny)
     if (partial.promo_price_cny != null && Number.isFinite(Number(partial.promo_price_cny))) {
       capture_meta.promo_price_cny = Number(partial.promo_price_cny);

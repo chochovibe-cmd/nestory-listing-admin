@@ -200,6 +200,19 @@ check("selectors: single catalog has taobao/tmall/shopee/generic", () => {
   assert.ok(Cap.SELECTORS.taobao.skuAxis.includes("[class*='skuItem--']"));
   assert.ok(Cap.SELECTORS.taobao.skuValue.includes("[class*='valueItem--']"));
   assert.ok(Cap.SELECTORS.taobao.paramsTable.includes("[class*='ParamsInfoItem--']"));
+  assert.ok(
+    Cap.SELECTORS.tmall.detailImages.includes("[class*='content--'] img"),
+    "tmall detail image rules must include modern content container"
+  );
+  assert.ok(
+    Cap.SELECTORS.taobao.detailImages.includes("#imageTextInfo-content img"),
+    "taobao detail rules must include modern imageTextInfo container"
+  );
+  assert.ok(
+    Cap.SELECTORS.tmall.detailImages.includes(".desc-root img"),
+    "tmall detail rules must include desc-root"
+  );
+  assert.equal(Cap.CAPTURE_BUILD, "capture-20261011-r6");
 });
 
 check("parsePrice: honest nulls", () => {
@@ -378,6 +391,71 @@ check("DOM: missing price → omit price_cny + client warning", () => {
     "expected price_cny warning"
   );
   assert.ok(body.title);
+});
+
+check("CAPTURE-IMAGE: Tmall detail selectors are unioned across containers", () => {
+  const html =
+    '<!doctype html><html><body><h1>detail union</h1>' +
+    '<div id="description"><img data-src="//img.alicdn.com/imgextra/i1/shop/detail-a.jpg"></div>' +
+    '<div class="content--new"><img data-lazy-src="//img.alicdn.com/imgextra/i2/shop/detail-b.png"></div>' +
+    '</body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://detail.tmall.com/item.htm?id=detail-union",
+    host: "detail.tmall.com"
+  });
+  assert.ok(Array.isArray(body.detail_image_urls));
+  assert.equal(body.detail_image_urls.length, 2);
+  assert.ok(body.detail_image_urls.some((u) => /detail-a\.jpg/.test(u)));
+  assert.ok(body.detail_image_urls.some((u) => /detail-b\.png/.test(u)));
+});
+
+check("CAPTURE-IMAGE: platform + SKU thumbs do not fake detail success", () => {
+  const skuImg = "https://gw.alicdn.com/bao/uploaded/i2/2211641406361/O1CN01sku.png";
+  const html =
+    '<!doctype html><html><body><h1>false detail</h1>' +
+    '<div class="content--noise">' +
+    '<img src="https://img.alicdn.com/imgextra/i3/O1CN01platform!!6000000000136-2-tps-732-2.png">' +
+    '<img src="' + skuImg + '_.webp">' +
+    "</div>" +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{' +
+    '"skuBase":{"props":[{"pid":"1","name":"款式","values":[{"vid":"a","name":"A","image":"' +
+    skuImg +
+    '"}]}],"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
+    '"skuCore":{"sku2info":{"s1":{"quantity":1}}},' +
+    '"richDetail":{"description":"<img src=\\\"https://img.alicdn.com/imgextra/i1/2211641406361/O1CN01real-detail.jpg\\\">"}' +
+    '}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://item.taobao.com/item.htm?id=false-detail",
+    host: "item.taobao.com"
+  });
+  assert.ok(body.detail_image_urls.some((u) => /real-detail\.jpg/.test(u)));
+  assert.ok(
+    !body.detail_image_urls.some((u) => /6000000000136-2-tps/.test(u)),
+    "platform detail asset must be filtered"
+  );
+  assert.ok(
+    !body.detail_image_urls.some((u) => /O1CN01sku\.png/.test(u)),
+    "variant thumb must not count as detail"
+  );
+});
+
+check("CAPTURE-IMAGE: loaded ICE rich-detail images are a local fallback", () => {
+  const html =
+    '<!doctype html><html><body><h1>ice detail</h1>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    '{"loaderData":{"home":{"data":{"res":{' +
+    '"skuBase":{"props":[{"pid":"1","name":"款式","values":[{"vid":"a","name":"A"}]}],"skus":[{"propPath":"1:a","skuId":"s1"}]},' +
+    '"richDetail":{"content":"<p><img src=\\\"https://img.alicdn.com/imgextra/i3/shop/rich-detail.webp\\\"></p>"}' +
+    '}}}}};</script></body></html>';
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://detail.tmall.com/item.htm?id=ice-detail",
+    host: "detail.tmall.com"
+  });
+  assert.ok(body.detail_image_urls.some((u) => /rich-detail\.webp/.test(u)));
 });
 
 check("DOM: tmall ssr2025 fixture → 1 SKU axis, multiple values, params", () => {
@@ -606,6 +684,33 @@ check("CAPTURE-TRUTH-A: price parsing adds no network request", () => {
   assert.doesNotMatch(adapter, /\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
 });
 
+check("CAPTURE-IMAGE: sparse detail retry is bounded and build-stamped", () => {
+  const content = read("extension/content/capture.js");
+  const payload = read("extension/lib/buildPayload.js");
+  assert.match(content, /detailCount\(payload\) < 5/);
+  assert.match(content, /started \+ 2400/);
+  assert.match(content, /detail_wait_ms/);
+  assert.match(payload, /extension_build/);
+});
+
+check("CAPTURE-IMAGE: detail_debug retained as bounded capture_meta evidence", () => {
+  const href = "https://detail.tmall.com/item.htm?id=debug-test";
+  const { document } = loadDoc("scripts/fixtures/taobao-item-sample.html", href);
+  const body = Cap.buildCapturePayload(document, { href, host: "detail.tmall.com" });
+  const debug = body.capture_meta.detail_debug;
+  assert.ok(debug, "detail_debug must travel into capture_meta");
+  assert.ok(Number.isInteger(debug.dom_img_nodes));
+  assert.ok(Number.isInteger(debug.before_filter_dom_candidates));
+  assert.ok(Number.isInteger(debug.before_filter_ice_candidates));
+  assert.ok(Number.isInteger(debug.iframe_nodes));
+  assert.ok(Number.isInteger(debug.inline_background_image_nodes));
+  assert.ok(debug.sampled_candidates <= 40);
+  assert.ok(debug.rejected_examples.length <= 12);
+  for (const reason of ["main_duplicate", "variant_duplicate", "tps", "placeholder"]) {
+    assert.ok(Number.isInteger(debug.rejected_by_rule[reason]));
+  }
+});
+
 check("CAPTURE-TRUTH-A: price diagnostics are bounded and local", () => {
   const html =
     '<!doctype html><html><body><h1 class="MainTitle--x">debug item</h1>' +
@@ -768,6 +873,121 @@ check("no third-party script injection in extension", () => {
   const bg = read("extension/background.js");
   const cap = read("extension/content/capture.js");
   assert.ok(!/cdn\.|googleapis|script\.src\s*=/.test(bg + cap));
+});
+
+// 2026-10-11 15:00 live Hollybox (ec18dfd8): sku2info now carries per-SKU prices,
+// while priceVO.price followed the URL-selected combo SKU (79.8, still labelled 起).
+function hollyboxSelectedSkuLiveCase() {
+  const base = livePriceDebugFixture.cases.find((x) => x.draft_prefix === "ff813a4a");
+  const testCase = JSON.parse(JSON.stringify(base));
+  const info = testCase.ice_res.skuCore.sku2info;
+  const price = (text, desc) => ({
+    price: Object.assign({ priceTitle: "优惠前", priceText: text }, desc ? { priceDesc: desc } : {})
+  });
+  for (const id of Object.keys(info)) {
+    const n = Number(id);
+    const text = n === 6141485911090 ? "239" : n >= 6146720591295 ? "79.8" : "39.9";
+    info[id] = Object.assign({}, info[id], price(text));
+  }
+  info["0"] = price("39.9", "起");
+  testCase.ice_res.componentsVO.priceVO.price.priceText = "79.8";
+  testCase.ice_res.componentsVO.priceVO.price.priceMoney = "7980";
+  return testCase;
+}
+
+check("r6 baseline: live Hollybox selected combo → product baseline is cheapest SKU 39.9", () => {
+  const testCase = hollyboxSelectedSkuLiveCase();
+  const body = captureFromLivePriceFixture(testCase);
+  assert.equal(body.price_cny, 39.9);
+  assert.equal(body.capture_meta.price_source, "ice.skuCore.min_sku_price");
+  // extraPrice belongs to the 79.8 priceVO state, so it must not become product promo.
+  assert.equal(body.capture_meta.promo_price_cny ?? null, null);
+  const byPrice = (p) => body.variants_flat.filter((row) => row.cny_price === p).length;
+  assert.equal(body.variants_flat.length, 13);
+  assert.equal(byPrice(39.9), 6);
+  assert.equal(byPrice(79.8), 6);
+  assert.equal(byPrice(239), 1);
+  assert.ok(body.variants_flat.every((row) => row.price_source === "skuCore.price"));
+});
+
+check("r6 baseline: non-sale placeholder SKU (补差价 ¥1) never becomes the product baseline", () => {
+  const base = livePriceDebugFixture.cases.find((x) => x.draft_prefix === "dd6950a3");
+  const testCase = JSON.parse(JSON.stringify(base));
+  const res = testCase.ice_res;
+  const firstProp = res.skuBase.props[0];
+  firstProp.values.push({ vid: "vfee", name: "补差价专拍（勿拍）" });
+  const template = res.skuBase.skus[0];
+  const pathParts = String(template.propPath).split(";");
+  pathParts[0] = `${firstProp.pid}:vfee`;
+  res.skuBase.skus.push({ propPath: pathParts.join(";"), skuId: "9999999999999" });
+  res.skuCore.sku2info["9999999999999"] = { price: { priceTitle: "优惠前", priceText: "1" } };
+  const body = captureFromLivePriceFixture(testCase);
+  assert.equal(body.price_cny, 18.9);
+  const fee = body.variants_flat.find((row) => row.sku === "9999999999999");
+  assert.ok(fee, "placeholder row is still captured for the operator to see");
+  assert.equal(fee.cny_price, 1);
+});
+
+check("r6 baseline: priceVO with URL skuId and no SKU prices is flagged for confirmation", () => {
+  const testCase = livePriceDebugFixture.cases.find((x) => x.draft_prefix === "ff813a4a");
+  const body = captureFromLivePriceFixture(testCase);
+  assert.equal(body.price_cny, 39.9);
+  assert.equal(body.capture_meta.price_confidence, "needs_confirmation");
+  assert.ok(
+    (body.capture_meta.warnings_from_client || []).some((w) => /可能是目前選中款的價格/.test(w)),
+    "selected-SKU baseline risk must be surfaced"
+  );
+});
+
+check("r6 detail_debug: iframe / background-image / ICE desc samples are host+path only", () => {
+  const ice = {
+    loaderData: {
+      home: {
+        data: {
+          res: {
+            item: { descUrl: "//market.m.taobao.com/app/detail-desc/index.html?id=1&secret=s" }
+          }
+        }
+      }
+    }
+  };
+  const html =
+    '<!doctype html><html><body><h1 class="MainTitle--x">detail debug</h1>' +
+    '<iframe src="https://desc.alicdn.com/i7/123/desc.htm?token=abc"></iframe>' +
+    '<div style="background-image:url(\'https://img.alicdn.com/imgextra/i1/123/O1CN01detail.jpg?x=1\')"></div>' +
+    "<script>window.__ICE_APP_CONTEXT__=" +
+    JSON.stringify(ice) +
+    ";</script></body></html>";
+  const { document } = parseHTML(html);
+  const body = Cap.buildCapturePayload(document, {
+    href: "https://item.taobao.com/item.htm?id=1",
+    host: "item.taobao.com"
+  });
+  const debug = body.capture_meta.detail_debug;
+  assert.deepEqual(debug.iframe_src_samples, ["desc.alicdn.com/i7/123/desc.htm"]);
+  assert.deepEqual(debug.background_image_samples, ["img.alicdn.com/imgextra/i1/123/O1CN01detail.jpg"]);
+  assert.equal(debug.ice_desc_url_keys.length, 1);
+  assert.equal(debug.ice_desc_url_keys[0].url, "market.m.taobao.com/app/detail-desc/index.html");
+  assert.ok(!JSON.stringify(debug).includes("token=abc"));
+  assert.ok(!JSON.stringify(debug).includes("secret=s"));
+  assert.equal(debug.limits.samples, 12);
+});
+
+check("r6 extension UI: API target 正式站／預覽 + host shown in settings, result and toast", () => {
+  const bg = read("extension/background.js");
+  const popupJs = read("extension/popup/popup.js");
+  const popupHtml = read("extension/popup/popup.html");
+  for (const src of [bg, popupJs]) {
+    assert.match(src, /function apiTargetInfo\(apiBaseUrl\)/);
+    assert.match(src, /"nestory-listing-admin\.vercel\.app"/);
+    assert.match(src, /"正式站"/);
+    assert.match(src, /"預覽"/);
+  }
+  assert.match(bg, /api_target: target\.label/);
+  assert.match(bg, /"［" \+ target\.label \+ "］" \+ message/);
+  assert.match(popupHtml, /id="apiTarget"/);
+  assert.match(popupHtml, /id="lastTarget"/);
+  assert.match(popupJs, /"送到：" \+ last\.api_target/);
 });
 
 if (failures.length) {

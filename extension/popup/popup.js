@@ -13,17 +13,53 @@ function setMsg(text, ok) {
   el.className = "msg " + (ok ? "ok" : text ? "err" : "");
 }
 
+var PRODUCTION_API_HOSTS = [
+  "nestory-listing-admin.vercel.app",
+  "nestory-listing-admin-chocho-nestory.vercel.app"
+];
+
+/** Keep in sync with background.js apiTargetInfo. */
+function apiTargetInfo(apiBaseUrl) {
+  var host = "";
+  try {
+    host = new URL(apiBaseUrl).hostname.toLowerCase();
+  } catch (_e) {
+    return { label: "未設定", host: "", kind: "none" };
+  }
+  if (PRODUCTION_API_HOSTS.indexOf(host) !== -1) {
+    return { label: "正式站", host: host, kind: "prod" };
+  }
+  if (host === "localhost" || host === "127.0.0.1") {
+    return { label: "本機", host: host, kind: "local" };
+  }
+  if (/\.vercel\.app$/.test(host)) return { label: "預覽", host: host, kind: "preview" };
+  return { label: "其他", host: host, kind: "other" };
+}
+
+function renderTarget() {
+  var el = $("apiTarget");
+  var info = apiTargetInfo(normalizeApiBase($("apiBaseUrl").value));
+  el.textContent =
+    info.kind === "none" ? "目前送到：未設定" : "目前送到：" + info.label + "（" + info.host + "）";
+  el.className = "target-pill " + info.kind;
+}
+
 function renderLast(last) {
   var line = $("lastResult");
+  var target = $("lastTarget");
   var at = $("lastAt");
   if (!last || !last.line) {
     line.textContent = "尚無擷取紀錄";
     line.className = "result-line";
+    target.textContent = "";
     at.textContent = "";
     return;
   }
   line.textContent = last.line;
   line.className = "result-line " + (last.ok ? "ok" : "err");
+  target.textContent = last.api_target
+    ? "送到：" + last.api_target + (last.api_host ? "（" + last.api_host + "）" : "")
+    : "";
   if (last.at) {
     try {
       at.textContent = "時間：" + new Date(last.at).toLocaleString();
@@ -91,8 +127,11 @@ async function load() {
   if (data.vercelProtectionBypass) {
     $("vercelProtectionBypass").value = data.vercelProtectionBypass;
   }
+  renderTarget();
   renderLast(data.lastResult || null);
 }
+
+$("apiBaseUrl").addEventListener("input", renderTarget);
 
 $("saveBtn").addEventListener("click", async function () {
   setMsg("儲存中…（權限視窗會在此時跳出，請按「允許」）", true);
@@ -138,7 +177,12 @@ $("saveBtn").addEventListener("click", async function () {
     await chrome.action.setPopup({ popup: "" });
   } catch (_e) {}
 
-  setMsg("已儲存。現在開商品頁，再按工具列圖示即可擷取。", true);
+  var savedTarget = apiTargetInfo(apiBaseUrl);
+  renderTarget();
+  setMsg(
+    "已儲存（送到：" + savedTarget.label + "）。現在開商品頁，再按工具列圖示即可擷取。",
+    true
+  );
 });
 
 $("openSettingsMode").addEventListener("click", async function () {

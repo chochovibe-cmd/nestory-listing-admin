@@ -625,6 +625,38 @@ check("pure: CAP-2.6/88 image fetch all-fail → variants keep rows, no image_id
   assert.ok(failWarnings.every((w) => /圖片代抓失敗/.test(w)));
 });
 
+// CAPTURE-TRUTH-A r6: run the real (dependency-free) server rule, not a mirror.
+const { keepOrInheritVariantCny } = await import("../src/lib/import/captureVariantPrice.ts");
+
+check("r6 C1: sourced SKU price equal to product stays explicit; unsourced collapses", () => {
+  assert.equal(keepOrInheritVariantCny(18.9, 18.9, "skuCore.price"), 18.9);
+  assert.equal(keepOrInheritVariantCny(79.8, 79.8, "dom.selected_sku"), 79.8);
+  assert.equal(keepOrInheritVariantCny(18.9, 18.9, null), null);
+  assert.equal(keepOrInheritVariantCny(113.9, 18.9, null), 113.9);
+  assert.equal(keepOrInheritVariantCny(null, 18.9, "skuCore.price"), null);
+  assert.equal(keepOrInheritVariantCny(18.9, null, null), 18.9);
+});
+
+check("r6 C1: 2026-10-11 live Pokémon payload keeps all 7 captured SKU prices", () => {
+  const fixture = JSON.parse(read("scripts/fixtures/capture-variant-equal-product.json"));
+  const stored = fixture.variants_flat.map((v) =>
+    keepOrInheritVariantCny(v.cny_price, fixture.product_cny, v.price_source ?? null)
+  );
+  assert.deepEqual(stored, fixture.expected_explicit_prices);
+  const legacy = fixture.legacy_unsourced_row;
+  assert.equal(keepOrInheritVariantCny(legacy.cny_price, fixture.product_cny, null), null);
+});
+
+check("r6 source: mapCaptureFields uses the shared C1 rule + records backend build", () => {
+  const src = read("src/lib/import/mapCaptureFields.ts");
+  assert.match(src, /import \{ keepOrInheritVariantCny \} from "@\/lib\/import\/captureVariantPrice"/);
+  assert.match(src, /cny = keepOrInheritVariantCny\(cny, product, ownPriceSource\)/);
+  assert.match(src, /ownPriceSource = cny != null \? asTrimmedString\(v\.price_source\) : null/);
+  assert.doesNotMatch(src, /if \(cny != null && product != null && Math\.abs\(cny - product\) < 0\.001\)/);
+  assert.match(src, /backend_sha: process\.env\.VERCEL_GIT_COMMIT_SHA \|\| null/);
+  assert.match(src, /backend_env: process\.env\.VERCEL_ENV \|\| null/);
+});
+
 // --- summary ---
 if (failures.length) {
   console.error(`\nverify-cap1 FAILED: ${failures.length} check(s)`);

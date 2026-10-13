@@ -45,6 +45,19 @@ export async function POST(
     );
   }
 
+  // PUBLISH-GUARD: the test site (mock mode) shares the production database, so it
+  // must never call Shopify or write the draft, whatever the product id looks like.
+  if (process.env.SHOPIFY_PUBLISH_MOCK !== "false") {
+    return Response.json(
+      {
+        ok: false,
+        mock: true,
+        error: "測試站（模擬模式）不會下架 Shopify 商品，草稿狀態也不會改變；請到正式站操作"
+      },
+      { status: 409 }
+    );
+  }
+
   const serviceSupabase = createServiceSupabaseClient();
   const { data: draft, error } = await serviceSupabase
     .from("product_drafts")
@@ -86,14 +99,11 @@ export async function POST(
     );
   }
 
-  const mockMode = process.env.SHOPIFY_PUBLISH_MOCK !== "false";
   if (productId === "mock-product-id") {
-    if (!mockMode) {
-      return Response.json(
-        { error: "mock-product-id cannot be sent to live Shopify lifecycle mutations" },
-        { status: 409 }
-      );
-    }
+    return Response.json(
+      { error: "mock-product-id cannot be sent to live Shopify lifecycle mutations" },
+      { status: 409 }
+    );
   } else if (!isRealShopifyProductId(productId)) {
     return Response.json({ error: "Invalid Shopify product ID" }, { status: 409 });
   } else {

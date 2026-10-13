@@ -63,7 +63,9 @@ const scripts = [
   "scripts/verify-shopify-sync-ux.mjs",
   "scripts/verify-websearch-copy-path.mjs",
   // IMAGE-INTEGRITY: unbind -> DB delete -> Storage; no UI path deletes Storage first.
-  "scripts/verify-image-integrity.mjs"
+  "scripts/verify-image-integrity.mjs",
+  // PUBLISH-GUARD: mock mode = dry run (zero writes) + pre-publish blockers.
+  "scripts/verify-publish-guard.mjs"
 ];
 
 for (const script of scripts) {

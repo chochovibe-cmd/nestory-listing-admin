@@ -12,6 +12,7 @@ import type {
   PublishBatchStatus,
   PublishMode
 } from "@/types/domain";
+import type { PublishBlockCode, PublishBlocker } from "@/lib/shopify/publishReadiness";
 
 /** Default gap between publishDraft calls (Shopify ~2 req/s). */
 export const DEFAULT_PUBLISH_ITEM_GAP_MS = 600;
@@ -48,7 +49,57 @@ export type PublishBatchItemResult = {
   adminUrl?: string | null;
   /** True when skipped because time budget (Q2-A). */
   timeBudget?: boolean;
+  /** PUBLISH-GUARD: set when pre-publish readiness blocked this draft (HTTP 409 semantics). */
+  code?: PublishBlockCode;
+  blockers?: PublishBlocker[];
+  /** Mock dry run only: what the live site would do differently. */
+  mockNotes?: string[];
 };
+
+/**
+ * PUBLISH-GUARD: mock mode is a dry run. runPublishBatch writes no
+ * publish_batches row, so this sentinel is NOT a real batch id — clients must
+ * never try to load or link it.
+ */
+export const MOCK_DRY_RUN_BATCH_ID = "mock-dry-run";
+
+/** Prefix every mock-mode message shows so a dry run never reads like a real publish. */
+export const MOCK_PUBLISH_PREFIX = "【模擬】";
+
+/** Shown after every mock result: the dry-run contract in one sentence. */
+export const MOCK_PUBLISH_NO_WRITE_NOTE = "沒有寫入 Shopify，草稿狀態沒有改變";
+
+/** Make sure a user-facing mock message starts with 【模擬】 (idempotent). */
+export function withMockPrefix(message: string): string {
+  const text = message.trim();
+  return text.startsWith(MOCK_PUBLISH_PREFIX) ? text : `${MOCK_PUBLISH_PREFIX}${text}`;
+}
+
+/**
+ * Client-side wording for any publish API response that carried mock:true.
+ * A message the server already prefixed with 【模擬】 is used verbatim; anything
+ * else (e.g. a 409 error text) gets the prefix, a lead-in and the no-write note,
+ * so a dry run can never read like a real publish.
+ */
+export function formatMockPublishResponseMessage(input: { message?: string | null; ok: boolean }): string {
+  const text = (input.message ?? "").trim();
+  if (text.startsWith(MOCK_PUBLISH_PREFIX)) return text;
+  const lead = input.ok ? "Shopify 發布前檢查通過" : "Shopify 發布前檢查未通過";
+  const body = !text ? lead : input.ok ? text : `${lead}：${text}`;
+  return `${MOCK_PUBLISH_PREFIX}${body}；${MOCK_PUBLISH_NO_WRITE_NOTE}`;
+}
+
+export function formatMockPublishBatchMessage(input: {
+  passed: number;
+  blocked: number;
+  skipped?: number;
+}): string {
+  const parts = [
+    `${MOCK_PUBLISH_PREFIX}${input.passed} 筆檢查通過、${input.blocked} 筆被擋下；${MOCK_PUBLISH_NO_WRITE_NOTE}`
+  ];
+  if ((input.skipped ?? 0) > 0) parts.push(`略過 ${input.skipped} 筆（時間不足）`);
+  return parts.join("；");
+}
 
 /**
  * Resolve inter-item gap from env PUBLISH_ITEM_GAP_MS (ms).

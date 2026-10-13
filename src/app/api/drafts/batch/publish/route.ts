@@ -1,6 +1,10 @@
 /**
  * D7-open: batch publish with rate limit + publish_batches ledger.
  * Auth: admin | reviewer (Q6 unchanged). Thin shell → runPublishBatch.
+ *
+ * PUBLISH-GUARD: mock mode answers { mock:true, batchId:"mock-dry-run", ... } and
+ * writes nothing. This route never accepts the variant-price confirmation flag:
+ * confirming costs is a single-card decision, batches only report the blockers.
  */
 import { NextRequest } from "next/server";
 import { canPublish } from "@/lib/auth/roles";
@@ -65,6 +69,7 @@ export async function POST(request: NextRequest) {
 
   return Response.json({
     ok: true,
+    mock: result.mock === true,
     batchId: result.batchId,
     batchStatus: result.batchStatus,
     succeeded: result.succeeded,
@@ -77,7 +82,10 @@ export async function POST(request: NextRequest) {
       mock: r.mock,
       productId: r.productId,
       adminUrl: r.adminUrl,
-      itemStatus: r.itemStatus
+      itemStatus: r.itemStatus,
+      code: r.code,
+      blockers: r.blockers,
+      mockNotes: r.mockNotes
     })),
     message: result.message,
     stoppedEarly: result.stoppedEarly,

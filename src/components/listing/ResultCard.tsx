@@ -113,6 +113,9 @@ import {
   type ExportPreviewRow
 } from "@/components/listing/ExportPreflightModal";
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
+import { PublishPriceConfirmModal } from "@/components/listing/PublishPriceConfirmModal";
+import type { PublishBlocker } from "@/lib/shopify/publishReadiness";
+import { formatMockPublishResponseMessage } from "@/lib/drafts/publishBatch";
 import {
   runExportPreflight,
   type ExportKind,
@@ -337,9 +340,17 @@ export function ResultCard({
   const [exportMarkLeave, setExportMarkLeave] = useState(true);
   const [exportBusy, setExportBusy] = useState(false);
   const [cardExportKind, setCardExportKind] = useState<ExportKind>("matrixify");
-  const [pendingApiResult, setPendingApiResult] = useState<{ ok: boolean; message: string } | null>(
-    null
-  );
+  const [pendingApiResult, setPendingApiResult] = useState<{
+    ok: boolean;
+    message: string;
+    /** PUBLISH-GUARD: the publish API answered mock:true (dry run on the test site). */
+    mock?: boolean;
+  } | null>(null);
+  /** PUBLISH-GUARD: publish answered 409 PUBLISH_NEEDS_PRICE_CONFIRM → ask before re-running. */
+  const [priceConfirm, setPriceConfirm] = useState<{
+    selection: Station3PublishSelection;
+    blockers: PublishBlocker[];
+  } | null>(null);
   const [approveSummaryBusy, setApproveSummaryBusy] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
@@ -1537,7 +1548,10 @@ export function ResultCard({
     });
   }
 
-  async function runStation3CardFlow(selection: Station3PublishSelection) {
+  async function runStation3CardFlow(
+    selection: Station3PublishSelection,
+    opts: { confirmVariantPrices?: boolean } = {}
+  ) {
     setStation3Open(false);
     setStation3Selection(selection);
     setStation3Busy(true);
@@ -1545,6 +1559,7 @@ export function ResultCard({
     setDiscardArm(null);
     let apiSucceeded: boolean | null = null;
     let apiMessage = "";
+    let apiMock = false;
     try {
       if (hasUncommittedCopy()) {
         // UX-L T62: busy flag covers progress; result toast
@@ -1562,17 +1577,40 @@ export function ResultCard({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             publishMode: selection.shopify,
-            confirmActive: selection.shopify === "active"
+            confirmActive: selection.shopify === "active",
+            ...(opts.confirmVariantPrices ? { confirmVariantPrices: true } : {})
           })
         });
         const payload = await publishResponse.json().catch(() => ({}));
+
+        // PUBLISH-GUARD: only confirmable blockers (bundle / unconfirmed price) get a
+        // confirm modal. Stop here: no CSV exports, no queue change. PUBLISH_BLOCKED
+        // (fake variants) falls through as a normal error toast.
+        if (
+          publishResponse.status === 409 &&
+          payload.code === "PUBLISH_NEEDS_PRICE_CONFIRM" &&
+          Array.isArray(payload.blockers)
+        ) {
+          setMessage("");
+          setStation3Selection(null);
+          setPendingApiResult(null);
+          setPriceConfirm({ selection, blockers: payload.blockers as PublishBlocker[] });
+          return;
+        }
+
+        apiMock = payload.mock === true;
         apiSucceeded = publishResponse.ok && payload.ok !== false;
         apiMessage = publishResponse.ok
           ? payload.message ?? "Shopify 完成"
           : payload.error ?? "發布失敗";
-        setPendingApiResult({ ok: Boolean(apiSucceeded), message: apiMessage });
+        setPendingApiResult({ ok: Boolean(apiSucceeded), message: apiMessage, mock: apiMock });
         if (!apiSucceeded) {
-          showToast(apiMessage, "error");
+          showToast(
+            apiMock
+              ? formatMockPublishResponseMessage({ message: apiMessage, ok: false })
+              : apiMessage,
+            "error"
+          );
         }
       }
 
@@ -1584,30 +1622,34 @@ export function ResultCard({
         const left = shouldLeaveQueue({
           selection,
           apiSucceeded,
-          csvSucceeded: null
+          csvSucceeded: null,
+          apiMock
         });
         const summary = formatStation3ResultMessage({
           selection,
           apiSucceeded,
           apiMessage,
           csvSucceeded: null,
-          leftQueue: left
+          leftQueue: left,
+          apiMock
         });
         setMessage("");
         showToast(
           summary,
-          apiSucceeded === false ? "error" : apiSucceeded ? "success" : "info"
+          apiSucceeded === false ? "error" : apiSucceeded ? (apiMock ? "info" : "success") : "info"
         );
         setStation3Selection(null);
         setPendingApiResult(null);
-        finishSuccessfulTransition(left);
+        // Dry run: nothing changed server-side, so no leave/refresh as if it had.
+        if (!apiMock) finishSuccessfulTransition(left);
         return;
       }
 
       const markLeave = shouldLeaveQueue({
         selection,
         apiSucceeded: selection.shopify === "none" ? null : apiSucceeded,
-        csvSucceeded: true
+        csvSucceeded: true,
+        apiMock
       });
       setExportMarkLeave(markLeave);
       void openNextCardExport(csvKinds, markLeave);
@@ -1964,7 +2006,8 @@ export function ResultCard({
         apiMessage: api?.message,
         csvSucceeded: true,
         csvNote: "CSV 已下載",
-        leftQueue: exportMarkLeave
+        leftQueue: exportMarkLeave,
+        apiMock: api?.mock === true
       });
       setMessage("");
       showToast(summary, "success");
@@ -3205,6 +3248,21 @@ export function ResultCard({
         }}
         onConfirm={(sel) => void runStation3CardFlow(sel)}
         open={station3Open}
+      />
+
+      <PublishPriceConfirmModal
+        blockers={priceConfirm?.blockers ?? []}
+        busy={station3Busy}
+        onCancel={() => {
+          if (!station3Busy) setPriceConfirm(null);
+        }}
+        onConfirm={() => {
+          const pending = priceConfirm;
+          if (!pending) return;
+          setPriceConfirm(null);
+          void runStation3CardFlow(pending.selection, { confirmVariantPrices: true });
+        }}
+        open={priceConfirm !== null}
       />
 
       <ExportPreflightModal

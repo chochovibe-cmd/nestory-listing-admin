@@ -23,6 +23,7 @@ import {
   type OptimisticHideMap
 } from "@/lib/drafts/optimisticArchiveHide";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
+import { formatMockPublishResponseMessage } from "@/lib/drafts/publishBatch";
 import {
   countStations,
   DEFAULT_RESULTS_FILTER,
@@ -232,14 +233,23 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
     });
     const payload = await response.json();
     setBusy(false);
-    setMessage(
-      response.ok
-        ? payload.message ??
-            `成功 ${payload.succeeded} 筆／失敗 ${payload.failed} 筆${
-              payload.skipped ? `／略過 ${payload.skipped}` : ""
-            }`
-        : [payload.error, payload.hint].filter(Boolean).join(" — ") || "批次發布失敗"
-    );
+    const resultText = response.ok
+      ? payload.message ??
+        `成功 ${payload.succeeded} 筆／失敗 ${payload.failed} 筆${
+          payload.skipped ? `／略過 ${payload.skipped}` : ""
+        }`
+      : [payload.error, payload.hint].filter(Boolean).join(" — ") || "批次發布失敗";
+    if (payload.mock === true) {
+      // PUBLISH-GUARD dry run: say so, and keep selection/list as they were.
+      setMessage(
+        formatMockPublishResponseMessage({
+          message: resultText,
+          ok: response.ok && !payload.failed
+        })
+      );
+      return;
+    }
+    setMessage(resultText);
     setSelectedIds(new Set());
     router.refresh();
   }

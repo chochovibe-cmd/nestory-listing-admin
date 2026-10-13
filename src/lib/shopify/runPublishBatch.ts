@@ -7,12 +7,17 @@
  * - Optional MAKE_WEBHOOK_URL publish_batch_submitted; fail never 500
  * - D6-#2: after terminal batch update → safeTryNotifyPublishBatchIfComplete
  *   (Q3b claim; notify failure never changes run ok)
+ * - PUBLISH-GUARD: mock mode is a dry run. No publish_batches / items rows, no
+ *   current_publish_batch_id, no Make webhook, no batch notifications; each draft
+ *   only goes through publishDraft's read-only checks (see runPublishBatchDryRun).
  */
 
 import {
   MIGRATION_027_HINT,
+  MOCK_DRY_RUN_BATCH_ID,
   TIME_BUDGET_SKIP_REASON,
   buildPublishSnapshot,
+  formatMockPublishBatchMessage,
   formatPublishBatchOperatorMessage,
   isMissingPublishBatchesError,
   processTagFromImageIntents,
@@ -48,15 +53,29 @@ export type RunPublishBatchInput = {
   publishOne?: (
     client: PublishBatchServiceClient,
     id: string,
-    mode: PublishMode
+    mode: PublishMode,
+    opts?: PublishOneOptions
   ) => Promise<PublishDraftResult>;
   /** Skip Make webhook (tests). */
   skipMakeWebhook?: boolean;
+  /** Inject for tests; default = SHOPIFY_PUBLISH_MOCK is anything but exactly "false". */
+  mockMode?: boolean;
+  /** Single-card publish only: the operator confirmed the variant costs. */
+  confirmVariantPrices?: boolean;
+};
+
+/** Per-draft options forwarded to publishDraft (same shape as its deps). */
+export type PublishOneOptions = {
+  confirmVariantPrices?: boolean;
+  confirmedBy?: string | null;
+  mockMode?: boolean;
 };
 
 export type RunPublishBatchResult =
   | {
       ok: true;
+      /** true = dry run: batchId is the MOCK_DRY_RUN_BATCH_ID sentinel, nothing was written. */
+      mock?: boolean;
       batchId: string;
       batchStatus: PublishBatchStatus;
       succeeded: number;
@@ -89,6 +108,149 @@ function draftTitle(row: {
   );
 }
 
+/**
+ * Mock-mode batch: read-only. Never touches publish_batches / publish_batch_items /
+ * product_drafts, never sends Make, never calls Shopify. publishDraft itself runs
+ * in dry-run mode (mockMode forwarded) and returns the checks + payload only.
+ */
+async function runPublishBatchDryRun(
+  input: RunPublishBatchInput,
+  uniqueIds: string[]
+): Promise<RunPublishBatchResult> {
+  const {
+    serviceSupabase,
+    publishMode,
+    createdBy,
+    now = () => Date.now(),
+    deadlineMs = PUBLISH_BATCH_DEADLINE_MS,
+    minRemainingMs = PUBLISH_BATCH_MIN_REMAINING_MS,
+    publishOne = publishDraft,
+    confirmVariantPrices = false
+  } = input;
+  const startedAt = now();
+
+  const { data: drafts, error: draftError } = await serviceSupabase
+    .from("product_drafts")
+    .select("id, title_zh, taobao_title, original_title")
+    .in("id", uniqueIds);
+  if (draftError) {
+    return { ok: false, error: draftError.message, status: 500 };
+  }
+  const draftById = new Map((drafts ?? []).map((d) => [d.id as string, d]));
+
+  const results: PublishBatchItemResult[] = [];
+  let passedCount = 0;
+  let blockedCount = 0;
+  let skippedCount = 0;
+  let stoppedEarly = false;
+
+  for (const id of uniqueIds) {
+    const row = draftById.get(id) ?? null;
+    const title = row ? draftTitle(row) : "找不到草稿";
+
+    // No Shopify calls in a dry run, so the rate-limit gap is not needed; the
+    // time budget still applies because each check reads several tables.
+    if (shouldStopForTimeBudget(startedAt, now(), { deadlineMs, minRemainingMs })) {
+      stoppedEarly = true;
+      results.push({
+        draftId: id,
+        title,
+        itemStatus: "skipped",
+        ok: false,
+        error: TIME_BUDGET_SKIP_REASON,
+        mock: true,
+        timeBudget: true
+      });
+      skippedCount += 1;
+      continue;
+    }
+
+    if (!row) {
+      results.push({
+        draftId: id,
+        title,
+        itemStatus: "failed",
+        ok: false,
+        error: "草稿不存在或無權限",
+        mock: true
+      });
+      blockedCount += 1;
+      continue;
+    }
+
+    let pubResult: PublishDraftResult;
+    try {
+      pubResult = await publishOne(serviceSupabase, id, publishMode, {
+        confirmVariantPrices,
+        confirmedBy: createdBy,
+        mockMode: true
+      });
+    } catch (e) {
+      results.push({
+        draftId: id,
+        title,
+        itemStatus: "failed",
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+        mock: true
+      });
+      blockedCount += 1;
+      continue;
+    }
+
+    if (pubResult.ok) {
+      // Whatever publishOne returned, a dry run never reports a Shopify product.
+      results.push({
+        draftId: id,
+        title,
+        itemStatus: "done",
+        ok: true,
+        mock: true,
+        productId: null,
+        adminUrl: null,
+        mockNotes: "mockNotes" in pubResult ? pubResult.mockNotes : undefined
+      });
+      passedCount += 1;
+    } else {
+      results.push({
+        draftId: id,
+        title,
+        itemStatus: "failed",
+        ok: false,
+        error: pubResult.error || "發布前檢查未通過",
+        mock: true,
+        ...(pubResult.code ? { code: pubResult.code } : {}),
+        ...(pubResult.blockers ? { blockers: pubResult.blockers } : {})
+      });
+      blockedCount += 1;
+    }
+  }
+
+  return {
+    ok: true,
+    mock: true,
+    batchId: MOCK_DRY_RUN_BATCH_ID,
+    batchStatus: summarizePublishBatchStatus({
+      total: uniqueIds.length,
+      done: passedCount,
+      failed: blockedCount,
+      skipped: skippedCount
+    }),
+    succeeded: passedCount,
+    failed: blockedCount,
+    skipped: skippedCount,
+    results,
+    message: formatMockPublishBatchMessage({
+      passed: passedCount,
+      blocked: blockedCount,
+      skipped: skippedCount
+    }),
+    stoppedEarly,
+    elapsedMs: now() - startedAt,
+    makeWebhook: "skipped"
+  };
+}
+
 export async function runPublishBatch(
   input: RunPublishBatchInput
 ): Promise<RunPublishBatchResult> {
@@ -100,8 +262,10 @@ export async function runPublishBatch(
     deadlineMs = PUBLISH_BATCH_DEADLINE_MS,
     minRemainingMs = PUBLISH_BATCH_MIN_REMAINING_MS,
     publishOne = publishDraft,
-    skipMakeWebhook = false
+    skipMakeWebhook = false,
+    confirmVariantPrices = false
   } = input;
+  const mockMode = input.mockMode ?? process.env.SHOPIFY_PUBLISH_MOCK !== "false";
 
   const gapMs = input.gapMs ?? resolvePublishItemGapMs();
   const uniqueIds = [...new Set(input.draftIds.filter((id) => typeof id === "string" && id.length > 0))];
@@ -115,6 +279,10 @@ export async function runPublishBatch(
   const liveTestGuardError = checkLiveTestGuard({ draftIds: uniqueIds, publishMode });
   if (liveTestGuardError) {
     return { ok: false, error: liveTestGuardError, status: 403 };
+  }
+
+  if (mockMode) {
+    return runPublishBatchDryRun(input, uniqueIds);
   }
 
   const startedAt = now();
@@ -353,7 +521,12 @@ export async function runPublishBatch(
 
     let pubResult: PublishDraftResult;
     try {
-      pubResult = await publishOne(serviceSupabase, item.draftId, publishMode);
+      pubResult = await publishOne(serviceSupabase, item.draftId, publishMode, {
+        confirmVariantPrices,
+        confirmedBy: createdBy,
+        // The batch already decided live; publishDraft must not re-read the env.
+        mockMode: false
+      });
     } catch (e) {
       const err = e instanceof Error ? e.message : String(e);
       await serviceSupabase
@@ -385,7 +558,7 @@ export async function runPublishBatch(
         .update({
           item_status: "done",
           error_message: null,
-          shopify_product_id: productId ?? (mock ? "mock-product-id" : null),
+          shopify_product_id: productId ?? null,
           shopify_admin_url: adminUrl ?? null,
           completed_at: new Date(now()).toISOString()
         })
@@ -397,7 +570,7 @@ export async function runPublishBatch(
         itemStatus: "done",
         ok: true,
         mock: mock || undefined,
-        productId: productId ?? (mock ? "mock-product-id" : null),
+        productId: productId ?? null,
         adminUrl: adminUrl ?? null
       });
       doneCount += 1;
@@ -417,7 +590,10 @@ export async function runPublishBatch(
         title: item.title,
         itemStatus: "failed",
         ok: false,
-        error: err
+        error: err,
+        // PUBLISH-GUARD: readiness blockers travel with the item (HTTP 409 semantics).
+        ...(pubResult.code ? { code: pubResult.code } : {}),
+        ...(pubResult.blockers ? { blockers: pubResult.blockers } : {})
       });
       failedCount += 1;
     }

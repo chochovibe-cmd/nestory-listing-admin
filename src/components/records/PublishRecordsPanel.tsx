@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { isAdmin } from "@/lib/auth/roles";
 import {
   MIGRATION_027_HINT,
+  formatMockPublishResponseMessage,
   publishBatchTitle
 } from "@/lib/drafts/publishBatch";
 import {
@@ -377,7 +378,21 @@ export function PublishRecordsPanel() {
       if (!response.ok) {
         // UX-I T55: operation feedback → toast
         const line = [payload.error ?? "重送失敗", payload.hint].filter(Boolean).join(" — ");
-        showToast(line, "error");
+        showToast(
+          payload.mock === true
+            ? formatMockPublishResponseMessage({ message: line, ok: false })
+            : line,
+          "error"
+        );
+        setNotice(null);
+        return;
+      }
+      if (payload.mock === true) {
+        // PUBLISH-GUARD dry run: no batch was created, so nothing to reload or clear.
+        showToast(
+          formatMockPublishResponseMessage({ message: payload.message, ok: !payload.failed }),
+          payload.failed ? "warn" : "info"
+        );
         setNotice(null);
         return;
       }

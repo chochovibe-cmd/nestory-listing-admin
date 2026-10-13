@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useShopifyPublishMock } from "@/lib/shopify/clientPublishMock";
 import {
   countSelectedActions,
   DEFAULT_STATION3_SELECTION,
@@ -35,6 +36,8 @@ export function Station3PublishModal({
   const primaryRef = useRef<HTMLButtonElement>(null);
   const [selection, setSelection] = useState<Station3PublishSelection>(DEFAULT_STATION3_SELECTION);
   const [singleWarn, setSingleWarn] = useState(false);
+  // PUBLISH-GUARD: true on the test site (mock mode) → publishing is a dry run.
+  const publishMock = useShopifyPublishMock() === true;
 
   useEffect(() => {
     if (!open) return;
@@ -113,6 +116,12 @@ export function Station3PublishModal({
           <p className="export-pf-overview">
             已選 <strong>{draftCount}</strong> 件 · 可同時勾多種格式
           </p>
+
+          {publishMock ? (
+            <p className="station3-single-warn" role="status">
+              <strong>⚠ 測試站・模擬模式：只做發布前檢查，不會建立 Shopify 商品，也不會改變草稿狀態</strong>
+            </p>
+          ) : null}
 
           <fieldset className="station3-fieldset" disabled={busy}>
             <legend className="station3-legend">Shopify（二選一）</legend>
@@ -196,7 +205,7 @@ export function Station3PublishModal({
               </button>
             ) : null}
             <button
-              className={`primary approve-sum-btn${selection.shopify === "active" ? " danger" : ""}`}
+              className={`primary approve-sum-btn${selection.shopify === "active" && !publishMock ? " danger" : ""}`}
               disabled={!canSubmit}
               onClick={handlePrimary}
               ref={primaryRef}
@@ -206,9 +215,11 @@ export function Station3PublishModal({
                 ? "處理中…"
                 : singleWarn
                   ? "仍只做這項"
-                  : selection.shopify === "active"
-                    ? "確認上架／匯出"
-                    : "確認執行"}
+                  : publishMock && selection.shopify !== "none"
+                    ? "模擬發布（只檢查）"
+                    : selection.shopify === "active"
+                      ? "確認上架／匯出"
+                      : "確認執行"}
             </button>
           </div>
         </div>

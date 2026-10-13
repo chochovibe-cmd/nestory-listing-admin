@@ -247,6 +247,13 @@ export function ShopifySyncControls({
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const error = typeof payload.error === "string" ? payload.error : "Shopify 操作失敗";
+        if (payload.mock === true) {
+          // Test site (mock mode): refused before any Shopify call or DB write, so
+          // the sync status stays exactly as it was.
+          setModal(null);
+          showToast(error, "warn");
+          return;
+        }
         const nextStatus: ShopifySyncStatus =
           payload.code === "manual_reconciliation_required" ? "partial" : "error";
         onStatusChange(nextStatus, error);

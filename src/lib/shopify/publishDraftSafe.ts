@@ -26,8 +26,10 @@ import {
 import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import {
   findDuplicateProductVariantRows,
+  planResumeVariantSync,
   toBulkVariantInput,
-  type MultiVariantPublishPlan
+  type MultiVariantPublishPlan,
+  type ResumeRemoteVariant
 } from "@/lib/variants/shopifyVariants";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductVariantRow, PublishMode } from "@/types/domain";
@@ -605,13 +607,18 @@ export async function publishDraft(
   let createResult: any = null;
   let productId: string;
   let defaultVariantId: string | undefined;
+  // PUBLISH-RETRY: variants already on the resumed Shopify DRAFT (null on a fresh create).
+  let resumeRemoteVariants: ResumeRemoteVariant[] | null = null;
 
   if (resumeExistingDraftId) {
     const resumeQuery = `
       query ResumeShopifyDraftVariant($id: ID!) {
         product(id: $id) {
           id status
-          variants(first: 1) { nodes { id } }
+          variants(first: 100) {
+            pageInfo { hasNextPage }
+            nodes { id title sku selectedOptions { name value } }
+          }
         }
       }
     `;
@@ -637,8 +644,30 @@ export async function publishDraft(
       await markDraftFailed(serviceSupabase, id, message, resumeExistingDraftId);
       return { ok: false, status: 409, error: message };
     }
+    const remoteVariantConnection = remoteProduct?.variants;
+    if (remoteVariantConnection?.pageInfo?.hasNextPage === true) {
+      const message =
+        "Shopify 草稿上的款式超過 100 個，無法安全對帳，已停止重試（沒有修改任何款式）。請到 Shopify 後台確認款式後再處理。";
+      await markDraftFailed(serviceSupabase, id, message, resumeExistingDraftId);
+      return { ok: false, status: 409, error: message };
+    }
+    if (!Array.isArray(remoteVariantConnection?.nodes)) {
+      const message = "Shopify 草稿的款式清單無法讀取，已停止重試（沒有修改任何款式）。";
+      await markDraftFailed(serviceSupabase, id, message, resumeExistingDraftId);
+      return { ok: false, status: 409, error: message };
+    }
     productId = resumeExistingDraftId;
-    defaultVariantId = remoteProduct?.variants?.nodes?.[0]?.id as string | undefined;
+    resumeRemoteVariants = (remoteVariantConnection.nodes as any[]).map((node) => ({
+      id: String(node?.id),
+      title: typeof node?.title === "string" ? node.title : null,
+      sku: typeof node?.sku === "string" ? node.sku : null,
+      selectedOptions: Array.isArray(node?.selectedOptions)
+        ? (node.selectedOptions as any[]).map((option) => ({
+            name: String(option?.name ?? ""),
+            value: String(option?.value ?? "")
+          }))
+        : []
+    }));
     createResult = { recoveredExistingDraft: true, productId };
   } else {
     let createResponse: Response;
@@ -709,12 +738,45 @@ export async function publishDraft(
   };
 
   let priceSyncWarning: string | null = null;
+  const resumeWarnings: string[] = [];
+  const RESUME_INVENTORY_WARNING = "重試沿用 Shopify 草稿上既有的庫存數量，請到 Shopify 後台確認庫存。";
   const variantPlan = payload.variantPlan as ({ mode: string } & Partial<MultiVariantPublishPlan>) | undefined;
   const isMulti = variantPlan?.mode === "multi" && variantPlan.initial && variantPlan.all;
 
   if (isMulti) {
     const multi = variantPlan as MultiVariantPublishPlan;
-    const needsLocation = multi.all.some(
+    // PUBLISH-RETRY: on resume the variants may already exist on Shopify, so only
+    // the missing ones are created and existing ones never get a quantity adjustment.
+    const resumePlan = resumeRemoteVariants ? planResumeVariantSync(multi.all, resumeRemoteVariants) : null;
+    if (resumePlan) {
+      if (resumePlan.extraRemote.length > 0) {
+        const titles = resumePlan.extraRemote
+          .map(
+            (variant) =>
+              variant.title?.trim() ||
+              variant.selectedOptions.map((option) => option.value).join("／") ||
+              variant.id
+          )
+          .join("、");
+        return failAfterCreate(
+          `Shopify 草稿上有 Nestory 沒有的款式：${titles}。為避免誤刪，請到 Shopify 後台刪除這些款式（或刪除整個草稿）後再重試。`,
+          { productId, extraRemoteVariantIds: resumePlan.extraRemote.map((variant) => variant.id) }
+        );
+      }
+      if (resumePlan.matched.length === 0) {
+        return failAfterCreate("Shopify 草稿上沒有任何款式可供對帳，請到 Shopify 後台確認商品後再重試。", {
+          productId
+        });
+      }
+      if (
+        resumePlan.matched.some(
+          ({ seed }) => seed.inventoryPolicy === "DENY" && Number.isInteger(seed.inventoryQuantity)
+        )
+      ) {
+        resumeWarnings.push(RESUME_INVENTORY_WARNING);
+      }
+    }
+    const needsLocation = (resumePlan ? resumePlan.missing : multi.all).some(
       (seed) => seed.inventoryPolicy === "DENY" && Number.isInteger(seed.inventoryQuantity)
     );
     const inventoryLocationId = needsLocation ? await getShopifyInventoryLocationId(caller) : null;
@@ -724,7 +786,7 @@ export async function publishDraft(
         null
       );
     }
-    if (!defaultVariantId) {
+    if (!resumePlan && !defaultVariantId) {
       return failAfterCreate("商品已建立但 Shopify 未回傳初始款式 ID，多款式價格無法同步。", createResult);
     }
 
@@ -748,28 +810,38 @@ export async function publishDraft(
     try {
       const { response: updateResponse, result: updateResult } = await caller(updateMutation, {
         productId,
-        variants: [
-          toBulkVariantInput(multi.initial, {
-            includeOptionValues: false,
-            locationId: inventoryLocationId,
-            inventoryMode: "update",
-            variantId: defaultVariantId
-          })
-        ]
+        variants: resumePlan
+          ? resumePlan.matched.map(({ seed, variantId }) =>
+              toBulkVariantInput(seed, {
+                includeOptionValues: false,
+                locationId: null,
+                inventoryMode: "update",
+                variantId
+              })
+            )
+          : [
+              toBulkVariantInput(multi.initial, {
+                includeOptionValues: false,
+                locationId: inventoryLocationId,
+                inventoryMode: "update",
+                variantId: defaultVariantId
+              })
+            ]
       });
       const updateErrors = updateResult?.data?.productVariantsBulkUpdate?.userErrors ?? updateResult?.errors;
       if (!updateResponse.ok || (Array.isArray(updateErrors) && updateErrors.length > 0)) {
         return failAfterCreate(
-          `商品已建立但初始款式價格同步失敗：${stringifyError(updateErrors?.length ? updateErrors : updateResult)}`,
+          `商品已建立但${resumePlan ? "既有" : "初始"}款式價格同步失敗：${stringifyError(updateErrors?.length ? updateErrors : updateResult)}`,
           updateResult
         );
       }
 
-      if (multi.additional.length > 0) {
+      const seedsToCreate = resumePlan ? resumePlan.missing : multi.additional;
+      if (seedsToCreate.length > 0) {
         const { response: bulkCreateResponse, result: bulkCreateResult } = await caller(bulkCreateMutation, {
           productId,
           strategy: "DEFAULT",
-          variants: multi.additional.map((seed) =>
+          variants: seedsToCreate.map((seed) =>
             toBulkVariantInput(seed, {
               includeOptionValues: true,
               locationId: inventoryLocationId,
@@ -780,7 +852,7 @@ export async function publishDraft(
         const bulkErrors = bulkCreateResult?.data?.productVariantsBulkCreate?.userErrors ?? bulkCreateResult?.errors;
         if (!bulkCreateResponse.ok || (Array.isArray(bulkErrors) && bulkErrors.length > 0)) {
           return failAfterCreate(
-            `商品已建立且第一個款式已更新，但其餘款式 productVariantsBulkCreate 失敗：${stringifyError(
+            `商品已建立且${resumePlan ? "既有" : "第一個"}款式已更新，但${resumePlan ? "缺少" : "其餘"}款式 productVariantsBulkCreate 失敗：${stringifyError(
               bulkErrors?.length ? bulkErrors : bulkCreateResult
             )}`,
             bulkCreateResult
@@ -790,7 +862,7 @@ export async function publishDraft(
     } catch (variantError) {
       return failAfterCreate(`商品已建立但多款式同步失敗：${stringifyError(variantError)}`, null);
     }
-  } else if (defaultVariantId) {
+  } else if (defaultVariantId || resumeRemoteVariants) {
     const variantMutation = `
       mutation ProductVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
         productVariantsBulkUpdate(productId: $productId, variants: $variants) {
@@ -808,10 +880,44 @@ export async function publishDraft(
       inventoryPolicy: "DENY" | "CONTINUE";
     };
     const hasFiniteInventory = seed.inventoryPolicy === "DENY" && Number.isInteger(seed.inventoryQuantity);
-    const inventoryLocationId = hasFiniteInventory ? await getShopifyInventoryLocationId(caller) : null;
+
+    // PUBLISH-RETRY: on resume the single variant already exists on Shopify and its
+    // quantity may already be applied, so it is updated without quantityAdjustments.
+    if (resumeRemoteVariants) {
+      if (resumeRemoteVariants.length > 1) {
+        return failAfterCreate(
+          `Shopify 草稿上有 ${resumeRemoteVariants.length} 個款式，但 Nestory 目前是單一款式商品。為避免誤刪，請到 Shopify 後台刪除多餘款式（或刪除整個草稿）後再重試。`,
+          { productId, remoteVariantIds: resumeRemoteVariants.map((variant) => variant.id) }
+        );
+      }
+      const singlePlan = planResumeVariantSync(
+        [
+          {
+            optionValues: [],
+            price: seed.price,
+            compareAtPrice: seed.compareAtPrice ?? null,
+            cost: seed.cost,
+            sku: seed.sku ?? null,
+            inventoryQuantity: seed.inventoryQuantity,
+            inventoryPolicy: seed.inventoryPolicy,
+            imageId: null
+          }
+        ],
+        resumeRemoteVariants
+      );
+      if (singlePlan.matched.length === 0) {
+        return failAfterCreate("Shopify 草稿上找不到可更新的款式，請到 Shopify 後台確認商品後再重試。", {
+          productId
+        });
+      }
+      defaultVariantId = singlePlan.matched[0].variantId;
+      if (hasFiniteInventory) resumeWarnings.push(RESUME_INVENTORY_WARNING);
+    }
+    const writesInventory = hasFiniteInventory && !resumeRemoteVariants;
+    const inventoryLocationId = writesInventory ? await getShopifyInventoryLocationId(caller) : null;
 
     try {
-      if (hasFiniteInventory && !inventoryLocationId) {
+      if (writesInventory && !inventoryLocationId) {
         throw new Error(
           "有限庫存發布需要 Shopify location ID；請設定 SHOPIFY_LOCATION_ID，或確認 Shopify Admin API 可讀取 locations。"
         );
@@ -829,7 +935,7 @@ export async function publishDraft(
               cost: String(seed.cost),
               tracked: hasFiniteInventory
             },
-            ...(hasFiniteInventory && inventoryLocationId
+            ...(writesInventory && inventoryLocationId
               ? {
                   quantityAdjustments: [
                     {
@@ -936,14 +1042,19 @@ export async function publishDraft(
     }
   }
 
-  const publishWarnings = [...(priceSyncWarning ? [priceSyncWarning] : []), ...videoWarnings];
+  const publishWarnings = [...(priceSyncWarning ? [priceSyncWarning] : []), ...resumeWarnings, ...videoWarnings];
   const finalStatus = publishMode === "active" ? "active_published" : "draft_created";
   await insertPublishJob(
     serviceSupabase,
     publishJobBase,
     finalStatus,
     publishWarnings.length
-      ? { ...createResult, warning: priceSyncWarning ?? undefined, videoWarnings: videoWarnings.length ? videoWarnings : undefined }
+      ? {
+          ...createResult,
+          warning: priceSyncWarning ?? undefined,
+          resumeWarnings: resumeWarnings.length ? resumeWarnings : undefined,
+          videoWarnings: videoWarnings.length ? videoWarnings : undefined
+        }
       : createResult
   );
 

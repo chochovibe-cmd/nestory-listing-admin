@@ -228,6 +228,8 @@ export function DraftResultsPanel({
   const [pendingApiResult, setPendingApiResult] = useState<{
     ok: boolean;
     message: string;
+    /** PUBLISH-GUARD: batch API answered mock:true (dry run on the test site). */
+    mock?: boolean;
   } | null>(null);
   /** UX-Q T70 / BX1 延伸: sequential copy or image review (snapshot at open). */
   const [seqReviewOpen, setSeqReviewOpen] = useState(false);
@@ -1033,6 +1035,7 @@ export function DraftResultsPanel({
 
     let apiSucceeded: boolean | null = null;
     let apiMessage = "";
+    let apiMock = false;
 
     try {
       if (selection.shopify !== "none") {
@@ -1049,6 +1052,7 @@ export function DraftResultsPanel({
           })
         });
         const payload = await response.json().catch(() => ({}));
+        apiMock = payload.mock === true;
         const allOk =
           response.ok &&
           (payload.failed == null || payload.failed === 0) &&
@@ -1059,7 +1063,7 @@ export function DraftResultsPanel({
           ? payload.message ??
             `成功 ${payload.succeeded ?? 0}／失敗 ${payload.failed ?? 0}`
           : [payload.error, payload.hint].filter(Boolean).join(" — ") || "發布失敗";
-        setPendingApiResult({ ok: apiSucceeded, message: apiMessage });
+        setPendingApiResult({ ok: apiSucceeded, message: apiMessage, mock: apiMock });
       }
 
       const csvKinds: ExportKind[] = [];
@@ -1070,7 +1074,8 @@ export function DraftResultsPanel({
         const left = shouldLeaveQueue({
           selection,
           apiSucceeded,
-          csvSucceeded: null
+          csvSucceeded: null,
+          apiMock
         });
         setMessage(
           formatStation3ResultMessage({
@@ -1078,15 +1083,17 @@ export function DraftResultsPanel({
             apiSucceeded,
             apiMessage,
             csvSucceeded: null,
-            leftQueue: left
+            leftQueue: left,
+            apiMock
           })
         );
-        setSelectedIds(new Set());
+        // Dry run changed nothing: keep the selection and skip the success refresh.
+        if (!apiMock) setSelectedIds(new Set());
         setStation3Selection(null);
         setPendingApiResult(null);
         // T128: leave-queue → fade out before refresh
         if (left) scheduleLeaveThenRefresh(draftIds);
-        else scheduleRouterRefresh(() => router.refresh());
+        else if (!apiMock) scheduleRouterRefresh(() => router.refresh());
         return;
       }
 
@@ -1094,7 +1101,8 @@ export function DraftResultsPanel({
       const markLeaveQueue = shouldLeaveQueue({
         selection,
         apiSucceeded: selection.shopify === "none" ? null : apiSucceeded,
-        csvSucceeded: true
+        csvSucceeded: true,
+        apiMock
       });
       void openNextExportPreflight(csvKinds, draftIds, markLeaveQueue);
     } catch {
@@ -1138,17 +1146,20 @@ export function DraftResultsPanel({
       matrixify: kind === "matrixify",
       showmore: kind === "showmore"
     };
+    const apiMock = api?.mock === true;
     const left = shouldLeaveQueue({
       selection: sel,
       apiSucceeded: api ? api.ok : sel.shopify === "none" ? null : null,
-      csvSucceeded: true
+      csvSucceeded: true,
+      apiMock
     });
     // Fix: when selection had API, use api result
     const leftFinal = selection
       ? shouldLeaveQueue({
           selection,
           apiSucceeded: selection.shopify === "none" ? null : api?.ok ?? false,
-          csvSucceeded: true
+          csvSucceeded: true,
+          apiMock
         })
       : left;
 
@@ -1162,7 +1173,8 @@ export function DraftResultsPanel({
           kind === "showmore" || selection?.showmore
             ? "CSV 已下載（多款式已展開；庫存／重量為預設）"
             : "CSV 已下載",
-        leftQueue: leftFinal
+        leftQueue: leftFinal,
+        apiMock
       })
     );
     setExportPreflight(null);

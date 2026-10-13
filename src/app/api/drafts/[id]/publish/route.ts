@@ -1,6 +1,10 @@
 /**
  * D7-open Q4-A: single-draft publish also creates a 1-item publish_batches row
  * via the same runPublishBatch path (rate ledger + records).
+ *
+ * PUBLISH-GUARD: in mock mode this is a dry run (no batch row, no DB writes, no
+ * Shopify). Readiness blockers answer HTTP 409 { ok:false, error, code, blockers };
+ * body.confirmVariantPrices === true is the operator's "I checked the costs" tick.
  */
 import { NextRequest } from "next/server";
 import { canPublish } from "@/lib/auth/roles";
@@ -45,7 +49,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     serviceSupabase,
     draftIds: [id],
     publishMode,
-    createdBy: user.id
+    createdBy: user.id,
+    confirmVariantPrices: body.confirmVariantPrices === true
   });
 
   if (!result.ok) {
@@ -63,6 +68,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!first?.ok) {
     return Response.json(
       {
+        // Readiness blockers (PUBLISH_NEEDS_PRICE_CONFIRM / PUBLISH_BLOCKED) carry
+        // ok:false + code + blockers so the card can open the confirm modal.
+        ...(first?.code ? { ok: false, code: first.code, blockers: first.blockers ?? [] } : {}),
+        ...(result.mock === true ? { mock: true } : {}),
         error: first?.error ?? "發布失敗",
         batchId: result.batchId,
         batchStatus: result.batchStatus,
@@ -80,6 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     mock: first.mock === true,
     productId: first.productId,
     adminUrl: first.adminUrl ?? null,
-    message: result.message
+    message: result.message,
+    ...(first.mock === true ? { mockNotes: first.mockNotes ?? [] } : {})
   });
 }

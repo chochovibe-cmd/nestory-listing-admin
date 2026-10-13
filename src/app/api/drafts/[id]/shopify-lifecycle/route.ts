@@ -60,6 +60,20 @@ export async function POST(
     );
   }
 
+  // PUBLISH-GUARD: the test site (mock mode) shares the production database, so it
+  // must never call Shopify or write the draft, whatever the product id looks like.
+  if (process.env.SHOPIFY_PUBLISH_MOCK !== "false") {
+    const actionLabel = action === "archive" ? "封存" : action === "restore" ? "恢復" : "刪除";
+    return Response.json(
+      {
+        ok: false,
+        mock: true,
+        error: `測試站（模擬模式）不會${actionLabel} Shopify 商品，草稿狀態也不會改變；請到正式站操作`
+      },
+      { status: 409 }
+    );
+  }
+
   const guardError = checkLiveTestGuard({ draftIds: [id], operation: action });
   if (guardError) return Response.json({ error: guardError }, { status: 403 });
 
@@ -79,9 +93,7 @@ export async function POST(
   }
 
   const productId = draft.shopify_product_id as string | null;
-  const mockMode = process.env.SHOPIFY_PUBLISH_MOCK !== "false";
-  const mockProduct = productId === "mock-product-id" && mockMode;
-  if (!mockProduct && !isRealShopifyProductId(productId)) {
+  if (!isRealShopifyProductId(productId)) {
     return Response.json(
       { error: "Draft has no real Shopify product ID" },
       { status: 409 }
@@ -198,14 +210,12 @@ export async function POST(
 
   try {
     let lifecycleUpdatedAt: string | null = null;
-    if (!mockProduct) {
-      if (action === "archive") {
-        lifecycleUpdatedAt = (await setShopifyProductStatus(productId, "ARCHIVED")).updatedAt;
-      } else if (action === "restore") {
-        lifecycleUpdatedAt = (await setShopifyProductStatus(productId, "DRAFT")).updatedAt;
-      }
-      else await deleteShopifyProduct(productId);
+    if (action === "archive") {
+      lifecycleUpdatedAt = (await setShopifyProductStatus(productId, "ARCHIVED")).updatedAt;
+    } else if (action === "restore") {
+      lifecycleUpdatedAt = (await setShopifyProductStatus(productId, "DRAFT")).updatedAt;
     }
+    else await deleteShopifyProduct(productId);
 
     let localPatch: Record<string, unknown>;
     if (action === "archive") {
@@ -264,7 +274,7 @@ export async function POST(
           productId,
           remoteStatus:
             action === "archive" ? "ARCHIVED" : action === "restore" ? "DRAFT" : "DELETED",
-          mock: mockProduct
+          mock: false
         },
         completed_at: nowIso()
       })
@@ -275,7 +285,7 @@ export async function POST(
       productId,
       remoteStatus:
         action === "archive" ? "ARCHIVED" : action === "restore" ? "DRAFT" : "DELETED",
-      mock: mockProduct
+      mock: false
     });
   } catch (error) {
     return fail(502, error);

@@ -1,6 +1,11 @@
 /**
  * R3 station③: multi-select publish/export prefs + leave-queue rules (pure).
+ *
+ * PUBLISH-GUARD: `apiMock` = the publish API answered mock:true (test site dry run).
+ * A dry run changes nothing, so it never leaves the queue and its message always
+ * starts with 【模擬】.
  */
+import { formatMockPublishResponseMessage } from "@/lib/drafts/publishBatch";
 
 export type Station3ShopifyChoice = "none" | "draft" | "active";
 
@@ -48,11 +53,14 @@ export function shouldLeaveQueue(input: {
   selection: Station3PublishSelection;
   apiSucceeded: boolean | null;
   csvSucceeded: boolean | null;
+  apiMock?: boolean;
 }): boolean {
   const wantsApi = input.selection.shopify !== "none";
   const wantsCsv = input.selection.matrixify || input.selection.showmore;
 
   if (wantsApi) {
+    // Dry run: nothing was published, so the card must stay where it is.
+    if (input.apiMock === true) return false;
     if (input.apiSucceeded !== true) return false;
     if (wantsCsv && input.csvSucceeded === false) return false;
     return true;
@@ -68,13 +76,21 @@ export function formatStation3ResultMessage(input: {
   csvSucceeded: boolean | null;
   csvNote?: string;
   leftQueue: boolean;
+  apiMock?: boolean;
 }): string {
   const parts: string[] = [];
   const wantsApi = input.selection.shopify !== "none";
   const wantsCsv = input.selection.matrixify || input.selection.showmore;
 
   if (wantsApi) {
-    if (input.apiSucceeded === true) {
+    if (input.apiMock === true && input.apiSucceeded !== null) {
+      parts.push(
+        formatMockPublishResponseMessage({
+          message: input.apiMessage,
+          ok: input.apiSucceeded === true
+        })
+      );
+    } else if (input.apiSucceeded === true) {
       parts.push(
         input.selection.shopify === "active"
           ? "Shopify 已正式上架"

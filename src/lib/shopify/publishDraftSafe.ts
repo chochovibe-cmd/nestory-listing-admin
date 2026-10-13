@@ -16,6 +16,13 @@ import {
   type ShopifyAdminGraphQLCaller
 } from "@/lib/shopify/productLifecycle";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
+import {
+  checkPublishReadiness,
+  formatPublishBlockMessage,
+  isVariantPriceConfirmed,
+  type PublishBlockCode,
+  type PublishBlocker
+} from "@/lib/shopify/publishReadiness";
 import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import {
   findDuplicateProductVariantRows,
@@ -26,12 +33,19 @@ import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductVariantRow, PublishMode } from "@/types/domain";
 
 export type PublishDraftResult =
-  | { ok: true; mock: true; payload: unknown; productId?: string; adminUrl?: string | null }
+  // Mock mode is a dry run: checks + payload only, nothing written, no Shopify product.
+  | { ok: true; mock: true; payload: unknown; productId: null; adminUrl: null; mockNotes: string[] }
   | { ok: true; mock?: false; productId: string; adminUrl: string | null }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; code?: PublishBlockCode; blockers?: PublishBlocker[] };
 
 type PublishDraftDeps = {
   callGraphQL?: ShopifyAdminGraphQLCaller;
+  /** Inject for tests; default = SHOPIFY_PUBLISH_MOCK is anything but exactly "false". */
+  mockMode?: boolean;
+  /** Operator ticked "I checked every variant cost" (single-card publish only). */
+  confirmVariantPrices?: boolean;
+  /** Who confirmed; stored next to variant_price_confirmed_at. */
+  confirmedBy?: string | null;
 };
 
 type ServiceSupabase = ReturnType<typeof createServiceSupabaseClient>;
@@ -200,42 +214,35 @@ async function finishLocalSuccess(
   return { ok: true };
 }
 
-async function mockPublish(
+/**
+ * PUBLISH-GUARD: remember that an operator confirmed the variant costs so the
+ * next publish of this draft does not ask again. Merge-only (other raw_capture /
+ * server keys stay), live mode only, and skipped when raw_capture has no
+ * `server` object. Best-effort: a failed write never blocks the publish.
+ */
+async function persistVariantPriceConfirmation(
   serviceSupabase: ServiceSupabase,
   id: string,
-  draft: any,
-  publishMode: PublishMode,
-  payload: unknown,
-  publishJobBase: Record<string, unknown>,
-  videoWarnings: string[]
-): Promise<PublishDraftResult> {
-  const mockStatus = publishMode === "active" ? "active_published" : "draft_created";
-  await insertPublishJob(serviceSupabase, publishJobBase, mockStatus, {
-    mock: true,
-    note: "SHOPIFY_PUBLISH_MOCK is enabled (safe simulation; no real Shopify product)",
-    ...(videoWarnings.length ? { videoWarnings } : {})
-  });
-  const { error } = await serviceSupabase
+  rawCapture: unknown,
+  confirmedBy: string | null
+): Promise<void> {
+  if (!rawCapture || typeof rawCapture !== "object" || Array.isArray(rawCapture)) return;
+  const raw = rawCapture as Record<string, unknown>;
+  const server = raw.server;
+  if (!server || typeof server !== "object" || Array.isArray(server)) return;
+  await serviceSupabase
     .from("product_drafts")
     .update({
-      status: mockStatus,
-      pipeline_stage: mapStatusToPipelineStage(mockStatus),
-      publish_status: mockStatus,
-      publish_mode: publishMode,
-      shopify_product_id: "mock-product-id",
-      shopify_admin_url: null,
-      error_message: null,
-      published_at: nowIso(),
-      ...(videoWarnings.length
-        ? { warnings: [...(Array.isArray(draft.warnings) ? draft.warnings : []), ...videoWarnings].slice(-30) }
-        : {})
+      raw_capture: {
+        ...raw,
+        server: {
+          ...(server as Record<string, unknown>),
+          variant_price_confirmed_at: nowIso(),
+          variant_price_confirmed_by: confirmedBy
+        }
+      }
     })
     .eq("id", id);
-  if (error) {
-    return { ok: false, status: 500, error: `Mock publish local persistence failed: ${error.message}` };
-  }
-  await notifyMake(mockStatus, { draftId: id, mock: true });
-  return { ok: true, mock: true, payload, productId: "mock-product-id", adminUrl: null };
 }
 
 async function republishExistingDraft(
@@ -319,7 +326,8 @@ export async function publishDraft(
     return { ok: false, status: 409, error: "Draft is already publishing; duplicate publish request blocked" };
   }
 
-  const mockMode = process.env.SHOPIFY_PUBLISH_MOCK !== "false";
+  // Mock mode is a dry run: read-only guards + payload build, zero writes, no Shopify.
+  const mockMode = deps.mockMode ?? process.env.SHOPIFY_PUBLISH_MOCK !== "false";
   const existingProductId = draft.shopify_product_id as string | null;
 
   // Mock IDs never cross the live Shopify boundary.
@@ -331,14 +339,65 @@ export async function publishDraft(
     };
   }
 
+  // PUBLISH-GUARD: variant rows are loaded once (before image prep) and reused for
+  // readiness, the duplicate-variant check and the payload. A transient read error
+  // must not turn into "no variants, so nothing to block".
+  const { data: variantRows, error: variantRowsError } = await serviceSupabase
+    .from("product_variants")
+    .select("*")
+    .eq("draft_id", id)
+    .order("sort_order", { ascending: true });
+  if (variantRowsError) {
+    return { ok: false, status: 500, error: `讀取款式資料失敗，已停止發布：${variantRowsError.message}` };
+  }
+  const typedVariantRows = (variantRows ?? []) as ProductVariantRow[];
+
+  // Runs before the republish path, status gate, image prep and claimPublishing,
+  // so a blocked draft is never moved to another status.
+  const readiness = checkPublishReadiness(draft, typedVariantRows, {
+    confirmVariantPrices: deps.confirmVariantPrices === true
+  });
+  if (readiness.blocked) {
+    return {
+      ok: false,
+      status: 409,
+      error: formatPublishBlockMessage(readiness.blockers),
+      code: readiness.needsPriceConfirm ? "PUBLISH_NEEDS_PRICE_CONFIRM" : "PUBLISH_BLOCKED",
+      blockers: readiness.blockers
+    };
+  }
+  // Persist the operator's confirmation only when the request flag actually waived
+  // a blocker (not when it was already persisted), never in mock mode.
+  const persistConfirmationIfNeeded = async () => {
+    if (
+      mockMode ||
+      deps.confirmVariantPrices !== true ||
+      readiness.bypassed.length === 0 ||
+      isVariantPriceConfirmed(draft.raw_capture)
+    ) {
+      return;
+    }
+    await persistVariantPriceConfirmation(
+      serviceSupabase,
+      id,
+      draft.raw_capture,
+      deps.confirmedBy ?? null
+    );
+  };
+
   // Normal re-publish after an intentional unpublish reuses the same Shopify product.
   if (!mockMode && draft.status === "draft_created" && isRealShopifyProductId(existingProductId)) {
+    await persistConfirmationIfNeeded();
     return republishExistingDraft(serviceSupabase, id, draft, publishMode, caller);
   }
 
+  // Dry run: live would take the republish path for this draft, so the status gate
+  // (which only knows about first-time publishes) must not reject it.
+  const mockWouldRepublish =
+    mockMode && draft.status === "draft_created" && isRealShopifyProductId(existingProductId);
   const publishableStatuses = ["approved", "ready_for_review", "api_failed"];
   const allowed = publishableStatuses.includes(draft.status) || draft.pipeline_stage === "ready";
-  if (!allowed) {
+  if (!allowed && !mockWouldRepublish) {
     return { ok: false, status: 409, error: `Draft status ${draft.status} cannot be published` };
   }
 
@@ -426,7 +485,11 @@ export async function publishDraft(
         };
       }
     }
-  } else if (!mockMode && isRealShopifyProductId(existingProductId)) {
+  } else if (
+    isRealShopifyProductId(existingProductId) &&
+    // Dry run cannot reconcile with Shopify; republish / api_failed linkage only gets a note.
+    !(mockMode && (draft.status === "draft_created" || draft.status === "api_failed"))
+  ) {
     // Any other real linkage is not a create candidate.
     return {
       ok: false,
@@ -436,28 +499,26 @@ export async function publishDraft(
   }
 
   // R3: publish-time image preparation stays in the existing lifecycle.
-  const prep = await prepareImagesForPublish({ serviceSupabase, draftId: id });
-  if (prep.warnings.length) {
-    const merged = [
-      ...(Array.isArray(draft.warnings) ? draft.warnings : []),
-      ...prep.warnings.map((warning) => `發布前圖處理：${warning}`)
-    ].slice(-30);
-    await serviceSupabase.from("product_drafts").update({ warnings: merged }).eq("id", id);
+  // Mock mode skips it entirely: it can upload to Shopify Files and writes image rows.
+  let draftForPayload = draft;
+  if (!mockMode) {
+    const prep = await prepareImagesForPublish({ serviceSupabase, draftId: id });
+    if (prep.warnings.length) {
+      const merged = [
+        ...(Array.isArray(draft.warnings) ? draft.warnings : []),
+        ...prep.warnings.map((warning) => `發布前圖處理：${warning}`)
+      ].slice(-30);
+      await serviceSupabase.from("product_drafts").update({ warnings: merged }).eq("id", id);
+    }
+
+    const { data: draftFresh } = await serviceSupabase
+      .from("product_drafts")
+      .select("*, product_images(*)")
+      .eq("id", id)
+      .single();
+    draftForPayload = draftFresh ?? draft;
   }
 
-  const { data: draftFresh } = await serviceSupabase
-    .from("product_drafts")
-    .select("*, product_images(*)")
-    .eq("id", id)
-    .single();
-  const draftForPayload = draftFresh ?? draft;
-
-  const { data: variantRows } = await serviceSupabase
-    .from("product_variants")
-    .select("*")
-    .eq("draft_id", id)
-    .order("sort_order", { ascending: true });
-  const typedVariantRows = (variantRows ?? []) as ProductVariantRow[];
   const duplicateVariantRows = findDuplicateProductVariantRows(typedVariantRows);
   if (duplicateVariantRows.length > 0) {
     return {
@@ -487,6 +548,23 @@ export async function publishDraft(
     product: { ...builtPayload.product, status: "DRAFT" as const }
   };
 
+  if (mockMode) {
+    const mockNotes = ["模擬模式：未執行發布前圖片處理（不上傳 Shopify Files）"];
+    if (isRealShopifyProductId(existingProductId)) {
+      mockNotes.push(
+        draft.status === "draft_created"
+          ? `此草稿已有 Shopify 商品 ${existingProductId}：正式站會直接重新上架這個商品，不會另外建立新商品`
+          : `此草稿已有 Shopify 商品 ${existingProductId}：正式站會先與 Shopify 對帳並沿用這個商品，不會另外建立新商品`
+      );
+    }
+    if (readiness.bypassed.length > 0) {
+      mockNotes.push("款式價確認已通過；模擬模式不會把確認記錄寫入草稿");
+    }
+    mockNotes.push("模擬模式：沒有寫入 Shopify、沒有改變草稿狀態、沒有送出通知");
+    return { ok: true, mock: true, payload, productId: null, adminUrl: null, mockNotes };
+  }
+
+  await persistConfirmationIfNeeded();
   const claimed = await claimPublishing(serviceSupabase, id, draft.status, publishMode, payload);
   if (!claimed) {
     return { ok: false, status: 409, error: "Draft publish state changed concurrently; duplicate publish request blocked" };
@@ -501,17 +579,13 @@ export async function publishDraft(
   };
   const videoWarnings = Array.isArray(payload.videoWarnings) ? (payload.videoWarnings as string[]) : [];
 
-  if (!mockMode && !hasShopifyAdminCredentials() && !deps.callGraphQL) {
+  if (!hasShopifyAdminCredentials() && !deps.callGraphQL) {
     const message =
       "已關閉模擬發布（SHOPIFY_PUBLISH_MOCK=false），但缺少 Shopify 憑證。請設定 SHOPIFY_STORE_DOMAIN、SHOPIFY_CLIENT_ID、SHOPIFY_CLIENT_SECRET 後重試。";
     await insertPublishJob(serviceSupabase, publishJobBase, "api_failed", { error: message, mock: false }, message);
     await markDraftFailed(serviceSupabase, id, message);
     await notifyMake("api_failed", { draftId: id, error: message });
     return { ok: false, status: 503, error: message };
-  }
-
-  if (mockMode) {
-    return mockPublish(serviceSupabase, id, draft, publishMode, payload, publishJobBase, videoWarnings);
   }
 
   const createMutation = `

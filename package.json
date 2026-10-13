@@ -42,6 +42,7 @@
     "verify:copy-product-brief": "node scripts/verify-copy-product-brief.mjs",
     "verify:variant-picker-containment": "node scripts/verify-variant-picker-containment.mjs",
     "verify:image-integrity": "node scripts/verify-image-integrity.mjs",
+    "verify:publish-guard": "node scripts/verify-publish-guard.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

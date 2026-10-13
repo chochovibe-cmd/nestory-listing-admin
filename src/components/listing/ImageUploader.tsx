@@ -17,8 +17,7 @@ import { intentForSpecToggle } from "@/lib/images/processMarks";
 import { showToast } from "@/components/Toast";
 import {
   deleteProductImages,
-  deleteProductImagesFailureMessage,
-  findVariantBindings
+  deleteProductImagesFailureMessage
 } from "@/lib/images/deleteProductImages";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
@@ -597,28 +596,19 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
     };
     try {
       const armed = deleteArm?.id === imageId;
-      if (!armed) {
-        const bindings = await findVariantBindings(supabase, [imageId]);
-        if (!bindings.ok) {
-          const msg = `無法確認款式綁定，未刪除圖片：${bindings.error}`;
-          setMarkError(msg);
-          showToast(msg, "error");
-          return;
-        }
-        if (bindings.total > 0) {
-          promptVariantBound(bindings.total);
-          return;
-        }
-      }
       clearDeleteArm();
 
-      // UX-H T49: brief fade before remove (display only)
+      // UX-H T49: brief fade before remove (display only). The helper itself refuses a
+      // variant-bound image (blockedByVariants) unless armed, and the 250ms fade runs alongside
+      // the delete instead of before it. Storage cleanup is left to the background.
       setFadingKeys((prev) => new Set(prev).add(item.clientKey));
-      await new Promise((r) => window.setTimeout(r, 250));
-      const result = await deleteProductImages(supabase, [imageId], { unbindVariants: armed });
+      const [result] = await Promise.all([
+        deleteProductImages(supabase, [imageId], { unbindVariants: armed, backgroundStorageCleanup: true }),
+        new Promise((r) => window.setTimeout(r, 250))
+      ]);
 
       if (result.blockedByVariants?.length) {
-        // A variant bound to this image appeared after our check -- ask again.
+        // First click on a variant-bound image -- ask again (armed second click unbinds).
         unfade();
         promptVariantBound(result.blockedByVariants.reduce((sum, row) => sum + row.count, 0));
         return;

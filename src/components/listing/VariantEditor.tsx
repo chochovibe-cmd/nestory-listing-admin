@@ -368,7 +368,7 @@ export function VariantEditor({
     const count = candidateIds.length;
     // Explicitly offer both choices before any local edit or database mutation.
     const removeImageToo = window.confirm(
-      `確定刪除這款嗎？會一起移除 ${count} 張款式圖（僅從草稿移除，Storage 檔案保留）。\n「確定」連圖一起移除；「取消」可選擇保留圖片。`
+      `確定刪除這款嗎？會一起移除 ${count} 張款式圖（儲存後才從草稿移除，Storage 檔案保留）。\n「確定」連圖一起移除；「取消」可選擇保留圖片。`
     );
     if (!removeImageToo && !window.confirm("保留圖片，只刪除此款式嗎？")) return;
     if (removeImageToo && count > 0) onQueueImageDeletion?.(candidateIds);

@@ -9,6 +9,7 @@
  *   Part B  readiness blockers (fake variants, bundle cost, unconfirmed price)
  *   Part C  UI wiring (static source assertions)
  *   PUBLISH-RETRY  api_failed resume must not re-create / re-adjust existing variants
+ *   ONLINE-STORE-DISCOVERY  publication id: env override, channel match, name fallback, ambiguity
  *
  * Run: node scripts/verify-publish-guard.mjs  |  npm run verify:publish-guard
  */
@@ -32,6 +33,7 @@ const { runPublishBatch } = await import(src("src/lib/shopify/runPublishBatch.ts
 const station3 = await import(src("src/lib/drafts/station3Publish.ts"));
 const batchHelpers = await import(src("src/lib/drafts/publishBatch.ts"));
 const { planResumeVariantSync } = await import(src("src/lib/variants/shopifyVariants.ts"));
+const { getShopifyOnlineStorePublicationId } = await import(src("src/lib/shopify/productLifecycle.ts"));
 
 const {
   checkPublishReadiness,
@@ -1539,6 +1541,166 @@ await check("fresh create (no resume) is unchanged: productCreate → update ini
     false,
     "no resume warning on a fresh create"
   );
+});
+
+// =====================================================================
+// ONLINE-STORE-DISCOVERY: publication id discovery (fake caller, no network)
+// =====================================================================
+console.log("\nONLINE-STORE-DISCOVERY — getShopifyOnlineStorePublicationId");
+
+function discoveryCaller(data, { errors, ok = true } = {}) {
+  let count = 0;
+  const caller = async () => {
+    count += 1;
+    return { response: { ok, status: ok ? 200 : 500 }, result: { data, ...(errors ? { errors } : {}) } };
+  };
+  return { caller, count: () => count };
+}
+const PUB_ONLINE = "gid://shopify/Publication/192801177785";
+const PUB_POS = "gid://shopify/Publication/192801243321";
+const PUB_GOOGLE = "gid://shopify/Publication/210344378553";
+const NO_OVERRIDE = { SHOPIFY_ONLINE_STORE_PUBLICATION_ID: undefined };
+
+await check("discovery: channels contain online_store -> channel match (old path)", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: {
+        nodes: [
+          { id: "gid://shopify/Channel/192801243321", name: "銷售點", handle: "pos", app: null },
+          { id: "gid://shopify/Channel/192801177785", name: "線上商店", handle: "online_store", app: null }
+        ]
+      },
+      publications: {
+        nodes: [
+          { id: PUB_POS, name: "銷售點" },
+          { id: PUB_ONLINE, name: "線上商店" }
+        ]
+      }
+    });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+    assert.equal(fake.count(), 1);
+  });
+});
+
+await check("discovery: channels empty + publications [線上商店, 銷售點, Google & YouTube] -> 線上商店 id", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: { nodes: [] },
+      publications: {
+        nodes: [
+          { id: PUB_ONLINE, name: "線上商店" },
+          { id: PUB_POS, name: "銷售點" },
+          { id: PUB_GOOGLE, name: "Google & YouTube" }
+        ]
+      }
+    });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+  });
+});
+
+await check("discovery: English 'Online Store' matches case-insensitively and trimmed", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: { nodes: [] },
+      publications: {
+        nodes: [
+          { id: PUB_POS, name: "Point of Sale" },
+          { id: PUB_ONLINE, name: "  online STORE " }
+        ]
+      }
+    });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+  });
+});
+
+await check("discovery: channels query errors but publications data present -> fallback still works", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller(
+      { channels: null, publications: { nodes: [{ id: PUB_ONLINE, name: "線上商店" }, { id: PUB_POS, name: "銷售點" }] } },
+      { errors: [{ message: "Access denied for channels field" }] }
+    );
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+  });
+});
+
+await check("discovery: GraphQL errors with no publications data -> still throws the GraphQL error", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller(null, { errors: [{ message: "Throttled" }] });
+    await assert.rejects(() => getShopifyOnlineStorePublicationId(fake.caller), /publication discovery failed: .*Throttled/);
+  });
+});
+
+await check("discovery: HTTP error still throws", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({ channels: { nodes: [] }, publications: { nodes: [] } }, { ok: false });
+    await assert.rejects(() => getShopifyOnlineStorePublicationId(fake.caller), /HTTP 500/);
+  });
+});
+
+await check("discovery: channels empty + only [銷售點, Google & YouTube] -> throws and lists names (never picks POS/Google)", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: { nodes: [] },
+      publications: {
+        nodes: [
+          { id: PUB_POS, name: "銷售點" },
+          { id: PUB_GOOGLE, name: "Google & YouTube" }
+        ]
+      }
+    });
+    await assert.rejects(
+      () => getShopifyOnlineStorePublicationId(fake.caller),
+      (err) => {
+        assert.match(err.message, /Online Store publication could not be discovered/);
+        assert.match(err.message, /publications seen: 銷售點、Google & YouTube/);
+        assert.match(err.message, /SHOPIFY_ONLINE_STORE_PUBLICATION_ID/);
+        return true;
+      }
+    );
+  });
+});
+
+await check("discovery: two publications with matching names -> throws ambiguous", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: { nodes: [] },
+      publications: {
+        nodes: [
+          { id: PUB_ONLINE, name: "線上商店" },
+          { id: "gid://shopify/Publication/999", name: "Online Store" },
+          { id: PUB_POS, name: "銷售點" }
+        ]
+      }
+    });
+    await assert.rejects(() => getShopifyOnlineStorePublicationId(fake.caller), /ambiguous/);
+  });
+});
+
+await check("discovery: channel found but no publication matches it -> name fallback, else throws", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const channels = { nodes: [{ id: "gid://shopify/Channel/55", name: "Whatever", handle: "online_store", app: null }] };
+    const viaName = discoveryCaller({ channels, publications: { nodes: [{ id: PUB_ONLINE, name: "線上商店" }] } });
+    assert.equal(await getShopifyOnlineStorePublicationId(viaName.caller), PUB_ONLINE);
+    const none = discoveryCaller({ channels, publications: { nodes: [{ id: PUB_POS, name: "銷售點" }] } });
+    await assert.rejects(() => getShopifyOnlineStorePublicationId(none.caller), /publications seen: 銷售點/);
+  });
+});
+
+await check("discovery: SHOPIFY_ONLINE_STORE_PUBLICATION_ID override returns env value without calling Shopify", async () => {
+  const override = "gid://shopify/Publication/424242";
+  const before = process.env.SHOPIFY_ONLINE_STORE_PUBLICATION_ID;
+  await withEnv({ SHOPIFY_ONLINE_STORE_PUBLICATION_ID: `  ${override}  ` }, async () => {
+    const fake = discoveryCaller({ channels: { nodes: [] }, publications: { nodes: [] } });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), override);
+    assert.equal(fake.count(), 0, "override must skip discovery entirely");
+  });
+  // a malformed override is ignored (discovery runs instead)
+  await withEnv({ SHOPIFY_ONLINE_STORE_PUBLICATION_ID: "not-a-gid" }, async () => {
+    const fake = discoveryCaller({ channels: { nodes: [] }, publications: { nodes: [{ id: PUB_ONLINE, name: "線上商店" }] } });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+    assert.equal(fake.count(), 1);
+  });
+  assert.equal(process.env.SHOPIFY_ONLINE_STORE_PUBLICATION_ID, before, "env restored after test");
 });
 
 // =====================================================================

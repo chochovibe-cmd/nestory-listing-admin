@@ -5,9 +5,16 @@
  * PUBLISH-GUARD: mock mode answers { mock:true, batchId:"mock-dry-run", ... } and
  * writes nothing. This route never accepts the variant-price confirmation flag:
  * confirming costs is a single-card decision, batches only report the blockers.
+ *
+ * PUBLISH-BATCH: body.stepwise === true creates the batch (header + queued items) and
+ * answers immediately WITHOUT publishing; the client then drives
+ * POST /api/publish-batches/[batchId]/step once per item. Without the flag the old
+ * one-request behaviour is unchanged.
  */
 import { NextRequest } from "next/server";
 import { canPublish } from "@/lib/auth/roles";
+import { createStepwisePublishBatch } from "@/lib/shopify/publishBatchStepwise";
+import { recoverStalePublishBatchesBestEffort } from "@/lib/shopify/recoverStalePublishBatches";
 import { runPublishBatch } from "@/lib/shopify/runPublishBatch";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
@@ -49,6 +56,38 @@ export async function POST(request: NextRequest) {
   if (guardError) return Response.json({ error: guardError }, { status: 403 });
 
   const serviceSupabase = createServiceSupabaseClient();
+  // Close batches an earlier killed function left in "processing" (live mode only).
+  await recoverStalePublishBatchesBestEffort(serviceSupabase);
+
+  if (body.stepwise === true) {
+    const created = await createStepwisePublishBatch({
+      serviceSupabase,
+      draftIds: draftIds as string[],
+      publishMode,
+      createdBy: user.id
+    });
+    if (!created.ok) {
+      return Response.json(
+        { error: created.error, hint: created.hint, batchId: created.batchId ?? null },
+        { status: created.status }
+      );
+    }
+    if (!("total" in created)) {
+      // Mock dry run: the full one-shot answer, nothing written.
+      return Response.json(oneShotBody(created));
+    }
+    return Response.json({
+      ok: true,
+      mock: false,
+      stepwise: true,
+      batchId: created.batchId,
+      batchStatus: created.batchStatus,
+      publishMode: created.publishMode,
+      total: created.total,
+      items: created.items
+    });
+  }
+
   const result = await runPublishBatch({
     serviceSupabase,
     draftIds: draftIds as string[],
@@ -67,7 +106,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return Response.json({
+  return Response.json(oneShotBody(result));
+}
+
+function oneShotBody(result: Extract<Awaited<ReturnType<typeof runPublishBatch>>, { ok: true }>) {
+  return {
     ok: true,
     mock: result.mock === true,
     batchId: result.batchId,
@@ -85,11 +128,13 @@ export async function POST(request: NextRequest) {
       itemStatus: r.itemStatus,
       code: r.code,
       blockers: r.blockers,
-      mockNotes: r.mockNotes
+      mockNotes: r.mockNotes,
+      reconciled: r.reconciled,
+      warnings: r.warnings
     })),
     message: result.message,
     stoppedEarly: result.stoppedEarly,
     elapsedMs: result.elapsedMs,
     makeWebhook: result.makeWebhook
-  });
+  };
 }

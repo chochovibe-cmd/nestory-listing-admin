@@ -88,6 +88,7 @@ export function recalculateUnlockedVariantPrices(
         priceLocked: keepSell || keepCompare
       };
     }
+    // Each variant is priced from ITS OWN cost.
     const result = calculatePrice(costNum, {
       currency: options.currency,
       priceMode: options.priceMode,

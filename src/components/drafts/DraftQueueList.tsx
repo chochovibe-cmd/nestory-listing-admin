@@ -24,6 +24,7 @@ import {
 } from "@/lib/drafts/optimisticArchiveHide";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
 import { formatMockPublishResponseMessage } from "@/lib/drafts/publishBatch";
+import { runStepwisePublishBatch } from "@/lib/drafts/publishBatchClient";
 import {
   countStations,
   DEFAULT_RESULTS_FILTER,
@@ -226,15 +227,16 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
     }
 
     setMessage(mode === "active" ? `上架中（已選 ${n} 筆）…` : `建立草稿中（已選 ${n} 筆）…`);
-    const response = await fetch("/api/drafts/batch/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draftIds: selectedArray, publishMode: mode, confirmActive: mode === "active" })
+    // PUBLISH-BATCH: one request per item (own 60s budget each) + live progress text.
+    const payload = await runStepwisePublishBatch({
+      draftIds: selectedArray,
+      publishMode: mode,
+      confirmActive: mode === "active",
+      onProgress: (progress) => setMessage(progress.text)
     });
-    const payload = await response.json();
     setBusy(false);
-    const resultText = response.ok
-      ? payload.message ??
+    const resultText = payload.ok
+      ? payload.message ||
         `成功 ${payload.succeeded} 筆／失敗 ${payload.failed} 筆${
           payload.skipped ? `／略過 ${payload.skipped}` : ""
         }`
@@ -244,7 +246,7 @@ export function DraftQueueList({ drafts }: { drafts: DraftQueueRow[] }) {
       setMessage(
         formatMockPublishResponseMessage({
           message: resultText,
-          ok: response.ok && !payload.failed
+          ok: payload.ok && !payload.failed
         })
       );
       return;

@@ -66,8 +66,16 @@ const scripts = [
   "scripts/verify-image-integrity.mjs",
   // PUBLISH-GUARD: mock mode = dry run (zero writes) + pre-publish blockers.
   "scripts/verify-publish-guard.mjs",
+  // PUBLISH-BATCH: stepwise batch (1 item/request), stale-batch recovery, reconcile, Google channel.
+  "scripts/verify-publish-batch.mjs",
   // REVIEW-FLOW: transition guard, batch return, no-blink leave, approve triage, ⛔ batch, 逐件 skip.
-  "scripts/verify-review-flow.mjs"
+  "scripts/verify-review-flow.mjs",
+  // Pre-publish image prep: >12 image rows are chunked, detail rows untouched.
+  "scripts/verify-prepare-images.mjs",
+  // Per-variant selling price: each variant priced from its own cost (fine ladder), locks kept.
+  "scripts/verify-variant-pricing.mjs",
+  // MOBILE-VARIANT-LAYOUT: Workspace accordion grid must not blow out the variant table.
+  "scripts/verify-mobile-variant-workspace.mjs"
 ];
 
 for (const script of scripts) {

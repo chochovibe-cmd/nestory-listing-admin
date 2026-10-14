@@ -1220,6 +1220,20 @@ function createShopifyFake({
             userErrors: []
           }
         });
+      // PUBLISH-BATCH: Google & YouTube is a REQUIRED channel now (POS is optional, absent here).
+      case "SalesChannelPublicationDiscovery":
+        return ok({
+          publications: {
+            nodes: [
+              { id: "gid://shopify/Publication/1", name: "Online Store" },
+              { id: "gid://shopify/Publication/2", name: "Google & YouTube" }
+            ]
+          }
+        });
+      case "PublishProductToGoogle":
+        return ok({ publishablePublish: { publishable: { id: variables.id, status: "ACTIVE" }, userErrors: [] } });
+      case "ProductChannelState":
+        return ok({ product: { id: variables.id, publishedOnPublication: true } });
       case "VerifyProductOnlineStore":
         return ok({
           product: { id: variables.id, status: "ACTIVE", publishedAt: "2026-10-13T00:00:00Z", publishedOnPublication: true }
@@ -1315,7 +1329,8 @@ await check("retry (a2): the real case — everything synced, ACTIVE/Online Stor
   assert.deepEqual(shopify.mutationNames(), [
     "ProductVariantsBulkUpdate",
     "ProductUpdateStatus",
-    "PublishProductToOnlineStore"
+    "PublishProductToOnlineStore",
+    "PublishProductToGoogle"
   ]);
   assert.equal(shopify.named("ProductUpdateStatus")[0].variables.product.status, "ACTIVE");
   assert.equal(fake.tables.product_drafts[0].status, "active_published");
@@ -1808,6 +1823,16 @@ await check("runPublishBatch: mock branch precedes every ledger write and Make c
   const text = read("src/lib/shopify/runPublishBatch.ts");
   const mockIdx = text.indexOf("return runPublishBatchDryRun(input, uniqueIds)");
   assert.ok(mockIdx > 0);
+  // PUBLISH-BATCH: the ledger writes now live in shared helpers (createPublishBatchRecords /
+  // runPublishBatchItem / finalizePublishBatch) defined between the dry run and runPublishBatch.
+  // Same guard, adapted: inside runPublishBatch nothing that reaches them may run before the
+  // mock branch returns, no raw ledger write may sit in front of it, and the dry-run function
+  // (checked below) must not touch them at all.
+  const runStart = text.indexOf("export async function runPublishBatch(");
+  for (const marker of ["createPublishBatchRecords(", "runPublishBatchItem(", "finalizePublishBatch("]) {
+    const first = text.indexOf(marker, runStart);
+    assert.ok(first > mockIdx, `${marker} must come after the mock branch`);
+  }
   for (const marker of [
     '.from("publish_batches")',
     '.from("publish_batch_items")',
@@ -1815,10 +1840,13 @@ await check("runPublishBatch: mock branch precedes every ledger write and Make c
     "notifyMake(",
     "safeTryNotifyPublishBatchIfComplete(batchId"
   ]) {
-    const first = text.indexOf(marker, text.indexOf("export async function runPublishBatch("));
-    assert.ok(first > mockIdx, `${marker} must come after the mock branch`);
+    const first = text.indexOf(marker, runStart);
+    assert.ok(first === -1 || first > mockIdx, `${marker} must not run before the mock branch`);
   }
-  const dryRun = text.slice(text.indexOf("async function runPublishBatchDryRun"), text.indexOf("export async function runPublishBatch("));
+  const dryRun = text.slice(
+    text.indexOf("async function runPublishBatchDryRun"),
+    text.indexOf("export type PublishBatchPlanItem")
+  );
   assert.doesNotMatch(dryRun, /\.insert\(|\.update\(|\.upsert\(|\.delete\(|notifyMake|mock-product-id/);
 });
 

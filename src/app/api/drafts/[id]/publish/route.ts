@@ -8,6 +8,8 @@
  */
 import { NextRequest } from "next/server";
 import { canPublish } from "@/lib/auth/roles";
+import { recoverStalePublishBatchesBestEffort } from "@/lib/shopify/recoverStalePublishBatches";
+import { RECONCILED_MESSAGE } from "@/lib/shopify/reconcileDraft";
 import { runPublishBatch } from "@/lib/shopify/runPublishBatch";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
@@ -45,6 +47,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (guardError) return Response.json({ error: guardError }, { status: 403 });
 
   const serviceSupabase = createServiceSupabaseClient();
+  // Close batches an earlier killed function left in "processing" (live mode only).
+  await recoverStalePublishBatchesBestEffort(serviceSupabase);
   const result = await runPublishBatch({
     serviceSupabase,
     draftIds: [id],
@@ -89,7 +93,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     mock: first.mock === true,
     productId: first.productId,
     adminUrl: first.adminUrl ?? null,
-    message: result.message,
+    // PUBLISH-BATCH: Shopify was already live; only the local state was repaired.
+    message: first.reconciled ? RECONCILED_MESSAGE : result.message,
+    ...(first.reconciled ? { reconciled: true } : {}),
+    ...(first.warnings?.length ? { warnings: first.warnings } : {}),
     ...(first.mock === true ? { mockNotes: first.mockNotes ?? [] } : {})
   });
 }

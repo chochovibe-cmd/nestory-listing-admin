@@ -6090,7 +6090,14 @@ textarea {
   }
   .form-acc-step.open .form-acc-body {
     display: grid;
+    /* minmax(0,1fr): an implicit auto track grows to the max-content width of
+     * the variant table (nowrap rows) and the step's overflow:hidden then clips
+     * it; a zero-min track lets .v-mobile-table-scroll own the horizontal scroll. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
+  }
+  .form-acc-step.open .form-acc-body > * {
+    min-width: 0;
   }
   .form-acc-step.open .form-acc-hdr {
     border-bottom: 1px solid var(--border);

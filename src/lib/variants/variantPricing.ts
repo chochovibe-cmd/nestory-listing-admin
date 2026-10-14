@@ -88,13 +88,11 @@ export function recalculateUnlockedVariantPrices(
         priceLocked: keepSell || keepCompare
       };
     }
-    // Each variant is priced from ITS OWN cost. "fine" ladder: the shop-wide ladder is so
-    // coarse above NT$1,680 that costs 219..259 CNY all rounded up to the same 2280.
+    // Each variant is priced from ITS OWN cost.
     const result = calculatePrice(costNum, {
       currency: options.currency,
       priceMode: options.priceMode,
-      settings,
-      priceLadder: "fine"
+      settings
     });
     const nextSell = String(result.sellPrice);
     const nextCompare =

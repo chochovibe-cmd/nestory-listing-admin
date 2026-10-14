@@ -39,24 +39,27 @@ function exists(rel) {
 
 const LOW_TIER_PRICES = [99, 129, 149, 169, 199, 229, 249, 299];
 const MID_TIER_PRICES = [329, 349, 399, 449, 499, 549, 599, 699, 799, 899];
-const HIGH_TIER_PRICES = [
-  980, 990, 999, 1080, 1099, 1180, 1199, 1280, 1299, 1580, 1680, 2280, 4480
-];
+const HIGH_TIER_PRICES = [980, 990, 999, 1080, 1099, 1180, 1199, 1280, 1299, 1580, 1680];
 
-function nearestAtOrAbove(tier, rawPrice, extensionStep) {
-  const candidate = tier.find((price) => price >= rawPrice);
-  if (candidate !== undefined) return candidate;
-  let extended = tier[tier.length - 1];
-  while (extended < rawPrice) extended += extensionStep;
-  return extended;
+function nearestAtOrAbove(tier, rawPrice) {
+  return tier.find((price) => price >= rawPrice) ?? tier[tier.length - 1];
+}
+
+function nearestAboveHighTier(basePrice) {
+  for (let hundred = Math.floor(basePrice / 100) * 100; ; hundred += 100) {
+    for (const offset of [80, 99]) {
+      if (hundred + offset >= basePrice) return hundred + offset;
+    }
+  }
 }
 
 function beautifyNestoryPrice(rawPrice) {
   if (!Number.isFinite(rawPrice) || rawPrice <= 0) return 0;
   const basePrice = Math.ceil(rawPrice);
-  if (basePrice < 300) return nearestAtOrAbove(LOW_TIER_PRICES, basePrice, 50);
-  if (basePrice <= 900) return nearestAtOrAbove(MID_TIER_PRICES, basePrice, 100);
-  return nearestAtOrAbove(HIGH_TIER_PRICES, basePrice, 1000);
+  if (basePrice < 300) return nearestAtOrAbove(LOW_TIER_PRICES, basePrice);
+  if (basePrice <= 900) return basePrice > 899 ? 999 : nearestAtOrAbove(MID_TIER_PRICES, basePrice);
+  if (basePrice <= 1680) return nearestAtOrAbove(HIGH_TIER_PRICES, basePrice);
+  return nearestAboveHighTier(basePrice);
 }
 
 function nextBeautifiedPriceAbove(price) {

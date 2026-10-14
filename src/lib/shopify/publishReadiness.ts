@@ -133,6 +133,74 @@ export function findBundleInheritedVariantLabels(
     .map(variantLabel);
 }
 
+/**
+ * PRICE-GUARD evidence that Taobao/Tmall hid the per-variant prices (reads
+ * raw_capture.client_meta: warnings_from_client + price_debug). Also used by the capture mapper
+ * through src/lib/import/captureHiddenPrices.ts.
+ */
+/** Mirrors the extension warning text (extension/lib/adapters/taobao.js). */
+const CLIENT_MISSING_SKU_PRICE_RE = /個別未優惠價未完整取得/;
+
+/** 「￥329-418」「￥10.9-189.9」: currency sign + low-high range (low must be < high). */
+const PRICE_RANGE_RE = /[￥¥]\s*(\d+(?:\.\d+)?)\s*[-~－–—至到]\s*[￥¥]?\s*(\d+(?:\.\d+)?)/g;
+
+export type HiddenVariantPriceEvidence = {
+  /** Extension said some variant has no price of its own. */
+  clientWarning: boolean;
+  /** ICE `hideOtherPrice` is true. */
+  hideOtherPrice: boolean;
+  /** A promo/price text shows a real range (low < high). */
+  priceRange: boolean;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/** True when `text` contains a ￥low-high range with low < high. */
+export function textHasPriceRange(text: string): boolean {
+  for (const match of text.matchAll(PRICE_RANGE_RE)) {
+    const low = Number(match[1]);
+    const high = Number(match[2]);
+    if (Number.isFinite(low) && Number.isFinite(high) && low > 0 && low < high) return true;
+  }
+  return false;
+}
+
+export function readHiddenVariantPriceEvidence(clientMeta: unknown): HiddenVariantPriceEvidence {
+  const meta = asRecord(clientMeta);
+  const warnings = Array.isArray(meta?.warnings_from_client) ? meta.warnings_from_client : [];
+  const clientWarning = warnings.some(
+    (w) => typeof w === "string" && CLIENT_MISSING_SKU_PRICE_RE.test(w)
+  );
+
+  const paths = Array.isArray(asRecord(meta?.price_debug)?.price_paths)
+    ? ((asRecord(meta?.price_debug) as Record<string, unknown>).price_paths as unknown[])
+    : [];
+  let hideOtherPrice = false;
+  let priceRange = false;
+  for (const entry of paths) {
+    const item = asRecord(entry);
+    if (!item) continue;
+    const path = typeof item.path === "string" ? item.path : "";
+    const value = item.value;
+    if (/hideOtherPrice$/i.test(path) && (value === true || value === "true")) {
+      hideOtherPrice = true;
+    }
+    if (typeof value === "string" && textHasPriceRange(value)) {
+      priceRange = true;
+    }
+  }
+  return { clientWarning, hideOtherPrice, priceRange };
+}
+
+export function hasHiddenVariantPriceEvidence(clientMeta: unknown): boolean {
+  const e = readHiddenVariantPriceEvidence(clientMeta);
+  return e.clientWarning || e.hideOtherPrice || e.priceRange;
+}
+
 function serverCapture(rawCapture: unknown): Record<string, unknown> | null {
   if (!rawCapture || typeof rawCapture !== "object" || Array.isArray(rawCapture)) return null;
   const server = (rawCapture as Record<string, unknown>).server;
@@ -148,6 +216,44 @@ export function isVariantPriceConfirmed(rawCapture: unknown): boolean {
 
 function captureFlagsPriceUnconfirmed(rawCapture: unknown): boolean {
   return serverCapture(rawCapture)?.price_requires_confirmation === true;
+}
+
+/** Capture said "check every variant cost" and no operator confirmation was saved yet (card hint). */
+export function isVariantPriceUnconfirmedCapture(rawCapture: unknown): boolean {
+  return captureFlagsPriceUnconfirmed(rawCapture) && !isVariantPriceConfirmed(rawCapture);
+}
+
+function clientMetaOf(rawCapture: unknown): unknown {
+  if (!rawCapture || typeof rawCapture !== "object" || Array.isArray(rawCapture)) return null;
+  return (rawCapture as Record<string, unknown>).client_meta ?? null;
+}
+
+/** Every variant ends up with the same cost (NULL cost = the product cost it inherits). */
+function allVariantCostsIdentical(rows: ReadinessVariantRow[], productCny: number | null): boolean {
+  if (rows.length < 2) return false;
+  const costs = rows.map((row) => toFiniteNumber(row.cny_price) ?? productCny);
+  return costs.every(
+    (cost) =>
+      (cost == null && costs[0] == null) ||
+      (cost != null && costs[0] != null && Math.abs(cost - costs[0]) < COST_EPSILON)
+  );
+}
+
+/**
+ * Backstop for 2026-10-14: Taobao hid the per-variant prices, the editor lost the
+ * "inherited" flag and every variant published at the cheapest price. Independent of
+ * cost_is_inherited: capture evidence of hidden prices / a price range + identical costs.
+ */
+function hiddenPricesWithIdenticalCosts(
+  rawCapture: unknown,
+  rows: ReadinessVariantRow[],
+  productCny: number | null
+): boolean {
+  return (
+    rows.length >= 2 &&
+    hasHiddenVariantPriceEvidence(clientMetaOf(rawCapture)) &&
+    allVariantCostsIdentical(rows, productCny)
+  );
 }
 
 export function checkPublishReadiness(
@@ -179,15 +285,19 @@ export function checkPublishReadiness(
   }
 
   const placeholder = productCny != null && Math.abs(productCny - PRICE_PLACEHOLDER_CNY) < 0.000001;
-  if (captureFlagsPriceUnconfirmed(draft.raw_capture) && !placeholder) {
+  const flagged = captureFlagsPriceUnconfirmed(draft.raw_capture);
+  const hiddenIdentical =
+    !flagged && hiddenPricesWithIdenticalCosts(draft.raw_capture, rows, productCny);
+  if ((flagged || hiddenIdentical) && !placeholder) {
     const inheritCount =
       rows.length >= 2 ? rows.filter((row) => rowInheritsProductCost(row, productCny)).length : 0;
     found.push({
       code: "VARIANT_PRICE_UNCONFIRMED",
       confirmable: true,
-      message:
-        "抓取時價格被標記為「需確認」（價格來源衝突，或天貓隱藏了各款價格），請逐一核對款式價後再發布。" +
-        (inheritCount > 0 ? `目前有 ${inheritCount} 個款式沿用商品成本。` : "")
+      message: hiddenIdentical
+        ? "抓取資料顯示淘寶隱藏了各款價格，但目前所有款式的成本都一樣（暫用最低價），請逐款核對成本後再發布。"
+        : "抓取時價格被標記為「需確認」（價格來源衝突，或天貓隱藏了各款價格），請逐一核對款式價後再發布。" +
+          (inheritCount > 0 ? `目前有 ${inheritCount} 個款式沿用商品成本。` : "")
     });
   }
 

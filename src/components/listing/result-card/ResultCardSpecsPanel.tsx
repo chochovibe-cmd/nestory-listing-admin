@@ -18,6 +18,7 @@ export function ResultCardSpecsPanel({
   variantWarning,
   priceMode,
   productCost,
+  priceUnconfirmed = false,
   onDimensionsChange,
   onRowsChange,
   onWarning
@@ -28,12 +29,19 @@ export function ResultCardSpecsPanel({
   variantWarning: string | null;
   priceMode: PriceMode;
   productCost: number | null;
+  /** PRICE-GUARD: capture hid/flagged per-variant prices and nobody confirmed them yet. */
+  priceUnconfirmed?: boolean;
   onDimensionsChange: (dims: VariantDimension[]) => void;
   onRowsChange: (rows: VariantFormRow[]) => void;
   onWarning: (msg: string | null) => void;
 }) {
   const costMissing = isPricePlaceholderCny(productCost);
   const effectiveProductCost = costMissing ? null : productCost;
+  const unconfirmedLabels = priceUnconfirmed
+    ? variantRows
+        .filter((row) => isVariantRowFilled(row) && row.costIsInherited)
+        .map((row) => row.optionValues.map((v) => v.trim()).filter(Boolean).join("／"))
+    : [];
 
   return (
     <div className="rc-tabpanel" role="tabpanel">
@@ -42,6 +50,13 @@ export function ResultCardSpecsPanel({
         {costMissing ? (
           <p className="price-soft-warn" style={{ margin: "0 0 8px" }}>
             ⚠ 成本未取得
+          </p>
+        ) : null}
+        {priceUnconfirmed && unconfirmedLabels.length > 0 ? (
+          <p className="price-soft-warn" style={{ margin: "0 0 8px" }}>
+            ⚠ 淘寶隱藏了各款價格，這 {unconfirmedLabels.length} 款仍暫用商品成本（未逐款確認），發布前請逐款核對：
+            {unconfirmedLabels.slice(0, 6).map((label) => `「${label}」`).join("")}
+            {unconfirmedLabels.length > 6 ? "…" : ""}
           </p>
         ) : null}
         {variantDimensions.length === 0 && variantRows.filter(isVariantRowFilled).length === 0 ? (
@@ -60,6 +75,7 @@ export function ResultCardSpecsPanel({
             priceMode={priceMode}
             pricingSettings={getStoredPricingSettings()}
             productCost={effectiveProductCost}
+            unconfirmedCost={priceUnconfirmed}
             rows={variantRows}
             warning={variantWarning}
           />

@@ -60,6 +60,8 @@ type Props = {
   priceMode: PriceMode;
   pricingSettings: PricingSettings;
   productCost?: number | null;
+  /** PRICE-GUARD: capture flagged the per-variant costs as unconfirmed → inherited rows show a warning. */
+  unconfirmedCost?: boolean;
   images: VariantImageOption[];
   warning: string | null;
   onWarning: (w: string | null) => void;
@@ -111,6 +113,7 @@ export function VariantEditor({
   rows,
   onDimensionsChange,
   productCost = null,
+  unconfirmedCost = false,
   onRowsChange,
   currency,
   priceMode,
@@ -753,6 +756,7 @@ export function VariantEditor({
     portalReady,
     priceMode,
     productCost,
+    unconfirmedCost,
     removeRow,
     renameAxisValue,
     reorderDragKey,

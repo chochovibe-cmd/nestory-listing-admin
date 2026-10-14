@@ -5402,6 +5402,10 @@ textarea {
 .v-cost-badge.muted {
   color: var(--text-muted);
 }
+/* PRICE-GUARD: inherited cost the capture could not confirm (same token as .price-soft-warn) */
+.v-cost-badge.unconfirmed {
+  color: var(--warn-text);
+}
 .v-axis-add {
   display: inline-flex;
   align-items: center;

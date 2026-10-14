@@ -47,6 +47,7 @@
     "verify:review-flow": "node scripts/verify-review-flow.mjs",
     "verify:prepare-images": "node scripts/verify-prepare-images.mjs",
     "verify:variant-pricing": "node scripts/verify-variant-pricing.mjs",
+    "verify:mobile-variant-workspace": "node scripts/verify-mobile-variant-workspace.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

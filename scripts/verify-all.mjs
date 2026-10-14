@@ -73,7 +73,9 @@ const scripts = [
   // Pre-publish image prep: >12 image rows are chunked, detail rows untouched.
   "scripts/verify-prepare-images.mjs",
   // Per-variant selling price: each variant priced from its own cost (fine ladder), locks kept.
-  "scripts/verify-variant-pricing.mjs"
+  "scripts/verify-variant-pricing.mjs",
+  // MOBILE-VARIANT-LAYOUT: Workspace accordion grid must not blow out the variant table.
+  "scripts/verify-mobile-variant-workspace.mjs"
 ];
 
 for (const script of scripts) {

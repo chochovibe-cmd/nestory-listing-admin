@@ -1,7 +1,10 @@
 import { scanStuckBatches } from "@/lib/notifications/scanStuckBatches";
+import { recoverStalePublishBatches } from "@/lib/shopify/recoverStalePublishBatches";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
 
 /**
  * D6-open: daily Vercel Cron — stuck image batches + optional catch-up notify.
+ * PUBLISH-BATCH: also closes stuck publish_batches (killed-function leftovers).
  *
  * Auth: same pattern as /api/cron/fx (Bearer CRON_SECRET).
  * vercel.json: second free cron slot (fx uses the first).
@@ -43,7 +46,24 @@ export async function GET(request: Request) {
 
   try {
     const result = await scanStuckBatches({ catchUpTerminal: true });
+
+    // PUBLISH-BATCH: publish_batches left in "processing" by a killed function. Image batch
+    // behaviour above is untouched; a failure here is reported but never fails the cron.
+    let publishBatches:
+      | { ok: true; batchesChecked: number; itemsReconciled: number; itemsFailed: number; itemsSkipped: number; batchesFinalized: number; errors: string[] }
+      | { ok: false; error: string };
+    try {
+      const recovered = await recoverStalePublishBatches(createServiceSupabaseClient(), { limit: 50 });
+      publishBatches = { ok: true, ...recovered };
+    } catch (err) {
+      publishBatches = {
+        ok: false,
+        error: (err instanceof Error ? err.message : String(err)).slice(0, 200)
+      };
+    }
+
     return Response.json({
+      publishBatches,
       ok: result.ok,
       scanned: result.scanned,
       markedStuck: result.markedStuck,

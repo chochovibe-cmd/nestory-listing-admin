@@ -17,6 +17,11 @@ import {
 } from "@/lib/shopify/productLifecycle";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import {
+  RECONCILED_CODE,
+  RECONCILED_MESSAGE,
+  reconcileDraftWithShopify
+} from "@/lib/shopify/reconcileDraft";
+import {
   checkPublishReadiness,
   formatPublishBlockMessage,
   isVariantPriceConfirmed,
@@ -37,7 +42,17 @@ import type { ProductVariantRow, PublishMode } from "@/types/domain";
 export type PublishDraftResult =
   // Mock mode is a dry run: checks + payload only, nothing written, no Shopify product.
   | { ok: true; mock: true; payload: unknown; productId: null; adminUrl: null; mockNotes: string[] }
-  | { ok: true; mock?: false; productId: string; adminUrl: string | null }
+  | {
+      ok: true;
+      mock?: false;
+      productId: string;
+      adminUrl: string | null;
+      /** PUBLISH-BATCH: "RECONCILED" = Shopify was already live, only the local state was repaired. */
+      code?: "RECONCILED";
+      message?: string;
+      /** Non-fatal notes (e.g. optional Google & YouTube channel skipped). */
+      warnings?: string[];
+    }
   | { ok: false; status: number; error: string; code?: PublishBlockCode; blockers?: PublishBlocker[] };
 
 type PublishDraftDeps = {
@@ -421,10 +436,31 @@ export async function publishDraft(
     }
 
     if (remote?.status === "ACTIVE") {
+      // PUBLISH-BATCH: Shopify is already live. In active mode that is the outcome the
+      // operator wanted, so repair the local state (no content re-sync). A draft-mode
+      // publish must never silently turn into an active listing.
+      if (publishMode === "active") {
+        const reconciled = await reconcileDraftWithShopify(serviceSupabase, id, caller);
+        if (reconciled.reconciled) {
+          return {
+            ok: true,
+            productId: existingProductId,
+            adminUrl: reconciled.adminUrl ?? shopifyAdminUrl(existingProductId),
+            code: RECONCILED_CODE,
+            message: RECONCILED_MESSAGE,
+            ...(reconciled.warnings?.length ? { warnings: reconciled.warnings } : {})
+          };
+        }
+        return {
+          ok: false,
+          status: 502,
+          error: `Existing Shopify product ${existingProductId} is ACTIVE but reconciliation failed: ${reconciled.message}`
+        };
+      }
       return {
         ok: false,
         status: 409,
-        error: `Existing Shopify product ${existingProductId} is ACTIVE while local state is api_failed; automatic recovery is blocked. Manual reconciliation required.`
+        error: `Existing Shopify product ${existingProductId} is ACTIVE while local state is api_failed; a draft-mode publish will not change it. Use 正式上架 or 對帳 in the publish records. Manual reconciliation required.`
       };
     }
 
@@ -1024,10 +1060,12 @@ export async function publishDraft(
 
   // ACTIVE is successful only after both Admin status promotion and
   // Online Store publication have been independently confirmed.
+  const channelWarnings: string[] = [];
   if (publishMode === "active") {
     try {
       await setShopifyProductStatus(productId, "ACTIVE", caller);
-      await publishShopifyProductToOnlineStore(productId, caller);
+      const channels = await publishShopifyProductToOnlineStore(productId, caller);
+      channelWarnings.push(...channels.warnings);
     } catch (activateError) {
       let rollbackNote = "";
       try {
@@ -1042,7 +1080,12 @@ export async function publishDraft(
     }
   }
 
-  const publishWarnings = [...(priceSyncWarning ? [priceSyncWarning] : []), ...resumeWarnings, ...videoWarnings];
+  const publishWarnings = [
+    ...(priceSyncWarning ? [priceSyncWarning] : []),
+    ...resumeWarnings,
+    ...videoWarnings,
+    ...channelWarnings
+  ];
   const finalStatus = publishMode === "active" ? "active_published" : "draft_created";
   await insertPublishJob(
     serviceSupabase,
@@ -1078,5 +1121,10 @@ export async function publishDraft(
     shopifyProductId: productId,
     shopifyAdminUrl: shopifyAdminUrl(productId)
   });
-  return { ok: true, productId, adminUrl: shopifyAdminUrl(productId) };
+  return {
+    ok: true,
+    productId,
+    adminUrl: shopifyAdminUrl(productId),
+    ...(channelWarnings.length ? { warnings: channelWarnings } : {})
+  };
 }

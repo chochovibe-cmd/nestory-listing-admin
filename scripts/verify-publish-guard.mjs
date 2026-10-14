@@ -1808,6 +1808,16 @@ await check("runPublishBatch: mock branch precedes every ledger write and Make c
   const text = read("src/lib/shopify/runPublishBatch.ts");
   const mockIdx = text.indexOf("return runPublishBatchDryRun(input, uniqueIds)");
   assert.ok(mockIdx > 0);
+  // PUBLISH-BATCH: the ledger writes now live in shared helpers (createPublishBatchRecords /
+  // runPublishBatchItem / finalizePublishBatch) defined between the dry run and runPublishBatch.
+  // Same guard, adapted: inside runPublishBatch nothing that reaches them may run before the
+  // mock branch returns, no raw ledger write may sit in front of it, and the dry-run function
+  // (checked below) must not touch them at all.
+  const runStart = text.indexOf("export async function runPublishBatch(");
+  for (const marker of ["createPublishBatchRecords(", "runPublishBatchItem(", "finalizePublishBatch("]) {
+    const first = text.indexOf(marker, runStart);
+    assert.ok(first > mockIdx, `${marker} must come after the mock branch`);
+  }
   for (const marker of [
     '.from("publish_batches")',
     '.from("publish_batch_items")',
@@ -1815,10 +1825,13 @@ await check("runPublishBatch: mock branch precedes every ledger write and Make c
     "notifyMake(",
     "safeTryNotifyPublishBatchIfComplete(batchId"
   ]) {
-    const first = text.indexOf(marker, text.indexOf("export async function runPublishBatch("));
-    assert.ok(first > mockIdx, `${marker} must come after the mock branch`);
+    const first = text.indexOf(marker, runStart);
+    assert.ok(first === -1 || first > mockIdx, `${marker} must not run before the mock branch`);
   }
-  const dryRun = text.slice(text.indexOf("async function runPublishBatchDryRun"), text.indexOf("export async function runPublishBatch("));
+  const dryRun = text.slice(
+    text.indexOf("async function runPublishBatchDryRun"),
+    text.indexOf("export type PublishBatchPlanItem")
+  );
   assert.doesNotMatch(dryRun, /\.insert\(|\.update\(|\.upsert\(|\.delete\(|notifyMake|mock-product-id/);
 });
 

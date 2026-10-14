@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
 import { isAdmin } from "@/lib/auth/roles";
+import { runStepwisePublishBatch } from "@/lib/drafts/publishBatchClient";
 import {
   MIGRATION_027_HINT,
   formatMockPublishResponseMessage,
@@ -80,6 +81,9 @@ export function PublishRecordsPanel() {
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
   const [failedSelected, setFailedSelected] = useState<Set<string>>(() => new Set());
   const [failedRetryBusy, setFailedRetryBusy] = useState(false);
+  /** PUBLISH-BATCH 對帳: failed drafts that already have a Shopify product (api_failed only). */
+  const [reconcilableByDraft, setReconcilableByDraft] = useState<Record<string, boolean>>({});
+  const [reconcileBusyId, setReconcileBusyId] = useState<string | null>(null);
   /** UX-N T65: client filter for batches + failed (shared). */
   const [kindFilter, setKindFilter] = useState<PublishRecordsKindFilter>("all");
 
@@ -334,6 +338,66 @@ export function PublishRecordsPanel() {
     [failedBatchesForTab, itemsByBatch]
   );
 
+  // PUBLISH-BATCH 對帳: which failed drafts carry a real Shopify product id (and are still api_failed).
+  const failedDraftIdsKey = useMemo(() => {
+    const ids = new Set<string>();
+    for (const list of Object.values(itemsByBatch)) {
+      for (const item of list) if (item.item_status === "failed") ids.add(item.draft_id);
+    }
+    return [...ids].sort().join(",");
+  }, [itemsByBatch]);
+
+  useEffect(() => {
+    const missing = failedDraftIdsKey
+      .split(",")
+      .filter((id) => id && !(id in reconcilableByDraft));
+    if (missing.length === 0 || !hasSupabaseBrowserEnv()) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await createClient()
+        .from("product_drafts")
+        .select("id, status, shopify_product_id")
+        .in("id", missing);
+      if (cancelled) return;
+      const next: Record<string, boolean> = {};
+      for (const id of missing) next[id] = false;
+      for (const row of (data ?? []) as Array<{
+        id: string;
+        status: string | null;
+        shopify_product_id: string | null;
+      }>) {
+        const pid = row.shopify_product_id?.trim();
+        next[row.id] = Boolean(pid) && pid !== "mock-product-id" && row.status === "api_failed";
+      }
+      setReconcilableByDraft((prev) => ({ ...prev, ...next }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failedDraftIdsKey]);
+
+  async function reconcileOne(draftId: string) {
+    setReconcileBusyId(draftId);
+    try {
+      const response = await fetch(`/api/drafts/${draftId}/reconcile-shopify`, { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      const message: string = payload.message ?? payload.error ?? "對帳失敗";
+      if (payload.reconciled) {
+        showToast(message, "success");
+        setReconcilableByDraft((prev) => ({ ...prev, [draftId]: false }));
+        setItemsByBatch({});
+        await loadBatches();
+      } else {
+        showToast(message, response.ok ? "info" : "error");
+      }
+    } catch {
+      showToast("對帳連線失敗", "error");
+    } finally {
+      setReconcileBusyId(null);
+    }
+  }
+
   async function toggleOpen(batchId: string) {
     setOpenIds((prev) => {
       const next = new Set(prev);
@@ -365,17 +429,14 @@ export function PublishRecordsPanel() {
   async function runRetryPublish(draftIds: string[], publishMode: PublishMode) {
     setNotice(null);
     try {
-      const response = await fetch("/api/drafts/batch/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          draftIds,
-          publishMode,
-          confirmActive: publishMode === "active"
-        })
+      // PUBLISH-BATCH: one request per item (own 60s budget each) + live progress text.
+      const payload = await runStepwisePublishBatch({
+        draftIds,
+        publishMode,
+        confirmActive: publishMode === "active",
+        onProgress: (progress) => setNotice(progress.text)
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
+      if (!payload.ok) {
         // UX-I T55: operation feedback → toast
         const line = [payload.error ?? "重送失敗", payload.hint].filter(Boolean).join(" — ");
         showToast(
@@ -615,6 +676,9 @@ export function PublishRecordsPanel() {
             onRetry={() => void retrySelectedFailed()}
             itemsLoading={failedBatchesForTab.some((b) => !itemsByBatch[b.id])}
             kindFilter={kindFilter}
+            reconcilableByDraft={reconcilableByDraft}
+            reconcileBusyId={reconcileBusyId}
+            onReconcile={(draftId) => void reconcileOne(draftId)}
           />
         ) : visibleBatches.length === 0 ? (
           <div className="empty-state">
@@ -731,6 +795,17 @@ export function PublishRecordsPanel() {
                                     後台
                                   </a>
                                 ) : null}
+                                {item.item_status === "failed" && reconcilableByDraft[item.draft_id] ? (
+                                  <Button
+                                    size="sm"
+                                    type="button"
+                                    loading={reconcileBusyId === item.draft_id}
+                                    disabled={!!reconcileBusyId}
+                                    onClick={() => void reconcileOne(item.draft_id)}
+                                  >
+                                    對帳
+                                  </Button>
+                                ) : null}
                                 <Link
                                   className="nb-btn nb-btn--secondary nb-btn--sm"
                                   href={`/drafts/${item.draft_id}`}
@@ -812,7 +887,10 @@ function FailedRetrySection({
   busy,
   onRetry,
   itemsLoading,
-  kindFilter
+  kindFilter,
+  reconcilableByDraft,
+  reconcileBusyId,
+  onReconcile
 }: {
   items: ReturnType<typeof flattenFailedItems>;
   selected: Set<string>;
@@ -821,6 +899,9 @@ function FailedRetrySection({
   onRetry: () => void;
   itemsLoading: boolean;
   kindFilter: PublishRecordsKindFilter;
+  reconcilableByDraft: Record<string, boolean>;
+  reconcileBusyId: string | null;
+  onReconcile: (draftId: string) => void;
 }) {
   if (itemsLoading && items.length === 0) {
     return <p className="muted">載入失敗件…</p>;
@@ -888,6 +969,17 @@ function FailedRetrySection({
               <br />
               <span className="muted">{item.errorMessage}</span>
             </span>
+            {reconcilableByDraft[item.draftId] ? (
+              <Button
+                size="sm"
+                type="button"
+                loading={reconcileBusyId === item.draftId}
+                disabled={!!reconcileBusyId}
+                onClick={() => onReconcile(item.draftId)}
+              >
+                對帳
+              </Button>
+            ) : null}
             <Link className="nb-btn nb-btn--secondary nb-btn--sm" href={`/drafts/${item.draftId}`}>
               草稿
             </Link>

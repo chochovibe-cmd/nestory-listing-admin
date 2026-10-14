@@ -115,6 +115,7 @@ import {
 } from "@/lib/drafts/quickUndo";
 import { getStoredPricingSettings } from "@/lib/pricingSettingsStore";
 import { isAdmin } from "@/lib/auth/roles";
+import { runStepwisePublishBatch } from "@/lib/drafts/publishBatchClient";
 import { libraryCreatorLabel } from "@/lib/library/productLibrary";
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -1285,26 +1286,19 @@ export function DraftResultsPanel({
         setMessage(
           selection.shopify === "active" ? "正式上架中（含轉檔／圖床）…" : "建立草稿中（含轉檔／圖床）…"
         );
-        const response = await fetch("/api/drafts/batch/publish", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            draftIds,
-            publishMode: selection.shopify,
-            confirmActive: selection.shopify === "active"
-          })
+        // PUBLISH-BATCH: one request per item (own 60s budget each) + live progress text.
+        const payload = await runStepwisePublishBatch({
+          draftIds,
+          publishMode: selection.shopify,
+          confirmActive: selection.shopify === "active",
+          onProgress: (progress) => setMessage(progress.text)
         });
-        const payload = await response.json().catch(() => ({}));
         apiMock = payload.mock === true;
-        const allOk =
-          response.ok &&
-          (payload.failed == null || payload.failed === 0) &&
-          (payload.succeeded == null || payload.succeeded > 0);
+        const allOk = payload.ok && payload.failed === 0 && payload.succeeded > 0;
         // partial: treat as not full success for leave-queue
         apiSucceeded = Boolean(allOk);
-        apiMessage = response.ok
-          ? payload.message ??
-            `成功 ${payload.succeeded ?? 0}／失敗 ${payload.failed ?? 0}`
+        apiMessage = payload.ok
+          ? payload.message || `成功 ${payload.succeeded}／失敗 ${payload.failed}`
           : [payload.error, payload.hint].filter(Boolean).join(" — ") || "發布失敗";
         setPendingApiResult({ ok: apiSucceeded, message: apiMessage, mock: apiMock });
       }

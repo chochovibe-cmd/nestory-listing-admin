@@ -193,10 +193,230 @@ export async function getShopifyOnlineStorePublicationId(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Google & YouTube channel (OPTIONAL). Online Store stays the only required channel.
+// POS is never published: only the Online Store id and the Google id are ever sent.
+// ---------------------------------------------------------------------------
+const GOOGLE_PUBLICATION_ID_ENV = "SHOPIFY_GOOGLE_PUBLICATION_ID";
+const POS_PUBLICATION_NAME_RE = /point of sale|銷售點|销售点|\bpos\b/i;
+
+export function isPosPublicationName(name: unknown): boolean {
+  return typeof name === "string" && POS_PUBLICATION_NAME_RE.test(name);
+}
+
+/** "Google & YouTube", "Google 和 YouTube", "Google & YouTube 頻道" ... (name contains both words). */
+export function isGooglePublicationName(name: unknown): boolean {
+  if (typeof name !== "string") return false;
+  const lower = name.trim().toLowerCase();
+  return lower.includes("google") && lower.includes("youtube") && !isPosPublicationName(lower);
+}
+
+export type GooglePublicationDiscovery = { id: string | null; warning: string | null };
+
+/**
+ * Finds the Google & YouTube publication. Never throws for "not found": the
+ * channel is optional, so the caller only gets `id:null` plus a warning.
+ * A discovery/transport error also becomes a warning.
+ */
+export async function discoverShopifyGooglePublication(
+  caller: ShopifyAdminGraphQLCaller = defaultCaller
+): Promise<GooglePublicationDiscovery> {
+  const override = process.env[GOOGLE_PUBLICATION_ID_ENV]?.trim();
+  const validOverride = override && override.startsWith(PUBLICATION_GID_PREFIX) ? override : null;
+
+  const query = `
+    query GooglePublicationDiscovery {
+      publications(first: 50) {
+        nodes {
+          id
+          name
+        }
+      }
+    }
+  `;
+  let publications: any[] = [];
+  try {
+    const { response, result } = await caller(query, {});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!Array.isArray(result?.data?.publications?.nodes)) {
+      throw new Error(messages(result?.errors ?? result));
+    }
+    publications = result.data.publications.nodes;
+  } catch (error) {
+    // Without the list the override's name cannot be checked against POS; a configured
+    // id is still used, but nothing is guessed.
+    if (validOverride) return { id: validOverride, warning: null };
+    return {
+      id: null,
+      warning: `Google & YouTube 頻道探索失敗，已略過（商品已正常上架）：${
+        error instanceof Error ? error.message : String(error)
+      }`
+    };
+  }
+
+  if (validOverride) {
+    const named = publications.find((publication: any) => publication?.id === validOverride);
+    if (named && isPosPublicationName(named.name)) {
+      return {
+        id: null,
+        warning: `${GOOGLE_PUBLICATION_ID_ENV} 指向「${String(named.name).trim()}」（銷售點類通路），已略過 Google & YouTube 頻道`
+      };
+    }
+    return { id: validOverride, warning: null };
+  }
+
+  const matches = publications.filter(
+    (publication: any) => publication?.id && isGooglePublicationName(publication?.name)
+  );
+  if (matches.length === 1) return { id: matches[0].id as string, warning: null };
+  if (matches.length > 1) {
+    return {
+      id: null,
+      warning: `找到多個 Google & YouTube 頻道，已略過（請設定 ${GOOGLE_PUBLICATION_ID_ENV}）`
+    };
+  }
+  return { id: null, warning: "找不到 Google & YouTube 頻道，已略過（商品已正常上架）" };
+}
+
+export async function getShopifyGooglePublicationId(
+  caller: ShopifyAdminGraphQLCaller = defaultCaller
+): Promise<string | null> {
+  return (await discoverShopifyGooglePublication(caller)).id;
+}
+
+export type GoogleChannelPublishResult = {
+  publicationId: string | null;
+  published: boolean;
+  warning: string | null;
+};
+
+/**
+ * Best-effort publish to Google & YouTube. Never throws: any failure becomes a
+ * warning so the (already confirmed) Online Store publication is never rolled back.
+ * `onlyIfMissing` reads the current state first (reconcile) and skips the write
+ * when the product is already published there.
+ */
+export async function publishShopifyProductToGoogle(
+  productId: string,
+  caller: ShopifyAdminGraphQLCaller = defaultCaller,
+  options: { onlyIfMissing?: boolean; excludePublicationIds?: string[] } = {}
+): Promise<GoogleChannelPublishResult> {
+  try {
+    assertLiveProductId(productId);
+    const found = await discoverShopifyGooglePublication(caller);
+    if (!found.id) return { publicationId: null, published: false, warning: found.warning };
+    if (options.excludePublicationIds?.includes(found.id)) {
+      return { publicationId: found.id, published: false, warning: null };
+    }
+
+    if (options.onlyIfMissing) {
+      const stateQuery = `
+        query ReconcileProductGoogleChannel($id: ID!, $publicationId: ID!) {
+          product(id: $id) {
+            id
+            publishedOnPublication(publicationId: $publicationId)
+          }
+        }
+      `;
+      const { response, result } = await caller(stateQuery, { id: productId, publicationId: found.id });
+      if (
+        response.ok &&
+        !(Array.isArray(result?.errors) && result.errors.length > 0) &&
+        result?.data?.product?.publishedOnPublication === true
+      ) {
+        return { publicationId: found.id, published: false, warning: null };
+      }
+    }
+
+    const mutation = `
+      mutation PublishProductToGoogle($id: ID!, $input: [PublicationInput!]!) {
+        publishablePublish(id: $id, input: $input) {
+          publishable {
+            ... on Product { id status }
+          }
+          userErrors { field message }
+        }
+      }
+    `;
+    const { response, result } = await caller(mutation, {
+      id: productId,
+      input: [{ publicationId: found.id }]
+    });
+    const userErrors = result?.data?.publishablePublish?.userErrors;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (Array.isArray(result?.errors) && result.errors.length > 0) throw new Error(messages(result.errors));
+    if (Array.isArray(userErrors) && userErrors.length > 0) throw new Error(messages(userErrors));
+    return { publicationId: found.id, published: true, warning: null };
+  } catch (error) {
+    return {
+      publicationId: null,
+      published: false,
+      warning: `Google & YouTube 頻道發布失敗，已略過（商品已正常上架）：${
+        error instanceof Error ? error.message : String(error)
+      }`
+    };
+  }
+}
+
+/**
+ * Reconcile helper: the product is already ACTIVE. Makes sure the required
+ * channels are present. ONLY ever adds publications (never unpublishes, never
+ * edits product content). Throws when the Online Store cannot be confirmed.
+ */
+export async function ensureShopifyProductChannels(
+  productId: string,
+  caller: ShopifyAdminGraphQLCaller = defaultCaller
+): Promise<{ publishedAt: string | null; onlineStoreAdded: boolean; warnings: string[] }> {
+  assertLiveProductId(productId);
+  const publicationId = await getShopifyOnlineStorePublicationId(caller);
+  const stateQuery = `
+    query ReconcileProductChannels($id: ID!, $publicationId: ID!) {
+      product(id: $id) {
+        id
+        status
+        publishedAt
+        publishedOnPublication(publicationId: $publicationId)
+      }
+    }
+  `;
+  const { response, result } = await caller(stateQuery, { id: productId, publicationId });
+  if (!response.ok) {
+    throw new Error(`Shopify channel state query failed: HTTP ${response.status}`);
+  }
+  if (Array.isArray(result?.errors) && result.errors.length > 0) {
+    throw new Error(`Shopify channel state query failed: ${messages(result.errors)}`);
+  }
+  const product = result?.data?.product;
+  if (!product || product.id !== productId) {
+    throw new Error(`Shopify channel state query returned no product for ${productId}`);
+  }
+
+  if (product.publishedOnPublication === true) {
+    const google = await publishShopifyProductToGoogle(productId, caller, {
+      onlyIfMissing: true,
+      excludePublicationIds: [publicationId]
+    });
+    return {
+      publishedAt: typeof product.publishedAt === "string" && product.publishedAt ? product.publishedAt : null,
+      onlineStoreAdded: false,
+      warnings: google.warning ? [google.warning] : []
+    };
+  }
+
+  const published = await publishShopifyProductToOnlineStore(productId, caller);
+  return { publishedAt: published.publishedAt, onlineStoreAdded: true, warnings: published.warnings };
+}
+
 export async function publishShopifyProductToOnlineStore(
   productId: string,
   caller: ShopifyAdminGraphQLCaller = defaultCaller
-): Promise<{ id: string; publicationId: string; publishedAt: string }> {
+): Promise<{
+  id: string;
+  publicationId: string;
+  publishedAt: string;
+  googlePublicationId: string | null;
+  warnings: string[];
+}> {
   assertLiveProductId(productId);
   const publicationId = await getShopifyOnlineStorePublicationId(caller);
 
@@ -269,10 +489,17 @@ export async function publishShopifyProductToOnlineStore(
     );
   }
 
+  // Optional second channel: only after the required one is confirmed, never fatal.
+  const google = await publishShopifyProductToGoogle(productId, caller, {
+    excludePublicationIds: [publicationId]
+  });
+
   return {
     id: product.id,
     publicationId,
-    publishedAt: product.publishedAt
+    publishedAt: product.publishedAt,
+    googlePublicationId: google.published ? google.publicationId : null,
+    warnings: google.warning ? [google.warning] : []
   };
 }
 

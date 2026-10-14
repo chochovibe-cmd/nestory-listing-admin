@@ -10,6 +10,13 @@
  * - PUBLISH-GUARD: mock mode is a dry run. No publish_batches / items rows, no
  *   current_publish_batch_id, no Make webhook, no batch notifications; each draft
  *   only goes through publishDraft's read-only checks (see runPublishBatchDryRun).
+ *
+ * PUBLISH-BATCH: the same pieces also drive the stepwise mode (one request per
+ * item, see publishBatchStepwise.ts):
+ *   createPublishBatchRecords  header + queued items (+ draft pointer)
+ *   runPublishBatchItem        publish ONE item and write its result row
+ *   finalizePublishBatch       terminal header write, claimed exactly once
+ * runPublishBatch below is the original one-request loop built from them.
  */
 
 import {
@@ -50,12 +57,7 @@ export type RunPublishBatchInput = {
   deadlineMs?: number;
   minRemainingMs?: number;
   /** Inject publishDraft for unit tests. */
-  publishOne?: (
-    client: PublishBatchServiceClient,
-    id: string,
-    mode: PublishMode,
-    opts?: PublishOneOptions
-  ) => Promise<PublishDraftResult>;
+  publishOne?: PublishOneFn;
   /** Skip Make webhook (tests). */
   skipMakeWebhook?: boolean;
   /** Inject for tests; default = SHOPIFY_PUBLISH_MOCK is anything but exactly "false". */
@@ -70,6 +72,13 @@ export type PublishOneOptions = {
   confirmedBy?: string | null;
   mockMode?: boolean;
 };
+
+export type PublishOneFn = (
+  client: PublishBatchServiceClient,
+  id: string,
+  mode: PublishMode,
+  opts?: PublishOneOptions
+) => Promise<PublishDraftResult>;
 
 export type RunPublishBatchResult =
   | {
@@ -95,7 +104,7 @@ export type RunPublishBatchResult =
       batchId?: string | null;
     };
 
-function draftTitle(row: {
+export function draftTitle(row: {
   title_zh?: string | null;
   taobao_title?: string | null;
   original_title?: string | null;
@@ -251,41 +260,39 @@ async function runPublishBatchDryRun(
   };
 }
 
-export async function runPublishBatch(
-  input: RunPublishBatchInput
-): Promise<RunPublishBatchResult> {
-  const {
-    serviceSupabase,
-    publishMode,
-    createdBy,
-    now = () => Date.now(),
-    deadlineMs = PUBLISH_BATCH_DEADLINE_MS,
-    minRemainingMs = PUBLISH_BATCH_MIN_REMAINING_MS,
-    publishOne = publishDraft,
-    skipMakeWebhook = false,
-    confirmVariantPrices = false
-  } = input;
-  const mockMode = input.mockMode ?? process.env.SHOPIFY_PUBLISH_MOCK !== "false";
+// ---------------------------------------------------------------------------
+// PUBLISH-BATCH: reusable pieces (one-shot loop + stepwise mode)
+// ---------------------------------------------------------------------------
 
-  const gapMs = input.gapMs ?? resolvePublishItemGapMs();
-  const uniqueIds = [...new Set(input.draftIds.filter((id) => typeof id === "string" && id.length > 0))];
+export type PublishBatchPlanItem = {
+  draftId: string;
+  title: string;
+  processTag: ReturnType<typeof processTagFromImageIntents>;
+};
 
-  if (uniqueIds.length === 0) {
-    return { ok: false, error: "draftIds must be a non-empty string array", status: 400 };
-  }
+export type CreatePublishBatchRecordsResult =
+  | {
+      ok: true;
+      batchId: string;
+      ordered: PublishBatchPlanItem[];
+      snapshot: PublishBatchSnapshotDraft[];
+      /** Drafts that exist (and are visible), by id. */
+      draftById: Map<string, Record<string, unknown>>;
+    }
+  | { ok: false; error: string; status: number; hint?: string; batchId?: string | null };
 
-  // Defense-in-depth for non-HTTP callers: a configured live-test allowlist
-  // must not be bypassed by invoking the batch runner directly.
-  const liveTestGuardError = checkLiveTestGuard({ draftIds: uniqueIds, publishMode });
-  if (liveTestGuardError) {
-    return { ok: false, error: liveTestGuardError, status: 403 };
-  }
-
-  if (mockMode) {
-    return runPublishBatchDryRun(input, uniqueIds);
-  }
-
-  const startedAt = now();
+/**
+ * Header (status "processing") + one "queued" row per draft + draft pointer.
+ * Does NOT publish anything. Callers have already validated ids / live-test guard.
+ */
+export async function createPublishBatchRecords(input: {
+  serviceSupabase: PublishBatchServiceClient;
+  uniqueIds: string[];
+  publishMode: PublishMode;
+  createdBy: string | null;
+  now?: () => number;
+}): Promise<CreatePublishBatchRecordsResult> {
+  const { serviceSupabase, uniqueIds, publishMode, createdBy, now = () => Date.now() } = input;
 
   const { data: drafts, error: draftError } = await serviceSupabase
     .from("product_drafts")
@@ -316,18 +323,16 @@ export async function runPublishBatch(
     imagesByDraft.set(draftId, list);
   }
 
-  const draftById = new Map((drafts ?? []).map((d) => [d.id as string, d]));
-  const ordered: Array<{
-    draftId: string;
-    title: string;
-    processTag: ReturnType<typeof processTagFromImageIntents>;
-  }> = [];
+  const draftById = new Map(
+    (drafts ?? []).map((d) => [d.id as string, d as Record<string, unknown>])
+  );
+  const ordered: PublishBatchPlanItem[] = [];
   for (const id of uniqueIds) {
     const row = draftById.get(id) ?? null;
     const imgs = imagesByDraft.get(id) ?? [];
     ordered.push({
       draftId: id,
-      title: row ? draftTitle(row) : "找不到草稿",
+      title: row ? draftTitle(row as Parameters<typeof draftTitle>[0]) : "找不到草稿",
       processTag: processTagFromImageIntents(imgs)
     });
   }
@@ -405,6 +410,387 @@ export async function runPublishBatch(
       // ignore missing column / RLS
     }
   }
+
+  return { ok: true, batchId, ordered, snapshot, draftById };
+}
+
+/**
+ * Publish ONE item of a batch and write its result row (done / failed).
+ * `alreadyClaimed` = the stepwise route already moved the row queued → processing
+ * with a conditional update, so this must not flip it again.
+ */
+export async function runPublishBatchItem(input: {
+  serviceSupabase: PublishBatchServiceClient;
+  batchId: string;
+  draftId: string;
+  title: string;
+  /** false → "草稿不存在或無權限" without calling publishDraft. */
+  draftExists: boolean;
+  publishMode: PublishMode;
+  createdBy: string | null;
+  publishOne?: PublishOneFn;
+  confirmVariantPrices?: boolean;
+  now?: () => number;
+  alreadyClaimed?: boolean;
+}): Promise<PublishBatchItemResult> {
+  const {
+    serviceSupabase,
+    batchId,
+    draftId,
+    title,
+    draftExists,
+    publishMode,
+    createdBy,
+    publishOne = publishDraft,
+    confirmVariantPrices = false,
+    now = () => Date.now(),
+    alreadyClaimed = false
+  } = input;
+
+  const writeItem = (patch: Record<string, unknown>) =>
+    serviceSupabase
+      .from("publish_batch_items")
+      .update(patch)
+      .eq("batch_id", batchId)
+      .eq("draft_id", draftId);
+
+  if (!draftExists) {
+    const err = "草稿不存在或無權限";
+    await writeItem({
+      item_status: "failed",
+      error_message: err,
+      completed_at: new Date(now()).toISOString()
+    });
+    return { draftId, title, itemStatus: "failed", ok: false, error: err };
+  }
+
+  if (!alreadyClaimed) {
+    await writeItem({ item_status: "processing" });
+  }
+
+  let pubResult: PublishDraftResult;
+  try {
+    pubResult = await publishOne(serviceSupabase, draftId, publishMode, {
+      confirmVariantPrices,
+      confirmedBy: createdBy,
+      // The batch already decided live; publishDraft must not re-read the env.
+      mockMode: false
+    });
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    await writeItem({
+      item_status: "failed",
+      error_message: err.slice(0, 500),
+      completed_at: new Date(now()).toISOString()
+    });
+    return { draftId, title, itemStatus: "failed", ok: false, error: err };
+  }
+
+  if (pubResult.ok) {
+    const productId = "productId" in pubResult ? pubResult.productId : null;
+    const adminUrl = "adminUrl" in pubResult ? pubResult.adminUrl : null;
+    const mock = "mock" in pubResult && pubResult.mock === true;
+    const reconciled = "code" in pubResult && pubResult.code === "RECONCILED";
+    const warnings = "warnings" in pubResult && pubResult.warnings?.length ? pubResult.warnings : undefined;
+    await writeItem({
+      item_status: "done",
+      error_message: null,
+      shopify_product_id: productId ?? null,
+      shopify_admin_url: adminUrl ?? null,
+      completed_at: new Date(now()).toISOString()
+    });
+    return {
+      draftId,
+      title,
+      itemStatus: "done",
+      ok: true,
+      mock: mock || undefined,
+      productId: productId ?? null,
+      adminUrl: adminUrl ?? null,
+      ...(reconciled ? { reconciled: true } : {}),
+      ...(warnings ? { warnings } : {})
+    };
+  }
+
+  const err = pubResult.error || "發布失敗";
+  await writeItem({
+    item_status: "failed",
+    error_message: err.slice(0, 500),
+    completed_at: new Date(now()).toISOString()
+  });
+  return {
+    draftId,
+    title,
+    itemStatus: "failed",
+    ok: false,
+    error: err,
+    // PUBLISH-GUARD: readiness blockers travel with the item (HTTP 409 semantics).
+    ...(pubResult.code ? { code: pubResult.code } : {}),
+    ...(pubResult.blockers ? { blockers: pubResult.blockers } : {})
+  };
+}
+
+export type PublishBatchItemCounts = {
+  total: number;
+  done: number;
+  failed: number;
+  skipped: number;
+  queued: number;
+  processing: number;
+};
+
+export async function getPublishBatchItemCounts(
+  serviceSupabase: PublishBatchServiceClient,
+  batchId: string
+): Promise<PublishBatchItemCounts> {
+  const { data } = await serviceSupabase
+    .from("publish_batch_items")
+    .select("item_status")
+    .eq("batch_id", batchId);
+  const counts: PublishBatchItemCounts = {
+    total: 0,
+    done: 0,
+    failed: 0,
+    skipped: 0,
+    queued: 0,
+    processing: 0
+  };
+  for (const row of (data ?? []) as Array<{ item_status?: string }>) {
+    counts.total += 1;
+    switch (row.item_status) {
+      case "done":
+        counts.done += 1;
+        break;
+      case "failed":
+        counts.failed += 1;
+        break;
+      case "skipped":
+        counts.skipped += 1;
+        break;
+      case "processing":
+        counts.processing += 1;
+        break;
+      default:
+        counts.queued += 1;
+    }
+  }
+  return counts;
+}
+
+export type FinalizePublishBatchInput = {
+  serviceSupabase: PublishBatchServiceClient;
+  batchId: string;
+  publishMode: PublishMode;
+  /** One-shot passes its in-memory tally; stepwise/recovery leave it out (read from items). */
+  counts?: { total: number; done: number; failed: number; skipped: number };
+  stoppedEarly?: boolean;
+  /** Why items were skipped, for error_summary. Default: time budget. */
+  skipNote?: string;
+  /** Result list for the Make payload; default = derived from the item rows. */
+  results?: PublishBatchItemResult[];
+  /** Default = read from the batch header. */
+  snapshot?: PublishBatchSnapshotDraft[];
+  now?: () => number;
+  skipMakeWebhook?: boolean;
+};
+
+export type FinalizePublishBatchResult = {
+  /** true = THIS call performed the processing → terminal transition (and sent the notices). */
+  claimed: boolean;
+  batchStatus: PublishBatchStatus;
+  counts: { total: number; done: number; failed: number; skipped: number };
+  makeWebhook: "sent" | "skipped" | "error";
+};
+
+/**
+ * Terminal header write + notifications. The write is conditional on
+ * status = 'processing', so however many tabs / recovery sweeps race here,
+ * exactly one caller wins and only the winner sends the notification and the
+ * Make webhook.
+ */
+export async function finalizePublishBatch(
+  input: FinalizePublishBatchInput
+): Promise<FinalizePublishBatchResult> {
+  const {
+    serviceSupabase,
+    batchId,
+    publishMode,
+    now = () => Date.now(),
+    stoppedEarly = false,
+    skipNote = "時間不足",
+    skipMakeWebhook = false
+  } = input;
+
+  let tally = input.counts;
+  if (!tally) {
+    const fromDb = await getPublishBatchItemCounts(serviceSupabase, batchId);
+    tally = {
+      total: fromDb.total,
+      done: fromDb.done,
+      failed: fromDb.failed,
+      // Anything still queued/processing at this point is abandoned work.
+      skipped: fromDb.skipped + fromDb.queued + fromDb.processing
+    };
+  }
+  const doneCount = tally.done;
+  const failedCount = tally.failed;
+  const skippedCount = tally.skipped;
+
+  const batchStatus = summarizePublishBatchStatus({
+    total: tally.total,
+    done: doneCount,
+    failed: failedCount,
+    skipped: skippedCount
+  });
+
+  const errorSummaryParts: string[] = [];
+  if (failedCount > 0) errorSummaryParts.push(`失敗 ${failedCount}`);
+  if (skippedCount > 0) errorSummaryParts.push(`略過 ${skippedCount}（${skipNote}）`);
+  const completedAt = new Date(now()).toISOString();
+
+  const { data: claimedRow, error: claimError } = await serviceSupabase
+    .from("publish_batches")
+    .update({
+      status: batchStatus,
+      done_count: doneCount,
+      failed_count: failedCount,
+      error_summary: errorSummaryParts.length ? errorSummaryParts.join("；") : null,
+      completed_at: completedAt,
+      updated_at: completedAt
+      // notify_sent_at claimed only by tryNotify when ≥1 channel sent (Q3b)
+    })
+    .eq("id", batchId)
+    .eq("status", "processing")
+    .select("id")
+    .maybeSingle();
+
+  const claimed = !claimError && Boolean(claimedRow?.id);
+  if (!claimed) {
+    return { claimed: false, batchStatus, counts: tally, makeWebhook: "skipped" };
+  }
+
+  // Event #2: after terminal write; never throws into publish result
+  await safeTryNotifyPublishBatchIfComplete(batchId, { serviceSupabase });
+
+  let makeWebhook: "sent" | "skipped" | "error" = "skipped";
+  if (!skipMakeWebhook && process.env.MAKE_WEBHOOK_URL) {
+    try {
+      let snapshot = input.snapshot;
+      let results = input.results;
+      if (!snapshot || !results) {
+        const [{ data: header }, { data: itemRows }] = await Promise.all([
+          serviceSupabase
+            .from("publish_batches")
+            .select("snapshot_json")
+            .eq("id", batchId)
+            .maybeSingle(),
+          serviceSupabase
+            .from("publish_batch_items")
+            .select("draft_id, item_status, error_message, shopify_product_id")
+            .eq("batch_id", batchId)
+        ]);
+        snapshot = snapshot ?? ((header?.snapshot_json as PublishBatchSnapshotDraft[] | null) ?? []);
+        const titleById = new Map(snapshot.map((s) => [s.draftId, s.title]));
+        results =
+          results ??
+          ((itemRows ?? []) as Array<{
+            draft_id: string;
+            item_status: PublishBatchItemResult["itemStatus"];
+            error_message?: string | null;
+            shopify_product_id?: string | null;
+          }>).map((row) => ({
+            draftId: row.draft_id,
+            title: titleById.get(row.draft_id) ?? "未命名草稿",
+            itemStatus: row.item_status,
+            ok: row.item_status === "done",
+            error: row.error_message ?? undefined,
+            productId: row.shopify_product_id ?? null
+          }));
+      }
+      await notifyMake("publish_batch_submitted", {
+        batchId,
+        publishMode,
+        batchStatus,
+        totalCount: tally.total,
+        doneCount,
+        failedCount,
+        skippedCount,
+        stoppedEarly,
+        snapshot,
+        results: results.map((r) => ({
+          draftId: r.draftId,
+          itemStatus: r.itemStatus,
+          ok: r.ok,
+          error: r.error ?? null,
+          productId: r.productId ?? null
+        }))
+      });
+      makeWebhook = "sent";
+    } catch {
+      makeWebhook = "error";
+    }
+  }
+
+  return { claimed: true, batchStatus, counts: tally, makeWebhook };
+}
+
+// ---------------------------------------------------------------------------
+// One-shot batch (original behaviour: everything inside ONE request)
+// ---------------------------------------------------------------------------
+
+export async function runPublishBatch(
+  input: RunPublishBatchInput
+): Promise<RunPublishBatchResult> {
+  const {
+    serviceSupabase,
+    publishMode,
+    createdBy,
+    now = () => Date.now(),
+    deadlineMs = PUBLISH_BATCH_DEADLINE_MS,
+    minRemainingMs = PUBLISH_BATCH_MIN_REMAINING_MS,
+    publishOne = publishDraft,
+    skipMakeWebhook = false,
+    confirmVariantPrices = false
+  } = input;
+  const mockMode = input.mockMode ?? process.env.SHOPIFY_PUBLISH_MOCK !== "false";
+
+  const gapMs = input.gapMs ?? resolvePublishItemGapMs();
+  const uniqueIds = [...new Set(input.draftIds.filter((id) => typeof id === "string" && id.length > 0))];
+
+  if (uniqueIds.length === 0) {
+    return { ok: false, error: "draftIds must be a non-empty string array", status: 400 };
+  }
+
+  // Defense-in-depth for non-HTTP callers: a configured live-test allowlist
+  // must not be bypassed by invoking the batch runner directly.
+  const liveTestGuardError = checkLiveTestGuard({ draftIds: uniqueIds, publishMode });
+  if (liveTestGuardError) {
+    return { ok: false, error: liveTestGuardError, status: 403 };
+  }
+
+  if (mockMode) {
+    return runPublishBatchDryRun(input, uniqueIds);
+  }
+
+  const startedAt = now();
+
+  const created = await createPublishBatchRecords({
+    serviceSupabase,
+    uniqueIds,
+    publishMode,
+    createdBy,
+    now
+  });
+  if (!created.ok) {
+    return {
+      ok: false,
+      error: created.error,
+      status: created.status,
+      hint: created.hint,
+      batchId: created.batchId ?? null
+    };
+  }
+  const { batchId, ordered, snapshot, draftById } = created;
 
   const results: PublishBatchItemResult[] = [];
   let doneCount = 0;
@@ -491,112 +877,21 @@ export async function runPublishBatch(
     }
     firstItem = false;
 
-    if (!draftById.has(item.draftId)) {
-      const err = "草稿不存在或無權限";
-      await serviceSupabase
-        .from("publish_batch_items")
-        .update({
-          item_status: "failed",
-          error_message: err,
-          completed_at: new Date(now()).toISOString()
-        })
-        .eq("batch_id", batchId)
-        .eq("draft_id", item.draftId);
-      results.push({
-        draftId: item.draftId,
-        title: item.title,
-        itemStatus: "failed",
-        ok: false,
-        error: err
-      });
-      failedCount += 1;
-      continue;
-    }
-
-    await serviceSupabase
-      .from("publish_batch_items")
-      .update({ item_status: "processing" })
-      .eq("batch_id", batchId)
-      .eq("draft_id", item.draftId);
-
-    let pubResult: PublishDraftResult;
-    try {
-      pubResult = await publishOne(serviceSupabase, item.draftId, publishMode, {
-        confirmVariantPrices,
-        confirmedBy: createdBy,
-        // The batch already decided live; publishDraft must not re-read the env.
-        mockMode: false
-      });
-    } catch (e) {
-      const err = e instanceof Error ? e.message : String(e);
-      await serviceSupabase
-        .from("publish_batch_items")
-        .update({
-          item_status: "failed",
-          error_message: err.slice(0, 500),
-          completed_at: new Date(now()).toISOString()
-        })
-        .eq("batch_id", batchId)
-        .eq("draft_id", item.draftId);
-      results.push({
-        draftId: item.draftId,
-        title: item.title,
-        itemStatus: "failed",
-        ok: false,
-        error: err
-      });
-      failedCount += 1;
-      continue;
-    }
-
-    if (pubResult.ok) {
-      const productId = "productId" in pubResult ? pubResult.productId : null;
-      const adminUrl = "adminUrl" in pubResult ? pubResult.adminUrl : null;
-      const mock = "mock" in pubResult && pubResult.mock === true;
-      await serviceSupabase
-        .from("publish_batch_items")
-        .update({
-          item_status: "done",
-          error_message: null,
-          shopify_product_id: productId ?? null,
-          shopify_admin_url: adminUrl ?? null,
-          completed_at: new Date(now()).toISOString()
-        })
-        .eq("batch_id", batchId)
-        .eq("draft_id", item.draftId);
-      results.push({
-        draftId: item.draftId,
-        title: item.title,
-        itemStatus: "done",
-        ok: true,
-        mock: mock || undefined,
-        productId: productId ?? null,
-        adminUrl: adminUrl ?? null
-      });
-      doneCount += 1;
-    } else {
-      const err = pubResult.error || "發布失敗";
-      await serviceSupabase
-        .from("publish_batch_items")
-        .update({
-          item_status: "failed",
-          error_message: err.slice(0, 500),
-          completed_at: new Date(now()).toISOString()
-        })
-        .eq("batch_id", batchId)
-        .eq("draft_id", item.draftId);
-      results.push({
-        draftId: item.draftId,
-        title: item.title,
-        itemStatus: "failed",
-        ok: false,
-        error: err,
-        // PUBLISH-GUARD: readiness blockers travel with the item (HTTP 409 semantics).
-        ...(pubResult.code ? { code: pubResult.code } : {}),
-        ...(pubResult.blockers ? { blockers: pubResult.blockers } : {})
-      });
-      failedCount += 1;
-    }
+    const itemResult = await runPublishBatchItem({
+      serviceSupabase,
+      batchId,
+      draftId: item.draftId,
+      title: item.title,
+      draftExists: draftById.has(item.draftId),
+      publishMode,
+      createdBy,
+      publishOne,
+      confirmVariantPrices,
+      now
+    });
+    results.push(itemResult);
+    if (itemResult.ok) doneCount += 1;
+    else failedCount += 1;
   }
 
   // If we stopped early via continue loop, remaining ordered items may still be queued
@@ -624,73 +919,30 @@ export async function runPublishBatch(
     skippedCount += 1;
   }
 
-  const batchStatus = summarizePublishBatchStatus({
-    total: ordered.length,
-    done: doneCount,
-    failed: failedCount,
-    skipped: skippedCount
+  const finalized = await finalizePublishBatch({
+    serviceSupabase,
+    batchId,
+    publishMode,
+    counts: { total: ordered.length, done: doneCount, failed: failedCount, skipped: skippedCount },
+    stoppedEarly,
+    results,
+    snapshot,
+    now,
+    skipMakeWebhook
   });
-
-  const errorSummaryParts: string[] = [];
-  if (failedCount > 0) errorSummaryParts.push(`失敗 ${failedCount}`);
-  if (skippedCount > 0) errorSummaryParts.push(`略過 ${skippedCount}（時間不足）`);
-  const completedAt = new Date(now()).toISOString();
-
-  await serviceSupabase
-    .from("publish_batches")
-    .update({
-      status: batchStatus,
-      done_count: doneCount,
-      failed_count: failedCount,
-      error_summary: errorSummaryParts.length ? errorSummaryParts.join("；") : null,
-      completed_at: completedAt,
-      updated_at: completedAt
-      // notify_sent_at claimed only by tryNotify when ≥1 channel sent (Q3b)
-    })
-    .eq("id", batchId);
-
-  // Event #2: after terminal write; never throws into publish result
-  await safeTryNotifyPublishBatchIfComplete(batchId, { serviceSupabase });
-
-  let makeWebhook: "sent" | "skipped" | "error" = "skipped";
-  if (!skipMakeWebhook && process.env.MAKE_WEBHOOK_URL) {
-    try {
-      await notifyMake("publish_batch_submitted", {
-        batchId,
-        publishMode,
-        batchStatus,
-        totalCount: ordered.length,
-        doneCount,
-        failedCount,
-        skippedCount,
-        stoppedEarly,
-        snapshot,
-        results: results.map((r) => ({
-          draftId: r.draftId,
-          itemStatus: r.itemStatus,
-          ok: r.ok,
-          error: r.error ?? null,
-          productId: r.productId ?? null
-        }))
-      });
-      makeWebhook = "sent";
-    } catch {
-      makeWebhook = "error";
-    }
-  }
 
   const message = formatPublishBatchOperatorMessage({
     succeeded: doneCount,
     failed: failedCount,
     skipped: skippedCount,
-    batchStatus,
+    batchStatus: finalized.batchStatus,
     publishMode
   });
 
   return {
     ok: true,
     batchId,
-    batchStatus,
+    batchStatus: finalized.batchStatus,
     succeeded: doneCount,
     failed: failedCount,
     skipped: skippedCount,
@@ -698,6 +950,6 @@ export async function runPublishBatch(
     message,
     stoppedEarly,
     elapsedMs: now() - startedAt,
-    makeWebhook
+    makeWebhook: finalized.makeWebhook
   };
 }

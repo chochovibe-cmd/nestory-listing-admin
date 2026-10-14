@@ -232,7 +232,8 @@ await check("records page is not ComingSoon; panel + helpers exist", () => {
   assert.ok(exists("src/components/records/PublishRecordsPanel.tsx"));
   const panel = read("src/components/records/PublishRecordsPanel.tsx");
   assert.match(panel, /重送失敗件|retryFailed/);
-  assert.match(panel, /\/api\/drafts\/batch\/publish/);
+  // PUBLISH-BATCH: the panel posts through the stepwise client helper (which calls the batch route).
+  assert.match(panel, /runStepwisePublishBatch|\/api\/drafts\/batch\/publish/);
   assert.match(panel, /MIGRATION_027|027/);
   assert.ok(exists("src/lib/drafts/publishRecords.ts"));
 });

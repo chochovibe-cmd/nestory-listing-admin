@@ -66,6 +66,8 @@ const scripts = [
   "scripts/verify-image-integrity.mjs",
   // PUBLISH-GUARD: mock mode = dry run (zero writes) + pre-publish blockers.
   "scripts/verify-publish-guard.mjs",
+  // PUBLISH-BATCH: stepwise batch (1 item/request), stale-batch recovery, reconcile, Google channel.
+  "scripts/verify-publish-batch.mjs",
   // REVIEW-FLOW: transition guard, batch return, no-blink leave, approve triage, ⛔ batch, 逐件 skip.
   "scripts/verify-review-flow.mjs"
 ];

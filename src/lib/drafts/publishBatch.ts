@@ -54,7 +54,23 @@ export type PublishBatchItemResult = {
   blockers?: PublishBlocker[];
   /** Mock dry run only: what the live site would do differently. */
   mockNotes?: string[];
+  /** PUBLISH-BATCH: Shopify was already live; only the local state was repaired (no re-sync). */
+  reconciled?: boolean;
+  /** Non-fatal notes (e.g. optional Google & YouTube channel skipped). */
+  warnings?: string[];
 };
+
+/** Stored in publish_batch_items.error_message when a killed run is closed by recovery. */
+export const PUBLISH_INTERRUPTED_ITEM_MESSAGE = "上次發布被中斷（逾時），可在發布紀錄重試";
+
+/** Queued items of an abandoned (idle) batch. */
+export const PUBLISH_BATCH_ABORTED_SKIP_REASON = "批次中斷，未執行";
+
+/** An item stuck in `processing` this long (no batch activity) means its function was killed. */
+export const PUBLISH_STALE_ITEM_MS = 3 * 60_000;
+
+/** A `processing` batch with no activity for this long gets its queued items skipped. */
+export const PUBLISH_IDLE_BATCH_MS = 10 * 60_000;
 
 /**
  * PUBLISH-GUARD: mock mode is a dry run. runPublishBatch writes no

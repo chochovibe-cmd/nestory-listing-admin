@@ -133,16 +133,28 @@ export default async function NewDraftPage({
   let typedVariants: WorkbenchVariantPrice[] = [];
 
   if (draftIds.length > 0) {
-    const [{ data: images }, { data: variants }] = await Promise.all([
+    // PRICE-GUARD: the card editor re-hydrates from these rows. Without cost_is_inherited the
+    // editor re-infers the flag and an unconfirmed (inherited) cost is saved back as confirmed.
+    const workbenchVariantBase =
+      "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id";
+    const [{ data: images }, fullVariants] = await Promise.all([
       supabase.from("product_images").select("*").in("draft_id", draftIds).order("sort_order"),
       supabase
         .from("product_variants")
-        .select(
-          "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id"
-        )
+        .select(`${workbenchVariantBase}, cost_is_inherited, sell_price_locked, compare_at_locked`)
         .in("draft_id", draftIds)
         .order("sort_order", { ascending: true })
     ]);
+    let variants = fullVariants.data as unknown as WorkbenchVariantPrice[] | null;
+    if (fullVariants.error || !variants) {
+      // Pre-migration DB (columns missing) → whole select fails; fall back to the base columns.
+      const fallback = await supabase
+        .from("product_variants")
+        .select(workbenchVariantBase)
+        .in("draft_id", draftIds)
+        .order("sort_order", { ascending: true });
+      variants = fallback.data as unknown as WorkbenchVariantPrice[] | null;
+    }
     typedImages = (images ?? []) as ProductImage[];
     typedVariants = (variants ?? []) as WorkbenchVariantPrice[];
   }

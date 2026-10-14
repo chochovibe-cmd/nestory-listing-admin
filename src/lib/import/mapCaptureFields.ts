@@ -23,6 +23,10 @@ import {
   WARNING_MULTIDIM_NO_FLAT
 } from "@/lib/import/captureTypes";
 import { keepOrInheritVariantCny } from "@/lib/import/captureVariantPrice";
+import {
+  WARNING_HIDDEN_VARIANT_PRICES,
+  captureHidesVariantPrices
+} from "@/lib/import/captureHiddenPrices";
 
 const BRAND_PARAM_KEYS = [
   "品牌",
@@ -438,8 +442,8 @@ export function mapCaptureToDraftFields(
   const listPrice = asPositiveNumber(body.list_price_cny);
   const usedPricePlaceholder = price == null;
   const cnyPrice = price ?? PRICE_PLACEHOLDER_CNY;
-  const priceConfidence = body.capture_meta?.price_confidence ?? null;
-  const priceRequiresConfirmation =
+  let priceConfidence = body.capture_meta?.price_confidence ?? null;
+  let priceRequiresConfirmation =
     usedPricePlaceholder ||
     priceConfidence === "conflict" ||
     priceConfidence === "needs_confirmation";
@@ -480,6 +484,33 @@ export function mapCaptureToDraftFields(
     dimensions: variantDimensions,
     variantImageUrls
   } = mapVariantRows(flats, body.sku_table, price);
+
+  // PRICE-GUARD: Taobao may hide every per-variant price (hideOtherPrice / no sku2info price).
+  // The extension warns, but the server must also demand a per-variant cost check, otherwise
+  // all variants silently publish at the cheapest price. Multi-variant only.
+  const ownPricedFlats = flats.filter(
+    (v) => asPositiveNumber(v.cny_price) != null && !/^dom./.test(asTrimmedString(v.price_source) ?? "")
+  ).length;
+  const domOnlyPricedFlats = flats.filter(
+    (v) => asPositiveNumber(v.cny_price) != null && /^dom./.test(asTrimmedString(v.price_source) ?? "")
+  ).length;
+  const hiddenVariantPrices = captureHidesVariantPrices({
+    clientMeta: body.capture_meta,
+    variantCount: variantRows.length,
+    // table-sourced prices count as priced; the DOM "selected SKU" price covers one variant only
+    pricedVariantCount: Math.max(
+      ownPricedFlats,
+      variantRows.filter((row) => row.cny_price != null).length - domOnlyPricedFlats
+    ),
+    unpricedVariantCount: variantRows.filter((row) => row.cny_price == null).length
+  });
+  const serverPriceWarnings: string[] = [];
+  if (hiddenVariantPrices) {
+    priceRequiresConfirmation = true;
+    if (priceConfidence !== "conflict") priceConfidence = "needs_confirmation";
+    warnings.push(WARNING_HIDDEN_VARIANT_PRICES);
+    serverPriceWarnings.push(WARNING_HIDDEN_VARIANT_PRICES);
+  }
 
   // PKG2A: multi-dim with flat rows already stored → info (axis count × actual rows).
   // No flat → honest warning; never invent cartesian.
@@ -528,7 +559,7 @@ export function mapCaptureToDraftFields(
     params: params ?? null,
     client_meta: body.capture_meta ?? null,
     server: {
-      warnings: stripped.warnings.slice(),
+      warnings: [...stripped.warnings, ...serverPriceWarnings],
       /** PKG2A: true when multi-dim was detected (info or no-flat warning). */
       sku_multi_dim: multiDim,
       /** @deprecated alias kept for older readers */

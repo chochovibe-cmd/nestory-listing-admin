@@ -120,7 +120,8 @@ import {
 } from "@/components/listing/ExportPreflightModal";
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import { PublishPriceConfirmModal } from "@/components/listing/PublishPriceConfirmModal";
-import type { PublishBlocker } from "@/lib/shopify/publishReadiness";
+import { isPricePlaceholderCny } from "@/lib/import/captureTypes";
+import { isVariantPriceUnconfirmedCapture, type PublishBlocker } from "@/lib/shopify/publishReadiness";
 import { formatMockPublishResponseMessage } from "@/lib/drafts/publishBatch";
 import {
   runExportPreflight,
@@ -185,14 +186,15 @@ type ResultCardVariantRow = {
   cny_price?: number | null;
   compare_at_price?: number | null;
   price_locked?: boolean | null;
+  /** PRICE-GUARD: must reach dbRowsToForm or an inherited cost is re-inferred as independent. */
+  cost_is_inherited?: boolean | null;
+  sell_price_locked?: boolean | null;
+  compare_at_locked?: boolean | null;
   sort_order?: number | null;
   inventory_quantity?: number | null;
   inventory_policy?: string | null;
   sku?: string | null;
   image_id?: string | null;
-  cost_is_inherited?: boolean | null;
-  sell_price_locked?: boolean | null;
-  compare_at_locked?: boolean | null;
   source_sku_id?: string | null;
   source_options?: { names: Array<string | null>; values: Array<string | null> } | null;
 };
@@ -437,6 +439,9 @@ export function ResultCard({
           sell: v.twd_price,
           cmp: v.compare_at_price,
           lock: v.price_locked,
+          inh: v.cost_is_inherited,
+          slk: v.sell_price_locked,
+          clk: v.compare_at_locked,
           qty: v.inventory_quantity,
           pol: v.inventory_policy,
           sku: v.sku,
@@ -451,7 +456,9 @@ export function ResultCard({
     const dimsRaw = Array.isArray(draft.variant_dimensions)
       ? (draft.variant_dimensions as VariantDimension[])
       : [];
-    const { dimensions, rows } = dbRowsToForm(dimsRaw, variantPrices);
+    const { dimensions, rows } = dbRowsToForm(dimsRaw, variantPrices, {
+      productCost: isPricePlaceholderCny(draft.cny_price) ? null : (draft.cny_price ?? null)
+    });
     setVariantDimensions(dimensions);
     setVariantRows(rows);
     setVariantsDirty(false);
@@ -3103,6 +3110,7 @@ export function ResultCard({
               }}
               onWarning={setVariantWarning}
               priceMode={priceMode}
+              priceUnconfirmed={isVariantPriceUnconfirmedCapture(draft.raw_capture)}
               productCost={
                 draft.cny_price != null && Number.isFinite(Number(draft.cny_price))
                   ? Number(draft.cny_price)

@@ -29,6 +29,7 @@ export function ResultCardSpecsPanel({
   restoreBusyIndex,
   restoreDisabledReason,
   onRestoreExcluded,
+  priceUnconfirmed = false,
   onDimensionsChange,
   onRowsChange,
   onWarning
@@ -46,6 +47,8 @@ export function ResultCardSpecsPanel({
   /** Non-null → 恢復 is disabled and this says why (e.g. unsaved edits). */
   restoreDisabledReason: string | null;
   onRestoreExcluded: (index: number) => void;
+  /** PRICE-GUARD: capture hid/flagged per-variant prices and nobody confirmed them yet. */
+  priceUnconfirmed?: boolean;
   onDimensionsChange: (dims: VariantDimension[]) => void;
   onRowsChange: (rows: VariantFormRow[]) => void;
   onWarning: (msg: string | null) => void;
@@ -57,6 +60,12 @@ export function ResultCardSpecsPanel({
   const [excludedOpen, setExcludedOpen] = useState(false);
   const hasRows = variantRows.filter(isVariantRowFilled).length > 0;
 
+  const unconfirmedLabels = priceUnconfirmed
+    ? variantRows
+        .filter((row) => isVariantRowFilled(row) && row.costIsInherited)
+        .map((row) => row.optionValues.map((v) => v.trim()).filter(Boolean).join("／"))
+    : [];
+
   return (
     <div className="rc-tabpanel" role="tabpanel">
       <div className="rc-field rc-span-2">
@@ -64,6 +73,13 @@ export function ResultCardSpecsPanel({
         {costMissing ? (
           <p className="price-soft-warn" style={{ margin: "0 0 8px" }}>
             ⚠ 成本未取得
+          </p>
+        ) : null}
+        {priceUnconfirmed && unconfirmedLabels.length > 0 ? (
+          <p className="price-soft-warn" style={{ margin: "0 0 8px" }}>
+            ⚠ 淘寶隱藏了各款價格，這 {unconfirmedLabels.length} 款仍暫用商品成本（未逐款確認），發布前請逐款核對：
+            {unconfirmedLabels.slice(0, 6).map((label) => `「${label}」`).join("")}
+            {unconfirmedLabels.length > 6 ? "…" : ""}
           </p>
         ) : null}
         {variantDimensions.length === 0 && variantRows.filter(isVariantRowFilled).length === 0 ? (
@@ -92,6 +108,7 @@ export function ResultCardSpecsPanel({
             priceMode={priceMode}
             pricingSettings={getStoredPricingSettings()}
             productCost={effectiveProductCost}
+            unconfirmedCost={priceUnconfirmed}
             rows={variantRows}
             warning={variantWarning}
           />

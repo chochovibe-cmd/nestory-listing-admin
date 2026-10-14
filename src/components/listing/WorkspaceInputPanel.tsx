@@ -141,7 +141,11 @@ async function persistProductVariants(
   if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
     const retry = await client
       .from("product_variants")
-      .insert(omitVariantOverrideColumns(rows));
+      .insert(omitVariantOverrideColumns(rows, insertError.message));
+    insertError = retry.error;
+  }
+  if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
+    const retry = await client.from("product_variants").insert(omitVariantOverrideColumns(rows));
     insertError = retry.error;
   }
   if (insertError) {

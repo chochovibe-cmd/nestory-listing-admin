@@ -71,6 +71,7 @@ type VariantEditorRenderContext = {
   portalReady: boolean;
   priceMode: PriceMode;
   productCost: number | null;
+  unconfirmedCost: boolean;
   removeRow: (index: number) => void;
   renameAxisValue: (dimIndex: number, oldValue: string, nextValue: string) => boolean;
   reorderDragKey: string | null;
@@ -395,7 +396,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
     gridCols, isNarrow, mobileSelected, onCostChange, onMobileRowClick, onTouchDragPointerDown,
     onTouchDragPointerMove, openEditorModal, priceMode, productCost, removeRow, reorderDragKey,
     reorderOverKey, rows, rowsAtMax, setReorderDragKey, setReorderOverKey, showGrid, startRowLongPress,
-    updateRow
+    unconfirmedCost, updateRow
   } = ctx;
   const mobileHeaders = dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }];
   return (
@@ -476,6 +477,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
                       <div className="v-mobile-cost">
                         <NumericStepper value={row.cost} ariaLabel={costLabel} onChange={(value) => onCostChange(index, value)} />
                         {costOverridden ? <span className="rc-tag v-manual-override-tag">已手動覆蓋</span> : null}
+                        {unconfirmedCost && row.costIsInherited ? <span className="v-cost-badge unconfirmed">未確認</span> : null}
                       </div>
                       <div className="v-mobile-inventory">
                         <label className="v-inventory-toggle">
@@ -567,7 +569,11 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
                   ))}
                   <span className="v-cell" data-label={costLabel}>
                     <input aria-label={costLabel} className={row.costIsInherited ? "v-cost-inherited" : undefined} type="number" value={row.cost} onChange={(event) => onCostChange(index, event.target.value)} />
-                    {row.costIsInherited ? <span className="v-cost-badge muted">已套用商品成本，可覆蓋</span> : null}
+                    {row.costIsInherited
+                      ? unconfirmedCost
+                        ? <span className="v-cost-badge unconfirmed">未確認・暫用商品成本，請逐款核對</span>
+                        : <span className="v-cost-badge muted">已套用商品成本，可覆蓋</span>
+                      : null}
                   </span>
                   <span className="v-row-actions">
                     <button type="button" className="v-row-dup" disabled={rowsAtMax} onClick={() => duplicateRow(index)}>複製</button>

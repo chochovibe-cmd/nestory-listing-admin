@@ -74,6 +74,7 @@ export function formRowsToDbInserts(
         qtyNum != null && Number.isInteger(qtyNum) && qtyNum >= 0 && qtyTrim !== "";
       const sellPriceLocked = Boolean(row.sellPriceLocked);
       const compareAtLocked = Boolean(row.compareAtLocked);
+      const costValue = Number.isFinite(costNum) && costNum > 0 ? costNum : null;
 
       return {
         option1_name: names[0],
@@ -83,11 +84,13 @@ export function formRowsToDbInserts(
         option3_name: names[2] && v2 ? names[2] : names[2] && dims.length > 2 ? names[2] : null,
         option3_value: names[2] && v2 ? v2 : null,
         sku: row.sku.trim() || null,
-        cny_price: Number.isFinite(costNum) && costNum > 0 ? costNum : null,
+        cny_price: costValue,
         twd_price: Number.isFinite(sellNum) && sellNum > 0 ? Math.round(sellNum) : null,
         compare_at_price:
           Number.isFinite(cmpNum) && cmpNum > 0 ? Math.round(cmpNum) : null,
-        cost_is_inherited: Boolean(row.costIsInherited),
+        // PRICE-GUARD: only a cost the user typed makes the row independent; a row without
+        // any cost (NULL) can never be "confirmed", so it always stays inherited.
+        cost_is_inherited: Boolean(row.costIsInherited) || costValue == null,
         sell_price_locked: sellPriceLocked,
         compare_at_locked: compareAtLocked,
         price_locked: sellPriceLocked || compareAtLocked,
@@ -226,8 +229,13 @@ export function dbRowsToForm(
     const rowCost = r.cny_price != null ? Number(r.cny_price) : null;
     const inferredInherited =
       hasProductCost && rowCost != null && Number.isFinite(rowCost) && rowCost > 0 && rowCost === productCost;
-    const costIsInherited =
+    // PRICE-GUARD: a row with no cost of its own (NULL) is ALWAYS "inherited / unconfirmed",
+    // whatever the flag says (older saves wrote NULL + false). Otherwise trust the flag; a
+    // missing flag (select without the column / pre-migration DB) falls back to inference.
+    const flagInherited =
       typeof r.cost_is_inherited === "boolean" ? r.cost_is_inherited : inferredInherited;
+    const costIsInherited =
+      flagInherited || rowCost == null || !Number.isFinite(rowCost) || rowCost <= 0;
     return {
       optionValues: [
         r.option1_value ?? "",

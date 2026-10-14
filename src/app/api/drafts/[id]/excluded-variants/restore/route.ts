@@ -54,6 +54,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
     ({ error: insertError } = await serviceSupabase
       .from("product_variants")
+      .insert(omitVariantOverrideColumns([plan.row], insertError.message)[0]));
+  }
+  if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
+    ({ error: insertError } = await serviceSupabase
+      .from("product_variants")
       .insert(omitVariantOverrideColumns([plan.row])[0]));
   }
   if (insertError) return Response.json({ error: `恢復款式失敗：${insertError.message}` }, { status: 500 });

@@ -349,6 +349,14 @@ export interface ProductVariantRow {
   twd_price: number | null;
   compare_at_price: number | null;
   price_locked: boolean;
+  /**
+   * D3.10A override state (optional until migration 20260822223100). PRICE-GUARD: every select
+   * that feeds the variant editor must include these, otherwise the editor re-infers them and
+   * an inherited (unconfirmed) cost is silently saved back as an independent one.
+   */
+  cost_is_inherited?: boolean | null;
+  sell_price_locked?: boolean | null;
+  compare_at_locked?: boolean | null;
   sort_order: number;
   inventory_quantity: number;
   inventory_policy: "deny" | "continue";
@@ -359,10 +367,6 @@ export interface ProductVariantRow {
   /** VARIANT-CLEAN (migration 20261014100000): Taobao skuId + imported option text. */
   source_sku_id?: string | null;
   source_options?: { names: Array<string | null>; values: Array<string | null> } | null;
-  /** D3.10A split locks (NULL on legacy rows -> price_locked fallback). */
-  sell_price_locked?: boolean | null;
-  compare_at_locked?: boolean | null;
-  cost_is_inherited?: boolean | null;
   created_at: string;
 }
 

@@ -1220,6 +1220,20 @@ function createShopifyFake({
             userErrors: []
           }
         });
+      // PUBLISH-BATCH: Google & YouTube is a REQUIRED channel now (POS is optional, absent here).
+      case "SalesChannelPublicationDiscovery":
+        return ok({
+          publications: {
+            nodes: [
+              { id: "gid://shopify/Publication/1", name: "Online Store" },
+              { id: "gid://shopify/Publication/2", name: "Google & YouTube" }
+            ]
+          }
+        });
+      case "PublishProductToGoogle":
+        return ok({ publishablePublish: { publishable: { id: variables.id, status: "ACTIVE" }, userErrors: [] } });
+      case "ProductChannelState":
+        return ok({ product: { id: variables.id, publishedOnPublication: true } });
       case "VerifyProductOnlineStore":
         return ok({
           product: { id: variables.id, status: "ACTIVE", publishedAt: "2026-10-13T00:00:00Z", publishedOnPublication: true }
@@ -1315,7 +1329,8 @@ await check("retry (a2): the real case — everything synced, ACTIVE/Online Stor
   assert.deepEqual(shopify.mutationNames(), [
     "ProductVariantsBulkUpdate",
     "ProductUpdateStatus",
-    "PublishProductToOnlineStore"
+    "PublishProductToOnlineStore",
+    "PublishProductToGoogle"
   ]);
   assert.equal(shopify.named("ProductUpdateStatus")[0].variables.product.status, "ACTIVE");
   assert.equal(fake.tables.product_drafts[0].status, "active_published");

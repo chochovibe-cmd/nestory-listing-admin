@@ -4,7 +4,7 @@
  * run finished its Shopify work but never wrote the local result).
  *
  * Shopify side is READ-ONLY except one thing: when the product is ACTIVE this
- * may ADD missing sales-channel publications (Online Store / Google & YouTube).
+ * may ADD missing sales-channel publications (Online Store / Google & YouTube required, POS optional).
  * It never removes a publication, never changes the status and never touches
  * product content. The local draft is then marked exactly like a successful
  * ACTIVE publish (see finishLocalSuccess in publishDraftSafe.ts).
@@ -40,7 +40,7 @@ export type ReconcileResult = {
   productId?: string | null;
   adminUrl?: string | null;
   remoteStatus?: string | null;
-  /** Non-fatal notes (e.g. Google & YouTube channel skipped). */
+  /** Non-fatal notes (e.g. optional 銷售點 POS channel skipped). */
   warnings?: string[];
 };
 
@@ -151,7 +151,7 @@ export async function reconcileDraftWithShopify(
     return {
       reconciled: false,
       outcome: "error",
-      message: `Shopify 商品已是 ACTIVE，但無法確認線上商店通路：${errText(e)}`,
+      message: `Shopify 商品已是 ACTIVE，但無法確認必要通路（線上商店／Google & YouTube）：${errText(e)}`,
       productId,
       adminUrl,
       remoteStatus: "ACTIVE"

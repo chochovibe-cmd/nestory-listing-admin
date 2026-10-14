@@ -50,7 +50,7 @@ export type PublishDraftResult =
       /** PUBLISH-BATCH: "RECONCILED" = Shopify was already live, only the local state was repaired. */
       code?: "RECONCILED";
       message?: string;
-      /** Non-fatal notes (e.g. optional Google & YouTube channel skipped). */
+      /** Non-fatal notes (e.g. optional 銷售點 POS channel skipped). */
       warnings?: string[];
     }
   | { ok: false; status: number; error: string; code?: PublishBlockCode; blockers?: PublishBlocker[] };

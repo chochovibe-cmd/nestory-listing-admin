@@ -5,7 +5,7 @@
  * reconcileDraft / productLifecycle / publishDraftSafe / publishBatchClient) driven through
  * scripts/publish-guard-loader.mjs with an in-memory Supabase fake and a fake Shopify.
  *
- *   A  channels: Online Store (required) + Google & YouTube (optional), never POS
+ *   A  channels: Online Store + Google & YouTube REQUIRED, POS optional (warning only)
  *   B  resume gate: api_failed + remote ACTIVE -> RECONCILED (active) / 409 (draft)
  *   C  reconcileDraftWithShopify outcomes
  *   D  stepwise create / step / atomic claim / finalize once
@@ -227,6 +227,8 @@ function createShop({
   publications = STORE_PUBS,
   publishedOn = [],
   googleUserErrors = false,
+  googleNeverSticks = false,
+  posUserErrors = false,
   onlineUserErrors = false
 } = {}) {
   const calls = [];
@@ -241,8 +243,33 @@ function createShop({
         return ok({ product: state.status ? { id: productId, status: state.status } : null });
       case "OnlineStorePublicationDiscovery":
         return ok({ channels: { nodes: [] }, publications: { nodes: publications } });
-      case "GooglePublicationDiscovery":
+      case "SalesChannelPublicationDiscovery":
         return ok({ publications: { nodes: publications } });
+      case "ProductUpdateStatus":
+        state.status = variables.product.status;
+        return ok({
+          productUpdate: {
+            product: { id: variables.product.id, status: state.status, updatedAt: "2026-10-14T00:00:00Z" },
+            userErrors: []
+          }
+        });
+      case "ResumeShopifyDraft":
+        return ok({
+          product: { id: productId, status: state.status, media: { nodes: [] }, variants: { nodes: [{ id: "gid://shopify/ProductVariant/5" }] } }
+        });
+      case "ResumeShopifyDraftVariant":
+        return ok({
+          product: {
+            id: productId,
+            status: state.status,
+            variants: {
+              pageInfo: { hasNextPage: false },
+              nodes: [{ id: "gid://shopify/ProductVariant/5", title: "Default Title", sku: null, selectedOptions: [{ name: "Title", value: "Default Title" }] }]
+            }
+          }
+        });
+      case "ProductVariantsBulkUpdate":
+        return ok({ productVariantsBulkUpdate: { productVariants: [], userErrors: [] } });
       case "PublishProductToOnlineStore": {
         if (onlineUserErrors) {
           return ok({ publishablePublish: { publishable: null, userErrors: [{ field: ["input"], message: "nope" }] } });
@@ -259,13 +286,20 @@ function createShop({
         if (googleUserErrors) {
           return ok({ publishablePublish: { publishable: null, userErrors: [{ field: ["input"], message: "google refused" }] } });
         }
-        for (const p of variables.input) state.publishedOn.add(p.publicationId);
+        if (!googleNeverSticks) for (const p of variables.input) state.publishedOn.add(p.publicationId);
         return ok({
           publishablePublish: {
             publishable: { id: variables.id, status: state.status },
             userErrors: []
           }
         });
+      }
+      case "PublishProductToPos": {
+        if (posUserErrors) {
+          return ok({ publishablePublish: { publishable: null, userErrors: [{ field: ["input"], message: "pos refused" }] } });
+        }
+        for (const p of variables.input) state.publishedOn.add(p.publicationId);
+        return ok({ publishablePublish: { publishable: { id: variables.id, status: state.status }, userErrors: [] } });
       }
       case "VerifyProductOnlineStore":
       case "ReconcileProductChannels":
@@ -277,7 +311,7 @@ function createShop({
             publishedOnPublication: state.publishedOn.has(variables.publicationId)
           }
         });
-      case "ReconcileProductGoogleChannel":
+      case "ProductChannelState":
         return ok({
           product: { id: variables.id, publishedOnPublication: state.publishedOn.has(variables.publicationId) }
         });
@@ -369,117 +403,208 @@ console.log("\nPUBLISH-BATCH verify\n");
 // =====================================================================
 // A: channels
 // =====================================================================
-console.log("A — channels (Online Store required, Google & YouTube optional, never POS)");
+console.log("A — channels (Online Store + Google & YouTube REQUIRED, POS optional)");
 
-await check("Google publication name matching: Google & YouTube / 和 / 頻道; never POS", () => {
+const ALL_THREE = [PUB_ONLINE, PUB_GOOGLE, PUB_POS];
+
+await check("publication name matching: Google & YouTube variants; POS variants; no cross-matches", () => {
   const { isGooglePublicationName, isPosPublicationName } = lifecycle;
-  for (const n of ["Google & YouTube", "google & youtube", "Google 和 YouTube", "Google & YouTube 頻道", " Google＆YouTube 通路 ".replace("＆", "&")]) {
+  for (const n of ["Google & YouTube", "google & youtube", "Google 和 YouTube", "Google & YouTube 頻道"]) {
     assert.equal(isGooglePublicationName(n), true, n);
   }
   for (const n of ["線上商店", "銷售點", "Point of Sale", "Google Shopping", "YouTube"]) {
     assert.equal(isGooglePublicationName(n), false, n);
   }
-  assert.equal(isPosPublicationName("銷售點"), true);
-  assert.equal(isPosPublicationName("Point of Sale"), true);
-  assert.equal(isPosPublicationName("線上商店"), false);
+  for (const n of ["銷售點", "Point of Sale", "POS", "销售点"]) assert.equal(isPosPublicationName(n), true, n);
+  for (const n of ["線上商店", "Google & YouTube", "Possible"]) assert.equal(isPosPublicationName(n), false, n);
 });
 
-await check("publishes to Online Store AND Google & YouTube; the POS id is never sent", async () => {
+await check("publishes to Online Store, Google & YouTube AND POS (all three real ids), in that order", async () => {
   await live(async () => {
     const shop = createShop();
     const result = await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller);
     assert.equal(result.publicationId, PUB_ONLINE);
     assert.equal(result.googlePublicationId, PUB_GOOGLE);
+    assert.equal(result.posPublicationId, PUB_POS);
     assert.deepEqual(result.warnings, []);
-    assert.deepEqual(shop.publishedPublicationIds(), [PUB_ONLINE, PUB_GOOGLE]);
-    assert.ok(!shop.publishedPublicationIds().includes(PUB_POS));
-    assert.equal(JSON.stringify(shop.calls).includes(PUB_POS) && shop.publishedPublicationIds().includes(PUB_POS), false);
-    assert.ok(shop.state.publishedOn.has(PUB_ONLINE) && shop.state.publishedOn.has(PUB_GOOGLE));
-    assert.ok(!shop.state.publishedOn.has(PUB_POS));
+    assert.deepEqual(shop.publishedPublicationIds(), [PUB_ONLINE, PUB_GOOGLE, PUB_POS]);
+    assert.deepEqual(shop.mutationNames(), ["PublishProductToOnlineStore", "PublishProductToGoogle", "PublishProductToPos"]);
+    for (const id of shop.publishedPublicationIds()) assert.ok(ALL_THREE.includes(id), "only the three known ids are ever sent");
+    assert.ok(ALL_THREE.every((id) => shop.state.publishedOn.has(id)));
   });
 });
 
-await check("Google channel missing -> still ok, with a warning (Online Store published)", async () => {
+await check("POS missing -> still ok, warning only (Online Store + Google published)", async () => {
   await live(async () => {
-    const shop = createShop({ publications: STORE_PUBS.filter((p) => p.id !== PUB_GOOGLE) });
+    const shop = createShop({ publications: STORE_PUBS.filter((p) => p.id !== PUB_POS) });
     const result = await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller);
-    assert.equal(result.publicationId, PUB_ONLINE);
-    assert.equal(result.googlePublicationId, null);
+    assert.equal(result.googlePublicationId, PUB_GOOGLE);
+    assert.equal(result.posPublicationId, null);
     assert.equal(result.warnings.length, 1);
-    assert.match(result.warnings[0], /找不到 Google & YouTube/);
-    assert.deepEqual(shop.publishedPublicationIds(), [PUB_ONLINE]);
+    assert.match(result.warnings[0], /找不到銷售點 \(POS\) 頻道/);
+    assert.deepEqual(shop.publishedPublicationIds(), [PUB_ONLINE, PUB_GOOGLE]);
   });
 });
 
-await check("Google publish userErrors -> still ok, warning only, no rollback", async () => {
+await check("POS publish userErrors -> warning only, required channels stay published", async () => {
   await live(async () => {
-    const shop = createShop({ googleUserErrors: true });
+    const shop = createShop({ posUserErrors: true });
     const result = await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller);
-    assert.equal(result.googlePublicationId, null);
-    assert.match(result.warnings[0], /Google & YouTube 頻道發布失敗/);
-    assert.ok(shop.state.publishedOn.has(PUB_ONLINE));
+    assert.equal(result.posPublicationId, null);
+    assert.match(result.warnings[0], /^銷售點 \(POS\) 頻道發布失敗，已略過（商品已正常上架）：/);
+    assert.ok(shop.state.publishedOn.has(PUB_ONLINE) && shop.state.publishedOn.has(PUB_GOOGLE));
     assert.equal(shop.named("ProductUpdateStatus").length, 0);
   });
 });
 
-await check("Online Store missing -> fails as before and Google is never attempted", async () => {
+await check("two POS-named publications -> ambiguous warning; SHOPIFY_POS_PUBLICATION_ID picks one", async () => {
+  const twoPos = [...STORE_PUBS, { id: "gid://shopify/Publication/777", name: "Point of Sale (2)" }];
+  await live(async () => {
+    const shop = createShop({ publications: twoPos });
+    const result = await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller);
+    assert.equal(result.posPublicationId, null);
+    assert.match(result.warnings[0], /找到多個銷售點 \(POS\) 頻道/);
+  });
+  await live(
+    async () => {
+      const shop = createShop({ publications: twoPos });
+      const result = await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller);
+      assert.equal(result.posPublicationId, PUB_POS);
+      assert.deepEqual(result.warnings, []);
+    },
+    { SHOPIFY_POS_PUBLICATION_ID: PUB_POS }
+  );
+});
+
+await check("Google & YouTube missing -> publish THROWS (required), after Online Store, nothing for POS", async () => {
+  await live(async () => {
+    const shop = createShop({ publications: STORE_PUBS.filter((p) => p.id !== PUB_GOOGLE) });
+    await assert.rejects(
+      () => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller),
+      /Google & YouTube publication could not be discovered/
+    );
+    assert.deepEqual(shop.publishedPublicationIds(), [PUB_ONLINE]);
+    assert.equal(shop.named("PublishProductToPos").length, 0);
+  });
+});
+
+await check("Google ambiguous / publish userErrors / not confirmed / transport error -> all THROW", async () => {
+  await live(async () => {
+    const dup = createShop({ publications: [...STORE_PUBS, { id: "gid://shopify/Publication/888", name: "Google 和 YouTube" }] });
+    await assert.rejects(() => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, dup.caller), /Google & YouTube publication is ambiguous/);
+
+    const refused = createShop({ googleUserErrors: true });
+    await assert.rejects(() => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, refused.caller), /Google & YouTube publish userErrors/);
+
+    const unconfirmed = createShop({ googleNeverSticks: true });
+    await assert.rejects(() => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, unconfirmed.caller), /Google & YouTube publication readback mismatch/);
+
+    const down = createShop();
+    const flaky = async (q, v) => {
+      if (/GooglePublicationDiscovery|SalesChannelPublicationDiscovery/.test(q)) {
+        return { response: { ok: false, status: 503 }, result: {} };
+      }
+      return down.caller(q, v);
+    };
+    await assert.rejects(() => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, flaky), /publication discovery failed: HTTP 503/);
+  });
+});
+
+await check("Online Store missing -> fails as before; Google / POS are never attempted", async () => {
   await live(async () => {
     const shop = createShop({ publications: STORE_PUBS.filter((p) => p.id !== PUB_ONLINE) });
     await assert.rejects(
       () => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller),
       /Online Store publication could not be discovered/
     );
-    assert.equal(shop.named("PublishProductToGoogle").length, 0);
-    assert.equal(shop.named("PublishProductToOnlineStore").length, 0);
+    assert.deepEqual(shop.mutationNames(), []);
   });
 });
 
-await check("Online Store publish userErrors -> throws as before (no Google publish)", async () => {
+await check("Online Store publish userErrors -> throws as before (no Google / POS publish)", async () => {
   await live(async () => {
     const shop = createShop({ onlineUserErrors: true });
     await assert.rejects(() => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller), /userErrors/);
-    assert.equal(shop.named("PublishProductToGoogle").length, 0);
+    assert.deepEqual(shop.mutationNames(), ["PublishProductToOnlineStore"]);
   });
 });
 
-await check("SHOPIFY_GOOGLE_PUBLICATION_ID: valid gid is used; a POS-named id is refused", async () => {
+await check("SHOPIFY_GOOGLE_PUBLICATION_ID: valid gid used; POS-named id and Online Store id are errors", async () => {
   await live(
     async () => {
-      const shop = createShop();
-      const found = await lifecycle.discoverShopifyGooglePublication(shop.caller);
-      assert.equal(found.id, PUB_GOOGLE);
+      const shop = createShop({ publications: STORE_PUBS.filter((p) => p.id !== PUB_GOOGLE) });
+      const result = await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller);
+      assert.equal(result.googlePublicationId, PUB_GOOGLE, "env override works even if the name list lacks it");
     },
     { SHOPIFY_GOOGLE_PUBLICATION_ID: PUB_GOOGLE }
   );
   await live(
     async () => {
       const shop = createShop();
-      const result = await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller);
-      assert.equal(result.googlePublicationId, null);
-      assert.match(result.warnings[0], /銷售點/);
-      assert.ok(!shop.publishedPublicationIds().includes(PUB_POS), "POS must never be published");
+      await assert.rejects(() => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller), /a Point of Sale publication/);
     },
     { SHOPIFY_GOOGLE_PUBLICATION_ID: PUB_POS }
   );
-  // a malformed override is ignored (falls back to name discovery)
   await live(
     async () => {
-      const found = await lifecycle.discoverShopifyGooglePublication(createShop().caller);
-      assert.equal(found.id, PUB_GOOGLE);
+      const shop = createShop();
+      await assert.rejects(() => lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller), /resolves to the Online Store publication/);
+    },
+    { SHOPIFY_GOOGLE_PUBLICATION_ID: PUB_ONLINE }
+  );
+  // a malformed override is ignored (name discovery)
+  await live(
+    async () => {
+      const result = await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, createShop().caller);
+      assert.equal(result.googlePublicationId, PUB_GOOGLE);
     },
     { SHOPIFY_GOOGLE_PUBLICATION_ID: "12345" }
   );
 });
 
-await check("Google id equal to the Online Store id is not published twice", async () => {
-  await live(
-    async () => {
-      const shop = createShop();
-      await lifecycle.publishShopifyProductToOnlineStore(PRODUCT, shop.caller);
-      assert.deepEqual(shop.publishedPublicationIds(), [PUB_ONLINE]);
-    },
-    { SHOPIFY_GOOGLE_PUBLICATION_ID: PUB_ONLINE }
-  );
+await check("ACTIVE finalize in publishDraft: Google failure -> same rollback to DRAFT + api_failed as an Online Store failure", async () => {
+  await live(async () => {
+    for (const faults of [{ publications: STORE_PUBS.filter((p) => p.id !== PUB_GOOGLE) }, { googleUserErrors: true }]) {
+      const fake = createFakeSupabase({
+        product_drafts: [
+          draftRow({
+            status: "api_failed", publish_status: "api_failed", shopify_product_id: PRODUCT,
+            error_message: "x", generated_payload_json: { media: [] }
+          })
+        ]
+      });
+      const shop = createShop({ remoteStatus: "DRAFT", resumable: true, ...faults });
+      const result = await publishDraft(fake, "d1", "active", { mockMode: false, callGraphQL: shop.caller });
+      assert.equal(result.ok, false, JSON.stringify(result));
+      assert.match(result.error, /ACTIVE\/Online Store publication failed after staged sync/);
+      assert.match(result.error, /Google & YouTube/);
+      const statuses = shop.named("ProductUpdateStatus").map((c) => c.variables.product.status);
+      assert.deepEqual(statuses, ["ACTIVE", "DRAFT"], "promoted, then rolled back");
+      assert.equal(shop.state.status, "DRAFT");
+      assert.equal(draftOf(fake, "d1").status, "api_failed");
+      assert.equal(draftOf(fake, "d1").shopify_product_id, PRODUCT);
+    }
+  });
+});
+
+await check("ACTIVE finalize in publishDraft: all three channels ok -> active_published; POS problem is a stored warning", async () => {
+  await live(async () => {
+    const fake = createFakeSupabase({
+      product_drafts: [
+        draftRow({
+          status: "api_failed", publish_status: "api_failed", shopify_product_id: PRODUCT,
+          error_message: "x", generated_payload_json: { media: [] }
+        })
+      ]
+    });
+    const shop = createShop({ remoteStatus: "DRAFT", resumable: true, posUserErrors: true });
+    const result = await publishDraft(fake, "d1", "active", { mockMode: false, callGraphQL: shop.caller });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(draftOf(fake, "d1").status, "active_published");
+    assert.deepEqual(shop.publishedPublicationIds().slice(0, 2), [PUB_ONLINE, PUB_GOOGLE]);
+    assert.ok(draftOf(fake, "d1").warnings.some((w) => /銷售點 \(POS\) 頻道發布失敗/.test(w)));
+    assert.ok(result.warnings.some((w) => /銷售點 \(POS\)/.test(w)));
+  });
 });
 
 // =====================================================================
@@ -512,7 +637,7 @@ const WRITE_MUTATIONS = [
 await check("active mode: RECONCILED success, local state repaired, content never re-synced", async () => {
   await live(async () => {
     const fake = gateSupabase();
-    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [PUB_ONLINE] });
+    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: ALL_THREE });
     const result = await publishDraft(fake, "d1", "active", { mockMode: false, callGraphQL: shop.caller });
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.code, "RECONCILED");
@@ -528,21 +653,21 @@ await check("active mode: RECONCILED success, local state repaired, content neve
     assert.equal(draft.published_at, REMOTE_PUBLISHED_AT, "published_at comes from Shopify publishedAt");
     assert.ok(draft.warnings.includes("舊警告") && draft.warnings.includes("Shopify 已上架，已對帳（未重新同步內容）"));
     for (const name of WRITE_MUTATIONS) assert.equal(shop.named(name).length, 0, `${name} must not run`);
-    assert.ok(!shop.publishedPublicationIds().includes(PUB_POS));
+    assert.deepEqual(shop.mutationNames(), [], "already on every channel -> not a single Shopify write");
     assert.equal(fake.tables.publish_jobs.length, 0);
   });
 });
 
-await check("active mode: remote ACTIVE but not on Online Store -> channels ADDED (Online Store + Google), nothing else", async () => {
+await check("active mode: remote ACTIVE but on no channel -> Online Store + Google + POS ADDED, nothing else", async () => {
   await live(async () => {
     const fake = gateSupabase();
     const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [] });
     const result = await publishDraft(fake, "d1", "active", { mockMode: false, callGraphQL: shop.caller });
     assert.equal(result.code, "RECONCILED");
-    assert.deepEqual(shop.publishedPublicationIds(), [PUB_ONLINE, PUB_GOOGLE]);
+    assert.deepEqual(shop.publishedPublicationIds(), [PUB_ONLINE, PUB_GOOGLE, PUB_POS]);
     assert.deepEqual(
       [...new Set(shop.mutationNames())].sort(),
-      ["PublishProductToGoogle", "PublishProductToOnlineStore"]
+      ["PublishProductToGoogle", "PublishProductToOnlineStore", "PublishProductToPos"]
     );
   });
 });
@@ -550,7 +675,7 @@ await check("active mode: remote ACTIVE but not on Online Store -> channels ADDE
 await check("draft mode + remote ACTIVE: still a clear 409, no write at all", async () => {
   await live(async () => {
     const fake = gateSupabase();
-    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [PUB_ONLINE] });
+    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: ALL_THREE });
     const before = JSON.stringify(draftOf(fake, "d1"));
     const result = await publishDraft(fake, "d1", "draft", { mockMode: false, callGraphQL: shop.caller });
     assert.equal(result.ok, false);
@@ -627,6 +752,41 @@ await check("remote ARCHIVED -> remote_other, no change", async () => {
   });
 });
 
+await check("remote ACTIVE, Online Store ok but Google & YouTube cannot be confirmed -> outcome error, draft UNTOUCHED", async () => {
+  await live(async () => {
+    for (const faults of [
+      { publications: STORE_PUBS.filter((p) => p.id !== PUB_GOOGLE) },
+      { googleUserErrors: true },
+      { googleNeverSticks: true }
+    ]) {
+      const fake = gateSupabase();
+      const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [PUB_ONLINE], ...faults });
+      const r = await reconcileDraftWithShopify(fake, "d1", shop.caller);
+      assert.equal(r.reconciled, false);
+      assert.equal(r.outcome, "error");
+      assert.match(r.message, /必要通路（線上商店／Google & YouTube）/);
+      assert.equal(fake.writes.length, 0, "no DB write at all");
+      assert.equal(draftOf(fake, "d1").status, "api_failed");
+      assert.ok(!shop.publishedPublicationIds().includes(PUB_POS), "POS is not attempted after a required channel failed");
+    }
+  });
+});
+
+await check("remote ACTIVE: only the MISSING channels are published (onlyIfMissing); POS failure is just a warning", async () => {
+  await live(async () => {
+    const fake = gateSupabase();
+    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [PUB_ONLINE, PUB_GOOGLE], posUserErrors: true });
+    const r = await reconcileDraftWithShopify(fake, "d1", shop.caller);
+    assert.equal(r.reconciled, true);
+    assert.deepEqual(shop.publishedPublicationIds(), [PUB_POS], "Online Store / Google are not re-published");
+    assert.match(r.warnings[0], /銷售點 \(POS\) 頻道發布失敗/);
+    assert.equal(draftOf(fake, "d1").status, "active_published");
+    assert.ok(draftOf(fake, "d1").warnings.some((w) => /銷售點 \(POS\)/.test(w)));
+    const mutations = shop.mutationNames();
+    assert.ok(mutations.every((n) => n.startsWith("PublishProductTo")), "reconcile only ever adds publications");
+  });
+});
+
 await check("no / mock product id -> no_product; other draft statuses -> not_applicable", async () => {
   await live(async () => {
     const shop = createShop();
@@ -643,7 +803,7 @@ await check("no / mock product id -> no_product; other draft statuses -> not_app
 await check("remote ACTIVE already on both channels -> state repaired with ZERO Shopify writes", async () => {
   await live(async () => {
     const fake = gateSupabase();
-    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [PUB_ONLINE, PUB_GOOGLE] });
+    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: ALL_THREE });
     const r = await reconcileDraftWithShopify(fake, "d1", shop.caller);
     assert.equal(r.reconciled, true);
     assert.equal(r.outcome, "active_published");
@@ -655,7 +815,7 @@ await check("remote ACTIVE already on both channels -> state repaired with ZERO 
 await check("reconcile never moves a draft that changed state meanwhile (conditional write)", async () => {
   await live(async () => {
     const fake = gateSupabase();
-    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [PUB_ONLINE] });
+    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: ALL_THREE });
     // the draft gets re-queued while Shopify answers
     const slow = async (q, v) => {
       const out = await shop.caller(q, v);
@@ -728,7 +888,7 @@ await check("stepwise create: header + queued items only, returns at once, publi
     assert.equal(fake.tables.publish_batches[0].publish_mode, "active");
     assert.deepEqual(fake.tables.publish_batch_items.map((i) => i.item_status), ["queued", "queued", "queued"]);
     assert.ok(fake.tables.product_drafts.every((d) => d.status === "approved"), "drafts untouched");
-    assert.equal(makeCalls.length, 0, "no webhook before the batch finishes");
+    assert.equal(makeCalls.filter((c) => c.event === "publish_batch_submitted").length, 0, "no batch webhook before the batch finishes");
   });
 });
 
@@ -987,7 +1147,7 @@ await check("real publishDraft path: api_failed + remote ACTIVE inside a step ->
         })
       ]
     });
-    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [PUB_ONLINE, PUB_GOOGLE] });
+    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: ALL_THREE });
     const publishOne = publishWith(shop);
     const created = await createStepwisePublishBatch({
       serviceSupabase: fake, draftIds: ["d1"], publishMode: "active", createdBy: "u1", publishOne, now: () => NOW
@@ -1035,7 +1195,7 @@ await check("stale processing item + remote ACTIVE (active batch) -> reconciled 
         draftRow({ id: "d1", status: "api_failed", publish_status: "api_failed", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })
       ]
     });
-    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: [PUB_ONLINE, PUB_GOOGLE] });
+    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: ALL_THREE });
     const before = makeCalls.length;
     const out = await recoverStalePublishBatches(fake, recoverOpts(shop, { batchId: "b1" }));
     assert.equal(out.itemsReconciled, 1);

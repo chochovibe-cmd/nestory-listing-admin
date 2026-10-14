@@ -56,7 +56,7 @@ export type PublishBatchItemResult = {
   mockNotes?: string[];
   /** PUBLISH-BATCH: Shopify was already live; only the local state was repaired (no re-sync). */
   reconciled?: boolean;
-  /** Non-fatal notes (e.g. optional Google & YouTube channel skipped). */
+  /** Non-fatal notes (e.g. optional 銷售點 POS channel skipped). */
   warnings?: string[];
 };
 

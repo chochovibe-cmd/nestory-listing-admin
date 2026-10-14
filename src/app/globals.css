@@ -10270,6 +10270,39 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
   .nav .hdr-auth-desktop { order: 5; }
 }
 
+/* VARIANT-CLEAN fixbatch: grid auto-minimum made a wide VariantEditor silently
+   stretch its ResultCard beyond the available column. Constrain ONLY result
+   cards; the table may scroll inside .rc-specs-wrap, not under the clipped card. */
+.results-panel .results-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+.results-panel .result-card,
+.result-card .rc-body,
+.result-card .rc-tabpanel,
+.result-card .rc-tabpanel > .rc-field,
+.result-card .rc-specs-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+.result-card .rc-body,
+.result-card .rc-tabpanel > .rc-field {
+  width: 100%;
+}
+.result-card .rc-specs-wrap {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.result-card .vc-toolbar {
+  width: 100%;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.result-card .vc-toolbar .nb-btn {
+  max-width: 100%;
+  white-space: normal;
+}
+
 /* VARIANT-CLEAN: 整理款式名稱／依公式重算售價／價格＋款式圖重同步 — layout only, tokens only.
    Reuses the modal shell (.modal-box.approve-summary-modal), .adv-section, .rec-items/.rec-item,
    .schip, .nb-btn and .check-row; no new colors, radii or shadows. */

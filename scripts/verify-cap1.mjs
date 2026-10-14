@@ -360,7 +360,10 @@ check("CAPTURE refill: temporary image_url never reaches product_variants insert
   assert.ok(start >= 0 && end > start, "refill function must exist");
   const refill = src.slice(start, end);
   assert.match(refill, /applyVariantImageIds\(mapped\.variantRows, \{\}\)/);
-  assert.match(refill, /persistVariantsSafe\(input\.serviceSupabase, input\.draftId, withDraft\)/);
+  assert.match(
+    refill,
+    /persistVariantsSafe\(\s*input\.serviceSupabase,\s*input\.draftId,\s*assignVariantSkus\(input\.draftId, withDraft\)\s*\)/
+  );
   assert.doesNotMatch(refill, /const withDraft = mapped\.variantRows\.map/);
 });
 

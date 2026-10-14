@@ -10,7 +10,8 @@ const expectedActive = [
   "20260818142919_production_reconcile_20260818.sql",
   "20260822223100_variant_split_override_semantics.sql",
   "20260902090000_guard_current_image_batch_pointer.sql",
-  "20260903100000_shopify_full_sync_state.sql"
+  "20260903100000_shopify_full_sync_state.sql",
+  "20261014100000_variant_clean_columns.sql"
 ];
 
 function fail(message) {

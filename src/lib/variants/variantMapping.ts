@@ -7,7 +7,8 @@ import {
   type ShopifyVariantSeed,
   type VariantDbInsert,
   type VariantDimension,
-  type VariantFormRow
+  type VariantFormRow,
+  type VariantSourceOptions
 } from "./types";
 import { rebuildDimensionValuesFromRows, uniqueAxisValues } from "./variantCrossExpand";
 
@@ -93,7 +94,9 @@ export function formRowsToDbInserts(
         sort_order: index,
         inventory_quantity: hasFiniteQty ? (qtyNum as number) : 0,
         inventory_policy: hasFiniteQty ? ("deny" as const) : ("continue" as const),
-        image_id: row.imageId
+        image_id: row.imageId,
+        source_sku_id: row.sourceSkuId?.trim() || null,
+        source_options: row.sourceOptions ?? null
       };
     });
 }
@@ -192,6 +195,8 @@ export function dbRowsToForm(
     inventory_policy?: string | null;
     sku?: string | null;
     image_id?: string | null;
+    source_sku_id?: string | null;
+    source_options?: VariantSourceOptions | null;
   }>,
   options?: { productCost?: number | null }
 ): { dimensions: VariantDimension[]; rows: VariantFormRow[] } {
@@ -242,7 +247,9 @@ export function dbRowsToForm(
           : "",
       sku: r.sku ?? "",
       imageId: r.image_id ?? null,
-      sortOrder: r.sort_order ?? i
+      sortOrder: r.sort_order ?? i,
+      sourceSkuId: r.source_sku_id ?? null,
+      sourceOptions: r.source_options ?? null
     };
   });
 

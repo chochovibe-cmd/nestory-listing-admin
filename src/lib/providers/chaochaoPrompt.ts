@@ -133,7 +133,7 @@ const CHAOCHAO_OPS = `【必要作業】
 已建檔 IP 清單裡有的，detected_ip_name 必須原樣照抄中文名；對不上再寫你判斷的名稱。
 detected_character_name、detected_product_type 依標題／圖／規格判斷；聯名或製造商品牌寫進 detected_product_brand，沒把握就留空。
 detected_category 寫成「型態_」＋型態，例如型態_吊飾。
-sku：CHO-{型態縮寫}-{IP縮寫}-{角色縮寫}-001，縮寫 2-3 碼全大寫英文，序號固定 001。例：吉伊卡哇小八吊飾 → CHO-CHM-CKW-CH8-001。
+sku 欄留空：編號由系統依草稿自動產生，不要寫也不要猜。
 Tags、Collections 不必輸出，後端會自己比對。
 
 ${SHARED_PRODUCT_TITLE_PROMPT}
@@ -162,7 +162,6 @@ const CHAOCHAO_OUTPUT_FORMAT = `【輸出格式】
 [[detected_category]]
 型態_吊飾
 [[sku]]
-CHO-...-...-...-001
 [[enriched_title]]
 [[title_ip]]
 [[title_brand]]
@@ -200,7 +199,7 @@ ${secondhandSection}
 
 ${CHAOCHAO_OPS}
 
-你輸出的欄位依序是：detected_ip_name、detected_character_name、detected_product_type、detected_product_brand、detected_category、sku、enriched_title（含 title_ip／title_brand／title_item／title_diff）、generated_description_html、generated_faq_html、seo_title、meta_description、why_we_chose_it、product_highlights、spec。
+你輸出的欄位依序是：detected_ip_name、detected_character_name、detected_product_type、detected_product_brand、detected_category、enriched_title（含 title_ip／title_brand／title_item／title_diff）、generated_description_html、generated_faq_html、seo_title、meta_description、why_we_chose_it、product_highlights、spec。
 
 ${CHAOCHAO_OUTPUT_FORMAT}`;
 }

@@ -90,6 +90,8 @@ function preservedHandFields(row: VariantFormRow): Pick<
   | "qty"
   | "sku"
   | "imageId"
+  | "sourceSkuId"
+  | "sourceOptions"
 > {
   return {
     cost: row.cost,
@@ -101,7 +103,9 @@ function preservedHandFields(row: VariantFormRow): Pick<
     priceLocked: row.priceLocked,
     qty: row.qty,
     sku: row.sku,
-    imageId: row.imageId
+    imageId: row.imageId,
+    sourceSkuId: row.sourceSkuId,
+    sourceOptions: row.sourceOptions
   };
 }
 

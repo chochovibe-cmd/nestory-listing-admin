@@ -179,7 +179,8 @@ export function buildVariantPublishPlan(
 
     return {
       optionValues,
-      price: row.twd_price ?? 0,
+      // No `?? 0`: a missing price is a PUBLISH-GUARD blocker, never a NT$0 listing.
+      price: row.twd_price ?? null,
       compareAtPrice:
         draft.price_mode === "single" ? null : row.compare_at_price ?? null,
       cost: estimateVariantCostTwd(row, draft),
@@ -307,6 +308,8 @@ export function toBulkVariantInput(
     /** create uses inventoryQuantities; update uses quantityAdjustments */
     inventoryMode: "create" | "update";
     variantId?: string;
+    /** VARIANT-CLEAN: Shopify MediaImage id to show for this variant (only when already known). */
+    mediaId?: string | null;
   }
 ): Record<string, unknown> {
   const hasFinite =
@@ -315,7 +318,7 @@ export function toBulkVariantInput(
     Number.isInteger(seed.inventoryQuantity);
 
   const base: Record<string, unknown> = {
-    price: String(seed.price),
+    ...(seed.price != null ? { price: String(seed.price) } : {}),
     ...(seed.compareAtPrice != null && seed.compareAtPrice > 0
       ? { compareAtPrice: String(seed.compareAtPrice) }
       : {}),
@@ -329,6 +332,10 @@ export function toBulkVariantInput(
 
   if (options.variantId) {
     base.id = options.variantId;
+  }
+
+  if (options.mediaId) {
+    base.mediaId = options.mediaId;
   }
 
   if (options.includeOptionValues) {

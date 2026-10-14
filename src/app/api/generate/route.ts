@@ -1036,7 +1036,8 @@ export async function POST(request: NextRequest) {
         character: resolvedCharacter,
         productType: raw.detectedProductType,
         category: raw.detectedCategory || (raw.detectedProductType ? `型態_${raw.detectedProductType}` : ""),
-        sku: raw.sku,
+        // VARIANT-CLEAN: the SKU is program-owned (NS-<draft>-NN at publish); never from the AI.
+        sku: draft.sku ?? "",
       };
       providerOutput = raw;
 

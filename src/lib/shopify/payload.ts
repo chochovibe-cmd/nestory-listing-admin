@@ -1,4 +1,3 @@
-import { generateSku } from "@/lib/contentGenerator/sku";
 import {
   formatChaochaoSalesDescriptionHtml,
   formatPlainTextAsHtml,
@@ -15,6 +14,7 @@ import {
   buildVariantPublishPlan,
   type VariantPublishPlan
 } from "@/lib/variants/shopifyVariants";
+import { deriveDraftSku, isAutoSku } from "@/lib/variants/variantSku";
 
 const CHAOCHAO_SALES_TONE = "潮巢導購版";
 
@@ -133,19 +133,17 @@ export function buildShopifyProductPayload(
   );
   const mediaWithVideos = [...images, ...videoBuild.media];
 
-  const { sku: generatedSku } = generateSku({
-    productType: draft.product_type ?? "",
-    ipName: draft.ip_name ?? draft.category ?? "",
-    characterName: draft.character_name
-  });
   const generatedPayload = isRecord(draft.generated_payload_json) ? draft.generated_payload_json : {};
   const generatedProduct = isRecord(generatedPayload.product) ? generatedPayload.product : {};
   const generatedVariantSeed = isRecord(generatedPayload.variantSeed) ? generatedPayload.variantSeed : {};
+  // VARIANT-CLEAN: the program owns the SKU (NS-<draft>-01). Only a SKU a person typed
+  // (not empty / NS- / Taobao skuId / old AI CHO-…-001) survives.
   const generatedSeedSku =
-    typeof generatedVariantSeed.sku === "string" && generatedVariantSeed.sku.trim()
-      ? generatedVariantSeed.sku.trim()
-      : generatedSku;
-  const publishSku = draft.sku?.trim() || generatedSeedSku;
+    typeof generatedVariantSeed.sku === "string" ? generatedVariantSeed.sku.trim() : "";
+  const manualSku = [draft.sku, generatedSeedSku]
+    .map((value) => (value ?? "").trim())
+    .find((value) => value && !isAutoSku(value));
+  const publishSku = manualSku ?? deriveDraftSku(draft.id, draft.sku);
   const tags = draft.shopify_tags?.length ? draft.shopify_tags : draft.tags || [];
 
   // COPY C1.1: only 潮巢導購版 changes the Shopify semantic hierarchy.

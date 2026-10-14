@@ -44,11 +44,17 @@ export type SupabaseLike = {
   };
 };
 
-/** D3.10A columns. Production ledger does not have them yet. */
+/**
+ * Columns that may not exist on a database yet: the D3.10A override columns and the
+ * VARIANT-CLEAN source columns (migration 20261014100000). An insert that fails on one
+ * of them is retried once without all of them, so a card save never dies on a missing migration.
+ */
 const VARIANT_OVERRIDE_COLUMNS = [
   "cost_is_inherited",
   "sell_price_locked",
-  "compare_at_locked"
+  "compare_at_locked",
+  "source_sku_id",
+  "source_options"
 ] as const;
 
 export function isMissingVariantOverrideColumn(message: string): boolean {

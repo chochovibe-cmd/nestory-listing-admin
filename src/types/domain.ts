@@ -356,6 +356,13 @@ export interface ProductVariantRow {
   /** G4: remote identities, optional until migration 20260903100000. */
   shopify_variant_id?: string | null;
   shopify_inventory_item_id?: string | null;
+  /** VARIANT-CLEAN (migration 20261014100000): Taobao skuId + imported option text. */
+  source_sku_id?: string | null;
+  source_options?: { names: Array<string | null>; values: Array<string | null> } | null;
+  /** D3.10A split locks (NULL on legacy rows -> price_locked fallback). */
+  sell_price_locked?: boolean | null;
+  compare_at_locked?: boolean | null;
+  cost_is_inherited?: boolean | null;
   created_at: string;
 }
 

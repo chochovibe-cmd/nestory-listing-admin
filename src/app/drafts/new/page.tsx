@@ -18,6 +18,10 @@ export const dynamic = "force-dynamic";
 
 export type WorkbenchVariantPrice = VariantPriceRow;
 
+const workbenchVariantSelectBase =
+  "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id";
+const workbenchVariantSelectFull = `${workbenchVariantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options`;
+
 function firstParam(
   value: string | string[] | undefined
 ): string | undefined {
@@ -75,7 +79,7 @@ export default async function NewDraftPage({
         "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, cny_price, sku, price_locked, inventory_quantity, inventory_policy, image_id";
       // D3.10A columns are not on production yet. Selecting them makes PostgREST
       // fail the whole query, so the form shows axis values and 尚無款式.
-      const variantSelectFull = `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked`;
+      const variantSelectFull = `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options`;
 
       const { data: seedImages } = await supabase
         .from("product_images")
@@ -137,14 +141,23 @@ export default async function NewDraftPage({
       supabase.from("product_images").select("*").in("draft_id", draftIds).order("sort_order"),
       supabase
         .from("product_variants")
-        .select(
-          "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id"
-        )
+        .select(workbenchVariantSelectFull)
         .in("draft_id", draftIds)
         .order("sort_order", { ascending: true })
     ]);
     typedImages = (images ?? []) as ProductImage[];
-    typedVariants = (variants ?? []) as WorkbenchVariantPrice[];
+    // The extra columns (D3.10A split locks, VARIANT-CLEAN source_*) make PostgREST fail the
+    // whole query on a database that lacks them, so retry with the base columns.
+    let variantRows = variants;
+    if (!variantRows) {
+      const fallback = await supabase
+        .from("product_variants")
+        .select(workbenchVariantSelectBase)
+        .in("draft_id", draftIds)
+        .order("sort_order", { ascending: true });
+      variantRows = fallback.data as typeof variants;
+    }
+    typedVariants = (variantRows ?? []) as WorkbenchVariantPrice[];
   }
 
   return (

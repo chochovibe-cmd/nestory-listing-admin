@@ -7,12 +7,15 @@
  * as 「端盒 6 款」 silently inherits the single-box cost.
  *
  * - FAKE_VARIANT is never bypassable: the operator must delete the row.
+ * - VARIANT_NO_PRICE is never bypassable either: a variant (or a single-variant
+ *   draft) without a selling price would otherwise go live at NT$0.
  * - BUNDLE_VARIANT_PRICE / VARIANT_PRICE_UNCONFIRMED are confirmable: the
  *   operator can tick "I checked every variant cost" and publish.
  */
 
 export type PublishBlockerCode =
   | "FAKE_VARIANT"
+  | "VARIANT_NO_PRICE"
   | "BUNDLE_VARIANT_PRICE"
   | "VARIANT_PRICE_UNCONFIRMED";
 
@@ -34,6 +37,8 @@ export type ReadinessVariantRow = {
   option3_value?: string | null;
   cny_price?: number | string | null;
   cost_is_inherited?: boolean | null;
+  /** NT$ selling price. Absent key = not loaded (check skipped); null / <= 0 = missing. */
+  twd_price?: number | string | null;
 };
 
 export type PublishReadinessResult = {
@@ -99,9 +104,30 @@ function isFakeRow(row: ReadinessVariantRow): boolean {
   return rowMatches(row, FAKE_VARIANT_PATTERN) || rowMatches(row, FAKE_VARIANT_CS_LEAD_PATTERN);
 }
 
+/**
+ * VARIANT-CLEAN: the single "is this 款式 not a product" predicate. The capture import
+ * uses it to keep such options out of product_variants, and the publish guard keeps
+ * using it as a backstop, so the two can never disagree.
+ */
+export function isFakeVariantRow(row: ReadinessVariantRow): boolean {
+  return isFakeRow(row);
+}
+
 /** Labels of rows whose option text is not a sellable product (cannot be bypassed). */
 export function findFakeVariantLabels(rows: ReadinessVariantRow[]): string[] {
   return rows.filter(isFakeRow).map(variantLabel);
+}
+
+/** Labels of (non-fake) variants whose selling price is missing or <= 0. */
+export function findNoPriceVariantLabels(rows: ReadinessVariantRow[]): string[] {
+  return rows
+    .filter((row) => {
+      if (isFakeRow(row) || optionValues(row).length === 0) return false;
+      if (row.twd_price === undefined) return false;
+      const price = toFiniteNumber(row.twd_price);
+      return price == null || price <= 0;
+    })
+    .map(variantLabel);
 }
 
 /** True when the row's cost is not independently sourced (follows / equals product cost). */
@@ -151,7 +177,7 @@ function captureFlagsPriceUnconfirmed(rawCapture: unknown): boolean {
 }
 
 export function checkPublishReadiness(
-  draft: { cny_price?: unknown; raw_capture?: unknown },
+  draft: { cny_price?: unknown; twd_price?: unknown; raw_capture?: unknown },
   rows: ReadinessVariantRow[],
   opts: { confirmVariantPrices?: boolean } = {}
 ): PublishReadinessResult {
@@ -166,6 +192,27 @@ export function checkPublishReadiness(
       variantLabels: fakeLabels,
       message: `有 ${fakeLabels.length} 個款式不是可賣的商品（像「購買須知」「勿拍」「補差價」「客服」「售罄」這類）：${quoteLabels(fakeLabels)}。請在商品卡刪除這些款式後再發布。`
     });
+  }
+
+  const noPriceLabels = findNoPriceVariantLabels(rows);
+  for (const label of noPriceLabels) {
+    found.push({
+      code: "VARIANT_NO_PRICE",
+      confirmable: false,
+      variantLabels: [label],
+      message: `款式「${label}」沒有售價，請先在商品卡的規格頁籤補上售價再發布。`
+    });
+  }
+  // Single-variant draft (no variant rows): the draft-level price is what goes live.
+  if (rows.length === 0 && draft.twd_price !== undefined) {
+    const draftPrice = toFiniteNumber(draft.twd_price);
+    if (draftPrice == null || draftPrice <= 0) {
+      found.push({
+        code: "VARIANT_NO_PRICE",
+        confirmable: false,
+        message: "這件商品沒有售價，請先在商品卡的定價頁籤補上售價再發布。"
+      });
+    }
   }
 
   const bundleLabels = findBundleInheritedVariantLabels(rows, productCny);

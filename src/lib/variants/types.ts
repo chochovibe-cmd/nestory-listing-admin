@@ -32,6 +32,16 @@ export type VariantFormRow = {
   sku: string;
   imageId: string | null;
   sortOrder: number;
+  /** VARIANT-CLEAN: Taobao skuId (internal). Optional so rows built by hand stay valid. */
+  sourceSkuId?: string | null;
+  /** VARIANT-CLEAN: imported axis names/values before 整理款式名稱. */
+  sourceOptions?: VariantSourceOptions | null;
+};
+
+/** names[3] / values[3], index = axis. */
+export type VariantSourceOptions = {
+  names: Array<string | null>;
+  values: Array<string | null>;
 };
 
 export type VariantDbInsert = {
@@ -53,6 +63,8 @@ export type VariantDbInsert = {
   inventory_quantity: number;
   inventory_policy: "deny" | "continue";
   image_id: string | null;
+  source_sku_id: string | null;
+  source_options: VariantSourceOptions | null;
 };
 
 /** Shopify productOptions shape for productCreate (names + values). */
@@ -64,7 +76,8 @@ export type ShopifyProductOptionInput = {
 /** One variant for publish payload / bulkCreate. */
 export type ShopifyVariantSeed = {
   optionValues: { optionName: string; name: string }[];
-  price: number;
+  /** null = no selling price (blocked by PUBLISH-GUARD before it can be sent). */
+  price: number | null;
   compareAtPrice: number | null;
   cost: number;
   sku: string | null;

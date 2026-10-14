@@ -189,6 +189,11 @@ type ResultCardVariantRow = {
   inventory_policy?: string | null;
   sku?: string | null;
   image_id?: string | null;
+  cost_is_inherited?: boolean | null;
+  sell_price_locked?: boolean | null;
+  compare_at_locked?: boolean | null;
+  source_sku_id?: string | null;
+  source_options?: { names: Array<string | null>; values: Array<string | null> } | null;
 };
 
 

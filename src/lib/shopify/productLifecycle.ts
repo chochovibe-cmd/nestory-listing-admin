@@ -101,9 +101,27 @@ function legacyGidTail(id: unknown): string | null {
   return tail || null;
 }
 
+const ONLINE_STORE_PUBLICATION_ID_ENV = "SHOPIFY_ONLINE_STORE_PUBLICATION_ID";
+const PUBLICATION_GID_PREFIX = "gid://shopify/Publication/";
+// Fallback only: exact (trimmed) publication names of the Online Store sales channel.
+// Never add POS / Google & YouTube / any other channel name here.
+const ONLINE_STORE_PUBLICATION_NAMES = new Set([
+  "online store",
+  "線上商店",
+  "网上商店",
+  "線上商店 online store"
+]);
+
+function isOnlineStorePublicationName(name: unknown): boolean {
+  return typeof name === "string" && ONLINE_STORE_PUBLICATION_NAMES.has(name.trim().toLowerCase());
+}
+
 export async function getShopifyOnlineStorePublicationId(
   caller: ShopifyAdminGraphQLCaller = defaultCaller
 ): Promise<string> {
+  const override = process.env[ONLINE_STORE_PUBLICATION_ID_ENV]?.trim();
+  if (override && override.startsWith(PUBLICATION_GID_PREFIX)) return override;
+
   const query = `
     query OnlineStorePublicationDiscovery {
       channels(first: 50) {
@@ -126,7 +144,13 @@ export async function getShopifyOnlineStorePublicationId(
   if (!response.ok) {
     throw new Error(`Shopify publication discovery failed: HTTP ${response.status}`);
   }
-  if (Array.isArray(result?.errors) && result.errors.length > 0) {
+  // The deprecated `channels` field can error for a non-sales-channel app while `publications`
+  // still returns data; only fail hard when there is no publications data to fall back on.
+  if (
+    Array.isArray(result?.errors) &&
+    result.errors.length > 0 &&
+    !Array.isArray(result?.data?.publications?.nodes)
+  ) {
     throw new Error(`Shopify publication discovery failed: ${messages(result.errors)}`);
   }
 
@@ -135,25 +159,38 @@ export async function getShopifyOnlineStorePublicationId(
   const onlineStoreChannel = channels.find(
     (channel: any) => channel?.handle === "online_store" || channel?.app?.handle === "online_store"
   );
-  if (!onlineStoreChannel?.id) {
-    throw new Error("Shopify Online Store channel could not be discovered");
+
+  if (onlineStoreChannel?.id) {
+    const channelTail = legacyGidTail(onlineStoreChannel.id);
+    const byLegacyId = channelTail
+      ? publications.find((publication: any) => legacyGidTail(publication?.id) === channelTail)
+      : null;
+    const byChannelName = onlineStoreChannel?.name
+      ? publications.find((publication: any) => publication?.name === onlineStoreChannel.name)
+      : null;
+    const publication = byLegacyId ?? byChannelName;
+    if (publication?.id) return publication.id as string;
   }
 
-  const channelTail = legacyGidTail(onlineStoreChannel.id);
-  const byLegacyId = channelTail
-    ? publications.find((publication: any) => legacyGidTail(publication?.id) === channelTail)
-    : null;
-  const byChannelName = onlineStoreChannel?.name
-    ? publications.find((publication: any) => publication?.name === onlineStoreChannel.name)
-    : null;
-  const publication = byLegacyId ?? byChannelName;
-
-  if (!publication?.id) {
+  const byName = publications.filter(
+    (publication: any) => publication?.id && isOnlineStorePublicationName(publication?.name)
+  );
+  if (byName.length > 1) {
     throw new Error(
-      `Shopify Online Store publication could not be matched to channel ${String(onlineStoreChannel.id)}`
+      `Shopify Online Store publication is ambiguous (matches: ${byName
+        .map((publication: any) => `${String(publication.name).trim()} ${String(publication.id)}`)
+        .join("、")}). Set ${ONLINE_STORE_PUBLICATION_ID_ENV}.`
     );
   }
-  return publication.id as string;
+  if (byName.length === 1) return byName[0].id as string;
+
+  const seen = publications
+    .map((publication: any) => (typeof publication?.name === "string" ? publication.name.trim() : ""))
+    .filter(Boolean)
+    .join("、");
+  throw new Error(
+    `Shopify Online Store publication could not be discovered (publications seen: ${seen || "none"}). Set ${ONLINE_STORE_PUBLICATION_ID_ENV}.`
+  );
 }
 
 export async function publishShopifyProductToOnlineStore(

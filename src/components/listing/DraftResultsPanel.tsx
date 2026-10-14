@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
+import { ReviewConfirmModal } from "@/components/listing/ReviewConfirmModal";
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import {
   SequentialReviewOverlay,
@@ -86,6 +87,26 @@ import {
   type OptimisticHideMap
 } from "@/lib/drafts/optimisticArchiveHide";
 import { scheduleRouterRefresh } from "@/lib/drafts/scheduleRouterRefresh";
+import {
+  formatBatchApproveBlockedConfirm,
+  partitionApproveBlockers
+} from "@/lib/drafts/approveGate";
+import {
+  classifyApproveResponse,
+  formatBatchRecheckMessage,
+  formatSkippedSummary,
+  recheckDraftStages,
+  triageRecheck,
+  type SkippedItem
+} from "@/lib/drafts/approveTriage";
+import {
+  filterPendingLeave,
+  nextPendingLeaveExpiryMs,
+  reconcilePendingLeave,
+  recordPendingLeave,
+  snapshotForPendingLeave,
+  type PendingLeaveMap
+} from "@/lib/drafts/pendingLeave";
 import {
   undoApproveDrafts,
   undoArchiveDrafts,
@@ -200,6 +221,18 @@ export function DraftResultsPanel({
   const [optimisticHide, setOptimisticHide] = useState<OptimisticHideMap>(() => new Map());
   /** UX-H T49 / UX-AD T128: brief leave fade before hide or refresh. */
   const [leavingIds, setLeavingIds] = useState<Set<string>>(() => new Set());
+  /**
+   * REVIEW-FLOW B4: cards that just left their station stay hidden (pre-action
+   * stage+status remembered) until the refreshed props change, so they never blink
+   * back between the fade-out and router.refresh() landing. Capped at 20s.
+   */
+  const [pendingLeave, setPendingLeave] = useState<PendingLeaveMap>(() => new Map());
+  /** REVIEW-FLOW B2 / B6: count-aware confirm dialogs for the batch strip. */
+  const [reviewDialog, setReviewDialog] = useState<
+    | null
+    | { kind: "return"; target: "copy_review" | "image_review" }
+    | { kind: "approve_blocked"; blockedCount: number; eligibleIds: string[] }
+  >(null);
   /** UX-AE T133: Dashboard / deep-link arrival pulse target (clears after ~3s). */
   const [jumpTargetId, setJumpTargetId] = useState<string | null>(null);
   const jumpHighlightTimerRef = useRef<number | null>(null);
@@ -414,12 +447,31 @@ export function DraftResultsPanel({
     }, 280);
   }
 
-  /** UX-AD T128: fade cards out, then refresh (approve / station2 / leave-queue). */
-  function scheduleLeaveThenRefresh(ids: string[]) {
+  // REVIEW-FLOW B4: drop pending-leave entries once the props moved on (or after 20s),
+  // and re-check at the earliest expiry so a refresh that never lands cannot hide a card.
+  useEffect(() => {
+    setPendingLeave((prev) => reconcilePendingLeave(prev, drafts, Date.now()));
+    const wait = nextPendingLeaveExpiryMs(pendingLeave, Date.now());
+    if (wait == null) return;
+    const timer = window.setTimeout(() => {
+      setPendingLeave((prev) => reconcilePendingLeave(prev, drafts, Date.now()));
+    }, wait + 25);
+    return () => window.clearTimeout(timer);
+  }, [drafts, pendingLeave]);
+
+  /**
+   * UX-AD T128: fade cards out, then refresh (approve / station2 / leave-queue).
+   * REVIEW-FLOW B4: `hideIds` (default = all `ids`) are also kept hidden after the fade
+   * until the refreshed props arrive. Pass a subset when only some of the ids really
+   * leave their station (e.g. 送生圖工廠 stays at 站② until the factory finishes).
+   * The pre-action stage+status is captured NOW, before the refresh can change props.
+   */
+  function scheduleLeaveThenRefresh(ids: string[], opts?: { hideIds?: string[] }) {
     if (!ids.length) {
       scheduleRouterRefresh(() => router.refresh());
       return;
     }
+    const hideSnapshot = snapshotForPendingLeave(opts?.hideIds ?? ids, drafts);
     setLeavingIds((prev) => {
       const next = new Set(prev);
       for (const id of ids) next.add(id);
@@ -431,8 +483,15 @@ export function DraftResultsPanel({
         for (const id of ids) next.delete(id);
         return next;
       });
+      setPendingLeave((prev) => recordPendingLeave(prev, hideSnapshot, Date.now()));
       scheduleRouterRefresh(() => router.refresh());
     }, 250);
+  }
+
+  /** REVIEW-FLOW B4/B7: hide drafts that were just actioned inside the 逐件 overlay. */
+  function markLeftStation(draftId: string) {
+    const snapshot = snapshotForPendingLeave([draftId], drafts);
+    setPendingLeave((prev) => recordPendingLeave(prev, snapshot, Date.now()));
   }
 
   const progressHeadStatus = progress
@@ -525,8 +584,13 @@ export function DraftResultsPanel({
   );
 
   const visibleDrafts = useMemo(
-    () => filterByOptimisticHide(sortedDrafts, optimisticHide),
-    [sortedDrafts, optimisticHide]
+    () =>
+      filterByOptimisticHide(
+        // REVIEW-FLOW B4: just-actioned cards stay hidden until props move on (max 20s).
+        filterPendingLeave(sortedDrafts, pendingLeave, Date.now()),
+        optimisticHide
+      ),
+    [sortedDrafts, optimisticHide, pendingLeave]
   );
 
   // UX-AE T133: after prefs + stage filter, consume nestory:jump-draft-id once.
@@ -666,6 +730,24 @@ export function DraftResultsPanel({
   // R2 station①: pure approve → image_review + default keep
   async function batchApproveOnly() {
     if (!selectedArray.length) return;
+    // REVIEW-FLOW B6: same ⛔ 必修 gate as the single card (shared approveGate helper).
+    const selectedDrafts = drafts.filter((d) => selectedIds.has(d.id));
+    const { eligible, blocked } = partitionApproveBlockers(selectedDrafts);
+    if (eligible.length === 0 && blocked.length > 0) {
+      setBatchArm(null);
+      showToast(`選取的 ${blocked.length} 件都有 ⛔ 必修項目，無法核准`, "error");
+      return;
+    }
+    if (blocked.length > 0) {
+      // The dialog is the confirm step (no extra arm click).
+      setBatchArm(null);
+      setReviewDialog({
+        kind: "approve_blocked",
+        blockedCount: blocked.length,
+        eligibleIds: eligible.map((d) => d.id)
+      });
+      return;
+    }
     // UX-E T28: first click arms, second submits
     if (!batchArm || batchArm.action !== "approve") {
       setBatchArm({
@@ -675,43 +757,202 @@ export function DraftResultsPanel({
       return;
     }
     setBatchArm(null);
-    const n = selectedArray.length;
+    if (eligible.length === 0) return;
+    await runBatchApprove(eligible.map((d) => d.id));
+  }
+
+  /**
+   * REVIEW-FLOW B5: only fetch + parse decide the outcome. Post-success UI callbacks run
+   * outside that try (a throw there is logged, never reported as 核准連線失敗), and an
+   * uncertain outcome (network / 5xx / unparseable) re-reads the real status + stage.
+   */
+  async function runBatchApprove(ids: string[]) {
+    if (!ids.length) return;
+    const n = ids.length;
     setBusy(true);
     setBusyLabel(`核准中 ${n} 筆…`);
     setMessage(`核准中（已選 ${n} 筆）…`);
     clearArchiveUndo();
     try {
-      const approveResponse = await fetch("/api/drafts/batch/approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftIds: selectedArray })
-      });
-      const payload = await approveResponse.json().catch(() => ({}));
-      if (!approveResponse.ok) {
-        const err = payload.error ?? "批次核准失敗";
+      let status = 0;
+      let payload: unknown = null;
+      let networkError = false;
+      try {
+        const approveResponse = await fetch("/api/drafts/batch/approve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draftIds: ids })
+        });
+        status = approveResponse.status;
+        payload = await approveResponse.json().catch(() => null);
+      } catch {
+        networkError = true;
+      }
+      const outcome = classifyApproveResponse({ networkError, status, payload });
+
+      if (outcome.kind === "uncertain") {
+        setMessage("連線不穩，正在重新確認核准結果…");
+        const rows = await recheckDraftStages(createClient(), ids);
+        const triage = triageRecheck(ids, rows);
+        const msg = formatBatchRecheckMessage(triage);
+        setMessage(msg);
+        showToast(
+          msg,
+          triage.approvedIds.length === 0
+            ? "error"
+            : triage.notApprovedIds.length + triage.unknownIds.length > 0
+              ? "warn"
+              : "success"
+        );
+        if (triage.approvedIds.length > 0) {
+          const approvedSet = new Set(triage.approvedIds);
+          setSelectedIds((current) => {
+            const next = new Set(current);
+            for (const id of approvedSet) next.delete(id);
+            return next;
+          });
+          try {
+            scheduleLeaveThenRefresh(triage.approvedIds);
+          } catch (err) {
+            console.error("batch approve: post-recheck refresh failed", err);
+          }
+        }
+        return;
+      }
+
+      if (outcome.kind !== "success") {
+        const err =
+          outcome.kind === "rejected" && outcome.message !== "核准失敗"
+            ? outcome.message
+            : "批次核准失敗";
         setMessage(err);
         showToast(err, "error");
         return;
       }
-      const approvedIds =
-        (payload.approvedIds as string[] | undefined) ?? selectedArray.slice(0, n);
-      const okMsg = `已核准 ${payload.approvedCount ?? n} 筆文案（尚未發布）`;
-      setMessage(okMsg);
-      // BX2: 10s toast 復原 → return-stage copy_review
-      showToast(okMsg, "success", UNDO_TOAST_MS.approve, {
-        actionLabel: "復原",
-        onAction: async () => {
-          const result = await undoApproveDrafts(approvedIds);
-          showToast(result.message, result.ok ? "success" : "error");
-          scheduleRouterRefresh(() => router.refresh());
+
+      const body = (payload ?? {}) as {
+        approved?: unknown;
+        approvedIds?: unknown;
+        skipped?: unknown;
+      };
+      const asIds = (value: unknown): string[] | null =>
+        Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : null;
+      const writtenIds = asIds(body.approvedIds) ?? [];
+      // approved = freshly written + already-approved (noop); hide all of them.
+      const approvedIds = asIds(body.approved) ?? writtenIds;
+      const skipped: SkippedItem[] = Array.isArray(body.skipped)
+        ? (body.skipped as SkippedItem[]).filter(
+            (item) => item && typeof item.id === "string" && typeof item.reason === "string"
+          )
+        : [];
+      const skipLine = formatSkippedSummary(skipped);
+
+      try {
+        if (approvedIds.length === 0) {
+          const msg = skipLine ? `沒有核准任何一件；${skipLine}` : "沒有核准任何一件";
+          setMessage(msg);
+          showToast(msg, "error");
+          setSelectedIds((current) => {
+            const next = new Set(current);
+            for (const item of skipped) next.delete(item.id);
+            return next;
+          });
+          // Skipped drafts are stale/blocked: refresh so the list reflects reality.
+          scheduleLeaveThenRefresh([]);
+          return;
         }
-      });
-      setSelectedIds(new Set());
-      // T128: leave fade before list refresh (leaves 審文案 filter)
-      scheduleLeaveThenRefresh(approvedIds);
-    } catch {
-      setMessage("批次核准連線失敗");
-      showToast("批次核准連線失敗", "error");
+        const okMsg = `已核准 ${approvedIds.length} 筆文案（尚未發布）${skipLine ? `；${skipLine}` : ""}`;
+        setMessage(okMsg);
+        // BX2: 10s toast 復原 → return-stage copy_review (only freshly written ids)
+        showToast(okMsg, skipLine ? "warn" : "success", UNDO_TOAST_MS.approve, {
+          actionLabel: writtenIds.length ? "復原" : undefined,
+          onAction: writtenIds.length
+            ? async () => {
+                const result = await undoApproveDrafts(writtenIds);
+                showToast(result.message, result.ok ? "success" : "error");
+                scheduleRouterRefresh(() => router.refresh());
+              }
+            : undefined
+        });
+        setSelectedIds(new Set());
+        // T128: leave fade before list refresh (leaves 審文案 filter)
+        scheduleLeaveThenRefresh(approvedIds);
+      } catch (err) {
+        console.error("batch approve: post-success UI update failed", err);
+      }
+    } finally {
+      setBusy(false);
+      setBusyLabel(null);
+    }
+  }
+
+  // REVIEW-FLOW B2: batch 退回 (②→① 文案；③→① 文案／②改圖), confirmed in a dialog.
+  async function runBatchReturn(target: "copy_review" | "image_review") {
+    const ids = [...selectedArray];
+    setReviewDialog(null);
+    if (!ids.length) return;
+    const n = ids.length;
+    const label = target === "copy_review" ? "文案" : "改圖";
+    setBusy(true);
+    setBusyLabel(`退回${label} ${n} 筆…`);
+    setMessage(`退回${label}中（已選 ${n} 筆）…`);
+    clearArchiveUndo();
+    try {
+      let payload: {
+        error?: string;
+        updated?: unknown;
+        skipped?: unknown;
+      } | null = null;
+      let ok = false;
+      try {
+        const response = await fetch("/api/drafts/batch/return-stage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids, target })
+        });
+        ok = response.ok;
+        payload = await response.json().catch(() => null);
+      } catch {
+        const err = "批次退回連線失敗，請重新整理確認結果";
+        setMessage(err);
+        showToast(err, "error");
+        return;
+      }
+      if (!ok || !payload) {
+        const err = payload?.error ?? "批次退回失敗";
+        setMessage(err);
+        showToast(err, "error");
+        return;
+      }
+      const updated = Array.isArray(payload.updated)
+        ? payload.updated.filter((id): id is string => typeof id === "string")
+        : [];
+      const skipped: SkippedItem[] = Array.isArray(payload.skipped)
+        ? (payload.skipped as SkippedItem[]).filter(
+            (item) => item && typeof item.id === "string" && typeof item.reason === "string"
+          )
+        : [];
+      const skipLine = formatSkippedSummary(skipped);
+      try {
+        if (updated.length === 0) {
+          const msg = skipLine ? `沒有退回任何一件；${skipLine}` : "沒有退回任何一件";
+          setMessage(msg);
+          showToast(msg, "error");
+          scheduleLeaveThenRefresh([]);
+          return;
+        }
+        const where =
+          target === "copy_review"
+            ? "到文案審核（文案已解鎖）"
+            : "到圖片標示（可重標後再審核）";
+        const okMsg = `已退回 ${updated.length} 件${where}${skipLine ? `；${skipLine}` : ""}`;
+        setMessage(okMsg);
+        showToast(okMsg, skipLine ? "warn" : "success");
+        setSelectedIds(new Set());
+        scheduleLeaveThenRefresh(updated);
+      } catch (err) {
+        console.error("batch return: post-success UI update failed", err);
+      }
     } finally {
       setBusy(false);
       setBusyLabel(null);
@@ -863,7 +1104,9 @@ export function DraftResultsPanel({
       });
       setSelectedIds(new Set());
       // T128: leave fade before refresh (leaves 標圖 filter)
-      scheduleLeaveThenRefresh(undoIds);
+      // REVIEW-FLOW B4: only the 直達待發布 ids really leave 站② — 送生圖工廠 ids stay at
+      // 站② until the factory finishes, so they must not be pinned hidden.
+      scheduleLeaveThenRefresh(undoIds, { hideIds: advanceIds });
     } catch {
       setMessage("批次分流連線失敗");
       showToast("批次分流連線失敗", "error");
@@ -1692,6 +1935,16 @@ export function DraftResultsPanel({
                   </Button>
                   <Button
                     size="sm"
+                    className="batch-return-action"
+                    disabled={busy || !selectedArray.length}
+                    onClick={() => setReviewDialog({ kind: "return", target: "copy_review" })}
+                    title="退回文案審核（文案會解鎖，需重新核准）"
+                    type="button"
+                  >
+                    批次退回文案
+                  </Button>
+                  <Button
+                    size="sm"
                     className="batch-remove-action"
                     disabled={busy || !selectedArray.length}
                     onClick={() => void batchArchiveOrUnarchive("archive")}
@@ -1703,17 +1956,39 @@ export function DraftResultsPanel({
                 </>
               ) : null}
               {isReadyStation ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="batch-primary-action"
-                  disabled={busy || station3Busy || !selectedArray.length}
-                  onClick={() => openStation3Modal()}
-                  title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
-                  type="button"
-                >
-                  發布／匯出
-                </Button>
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="batch-primary-action"
+                    disabled={busy || station3Busy || !selectedArray.length}
+                    onClick={() => openStation3Modal()}
+                    title="發布／匯出：API 上架或草稿、Matrixify、Showmore 可多選"
+                    type="button"
+                  >
+                    發布／匯出
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="batch-return-action"
+                    disabled={busy || station3Busy || !selectedArray.length}
+                    onClick={() => setReviewDialog({ kind: "return", target: "copy_review" })}
+                    title="退回改文案（文案會解鎖，需重新核准）"
+                    type="button"
+                  >
+                    批次退回文案
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="batch-return-action"
+                    disabled={busy || station3Busy || !selectedArray.length}
+                    onClick={() => setReviewDialog({ kind: "return", target: "image_review" })}
+                    title="退回改圖（保留已核准文案，重標圖後再審核）"
+                    type="button"
+                  >
+                    批次退回改圖
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>
@@ -1810,7 +2085,12 @@ export function DraftResultsPanel({
                   onGestureStart={() => {
                     setOpenSwipeId((cur) => (cur === draft.id ? cur : null));
                   }}
-                  onLeaveSuccess={() => scheduleLeaveThenRefresh([draft.id])}
+                  onLeaveSuccess={(info) =>
+                    scheduleLeaveThenRefresh(
+                      [draft.id],
+                      info?.leftStation === false ? { hideIds: [] } : undefined
+                    )
+                  }
                   onSwipeOpenChange={(open) => {
                     setOpenSwipeId(open ? draft.id : null);
                   }}
@@ -1839,9 +2119,58 @@ export function DraftResultsPanel({
           setSeqReviewQueue([]);
           setSeqReviewMode("copy");
         }}
+        // REVIEW-FLOW B4: items actioned in the overlay must not blink back on the list
+        // behind it before the refresh lands (送工廠 items stay at 站② → not hidden).
+        onItemDone={(draftId, info) => {
+          if (info?.leftStation !== false) markLeftStation(draftId);
+        }}
         open={seqReviewOpen}
         queue={seqReviewQueue}
       />
+
+      <ReviewConfirmModal
+        busy={busy}
+        confirmLabel={
+          reviewDialog?.kind === "approve_blocked"
+            ? `核准其餘 ${reviewDialog.eligibleIds.length} 件`
+            : "確認退回"
+        }
+        danger={reviewDialog?.kind === "return"}
+        onCancel={() => setReviewDialog(null)}
+        onConfirm={() => {
+          const dialog = reviewDialog;
+          if (!dialog) return;
+          if (dialog.kind === "return") {
+            void runBatchReturn(dialog.target);
+            return;
+          }
+          setReviewDialog(null);
+          void runBatchApprove(dialog.eligibleIds);
+        }}
+        open={reviewDialog !== null}
+        title={
+          reviewDialog?.kind === "approve_blocked"
+            ? "有 ⛔ 必修項目"
+            : reviewDialog?.target === "image_review"
+              ? "批次退回改圖"
+              : "批次退回文案"
+        }
+      >
+        {reviewDialog?.kind === "approve_blocked" ? (
+          <p>
+            {formatBatchApproveBlockedConfirm(
+              reviewDialog.blockedCount,
+              reviewDialog.eligibleIds.length
+            )}
+          </p>
+        ) : reviewDialog?.kind === "return" ? (
+          <p>
+            {reviewDialog.target === "image_review"
+              ? `將 ${selectedArray.length} 件退回「圖片待標示」：保留已核准的文案，可重新標圖後再審核。`
+              : `將 ${selectedArray.length} 件退回「文案待審核」：文案會解鎖，需要重新核准。`}
+          </p>
+        ) : null}
+      </ReviewConfirmModal>
 
       <Station3PublishModal
         busy={station3Busy}

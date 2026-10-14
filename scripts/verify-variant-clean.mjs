@@ -601,6 +601,8 @@ await check("AI validator preserves Taiwan character aliases without accepting d
   });
   assert.equal(keep.cells[0].accepted, true, keep.cells[0].reason);
   assert.equal(keep.cells[1].accepted, true, keep.cells[1].reason);
+  assert.equal(keep.rows[0][0], "M8大耳狗16G拍立得", "AI must not restore 玉桂狗");
+  assert.equal(keep.rows[1][0], "酷洛米吊飾", "AI must not restore 庫洛米");
   const lost = validator.validateAiVariantNames([["大耳狗吊飾"]], [["小熊吊飾"]], { names: ["玉桂狗"] });
   assert.equal(lost.rows[0][0], "大耳狗吊飾");
   assert.match(lost.cells[0].reason, /缺少名稱/);

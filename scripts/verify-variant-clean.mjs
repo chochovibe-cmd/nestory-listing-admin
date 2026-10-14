@@ -44,6 +44,7 @@ const { publishDraft } = await import(src("src/lib/shopify/publishDraftSafe.ts")
 const { defaultPricingSettings } = await import(src("src/lib/pricing.ts"));
 const { dbRowsToForm, formRowsToDbInserts } = await import(src("src/lib/variants/variantMapping.ts"));
 const { localizeToTaiwanTraditionalText } = await import(src("src/lib/zhTwLocalizer.ts"));
+const variantImageCleanup = await import(src("src/lib/variants/variantImageCleanup.ts"));
 const { gradeWarningText } = await import(src("src/lib/drafts/warningTiers.ts"));
 
 let passed = 0;
@@ -1497,6 +1498,110 @@ await check("UI: resync panel defaults to nothing ticked, has 全選 and 同步�
   const records = read("src/lib/drafts/publishRecords.ts");
   assert.match(records, /價格／款式圖重同步/);
   assert.match(read("src/components/records/PublishRecordsPanel.tsx"), /<PriceResyncPanel \/>/);
+});
+
+
+await check("deleting a variant proposes only its exclusive image_type=variant picture", () => {
+  const images = [
+    { id: "solo", imageType: "variant" },
+    { id: "shared", imageType: "variant" },
+    { id: "main", imageType: "main" },
+    { id: "detail", imageType: "detail" }
+  ];
+  const pick = variantImageCleanup.imageIdsOrphanedByRemovingVariant;
+  assert.deepEqual(pick({ imageId: "solo" }, [{ imageId: "shared" }], images), ["solo"]);
+  assert.deepEqual(pick({ imageId: "shared" }, [{ imageId: "shared" }], images), [], "shared image kept");
+  assert.deepEqual(pick({ imageId: "main" }, [], images), [], "main image kept");
+  assert.deepEqual(pick({ imageId: "detail" }, [], images), [], "detail image kept");
+  assert.deepEqual(pick({ imageId: "unknown" }, [], images), [], "unknown image type kept");
+});
+
+// A small real-query-shaped fake for the image-integrity delete helper. It uses
+// the actual DB-only cleanup path and fails if Storage deletion is ever attempted.
+function makeDraftImageCleanupFake() {
+  const tables = {
+    product_images: [
+      { id: "solo", draft_id: "d1", image_type: "variant" },
+      { id: "shared", draft_id: "d1", image_type: "variant" },
+      { id: "main", draft_id: "d1", image_type: "main" },
+      { id: "detail", draft_id: "d1", image_type: "detail" },
+      { id: "foreign", draft_id: "d2", image_type: "variant" }
+    ],
+    product_variants: [
+      { id: "remaining", draft_id: "d1", image_id: "shared" }
+    ]
+  };
+  const storageCalls = [];
+  return {
+    tables,
+    storageCalls,
+    storage: { from: () => ({
+      remove: async (paths) => {
+        storageCalls.push(paths);
+        throw new Error("STORAGE_DELETE_FORBIDDEN");
+      }
+    }) },
+    from(table) {
+      let op = "select";
+      const filters = [];
+      const query = {
+        select() { return query; },
+        delete() { op = "delete"; return query; },
+        eq(column, value) { filters.push((row) => row[column] === value); return query; },
+        in(column, values) { filters.push((row) => values.includes(row[column])); return query; },
+        then(resolve, reject) {
+          const hit = tables[table].filter((row) => filters.every((f) => f(row)));
+          if (op === "delete") {
+            tables[table] = tables[table].filter((row) => !hit.includes(row));
+          }
+          return Promise.resolve({ data: structuredClone(hit), error: null }).then(resolve, reject);
+        }
+      };
+      return query;
+    }
+  };
+}
+
+await check("draft-only cleanup removes an exclusive image DB row, preserves shared/main/detail/other drafts and Storage", async () => {
+  const fake = makeDraftImageCleanupFake();
+  const res = await variantImageCleanup.removeUnusedVariantImagesFromDraft(
+    fake, "d1", ["solo", "shared", "main", "detail", "foreign"]
+  );
+  assert.deepEqual(res.deletedIds, ["solo"]);
+  assert.deepEqual(fake.tables.product_images.map((img) => img.id), ["shared", "main", "detail", "foreign"]);
+  assert.deepEqual(fake.tables.product_variants.map((row) => row.image_id), ["shared"]);
+  assert.equal(fake.storageCalls.length, 0, "Storage objects are never permanently deleted");
+});
+
+await check("both variant editing entrances require a save before image cleanup and offer KEEP IMAGE", () => {
+  const editor = read("src/components/listing/VariantEditor.tsx");
+  assert.match(editor, /會一起移除 \$\\{count\\} 張款式圖/);
+  assert.match(editor, /保留圖片，只刪除此款式嗎/);
+  assert.match(editor, /if \(!removeImageToo && !window\\.confirm/);
+  const workspace = read("src/components/listing/WorkspaceInputPanel.tsx");
+  const resultCard = read("src/components/listing/ResultCard.tsx");
+  const specs = read("src/components/listing/result-card/ResultCardSpecsPanel.tsx");
+  for (const item of [workspace, resultCard, specs]) assert.match(item, /onQueueImageDeletion/);
+  assert.ok(workspace.indexOf("await persistProductVariants(") < workspace.indexOf("await removeUnusedVariantImagesFromDraft("));
+  assert.ok(resultCard.indexOf("await persistVariantsSafe(") < resultCard.indexOf("await removeUnusedVariantImagesFromDraft("));
+  const helper = read("src/lib/variants/variantImageCleanup.ts");
+  assert.match(helper, /unbindVariants: false/);
+  assert.match(helper, /keepStorageFiles: true/);
+  const deleteLib = read("src/lib/images/deleteProductImages.ts");
+  assert.match(deleteLib, /if \(options\\.keepStorageFiles\) return result/);
+});
+
+await check("narrow result-card keeps actions wrapping and fixes outer grid auto-minimum without new !important", () => {
+  const css = read("src/app/globals.css");
+  const block = css.slice(css.indexOf("/* VARIANT-CLEAN fixbatch:"));
+  assert.match(block, /grid-template-columns: minmax\\(0, 1fr\\)/);
+  assert.match(block, /\\.result-card \\.rc-body/);
+  assert.match(block, /\\.result-card \\.rc-specs-wrap/);
+  assert.match(block, /\\.result-card \\.vc-toolbar/);
+  assert.match(block, /flex-wrap: wrap/);
+  assert.doesNotMatch(block, /!important/);
+  // 375/560/768 pixel card widths are visual browser-review gates;
+  // static assertions guard the layout contract, not a screenshot claim.
 });
 
 await check("CSS: the new styles add no !important and only use existing tokens", () => {

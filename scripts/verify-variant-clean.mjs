@@ -491,6 +491,41 @@ await check("Taiwan glossary: 內存卡→記憶卡, U盤→隨身碟, 充電寶
   assert.equal(localizeToTaiwanTraditionalText(localizeToTaiwanTraditionalText("内存卡")), "記憶卡", "idempotent");
 });
 
+await check("Taiwan IP / character aliases: Sanrio, Disney and Pokémon, one fixture per term", () => {
+  const cases = [
+    ["M8玉桂狗16G拍立得", "M8大耳狗16G拍立得"],
+    ["库洛米吊飾", "酷洛米吊飾"],
+    ["庫洛米吊飾", "酷洛米吊飾"],
+    ["美乐蒂吊飾", "美樂蒂吊飾"],
+    ["帕恰狗吊飾", "帕恰狗吊飾"],
+    ["布丁狗吊飾", "布丁狗吊飾"],
+    ["大眼蛙吊飾", "大眼蛙吊飾"],
+    ["凯蒂猫掛件", "Hello Kitty吊飾"],
+    ["米老鼠吊飾", "米奇吊飾"],
+    ["唐老鸭吊飾", "唐老鴨吊飾"],
+    ["精灵宝可梦週邊", "寶可夢週邊"],
+    ["口袋妖怪公仔", "寶可夢公仔"],
+    ["皮卡丘吊飾", "皮卡丘吊飾"],
+    ["龙珠掛件", "七龍珠吊飾"]
+  ];
+  for (const [raw, expected] of cases) assert.equal(clean(raw), expected, raw);
+  assert.equal(rules.cleanVariantRows([{ option1_value: "M8玉桂狗16G拍立得" }])[0].values[0], "M8大耳狗16G拍立得");
+});
+
+await check("Taiwan IP replacement is idempotent, never duplicates Kitty or 七龍珠", () => {
+  for (const original of [
+    "大耳狗", "酷洛米", "美樂蒂", "帕恰狗", "布丁狗", "大眼蛙",
+    "Hello Kitty凱蒂貓", "凱蒂貓／Kitty", "七龍珠", "七龍珠套組", "玉桂狗"
+  ]) {
+    const once = clean(original);
+    assert.equal(clean(once), once, original);
+  }
+  assert.equal(clean("Hello Kitty凱蒂貓"), "Hello Kitty");
+  assert.equal(clean("凱蒂貓／Kitty"), "Kitty");
+  assert.equal(clean("七龍珠"), "七龍珠");
+  assert.equal(clean("七龍珠套組"), "七龍珠套組");
+});
+
 await check("decorative marketing words go; kept when the name would become empty or a duplicate", () => {
   assert.equal(clean("【現貨】Pingu螢幕耳機"), "Pingu螢幕耳機");
   assert.equal(clean("正版授權 Pingu 吊飾 包郵"), "Pingu 吊飾");
@@ -556,6 +591,18 @@ await check("dropping the character / product name falls back (even when the len
   assert.equal(res.rows[0][0], "Pingu螢幕耳機【升級版】");
   const noCtx = validator.validateAiVariantNames(RULE, [["耳機【升級版】"], ["耳機【豪華版】"], ["128G記憶卡"]]);
   assert.equal(noCtx.rows[0][0], "Pingu螢幕耳機【升級版】", "the shared leading product name is protected without any context");
+});
+
+await check("AI validator preserves Taiwan character aliases without accepting dropped names", () => {
+  const ruleRows = [["M8大耳狗16G拍立得"], ["酷洛米吊飾"]];
+  const keep = validator.validateAiVariantNames(ruleRows, [["M8玉桂狗16G拍立得"], ["庫洛米吊飾"]], {
+    names: ["玉桂狗", "库洛米"]
+  });
+  assert.equal(keep.cells[0].accepted, true, keep.cells[0].reason);
+  assert.equal(keep.cells[1].accepted, true, keep.cells[1].reason);
+  const lost = validator.validateAiVariantNames([["大耳狗吊飾"]], [["小熊吊飾"]], { names: ["玉桂狗"] });
+  assert.equal(lost.rows[0][0], "大耳狗吊飾");
+  assert.match(lost.cells[0].reason, /缺少名稱/);
 });
 
 await check("shortening by deleting words (length -5) or padding (+5) is rejected", () => {

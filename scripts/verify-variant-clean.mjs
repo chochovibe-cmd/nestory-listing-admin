@@ -1575,30 +1575,32 @@ await check("draft-only cleanup removes an exclusive image DB row, preserves sha
 
 await check("both variant editing entrances require a save before image cleanup and offer KEEP IMAGE", () => {
   const editor = read("src/components/listing/VariantEditor.tsx");
-  assert.match(editor, /會一起移除 \$\\{count\\} 張款式圖/);
-  assert.match(editor, /保留圖片，只刪除此款式嗎/);
-  assert.match(editor, /if \(!removeImageToo && !window\\.confirm/);
+  assert.ok(editor.includes("會一起移除 ${count} 張款式圖"));
+  assert.ok(editor.includes("保留圖片，只刪除此款式嗎"));
+  assert.ok(editor.includes("if (!removeImageToo && !window.confirm"));
   const workspace = read("src/components/listing/WorkspaceInputPanel.tsx");
   const resultCard = read("src/components/listing/ResultCard.tsx");
   const specs = read("src/components/listing/result-card/ResultCardSpecsPanel.tsx");
-  for (const item of [workspace, resultCard, specs]) assert.match(item, /onQueueImageDeletion/);
+  for (const item of [workspace, resultCard, specs]) assert.ok(item.includes("onQueueImageDeletion"));
   assert.ok(workspace.indexOf("await persistProductVariants(") < workspace.indexOf("await removeUnusedVariantImagesFromDraft("));
   assert.ok(resultCard.indexOf("await persistVariantsSafe(") < resultCard.indexOf("await removeUnusedVariantImagesFromDraft("));
   const helper = read("src/lib/variants/variantImageCleanup.ts");
-  assert.match(helper, /unbindVariants: false/);
-  assert.match(helper, /keepStorageFiles: true/);
+  assert.ok(helper.includes("unbindVariants: false"));
+  assert.ok(helper.includes("keepStorageFiles: true"));
   const deleteLib = read("src/lib/images/deleteProductImages.ts");
-  assert.match(deleteLib, /if \(options\\.keepStorageFiles\) return result/);
+  assert.ok(deleteLib.includes("if (options.keepStorageFiles) return result"));
 });
 
 await check("narrow result-card keeps actions wrapping and fixes outer grid auto-minimum without new !important", () => {
   const css = read("src/app/globals.css");
   const block = css.slice(css.indexOf("/* VARIANT-CLEAN fixbatch:"));
-  assert.match(block, /grid-template-columns: minmax\\(0, 1fr\\)/);
-  assert.match(block, /\\.result-card \\.rc-body/);
-  assert.match(block, /\\.result-card \\.rc-specs-wrap/);
-  assert.match(block, /\\.result-card \\.vc-toolbar/);
-  assert.match(block, /flex-wrap: wrap/);
+  for (const fragment of [
+    "grid-template-columns: minmax(0, 1fr)",
+    ".result-card .rc-body",
+    ".result-card .rc-specs-wrap",
+    ".result-card .vc-toolbar",
+    "flex-wrap: wrap"
+  ]) assert.ok(block.includes(fragment), fragment);
   assert.doesNotMatch(block, /!important/);
   // 375/560/768 pixel card widths are visual browser-review gates;
   // static assertions guard the layout contract, not a screenshot claim.

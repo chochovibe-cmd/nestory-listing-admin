@@ -26,12 +26,36 @@ function nearestAtOrAbove(tier: number[], rawPrice: number, extensionStep: numbe
   return extended;
 }
 
-export function beautifyNestoryPrice(rawPrice: number): number {
+/**
+ * "standard": the shop-wide ladder above (coarse above NT$1,680: 2280, 4480, then +1000).
+ * "fine": same ladder up to NT$1,680, then every hundred offers an x80 and an x99 point
+ * (1699, 1780, 1799, 1880, ... 2280 ... 4480 ... 5480 stay on it). Used for per-variant
+ * pricing, where the coarse gaps made different costs collapse into one selling price.
+ */
+export type PriceLadder = "standard" | "fine";
+
+const FINE_LADDER_START = 1680;
+const FINE_HUNDRED_POINTS = [80, 99];
+
+function fineHighPrice(basePrice: number): number {
+  for (let hundred = Math.floor(basePrice / 100) * 100; ; hundred += 100) {
+    for (const offset of FINE_HUNDRED_POINTS) {
+      const candidate = hundred + offset;
+      if (candidate >= basePrice) return candidate;
+    }
+  }
+}
+
+export function beautifyNestoryPrice(rawPrice: number, ladder: PriceLadder = "standard"): number {
   if (!Number.isFinite(rawPrice) || rawPrice <= 0) {
     return 0;
   }
 
   const basePrice = Math.ceil(rawPrice);
+
+  if (ladder === "fine" && basePrice > FINE_LADDER_START) {
+    return fineHighPrice(basePrice);
+  }
 
   if (basePrice < 300) {
     return nearestAtOrAbove(LOW_TIER_PRICES, basePrice, 50);
@@ -48,13 +72,13 @@ export function beautifyNestoryPrice(rawPrice: number): number {
  * B6 補修：回傳「嚴格大於 price」的下一階美化價。
  * 用於特價模式定價不能等於／低於售價（利潤驅動把售價拉高追上定價時）。
  */
-export function nextBeautifiedPriceAbove(price: number): number {
+export function nextBeautifiedPriceAbove(price: number, ladder: PriceLadder = "standard"): number {
   if (!Number.isFinite(price) || price < 0) {
-    return beautifyNestoryPrice(1);
+    return beautifyNestoryPrice(1, ladder);
   }
   // beautify 是「≥ raw 的最近階」；對 floor(price)+1 取美化即可跳過目前這階。
-  const candidate = beautifyNestoryPrice(Math.floor(price) + 1);
+  const candidate = beautifyNestoryPrice(Math.floor(price) + 1, ladder);
   if (candidate > price) return candidate;
   // 理論上不該發生；再保險往上推一階。
-  return beautifyNestoryPrice(candidate + 1);
+  return beautifyNestoryPrice(candidate + 1, ladder);
 }

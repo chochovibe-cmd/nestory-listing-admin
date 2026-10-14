@@ -1,4 +1,4 @@
-import { beautifyNestoryPrice, nextBeautifiedPriceAbove } from "@/lib/nestoryPrice";
+import { beautifyNestoryPrice, nextBeautifiedPriceAbove, type PriceLadder } from "@/lib/nestoryPrice";
 
 /** Default Showmore markup % (C2 / 【自動·一】). */
 export const DEFAULT_SHOWMORE_MARKUP_PERCENT = 5;
@@ -18,17 +18,20 @@ export function normalizeShowmoreMarkupPercent(value: unknown): number {
  * Sell / list price after Showmore markup + nestory 尾數美化.
  * Cost must NOT use this helper (cost is never marked up).
  * Empty / non-positive input → empty string for CSV cells.
+ * Per-variant rows pass ladder "fine" so different variant prices are not re-collapsed
+ * onto the coarse standard ladder (e.g. everything above NT$1,680 → 2280).
  */
 export function applyShowmoreMarkup(
   price: number | null | undefined,
-  markupPercent: number
+  markupPercent: number,
+  ladder: PriceLadder = "standard"
 ): number | "" {
   if (price == null || !Number.isFinite(Number(price))) return "";
   const base = Number(price);
   if (base <= 0) return "";
   const pct = normalizeShowmoreMarkupPercent(markupPercent);
   const raw = base * (1 + pct / 100);
-  return beautifyNestoryPrice(raw);
+  return beautifyNestoryPrice(raw, ladder);
 }
 
 /**
@@ -38,17 +41,18 @@ export function applyShowmoreMarkup(
 export function applyShowmoreCompareAt(
   compareAt: number | null | undefined,
   sellPriceShowmore: number | "",
-  markupPercent: number
+  markupPercent: number,
+  ladder: PriceLadder = "standard"
 ): number | "" {
   if (compareAt == null || !Number.isFinite(Number(compareAt))) return "";
   const base = Number(compareAt);
   if (base <= 0) return "";
 
-  let marked = applyShowmoreMarkup(base, markupPercent);
+  let marked = applyShowmoreMarkup(base, markupPercent, ladder);
   if (marked === "") return "";
 
   if (typeof sellPriceShowmore === "number" && sellPriceShowmore > 0 && marked <= sellPriceShowmore) {
-    marked = nextBeautifiedPriceAbove(sellPriceShowmore);
+    marked = nextBeautifiedPriceAbove(sellPriceShowmore, ladder);
   }
   return marked;
 }

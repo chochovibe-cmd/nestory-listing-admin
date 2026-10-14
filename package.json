@@ -46,6 +46,7 @@
     "verify:publish-batch": "node scripts/verify-publish-batch.mjs",
     "verify:review-flow": "node scripts/verify-review-flow.mjs",
     "verify:prepare-images": "node scripts/verify-prepare-images.mjs",
+    "verify:variant-pricing": "node scripts/verify-variant-pricing.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

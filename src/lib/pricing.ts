@@ -1,4 +1,4 @@
-import { beautifyNestoryPrice, nextBeautifiedPriceAbove } from "./nestoryPrice";
+import { beautifyNestoryPrice, nextBeautifiedPriceAbove, type PriceLadder } from "./nestoryPrice";
 
 export type CostCurrency = "CNY" | "TWD";
 
@@ -37,6 +37,11 @@ export interface CalculatePriceOptions {
   targetProfitTwd?: number | null;
   /** 是否由利潤驅動售價（true 時套用 targetProfitTwd + 美化）。 */
   profitDriven?: boolean;
+  /**
+   * 尾數美化階梯。預設 "standard"（全站原階梯，NT$1,680 以上很粗：2280、4480…）。
+   * 款式（variant）定價用 "fine"，避免不同成本的款式被收斂成同一個售價。
+   */
+  priceLadder?: PriceLadder;
 }
 
 export interface PriceResult {
@@ -106,13 +111,14 @@ function formulaSellPrice(
   costTwd: number,
   settings: PricingSettings,
   profitDriven: boolean,
-  targetProfitTwd: number | null | undefined
+  targetProfitTwd: number | null | undefined,
+  ladder: PriceLadder
 ): { sellPrice: number; profitNote: string | null } {
   if (profitDriven && targetProfitTwd != null && Number.isFinite(targetProfitTwd)) {
     // 允許負利潤（清倉賠售）；售價仍至少 NT$1，黃字警告由 buildWarnings 處理。
     const want = targetProfitTwd;
     const floor = costTwd + want;
-    const sellPrice = beautifyNestoryPrice(Math.max(floor, 1));
+    const sellPrice = beautifyNestoryPrice(Math.max(floor, 1), ladder);
     const actual = sellPrice - costTwd;
     const profitNote =
       actual !== want ? `美化後實際 NT$${actual.toLocaleString()}` : null;
@@ -120,22 +126,23 @@ function formulaSellPrice(
   }
 
   const rawSellPrice = Math.max(costTwd * settings.marginMultiplier, settings.minPrice);
-  return { sellPrice: beautifyNestoryPrice(rawSellPrice), profitNote: null };
+  return { sellPrice: beautifyNestoryPrice(rawSellPrice, ladder), profitNote: null };
 }
 
 function formulaCompareAt(
   costTwd: number,
   sellPrice: number,
   settings: PricingSettings,
-  priceMode: PriceMode
+  priceMode: PriceMode,
+  ladder: PriceLadder
 ): number | null {
   if (priceMode === "single") return null;
   // 定價至少不低於「成本×定價加成」與售價；再美化。
   // B6 補修：利潤驅動時售價可能追上定價 → 必須嚴格高於售價，跳下一階美化價。
   const rawCompareAtPrice = Math.max(costTwd * settings.compareAtMultiplier, sellPrice);
-  let compareAt = beautifyNestoryPrice(rawCompareAtPrice);
+  let compareAt = beautifyNestoryPrice(rawCompareAtPrice, ladder);
   if (sellPrice > 0 && compareAt <= sellPrice) {
-    compareAt = nextBeautifiedPriceAbove(sellPrice);
+    compareAt = nextBeautifiedPriceAbove(sellPrice, ladder);
   }
   return compareAt;
 }
@@ -150,7 +157,8 @@ export function calculatePrice(
     priceMode = "sale",
     manualPricing,
     targetProfitTwd = null,
-    profitDriven = false
+    profitDriven = false,
+    priceLadder = "standard"
   } = options;
 
   const costInput = Number.isFinite(price) ? price : 0;
@@ -201,9 +209,10 @@ export function calculatePrice(
     costTwd,
     settings,
     profitDriven,
-    targetProfitTwd
+    targetProfitTwd,
+    priceLadder
   );
-  const compareAtPrice = formulaCompareAt(costTwd, sellPrice, settings, priceMode);
+  const compareAtPrice = formulaCompareAt(costTwd, sellPrice, settings, priceMode, priceLadder);
   const { profitTwd, profitPct } = profitMetrics(sellPrice, costTwd);
 
   return {

@@ -196,11 +196,12 @@ export function buildShowmoreRows(
 
     variants.forEach((variant, index) => {
       const sellRaw = variant.twd_price ?? draft.twd_price;
-      const sellPrice = applyShowmoreMarkup(sellRaw, markupPercent);
+      const sellPrice = applyShowmoreMarkup(sellRaw, markupPercent, "fine");
       const compareAt = applyShowmoreCompareAt(
         variant.compare_at_price ?? draft.compare_at_price,
         sellPrice,
-        markupPercent
+        markupPercent,
+        "fine"
       );
       const opt1Name = (variant.option1_name ?? "").trim() || "款式";
       const opt1Value = (variant.option1_value ?? "").trim() || "單一款式";

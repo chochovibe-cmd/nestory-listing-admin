@@ -366,12 +366,14 @@ export function VariantEditor({
     const remaining = rows.filter((_, rowIndex) => rowIndex !== index);
     const candidateIds = imageIdsOrphanedByRemovingVariant(removed, remaining, images);
     const count = candidateIds.length;
-    // Explicitly offer both choices before any local edit or database mutation.
-    const removeImageToo = window.confirm(
-      `確定刪除這款嗎？會一起移除 ${count} 張款式圖（儲存後才從草稿移除，Storage 檔案保留）。\n「確定」連圖一起移除；「取消」可選擇保留圖片。`
-    );
-    if (!removeImageToo && !window.confirm("保留圖片，只刪除此款式嗎？")) return;
-    if (removeImageToo && count > 0) onQueueImageDeletion?.(candidateIds);
+    // No exclusive image: delete the row exactly as before (no dialog). Otherwise ask ONE question
+    // about the images only — the row is removed either way, so 取消 can never mean "abort".
+    if (count > 0) {
+      const removeImageToo = window.confirm(
+        `這款有 ${count} 張只屬於它的款式圖，要一起從草稿移除嗎？\n（按「儲存」後才移除，原始檔案保留）\n\n確定＝圖片一起移除\n取消＝保留圖片，只刪款式`
+      );
+      if (removeImageToo) onQueueImageDeletion?.(candidateIds);
+    }
     setRowsSafe(remaining.map((row, rowIndex) => ({ ...row, sortOrder: rowIndex })));
     setMobileSelected(new Set());
   }

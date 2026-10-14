@@ -89,8 +89,21 @@ const TAIWAN_TERM_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
   ['精靈寶可夢', '寶可夢'],
   ['口袋妖怪', '寶可夢'],
   ['皮卡丘', '皮卡丘'],
-  // 先處理「七龍珠」自帶的前綴，避免把舊稱「龍珠」置換成「七七龍珠」。
+  ['史迪仔', '史迪奇'],
+  ['奧特曼', '超人力霸王'],
+  ['布朗熊', '熊大'],
+  ['可妮兔', '兔兔'],
+  ['小豬佩奇', '粉紅豬小妹'],
+  ['托馬斯小火車', '湯瑪士小火車'],
+  ['托馬斯', '湯瑪士小火車'],
+  ['海賊王', '航海王'],
+  ['蜘蛛俠', '蜘蛛人'],
+  ['鋼鐵俠', '鋼鐵人'],
+  ['星球大戰', '星際大戰'],
+  ['機器貓', '哆啦A夢'],
+  // 台灣名本身包含舊稱（龍珠⊂七龍珠、汪汪隊⊂汪汪隊立大功）：applyTaiwanTerms 會先保護已是台灣名的部分。
   ['龍珠', '七龍珠'],
+  ['汪汪隊', '汪汪隊立大功'],
   // PKG2A / 回饋 84：款式值常見「鼠标」——OpenCC 先成「鼠標」，用語表再換成台灣「滑鼠」
   ['鼠标', '滑鼠'],
   ['鼠標', '滑鼠'],
@@ -124,8 +137,14 @@ function applyTaiwanTerms(value: string): string {
     if (source === '凱蒂貓' && /(?:hello\s*)?kitty/i.test(localized)) {
       return localized.replace(/(?:[\s／\/|｜,，、+＋·・]*凱蒂貓[\s／\/|｜,，、+＋·・]*)+/g, '').trim();
     }
-    // Prevent overlapping canonical name replacements from duplicating the prefix.
-    if (source === '龍珠') return localized.replace(/(^|[^七])龍珠/g, '$1七龍珠');
+    // The Taiwan name contains the old alias (龍珠 → 七龍珠): keep existing Taiwan names intact so
+    // a second pass never yields 七七龍珠 / 汪汪隊立大功立大功.
+    if (replacement.includes(source)) {
+      return localized
+        .split(replacement)
+        .map((part) => part.split(source).join(replacement))
+        .join(replacement);
+    }
     return localized.split(source).join(replacement);
   }, value);
 }

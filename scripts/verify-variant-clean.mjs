@@ -507,7 +507,20 @@ await check("Taiwan IP / character aliases: Sanrio, Disney and Pokémon, one fix
     ["精灵宝可梦週邊", "寶可夢週邊"],
     ["口袋妖怪公仔", "寶可夢公仔"],
     ["皮卡丘吊飾", "皮卡丘吊飾"],
-    ["龙珠掛件", "七龍珠吊飾"]
+    ["龙珠掛件", "七龍珠吊飾"],
+    ["史迪仔公仔", "史迪奇公仔"],
+    ["奥特曼公仔", "超人力霸王公仔"],
+    ["布朗熊抱枕", "熊大抱枕"],
+    ["可妮兔抱枕", "兔兔抱枕"],
+    ["小猪佩奇公仔", "粉紅豬小妹公仔"],
+    ["托马斯小火车玩具", "湯瑪士小火車玩具"],
+    ["托马斯玩具", "湯瑪士小火車玩具"],
+    ["海贼王公仔", "航海王公仔"],
+    ["蜘蛛侠公仔", "蜘蛛人公仔"],
+    ["钢铁侠公仔", "鋼鐵人公仔"],
+    ["星球大战公仔", "星際大戰公仔"],
+    ["机器猫公仔", "哆啦A夢公仔"],
+    ["汪汪队公仔", "汪汪隊立大功公仔"]
   ];
   for (const [raw, expected] of cases) assert.equal(clean(raw), expected, raw);
   assert.equal(rules.cleanVariantRows([{ option1_value: "M8玉桂狗16G拍立得" }])[0].values[0], "M8大耳狗16G拍立得");
@@ -516,7 +529,8 @@ await check("Taiwan IP / character aliases: Sanrio, Disney and Pokémon, one fix
 await check("Taiwan IP replacement is idempotent, never duplicates Kitty or 七龍珠", () => {
   for (const original of [
     "大耳狗", "酷洛米", "美樂蒂", "帕恰狗", "布丁狗", "大眼蛙",
-    "Hello Kitty凱蒂貓", "凱蒂貓／Kitty", "七龍珠", "七龍珠套組", "玉桂狗"
+    "Hello Kitty凱蒂貓", "凱蒂貓／Kitty", "七龍珠", "七龍珠套組", "玉桂狗",
+    "汪汪隊立大功", "湯瑪士小火車", "超人力霸王", "龍珠／七龍珠"
   ]) {
     const once = clean(original);
     assert.equal(clean(once), once, original);
@@ -1577,9 +1591,10 @@ await check("draft-only cleanup removes an exclusive image DB row, preserves sha
 
 await check("both variant editing entrances require a save before image cleanup and offer KEEP IMAGE", () => {
   const editor = read("src/components/listing/VariantEditor.tsx");
-  assert.ok(editor.includes("會一起移除 ${count} 張款式圖"));
-  assert.ok(editor.includes("保留圖片，只刪除此款式嗎"));
-  assert.ok(editor.includes("if (!removeImageToo && !window.confirm"));
+  assert.ok(editor.includes("這款有 ${count} 張只屬於它的款式圖"));
+  assert.ok(editor.includes("取消＝保留圖片，只刪款式"));
+  assert.ok(editor.includes("if (count > 0) {"), "no dialog when the row has no exclusive image (old behaviour)");
+  assert.ok(editor.includes("if (removeImageToo) onQueueImageDeletion?.(candidateIds)"));
   const workspace = read("src/components/listing/WorkspaceInputPanel.tsx");
   const resultCard = read("src/components/listing/ResultCard.tsx");
   const specs = read("src/components/listing/result-card/ResultCardSpecsPanel.tsx");

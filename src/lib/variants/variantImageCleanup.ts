@@ -41,6 +41,7 @@ export async function removeUnusedVariantImagesFromDraft(
   const result: DraftVariantImageCleanupResult = { deletedIds: [], skippedIds: [], warnings: [] };
   if (!draftId || ids.length === 0) return result;
 
+  try {
   const { data: imageRows, error: imageError } = await client
     .from("product_images")
     .select("id, draft_id, image_type")
@@ -77,4 +78,11 @@ export async function removeUnusedVariantImagesFromDraft(
   result.skippedIds.push(...deletable.filter((id) => !removed.deletedIds.includes(id)));
   if (!removed.ok) result.warnings.push(removed.error ?? "部分款式圖無法從草稿移除");
   return result;
+  } catch (error) {
+    // Saving the variant rows succeeded; never turn optional image cleanup
+    // into an exception that makes the already-saved form look unsaved.
+    result.skippedIds = ids;
+    result.warnings.push(`款式已儲存，但款式圖清理失敗：${error instanceof Error ? error.message : String(error)}`);
+    return result;
+  }
 }

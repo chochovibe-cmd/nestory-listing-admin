@@ -69,7 +69,9 @@ const scripts = [
   // PUBLISH-BATCH: stepwise batch (1 item/request), stale-batch recovery, reconcile, Google channel.
   "scripts/verify-publish-batch.mjs",
   // REVIEW-FLOW: transition guard, batch return, no-blink leave, approve triage, ⛔ batch, 逐件 skip.
-  "scripts/verify-review-flow.mjs"
+  "scripts/verify-review-flow.mjs",
+  // Pre-publish image prep: >12 image rows are chunked, detail rows untouched.
+  "scripts/verify-prepare-images.mjs"
 ];
 
 for (const script of scripts) {

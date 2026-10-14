@@ -32,11 +32,12 @@ export function ResultCardSpecsPanel({
   priceUnconfirmed = false,
   onDimensionsChange,
   onRowsChange,
+  onQueueImageDeletion,
   onWarning
 }: {
   variantDimensions: VariantDimension[];
   variantRows: VariantFormRow[];
-  variantImageOptions: Array<{ id: string; url: string; label: string }>;
+  variantImageOptions: Array<{ id: string; url: string; label: string; imageType?: string | null }>;
   variantWarning: string | null;
   priceMode: PriceMode;
   productCost: number | null;
@@ -51,6 +52,7 @@ export function ResultCardSpecsPanel({
   priceUnconfirmed?: boolean;
   onDimensionsChange: (dims: VariantDimension[]) => void;
   onRowsChange: (rows: VariantFormRow[]) => void;
+  onQueueImageDeletion?: (imageIds: string[]) => void;
   onWarning: (msg: string | null) => void;
 }) {
   const costMissing = isPricePlaceholderCny(productCost);
@@ -104,6 +106,7 @@ export function ResultCardSpecsPanel({
             images={variantImageOptions}
             onDimensionsChange={onDimensionsChange}
             onRowsChange={onRowsChange}
+            onQueueImageDeletion={onQueueImageDeletion}
             onWarning={onWarning}
             priceMode={priceMode}
             pricingSettings={getStoredPricingSettings()}

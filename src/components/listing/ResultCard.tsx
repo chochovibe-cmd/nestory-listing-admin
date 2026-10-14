@@ -146,6 +146,7 @@ import {
   type VariantDimension,
   type VariantFormRow
 } from "@/lib/variants";
+import { readExcludedVariants } from "@/lib/variants/restoreExcludedVariant";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -487,6 +488,32 @@ export function ResultCard({
         : variantPrices.length,
     [variantPrices, variantsDirty, variantRows]
   );
+
+  // VARIANT-CLEAN: options the capture import kept out of 款式 (restorable on the 規格 tab).
+  const excludedVariants = useMemo(() => readExcludedVariants(draft.raw_capture), [draft.raw_capture]);
+  const [restoreBusyIndex, setRestoreBusyIndex] = useState<number | null>(null);
+
+  async function restoreExcludedVariant(index: number) {
+    setRestoreBusyIndex(index);
+    try {
+      const response = await fetch(`/api/drafts/${draft.id}/excluded-variants/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        showToast(payload?.error ?? "恢復款式失敗", "error");
+        return;
+      }
+      showToast("已恢復這個款式", "success");
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      showToast("恢復款式連線失敗", "error");
+    } finally {
+      setRestoreBusyIndex(null);
+    }
+  }
 
   const variantImageOptions = useMemo(
     () =>
@@ -3056,6 +3083,16 @@ export function ResultCard({
 
           {activeTab === "specs" ? (
             <ResultCardSpecsPanel
+              excludedVariants={excludedVariants}
+              nameContext={{
+                productName: title || draft.title_zh || draft.taobao_title || null,
+                ip: draft.ip_name,
+                character: draft.character_name,
+                brand: draft.product_brand ?? null
+              }}
+              onRestoreExcluded={(index) => void restoreExcludedVariant(index)}
+              restoreBusyIndex={restoreBusyIndex}
+              restoreDisabledReason={variantsDirty ? "規格有尚未儲存的修改，請先儲存再恢復。" : null}
               onDimensionsChange={(dims) => {
                 setVariantDimensions(dims);
                 setVariantsDirty(true);

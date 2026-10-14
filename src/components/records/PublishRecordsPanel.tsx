@@ -6,6 +6,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNod
 import { createPortal } from "react-dom";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
+import { PriceResyncPanel } from "@/components/records/PriceResyncPanel";
 import { isAdmin } from "@/lib/auth/roles";
 import { runStepwisePublishBatch } from "@/lib/drafts/publishBatchClient";
 import {
@@ -850,6 +851,8 @@ export function PublishRecordsPanel() {
           librarySearching={librarySearching}
         />
       ) : null}
+
+      {tab === "price_resync" ? <PriceResyncPanel /> : null}
 
       <ConfirmModal
         open={activeConfirm !== null}

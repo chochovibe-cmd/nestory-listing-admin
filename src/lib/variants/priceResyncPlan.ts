@@ -151,3 +151,128 @@ export function checkResyncPrice(request: unknown): string | null {
   }
   return null;
 }
+
+export type ResyncCandidate = {
+  id: string;
+  title_zh?: string | null;
+  taobao_title?: string | null;
+  price_mode?: PriceMode | null;
+  cny_price?: number | null;
+  twd_price?: number | null;
+  compare_at_price?: number | null;
+  pricing_formula?: Record<string, unknown> | null;
+  variant_dimensions?: VariantDimension[] | null;
+  variants: PricedVariantDbRow[];
+};
+
+export type ResyncPreviewLine = {
+  rowId: string | null;
+  label: string;
+  oldPrice: string | null;
+  oldCompareAt: string | null;
+  needsImage: boolean;
+};
+
+export type ResyncRowPlanLine = {
+  rowId: string | null;
+  label: string;
+  /** Shopify's current price (the "old" one) */
+  oldPrice: number | null;
+  oldCompareAt: number | null;
+  newPrice: number | null;
+  newCompareAt: number | null;
+  priceChanged: boolean;
+  needsImage: boolean;
+  /** why this line is left alone, else null */
+  note: string | null;
+};
+
+export type ResyncRowPlan = {
+  lines: ResyncRowPlanLine[];
+  /** body.variants for POST /api/price-resync/[draftId]/apply */
+  request: Array<{ rowId: string | null } & ResyncPriceRequest>;
+  needsAction: boolean;
+  imageCount: number;
+};
+
+function numOrNull(value: string | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+/**
+ * Combine local data, the read-only Shopify preview and THIS device's pricing settings into
+ * what the 重同步 panel shows and sends. "Old" is always Shopify's live price.
+ */
+export function buildResyncRowPlan(input: {
+  candidate: ResyncCandidate;
+  preview: { lines: ResyncPreviewLine[] };
+  settings: PricingSettings;
+}): ResyncRowPlan {
+  const { candidate, preview, settings } = input;
+  const priceMode: PriceMode = candidate.price_mode === "single" ? "single" : "sale";
+  const productCost = usableProductCost(candidate.cny_price);
+  const lines: ResyncRowPlanLine[] = [];
+
+  if (candidate.variants.length === 0) {
+    const line = preview.lines[0];
+    const manual = candidate.pricing_formula?.kind === "manual_twd";
+    const recalc = computeSingleRecalc({
+      productCost,
+      priceMode,
+      settings,
+      oldSell: numOrNull(line?.oldPrice),
+      oldCompareAt: numOrNull(line?.oldCompareAt)
+    });
+    const target = manual ? null : recalc.newSell;
+    lines.push({
+      rowId: null,
+      label: "單一款式",
+      oldPrice: recalc.oldSell,
+      oldCompareAt: recalc.oldCompareAt,
+      newPrice: target,
+      newCompareAt: manual ? null : recalc.newCompareAt,
+      priceChanged: target != null && (recalc.oldSell !== target || (recalc.oldCompareAt ?? null) !== (recalc.newCompareAt ?? null)),
+      needsImage: false,
+      note: manual ? "手動定價，不動" : target == null ? "沒有成本，無法重算" : null
+    });
+  } else {
+    const recalc = computeVariantRecalcLines({
+      rows: candidate.variants,
+      dimensions: candidate.variant_dimensions ?? [],
+      productCost,
+      priceMode,
+      settings
+    });
+    for (const pl of preview.lines) {
+      const hit = recalc.find((r) => r.id === pl.rowId);
+      const oldPrice = numOrNull(pl.oldPrice);
+      const oldCompareAt = numOrNull(pl.oldCompareAt);
+      const newPrice = hit?.newSell ?? null;
+      const newCompareAt = priceMode === "single" ? null : (hit?.newCompareAt ?? null);
+      lines.push({
+        rowId: pl.rowId,
+        label: pl.label,
+        oldPrice,
+        oldCompareAt,
+        newPrice,
+        newCompareAt,
+        priceChanged: newPrice != null && (oldPrice !== newPrice || (oldCompareAt ?? null) !== (newCompareAt ?? null)),
+        needsImage: pl.needsImage,
+        note: newPrice == null ? "沒有成本，無法重算" : hit?.locked ? "已手動鎖定（以系統內的價格為準）" : null
+      });
+    }
+  }
+
+  const request = lines
+    .filter((line) => line.newPrice != null)
+    .map((line) => ({ rowId: line.rowId, price: line.newPrice as number, compareAtPrice: line.newCompareAt }));
+  const imageCount = lines.filter((line) => line.needsImage).length;
+  return {
+    lines,
+    request,
+    needsAction: lines.some((line) => line.priceChanged) || imageCount > 0,
+    imageCount
+  };
+}

@@ -26,7 +26,8 @@ export type PublishRecordsTab =
   | "batches"
   | "failed"
   | "shopify_drafts"
-  | "published";
+  | "published"
+  | "price_resync";
 
 export const PUBLISH_RECORDS_TABS: {
   key: PublishRecordsTab;
@@ -35,7 +36,9 @@ export const PUBLISH_RECORDS_TABS: {
   { key: "batches", label: "批次紀錄" },
   { key: "failed", label: "失敗重試" },
   { key: "shopify_drafts", label: "Shopify 草稿" },
-  { key: "published", label: "已發布／封存" }
+  { key: "published", label: "已發布／封存" },
+  // VARIANT-CLEAN: live-product price / variant-image resync (one product per request)
+  { key: "price_resync", label: "價格／款式圖重同步" }
 ];
 
 /** @deprecated R4 uses PublishRecordsTab; kept for verify-d7 mirrors */
@@ -144,7 +147,8 @@ export function parseRecordsTab(
     raw === "batches" ||
     raw === "failed" ||
     raw === "shopify_drafts" ||
-    raw === "published"
+    raw === "published" ||
+    raw === "price_resync"
   ) {
     return raw;
   }

@@ -75,6 +75,22 @@ const TAIWAN_TERM_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
   ['內存', '記憶體'],
   ['U盤', '隨身碟'],
   ['數據線', '傳輸線'],
+  // VARIANT-CLEAN fixbatch: Mainland IP / character wording -> Taiwan canonical wording.
+  // OpenCC runs first, so these are the Traditional forms (with explicitly tested aliases).
+  ['玉桂狗', '大耳狗'],
+  ['庫洛米', '酷洛米'],
+  ['美樂蒂', '美樂蒂'],
+  ['帕恰狗', '帕恰狗'],
+  ['布丁狗', '布丁狗'],
+  ['大眼蛙', '大眼蛙'],
+  ['凱蒂貓', 'Hello Kitty'],
+  ['米老鼠', '米奇'],
+  ['唐老鴨', '唐老鴨'],
+  ['精靈寶可夢', '寶可夢'],
+  ['口袋妖怪', '寶可夢'],
+  ['皮卡丘', '皮卡丘'],
+  // 先處理「七龍珠」自帶的前綴，避免把舊稱「龍珠」置換成「七七龍珠」。
+  ['龍珠', '七龍珠'],
   // PKG2A / 回饋 84：款式值常見「鼠标」——OpenCC 先成「鼠標」，用語表再換成台灣「滑鼠」
   ['鼠标', '滑鼠'],
   ['鼠標', '滑鼠'],
@@ -102,10 +118,16 @@ type LocalizableDraftTextFields = {
 };
 
 function applyTaiwanTerms(value: string): string {
-  return TAIWAN_TERM_REPLACEMENTS.reduce(
-    (localized, [source, replacement]) => localized.split(source).join(replacement),
-    value,
-  );
+  return TAIWAN_TERM_REPLACEMENTS.reduce((localized, [source, replacement]) => {
+    if (!localized.includes(source) || source === replacement) return localized;
+    // Already has Kitty in English: discard the Mainland alias, don't append a second Kitty.
+    if (source === '凱蒂貓' && /(?:hello\\s*)?kitty/i.test(localized)) {
+      return localized.replace(/(?:[\\s／/|｜,，、+＋·・]*凱蒂貓)+/g, '').trim();
+    }
+    // Prevent overlapping canonical name replacements from duplicating the prefix.
+    if (source === '龍珠') return localized.replace(/(^|[^七])龍珠/g, '$1七龍珠');
+    return localized.split(source).join(replacement);
+  }, value);
 }
 
 function protectUrlsAndEmails(value: string): { text: string; restore: (localized: string) => string } {

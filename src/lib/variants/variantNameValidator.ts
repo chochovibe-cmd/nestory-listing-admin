@@ -145,7 +145,8 @@ export function validateAiVariantNames(
   ruleRows.forEach((row, r) =>
     row.forEach((rule, axis) => {
       if (!rule) return;
-      const proposal = ai[r][axis].trim();
+      // Even if the AI uses an old Mainland alias, the final displayed value must stay Taiwan-localized.
+      const proposal = localizeToTaiwanTraditionalText(ai[r][axis].trim());
       const names = [...(ctx.names ?? []), leading[axis]].filter((n): n is string => Boolean(n && n.trim().length >= 2));
       const reason = proposal === rule ? null : checkCell(rule, proposal, names);
       const accepted = reason == null;

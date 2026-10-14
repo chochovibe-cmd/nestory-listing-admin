@@ -108,6 +108,7 @@ import {
   deleteProductImages,
   deleteProductImagesFailureMessage
 } from "@/lib/images/deleteProductImages";
+import { removeUnusedVariantImagesFromDraft } from "@/lib/variants/variantImageCleanup";
 import {
   formatArchiveResultMessage,
   formatUnarchiveResultMessage,
@@ -334,6 +335,7 @@ export function ResultCard({
   const [variantRows, setVariantRows] = useState<VariantFormRow[]>([]);
   const [variantWarning, setVariantWarning] = useState<string | null>(null);
   const [variantsDirty, setVariantsDirty] = useState(false);
+  const pendingVariantImageDeletionIdsRef = useRef<Set<string>>(new Set());
   const [message, setMessage] = useState("");
   const [markMessage, setMarkMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
@@ -528,6 +530,7 @@ export function ResultCard({
         .filter((img) => img.image_type === "main" || img.image_type === "variant")
         .map((img, i) => ({
           id: img.id,
+          imageType: img.image_type,
           url: String(img.processed_file_url || img.original_file_url || img.generated_file_url || ""),
           label: `主圖 ${i + 1}`
         }))
@@ -1115,6 +1118,18 @@ export function ResultCard({
         return false;
       }
 
+      // Remove queued draft image ROWS only after all surviving variant bindings are saved.
+      const queuedIds = [...pendingVariantImageDeletionIdsRef.current];
+      if (queuedIds.length > 0) {
+        const cleanup = await removeUnusedVariantImagesFromDraft(supabase, draft.id, queuedIds);
+        for (const imageId of [...cleanup.deletedIds, ...cleanup.skippedIds]) {
+          pendingVariantImageDeletionIdsRef.current.delete(imageId);
+        }
+        if (cleanup.deletedIds.length > 0) {
+          setImageMarks((current) => current.filter((image) => !cleanup.deletedIds.includes(image.id)));
+        }
+        if (cleanup.warnings.length > 0) showToast(cleanup.warnings.join("；"), "warn");
+      }
       setVariantsDirty(false);
       await markShopifyDirty();
       // UX-A T2 / UX-L T62: transient success → toast only
@@ -3107,6 +3122,9 @@ export function ResultCard({
               onRowsChange={(rows) => {
                 setVariantRows(rows);
                 setVariantsDirty(true);
+              }}
+              onQueueImageDeletion={(imageIds) => {
+                imageIds.forEach((id) => pendingVariantImageDeletionIdsRef.current.add(id));
               }}
               onWarning={setVariantWarning}
               priceMode={priceMode}

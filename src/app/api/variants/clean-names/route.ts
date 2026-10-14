@@ -6,7 +6,7 @@
 import { NextRequest } from "next/server";
 import { canOperate } from "@/lib/auth/roles";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { polishVariantNamesWithOpenAI } from "@/lib/variants/variantNameAiPolish";
+import { polishVariantNamesWithOpenAI } from "@/lib/providers/variantNamePolish";
 import { buildVariantNamePreview } from "@/lib/variants/variantNamePreview";
 import type { VariantOptionFields } from "@/lib/variants/variantNameRules";
 import type { UserRole } from "@/types/domain";

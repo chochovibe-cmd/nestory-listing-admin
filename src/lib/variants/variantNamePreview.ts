@@ -9,7 +9,23 @@ import {
   type VariantOptionFields
 } from "./variantNameRules";
 import { validateAiVariantNames } from "./variantNameValidator";
-import type { VariantPolishFn } from "./variantNameAiPolish";
+
+export type VariantPolishRequest = {
+  /** Rule-layer text per row / axis ("" = unused axis). */
+  rows: string[][];
+  axisNames: string[];
+  productName?: string | null;
+};
+
+export type VariantPolishResult = {
+  /** Same shape as the request, or null when the AI could not be used. */
+  rows: unknown | null;
+  model: string;
+  warning?: string;
+};
+
+/** The AI call itself lives in src/lib/providers/variantNamePolish.ts (server only). */
+export type VariantPolishFn = (request: VariantPolishRequest) => Promise<VariantPolishResult>;
 
 export type VariantNamePreviewRow = {
   index: number;

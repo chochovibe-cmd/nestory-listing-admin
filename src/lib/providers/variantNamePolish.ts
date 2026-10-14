@@ -12,21 +12,7 @@ import {
   isExternalTimeout
 } from "@/lib/providers/externalTimeout";
 
-export type VariantPolishRequest = {
-  /** Rule-layer text per row / axis ("" = unused axis). */
-  rows: string[][];
-  axisNames: string[];
-  productName?: string | null;
-};
-
-export type VariantPolishResult = {
-  /** Same shape as the request, or null when the AI could not be used. */
-  rows: unknown | null;
-  model: string;
-  warning?: string;
-};
-
-export type VariantPolishFn = (request: VariantPolishRequest) => Promise<VariantPolishResult>;
+import type { VariantPolishFn } from "@/lib/variants/variantNamePreview";
 
 const SYSTEM_PROMPT = `你是台灣電商的商品款式名稱校稿員。我會給你一組款式名稱（二維陣列，每列一個款式，每欄一個選項軸）。
 任務：把每個名稱改成自然的台灣用語，只調整措辭。

@@ -629,11 +629,11 @@ await check("preview: rules always, AI only on request, AI failure still returns
 
 await check("AI polish is button-only: never imported by the capture import or generate path", () => {
   for (const file of ["src/lib/import/mapCaptureFields.ts", "src/lib/import/createCaptureDraft.ts", "src/app/api/generate/route.ts"]) {
-    assert.doesNotMatch(read(file), /variantNameAiPolish|polishVariantNames/, file);
+    assert.doesNotMatch(read(file), /variantNamePolish|polishVariantNames/, file);
   }
   const route = read("src/app/api/variants/clean-names/route.ts");
   assert.match(route, /useAi: body\?\.useAi === true/);
-  assert.match(read("src/lib/variants/variantNameAiPolish.ts"), /OPENAI_BRIEF_MODEL/);
+  assert.match(read("src/lib/providers/variantNamePolish.ts"), /OPENAI_BRIEF_MODEL/);
 });
 
 // =====================================================================

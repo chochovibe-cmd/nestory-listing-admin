@@ -3,6 +3,7 @@
  * Pure planning; the API route does the writes. The excluded list lives in
  * product_drafts.raw_capture.server.excluded_variants.
  */
+import { cleanVariantRows } from "./variantNameRules";
 import { assignVariantSkus } from "./variantSku";
 import { findDuplicateVariantInsertRows } from "./variantPersist";
 
@@ -79,7 +80,16 @@ export function planRestoreExcludedVariant(input: {
     return { ok: false, status: 404, error: "找不到這個已排除的款式（可能已被恢復）" };
   }
 
-  const { image_url: _imageUrl, ...base } = entry.row;
+  const { image_url: _imageUrl, ...raw } = entry.row;
+  // Same rule layer the import used, and the axis names the product already has, so the
+  // restored row lines up with its siblings instead of opening a second axis.
+  const [cleaned] = cleanVariantRows([raw as Parameters<typeof cleanVariantRows>[0][number]]);
+  const base: Record<string, unknown> = { ...raw };
+  [0, 1, 2].forEach((axis) => {
+    const name = input.dimensions[axis]?.name ?? cleaned.names[axis];
+    base[`option${axis + 1}_name`] = cleaned.values[axis] != null ? name ?? null : cleaned.names[axis];
+    base[`option${axis + 1}_value`] = cleaned.values[axis];
+  });
   const sortOrder = input.existing.reduce((max, r) => Math.max(max, (r.sort_order ?? 0) + 1), 0);
   const draft: Record<string, unknown> = {
     ...base,
@@ -87,8 +97,8 @@ export function planRestoreExcludedVariant(input: {
     sort_order: sortOrder,
     // Originals stay on record, same as imported rows.
     source_options: {
-      names: [base.option1_name ?? null, base.option2_name ?? null, base.option3_name ?? null],
-      values: [base.option1_value ?? null, base.option2_value ?? null, base.option3_value ?? null]
+      names: [raw.option1_name ?? null, raw.option2_name ?? null, raw.option3_name ?? null],
+      values: [raw.option1_value ?? null, raw.option2_value ?? null, raw.option3_value ?? null]
     }
   };
 

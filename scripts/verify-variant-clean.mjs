@@ -1189,14 +1189,102 @@ await check("resync is one product per request: a request for another product's 
   assert.doesNotMatch(route, /\.map\(|for \(const/, "no loop over products inside one request");
 });
 
-await check("names on Shopify that differ from Nestory are skipped with a reason, never guessed", async () => {
+await check("ZERO matches (every name differs) → the product is skipped with a reason, never guessed", async () => {
   const ctx = resyncFixture({ shopifyOptions: { variants: [remoteVariant(1, "完全不同"), remoteVariant(2, "也不同")] } });
   const previewRes = await resync.previewVariantResync({ serviceSupabase: ctx.fake, caller: ctx.shopify.caller, draftId: "d1", mockMode: false });
   assert.equal(previewRes.ok, true);
-  assert.match(previewRes.skipReason, /無法安全對應/);
+  assert.match(previewRes.skipReason, /沒有任何款式能和系統的款式對應/);
+  assert.deepEqual(previewRes.lines, []);
   const res = await run(ctx, applyReq([{ rowId: "v-A", price: 1000, compareAtPrice: null }], false));
   assert.equal(res.ok, false);
+  assert.equal(res.status, 409);
   assert.equal(ctx.shopify.mutations().length, 0);
+});
+
+// Real prod shapes (read-only check, 2026-10-14): Shopify variants were deleted in the Shopify admin,
+// the Nestory rows stayed. Those rows must not block the product.
+const FAKE_NAMES = ["聯繫客服免費定製賀卡，定製內容務必聯繫客服！", "【購買須知】CCD配件存放說明 （資訊說明 | 拍下不出貨）", "資訊說明｜勿拍", "售罄勿拍"];
+
+async function runShape({ localLabels, remoteLabels, extraRows = [] }) {
+  const rows = [...localLabels, ...extraRows].map((label, i) =>
+    variantRow(label, { sort_order: i, twd_price: 4480, id: `v-${label}` })
+  );
+  const ctx = resyncFixture({
+    rows,
+    images: [],
+    shopifyOptions: {
+      media: [],
+      variants: remoteLabels.map((label, i) => remoteVariant(i + 1, label, { price: "4480.00" }))
+    }
+  });
+  const previewRes = await resync.previewVariantResync({ serviceSupabase: ctx.fake, caller: ctx.shopify.caller, draftId: "d1", mockMode: false });
+  return { ctx, previewRes, rows };
+}
+
+await check("小王子 shape: fake + discontinued 【定製版】 rows exist only in Nestory → still resynced", async () => {
+  const kept = ["【禮盒版】小王子星球燈", "【禮盒版】小王子星球燈+正版專屬禮袋"];
+  const discontinued = ["【定製版】小王子星球燈+星星掛鏈", "【定製版】小王子星球燈+星星掛鏈+正版專屬禮袋"];
+  const { ctx, previewRes } = await runShape({ localLabels: [...kept, FAKE_NAMES[0], ...discontinued], remoteLabels: kept });
+  assert.equal(previewRes.ok, true);
+  assert.equal(previewRes.skipReason, null);
+  assert.deepEqual(previewRes.lines.map((l) => l.label), kept);
+  assert.deepEqual(previewRes.localOnly, discontinued, "fake rows are neither priced nor listed; discontinued rows are listed as local-only");
+  assert.deepEqual(previewRes.remoteOnly, []);
+  const res = await run(ctx, applyReq(previewRes.lines.map((l) => ({ rowId: l.rowId, price: 1799, compareAtPrice: null })), false));
+  assert.equal(res.ok, true, JSON.stringify(res));
+  const sent = ctx.shopify.named("ResyncVariantPrices")[0].variables.variants.map((v) => v.id);
+  assert.deepEqual(sent, ["gid://shopify/ProductVariant/10", "gid://shopify/ProductVariant/20"], "only the matched Shopify variants");
+  assert.equal(ctx.fake.tables.product_variants.find((r) => r.id === `v-${discontinued[0]}`).twd_price, 4480, "local-only rows untouched");
+});
+
+await check("Pingu CCD shape: 13 rows incl. 【購買須知】, Shopify 12 → resynced, the fake row is never counted", async () => {
+  const labels = Array.from({ length: 12 }, (_, i) => `CCD款式${i + 1}`);
+  const { ctx, previewRes } = await runShape({ localLabels: labels, remoteLabels: labels, extraRows: [FAKE_NAMES[1]] });
+  assert.equal(previewRes.skipReason, null);
+  assert.equal(previewRes.lines.length, 12);
+  assert.deepEqual(previewRes.localOnly, [], "the 購買須知 row is excluded, not 'unmatched'");
+  const res = await run(ctx, applyReq(previewRes.lines.map((l) => ({ rowId: l.rowId, price: 2280, compareAtPrice: null })), false));
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(ctx.shopify.named("ResyncVariantPrices")[0].variables.variants.length, 12);
+  assert.equal(ctx.fake.tables.product_variants.find((r) => r.option1_value === FAKE_NAMES[1]).twd_price, 4480, "fake row never priced");
+  assert.equal(ctx.shopify.mutations().length, 1);
+});
+
+await check("Hello Kitty 檯燈 shape: 勿拍 / 售罄勿拍 rows local-only + a Shopify-only variant → matched ones only, Shopify-only untouched", async () => {
+  const sellable = ["Kitty蘋果款", "Kitty招財貓款"];
+  const { ctx, previewRes } = await runShape({
+    localLabels: [...sellable, FAKE_NAMES[2], FAKE_NAMES[3]],
+    remoteLabels: [...sellable, "只在Shopify上的款"]
+  });
+  assert.equal(previewRes.skipReason, null);
+  assert.deepEqual(previewRes.lines.map((l) => l.label), sellable);
+  assert.deepEqual(previewRes.localOnly, []);
+  assert.deepEqual(previewRes.remoteOnly, ["只在Shopify上的款"]);
+  const res = await run(ctx, applyReq(previewRes.lines.map((l) => ({ rowId: l.rowId, price: 1799, compareAtPrice: null })), false));
+  assert.equal(res.ok, true, JSON.stringify(res));
+  const sent = ctx.shopify.named("ResyncVariantPrices")[0].variables.variants.map((v) => v.id);
+  assert.deepEqual(sent, ["gid://shopify/ProductVariant/10", "gid://shopify/ProductVariant/20"]);
+  assert.equal(ctx.shopify.state.variants[2].price, "4480.00", "the Shopify-only variant keeps its price");
+  assert.ok(!sent.includes("gid://shopify/ProductVariant/30"));
+});
+
+await check("apply uses the same rule: an unmatched / fake row in the request is ignored, not a 409", async () => {
+  const sellable = ["A款", "B款"];
+  const { ctx } = await runShape({ localLabels: sellable, remoteLabels: [sellable[0]], extraRows: [FAKE_NAMES[3]] });
+  const res = await run(ctx, applyReq([
+    { rowId: "v-A款", price: 1799, compareAtPrice: null },
+    { rowId: "v-B款", price: 1799, compareAtPrice: null },
+    { rowId: `v-${FAKE_NAMES[3]}`, price: 1799, compareAtPrice: null }
+  ], false));
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.deepEqual(ctx.shopify.named("ResyncVariantPrices")[0].variables.variants.map((v) => v.id), ["gid://shopify/ProductVariant/10"]);
+});
+
+await check("resync panel shows the two info lists collapsed (details), not as errors", () => {
+  const panel = read("src/components/records/PriceResyncPanel.tsx");
+  assert.match(panel, /系統有、Shopify 上已沒有（不處理）/);
+  assert.match(panel, /Shopify 有、系統沒有（不動）/);
+  assert.match(panel, /<details className="vr-notes">/);
 });
 
 await check("preview is read-only: uses Shopify's CURRENT price as 舊價 and reports which variants need an image", async () => {

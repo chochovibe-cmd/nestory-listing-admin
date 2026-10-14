@@ -10425,6 +10425,20 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
 .vr-skipped {
   margin-top: var(--sp-4);
 }
+.vr-notes {
+  margin-top: var(--sp-1);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.vr-notes summary {
+  cursor: pointer;
+}
+.vr-notes ul {
+  margin: var(--sp-1) 0 0;
+  padding-left: var(--sp-4);
+  word-break: break-word;
+}
 @media (max-width: 959px) {
   .vr-status {
     align-items: flex-start;

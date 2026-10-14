@@ -21,6 +21,7 @@ import {
   type RemoteMediaNode
 } from "@/lib/shopify/variantMediaBind";
 import { isRealShopifyProductId, type ShopifyAdminGraphQLCaller } from "@/lib/shopify/productLifecycle";
+import { isFakeVariantRow } from "@/lib/shopify/publishReadiness";
 import { buildVariantPublishPlan, planResumeVariantSync } from "@/lib/variants/shopifyVariants";
 import { checkResyncPrice, type ResyncPriceRequest } from "@/lib/variants/priceResyncPlan";
 import type { ProductVariantRow } from "@/types/domain";
@@ -55,8 +56,10 @@ export type VariantResyncPreview =
       title: string;
       productId: string;
       lines: ResyncVariantLine[];
-      /** local variants Shopify has no matching variant for (names differ) */
-      unmatched: string[];
+      /** Nestory rows Shopify no longer has (deleted there): informational, left alone */
+      localOnly: string[];
+      /** Shopify variants Nestory has no row for: informational, never touched */
+      remoteOnly: string[];
       /** why this product cannot be resynced safely, else null */
       skipReason: string | null;
     }
@@ -65,10 +68,16 @@ export type VariantResyncPreview =
 
 export type MatchedVariant = { row: ProductVariantRow; remote: RemoteBindVariant };
 
-function validRows(rows: ProductVariantRow[]): ProductVariantRow[] {
+/** Rows that carry option values at all (fake options included). Empty = single-variant product. */
+function optionRows(rows: ProductVariantRow[]): ProductVariantRow[] {
   return [...rows]
     .filter((r) => Boolean(r.option1_value?.trim() || r.option2_value?.trim() || r.option3_value?.trim()))
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+}
+
+/** Sellable rows only: non-product options (購買須知／勿拍…) are never priced nor counted as unmatched. */
+function validRows(rows: ProductVariantRow[]): ProductVariantRow[] {
+  return optionRows(rows).filter((r) => !isFakeVariantRow(r));
 }
 
 function rowLabel(row: ProductVariantRow): string {
@@ -80,13 +89,15 @@ function rowLabel(row: ProductVariantRow): string {
 
 /**
  * Local variant row -> Shopify variant. Order: saved shopify_variant_id, then option name/value
- * pairs, then SKU (same engine as the publish retry). Anything else stays unmatched.
+ * pairs, then SKU (same engine as the publish retry). Strict: no positional guessing.
+ * Fake (non-product) rows are left out entirely. Rows Shopify no longer has (deleted there) and
+ * Shopify variants Nestory has no row for are NOT blockers; they are reported and left alone.
  */
 export function matchRowsToRemote(
   rows: ProductVariantRow[],
   remote: RemoteBindVariant[],
   draft: { cny_price?: number | null; twd_cost?: number | null; price_mode?: string | null }
-): { matched: MatchedVariant[]; unmatched: ProductVariantRow[] } {
+): { matched: MatchedVariant[]; unmatched: ProductVariantRow[]; remoteOnly: RemoteBindVariant[] } {
   const sorted = validRows(rows);
   const remoteIds = new Set(remote.map((v) => v.id));
   const matched: MatchedVariant[] = [];
@@ -102,10 +113,11 @@ export function matchRowsToRemote(
       rest.push(row);
     }
   }
-  if (rest.length === 0) return { matched, unmatched: [] };
+  const remoteLeft = () => remote.filter((v) => !matched.some((m) => m.remote.id === v.id));
+  if (rest.length === 0) return { matched, unmatched: [], remoteOnly: remoteLeft() };
 
   const plan = buildVariantPublishPlan(rest, draft);
-  if (plan.mode !== "multi") return { matched, unmatched: rest };
+  if (plan.mode !== "multi") return { matched, unmatched: rest, remoteOnly: remoteLeft() };
   const resume = planResumeVariantSync(
     plan.all,
     remote.filter((v) => !claimed.has(v.id))
@@ -116,7 +128,7 @@ export function matchRowsToRemote(
     if (hit) matched.push({ row: rest[index], remote: remote.find((v) => v.id === hit.variantId)! });
     else unmatched.push(rest[index]);
   });
-  return { matched, unmatched };
+  return { matched, unmatched, remoteOnly: remoteLeft() };
 }
 
 function imageRefs(images: any[]): LocalImageRef[] {
@@ -188,22 +200,30 @@ export async function previewVariantResync(input: {
   const base = { ok: true as const, mock: false as const, draftId: input.draftId, title, productId: ctx.draft.shopify_product_id as string };
   const fmt = (v: unknown) => (v == null ? null : String(v));
 
-  if (validRows(ctx.rows).length === 0) {
+  if (optionRows(ctx.rows).length === 0) {
     if (ctx.remoteVariants.length !== 1) {
-      return { ...base, lines: [], unmatched: [], skipReason: `Shopify 上有 ${ctx.remoteVariants.length} 個款式，但系統是單一款式，無法安全對應` };
+      return { ...base, lines: [], localOnly: [], remoteOnly: [], skipReason: `Shopify 上有 ${ctx.remoteVariants.length} 個款式，但系統是單一款式，無法安全對應` };
     }
     const only = ctx.remoteVariants[0];
     return {
       ...base,
       lines: [{ rowId: null, label: "單一款式", shopifyVariantId: only.id, oldPrice: fmt(only.price), oldCompareAt: fmt(only.compareAtPrice), needsImage: false }],
-      unmatched: [],
+      localOnly: [],
+      remoteOnly: [],
       skipReason: null
     };
   }
 
-  const { matched, unmatched } = matchRowsToRemote(ctx.rows, ctx.remoteVariants, ctx.draft);
+  const { matched, unmatched, remoteOnly } = matchRowsToRemote(ctx.rows, ctx.remoteVariants, ctx.draft);
+  const remoteOnlyLabels = remoteOnly.map((v) => v.title || v.selectedOptions.map((o) => o.value).join("／") || v.id);
   if (matched.length === 0) {
-    return { ...base, lines: [], unmatched: unmatched.map(rowLabel), skipReason: "Shopify 上的款式名稱和系統不同，無法安全對應（不會亂猜）" };
+    return {
+      ...base,
+      lines: [],
+      localOnly: unmatched.map(rowLabel),
+      remoteOnly: remoteOnlyLabels,
+      skipReason: "Shopify 上沒有任何款式能和系統的款式對應（名稱不同，不會亂猜）"
+    };
   }
 
   const refs = imageRefs(ctx.draft.product_images);
@@ -227,8 +247,9 @@ export async function previewVariantResync(input: {
       oldCompareAt: fmt(remote.compareAtPrice),
       needsImage: needs[index]
     })),
-    unmatched: unmatched.map(rowLabel),
-    skipReason: unmatched.length > 0 ? `有 ${unmatched.length} 個款式在 Shopify 對不到（${unmatched.map(rowLabel).join("、")}），整個商品先略過` : null
+    localOnly: unmatched.map(rowLabel),
+    remoteOnly: remoteOnlyLabels,
+    skipReason: null
   };
 }
 
@@ -314,20 +335,25 @@ export async function applyVariantResync(input: {
   // ---- map requested prices onto Shopify variants -------------------------------------------
   type Target = { row: ProductVariantRow | null; remote: RemoteBindVariant; price: number; compareAtPrice: number | null };
   const targets: Target[] = [];
-  if (validRows(ctx.rows).length === 0) {
+  if (optionRows(ctx.rows).length === 0) {
     if (ctx.remoteVariants.length !== 1 || request.variants.length !== 1) {
       return { ok: false, status: 409, error: "Shopify 上的款式數量和系統不同，無法安全對應" };
     }
     targets.push({ row: null, remote: ctx.remoteVariants[0], price: request.variants[0].price, compareAtPrice: request.variants[0].compareAtPrice });
   } else {
-    const { matched, unmatched } = matchRowsToRemote(ctx.rows, ctx.remoteVariants, ctx.draft);
-    if (unmatched.length > 0) {
-      return { ok: false, status: 409, error: `有 ${unmatched.length} 個款式在 Shopify 對不到（${unmatched.map(rowLabel).join("、")}），已整個略過` };
+    // Same rule as the preview: only strictly matched variants are touched. Rows Shopify no longer
+    // has, and Shopify variants Nestory has no row for, are simply left alone.
+    const { matched } = matchRowsToRemote(ctx.rows, ctx.remoteVariants, ctx.draft);
+    if (matched.length === 0) {
+      return { ok: false, status: 409, error: "Shopify 上沒有任何款式能和系統的款式對應，已略過" };
     }
     for (const req of request.variants) {
       const hit = matched.find((m) => m.row.id === req.rowId);
-      if (!hit) return { ok: false, status: 409, error: "要同步的款式已經被修改，請重新整理清單" };
+      if (!hit) continue;
       targets.push({ row: hit.row, remote: hit.remote, price: req.price, compareAtPrice: req.compareAtPrice });
+    }
+    if (targets.length === 0) {
+      return { ok: false, status: 409, error: "要同步的款式已經被修改，請重新整理清單" };
     }
   }
 
@@ -373,7 +399,10 @@ export async function applyVariantResync(input: {
   let imagesBound = 0;
   if (request.bindImages) {
     // The publish seeds carry the real option pairs, so bindVariantMedia finds each variant again.
-    const full = buildVariantPublishPlan(ctx.rows, ctx.draft);
+    const full = buildVariantPublishPlan(
+      targets.map((t) => t.row).filter((row): row is ProductVariantRow => row != null),
+      ctx.draft
+    );
     if (full.mode === "multi" && targets.some((t) => t.row?.image_id)) {
       const bound = await bindVariantMedia({
         caller,

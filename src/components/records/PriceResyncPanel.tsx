@@ -15,7 +15,8 @@ import {
 type PreviewOk = {
   mock: boolean;
   lines?: ResyncPreviewLine[];
-  unmatched?: string[];
+  localOnly?: string[];
+  remoteOnly?: string[];
   skipReason?: string | null;
   note?: string;
 };
@@ -26,11 +27,14 @@ type RowState = {
   skipReason: string | null;
   loadError: string | null;
   plan: ResyncRowPlan | null;
+  /** informational: Nestory rows Shopify no longer has / Shopify variants Nestory has no row for */
+  localOnly: string[];
+  remoteOnly: string[];
   status: "idle" | "syncing" | "done" | "failed";
   message: string | null;
 };
 
-const EMPTY_ROW: RowState = { loading: true, skipReason: null, loadError: null, plan: null, status: "idle", message: null };
+const EMPTY_ROW: RowState = { loading: true, skipReason: null, loadError: null, plan: null, localOnly: [], remoteOnly: [], status: "idle", message: null };
 
 function titleOf(c: ResyncCandidate): string {
   return c.title_zh || c.taobao_title || "未命名";
@@ -85,12 +89,14 @@ export function PriceResyncPanel() {
           patchRow(candidate.id, { loading: false, loadError: preview.note ?? "模擬模式：不查詢 Shopify" });
           return;
         }
+        const notes = { localOnly: preview.localOnly ?? [], remoteOnly: preview.remoteOnly ?? [] };
         if (preview.skipReason) {
-          patchRow(candidate.id, { loading: false, skipReason: preview.skipReason });
+          patchRow(candidate.id, { loading: false, skipReason: preview.skipReason, ...notes });
           return;
         }
         patchRow(candidate.id, {
           loading: false,
+          ...notes,
           plan: buildResyncRowPlan({ candidate, preview: { lines: preview.lines ?? [] }, settings: pricing })
         });
       } catch {
@@ -292,6 +298,26 @@ export function PriceResyncPanel() {
                 <span className="vr-summary vc-orig">
                   {plan.imageCount > 0 ? `要綁圖 ${plan.imageCount} 張` : "款式圖都已綁好"}
                 </span>
+                {state.localOnly.length > 0 ? (
+                  <details className="vr-notes">
+                    <summary>系統有、Shopify 上已沒有（不處理）· {state.localOnly.length}</summary>
+                    <ul>
+                      {state.localOnly.map((label, i) => (
+                        <li key={`${label}-${i}`}>{label}</li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+                {state.remoteOnly.length > 0 ? (
+                  <details className="vr-notes">
+                    <summary>Shopify 有、系統沒有（不動）· {state.remoteOnly.length}</summary>
+                    <ul>
+                      {state.remoteOnly.map((label, i) => (
+                        <li key={`${label}-${i}`}>{label}</li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
               </span>
               <span className="vr-status">
                 {state.status === "syncing" ? <span className="schip schip--run">同步中</span> : null}

@@ -44,11 +44,13 @@ import {
   type VariantFormRow
 } from "@/lib/variants";
 import { createClient } from "@/lib/supabase/client";
+import { imageIdsOrphanedByRemovingVariant } from "@/lib/variants/variantImageCleanup";
 
 export type VariantImageOption = {
   id: string;
   url: string;
   label: string;
+  imageType?: string | null;
 };
 
 type Props = {
@@ -56,6 +58,8 @@ type Props = {
   rows: VariantFormRow[];
   onDimensionsChange: (dims: VariantDimension[]) => void;
   onRowsChange: (rows: VariantFormRow[]) => void;
+  /** Candidate images are removed ONLY after the parent saves the remaining rows. */
+  onQueueImageDeletion?: (ids: string[]) => void;
   currency: CostCurrency;
   priceMode: PriceMode;
   pricingSettings: PricingSettings;
@@ -115,6 +119,7 @@ export function VariantEditor({
   productCost = null,
   unconfirmedCost = false,
   onRowsChange,
+  onQueueImageDeletion,
   currency,
   priceMode,
   pricingSettings,
@@ -356,11 +361,18 @@ export function VariantEditor({
   }
 
   function removeRow(index: number) {
-    setRowsSafe(
-      rows
-        .filter((_, rowIndex) => rowIndex !== index)
-        .map((row, rowIndex) => ({ ...row, sortOrder: rowIndex }))
+    const removed = rows[index];
+    if (!removed) return;
+    const remaining = rows.filter((_, rowIndex) => rowIndex !== index);
+    const candidateIds = imageIdsOrphanedByRemovingVariant(removed, remaining, images);
+    const count = candidateIds.length;
+    // Explicitly offer both choices before any local edit or database mutation.
+    const removeImageToo = window.confirm(
+      `確定刪除這款嗎？會一起移除 ${count} 張款式圖（僅從草稿移除，Storage 檔案保留）。\n「確定」連圖一起移除；「取消」可選擇保留圖片。`
     );
+    if (!removeImageToo && !window.confirm("保留圖片，只刪除此款式嗎？")) return;
+    if (removeImageToo && count > 0) onQueueImageDeletion?.(candidateIds);
+    setRowsSafe(remaining.map((row, rowIndex) => ({ ...row, sortOrder: rowIndex })));
     setMobileSelected(new Set());
   }
 

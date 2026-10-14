@@ -42,42 +42,42 @@ export async function removeUnusedVariantImagesFromDraft(
   if (!draftId || ids.length === 0) return result;
 
   try {
-  const { data: imageRows, error: imageError } = await client
-    .from("product_images")
-    .select("id, draft_id, image_type")
-    .eq("draft_id", draftId)
-    .in("id", ids);
-  if (imageError) {
-    result.skippedIds = ids;
-    result.warnings.push(`無法確認款式圖類型：${imageError.message}`);
+    const { data: imageRows, error: imageError } = await client
+      .from("product_images")
+      .select("id, draft_id, image_type")
+      .eq("draft_id", draftId)
+      .in("id", ids);
+    if (imageError) {
+      result.skippedIds = ids;
+      result.warnings.push(`無法確認款式圖類型：${imageError.message}`);
+      return result;
+    }
+
+    const candidates = (imageRows ?? [])
+      .filter((row) => row.image_type === "variant" && row.draft_id === draftId)
+      .map((row) => row.id as string);
+    const bindings = await findVariantBindings(client, candidates);
+    if (!bindings.ok) {
+      result.skippedIds = ids;
+      result.warnings.push(`無法確認款式圖是否共用：${bindings.error}`);
+      return result;
+    }
+
+    const deletable = candidates.filter((id) => (bindings.byImageId[id] ?? []).length === 0);
+    result.skippedIds = ids.filter((id) => !deletable.includes(id));
+    if (deletable.length === 0) return result;
+
+    // IMAGE-INTEGRITY helper rechecks bindings and deletes DB rows safely.
+    // keepStorageFiles is mandatory here: deleting a variant NEVER permanently
+    // deletes its underlying image files in Storage.
+    const removed = await deleteProductImages(client, deletable, {
+      unbindVariants: false,
+      keepStorageFiles: true
+    });
+    result.deletedIds = removed.deletedIds;
+    result.skippedIds.push(...deletable.filter((id) => !removed.deletedIds.includes(id)));
+    if (!removed.ok) result.warnings.push(removed.error ?? "部分款式圖無法從草稿移除");
     return result;
-  }
-
-  const candidates = (imageRows ?? [])
-    .filter((row) => row.image_type === "variant" && row.draft_id === draftId)
-    .map((row) => row.id as string);
-  const bindings = await findVariantBindings(client, candidates);
-  if (!bindings.ok) {
-    result.skippedIds = ids;
-    result.warnings.push(`無法確認款式圖是否共用：${bindings.error}`);
-    return result;
-  }
-
-  const deletable = candidates.filter((id) => (bindings.byImageId[id] ?? []).length === 0);
-  result.skippedIds = ids.filter((id) => !deletable.includes(id));
-  if (deletable.length === 0) return result;
-
-  // IMAGE-INTEGRITY helper rechecks bindings and deletes DB rows safely.
-  // keepStorageFiles is mandatory here: deleting a variant NEVER permanently
-  // deletes its underlying image files in Storage.
-  const removed = await deleteProductImages(client, deletable, {
-    unbindVariants: false,
-    keepStorageFiles: true
-  });
-  result.deletedIds = removed.deletedIds;
-  result.skippedIds.push(...deletable.filter((id) => !removed.deletedIds.includes(id)));
-  if (!removed.ok) result.warnings.push(removed.error ?? "部分款式圖無法從草稿移除");
-  return result;
   } catch (error) {
     // Saving the variant rows succeeded; never turn optional image cleanup
     // into an exception that makes the already-saved form look unsaved.

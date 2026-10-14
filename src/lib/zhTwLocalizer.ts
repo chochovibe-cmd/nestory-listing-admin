@@ -121,8 +121,8 @@ function applyTaiwanTerms(value: string): string {
   return TAIWAN_TERM_REPLACEMENTS.reduce((localized, [source, replacement]) => {
     if (!localized.includes(source) || source === replacement) return localized;
     // Already has Kitty in English: discard the Mainland alias, don't append a second Kitty.
-    if (source === '凱蒂貓' && /(?:hello\\s*)?kitty/i.test(localized)) {
-      return localized.replace(/(?:[\\s／/|｜,，、+＋·・]*凱蒂貓)+/g, '').trim();
+    if (source === '凱蒂貓' && /(?:hello\s*)?kitty/i.test(localized)) {
+      return localized.replace(/(?:[\s／/|｜,，、+＋·・]*凱蒂貓[\s／/|｜,，、+＋·・]*)+/g, '').trim();
     }
     // Prevent overlapping canonical name replacements from duplicating the prefix.
     if (source === '龍珠') return localized.replace(/(^|[^七])龍珠/g, '$1七龍珠');

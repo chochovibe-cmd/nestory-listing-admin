@@ -9,6 +9,7 @@
  *   4. no new information: no new digits / English, at most 3 new Han characters, no new sales words;
  *   5. variant names stay unique as a combination.
  */
+import { localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
 import { scanForbiddenTerms } from "@/lib/providers/forbiddenTerms";
 import { normalizeOptionValueForMerge } from "./variantCrossExpand";
 
@@ -70,11 +71,14 @@ function checkCell(rule: string, ai: string, protectedNames: string[]): string |
   if (!ai.trim()) return "AI 回傳空白";
 
   const aiSquash = squash(ai);
+  const canonicalAi = squash(localizeToTaiwanTraditionalText(ai));
+  const canonicalRule = squash(localizeToTaiwanTraditionalText(rule));
   for (const token of [...runs(rule, DIGIT_RUN), ...runs(rule, LATIN_RUN)]) {
     if (!aiSquash.includes(token)) return `缺少數字／英文「${token}」`;
   }
   for (const name of protectedNames) {
-    if (squash(rule).includes(squash(name)) && !aiSquash.includes(squash(name))) {
+    const canonicalName = squash(localizeToTaiwanTraditionalText(name));
+    if (canonicalRule.includes(canonicalName) && !canonicalAi.includes(canonicalName)) {
       return `缺少名稱「${name}」`;
     }
   }

@@ -199,6 +199,105 @@ export function buildVariantPublishPlan(
   };
 }
 
+/** A variant as read back from a Shopify DRAFT product during an api_failed retry. */
+export type ResumeRemoteVariant = {
+  id: string;
+  title?: string | null;
+  sku?: string | null;
+  selectedOptions: { name: string; value: string }[];
+};
+
+export type ResumeVariantSyncPlan<R extends ResumeRemoteVariant = ResumeRemoteVariant> = {
+  /** Seeds whose variant already exists on Shopify (seed order). */
+  matched: { seed: ShopifyVariantSeed; variantId: string }[];
+  /** Seeds with no variant on Shopify yet — the only ones a retry may bulk-create. */
+  missing: ShopifyVariantSeed[];
+  /** Remote variants no seed claims (never deleted automatically). */
+  extraRemote: R[];
+};
+
+/** Trimmed name→value pairs as an order-insensitive key; "" when there are no pairs. */
+function resumeOptionKey(pairs: { name: string; value: string }[]): string {
+  return [
+    ...new Set(
+      pairs.map((pair) => `${String(pair?.name ?? "").trim()}\u0001${String(pair?.value ?? "").trim()}`)
+    )
+  ]
+    .sort()
+    .join("\u0002");
+}
+
+/**
+ * PUBLISH-RETRY: reconcile the local variant seeds with the variants that already
+ * exist on the Shopify DRAFT, so an api_failed retry only creates what is missing.
+ *
+ * Matching (each remote variant is claimed at most once, seeds processed in order):
+ *  1. option values — seed optionValues {optionName,name} vs remote selectedOptions
+ *     {name,value}, as a set of trimmed pairs (order / whitespace insensitive);
+ *  2. fallback — equal non-empty trimmed SKU;
+ *  3. single-variant mode — a seed without optionValues takes the only remote variant.
+ */
+export function planResumeVariantSync<R extends ResumeRemoteVariant>(
+  seeds: ShopifyVariantSeed[],
+  remote: R[]
+): ResumeVariantSyncPlan<R> {
+  const claimed = new Set<number>();
+  const matchedRemoteIndex: (number | null)[] = seeds.map(() => null);
+  const seedKeys = seeds.map((seed) =>
+    resumeOptionKey(
+      (seed.optionValues ?? []).map((ov) => ({ name: ov.optionName, value: ov.name }))
+    )
+  );
+  const remoteKeys = remote.map((variant) => resumeOptionKey(variant.selectedOptions ?? []));
+
+  // Pass 1: option values. Run for every seed first so a SKU fallback can never
+  // steal a variant that a later seed matches exactly.
+  seeds.forEach((_seed, seedIndex) => {
+    const key = seedKeys[seedIndex];
+    if (!key) return;
+    const remoteIndex = remoteKeys.findIndex((remoteKey, i) => !claimed.has(i) && remoteKey === key);
+    if (remoteIndex >= 0) {
+      claimed.add(remoteIndex);
+      matchedRemoteIndex[seedIndex] = remoteIndex;
+    }
+  });
+
+  // Pass 2: SKU fallback.
+  seeds.forEach((seed, seedIndex) => {
+    if (matchedRemoteIndex[seedIndex] !== null) return;
+    const sku = seed.sku?.trim();
+    if (!sku) return;
+    const remoteIndex = remote.findIndex((variant, i) => !claimed.has(i) && variant.sku?.trim() === sku);
+    if (remoteIndex >= 0) {
+      claimed.add(remoteIndex);
+      matchedRemoteIndex[seedIndex] = remoteIndex;
+    }
+  });
+
+  // Pass 3: single-variant mode (no option values on the seed).
+  seeds.forEach((_seed, seedIndex) => {
+    if (matchedRemoteIndex[seedIndex] !== null || seedKeys[seedIndex]) return;
+    if (remote.length === 1 && !claimed.has(0)) {
+      claimed.add(0);
+      matchedRemoteIndex[seedIndex] = 0;
+    }
+  });
+
+  const matched: ResumeVariantSyncPlan<R>["matched"] = [];
+  const missing: ShopifyVariantSeed[] = [];
+  seeds.forEach((seed, seedIndex) => {
+    const remoteIndex = matchedRemoteIndex[seedIndex];
+    if (remoteIndex === null) missing.push(seed);
+    else matched.push({ seed, variantId: remote[remoteIndex].id });
+  });
+
+  return {
+    matched,
+    missing,
+    extraRemote: remote.filter((_variant, i) => !claimed.has(i))
+  };
+}
+
 /** GraphQL variables fragment for one bulk create/update input (without id). */
 export function toBulkVariantInput(
   seed: ShopifyVariantSeed,

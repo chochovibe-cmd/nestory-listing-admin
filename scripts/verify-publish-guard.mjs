@@ -8,6 +8,8 @@
  *   Part A  mock mode = dry run: zero DB writes, zero Shopify / Make calls
  *   Part B  readiness blockers (fake variants, bundle cost, unconfirmed price)
  *   Part C  UI wiring (static source assertions)
+ *   PUBLISH-RETRY  api_failed resume must not re-create / re-adjust existing variants
+ *   ONLINE-STORE-DISCOVERY  publication id: env override, channel match, name fallback, ambiguity
  *
  * Run: node scripts/verify-publish-guard.mjs  |  npm run verify:publish-guard
  */
@@ -30,6 +32,8 @@ const { publishDraft } = await import(src("src/lib/shopify/publishDraftSafe.ts")
 const { runPublishBatch } = await import(src("src/lib/shopify/runPublishBatch.ts"));
 const station3 = await import(src("src/lib/drafts/station3Publish.ts"));
 const batchHelpers = await import(src("src/lib/drafts/publishBatch.ts"));
+const { planResumeVariantSync } = await import(src("src/lib/variants/shopifyVariants.ts"));
+const { getShopifyOnlineStorePublicationId } = await import(src("src/lib/shopify/productLifecycle.ts"));
 
 const {
   checkPublishReadiness,
@@ -929,6 +933,774 @@ await check("the fake Supabase really records writes (sanity for the zero-write 
   await fake.from("product_drafts").update({ status: "x" }).eq("id", "d1");
   await fake.from("publish_jobs").insert({ draft_id: "d1" });
   assert.equal(fake.writes.length, 2);
+});
+
+// =====================================================================
+// PUBLISH-RETRY: an api_failed retry resumes the Shopify DRAFT and must only
+// finish the job (missing variants / media / ACTIVE), never re-create variants
+// that already exist or re-apply quantities.
+// =====================================================================
+console.log("\nPUBLISH-RETRY — planResumeVariantSync (pure)");
+
+const retrySeed = (label, overrides = {}) => ({
+  optionValues: [{ optionName: "款式", name: label }],
+  price: 300,
+  compareAtPrice: null,
+  cost: 100,
+  sku: null,
+  inventoryQuantity: null,
+  inventoryPolicy: "CONTINUE",
+  imageId: null,
+  ...overrides
+});
+const retryRemote = (id, label, overrides = {}) => ({
+  id,
+  title: label,
+  sku: null,
+  selectedOptions: [{ name: "款式", value: label }],
+  ...overrides
+});
+
+await check("planResumeVariantSync: every seed already on Shopify → all matched (seed order), nothing missing/extra", () => {
+  const seeds = [retrySeed("藍色"), retrySeed("紅色"), retrySeed("綠色")];
+  // remote order differs from seed order on purpose
+  const remote = [retryRemote("R-green", "綠色"), retryRemote("R-blue", "藍色"), retryRemote("R-red", "紅色")];
+  const plan = planResumeVariantSync(seeds, remote);
+  assert.deepEqual(plan.matched.map((m) => m.variantId), ["R-blue", "R-red", "R-green"]);
+  assert.deepEqual(plan.matched.map((m) => m.seed), seeds);
+  assert.deepEqual(plan.missing, []);
+  assert.deepEqual(plan.extraRemote, []);
+});
+
+await check("planResumeVariantSync: some seeds missing on Shopify → only those are missing", () => {
+  const seeds = [retrySeed("藍色"), retrySeed("紅色"), retrySeed("綠色")];
+  const plan = planResumeVariantSync(seeds, [retryRemote("R-blue", "藍色"), retryRemote("R-green", "綠色")]);
+  assert.deepEqual(plan.matched.map((m) => m.variantId), ["R-blue", "R-green"]);
+  assert.deepEqual(plan.missing, [seeds[1]]);
+  assert.deepEqual(plan.extraRemote, []);
+});
+
+await check("planResumeVariantSync: a remote variant no seed claims is extraRemote (returned as-is, never dropped)", () => {
+  const seeds = [retrySeed("藍色"), retrySeed("紅色")];
+  const extra = retryRemote("R-purple", "紫色");
+  const plan = planResumeVariantSync(seeds, [retryRemote("R-blue", "藍色"), extra, retryRemote("R-red", "紅色")]);
+  assert.equal(plan.matched.length, 2);
+  assert.deepEqual(plan.missing, []);
+  assert.deepEqual(plan.extraRemote, [extra]);
+  assert.equal(plan.extraRemote[0], extra, "same object reference");
+});
+
+await check("planResumeVariantSync: SKU fallback only for a non-empty trimmed SKU", () => {
+  const seeds = [
+    retrySeed("藍色", { sku: "SKU-1" }),
+    retrySeed("紅色", { sku: "" }),
+    retrySeed("綠色", { sku: null })
+  ];
+  const remote = [
+    // option value was renamed on Shopify, SKU still lines up (whitespace-insensitive)
+    retryRemote("R-1", "Blue", { sku: " SKU-1 " }),
+    // empty SKUs on both sides must never match each other
+    retryRemote("R-2", "Red", { sku: "" }),
+    retryRemote("R-3", "Green", { sku: null })
+  ];
+  const plan = planResumeVariantSync(seeds, remote);
+  assert.deepEqual(plan.matched.map((m) => m.variantId), ["R-1"]);
+  assert.deepEqual(plan.missing, [seeds[1], seeds[2]]);
+  assert.deepEqual(plan.extraRemote.map((r) => r.id), ["R-2", "R-3"]);
+});
+
+await check("planResumeVariantSync: option order and surrounding whitespace do not matter", () => {
+  const seeds = [
+    retrySeed("x", {
+      optionValues: [
+        { optionName: "顏色", name: "紅色" },
+        { optionName: " 尺寸", name: "L " }
+      ]
+    })
+  ];
+  const remote = [
+    retryRemote("R-1", "紅色 / L", {
+      selectedOptions: [
+        { name: "尺寸", value: " L" },
+        { name: " 顏色 ", value: "紅色" }
+      ]
+    })
+  ];
+  const plan = planResumeVariantSync(seeds, remote);
+  assert.deepEqual(plan.matched.map((m) => m.variantId), ["R-1"]);
+  assert.deepEqual(plan.missing, []);
+  // same values on a different axis name is a different variant
+  const other = planResumeVariantSync(seeds, [
+    retryRemote("R-2", "x", {
+      selectedOptions: [
+        { name: "顏色", value: "L" },
+        { name: "尺寸", value: "紅色" }
+      ]
+    })
+  ]);
+  assert.equal(other.matched.length, 0);
+  assert.equal(other.missing.length, 1);
+  assert.equal(other.extraRemote.length, 1);
+});
+
+await check("planResumeVariantSync: single-variant mode (no optionValues) takes the only remote variant", () => {
+  const seed = retrySeed("ignored", { optionValues: [] });
+  const only = retryRemote("R-default", "Default Title", {
+    selectedOptions: [{ name: "Title", value: "Default Title" }]
+  });
+  const plan = planResumeVariantSync([seed], [only]);
+  assert.deepEqual(plan.matched, [{ seed, variantId: "R-default" }]);
+  assert.deepEqual(plan.missing, []);
+  assert.deepEqual(plan.extraRemote, []);
+  // two remote variants: no blind match (the caller fails before mutating)
+  const two = planResumeVariantSync([seed], [only, retryRemote("R-2", "B")]);
+  assert.equal(two.matched.length, 0);
+  assert.equal(two.missing.length, 1);
+  assert.equal(two.extraRemote.length, 2);
+  // ...unless the SKU identifies it
+  const bySku = planResumeVariantSync([{ ...seed, sku: "S-1" }], [only, retryRemote("R-2", "B", { sku: "S-1" })]);
+  assert.deepEqual(bySku.matched.map((m) => m.variantId), ["R-2"]);
+  // no remote variant at all
+  assert.deepEqual(planResumeVariantSync([seed], []).missing, [seed]);
+});
+
+await check("planResumeVariantSync: a remote variant is never matched twice; a SKU fallback cannot steal an exact match", () => {
+  // duplicate seeds, one remote variant
+  const dup = [retrySeed("藍色"), retrySeed("藍色")];
+  const p1 = planResumeVariantSync(dup, [retryRemote("R-blue", "藍色")]);
+  assert.equal(p1.matched.length, 1);
+  assert.equal(p1.missing.length, 1);
+  assert.equal(p1.missing[0], dup[1]);
+  // two seeds share a SKU, one remote carries it
+  const sameSku = [retrySeed("A", { sku: "S" }), retrySeed("B", { sku: "S" })];
+  const p2 = planResumeVariantSync(sameSku, [retryRemote("R-1", "Z", { sku: "S" })]);
+  assert.equal(p2.matched.length, 1);
+  assert.equal(p2.matched[0].seed, sameSku[0]);
+  assert.deepEqual(p2.missing, [sameSku[1]]);
+  // seed A (SKU X, no exact remote) must not take the variant seed B matches by options
+  const seeds = [retrySeed("藍色", { sku: "X" }), retrySeed("紅色")];
+  const p3 = planResumeVariantSync(seeds, [retryRemote("R-red", "紅色", { sku: "X" })]);
+  assert.deepEqual(p3.matched.map((m) => [m.seed, m.variantId]), [[seeds[1], "R-red"]]);
+  assert.deepEqual(p3.missing, [seeds[0]]);
+  assert.deepEqual(p3.extraRemote, []);
+  // every remote id appears at most once across matched + extraRemote
+  const ids = [...p3.matched.map((m) => m.variantId), ...p3.extraRemote.map((r) => r.id)];
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+console.log("\nPUBLISH-RETRY — publishDraft resume path (fake Shopify + fake Supabase)");
+
+const RETRY_PRODUCT_ID = "gid://shopify/Product/9001";
+const RETRY_NEW_PRODUCT_ID = "gid://shopify/Product/7001";
+const RETRY_DEFAULT_VARIANT_ID = "gid://shopify/ProductVariant/1";
+const RETRY_LOCATION_ID = "gid://shopify/Location/55";
+const RETRY_MEDIA = [
+  { originalSource: "https://cdn.shopify.com/s/files/1/0/a.webp", alt: "a", mediaContentType: "IMAGE" },
+  { originalSource: "https://cdn.shopify.com/s/files/1/0/b.webp", alt: "b", mediaContentType: "IMAGE" }
+];
+
+/** Fake Shopify Admin GraphQL: records every call, mimics duplicate-variant userErrors. */
+function createShopifyFake({
+  productId = RETRY_PRODUCT_ID,
+  remoteStatus = "DRAFT",
+  remoteVariants = [],
+  remoteMediaCount = RETRY_MEDIA.length,
+  hasNextPage = false,
+  locationNodes = []
+} = {}) {
+  const calls = [];
+  const state = { variants: remoteVariants.map((v) => structuredClone(v)) };
+  let seq = 100;
+  const ok = (data) => ({ response: { ok: true, status: 200 }, result: { data } });
+  const combo = (pairs) =>
+    pairs
+      .map((p) => `${p.name}=${p.value}`)
+      .sort()
+      .join("|");
+  const caller = async (query, variables) => {
+    const m = /^\s*(query|mutation)\s+(\w+)/.exec(query);
+    const name = m?.[2] ?? "unknown";
+    calls.push({ kind: m?.[1] ?? "unknown", name, variables: structuredClone(variables) });
+    switch (name) {
+      case "ProductLifecycleStatus":
+        return ok({ product: { id: productId, status: remoteStatus } });
+      case "ResumeShopifyDraft":
+        return ok({
+          product: {
+            id: productId,
+            status: remoteStatus,
+            media: {
+              nodes: Array.from({ length: remoteMediaCount }, (_, i) => ({ id: `gid://shopify/MediaImage/${i}` }))
+            },
+            variants: { nodes: state.variants.slice(0, 1).map(({ id }) => ({ id })) }
+          }
+        });
+      case "ResumeShopifyDraftVariant":
+        return ok({
+          product: {
+            id: productId,
+            status: remoteStatus,
+            variants: { pageInfo: { hasNextPage }, nodes: structuredClone(state.variants) }
+          }
+        });
+      case "PrimaryInventoryLocation":
+        return ok({ locations: { nodes: locationNodes } });
+      case "ProductCreate": {
+        const options = variables.product.productOptions ?? [];
+        const selectedOptions = options.map((o) => ({ name: o.name, value: o.values[0].name }));
+        state.variants = [
+          {
+            id: RETRY_DEFAULT_VARIANT_ID,
+            title: selectedOptions.map((o) => o.value).join(" / ") || "Default Title",
+            sku: null,
+            selectedOptions
+          }
+        ];
+        return ok({
+          productCreate: {
+            product: {
+              id: RETRY_NEW_PRODUCT_ID,
+              title: variables.product.title,
+              status: "DRAFT",
+              variants: { nodes: [{ id: RETRY_DEFAULT_VARIANT_ID, selectedOptions }] }
+            },
+            userErrors: []
+          }
+        });
+      }
+      case "ProductVariantsBulkUpdate": {
+        const known = new Set(state.variants.map((v) => v.id));
+        const unknown = variables.variants.filter((v) => !known.has(v.id));
+        return ok({
+          productVariantsBulkUpdate: {
+            productVariants: [],
+            userErrors: unknown.map(() => ({ field: ["variants"], message: "Variant does not exist." }))
+          }
+        });
+      }
+      case "ProductVariantsBulkCreate": {
+        const existing = new Set(state.variants.map((v) => combo(v.selectedOptions)));
+        const toPairs = (v) => (v.optionValues ?? []).map((o) => ({ name: o.optionName, value: o.name }));
+        const dup = variables.variants.filter((v) => existing.has(combo(toPairs(v))));
+        if (dup.length > 0) {
+          return ok({
+            productVariantsBulkCreate: {
+              productVariants: null,
+              userErrors: dup.map((_, i) => ({ field: ["variants", String(i)], message: "The variant already exists." }))
+            }
+          });
+        }
+        const created = variables.variants.map((v) => {
+          const selectedOptions = toPairs(v);
+          const id = `gid://shopify/ProductVariant/${++seq}`;
+          const title = selectedOptions.map((o) => o.value).join(" / ");
+          state.variants.push({ id, title, sku: v.inventoryItem?.sku ?? null, selectedOptions });
+          return { id, title };
+        });
+        return ok({ productVariantsBulkCreate: { productVariants: created, userErrors: [] } });
+      }
+      case "ProductAttachMedia":
+        return ok({ productUpdate: { product: { id: variables.product.id, status: "DRAFT" }, userErrors: [] } });
+      case "ProductUpdateStatus":
+        return ok({
+          productUpdate: {
+            product: { id: variables.product.id, status: variables.product.status, updatedAt: "2026-10-13T00:00:00Z" },
+            userErrors: []
+          }
+        });
+      case "OnlineStorePublicationDiscovery":
+        return ok({
+          channels: { nodes: [{ id: "gid://shopify/Channel/1", name: "Online Store", handle: "online_store", app: null }] },
+          publications: { nodes: [{ id: "gid://shopify/Publication/1", name: "Online Store" }] }
+        });
+      case "PublishProductToOnlineStore":
+        return ok({
+          publishablePublish: {
+            publishable: { id: variables.id, status: "ACTIVE", publishedAt: "2026-10-13T00:00:00Z" },
+            userErrors: []
+          }
+        });
+      case "VerifyProductOnlineStore":
+        return ok({
+          product: { id: variables.id, status: "ACTIVE", publishedAt: "2026-10-13T00:00:00Z", publishedOnPublication: true }
+        });
+      default:
+        throw new Error(`UNEXPECTED_SHOPIFY_CALL:${name}`);
+    }
+  };
+  return {
+    caller,
+    calls,
+    state,
+    mutations: () => calls.filter((c) => c.kind === "mutation"),
+    mutationNames: () => calls.filter((c) => c.kind === "mutation").map((c) => c.name),
+    named: (name) => calls.filter((c) => c.name === name)
+  };
+}
+
+const RETRY_LABELS = ["藍色", "紅色", "綠色"];
+const retryVariantId = (label) => `gid://shopify/ProductVariant/${RETRY_LABELS.indexOf(label) + 1}0`;
+const retryRemoteVariants = (labels = RETRY_LABELS) =>
+  labels.map((label) => ({
+    id: retryVariantId(label),
+    title: label,
+    sku: `SKU-${RETRY_LABELS.indexOf(label)}`,
+    selectedOptions: [{ name: "款式", value: label }]
+  }));
+
+function retryFakeSupabase({ draft = {}, labels = RETRY_LABELS, variantOverrides = {}, noVariants = false } = {}) {
+  return createFakeSupabase({
+    product_drafts: [
+      draftRow({
+        status: "api_failed",
+        pipeline_stage: "ready",
+        publish_status: "api_failed",
+        shopify_product_id: RETRY_PRODUCT_ID,
+        error_message: "ACTIVE/Online Store publication failed",
+        generated_payload_json: { media: RETRY_MEDIA },
+        ...draft
+      })
+    ],
+    product_variants: noVariants
+      ? []
+      : labels.map((label, i) =>
+          variant(label, { sort_order: i, sku: `SKU-${i}`, ...(variantOverrides[label] ?? {}) })
+        )
+  });
+}
+
+const RETRY_ENV = {
+  SHOPIFY_PUBLISH_MOCK: "false",
+  SHOPIFY_LIVE_TEST_DRAFT_ID: undefined,
+  SHOPIFY_ACTIVE_PUBLISH_ENABLED: "true",
+  SHOPIFY_LOCATION_ID: undefined,
+  MAKE_WEBHOOK_URL: undefined
+};
+const runRetry = (fake, shopify, { mode = "draft", env = {} } = {}) =>
+  withEnv({ ...RETRY_ENV, ...env }, () =>
+    publishDraft(fake, "d1", mode, { mockMode: false, callGraphQL: shopify.caller })
+  );
+const hasKey = (value, key) => JSON.stringify(value).includes(`"${key}"`);
+const RETRY_INVENTORY_WARNING = "重試沿用 Shopify 草稿上既有的庫存數量，請到 Shopify 後台確認庫存。";
+
+await check("retry (a): api_failed + all 3 variants + media already on the DRAFT → one update, zero bulkCreate, no quantity adjustments", async () => {
+  const fake = retryFakeSupabase();
+  const shopify = createShopifyFake({ remoteVariants: retryRemoteVariants() });
+  const result = await runRetry(fake, shopify);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.productId, RETRY_PRODUCT_ID);
+  assert.equal(shopify.named("ProductCreate").length, 0, "never re-creates the product");
+  assert.equal(shopify.named("ProductVariantsBulkCreate").length, 0, "existing variants are never re-created");
+  assert.deepEqual(shopify.mutationNames(), ["ProductVariantsBulkUpdate"], "media already complete → nothing else to write");
+  const [update] = shopify.named("ProductVariantsBulkUpdate");
+  assert.equal(update.variables.productId, RETRY_PRODUCT_ID);
+  assert.deepEqual(
+    update.variables.variants.map((v) => v.id),
+    RETRY_LABELS.map(retryVariantId)
+  );
+  for (const key of ["quantityAdjustments", "inventoryQuantities", "optionValues"]) {
+    assert.equal(hasKey(update.variables.variants, key), false, `no ${key} on resume`);
+  }
+  assert.equal(shopify.named("PrimaryInventoryLocation").length, 0, "no location needed when nothing is created");
+  const stored = fake.tables.product_drafts[0];
+  assert.equal(stored.status, "draft_created");
+  assert.equal(stored.error_message, null);
+});
+
+await check("retry (a2): the real case — everything synced, ACTIVE/Online Store was the only failure → retry just finishes it", async () => {
+  const fake = retryFakeSupabase();
+  const shopify = createShopifyFake({ remoteVariants: retryRemoteVariants() });
+  const result = await runRetry(fake, shopify, { mode: "active" });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(shopify.mutationNames(), [
+    "ProductVariantsBulkUpdate",
+    "ProductUpdateStatus",
+    "PublishProductToOnlineStore"
+  ]);
+  assert.equal(shopify.named("ProductUpdateStatus")[0].variables.product.status, "ACTIVE");
+  assert.equal(fake.tables.product_drafts[0].status, "active_published");
+});
+
+await check("retry (b): remote has 2 of 3 variants → bulkCreate carries only the missing seed", async () => {
+  const fake = retryFakeSupabase();
+  const shopify = createShopifyFake({ remoteVariants: retryRemoteVariants(["藍色", "綠色"]) });
+  const result = await runRetry(fake, shopify);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(shopify.mutationNames(), ["ProductVariantsBulkUpdate", "ProductVariantsBulkCreate"]);
+  const [update] = shopify.named("ProductVariantsBulkUpdate");
+  assert.deepEqual(update.variables.variants.map((v) => v.id), [retryVariantId("藍色"), retryVariantId("綠色")]);
+  assert.equal(hasKey(update.variables.variants, "quantityAdjustments"), false);
+  const [create] = shopify.named("ProductVariantsBulkCreate");
+  assert.equal(create.variables.productId, RETRY_PRODUCT_ID);
+  assert.equal(create.variables.strategy, "DEFAULT");
+  assert.equal(create.variables.variants.length, 1);
+  assert.deepEqual(create.variables.variants[0].optionValues, [{ optionName: "款式", name: "紅色" }]);
+  assert.equal(create.variables.variants[0].inventoryItem.sku, "SKU-1");
+  assert.equal(shopify.state.variants.length, 3, "Shopify ends with exactly the 3 Nestory variants");
+  assert.equal(fake.tables.product_drafts[0].status, "draft_created");
+});
+
+await check("retry (c): remote has a variant Nestory does not → 款式 message, zero mutations, nothing deleted", async () => {
+  const fake = retryFakeSupabase();
+  const extra = {
+    id: "gid://shopify/ProductVariant/99",
+    title: "紫色",
+    sku: null,
+    selectedOptions: [{ name: "款式", value: "紫色" }]
+  };
+  const shopify = createShopifyFake({ remoteVariants: [...retryRemoteVariants(), extra] });
+  const result = await runRetry(fake, shopify);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 502);
+  assert.match(result.error, /Shopify 草稿上有 Nestory 沒有的款式：紫色。/);
+  assert.match(result.error, /為避免誤刪，請到 Shopify 後台刪除這些款式（或刪除整個草稿）後再重試。/);
+  assert.deepEqual(shopify.mutations(), [], "no mutation of any kind");
+  const stored = fake.tables.product_drafts[0];
+  assert.equal(stored.status, "api_failed");
+  assert.equal(stored.error_message, result.error);
+  assert.equal(stored.shopify_product_id, RETRY_PRODUCT_ID, "linkage kept so the next retry can resume");
+  // several extras are listed with 、
+  const shopify2 = createShopifyFake({
+    remoteVariants: [
+      ...retryRemoteVariants(),
+      extra,
+      { id: "gid://shopify/ProductVariant/98", title: "黃色", sku: null, selectedOptions: [{ name: "款式", value: "黃色" }] }
+    ]
+  });
+  const result2 = await runRetry(retryFakeSupabase(), shopify2);
+  assert.match(result2.error, /款式：紫色、黃色。/);
+  assert.deepEqual(shopify2.mutations(), []);
+});
+
+await check("retry (d): more than 100 variants on the DRAFT (hasNextPage) → 409, zero mutations, draft back to api_failed", async () => {
+  const fake = retryFakeSupabase();
+  const shopify = createShopifyFake({ remoteVariants: retryRemoteVariants(), hasNextPage: true });
+  const result = await runRetry(fake, shopify);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 409);
+  assert.match(result.error, /超過 100 個/);
+  assert.deepEqual(shopify.mutations(), []);
+  const stored = fake.tables.product_drafts[0];
+  assert.equal(stored.status, "api_failed");
+  assert.equal(stored.error_message, result.error);
+});
+
+await check("retry (e): finite-stock variants already on Shopify → no quantity sent, no location needed, stock warning kept", async () => {
+  const stocked = { inventory_policy: "deny", inventory_quantity: 5 };
+  const fake = retryFakeSupabase({ variantOverrides: { 藍色: stocked, 紅色: stocked } });
+  const shopify = createShopifyFake({ remoteVariants: retryRemoteVariants() });
+  const result = await runRetry(fake, shopify);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(shopify.mutationNames(), ["ProductVariantsBulkUpdate"]);
+  assert.equal(shopify.named("PrimaryInventoryLocation").length, 0);
+  const [update] = shopify.named("ProductVariantsBulkUpdate");
+  assert.equal(hasKey(update.variables.variants, "quantityAdjustments"), false);
+  assert.equal(update.variables.variants.find((v) => v.id === retryVariantId("藍色")).inventoryItem.tracked, true);
+  assert.equal(update.variables.variants.find((v) => v.id === retryVariantId("綠色")).inventoryItem.tracked, false);
+  assert.ok(fake.tables.product_drafts[0].warnings.includes(RETRY_INVENTORY_WARNING));
+  // no finite stock anywhere → no warning
+  const plain = retryFakeSupabase();
+  await runRetry(plain, createShopifyFake({ remoteVariants: retryRemoteVariants() }));
+  assert.equal(plain.tables.product_drafts[0].warnings.includes(RETRY_INVENTORY_WARNING), false);
+});
+
+await check("retry (f): a missing finite-stock variant is created with its quantity; existing ones are not adjusted", async () => {
+  const stocked = { inventory_policy: "deny", inventory_quantity: 4 };
+  const fake = retryFakeSupabase({ variantOverrides: { 紅色: stocked } });
+  const shopify = createShopifyFake({ remoteVariants: retryRemoteVariants(["藍色", "綠色"]) });
+  const result = await runRetry(fake, shopify, { env: { SHOPIFY_LOCATION_ID: RETRY_LOCATION_ID } });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const [create] = shopify.named("ProductVariantsBulkCreate");
+  assert.deepEqual(create.variables.variants[0].inventoryQuantities, [
+    { locationId: RETRY_LOCATION_ID, availableQuantity: 4 }
+  ]);
+  assert.equal(hasKey(shopify.named("ProductVariantsBulkUpdate")[0].variables.variants, "quantityAdjustments"), false);
+
+  // location unknown → stop before any mutation (only the missing seed needs it)
+  const noLoc = retryFakeSupabase({ variantOverrides: { 紅色: stocked } });
+  const shopify2 = createShopifyFake({ remoteVariants: retryRemoteVariants(["藍色", "綠色"]) });
+  const result2 = await runRetry(noLoc, shopify2);
+  assert.equal(result2.ok, false);
+  assert.match(result2.error, /SHOPIFY_LOCATION_ID/);
+  assert.deepEqual(shopify2.mutations(), []);
+});
+
+await check("retry (g): bulkCreate userErrors on the missing variants still fail the retry cleanly (api_failed, linkage kept)", async () => {
+  const fake = retryFakeSupabase();
+  const shopify = createShopifyFake({ remoteVariants: retryRemoteVariants(["藍色", "綠色"]) });
+  const original = shopify.caller;
+  const failing = {
+    ...shopify,
+    caller: async (query, variables) => {
+      if (/ProductVariantsBulkCreate/.test(query)) {
+        await original(query, variables);
+        return {
+          response: { ok: true, status: 200 },
+          result: { data: { productVariantsBulkCreate: { userErrors: [{ field: ["variants"], message: "nope" }] } } }
+        };
+      }
+      return original(query, variables);
+    }
+  };
+  const result = await runRetry(fake, failing);
+  assert.equal(result.ok, false);
+  assert.match(result.error, /既有款式已更新，但缺少款式 productVariantsBulkCreate 失敗/);
+  assert.equal(fake.tables.product_drafts[0].status, "api_failed");
+  assert.equal(fake.tables.product_drafts[0].shopify_product_id, RETRY_PRODUCT_ID);
+});
+
+await check("retry single-variant draft: the one Shopify variant is updated without quantityAdjustments (+ stock warning)", async () => {
+  const fake = retryFakeSupabase({
+    noVariants: true,
+    draft: { twd_price: 500, twd_cost: 200, inventory_policy: "deny", inventory_quantity: 3 }
+  });
+  const only = {
+    id: "gid://shopify/ProductVariant/5",
+    title: "Default Title",
+    sku: null,
+    selectedOptions: [{ name: "Title", value: "Default Title" }]
+  };
+  const shopify = createShopifyFake({ remoteVariants: [only] });
+  const result = await runRetry(fake, shopify);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(shopify.mutationNames(), ["ProductVariantsBulkUpdate"]);
+  assert.equal(shopify.named("PrimaryInventoryLocation").length, 0);
+  const [update] = shopify.named("ProductVariantsBulkUpdate");
+  assert.equal(update.variables.variants.length, 1);
+  assert.equal(update.variables.variants[0].id, only.id);
+  assert.equal(update.variables.variants[0].price, "500");
+  assert.equal(update.variables.variants[0].inventoryItem.tracked, true);
+  assert.equal(hasKey(update.variables.variants, "quantityAdjustments"), false);
+  assert.ok(fake.tables.product_drafts[0].warnings.includes(RETRY_INVENTORY_WARNING));
+});
+
+await check("retry single-variant draft: more than one variant on Shopify → fail with the 款式 message, zero mutations", async () => {
+  const fake = retryFakeSupabase({ noVariants: true });
+  const shopify = createShopifyFake({
+    remoteVariants: [
+      { id: "gid://shopify/ProductVariant/5", title: "A", sku: null, selectedOptions: [{ name: "款式", value: "A" }] },
+      { id: "gid://shopify/ProductVariant/6", title: "B", sku: null, selectedOptions: [{ name: "款式", value: "B" }] }
+    ]
+  });
+  const result = await runRetry(fake, shopify);
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Shopify 草稿上有 2 個款式，但 Nestory 目前是單一款式商品/);
+  assert.deepEqual(shopify.mutations(), []);
+  assert.equal(fake.tables.product_drafts[0].status, "api_failed");
+});
+
+await check("fresh create (no resume) is unchanged: productCreate → update initial (+quantityAdjustments) → bulkCreate additional → media", async () => {
+  const stocked = { inventory_policy: "deny", inventory_quantity: 5 };
+  const fake = retryFakeSupabase({
+    draft: { status: "approved", shopify_product_id: null },
+    variantOverrides: { 藍色: stocked }
+  });
+  const shopify = createShopifyFake({ remoteVariants: [] });
+  const result = await runRetry(fake, shopify, { env: { SHOPIFY_LOCATION_ID: RETRY_LOCATION_ID } });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.productId, RETRY_NEW_PRODUCT_ID);
+  assert.deepEqual(shopify.mutationNames(), [
+    "ProductCreate",
+    "ProductVariantsBulkUpdate",
+    "ProductVariantsBulkCreate",
+    "ProductAttachMedia"
+  ]);
+  assert.deepEqual(shopify.named("ProductVariantsBulkUpdate")[0].variables, {
+    productId: RETRY_NEW_PRODUCT_ID,
+    variants: [
+      {
+        id: RETRY_DEFAULT_VARIANT_ID,
+        price: "300",
+        inventoryPolicy: "DENY",
+        inventoryItem: { sku: "SKU-0", cost: "30", tracked: true },
+        quantityAdjustments: [{ locationId: RETRY_LOCATION_ID, adjustment: 5, changeFromQuantity: 0 }]
+      }
+    ]
+  });
+  assert.deepEqual(shopify.named("ProductVariantsBulkCreate")[0].variables, {
+    productId: RETRY_NEW_PRODUCT_ID,
+    strategy: "DEFAULT",
+    variants: [
+      {
+        price: "300",
+        inventoryPolicy: "CONTINUE",
+        inventoryItem: { sku: "SKU-1", cost: "30", tracked: false },
+        optionValues: [{ optionName: "款式", name: "紅色" }]
+      },
+      {
+        price: "300",
+        inventoryPolicy: "CONTINUE",
+        inventoryItem: { sku: "SKU-2", cost: "30", tracked: false },
+        optionValues: [{ optionName: "款式", name: "綠色" }]
+      }
+    ]
+  });
+  assert.equal(fake.tables.product_drafts[0].status, "draft_created");
+  assert.equal(
+    fake.tables.product_drafts[0].warnings.includes(RETRY_INVENTORY_WARNING),
+    false,
+    "no resume warning on a fresh create"
+  );
+});
+
+// =====================================================================
+// ONLINE-STORE-DISCOVERY: publication id discovery (fake caller, no network)
+// =====================================================================
+console.log("\nONLINE-STORE-DISCOVERY — getShopifyOnlineStorePublicationId");
+
+function discoveryCaller(data, { errors, ok = true } = {}) {
+  let count = 0;
+  const caller = async () => {
+    count += 1;
+    return { response: { ok, status: ok ? 200 : 500 }, result: { data, ...(errors ? { errors } : {}) } };
+  };
+  return { caller, count: () => count };
+}
+const PUB_ONLINE = "gid://shopify/Publication/192801177785";
+const PUB_POS = "gid://shopify/Publication/192801243321";
+const PUB_GOOGLE = "gid://shopify/Publication/210344378553";
+const NO_OVERRIDE = { SHOPIFY_ONLINE_STORE_PUBLICATION_ID: undefined };
+
+await check("discovery: channels contain online_store -> channel match (old path)", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: {
+        nodes: [
+          { id: "gid://shopify/Channel/192801243321", name: "銷售點", handle: "pos", app: null },
+          { id: "gid://shopify/Channel/192801177785", name: "線上商店", handle: "online_store", app: null }
+        ]
+      },
+      publications: {
+        nodes: [
+          { id: PUB_POS, name: "銷售點" },
+          { id: PUB_ONLINE, name: "線上商店" }
+        ]
+      }
+    });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+    assert.equal(fake.count(), 1);
+  });
+});
+
+await check("discovery: channels empty + publications [線上商店, 銷售點, Google & YouTube] -> 線上商店 id", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: { nodes: [] },
+      publications: {
+        nodes: [
+          { id: PUB_ONLINE, name: "線上商店" },
+          { id: PUB_POS, name: "銷售點" },
+          { id: PUB_GOOGLE, name: "Google & YouTube" }
+        ]
+      }
+    });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+  });
+});
+
+await check("discovery: English 'Online Store' matches case-insensitively and trimmed", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: { nodes: [] },
+      publications: {
+        nodes: [
+          { id: PUB_POS, name: "Point of Sale" },
+          { id: PUB_ONLINE, name: "  online STORE " }
+        ]
+      }
+    });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+  });
+});
+
+await check("discovery: channels query errors but publications data present -> fallback still works", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller(
+      { channels: null, publications: { nodes: [{ id: PUB_ONLINE, name: "線上商店" }, { id: PUB_POS, name: "銷售點" }] } },
+      { errors: [{ message: "Access denied for channels field" }] }
+    );
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+  });
+});
+
+await check("discovery: GraphQL errors with no publications data -> still throws the GraphQL error", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller(null, { errors: [{ message: "Throttled" }] });
+    await assert.rejects(() => getShopifyOnlineStorePublicationId(fake.caller), /publication discovery failed: .*Throttled/);
+  });
+});
+
+await check("discovery: HTTP error still throws", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({ channels: { nodes: [] }, publications: { nodes: [] } }, { ok: false });
+    await assert.rejects(() => getShopifyOnlineStorePublicationId(fake.caller), /HTTP 500/);
+  });
+});
+
+await check("discovery: channels empty + only [銷售點, Google & YouTube] -> throws and lists names (never picks POS/Google)", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: { nodes: [] },
+      publications: {
+        nodes: [
+          { id: PUB_POS, name: "銷售點" },
+          { id: PUB_GOOGLE, name: "Google & YouTube" }
+        ]
+      }
+    });
+    await assert.rejects(
+      () => getShopifyOnlineStorePublicationId(fake.caller),
+      (err) => {
+        assert.match(err.message, /Online Store publication could not be discovered/);
+        assert.match(err.message, /publications seen: 銷售點、Google & YouTube/);
+        assert.match(err.message, /SHOPIFY_ONLINE_STORE_PUBLICATION_ID/);
+        return true;
+      }
+    );
+  });
+});
+
+await check("discovery: two publications with matching names -> throws ambiguous", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const fake = discoveryCaller({
+      channels: { nodes: [] },
+      publications: {
+        nodes: [
+          { id: PUB_ONLINE, name: "線上商店" },
+          { id: "gid://shopify/Publication/999", name: "Online Store" },
+          { id: PUB_POS, name: "銷售點" }
+        ]
+      }
+    });
+    await assert.rejects(() => getShopifyOnlineStorePublicationId(fake.caller), /ambiguous/);
+  });
+});
+
+await check("discovery: channel found but no publication matches it -> name fallback, else throws", async () => {
+  await withEnv(NO_OVERRIDE, async () => {
+    const channels = { nodes: [{ id: "gid://shopify/Channel/55", name: "Whatever", handle: "online_store", app: null }] };
+    const viaName = discoveryCaller({ channels, publications: { nodes: [{ id: PUB_ONLINE, name: "線上商店" }] } });
+    assert.equal(await getShopifyOnlineStorePublicationId(viaName.caller), PUB_ONLINE);
+    const none = discoveryCaller({ channels, publications: { nodes: [{ id: PUB_POS, name: "銷售點" }] } });
+    await assert.rejects(() => getShopifyOnlineStorePublicationId(none.caller), /publications seen: 銷售點/);
+  });
+});
+
+await check("discovery: SHOPIFY_ONLINE_STORE_PUBLICATION_ID override returns env value without calling Shopify", async () => {
+  const override = "gid://shopify/Publication/424242";
+  const before = process.env.SHOPIFY_ONLINE_STORE_PUBLICATION_ID;
+  await withEnv({ SHOPIFY_ONLINE_STORE_PUBLICATION_ID: `  ${override}  ` }, async () => {
+    const fake = discoveryCaller({ channels: { nodes: [] }, publications: { nodes: [] } });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), override);
+    assert.equal(fake.count(), 0, "override must skip discovery entirely");
+  });
+  // a malformed override is ignored (discovery runs instead)
+  await withEnv({ SHOPIFY_ONLINE_STORE_PUBLICATION_ID: "not-a-gid" }, async () => {
+    const fake = discoveryCaller({ channels: { nodes: [] }, publications: { nodes: [{ id: PUB_ONLINE, name: "線上商店" }] } });
+    assert.equal(await getShopifyOnlineStorePublicationId(fake.caller), PUB_ONLINE);
+    assert.equal(fake.count(), 1);
+  });
+  assert.equal(process.env.SHOPIFY_ONLINE_STORE_PUBLICATION_ID, before, "env restored after test");
 });
 
 // =====================================================================

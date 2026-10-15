@@ -112,7 +112,12 @@ function makeFixture({
   async function wait(ms) {
     time += ms;
     const due = pending.filter((p) => p.at <= time).sort((a, b) => a.at - b.at);
-    for (const task of due) if (task.id === sequence) setDisplayed(task.value);
+    // Older asynchronous DOM updates can land after a newer SKU selection.
+    // At the same due time the latest click's response takes precedence.
+    for (const task of due) {
+      if (!due.some((other) => other.at === task.at && other.id > task.id))
+        setDisplayed(task.value);
+    }
     for (const task of due) pending.splice(pending.indexOf(task), 1);
   }
   const payload = {

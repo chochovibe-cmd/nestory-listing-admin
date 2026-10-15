@@ -870,7 +870,7 @@
         if (dt) label = dom.textOf(dt);
       }
       if (!label) return;
-      label = label.replace(/[:：]\\s*$/, "").trim();
+      label = label.replace(/[:：]\s*$/, "").trim();
       if (!label || label.length > 40 || /^(数量|數量|购买数量|購買數量)$/.test(label)) return;
       if (axes.some(function (a) { return a.label !== label && a.label.indexOf(label) >= 0 && a.label.length > label.length; })) return;
       var nodes = [];
@@ -910,8 +910,14 @@
     var S = resolveSelectors(host), dom = NestoryCap.domUtil;
     var prices = extractPrices(doc, S, dom);
     var p = dom.firstMatch(doc, S.price);
-    for (var i = 0; i < 3 && p && p.parentElement; i++) p = p.parentElement;
-    var text = String((p && p.textContent) || "").replace(/\\s+/g, " ").trim().slice(0, 200);
+    // Stay inside the price area, not body/page text with unrelated "起".
+    for (var i = 0; i < 3 && p && p.parentElement; i++) {
+      var parent = p.parentElement;
+      if (/^(BODY|HTML)$/i.test(parent.tagName || "")) break;
+      if (String(parent.textContent || "").length > 200) break;
+      p = parent;
+    }
+    var text = String((p && p.textContent) || "").replace(/\s+/g, " ").trim().slice(0, 200);
     return { base: prices.onlyPromo ? null : prices.price_cny,
       promo: prices.promo_price_cny, text: text };
   }

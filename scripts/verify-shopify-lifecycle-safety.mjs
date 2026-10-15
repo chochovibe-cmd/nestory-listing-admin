@@ -55,7 +55,8 @@ assert(publicationIndex > activeIndex, "Online Store publication must happen aft
 assert(finalLocalIndex > publicationIndex, "local active_published success must happen after publication readback");
 assert.doesNotMatch(safe, /productCreate\(product: \$product, media: \$media\)/, "productCreate must not wait on media");
 assert.match(safe, /media sync is pending/, "pre-media recovery checkpoint missing");
-assert.match(payload, /const publishSku = draft\.sku\?\.trim\(\) \|\| generatedSeedSku;/, "reviewed draft SKU must be authoritative when present");
+// VARIANT-CLEAN: a SKU a person typed stays authoritative; empty / NS- / Taobao id / old AI SKUs become NS-<draft>-01.
+assert.match(payload, /const publishSku = manualSku \?\? deriveDraftSku\(draft\.id, draft\.sku\);/, "a reviewed (manual) draft SKU must be authoritative when present");
 assert.match(payload, /\.\.\.generatedVariantSeed,[\s\S]*sku: publishSku/, "generated variant seed must not override reviewed draft SKU");
 assert.match(payload, /image\.image_type === "main" \|\| image\.image_type === "variant"/, "Shopify product media must only include main and variant images");
 assert.match(prep, /processing_status === "done"/, "publish image prep must reuse completed processed images");

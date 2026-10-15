@@ -37,6 +37,7 @@ import {
 } from "@/components/listing/generationProgress";
 import { createClient } from "@/lib/supabase/client";
 import { deleteProductImages } from "@/lib/images/deleteProductImages";
+import { removeUnusedVariantImagesFromDraft } from "@/lib/variants/variantImageCleanup";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import {
   MAX_SCREENSHOT_IMAGES,
@@ -141,7 +142,11 @@ async function persistProductVariants(
   if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
     const retry = await client
       .from("product_variants")
-      .insert(omitVariantOverrideColumns(rows));
+      .insert(omitVariantOverrideColumns(rows, insertError.message));
+    insertError = retry.error;
+  }
+  if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
+    const retry = await client.from("product_variants").insert(omitVariantOverrideColumns(rows));
     insertError = retry.error;
   }
   if (insertError) {
@@ -253,6 +258,7 @@ export function WorkspaceInputPanel({
   const [variants, setVariants] = useState<VariantFormRow[]>([]);
   const [variantWarning, setVariantWarning] = useState<string | null>(null);
   const [variantImages, setVariantImages] = useState<VariantImageOption[]>([]);
+  const pendingVariantImageDeletionIdsRef = useRef<Set<string>>(new Set());
   const [saleStatus, setSaleStatus] = useState<SaleStatus>(SALE_STATUS_OPTIONS[0]);
   /** UX-J T52: independent 一般｜二手 shell (writes is_secondhand + grade/condition/notes). */
   const [isSecondhand, setIsSecondhand] = useState(false);
@@ -766,6 +772,7 @@ export function WorkspaceInputPanel({
           .filter((img) => img.image_type === "main" || img.image_type === "variant")
           .map((img, i) => ({
             id: img.id as string,
+            imageType: img.image_type as string,
             url: String(img.processed_file_url || img.original_file_url || ""),
             label: `主圖 ${i + 1}`
           }))
@@ -1350,6 +1357,19 @@ export function WorkspaceInputPanel({
       return null;
     }
 
+    // Wait for a successful variant save before removing any image rows.
+    const queuedIds = [...pendingVariantImageDeletionIdsRef.current];
+    if (queuedIds.length > 0) {
+      const cleanup = await removeUnusedVariantImagesFromDraft(supabase, id, queuedIds);
+      for (const imageId of [...cleanup.deletedIds, ...cleanup.skippedIds]) {
+        pendingVariantImageDeletionIdsRef.current.delete(imageId);
+      }
+      if (cleanup.deletedIds.length > 0) {
+        setVariantImages((current) => current.filter((image) => !cleanup.deletedIds.includes(image.id)));
+      }
+      if (cleanup.warnings.length > 0) showToast(cleanup.warnings.join("；"), "warn");
+    }
+
     return id;
   }
 
@@ -1362,6 +1382,7 @@ export function WorkspaceInputPanel({
     setAutosaveEnabled(true);
 
     draftIdRef.current = null;
+    pendingVariantImageDeletionIdsRef.current.clear();
     ensureDraftPromiseRef.current = null;
     uploadPromisesRef.current = [];
     setDraftId(null);
@@ -2577,6 +2598,9 @@ export function WorkspaceInputPanel({
               images={variantImages}
               onDimensionsChange={setVariantDimensions}
               onRowsChange={setVariants}
+              onQueueImageDeletion={(imageIds) => {
+                imageIds.forEach((id) => pendingVariantImageDeletionIdsRef.current.add(id));
+              }}
               onWarning={setVariantWarning}
               priceMode={priceMode}
               pricingSettings={pricingSettings}

@@ -183,7 +183,9 @@ assert.match(regenTitleBlock, /value = historyContent/u, "single-field title reg
 // SKU: Full generation still computes/stores the reviewed SKU. Shopify publish
 // then preserves that reviewed draft.sku when present, with generated SKU only
 // as a fallback (Owner-accepted PR #21 authority).
-assert.match(route, /sku: raw\.sku,/u, "raw.sku no longer feeds detected.sku");
+// VARIANT-CLEAN: the SKU is program-owned, so the AI sku must not feed detected.sku any more.
+assert.doesNotMatch(route, /sku: raw\.sku,/u, "the AI sku must not feed detected.sku");
+assert.match(route, /sku: draft\.sku \?\? "",\n\s*\};\n\s*providerOutput = raw;/u, "detected.sku must stay the existing draft SKU");
 assert.match(route, /sku: detected\.sku \|\| null,/u, "detected.sku no longer feeds draft update");
 assert.doesNotMatch(route, /persistedSku|COPY C1\.3 SKU authority|generateSku/u,
   "C1.3 persisted/generated SKU authority returned to generate route");
@@ -192,16 +194,13 @@ assert.doesNotMatch(regenMap, /sku/u, "single-field regeneration must not write 
 const reviewedPinguSku = "CHO-BBX-PNG-PNG-001";
 assert.equal(reviewedPinguSku, "CHO-BBX-PNG-PNG-001", "Pingu reviewed SKU fixture failed");
 
-assert.match(payload, /const \{ sku: generatedSku \} = generateSku\(\{/u,
-  "Shopify generated SKU fallback missing");
-assert.match(payload, /const publishSku = draft\.sku\?\.trim\(\) \|\| generatedSeedSku;/u,
-  "Shopify payload must preserve reviewed draft SKU before generated fallback");
+// VARIANT-CLEAN: NS-<draft UUID>-01 unless a person typed a SKU.
+assert.match(payload, /const publishSku = manualSku \?\? deriveDraftSku\(draft\.id, draft\.sku\);/u,
+  "Shopify payload must keep a manual SKU and otherwise derive NS-<draft>-01");
 assert.match(payload, /\.\.\.generatedVariantSeed,[\s\S]*sku: publishSku/u,
   "Shopify variant seed must apply reviewed/fallback publishSku after generated payload");
-assert.match(promptBase, /sku：依規則產生 CHO-\{型態縮寫\}-\{IP縮寫\}-\{角色縮寫\}-001/u,
-  "Production SKU prompt format missing");
-assert.match(promptBase, /縮寫用 2-3 碼全大寫英文，序號固定 001/u,
-  "Production SKU abbreviation/sequence rule missing");
+assert.doesNotMatch(promptBase, /CHO-\{型態縮寫\}/u, "the prompt must no longer ask the AI for a SKU");
+assert.match(promptBase, /sku：不用輸出/u, "the prompt must tell the AI not to output a SKU");
 
 // Shared FAQ/GEO remains Production-derived; no R0B FAQ redesign.
 assert.match(promptBase, /【FAQ 規則】/u, "Production FAQ section missing");

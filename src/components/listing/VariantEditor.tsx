@@ -44,11 +44,13 @@ import {
   type VariantFormRow
 } from "@/lib/variants";
 import { createClient } from "@/lib/supabase/client";
+import { imageIdsOrphanedByRemovingVariant } from "@/lib/variants/variantImageCleanup";
 
 export type VariantImageOption = {
   id: string;
   url: string;
   label: string;
+  imageType?: string | null;
 };
 
 type Props = {
@@ -56,6 +58,8 @@ type Props = {
   rows: VariantFormRow[];
   onDimensionsChange: (dims: VariantDimension[]) => void;
   onRowsChange: (rows: VariantFormRow[]) => void;
+  /** Candidate images are removed ONLY after the parent saves the remaining rows. */
+  onQueueImageDeletion?: (ids: string[]) => void;
   currency: CostCurrency;
   priceMode: PriceMode;
   pricingSettings: PricingSettings;
@@ -115,6 +119,7 @@ export function VariantEditor({
   productCost = null,
   unconfirmedCost = false,
   onRowsChange,
+  onQueueImageDeletion,
   currency,
   priceMode,
   pricingSettings,
@@ -356,11 +361,20 @@ export function VariantEditor({
   }
 
   function removeRow(index: number) {
-    setRowsSafe(
-      rows
-        .filter((_, rowIndex) => rowIndex !== index)
-        .map((row, rowIndex) => ({ ...row, sortOrder: rowIndex }))
-    );
+    const removed = rows[index];
+    if (!removed) return;
+    const remaining = rows.filter((_, rowIndex) => rowIndex !== index);
+    const candidateIds = imageIdsOrphanedByRemovingVariant(removed, remaining, images);
+    const count = candidateIds.length;
+    // No exclusive image: delete the row exactly as before (no dialog). Otherwise ask ONE question
+    // about the images only — the row is removed either way, so 取消 can never mean "abort".
+    if (count > 0) {
+      const removeImageToo = window.confirm(
+        `這款有 ${count} 張只屬於它的款式圖，要一起從草稿移除嗎？\n（按「儲存」後才移除，原始檔案保留）\n\n確定＝圖片一起移除\n取消＝保留圖片，只刪款式`
+      );
+      if (removeImageToo) onQueueImageDeletion?.(candidateIds);
+    }
+    setRowsSafe(remaining.map((row, rowIndex) => ({ ...row, sortOrder: rowIndex })));
     setMobileSelected(new Set());
   }
 

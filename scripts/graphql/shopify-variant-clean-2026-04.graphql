@@ -1,0 +1,88 @@
+# VARIANT-CLEAN contract, Shopify Admin GraphQL 2026-04.
+# Keep aligned with src/lib/shopify/variantMediaBind.ts and src/lib/shopify/variantResync.ts
+# (scripts/verify-variant-clean.mjs compares the operation names and the allowed input fields).
+# ProductVariantsBulkInput carries `mediaId: ID` (verified against the 2026-04 schema).
+
+query ProductMediaBind($id: ID!) {
+  product(id: $id) {
+    id
+    media(first: 100) {
+      nodes {
+        id
+        mediaContentType
+        status
+        ... on MediaImage {
+          image {
+            url
+          }
+        }
+      }
+    }
+    variants(first: 100) {
+      pageInfo {
+        hasNextPage
+      }
+      nodes {
+        id
+        title
+        sku
+        price
+        compareAtPrice
+        selectedOptions {
+          name
+          value
+        }
+        media(first: 1) {
+          nodes {
+            id
+          }
+        }
+      }
+    }
+  }
+}
+
+mutation BindVariantMedia($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+    productVariants {
+      id
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation ResyncVariantPrices($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+    productVariants {
+      id
+      price
+      compareAtPrice
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+
+mutation AddVariantImageMedia($product: ProductUpdateInput!, $media: [CreateMediaInput!]!) {
+  productUpdate(product: $product, media: $media) {
+    product {
+      id
+      media(first: 100) {
+        nodes {
+          id
+          mediaContentType
+          status
+        }
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}

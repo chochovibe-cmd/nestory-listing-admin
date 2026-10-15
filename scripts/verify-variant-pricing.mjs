@@ -201,7 +201,9 @@ await check("recompute path -> DB inserts -> Shopify publish seeds carry per-var
 await check("publish never substitutes the draft-level price for rows that have their own", () => {
   const safe = fs.readFileSync("src/lib/shopify/publishDraftSafe.ts", "utf8");
   const shopifyVariants = fs.readFileSync("src/lib/variants/shopifyVariants.ts", "utf8");
-  assert.match(shopifyVariants, /price: row\.twd_price \?\? 0/);
+  // VARIANT-CLEAN: no NT$0 fallback any more; a missing price is a PUBLISH-GUARD blocker.
+  assert.match(shopifyVariants, /price: row\.twd_price \?\? null/);
+  assert.doesNotMatch(shopifyVariants, /twd_price \?\? 0/);
   assert.doesNotMatch(shopifyVariants, /draft\.twd_price/);
   assert.match(safe, /toBulkVariantInput\(multi\.initial/);
   assert.match(safe, /toBulkVariantInput\(seed/);

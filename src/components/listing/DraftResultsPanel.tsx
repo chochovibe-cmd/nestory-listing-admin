@@ -154,6 +154,11 @@ export type VariantPriceRow = Pick<
   | "inventory_quantity"
   | "inventory_policy"
   | "image_id"
+  | "cost_is_inherited"
+  | "sell_price_locked"
+  | "compare_at_locked"
+  | "source_sku_id"
+  | "source_options"
 >;
 
 /** Stable empty ref so ResultCard hydrate effect does not thrash on every render. */

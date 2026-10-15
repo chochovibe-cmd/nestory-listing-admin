@@ -48,6 +48,8 @@ export type DeleteProductImagesResult = {
 
 export type DeleteProductImagesOptions = {
   unbindVariants: boolean;
+  /** Draft-only orphan cleanup: delete the product_images DB row, but NEVER the Storage files. */
+  keepStorageFiles?: boolean;
   /**
    * Default false: the Storage cleanup is awaited before returning. When true the cleanup starts
    * after the DB delete is decided but is NOT awaited (follow it via result.storageCleanup).
@@ -350,9 +352,10 @@ export async function deleteProductImages(
   }
 
   // 5) Storage LAST, and only for rows that are really gone. Never fails the whole delete.
-  //    In background mode it starts here (DB outcome and any binding restores are final) and the
-  //    caller gets the result without waiting for it.
+  //    Draft-only variant cleanup intentionally preserves Storage objects for possible recovery.
   result.ok = result.failedIds.length === 0;
+  if (options.keepStorageFiles) return result;
+  //    In background mode cleanup starts after DB outcome and binding restores are final.
   const cleanup = cleanupStorage(supabase, result.deletedIds, rowsById);
   if (options.backgroundStorageCleanup) {
     result.storageCleanup = cleanup;

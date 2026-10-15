@@ -18,6 +18,10 @@ export const dynamic = "force-dynamic";
 
 export type WorkbenchVariantPrice = VariantPriceRow;
 
+const workbenchVariantSelectBase =
+  "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id";
+const workbenchVariantSelectFull = `${workbenchVariantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options`;
+
 function firstParam(
   value: string | string[] | undefined
 ): string | undefined {
@@ -75,7 +79,7 @@ export default async function NewDraftPage({
         "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, cny_price, sku, price_locked, inventory_quantity, inventory_policy, image_id";
       // D3.10A columns are not on production yet. Selecting them makes PostgREST
       // fail the whole query, so the form shows axis values and 尚無款式.
-      const variantSelectFull = `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked`;
+      const variantSelectFull = `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options`;
 
       const { data: seedImages } = await supabase
         .from("product_images")
@@ -89,13 +93,21 @@ export default async function NewDraftPage({
         .eq("draft_id", typed.id)
         .order("sort_order", { ascending: true });
 
+      // Step down one migration at a time so the PRICE-GUARD inherit flag survives a DB
+      // that only lacks the VARIANT-CLEAN source_* columns.
       if (!seedVariants) {
-        const fallback = await supabase
-          .from("product_variants")
-          .select(variantSelectBase)
-          .eq("draft_id", typed.id)
-          .order("sort_order", { ascending: true });
-        seedVariants = fallback.data as typeof seedVariants;
+        for (const columns of [
+          `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked`,
+          variantSelectBase
+        ]) {
+          const fallback = await supabase
+            .from("product_variants")
+            .select(columns)
+            .eq("draft_id", typed.id)
+            .order("sort_order", { ascending: true });
+          seedVariants = fallback.data as typeof seedVariants;
+          if (seedVariants) break;
+        }
       }
 
       initialFromServer = mapDraftToWorkspaceForm(
@@ -141,19 +153,28 @@ export default async function NewDraftPage({
       supabase.from("product_images").select("*").in("draft_id", draftIds).order("sort_order"),
       supabase
         .from("product_variants")
-        .select(`${workbenchVariantBase}, cost_is_inherited, sell_price_locked, compare_at_locked`)
+        .select(workbenchVariantSelectFull)
         .in("draft_id", draftIds)
         .order("sort_order", { ascending: true })
     ]);
     let variants = fullVariants.data as unknown as WorkbenchVariantPrice[] | null;
+    // A missing column makes PostgREST fail the whole query, so step down one migration at a
+    // time: without VARIANT-CLEAN source_* columns, still keep the PRICE-GUARD lock/inherit flags.
     if (fullVariants.error || !variants) {
-      // Pre-migration DB (columns missing) → whole select fails; fall back to the base columns.
-      const fallback = await supabase
-        .from("product_variants")
-        .select(workbenchVariantBase)
-        .in("draft_id", draftIds)
-        .order("sort_order", { ascending: true });
-      variants = fallback.data as unknown as WorkbenchVariantPrice[] | null;
+      for (const columns of [
+        `${workbenchVariantBase}, cost_is_inherited, sell_price_locked, compare_at_locked`,
+        workbenchVariantBase
+      ]) {
+        const fallback = await supabase
+          .from("product_variants")
+          .select(columns)
+          .in("draft_id", draftIds)
+          .order("sort_order", { ascending: true });
+        if (!fallback.error && fallback.data) {
+          variants = fallback.data as unknown as WorkbenchVariantPrice[];
+          break;
+        }
+      }
     }
     typedImages = (images ?? []) as ProductImage[];
     typedVariants = (variants ?? []) as WorkbenchVariantPrice[];

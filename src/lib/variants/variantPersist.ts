@@ -44,11 +44,19 @@ export type SupabaseLike = {
   };
 };
 
-/** D3.10A columns. Production ledger does not have them yet. */
+/**
+ * Columns that may not exist on a database yet: the D3.10A override columns and the
+ * VARIANT-CLEAN source columns (migration 20261014100000). An insert that fails on one
+ * of them is retried once without them, so a card save never dies on a missing migration.
+ * PRICE-GUARD: when only the VARIANT-CLEAN columns are missing, drop just those — dropping
+ * cost_is_inherited would save an unconfirmed cost as a confirmed one.
+ */
+const VARIANT_CLEAN_COLUMNS = ["source_sku_id", "source_options"] as const;
 const VARIANT_OVERRIDE_COLUMNS = [
   "cost_is_inherited",
   "sell_price_locked",
-  "compare_at_locked"
+  "compare_at_locked",
+  ...VARIANT_CLEAN_COLUMNS
 ] as const;
 
 export function isMissingVariantOverrideColumn(message: string): boolean {
@@ -56,10 +64,20 @@ export function isMissingVariantOverrideColumn(message: string): boolean {
   return VARIANT_OVERRIDE_COLUMNS.some((column) => message.includes(column));
 }
 
-export function omitVariantOverrideColumns<T extends Record<string, unknown>>(rows: T[]): T[] {
+export function omitVariantOverrideColumns<T extends Record<string, unknown>>(
+  rows: T[],
+  errorMessage?: string
+): T[] {
+  const onlyVariantClean =
+    errorMessage != null &&
+    VARIANT_CLEAN_COLUMNS.some((column) => errorMessage.includes(column)) &&
+    !VARIANT_OVERRIDE_COLUMNS.some(
+      (column) => !(VARIANT_CLEAN_COLUMNS as readonly string[]).includes(column) && errorMessage.includes(column)
+    );
+  const columns: readonly string[] = onlyVariantClean ? VARIANT_CLEAN_COLUMNS : VARIANT_OVERRIDE_COLUMNS;
   return rows.map((row) => {
     const next = { ...row };
-    for (const column of VARIANT_OVERRIDE_COLUMNS) delete next[column];
+    for (const column of columns) delete next[column];
     return next;
   });
 }
@@ -152,7 +170,11 @@ export async function persistVariantsSafe(
   if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
     const retry = await client
       .from("product_variants")
-      .insert(omitVariantOverrideColumns(withDraft));
+      .insert(omitVariantOverrideColumns(withDraft, insertError.message));
+    insertError = retry.error;
+  }
+  if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
+    const retry = await client.from("product_variants").insert(omitVariantOverrideColumns(withDraft));
     insertError = retry.error;
   }
 

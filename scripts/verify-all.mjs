@@ -77,7 +77,9 @@ const scripts = [
   // Per-variant selling price: each variant priced from its own cost (fine ladder), locks kept.
   "scripts/verify-variant-pricing.mjs",
   // MOBILE-VARIANT-LAYOUT: Workspace accordion grid must not blow out the variant table.
-  "scripts/verify-mobile-variant-workspace.mjs"
+  "scripts/verify-mobile-variant-workspace.mjs",
+  // VARIANT-CLEAN: fake options excluded at import, rule + AI-validated names, NS- SKU, variant image bind, resync.
+  "scripts/verify-variant-clean.mjs"
 ];
 
 for (const script of scripts) {

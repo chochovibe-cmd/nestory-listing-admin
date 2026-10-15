@@ -23,6 +23,8 @@ import {
   WARNING_MULTIDIM_NO_FLAT
 } from "@/lib/import/captureTypes";
 import { keepOrInheritVariantCny } from "@/lib/import/captureVariantPrice";
+import { isFakeVariantRow } from "@/lib/shopify/publishReadiness";
+import { cleanVariantRows } from "@/lib/variants/variantNameRules";
 import {
   WARNING_HIDDEN_VARIANT_PRICES,
   captureHidesVariantPrices
@@ -56,6 +58,15 @@ export type MappedCaptureDraft = {
   variantImageUrls: string[];
   /** True when cny_price used placeholder. */
   usedPricePlaceholder: boolean;
+  /** VARIANT-CLEAN: non-product options kept out of product_variants (restorable from the 規格 tab). */
+  excludedVariants: ExcludedCaptureVariant[];
+};
+
+/** A 款式 the import refused to create (購買須知／勿拍／補差價…). `row` is the full would-be variant row. */
+export type ExcludedCaptureVariant = {
+  label: string;
+  reason: "non_product_option";
+  row: Record<string, unknown>;
 };
 
 function asTrimmedString(value: unknown): string | null {
@@ -324,7 +335,7 @@ export function stripOversizedCaptureFields(
  * (would undo client omit of uniform prices). Only apply table price when it
  * differs from product-level cost.
  */
-function mapVariantRows(
+export function mapVariantRows(
   flats: CaptureVariantFlat[],
   skuTable?: unknown,
   productPriceCny?: number | null
@@ -332,8 +343,10 @@ function mapVariantRows(
   rows: Array<Record<string, unknown>>;
   dimensions: Array<{ name: string }>;
   variantImageUrls: string[];
+  excluded: ExcludedCaptureVariant[];
 } {
   const rows: Array<Record<string, unknown>> = [];
+  const excluded: ExcludedCaptureVariant[] = [];
   const dimNames: string[] = [];
   const valuesByName = new Map<string, string[]>();
   const imageUrls: string[] = [];
@@ -361,10 +374,6 @@ function mapVariantRows(
     const o3n = asTrimmedString(v.option3_name);
     const o3v = asTrimmedString(v.option3_value);
 
-    addDimValue(o1n, o1v);
-    addDimValue(o2n, o2v);
-    addDimValue(o3n, o3v);
-
     // Prefer flat.cny_price; if missing, map from sku_table cell only when
     // cell price differs from product cost (CAP-2.6 / 87 D1+C1).
     let cny = asPositiveNumber(v.cny_price);
@@ -390,19 +399,17 @@ function mapVariantRows(
     cny = keepOrInheritVariantCny(cny, product, ownPriceSource);
 
     const imageUrl = asTrimmedString(v.image_url);
-    if (imageUrl && !seenImg.has(imageUrl)) {
-      seenImg.add(imageUrl);
-      imageUrls.push(imageUrl);
-    }
-
-    rows.push({
+    // Taobao's skuId is an internal purchasing id now; the Shopify SKU (NS-…) is assigned
+    // after the draft exists (createCaptureDraft), so `sku` stays empty here.
+    const row: Record<string, unknown> = {
       option1_name: o1n,
       option1_value: o1v,
       option2_name: o2n,
       option2_value: o2v,
       option3_name: o3n,
       option3_value: o3v,
-      sku: asTrimmedString(v.sku),
+      sku: null,
+      source_sku_id: asTrimmedString(v.sku),
       cny_price: cny,
       // CAPTURE-TRUTH-A: a blank per-SKU cost means "follow product cost",
       // not "this SKU independently captured the same price".
@@ -412,7 +419,42 @@ function mapVariantRows(
       inventory_policy: "continue",
       // temporary; createCaptureDraft maps → image_id then strips
       ...(imageUrl ? { image_url: imageUrl } : {})
-    });
+    };
+
+    // Same predicate PUBLISH-GUARD uses, so import and publish can never disagree.
+    // Applied before the image / axis bookkeeping: an excluded option leaves no trace.
+    if (isFakeVariantRow(row)) {
+      excluded.push({
+        label: [o1v, o2v, o3v].filter(Boolean).join("／"),
+        reason: "non_product_option",
+        row
+      });
+      return;
+    }
+
+    if (imageUrl && !seenImg.has(imageUrl)) {
+      seenImg.add(imageUrl);
+      imageUrls.push(imageUrl);
+    }
+    rows.push(row);
+  });
+
+  // VARIANT-CLEAN rule layer (no AI at import). The imported text is kept in source_options.
+  const cleaned = cleanVariantRows(rows);
+  rows.forEach((row, i) => {
+    row.source_options = {
+      names: [row.option1_name, row.option2_name, row.option3_name].map((n) => n ?? null),
+      values: [row.option1_value, row.option2_value, row.option3_value].map((n) => n ?? null)
+    };
+    row.option1_name = cleaned[i].names[0];
+    row.option1_value = cleaned[i].values[0];
+    row.option2_name = cleaned[i].names[1];
+    row.option2_value = cleaned[i].values[1];
+    row.option3_name = cleaned[i].names[2];
+    row.option3_value = cleaned[i].values[2];
+    addDimValue(cleaned[i].names[0], cleaned[i].values[0]);
+    addDimValue(cleaned[i].names[1], cleaned[i].values[1]);
+    addDimValue(cleaned[i].names[2], cleaned[i].values[2]);
   });
 
   const dimensions =
@@ -425,7 +467,7 @@ function mapVariantRows(
         ? [{ name: "款式" }]
         : [];
 
-  return { rows, dimensions, variantImageUrls: imageUrls };
+  return { rows, dimensions, variantImageUrls: imageUrls, excluded };
 }
 
 /**
@@ -482,8 +524,15 @@ export function mapCaptureToDraftFields(
   const {
     rows: variantRows,
     dimensions: variantDimensions,
-    variantImageUrls
+    variantImageUrls,
+    excluded: excludedVariants
   } = mapVariantRows(flats, body.sku_table, price);
+
+  if (excludedVariants.length > 0) {
+    warnings.push(
+      `已排除 ${excludedVariants.length} 個非商品款式：${excludedVariants.map((e) => `「${e.label}」`).join("")}（可在規格頁籤恢復）`
+    );
+  }
 
   // PRICE-GUARD: Taobao may hide every per-variant price (hideOtherPrice / no sku2info price).
   // The extension warns, but the server must also demand a per-variant cost check, otherwise
@@ -564,6 +613,8 @@ export function mapCaptureToDraftFields(
       sku_multi_dim: multiDim,
       /** @deprecated alias kept for older readers */
       sku_flat_warning: multiDim,
+      /** VARIANT-CLEAN: options the import excluded; the 規格 tab lists them with 恢復. */
+      excluded_variants: excludedVariants,
       /** CAPTURE-TRUTH-A: downstream/UI may block auto-pricing until operator confirms. */
       price_requires_confirmation: priceRequiresConfirmation,
       price_confidence: priceConfidence,
@@ -620,6 +671,7 @@ export function mapCaptureToDraftFields(
     mainImageUrls,
     detailImageUrls,
     variantImageUrls,
-    usedPricePlaceholder
+    usedPricePlaceholder,
+    excludedVariants
   };
 }

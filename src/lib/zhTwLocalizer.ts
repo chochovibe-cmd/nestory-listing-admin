@@ -70,6 +70,40 @@ const TAIWAN_TERM_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
   ['移動電源', '行動電源'],
   ['性價比', 'CP值'],
   ['髮卡', '髮夾'],
+  // VARIANT-CLEAN：款式名常見 3C 用語（內存卡要排在內存之前）
+  ['內存卡', '記憶卡'],
+  ['內存', '記憶體'],
+  ['U盤', '隨身碟'],
+  ['數據線', '傳輸線'],
+  // VARIANT-CLEAN fixbatch: Mainland IP / character wording -> Taiwan canonical wording.
+  // OpenCC runs first, so these are the Traditional forms (with explicitly tested aliases).
+  ['玉桂狗', '大耳狗'],
+  ['庫洛米', '酷洛米'],
+  ['美樂蒂', '美樂蒂'],
+  ['帕恰狗', '帕恰狗'],
+  ['布丁狗', '布丁狗'],
+  ['大眼蛙', '大眼蛙'],
+  ['凱蒂貓', 'Hello Kitty'],
+  ['米老鼠', '米奇'],
+  ['唐老鴨', '唐老鴨'],
+  ['精靈寶可夢', '寶可夢'],
+  ['口袋妖怪', '寶可夢'],
+  ['皮卡丘', '皮卡丘'],
+  ['史迪仔', '史迪奇'],
+  ['奧特曼', '超人力霸王'],
+  ['布朗熊', '熊大'],
+  ['可妮兔', '兔兔'],
+  ['小豬佩奇', '粉紅豬小妹'],
+  ['托馬斯小火車', '湯瑪士小火車'],
+  ['托馬斯', '湯瑪士小火車'],
+  ['海賊王', '航海王'],
+  ['蜘蛛俠', '蜘蛛人'],
+  ['鋼鐵俠', '鋼鐵人'],
+  ['星球大戰', '星際大戰'],
+  ['機器貓', '哆啦A夢'],
+  // 台灣名本身包含舊稱（龍珠⊂七龍珠、汪汪隊⊂汪汪隊立大功）：applyTaiwanTerms 會先保護已是台灣名的部分。
+  ['龍珠', '七龍珠'],
+  ['汪汪隊', '汪汪隊立大功'],
   // PKG2A / 回饋 84：款式值常見「鼠标」——OpenCC 先成「鼠標」，用語表再換成台灣「滑鼠」
   ['鼠标', '滑鼠'],
   ['鼠標', '滑鼠'],
@@ -97,10 +131,22 @@ type LocalizableDraftTextFields = {
 };
 
 function applyTaiwanTerms(value: string): string {
-  return TAIWAN_TERM_REPLACEMENTS.reduce(
-    (localized, [source, replacement]) => localized.split(source).join(replacement),
-    value,
-  );
+  return TAIWAN_TERM_REPLACEMENTS.reduce((localized, [source, replacement]) => {
+    if (!localized.includes(source) || source === replacement) return localized;
+    // Already has Kitty in English: discard the Mainland alias, don't append a second Kitty.
+    if (source === '凱蒂貓' && /(?:hello\s*)?kitty/i.test(localized)) {
+      return localized.replace(/(?:[\s／\/|｜,，、+＋·・]*凱蒂貓[\s／\/|｜,，、+＋·・]*)+/g, '').trim();
+    }
+    // The Taiwan name contains the old alias (龍珠 → 七龍珠): keep existing Taiwan names intact so
+    // a second pass never yields 七七龍珠 / 汪汪隊立大功立大功.
+    if (replacement.includes(source)) {
+      return localized
+        .split(replacement)
+        .map((part) => part.split(source).join(replacement))
+        .join(replacement);
+    }
+    return localized.split(source).join(replacement);
+  }, value);
 }
 
 function protectUrlsAndEmails(value: string): { text: string; restore: (localized: string) => string } {

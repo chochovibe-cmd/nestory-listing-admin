@@ -40,7 +40,7 @@ const publishFunctionIndex = publishDraftSafe.indexOf("export async function pub
 assert.ok(publishFunctionIndex >= 0, "publishDraft safe implementation missing");
 const publishImplementation = publishDraftSafe.slice(publishFunctionIndex);
 const publishGuardIndex = publishImplementation.indexOf(
-  "findDuplicateProductVariantRows(typedVariantRows)"
+  "findDuplicateProductVariantRows(publishVariantRows)"
 );
 const payloadIndex = publishImplementation.indexOf("buildShopifyProductPayload(");
 const claimPublishingIndex = publishImplementation.indexOf("await claimPublishing(");

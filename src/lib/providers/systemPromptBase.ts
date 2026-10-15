@@ -373,13 +373,13 @@ ${COPY_FACT_RED_LINES_BLOCK}
 【判斷 IP／角色／類型／品牌（第一步，很重要）】
 - 系統會附上一份「已建檔 IP 清單」。如果商品明顯屬於清單中的某個 IP，detected_ip_name 必須「原封不動」使用清單裡的中文名稱（用字要完全一致，這是後端比對 Shopify 分類的關鍵）。
 - 如果標題資訊不足以判斷、或商品明顯不屬於清單中任何一個 IP，detected_ip_name 就填你最合理的判斷；不確定時寧可誠實填最接近的，不要亂猜一個清單裡的 IP。
-- detected_character_name：主要角色名稱（例：小八、玉桂狗）；多角色時以主角色為主，其餘角色寫進標題骨架；沒有明確角色就留空字串。
+- detected_character_name：主要角色名稱（例：小八、大耳狗）；多角色時以主角色為主，其餘角色寫進標題骨架；沒有明確角色就留空字串。
 - detected_product_type：具體商品型態（例：吊飾、絨毛娃娃、公仔模型、壓克力立牌、燈具小物），用台灣慣用說法。臺燈／桌燈／夜燈類可寫「燈具小物」或「臺燈」（後端會對齊）。
 - detected_product_brand（聯名／製造商品牌，P1-75a 誠實邊界）：
   ・要填：標題、圖上文字、規格裡「明確出現」的聯名或製造商品牌字樣（例：TOYUKI、Razer、MINISO）
   ・不填（留空）：IP 名稱本身（吉伊卡哇、三麗鷗不算 brand）、店名／賣家名、僅憑感覺猜測的品牌
   ・沒把握就留空，寧可空也不要猜；空字串即可，不要寫「無」或「未知」
-- sku：依規則產生 CHO-{型態縮寫}-{IP縮寫}-{角色縮寫}-001，縮寫用 2-3 碼全大寫英文，序號固定 001。例：吉伊卡哇小八吊飾 → CHO-CHM-CKW-CH8-001。
+- sku：不用輸出（系統依草稿編號自動產生 NS- 開頭的編號，AI 不要寫、不要猜）。
 
 【GEO 優化（Generative Engine Optimization）】
 FAQ 回答必須寫成可以被 AI 搜尋引擎（ChatGPT、Perplexity 等）單獨引用、語意完整的句子。
@@ -398,7 +398,7 @@ ${SHARED_PRODUCT_TITLE_PROMPT}
 3. detected_product_type
 4. detected_product_brand（聯名／製造商品牌；沒把握留空）
 5. detected_category（＝型態_ + detected_product_type，例：型態_吊飾）
-6. sku
+6. sku（留空；系統自動產生）
 7. enriched_title（與內部標題組件 title_ip／title_brand／title_item／title_diff）
 8. generated_description_html
 9. generated_faq_html
@@ -502,7 +502,7 @@ ${faqFieldEmojiRule(tone)}
 [[detected_category]]
 型態_（同上型態，例：型態_吊飾）
 [[sku]]
-CHO-...-...-...-001
+（留空）
 [[enriched_title]]
 （商品標題，見商品標題契約）
 [[title_ip]]

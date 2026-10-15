@@ -36,6 +36,9 @@ import {
   type MultiVariantPublishPlan,
   type ResumeRemoteVariant
 } from "@/lib/variants/shopifyVariants";
+import { bindVariantMedia, type LocalImageRef } from "@/lib/shopify/variantMediaBind";
+import { persistAssignedVariantSkus } from "@/lib/shopify/persistVariantSkus";
+import { assignVariantSkus, deriveDraftSku } from "@/lib/variants/variantSku";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductVariantRow, PublishMode } from "@/types/domain";
 
@@ -63,7 +66,13 @@ type PublishDraftDeps = {
   confirmVariantPrices?: boolean;
   /** Who confirmed; stored next to variant_price_confirmed_at. */
   confirmedBy?: string | null;
+  /** Inject for tests: clock + sleep used by the variant-image READY wait. */
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
 };
+
+/** Variant-image binding gives up waiting this long after the publish request started (60s budget). */
+const VARIANT_MEDIA_BIND_DEADLINE_MS = 45_000;
 
 type ServiceSupabase = ReturnType<typeof createServiceSupabaseClient>;
 
@@ -322,6 +331,8 @@ export async function publishDraft(
 ): Promise<PublishDraftResult> {
   const caller: ShopifyAdminGraphQLCaller = deps.callGraphQL ?? ((query, variables) =>
     callShopifyAdminGraphQL(query, variables));
+  const clock = deps.now ?? (() => Date.now());
+  const startedAt = clock();
 
   const { data: draft, error } = await serviceSupabase
     .from("product_drafts")
@@ -557,7 +568,18 @@ export async function publishDraft(
     draftForPayload = draftFresh ?? draft;
   }
 
-  const duplicateVariantRows = findDuplicateProductVariantRows(typedVariantRows);
+  // VARIANT-CLEAN: SKUs are program-owned (NS-<draft>-NN). Manual SKUs stay; the dry run
+  // computes them in memory only and writes nothing.
+  const publishVariantRows = assignVariantSkus(id, typedVariantRows);
+  const publishDraftSku = deriveDraftSku(id, draft.sku);
+  if (!mockMode) {
+    await persistAssignedVariantSkus(serviceSupabase, typedVariantRows, publishVariantRows);
+    if (draft.sku !== publishDraftSku && publishVariantRows.length === 0) {
+      await serviceSupabase.from("product_drafts").update({ sku: publishDraftSku }).eq("id", id);
+    }
+  }
+
+  const duplicateVariantRows = findDuplicateProductVariantRows(publishVariantRows);
   if (duplicateVariantRows.length > 0) {
     return {
       ok: false,
@@ -577,7 +599,7 @@ export async function publishDraft(
 
   // SAFE STAGING: the create payload is DRAFT for both requested modes.
   const builtPayload = buildShopifyProductPayload(
-    { ...draftForPayload, product_variants: typedVariantRows },
+    { ...draftForPayload, product_variants: publishVariantRows },
     publishMode,
     internalLinkMap
   ) as any;
@@ -1058,6 +1080,37 @@ export async function publishDraft(
     }
   }
 
+  // VARIANT-CLEAN: show each variant's own picture. Runs after the media step (Shopify only
+  // knows the MediaImage ids by now), waits a bounded time for READY, and can only add
+  // warnings — never fail the publish. Anything missed is picked up by the 重同步工具.
+  const mediaBindWarnings: string[] = [];
+  if (isMulti && mediaInputs.length > 0) {
+    const multi = variantPlan as MultiVariantPublishPlan;
+    const localImages: LocalImageRef[] = ((draftForPayload.product_images ?? []) as any[]).map((image) => ({
+      id: image.id as string,
+      url: (image.processed_file_url || image.original_file_url || image.generated_file_url || null) as string | null,
+      alt: (image.alt_text as string | null) ?? null,
+      shopifyMediaId: (image.shopify_media_id as string | null) ?? null,
+      inProductMedia: image.image_type === "main" || image.image_type === "variant"
+    }));
+    const bound = await bindVariantMedia({
+      caller,
+      productId,
+      seeds: multi.all,
+      localImages,
+      deadlineAt: startedAt + VARIANT_MEDIA_BIND_DEADLINE_MS,
+      now: clock,
+      ...(deps.sleep ? { sleep: deps.sleep } : {})
+    });
+    mediaBindWarnings.push(...bound.warnings);
+    // Remember which Shopify image is which (best effort; the column may not exist yet).
+    for (const [imageId, mediaId] of bound.imageMediaIds) {
+      const known = localImages.find((image) => image.id === imageId);
+      if (known?.shopifyMediaId === mediaId) continue;
+      await serviceSupabase.from("product_images").update({ shopify_media_id: mediaId }).eq("id", imageId);
+    }
+  }
+
   // ACTIVE is successful only after both Admin status promotion and
   // Online Store publication have been independently confirmed.
   const channelWarnings: string[] = [];
@@ -1083,6 +1136,7 @@ export async function publishDraft(
   const publishWarnings = [
     ...(priceSyncWarning ? [priceSyncWarning] : []),
     ...resumeWarnings,
+    ...mediaBindWarnings,
     ...videoWarnings,
     ...channelWarnings
   ];

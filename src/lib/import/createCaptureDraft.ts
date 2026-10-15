@@ -5,6 +5,7 @@
  */
 import { extractUrlMatchKey, queryDuplicateMatches } from "@/lib/drafts/checkDuplicate";
 import { persistVariantsSafe } from "@/lib/variants/variantPersist";
+import { assignVariantSkus } from "@/lib/variants/variantSku";
 import type {
   CaptureImportBody,
   CaptureImportCreated,
@@ -58,9 +59,12 @@ function captureImageExpectedCount(mapped: {
   ].map((url) => url.trim()).filter(Boolean)).size;
 }
 
+/**
+ * Matches an imported row to its stored row. The SKU is deliberately NOT part of it:
+ * the NS- SKU only exists on the stored row (assigned after the draft insert).
+ */
 function variantIdentity(row: Record<string, unknown>): string {
   return JSON.stringify([
-    row.sku ?? null,
     row.option1_name ?? null,
     row.option1_value ?? null,
     row.option2_name ?? null,
@@ -170,7 +174,11 @@ async function refillEmptyCaptureFields(input: {
       ...row,
       draft_id: input.draftId
     }));
-    const vr = await persistVariantsSafe(input.serviceSupabase, input.draftId, withDraft);
+    const vr = await persistVariantsSafe(
+      input.serviceSupabase,
+      input.draftId,
+      assignVariantSkus(input.draftId, withDraft)
+    );
     if (!vr.ok) {
       warnings.push(`款式補寫失敗：${vr.error}`);
     } else {
@@ -323,7 +331,11 @@ export async function createCaptureDraft(input: {
         ...row,
         draft_id: draftId
       }));
-      const vr = await persistVariantsSafe(input.serviceSupabase, draftId, withoutImages);
+      const vr = await persistVariantsSafe(
+        input.serviceSupabase,
+        draftId,
+        assignVariantSkus(draftId, withoutImages)
+      );
       if (!vr.ok) {
         warnings.push(`款式寫入失敗（草稿已建）：${vr.error}`);
       }
@@ -382,7 +394,11 @@ export async function createCaptureDraft(input: {
   if (mapped.variantRows.length > 0) {
     const withImages = applyVariantImageIds(mapped.variantRows, urlToImageId);
     const withDraft = withImages.map((r) => ({ ...r, draft_id: draftId }));
-    const vr = await persistVariantsSafe(input.serviceSupabase, draftId, withDraft);
+    const vr = await persistVariantsSafe(
+      input.serviceSupabase,
+      draftId,
+      assignVariantSkus(draftId, withDraft)
+    );
     if (!vr.ok) {
       warnings.push(`款式寫入失敗（草稿已建）：${vr.error}`);
     }
@@ -489,7 +505,7 @@ export async function completeCaptureDraftImages(input: {
       const { data: currentVariants, error: currentError } = await input.serviceSupabase
         .from("product_variants")
         .select(
-          "id,sku,option1_name,option1_value,option2_name,option2_value,option3_name,option3_value,image_id"
+          "id,option1_name,option1_value,option2_name,option2_value,option3_name,option3_value,image_id"
         )
         .eq("draft_id", input.draftId);
 

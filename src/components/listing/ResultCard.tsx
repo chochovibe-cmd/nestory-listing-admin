@@ -108,6 +108,7 @@ import {
   deleteProductImages,
   deleteProductImagesFailureMessage
 } from "@/lib/images/deleteProductImages";
+import { removeUnusedVariantImagesFromDraft } from "@/lib/variants/variantImageCleanup";
 import {
   formatArchiveResultMessage,
   formatUnarchiveResultMessage,
@@ -147,6 +148,7 @@ import {
   type VariantDimension,
   type VariantFormRow
 } from "@/lib/variants";
+import { readExcludedVariants } from "@/lib/variants/restoreExcludedVariant";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -194,6 +196,8 @@ type ResultCardVariantRow = {
   inventory_policy?: string | null;
   sku?: string | null;
   image_id?: string | null;
+  source_sku_id?: string | null;
+  source_options?: { names: Array<string | null>; values: Array<string | null> } | null;
 };
 
 
@@ -331,6 +335,7 @@ export function ResultCard({
   const [variantRows, setVariantRows] = useState<VariantFormRow[]>([]);
   const [variantWarning, setVariantWarning] = useState<string | null>(null);
   const [variantsDirty, setVariantsDirty] = useState(false);
+  const pendingVariantImageDeletionIdsRef = useRef<Set<string>>(new Set());
   const [message, setMessage] = useState("");
   const [markMessage, setMarkMessage] = useState("");
   const [regenerating, setRegenerating] = useState(false);
@@ -493,12 +498,39 @@ export function ResultCard({
     [variantPrices, variantsDirty, variantRows]
   );
 
+  // VARIANT-CLEAN: options the capture import kept out of 款式 (restorable on the 規格 tab).
+  const excludedVariants = useMemo(() => readExcludedVariants(draft.raw_capture), [draft.raw_capture]);
+  const [restoreBusyIndex, setRestoreBusyIndex] = useState<number | null>(null);
+
+  async function restoreExcludedVariant(index: number) {
+    setRestoreBusyIndex(index);
+    try {
+      const response = await fetch(`/api/drafts/${draft.id}/excluded-variants/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        showToast(payload?.error ?? "恢復款式失敗", "error");
+        return;
+      }
+      showToast("已恢復這個款式", "success");
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      showToast("恢復款式連線失敗", "error");
+    } finally {
+      setRestoreBusyIndex(null);
+    }
+  }
+
   const variantImageOptions = useMemo(
     () =>
       imageMarks
         .filter((img) => img.image_type === "main" || img.image_type === "variant")
         .map((img, i) => ({
           id: img.id,
+          imageType: img.image_type,
           url: String(img.processed_file_url || img.original_file_url || img.generated_file_url || ""),
           label: `主圖 ${i + 1}`
         }))
@@ -1086,6 +1118,18 @@ export function ResultCard({
         return false;
       }
 
+      // Remove queued draft image ROWS only after all surviving variant bindings are saved.
+      const queuedIds = [...pendingVariantImageDeletionIdsRef.current];
+      if (queuedIds.length > 0) {
+        const cleanup = await removeUnusedVariantImagesFromDraft(supabase, draft.id, queuedIds);
+        for (const imageId of [...cleanup.deletedIds, ...cleanup.skippedIds]) {
+          pendingVariantImageDeletionIdsRef.current.delete(imageId);
+        }
+        if (cleanup.deletedIds.length > 0) {
+          setImageMarks((current) => current.filter((image) => !cleanup.deletedIds.includes(image.id)));
+        }
+        if (cleanup.warnings.length > 0) showToast(cleanup.warnings.join("；"), "warn");
+      }
       setVariantsDirty(false);
       await markShopifyDirty();
       // UX-A T2 / UX-L T62: transient success → toast only
@@ -3061,6 +3105,16 @@ export function ResultCard({
 
           {activeTab === "specs" ? (
             <ResultCardSpecsPanel
+              excludedVariants={excludedVariants}
+              nameContext={{
+                productName: title || draft.title_zh || draft.taobao_title || null,
+                ip: draft.ip_name,
+                character: draft.character_name,
+                brand: draft.product_brand ?? null
+              }}
+              onRestoreExcluded={(index) => void restoreExcludedVariant(index)}
+              restoreBusyIndex={restoreBusyIndex}
+              restoreDisabledReason={variantsDirty ? "規格有尚未儲存的修改，請先儲存再恢復。" : null}
               onDimensionsChange={(dims) => {
                 setVariantDimensions(dims);
                 setVariantsDirty(true);
@@ -3068,6 +3122,9 @@ export function ResultCard({
               onRowsChange={(rows) => {
                 setVariantRows(rows);
                 setVariantsDirty(true);
+              }}
+              onQueueImageDeletion={(imageIds) => {
+                imageIds.forEach((id) => pendingVariantImageDeletionIdsRef.current.add(id));
               }}
               onWarning={setVariantWarning}
               priceMode={priceMode}

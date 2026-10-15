@@ -23,7 +23,8 @@ import {
   WARNING_MULTIDIM_NO_FLAT
 } from "@/lib/import/captureTypes";
 import { keepOrInheritVariantCny } from "@/lib/import/captureVariantPrice";
-import { isFakeVariantRow, parsePriceRange } from "@/lib/shopify/publishReadiness";
+import { isFakeVariantRow } from "@/lib/shopify/publishReadiness";
+import { parsePriceRange } from "@/lib/shopify/publishReadiness";
 import { cleanVariantRows } from "@/lib/variants/variantNameRules";
 import {
   WARNING_HIDDEN_VARIANT_PRICES,

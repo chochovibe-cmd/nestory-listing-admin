@@ -155,7 +155,8 @@
             click_failed: "點不到", node_not_found: "找不到款式按鈕",
             disabled: "無法選取", promo_only: "只看到促銷價",
             no_price: "沒有價格", mismatch: "兩次讀到不同",
-            not_run: "中止未讀"
+            not_run: "中止未讀", verify_failed: "抽查不一致",
+            slow_page: "頁面太慢"
           };
           var counts = {};
           (interact.rows || []).forEach(function (r) {

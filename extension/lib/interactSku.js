@@ -25,6 +25,10 @@
   function sameReading(a, b) {
     return !!a && !!b && a.base === b.base && a.promo === b.promo && a.text === b.text;
   }
+  // A DOM-only price (URL skuId → "dom.selected_sku") was read before any click; re-read it.
+  function needsRead(row) {
+    return !!row && (row.cny_price == null || /^dom./.test(String(row.price_source || "")));
+  }
   function positive(value) {
     var n = Number(value);
     return value != null && Number.isFinite(n) && n > 0;
@@ -48,7 +52,7 @@
     var maxTotalMs = Number.isFinite(limit.maxTotalMs) ? Math.max(0, limit.maxTotalMs) : 90000;
     var start = now(), stoppedForTime = false;
     var sourceRows = Array.isArray(payload && payload.variants_flat) ? payload.variants_flat : [];
-    var targets = sourceRows.filter(function (row) { return row && row.cny_price == null; });
+    var targets = sourceRows.filter(needsRead);
     var ice = adapters.taobaoIce;
     var iceRes = ice && ice.res && ice.parse ? ice.res(ice.parse(doc)) : null;
     var info = iceRes && iceRes.skuCore && iceRes.skuCore.sku2info || {};
@@ -158,31 +162,38 @@
       }
       return null;
     }
-    async function readSettledPrice(clickedAt, minimumWait) {
+    // Slow pages keep showing the PREVIOUS variant's price for a while. A reading that still
+    // equals the pre-click text is only trusted after SAME_PRICE_WAIT_MS (the price may
+    // genuinely be the same); a changed reading is trusted once stable.
+    var SAME_PRICE_WAIT_MS = 2000, READ_DEADLINE_MS = 4000, QUIET_TAIL_MS = 3000;
+    async function readSettledPrice(clickedAt, minimumWait, beforeText) {
       await wait(minimumWait);
       var last = null, streak = 0;
       // Stable only when base, promo and the surrounding price text all match.
-      while (now() - clickedAt <= 3000) {
+      while (now() - clickedAt <= READ_DEADLINE_MS) {
         var current = adapters.taobaoReadPrice(doc, host);
         if (sameReading(current, last)) streak++; else streak = 1;
         last = current;
-        if (streak >= 4 && current && !/起/.test(current.text || "")) {
+        var changed = !!current && current.text !== beforeText;
+        if (streak >= 4 && current && !/起/.test(current.text || "") &&
+            (changed || now() - clickedAt >= SAME_PRICE_WAIT_MS)) {
           if (!positive(current.base)) {
             return { status: positive(current.promo) ? "promo_only" : "no_price" };
           }
           return { status: "ok", base: Number(current.base),
             promo: positive(current.promo) ? Number(current.promo) : null };
         }
-        if (now() - clickedAt >= 3000) break;
+        if (now() - clickedAt >= READ_DEADLINE_MS) break;
         await wait(100);
       }
       return { status: "timeout" };
     }
     async function runOne(entry, minWait) {
+      var before = adapters.taobaoReadPrice(doc, host);
       var clickedAt = now();
       var fail = await selectCombo(entry.row);
       if (fail) return { status: fail };
-      return readSettledPrice(clickedAt, minWait);
+      return readSettledPrice(clickedAt, minWait, before ? before.text : null);
     }
     function markRemainingOverLimit() {
       eligible.forEach(function (e) {
@@ -227,10 +238,12 @@
     if (result.status === "aborted" || stoppedForTime) return finalize();
 
     // Second pass: reverse order. Do not revisit first-pass failures.
+    var lastRead = null;
     for (var j = eligible.length - 1; j >= 0; j--) {
       var e = eligible[j];
       if (!e._first) continue;
       var second = await runOne(e, 500);
+      lastRead = e;
       e.report.pass2 = second.status === "ok" ? second.base : null;
       e.report.status = second.status;
       if (second.status === "ok") {
@@ -257,26 +270,69 @@
         e.report.status = "ok";
         e.report.base = e._verified.base;
         e.report.promo = e._verified.promo;
-        // Never overwrite independently priced structured SKU evidence.
-        if (e.row.cny_price == null) {
-          e.row.cny_price = e._verified.base;
-          e.row.promo_price_cny =
-            positive(e._verified.promo) && e._verified.promo !== e._verified.base
-              ? e._verified.promo : null;
-          e.row.price_source = "interact.selected_sku";
-          e.row.promo_price_source = e.row.promo_price_cny == null
-            ? null : "interact.selected_sku.promo";
-          e.row.price_confidence = "interact_verified";
-          e.row.price_candidates = (Array.isArray(e.row.price_candidates)
-            ? e.row.price_candidates : []).concat([{
-              source: "interact.selected_sku", kind: "base", value: e._verified.base
-            }]);
-        }
       }
       recordProgress();
       if (consecutiveClickFails >= 3) { markAborted(); break; }
       if (now() - start > maxTotalMs) { markRemainingOverLimit(); break; }
     }
+
+    // Final spot-check: a slow page can feed every pass the same lagging stream of OLD prices.
+    // Re-select up to two verified variants (never the one on screen) with a long settle; any
+    // difference means no reading of this sweep can be trusted, so nothing is written.
+    var verified = eligible.filter(function (x) { return !!x._verified; });
+    if (verified.length && result.status !== "aborted") {
+      var picks = [];
+      [verified[verified.length - 1], verified[Math.floor(verified.length / 2)], verified[0]]
+        .forEach(function (x) {
+          if (x && x !== lastRead && picks.indexOf(x) < 0 && picks.length < 2) picks.push(x);
+        });
+      for (var k = 0; k < picks.length; k++) {
+        var spot = await runOne(picks[k], 1500);
+        lastRead = picks[k];
+        if (spot.status !== "ok" || spot.base !== picks[k]._verified.base) {
+          result.status = "aborted";
+          result.abort_reason = "verify_failed";
+          verified.forEach(function (x) {
+            x.report.status = "verify_failed";
+            x._verified = null;
+          });
+          break;
+        }
+      }
+    }
+
+    // Final quiet check: once we stop clicking, a healthy page never changes its price again.
+    // A change here means answers were still arriving late, so readings may belong to other
+    // variants → trust none of them.
+    verified = eligible.filter(function (x) { return !!x._verified; });
+    if (verified.length && result.status !== "aborted") {
+      var settledText = (adapters.taobaoReadPrice(doc, host) || {}).text;
+      for (var q = 0; q < QUIET_TAIL_MS; q += 100) {
+        await wait(100);
+        if ((adapters.taobaoReadPrice(doc, host) || {}).text !== settledText) {
+          result.status = "aborted";
+          result.abort_reason = "slow_page";
+          verified.forEach(function (x) {
+            x.report.status = "slow_page";
+            x._verified = null;
+          });
+          break;
+        }
+      }
+    }
+
+    // Only now write prices back (never overwrite independently priced structured SKU evidence).
+    eligible.forEach(function (x) {
+      if (!x._verified || !needsRead(x.row)) return;
+      var v = x._verified;
+      x.row.cny_price = v.base;
+      x.row.promo_price_cny = positive(v.promo) && v.promo !== v.base ? v.promo : null;
+      x.row.price_source = "interact.selected_sku";
+      x.row.promo_price_source = x.row.promo_price_cny == null ? null : "interact.selected_sku.promo";
+      x.row.price_confidence = "interact_verified";
+      x.row.price_candidates = (Array.isArray(x.row.price_candidates) ? x.row.price_candidates : [])
+        .concat([{ source: "interact.selected_sku", kind: "base", value: v.base }]);
+    });
     return finalize();
   }
 

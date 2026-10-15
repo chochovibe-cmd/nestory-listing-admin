@@ -161,7 +161,7 @@ await check("CI02 2-axis 3x2: 6/6 twice-verified prices and provenance", async (
     assert.equal(row.price_candidates.at(-1).kind, "base");
   }
 });
-await check("CI03 delayed 900ms: reverse-pass disagreement/third read; 2000ms mismatch", async () => {
+await check("CI03 delayed 900ms/2000ms verified correctly; 5000ms yields nothing", async () => {
   const f = makeFixture({ delay: 900 });
   const r = await run(f);
   assert.equal(r.ok, 6);
@@ -169,7 +169,17 @@ await check("CI03 delayed 900ms: reverse-pass disagreement/third read; 2000ms mi
     "900ms late DOM updates must still return only correctly verified prices");
   const g = makeFixture({ delay: 2000 });
   const rr = await run(g);
-  assert.ok(badCount(rr, "mismatch") >= 1, "very late render must not be trusted");
+  for (const row of rr.rows) {
+    if (row.status === "ok") assert.equal(row.base, g.amounts[row.sku], "2000ms: no stale price accepted");
+  }
+  const h = makeFixture({ delay: 5000 });
+  const rh = await run(h);
+  for (const row of rh.rows) {
+    if (row.status === "ok") assert.equal(row.base, h.amounts[row.sku], "5000ms: no stale price accepted");
+  }
+  for (const v of h.variants) if (v.cny_price != null) assert.equal(v.cny_price, h.amounts[v.sku]);
+  assert.equal(rh.requires_confirmation, true);
+  assert.ok(h.variants.every((row) => row.cny_price == null));
 });
 await check("CI04 selected options are never clicked again (toggle-off regression)", async () => {
   const f = makeFixture();
@@ -334,9 +344,40 @@ await check("CI16 existing CAP2/PRICE-GUARD/VARIANT-CLEAN/PUBLISH-GUARD + SKU fi
   assert.ok(parsed.sku_table || parsed.variants_flat.length > 0);
   assert.ok(read("extension/lib/adapters/taobao.js").includes("skuValueText(n, dom)"));
 });
+await check("CI17 slow page (1000–8000ms) + neighbours with equal prices never yield a wrong accepted price", async () => {
+  for (const delay of [1000, 1200, 1500, 1900, 2500, 3500, 5000, 8000]) {
+    for (const pattern of ["size", "alternate"]) {
+      const values = {};
+      ["A", "B", "C"].forEach((_c, ci) => ["1", "2"].forEach((_s, si) => {
+        values["sku-" + ci + "-" + si] = pattern === "size" ? 10 + si : 20 + ((ci + si) % 2) * 7;
+      }));
+      const f = makeFixture({ delay, values });
+      const r = await run(f);
+      for (const row of r.rows) {
+        if (row.status !== "ok") continue;
+        assert.equal(row.base, f.amounts[row.sku],
+          "delay " + delay + " pattern " + pattern + ": " + row.label + " accepted a stale price");
+      }
+      for (const v of f.variants) {
+        if (v.cny_price != null) assert.equal(v.cny_price, f.amounts[v.sku]);
+      }
+    }
+  }
+});
+await check("CI18 a DOM-only selected-SKU price (URL skuId) is re-read, not trusted blindly", async () => {
+  const f = makeFixture();
+  f.variants[2].cny_price = 999;
+  f.variants[2].price_source = "dom.selected_sku";
+  f.variants[2].price_confidence = "display_only";
+  assert.equal(Cap.shouldInteractSkuPrices(f.payload), true);
+  const r = await run(f);
+  assert.equal(r.targets, 6);
+  assert.equal(f.variants[2].cny_price, f.amounts[f.variants[2].sku]);
+  assert.equal(f.variants[2].price_source, "interact.selected_sku");
+});
 if (failed.length) {
-  console.error(failed.length + " / 16 CAPTURE-INTERACT checks failed");
+  console.error(failed.length + " CAPTURE-INTERACT checks failed");
   process.exitCode = 1;
 } else {
-  console.log("CAPTURE-INTERACT: all " + passed + " / 16 checks passed");
+  console.log("CAPTURE-INTERACT: all " + passed + " checks passed");
 }

@@ -119,6 +119,82 @@
       }
     }
 
+    if (NestoryCap.shouldInteractSkuPrices &&
+        NestoryCap.shouldInteractSkuPrices(payload)) {
+      payload.capture_meta = payload.capture_meta || {};
+      try {
+        var interact = await NestoryCap.interactSkuPrices(document, payload, {
+          host: location.hostname,
+          limits: { maxCombos: 40, maxTotalMs: 90000 },
+          onProgress: function (done, total) {
+            if (typeof globalThis.__nestoryShowCaptureToast === "function") {
+              globalThis.__nestoryShowCaptureToast(
+                "⏳ 逐款讀價 " + done + "/" + total + "…", "loading"
+              );
+            }
+            try {
+              chrome.runtime.sendMessage({ type: "NESTORY_CAPTURE_PROGRESS" }, function () {
+                // MV3 wakeup only: a missing listener / lastError must not fail capture.
+                void chrome.runtime.lastError;
+              });
+            } catch (_e) {}
+          }
+        });
+        payload.capture_meta.interact = interact;
+        var warns = Array.isArray(payload.capture_meta.warnings_from_client)
+          ? payload.capture_meta.warnings_from_client.slice() : [];
+        var flats = payload.variants_flat || [];
+        if (flats.length && flats.every(function (r) { return r.cny_price != null; })) {
+          warns = warns.filter(function (w) {
+            return w !== "sku: 個別未優惠價未完整取得；未以商品價假裝 SKU 價格";
+          });
+        }
+        if (interact.ok < interact.targets) {
+          var names = {
+            sold_out: "來源缺貨", over_limit: "超過上限", timeout: "頁面沒反應",
+            click_failed: "點不到", node_not_found: "找不到款式按鈕",
+            disabled: "無法選取", promo_only: "只看到促銷價",
+            no_price: "沒有價格", mismatch: "兩次讀到不同",
+            not_run: "中止未讀"
+          };
+          var counts = {};
+          (interact.rows || []).forEach(function (r) {
+            if (r.status !== "ok") counts[r.status] = (counts[r.status] || 0) + 1;
+          });
+          // Interaction metadata intentionally contains at most 60 rows.
+          var hidden = Math.max(0, interact.targets - (interact.rows || []).length);
+          if (hidden) counts.over_limit = (counts.over_limit || 0) + hidden;
+          var reasons = Object.keys(counts).map(function (status) {
+            return (names[status] || status) + " " + counts[status];
+          }).join("、");
+          warns.push("逐款讀價：" + (interact.targets - interact.ok) +
+            " 款沒讀到價格（" + reasons + "），請逐款確認");
+        }
+        if ((interact.reasons || []).indexOf("all_identical") >= 0) {
+          warns.push("逐款讀價：每款讀到的價格都一樣，可能沒讀到真正價格，請逐款確認");
+        }
+        var priced = flats.map(function (r) { return r.cny_price; })
+          .filter(function (v) { return v != null && Number.isFinite(Number(v)) && Number(v) > 0; })
+          .map(Number);
+        var lowest = priced.length ? Math.min.apply(Math, priced) : null;
+        if ((interact.reasons || []).indexOf("min_mismatch") >= 0 && lowest != null) {
+          warns.push("逐款讀價：最低款 ¥" + lowest +
+            " 和頁面起價 ¥" + payload.price_cny + " 不同，請確認");
+        }
+        if (payload.price_cny == null && lowest != null && interact.ok > 0) {
+          payload.price_cny = lowest;
+          payload.capture_meta.price_source = "interact.min_sku_price";
+          payload.capture_meta.price_confidence = "structured_min";
+        }
+        payload.capture_meta.warnings_from_client = warns;
+      } catch (err) {
+        payload.capture_meta.interact = {
+          version: 1, status: "aborted", abort_reason: "threw",
+          message: (err && err.message) || String(err)
+        };
+      }
+    }
+
     return payload;
   } catch (err) {
     return {

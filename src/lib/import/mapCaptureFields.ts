@@ -576,7 +576,7 @@ export function mapCaptureToDraftFields(
   const pageRange = debugPaths
     .map((item) => typeof item?.value === "string" ? parsePriceRange(item.value) : null)
     .find((range) => range != null);
-  if (variantRows.length >= 2 && pageRange &&
+  if (body.capture_meta?.interact && variantRows.length >= 2 && pageRange &&
       variantRows.every((row) => asPositiveNumber(row.cny_price) != null)) {
     const values = variantRows.map((row) => asPositiveNumber(row.cny_price) as number);
     const min = Math.min(...values);

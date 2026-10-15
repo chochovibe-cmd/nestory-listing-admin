@@ -183,7 +183,7 @@
     }
     function markRemainingOverLimit() {
       eligible.forEach(function (e) {
-        if (e.report.status === "not_run" || e.report.status === "pending") {
+        if (e.report.status === "not_run" || e.report.status === "pending" || e.report.status === "pass1") {
           e.report.status = "over_limit";
         }
       });
@@ -193,7 +193,7 @@
       result.status = "aborted";
       result.abort_reason = "click_failed";
       eligible.forEach(function (e) {
-        if (e.report.status === "pending") e.report.status = "not_run";
+        if (e.report.status === "pending" || e.report.status === "pass1") e.report.status = "not_run";
       });
     }
     function recordProgress() {
@@ -209,6 +209,7 @@
       entry.report.status = first.status;
       if (first.status === "ok") {
         entry.report.pass1 = first.base;
+        entry.report.status = "pass1"; // Not trusted until reverse verification.
         entry._first = first;
         consecutiveClickFails = 0;
       } else if (first.status === "click_failed") {

@@ -23,11 +23,13 @@ import {
   WARNING_MULTIDIM_NO_FLAT
 } from "@/lib/import/captureTypes";
 import { keepOrInheritVariantCny } from "@/lib/import/captureVariantPrice";
-import { isFakeVariantRow } from "@/lib/shopify/publishReadiness";
+import { isFakeVariantRow, parsePriceRange } from "@/lib/shopify/publishReadiness";
 import { cleanVariantRows } from "@/lib/variants/variantNameRules";
 import {
   WARNING_HIDDEN_VARIANT_PRICES,
-  captureHidesVariantPrices
+  WARNING_INTERACT_NEEDS_CONFIRMATION,
+  captureHidesVariantPrices,
+  interactRequiresConfirmation
 } from "@/lib/import/captureHiddenPrices";
 
 const BRAND_PARAM_KEYS = [
@@ -559,6 +561,35 @@ export function mapCaptureToDraftFields(
     if (priceConfidence !== "conflict") priceConfidence = "needs_confirmation";
     warnings.push(WARNING_HIDDEN_VARIANT_PRICES);
     serverPriceWarnings.push(WARNING_HIDDEN_VARIANT_PRICES);
+  }
+
+  // CAPTURE-INTERACT: a partial/aborted/tentative interaction never clears PRICE-GUARD.
+  if (variantRows.length >= 2 && interactRequiresConfirmation(body.capture_meta)) {
+    priceRequiresConfirmation = true;
+    if (priceConfidence !== "conflict") priceConfidence = "needs_confirmation";
+    warnings.push(WARNING_INTERACT_NEEDS_CONFIRMATION);
+    serverPriceWarnings.push(WARNING_INTERACT_NEEDS_CONFIRMATION);
+  }
+
+  // Match the complete independently priced variant range to the page's original range.
+  const debugPaths = body.capture_meta?.price_debug?.price_paths ?? [];
+  const pageRange = debugPaths
+    .map((item) => typeof item?.value === "string" ? parsePriceRange(item.value) : null)
+    .find((range) => range != null);
+  if (variantRows.length >= 2 && pageRange &&
+      variantRows.every((row) => asPositiveNumber(row.cny_price) != null)) {
+    const values = variantRows.map((row) => asPositiveNumber(row.cny_price) as number);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const outside = (a: number, b: number) =>
+      Math.abs(a - b) > Math.max(0.5, Math.max(Math.abs(a), Math.abs(b)) * 0.015);
+    if (outside(min, pageRange.low) || outside(max, pageRange.high)) {
+      priceRequiresConfirmation = true;
+      if (priceConfidence !== "conflict") priceConfidence = "needs_confirmation";
+      const rangeWarning = `外掛讀到的款式價格 ¥${min}–${max} 和頁面價格區間 ¥${pageRange.low}–${pageRange.high} 對不上，請逐款確認`;
+      warnings.push(rangeWarning);
+      serverPriceWarnings.push(rangeWarning);
+    }
   }
 
   // PKG2A: multi-dim with flat rows already stored → info (axis count × actual rows).

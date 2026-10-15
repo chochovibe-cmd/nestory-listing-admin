@@ -14,6 +14,9 @@
   function nameKey(v) {
     return String(v || "").replace(/[:：]\s*$/, "").replace(/\s+/g, "");
   }
+  function valueKey(v) {
+    return String(v || "").replace(/\s+/g, "");
+  }
   function labelFor(row) {
     return [row.option1_value, row.option2_value, row.option3_value]
       .filter(function (v) { return v != null && String(v).trim(); })
@@ -116,7 +119,7 @@
       if (!axis) return null;
       var text = String(expectedText).trim();
       var value = axis.values.find(function (v) { return v.text === text; }) ||
-        axis.values.find(function (v) { return nameKey(v.text) === nameKey(text); });
+        axis.values.find(function (v) { return valueKey(v.text) === valueKey(text); });
       return value || null;
     }
     async function waitForSelected(row, d, ms) {
@@ -258,7 +261,7 @@
         if (e.row.cny_price == null) {
           e.row.cny_price = e._verified.base;
           e.row.promo_price_cny =
-            positive(e._verified.promo) && !adapters.pricesClose(e._verified.promo, e._verified.base)
+            positive(e._verified.promo) && e._verified.promo !== e._verified.base
               ? e._verified.promo : null;
           e.row.price_source = "interact.selected_sku";
           e.row.promo_price_source = e.row.promo_price_cny == null

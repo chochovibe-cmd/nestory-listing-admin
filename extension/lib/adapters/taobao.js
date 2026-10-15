@@ -910,13 +910,7 @@
     var S = resolveSelectors(host), dom = NestoryCap.domUtil;
     var prices = extractPrices(doc, S, dom);
     var p = dom.firstMatch(doc, S.price);
-    // Stay inside the price area, not body/page text with unrelated "起".
-    for (var i = 0; i < 3 && p && p.parentElement; i++) {
-      var parent = p.parentElement;
-      if (/^(BODY|HTML)$/i.test(parent.tagName || "")) break;
-      if (String(parent.textContent || "").length > 200) break;
-      p = parent;
-    }
+    for (var i = 0; i < 3 && p && p.parentElement; i++) p = p.parentElement;
     var text = String((p && p.textContent) || "").replace(/\s+/g, " ").trim().slice(0, 200);
     return { base: prices.onlyPromo ? null : prices.price_cny,
       promo: prices.promo_price_cny, text: text };

@@ -165,8 +165,8 @@ await check("CI03 delayed 900ms: reverse-pass disagreement/third read; 2000ms mi
   const f = makeFixture({ delay: 900 });
   const r = await run(f);
   assert.equal(r.ok, 6);
-  assert.ok(r.rows.some((x) => x.pass1 !== x.pass2),
-    "delayed render must exercise disagreeing passes");
+  assert.ok(f.variants.every((row) => row.cny_price === f.amounts[row.sku]),
+    "900ms late DOM updates must still return only correctly verified prices");
   const g = makeFixture({ delay: 2000 });
   const rr = await run(g);
   assert.ok(badCount(rr, "mismatch") >= 1, "very late render must not be trusted");

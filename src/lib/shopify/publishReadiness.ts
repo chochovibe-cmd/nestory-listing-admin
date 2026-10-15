@@ -186,13 +186,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /** True when `text` contains a ￥low-high range with low < high. */
-export function textHasPriceRange(text: string): boolean {
+export function parsePriceRange(text: string): { low: number; high: number } | null {
   for (const match of text.matchAll(PRICE_RANGE_RE)) {
     const low = Number(match[1]);
     const high = Number(match[2]);
-    if (Number.isFinite(low) && Number.isFinite(high) && low > 0 && low < high) return true;
+    if (Number.isFinite(low) && Number.isFinite(high) && low > 0 && low < high)
+      return { low, high };
   }
-  return false;
+  return null;
+}
+
+/** True when text contains an independently priced currency range. */
+export function textHasPriceRange(text: string): boolean {
+  return parsePriceRange(text) !== null;
 }
 
 export function readHiddenVariantPriceEvidence(clientMeta: unknown): HiddenVariantPriceEvidence {

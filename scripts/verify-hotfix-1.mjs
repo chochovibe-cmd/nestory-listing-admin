@@ -238,7 +238,7 @@ function fakeDb(initial, { auth = false, role = "admin", userId = "owner-1" } = 
 
 console.log("HOTFIX-1 C — Shopify managed metafields deletion");
 const ID = "gid://shopify/Product/500";
-function shopifyFake({ existingFaq = true, deleteError = false, staleReadback = false } = {}) {
+function shopifyFake({ existingFaq = true, deleteError = false, staleReadback = false, remoteImages = [] } = {}) {
   const state = {
     product: {
       id: ID, title: "舊標題", descriptionHtml: "舊描述", vendor: "舊商家",
@@ -250,7 +250,7 @@ function shopifyFake({ existingFaq = true, deleteError = false, staleReadback = 
         selectedOptions: [{ name: "Title", value: "Default Title" }],
         inventoryItem: { id: "gid://shopify/InventoryItem/1", tracked: false, inventoryLevels: { nodes: [] } }
       }] },
-      media: { nodes: [] },
+      media: { nodes: structuredClone(remoteImages) },
       metafields: { nodes: existingFaq ? [{
         id: "gid://shopify/Metafield/5", namespace: "custom", key: "product_faq",
         type: "multi_line_text_field", value: "Q：以前的題目\nA：以前的答案",
@@ -298,9 +298,12 @@ function shopifyFake({ existingFaq = true, deleteError = false, staleReadback = 
   return { caller, calls, state };
 }
 async function syncFixture(settings = {}) {
-  const draft = testDraft({ metafields_json: settings.manual ?? null });
+  const draft = testDraft({
+    metafields_json: settings.manual ?? null,
+    ...(settings.draftOverrides ?? {})
+  });
   const tables = {
-    product_drafts: [draft], product_variants: [], product_images: [],
+    product_drafts: [draft], product_variants: [], product_images: settings.images ?? [],
     team_settings: [], shopify_sync_jobs: []
   };
   const db = fakeDb(tables);
@@ -309,6 +312,7 @@ async function syncFixture(settings = {}) {
     serviceSupabase: db,
     draftId: draft.id,
     createdBy: "owner-1",
+    forceRemoteOverwrite: settings.forceRemoteOverwrite ?? false,
     deps: { callGraphQL: shop.caller }
   });
   return { db, shop, result };
@@ -343,6 +347,86 @@ await check("C5: metafield remains on readback produces not_deleted mismatch", a
   const { result } = await syncFixture({ staleReadback: true });
   assert.equal(result.ok, false);
   assert.match(result.error, /metafield\.custom\.product_faq\.not_deleted/);
+});
+
+
+console.log("HOTFIX-1 S — sync-media list alignment and never-synced safety");
+await check("S1: only 2 main + 3 variant media survive 10 detail + 1 generated_detail, in payload order", async () => {
+  const draftId = testDraft().id;
+  const types = ["detail", "variant", "main", "detail", "variant", "main", "detail", "variant",
+    "detail", "detail", "detail", "detail", "detail", "detail", "detail", "detail"];
+  // Exactly 2 main, 3 variant, 10 detail, 1 generated_detail.
+  types[types.length - 1] = "generated_detail";
+  types.push("detail");
+  assert.equal(types.filter((type) => type === "detail").length, 10);
+  const images = types.map((image_type, i) => ({
+    id: "row-" + i,
+    draft_id: draftId,
+    image_type,
+    sort_order: types.length - i,
+    original_file_url: "https://example.test/hotfix-image-" + i + ".webp",
+    alt_text: "圖 " + i,
+    ...(image_type === "main" || image_type === "variant"
+      ? { shopify_media_id: "gid://shopify/MediaImage/" + i } : {})
+  }));
+  const expectedImages = images.filter(payload.isShopifyProductMediaImage)
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const resultPayload = payload.buildShopifyProductPayload(testDraft({ product_images: images }), "draft");
+  const imageMedia = resultPayload.media.filter((item) => item.mediaContentType === "IMAGE");
+  assert.equal(expectedImages.length, 5);
+  assert.equal(imageMedia.length, 5);
+  assert.deepEqual(imageMedia.map((item) => item.originalSource),
+    expectedImages.map((item) => item.original_file_url));
+  const remoteImages = expectedImages.map((item) => ({
+    id: item.shopify_media_id,
+    alt: item.alt_text,
+    mediaContentType: "IMAGE",
+    status: "READY",
+    image: { url: item.original_file_url }
+  }));
+  const fixture = await syncFixture({ images, remoteImages });
+  assert.equal(fixture.result.ok, true, JSON.stringify(fixture.result));
+  assert.notEqual(fixture.result.code, "image_payload_mismatch");
+  assert.equal(fixture.shop.calls.filter((call) => call.name === "UpdateProductFiles").length, 0,
+    "same rows and payload positions must avoid unexpected alt/media mutations");
+});
+await check("S2: shared media predicate is used by both payload and sync", () => {
+  const payloadSource = read("src/lib/shopify/payload.ts");
+  const syncSource = read("src/lib/shopify/syncShopifyProduct.ts");
+  assert.match(payloadSource, /export function isShopifyProductMediaImage\(/);
+  assert.match(payloadSource, /\.filter\(isShopifyProductMediaImage\)/);
+  assert.match(syncSource, /import \{ buildShopifyProductPayload, isShopifyProductMediaImage \} from "@\/lib\/shopify\/payload"/);
+  assert.match(syncSource, /\.filter\(isShopifyProductMediaImage\)/);
+  assert.doesNotMatch(syncSource, /image_type !== "spec"/);
+});
+await check("S3: never-synced draft without force stops at 409 before any Shopify write", async () => {
+  const { result, db, shop } = await syncFixture({
+    draftOverrides: { shopify_remote_updated_at: null }
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 409);
+  assert.equal(result.code, "remote_conflict");
+  assert.equal(result.error, "這件商品還沒有同步紀錄，無法確認 Shopify 後台是否被手動修改過；已停止覆蓋，請先比對差異");
+  assert.equal(db.tables.product_drafts[0].shopify_sync_status, "conflict");
+  assert.equal(db.tables.product_drafts[0].shopify_sync_error, "Never synced; remote baseline unknown");
+  assert.ok(db.writes.some((write) => write.table === "product_drafts" &&
+    write.patch.shopify_sync_status === "conflict"));
+  assert.equal(shop.calls.filter((call) => call.name !== "ProductSyncSnapshot").length, 0);
+});
+await check("S4: never-synced draft with explicit forceRemoteOverwrite can sync", async () => {
+  const { result, shop } = await syncFixture({
+    draftOverrides: { shopify_remote_updated_at: null },
+    forceRemoteOverwrite: true
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(shop.calls.filter((call) => call.name === "SyncProductCore").length, 1);
+});
+await check("S5: unchanged remote with known baseline retains existing successful sync", async () => {
+  const { result, shop } = await syncFixture({
+    draftOverrides: { shopify_remote_updated_at: "2026-10-15T00:00:00.000Z" }
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(shop.calls.filter((call) => call.name === "SyncProductCore").length, 1);
 });
 
 console.log("HOTFIX-1 F/G — genuine generation-queue route with fake auth/service DB");

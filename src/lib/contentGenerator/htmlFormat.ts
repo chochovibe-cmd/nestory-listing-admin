@@ -1,6 +1,7 @@
 // A23: description_html storage stays plain text; rich HTML is a render/publish boundary concern.
 import { matchSectionHeader } from "./sectionHeaders";
 import { saleStatusNoticeHtml } from "./saleStatusNotice";
+import { repairFaqHtml } from "./copyFormatRepair";
 
 const CHAOCHAO_SALES_TONE = "潮巢導購版";
 
@@ -310,7 +311,6 @@ export function formatChaochaoSalesDescriptionHtml(
 
   let html =
     `<h2>商品介紹</h2>` +
-    saleStatusNoticeHtml(saleStatus, CHAOCHAO_SALES_TONE) +
     renderParagraphs(introParagraphs) +
     `<h2>收藏亮點</h2>` +
     renderList(highlightItems);
@@ -327,9 +327,8 @@ export function formatChaochaoSalesDescriptionHtml(
     if (sawInfoHeading || infoBody) {
       html += `<h2>商品資訊</h2>` + (infoBody || renderList([]));
     }
-    if (careBody) {
-      html += `<h2>購買提醒</h2>` + careBody;
-    }
+    const notice = saleStatusNoticeHtml(saleStatus, CHAOCHAO_SALES_TONE);
+    if (notice || careBody) html += "<h2>購買提醒</h2>" + notice + careBody;
     return html;
   }
 
@@ -337,9 +336,8 @@ export function formatChaochaoSalesDescriptionHtml(
   html += audienceItems.length > 0
     ? renderList(audienceItems) + renderParagraphs(audienceParagraphs)
     : renderParagraphs(audienceParagraphs);
-  if (careBody) {
-    html += `<h2>購買提醒</h2>` + careBody;
-  }
+  const notice = saleStatusNoticeHtml(saleStatus, CHAOCHAO_SALES_TONE);
+  if (notice || careBody) html += "<h2>購買提醒</h2>" + notice + careBody;
   return html;
 }
 
@@ -376,6 +374,7 @@ export interface FaqPair {
 
 export function extractFaqPairs(html: string | null | undefined): FaqPair[] {
   if (!html) return [];
+  html = repairFaqHtml(html);
   const pairs: FaqPair[] = [];
   const pattern = /<h3>\s*<strong>(.*?)<\/strong>\s*<\/h3>\s*<p>(.*?)<\/p>/gis;
   let match: RegExpExecArray | null;

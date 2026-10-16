@@ -218,7 +218,7 @@ JSON schema:
   "differentiators":[""],
   "useCases":[""],
   "fanHooks":[""],
-  "specLines":["項目：內容"],
+  "specLines":["材質：PVC","尺寸：約 20cm"],
   "unknowns":[""],
   "rejectedEvidence":[""]
 }`;

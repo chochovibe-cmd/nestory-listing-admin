@@ -44,6 +44,7 @@
     "verify:image-integrity": "node scripts/verify-image-integrity.mjs",
     "verify:publish-guard": "node scripts/verify-publish-guard.mjs",
     "verify:price-guard": "node scripts/verify-price-guard.mjs",
+    "verify:capture-interact": "node scripts/verify-capture-interact.mjs",
     "verify:publish-batch": "node scripts/verify-publish-batch.mjs",
     "verify:review-flow": "node scripts/verify-review-flow.mjs",
     "verify:prepare-images": "node scripts/verify-prepare-images.mjs",

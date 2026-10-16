@@ -12,6 +12,7 @@ var CAPTURE_FILES = [
   "lib/adapters/generic.js",
   "lib/adapters/shopee.js",
   "lib/adapters/taobao.js",
+  "lib/interactSku.js",
   "lib/buildPayload.js",
   "content/capture.js"
 ];
@@ -124,6 +125,14 @@ function formatCreatedLine(json, payload) {
     (json.filled && json.filled.variants) ||
     (payload.variants_flat ? payload.variants_flat.length : 0);
   return "已建草稿：" + title + "×圖 " + imgs + "×款式 " + variants;
+}
+
+function interactSuffix(payload) {
+  var i = payload && payload.capture_meta && payload.capture_meta.interact;
+  if (!i || typeof i.targets !== "number" || typeof i.ok !== "number") return "";
+  return i.ok === i.targets
+    ? "（逐款讀價 " + i.ok + "/" + i.targets + "）"
+    : "（逐款讀價 " + i.ok + "/" + i.targets + "，" + (i.targets - i.ok) + " 款請確認）";
 }
 
 async function setBadge(kind, text) {
@@ -339,7 +348,7 @@ async function captureActiveTab() {
   }
 
   if (json.ok && json.status === "created") {
-    var createdLine = formatCreatedLine(json, payload);
+    var createdLine = formatCreatedLine(json, payload) + interactSuffix(payload);
     await setLastResult({
       ok: true,
       status: "created",
@@ -349,7 +358,7 @@ async function captureActiveTab() {
       at: new Date().toISOString()
     });
     await setBadge("ok", "✓");
-    await showPageToast(tab.id, "ok", "✓ 已擷取：" + capturedTitle);
+    await showPageToast(tab.id, "ok", "✓ 已擷取：" + capturedTitle + interactSuffix(payload));
     return;
   }
 
@@ -357,7 +366,7 @@ async function captureActiveTab() {
     await setLastResult({
       ok: true,
       status: "updated",
-      line: json.message || "已補上空白規格／款式",
+      line: (json.message || "已補上空白規格／款式") + interactSuffix(payload),
       draft_id: json.draft_id,
       open_path: json.open_path,
       at: new Date().toISOString()
@@ -366,7 +375,7 @@ async function captureActiveTab() {
     await showPageToast(
       tab.id,
       "warn",
-      "⚠ 這個網址之前已抓過，已補上缺少資料：" + capturedTitle
+      "⚠ 這個網址之前已抓過，已補上缺少資料：" + capturedTitle + interactSuffix(payload)
     );
     return;
   }
@@ -409,6 +418,11 @@ chrome.action.onClicked.addListener(function () {
 // Optional messages (settings + host grant are done in popup click handler)
 chrome.runtime.onMessage.addListener(function (msg, _sender, sendResponse) {
   if (!msg || !msg.type) return;
+
+  if (msg.type === "NESTORY_CAPTURE_PROGRESS") {
+    sendResponse({ ok: true });
+    return;
+  }
 
   if (msg.type === "GET_STATE") {
     (async function () {

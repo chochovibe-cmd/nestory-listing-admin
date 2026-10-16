@@ -822,6 +822,100 @@
     };
   }
 
+  // Shared, byte-for-byte equivalent value text rule for capture and interaction.
+  function skuValueText(n, dom) {
+    var textChild =
+      n.querySelector && n.querySelector("[class*='valueItemText']");
+    var t =
+      (n.getAttribute &&
+        (n.getAttribute("data-value") || n.getAttribute("title"))) ||
+      (textChild &&
+        ((textChild.getAttribute && textChild.getAttribute("title")) ||
+          dom.textOf(textChild))) ||
+      dom.textOf(n);
+    t = String(t || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!t || t.length > 160) return "";
+    if (/^请选择|請選擇|选择|選擇/i.test(t)) return "";
+    if (/^(推荐|推薦|切换大图模式|切換大圖模式)$/i.test(t)) return "";
+    return t;
+  }
+
+  // Live SKU nodes must be read afresh for each click (React may replace them).
+  function taobaoSkuNodes(doc, host) {
+    var S = resolveSelectors(host), dom = NestoryCap.domUtil;
+    var rootEl = dom.firstMatch(doc, S.skuRoot);
+    if (!rootEl) return [];
+    var groups = [], sels = S.skuAxis && S.skuAxis.length
+      ? S.skuAxis : ["dl.tb-prop", "[class*='skuItem']", "[class*='SkuItem']"];
+    for (var ai = 0; ai < sels.length && !groups.length; ai++) {
+      try {
+        var ns = rootEl.querySelectorAll(sels[ai]);
+        for (var i = 0; i < ns.length; i++) groups.push(ns[i]);
+      } catch (_err) {}
+    }
+    if (!groups.length) groups = [rootEl];
+    var axes = [];
+    groups.forEach(function (g) {
+      var label = null;
+      if (S.skuAxisLabel) for (var i = 0; i < S.skuAxisLabel.length; i++) {
+        try {
+          var le = g.querySelector(S.skuAxisLabel[i]);
+          if (le) { label = dom.textOf(le); if (label) break; }
+        } catch (_e) {}
+      }
+      if (!label) {
+        var dt = g.querySelector && g.querySelector("dt");
+        if (dt) label = dom.textOf(dt);
+      }
+      if (!label) return;
+      label = label.replace(/[:：]\s*$/, "").trim();
+      if (!label || label.length > 40 || /^(数量|數量|购买数量|購買數量)$/.test(label)) return;
+      if (axes.some(function (a) { return a.label !== label && a.label.indexOf(label) >= 0 && a.label.length > label.length; })) return;
+      var nodes = [];
+      if (S.skuValue) for (var j = 0; j < S.skuValue.length; j++) {
+        try {
+          var matches = g.querySelectorAll(S.skuValue[j]);
+          if (matches && matches.length) {
+            for (var k = 0; k < matches.length; k++) nodes.push(matches[k]);
+            break;
+          }
+        } catch (_e2) {}
+      }
+      if (!nodes.length) try {
+        var lis = g.querySelectorAll("li");
+        for (var l = 0; l < lis.length; l++) nodes.push(lis[l]);
+      } catch (_e3) {}
+      var seen = {}, values = [];
+      nodes.forEach(function (n) {
+        var t = skuValueText(n, dom);
+        if (!t || seen[t]) return;
+        seen[t] = true;
+        var cls = (n.getAttribute && n.getAttribute("class")) || "";
+        values.push({
+          text: t, node: n,
+          selected: /isSelected|selected|active|checked/i.test(cls) ||
+            n.getAttribute("aria-checked") === "true" || n.getAttribute("aria-selected") === "true",
+          disabled: /isDisabled|disabled|soldOut|sold-out/i.test(cls) ||
+            n.getAttribute("aria-disabled") === "true"
+        });
+      });
+      if (values.length) axes.push({ label: label, values: values });
+    });
+    return axes;
+  }
+
+  function taobaoReadPrice(doc, host) {
+    var S = resolveSelectors(host), dom = NestoryCap.domUtil;
+    var prices = extractPrices(doc, S, dom);
+    var p = dom.firstMatch(doc, S.price);
+    for (var i = 0; i < 3 && p && p.parentElement; i++) p = p.parentElement;
+    var text = String((p && p.textContent) || "").replace(/\s+/g, " ").trim().slice(0, 200);
+    return { base: prices.onlyPromo ? null : prices.price_cny,
+      promo: prices.promo_price_cny, text: text };
+  }
+
   function extractSkuFromRoot(rootEl, S, dom, baseHref) {
     var axes = [];
     var valuesPerAxis = [];
@@ -898,21 +992,8 @@
         } catch (_e4) {}
       }
       valueNodes.forEach(function (n) {
-        var textChild =
-          n.querySelector && n.querySelector("[class*='valueItemText']");
-        var t =
-          (n.getAttribute &&
-            (n.getAttribute("data-value") || n.getAttribute("title"))) ||
-          (textChild &&
-            ((textChild.getAttribute && textChild.getAttribute("title")) ||
-              dom.textOf(textChild))) ||
-          dom.textOf(n);
-        t = String(t || "")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (!t || t.length > 160) return;
-        if (/^请选择|請選擇|选择|選擇/i.test(t)) return;
-        if (/^(推荐|推薦|切换大图模式|切換大圖模式)$/i.test(t)) return;
+        var t = skuValueText(n, dom);
+        if (!t) return;
         vals.push(t);
         var thumb = thumbFromSkuNode(n, baseHref, dom);
         if (thumb && !imageByValue[t]) {
@@ -1657,12 +1738,20 @@
 
   NestoryCap.adapters = NestoryCap.adapters || {};
   NestoryCap.adapters.taobao = captureTaobao;
+  NestoryCap.adapters.taobaoSkuNodes = taobaoSkuNodes;
+  NestoryCap.adapters.taobaoReadPrice = taobaoReadPrice;
+  NestoryCap.adapters.taobaoIce = { parse: parseIceAppContext, res: iceResFromContext };
+  NestoryCap.adapters.pricesClose = pricesClose;
   NestoryCap.adapters.resolveTaobaoSelectors = resolveSelectors;
   NestoryCap.adapters.isTmallHost = isTmallHost;
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       captureTaobao: captureTaobao,
+      taobaoSkuNodes: taobaoSkuNodes,
+      taobaoReadPrice: taobaoReadPrice,
+      taobaoIce: { parse: parseIceAppContext, res: iceResFromContext },
+      pricesClose: pricesClose,
       resolveSelectors: resolveSelectors,
       isTmallHost: isTmallHost
     };

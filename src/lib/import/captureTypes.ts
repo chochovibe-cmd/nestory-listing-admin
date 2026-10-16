@@ -16,7 +16,7 @@ export type CaptureVariantFlat = {
   /** Provenance for the non-discount base cost captured for this SKU. */
   price_source?: string | null;
   promo_price_source?: string | null;
-  price_confidence?: "high" | "structured_pair" | "structured_primary" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
+  price_confidence?: "high" | "structured_pair" | "structured_primary" | "interact_verified" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
   price_candidates?: Array<{ key?: string; source?: string; value: number; kind?: string }>;
   sku?: string | null;
   /** CAP-2.6 / 88: SKU option thumb URL (server fetches → product_images variant + image_id). */
@@ -24,6 +24,18 @@ export type CaptureVariantFlat = {
 };
 
 export type CaptureMeta = {
+  /** CAPTURE-INTERACT: extension clicked each variant and read the displayed price. */
+  interact?: {
+    version?: number;
+    status?: "complete" | "partial" | "aborted";
+    abort_reason?: string | null;
+    targets?: number;
+    ok?: number;
+    elapsed_ms?: number;
+    requires_confirmation?: boolean;
+    reasons?: string[];
+    rows?: Array<{ sku?: string | null; label?: string; status?: string; base?: number | null; promo?: number | null; pass1?: number | null; pass2?: number | null }>;
+  } | null;
   adapter?: string;
   page_host?: string;
   /** ≥2 triggers multi-dim flatten warning (spec §9). */

@@ -45,3 +45,16 @@ export function captureHidesVariantPrices(input: {
   if ((e.hideOtherPrice || e.priceRange) && input.pricedVariantCount === 0) return true;
   return false;
 }
+
+/** CAPTURE-INTERACT: unverified click-through observations still require human review. */
+export const WARNING_INTERACT_NEEDS_CONFIRMATION =
+  "外掛逐款讀價沒有全部確認，發布前請逐款確認成本";
+
+export function interactRequiresConfirmation(clientMeta: unknown): boolean {
+  if (!clientMeta || typeof clientMeta !== "object" || Array.isArray(clientMeta)) return false;
+  const interact = (clientMeta as Record<string, unknown>).interact;
+  if (!interact || typeof interact !== "object" || Array.isArray(interact)) return false;
+  const data = interact as Record<string, unknown>;
+  return data.requires_confirmation === true ||
+    data.status === "partial" || data.status === "aborted";
+}

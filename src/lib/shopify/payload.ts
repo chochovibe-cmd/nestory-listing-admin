@@ -19,6 +19,10 @@ import { deriveDraftSku, isAutoSku } from "@/lib/variants/variantSku";
 
 const CHAOCHAO_SALES_TONE = "潮巢導購版";
 
+export function isShopifyProductMediaImage(image: { image_type: string }): boolean {
+  return image.image_type === "main" || image.image_type === "variant";
+}
+
 export interface ShopifyPublishDraft extends ProductDraft {
   product_images?: ProductImage[];
   /** B7: loaded at publish time; never used pre-B7. */
@@ -96,7 +100,7 @@ export function buildShopifyProductPayload(
   internalLinkMap: InternalLinkMap = {}
 ) {
   const sortedImages = (draft.product_images ?? [])
-    .filter((image) => image.image_type === "main" || image.image_type === "variant")
+    .filter(isShopifyProductMediaImage)
     .sort((a, b) => a.sort_order - b.sort_order);
   const imageTypeCounts = new Map<string, number>();
   for (const image of sortedImages) {

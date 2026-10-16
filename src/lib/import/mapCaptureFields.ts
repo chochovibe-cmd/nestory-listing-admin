@@ -152,7 +152,7 @@ export function filterCaptureSpecText(specText: string | null | undefined): stri
     const v = (row.value || "").trim();
     if (isSkuAxisParamKey(k)) continue;
     if (isFulfillmentSpec(k, v)) continue;
-    if (v && looksLikeSkuOptionList(v) && !/品牌|材質|材质|產地|产地|貨號|货号/.test(k)) {
+    if (v && looksLikeSkuOptionList(v) && !/品牌|材質|材质|產地|产地|貨號|货号|款式|角色|配件|功能|功率|系列|填充|烤盤|烤盘|內容|内容|掛繩|挂绳|型號|型号|電壓|电压|重量|顏色|颜色/.test(k)) {
       continue;
     }
     const key = localizeToTaiwanTraditionalText(k);

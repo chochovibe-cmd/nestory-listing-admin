@@ -6,6 +6,7 @@ import {
   ADD_PRODUCT_MEDIA_MUTATION,
   CREATE_PRODUCT_VARIANTS_MUTATION,
   DELETE_PRODUCT_VARIANTS_MUTATION,
+  DELETE_PRODUCT_METAFIELDS_MUTATION,
   PRODUCT_SYNC_SNAPSHOT_QUERY,
   SYNC_PRODUCT_CORE_MUTATION,
   SYNC_PRODUCT_VARIANTS_MUTATION,
@@ -28,6 +29,20 @@ import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductImage, ProductVariantRow } from "@/types/domain";
 
 type ServiceSupabase = ReturnType<typeof createServiceSupabaseClient>;
+
+const NESTORY_MANAGED_METAFIELD_KEYS = [
+  "why_nestory_pick",
+  "product_highlights",
+  "product_faq",
+  "product_specs"
+] as const;
+
+const METAFIELD_LABELS: Record<(typeof NESTORY_MANAGED_METAFIELD_KEYS)[number], string> = {
+  why_nestory_pick: "為什麼選它",
+  product_highlights: "商品賣點",
+  product_faq: "問與答",
+  product_specs: "商品規格"
+};
 
 type SyncDeps = {
   callGraphQL?: ShopifyAdminGraphQLCaller;
@@ -305,7 +320,8 @@ function verifyReadback(
   desiredVariants: DesiredVariant[],
   desiredImages: DesiredImage[],
   desiredVideoUrls: string[],
-  locationId: string | null
+  locationId: string | null,
+  toDelete: readonly string[]
 ): string[] {
   const mismatches: string[] = [];
   const scalarFields = ["title", "descriptionHtml", "vendor", "productType"] as const;
@@ -366,6 +382,11 @@ function verifyReadback(
   for (const metafield of core.metafields ?? []) {
     if (remoteMetafields.get(`${metafield.namespace}.${metafield.key}`) !== metafield.value) {
       mismatches.push(`metafield.${metafield.namespace}.${metafield.key}`);
+    }
+  }
+  for (const key of toDelete) {
+    if (remoteMetafields.has(`custom.${key}`)) {
+      mismatches.push(`metafield.custom.${key}.not_deleted`);
     }
   }
   return mismatches;
@@ -753,6 +774,33 @@ export async function syncShopifyProduct(
     }
     remoteWriteCount += 1;
 
+    const desiredMetafields = new Set(
+      (core.metafields ?? []).filter((item: { namespace: string; key: string }) => item.namespace === "custom")
+        .map((item: { key: string }) => item.key)
+    );
+    const toDelete = Array.isArray(draft.metafields_json)
+      ? []
+      : NESTORY_MANAGED_METAFIELD_KEYS.filter(
+          (key) => !desiredMetafields.has(key) &&
+            before.metafields.nodes.some(
+              (item) => item.namespace === "custom" && item.key === key && item.value.trim() !== ""
+            )
+        );
+    if (toDelete.length > 0) {
+      const deletion = await caller(DELETE_PRODUCT_METAFIELDS_MUTATION, {
+        metafields: toDelete.map((key) => ({ ownerId: productId, namespace: "custom", key }))
+      });
+      const deleteErrors = userErrors(deletion.result, "metafieldsDelete");
+      if (!deletion.response.ok || deleteErrors.length > 0) {
+        return fail(
+          "metafields_delete_failed",
+          `Shopify 欄位刪除失敗：${toDelete.map((key) => METAFIELD_LABELS[key]).join("、")}`,
+          deletion.result
+        );
+      }
+      remoteWriteCount += 1;
+    }
+
     const locationId = process.env.SHOPIFY_LOCATION_ID?.trim() || null;
     const existingVariantInputs = desiredVariants
       .filter((item) => item.remote)
@@ -910,7 +958,8 @@ export async function syncShopifyProduct(
       rematchedVariants,
       rematchedImages,
       desiredVideoUrls,
-      locationId
+      locationId,
+      toDelete
     );
     if (mismatches.length > 0) {
       return fail(

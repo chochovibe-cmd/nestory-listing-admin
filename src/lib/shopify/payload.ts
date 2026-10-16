@@ -5,6 +5,7 @@ import {
 } from "@/lib/contentGenerator/htmlFormat";
 import { appendDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/descriptionEmbed";
 import { saleStatusNoticeHtml } from "@/lib/contentGenerator/saleStatusNotice";
+import { repairSpecText } from "@/lib/contentGenerator/copyFormatRepair";
 import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
 import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildImageFileNameSlug } from "@/lib/contentGenerator/imageFileNameGenerator";
@@ -76,12 +77,13 @@ function buildProductMetafields(draft: ShopifyPublishDraft): { namespace: string
     metafields.push({ namespace: "custom", key: "product_faq", type: "multi_line_text_field", value: faqPlainText });
   }
 
-  if (draft.spec_text?.trim()) {
+  const repairedSpecText = repairSpecText(draft.spec_text?.trim() ?? "");
+  if (repairedSpecText) {
     metafields.push({
       namespace: "custom",
       key: "product_specs",
       type: "multi_line_text_field",
-      value: draft.spec_text.trim()
+      value: repairedSpecText
     });
   }
 
@@ -151,7 +153,7 @@ export function buildShopifyProductPayload(
   const plainDescription = draft.description_html || draft.description_plain || "";
   const mainDescriptionHtml = draft.generation_tone === CHAOCHAO_SALES_TONE
     ? formatChaochaoSalesDescriptionHtml(plainDescription, draft.sale_status)
-    : saleStatusNoticeHtml(draft.sale_status, draft.generation_tone) + formatPlainTextAsHtml(plainDescription);
+    : formatPlainTextAsHtml(plainDescription) + saleStatusNoticeHtml(draft.sale_status, draft.generation_tone);
 
   const product = {
     title: draft.title_zh || draft.taobao_title || "Nestory product",

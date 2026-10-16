@@ -357,7 +357,6 @@ await check("S1: only 2 main + 3 variant media survive 10 detail + 1 generated_d
     "detail", "detail", "detail", "detail", "detail", "detail", "detail", "detail"];
   // Exactly 2 main, 3 variant, 10 detail, 1 generated_detail.
   types[types.length - 1] = "generated_detail";
-  types.push("detail");
   assert.equal(types.filter((type) => type === "detail").length, 10);
   const images = types.map((image_type, i) => ({
     id: "row-" + i,

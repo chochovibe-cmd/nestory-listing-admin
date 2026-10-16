@@ -82,14 +82,14 @@ export function buildChaochaoHighlightsRule(): string {
 export function buildChaochaoMetafieldRules(): string {
   return `${buildChaochaoWhyRule()}
 ${buildChaochaoHighlightsRule()}
-spec：一項一行、台灣繁中。款式裡有的規格要對得上。沒有可寫的規格時寫「（無）」。`;
+spec：一項一行、台灣繁中，格式「規格名稱：內容」（例：材質：ABS），不可寫「項目」兩個字。款式裡有的規格要對得上。沒有可寫的規格時寫「（無）」。`;
 }
 
 export function buildChaochaoFaqRules(): string {
   return `【FAQ】
 3–5 題，寫會影響選款、使用、送禮或照顧的問題。
 至少 1 題是這個角色／IP 粉絲才會問、換成別件就問不出來的。
-每題 <h3><strong>問題</strong></h3><p>回答</p>。先回答，再補細節；單獨看也完整。`;
+每題兩行「Q：問句」「A：答案」，題與題之間空一行，不要輸出 HTML。先回答，再補細節；單獨看也完整。`;
 }
 
 export function buildChaochaoSeoRules(): string {
@@ -115,7 +115,7 @@ function buildChaochaoBriefFaqRules(): string {
 「不會、一定、保證、完全、比一般更、比較安靜／耐用／不褪色」等絕對或比較結論，只有 Product Brief 明確支持時才能寫。
 若 Brief 只寫「靜音設計」，最多寫「商品資料標示為靜音設計」，不能擴成「比一般吹風機更安靜」。
 材質本身也不能自動推出耐用、不褪色、易清潔或戶外適用。
-每題 <h3><strong>問題</strong></h3><p>回答</p>。先回答，再補細節；單獨看也完整。`;
+每題兩行「Q：問句」「A：答案」，題與題之間空一行，不要輸出 HTML。先回答，再補細節；單獨看也完整。`;
 }
 
 export function buildChaochaoVoiceChecklist(): string {
@@ -170,13 +170,15 @@ const CHAOCHAO_OUTPUT_FORMAT = `【輸出格式】
 [[generated_description_html]]
 商品介紹＋收藏亮點＋適合誰＋商品資訊＋購買提醒，純文字，段落之間空一行
 [[generated_faq_html]]
+Q：問句
+A：答案
 [[seo_title]]
 [[meta_description]]
 [[why_we_chose_it]]
 [[product_highlights]]
 ・
 [[spec]]
-項目：內容`;
+材質：內容`;
 
 export function buildChaochaoCopySystemPrompt(
   _copyLength: CopyLength,

@@ -43,6 +43,23 @@ function loadHtmlFormatModule() {
     if (specifier === "./saleStatusNotice") {
       return { saleStatusNoticeHtml: () => "" };
     }
+    if (specifier === "./copyFormatRepair") {
+      // HOTFIX-1: load the actual pure helper, not a stub.
+      const repairPath = "src/lib/contentGenerator/copyFormatRepair.ts";
+      const repaired = ts.transpileModule(read(repairPath), {
+        compilerOptions: {
+          module: ts.ModuleKind.CommonJS,
+          target: ts.ScriptTarget.ES2022,
+        },
+        fileName: repairPath,
+      }).outputText;
+      const repairModule = { exports: {} };
+      vm.runInNewContext(repaired, {
+        exports: repairModule.exports,
+        module: repairModule,
+      }, { filename: repairPath });
+      return repairModule.exports;
+    }
     throw new Error(`Unexpected htmlFormat dependency: ${specifier}`);
   };
   vm.runInNewContext(output, {

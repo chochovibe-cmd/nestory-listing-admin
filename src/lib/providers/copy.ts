@@ -226,7 +226,7 @@ export function parseCopyProviderJson(text: string, provider: string, model: str
   return {
     enrichedTitle: parsed.enriched_title ?? "",
     generatedDescriptionHtml: parsed.generated_description_html ?? "",
-    generatedFaqHtml: parsed.generated_faq_html ?? "",
+    generatedFaqHtml: normalizeFaqOutput(parsed.generated_faq_html ?? ""),
     seoTitle: parsed.seo_title ?? "",
     metaDescription: parsed.meta_description ?? "",
     whyWeChoseIt: parsed.why_we_chose_it ?? "",
@@ -237,7 +237,7 @@ export function parseCopyProviderJson(text: string, provider: string, model: str
     detectedProductBrand: parsed.detected_product_brand ?? "",
     detectedCategory: parsed.detected_category ?? "",
     sku: parsed.sku ?? "",
-    spec: parsed.spec ?? "",
+    spec: repairSpecText(parsed.spec ?? ""),
     titleIp: parsed.title_ip ?? "",
     titleBrand: parsed.title_brand ?? "",
     titleItem: parsed.title_item ?? "",

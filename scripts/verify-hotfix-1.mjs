@@ -93,6 +93,30 @@ await check("A6: real parseCopySegments wires FAQ and spec repair", () => {
   assert.equal(result.generatedFaqHtml, "<h3><strong>可以送禮嗎？</strong></h3>\n<p>可以。</p>");
   assert.equal(result.spec, "盒裝\n材質: ABS");
 });
+await check("A6b: JSON fallback parser applies the same FAQ and spec repair", () => {
+  const json = JSON.stringify({
+    enriched_title: "標題",
+    generated_faq_html: "Q：可以送禮嗎？\nA：可以。",
+    spec: "項目:盒裝\n材質: ABS"
+  });
+  const result = copy.parseCopyProviderOutput(json, "test", "test");
+  assert.equal(result.generatedFaqHtml, "<h3><strong>可以送禮嗎？</strong></h3>\n<p>可以。</p>");
+  assert.equal(result.spec, "盒裝\n材質: ABS");
+});
+await check("A6c: tolerant Q/A prefixes; literal prompt placeholders are dropped", () => {
+  const pairs = html.extractFaqPairs(repair.normalizeFaqOutput([
+    "- **Q1：** 有附提袋嗎？", "**A1：** 有，附品牌提袋。", "",
+    "問題：可以水洗嗎？", "答案：建議手洗。", "",
+    "Q2: Type-C 充電嗎？", "回答：是的。"
+  ].join("\n")));
+  assert.deepEqual(pairs, [
+    { question: "有附提袋嗎？", answer: "有，附品牌提袋。" },
+    { question: "可以水洗嗎？", answer: "建議手洗。" },
+    { question: "Type-C 充電嗎？", answer: "是的。" }
+  ]);
+  assert.equal(repair.normalizeFaqOutput("Q：問句\nA：答案"), "");
+  assert.equal(repair.repairSpecText("材質：內容\n尺寸：約 20cm"), "尺寸：約 20cm");
+});
 const testDraft = (overrides = {}) => ({
   id: "11111111-1111-4111-8111-111111111111",
   title_zh: "HOTFIX 測試商品",

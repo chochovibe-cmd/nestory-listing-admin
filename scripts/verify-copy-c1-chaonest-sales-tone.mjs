@@ -221,7 +221,7 @@ assert.match(promptBase, /sku：不用輸出/u, "the prompt must tell the AI not
 
 // Shared FAQ/GEO remains Production-derived; no R0B FAQ redesign.
 assert.match(promptBase, /【FAQ 規則】/u, "Production FAQ section missing");
-assert.match(promptBase, /3-5 題，每題 <h3><strong>問題<\/strong><\/h3> \+ <p>回答<\/p>（2-3 句）/u,
+assert.match(promptBase, /3-5 題，每題兩行：「Q：問句」「A：答案（2-3 句）」，題與題之間空一行；不要輸出 HTML，不要寫「問題」「回答」佔位字/u,
   "Production FAQ count/markup/sentence contract changed");
 assert.match(promptBase, /鼓勵自由發揮：問題可以導購性強、有趣、吸引人、針對目標客群設計/u,
   "Production FAQ creativity/target-audience guidance missing");
@@ -230,7 +230,7 @@ assert.match(promptBase, /FAQ 回答必須寫成可以被 AI 搜尋引擎（Chat
   "Production GEO standalone-answer rule missing");
 assert.match(promptBase, /避免使用「如上所述」「如前面提到」「如圖所示」/u,
   "Production GEO contextual-reference ban missing");
-assert.match(promptBase, /3-5 題，每題 <h3><strong>問題<\/strong><\/h3><p>回答<\/p>，答案自成一段可被單獨引用，導購感優先/u,
+assert.match(promptBase, /3-5 題，每題兩行「Q：問句」「A：答案」，題與題之間空一行，不要輸出 HTML；答案自成一段可被單獨引用，導購感優先/u,
   "Production FAQ single-field regen rule changed");
 
 // Taiwan Traditional customer-facing boundary retained.

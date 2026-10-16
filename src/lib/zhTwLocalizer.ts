@@ -130,6 +130,15 @@ type LocalizableDraftTextFields = {
   variants?: ProductVariant[] | null;
 };
 
+/**
+ * OpenCC cn→tw 詞庫會把「合家」轉成「閤家」（閤家歡樂）。
+ * 「適合家庭／適合家用」裡的「合家」會被一起切到，變成「適閤家庭」。
+ * 只還原「適閤」這個兩字詞，不把單字「閤」改回「合」，以免動到閤府、閤家歡樂。
+ */
+function restoreMistakenHejiaInsideShihe(value: string): string {
+  return value.split("適閤").join("適合");
+}
+
 function applyTaiwanTerms(value: string): string {
   return TAIWAN_TERM_REPLACEMENTS.reduce((localized, [source, replacement]) => {
     if (!localized.includes(source) || source === replacement) return localized;
@@ -196,7 +205,8 @@ export function localizeToTaiwanTraditionalText(text: string): string {
   const protectedText = protectUrlsAndEmails(text);
   const traditionalText = convertSimplifiedToTraditional(protectedText.text);
 
-  return protectedText.restore(applyTaiwanTerms(traditionalText));
+  const phraseFixed = restoreMistakenHejiaInsideShihe(traditionalText);
+  return protectedText.restore(applyTaiwanTerms(phraseFixed));
 }
 
 function localizeDisplayTitleText(value: string | null | undefined): string | null {

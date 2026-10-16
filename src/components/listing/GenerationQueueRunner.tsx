@@ -70,17 +70,23 @@ function emitRegenStatus(detail: RegenQueueStatusDetail) {
   window.dispatchEvent(new CustomEvent<RegenQueueStatusDetail>(REGEN_QUEUE_STATUS_EVENT, { detail }));
 }
 
-async function reportNetworkFailure(job: ClaimedJob, message: string) {
-  await fetch("/api/generation-queue", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "fail",
-      draftId: job.draftId,
-      runId: job.runId,
-      error: message,
-    }),
-  }).catch(() => undefined);
+async function reportNetworkFailure(job: ClaimedJob, message: string): Promise<string> {
+  try {
+    const response = await fetch("/api/generation-queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "fail",
+        draftId: job.draftId,
+        runId: job.runId,
+        error: message,
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    return typeof payload?.status === "string" ? payload.status : "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 /**
@@ -131,7 +137,13 @@ export function GenerationQueueRunner() {
           });
         } catch {
           const message = "重生連線失敗，原文案已保留，可重新送出。";
-          await reportNetworkFailure(job, message);
+          const result = await reportNetworkFailure(job, message);
+          if (result === "already_completed") {
+            emitRegenStatus({ draftId: job.draftId, status: "completed", field: job.input.regenField ?? null });
+            showToast(`${title}：重生已完成（連線曾中斷，結果已保存）`, "success");
+            router.refresh();
+            return;
+          }
           emitRegenStatus({
             draftId: job.draftId,
             status: "failed",
@@ -146,7 +158,13 @@ export function GenerationQueueRunner() {
         if (!regenResponse.ok) {
           const errorText =
             typeof regenPayload.error === "string" ? regenPayload.error : "重生失敗";
-          await reportNetworkFailure(job, errorText);
+          const result = await reportNetworkFailure(job, errorText);
+          if (result === "already_completed") {
+            emitRegenStatus({ draftId: job.draftId, status: "completed", field: job.input.regenField ?? null });
+            showToast(`${title}：重生已完成（連線曾中斷，結果已保存）`, "success");
+            router.refresh();
+            return;
+          }
           emitRegenStatus({
             draftId: job.draftId,
             status: "failed",
@@ -230,7 +248,13 @@ export function GenerationQueueRunner() {
         });
       } catch {
         const message = "生成連線失敗，工作已保留為失敗，可單件重試。";
-        await reportNetworkFailure(job, message);
+        const result = await reportNetworkFailure(job, message);
+        if (result === "already_completed") {
+          emitProgress(job.draftId, title, ["done", imageStep, "done", "done"], undefined, "伺服器已完成");
+          showToast(`${title} 已生成完成（連線曾中斷，結果已保存）`, "success");
+          router.refresh();
+          return;
+        }
         emitProgress(job.draftId, title, ["done", imageStep, "error", "pending"], message);
         showToast(message, "error");
         router.refresh();
@@ -242,7 +266,13 @@ export function GenerationQueueRunner() {
 
       if (!response.ok) {
         const errorText = typeof payload.error === "string" ? payload.error : "生成失敗";
-        await reportNetworkFailure(job, errorText);
+        const result = await reportNetworkFailure(job, errorText);
+        if (result === "already_completed") {
+          emitProgress(job.draftId, title, ["done", imageStep, "done", "done"], undefined, "伺服器已完成");
+          showToast(`${title} 已生成完成（連線曾中斷，結果已保存）`, "success");
+          router.refresh();
+          return;
+        }
         emitProgress(job.draftId, title, ["done", imageStep, "error", "pending"], errorText);
         showToast(`${title}：${errorText}（可單件重試）`, "error");
         router.refresh();

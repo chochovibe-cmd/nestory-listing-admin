@@ -1,3 +1,5 @@
+import { normalizeFaqOutput, repairSpecText } from "@/lib/contentGenerator/copyFormatRepair";
+
 // COPY C1: seventh manual tone（潮巢導購版）added before 依IP自動匹配.
 // 依IP自動匹配 is NOT a voice the model picks itself -- it's resolved server-side
 // to one of the manual tones via resolveCopyTone() in systemPrompt.ts.
@@ -224,7 +226,7 @@ export function parseCopyProviderJson(text: string, provider: string, model: str
   return {
     enrichedTitle: parsed.enriched_title ?? "",
     generatedDescriptionHtml: parsed.generated_description_html ?? "",
-    generatedFaqHtml: parsed.generated_faq_html ?? "",
+    generatedFaqHtml: normalizeFaqOutput(parsed.generated_faq_html ?? ""),
     seoTitle: parsed.seo_title ?? "",
     metaDescription: parsed.meta_description ?? "",
     whyWeChoseIt: parsed.why_we_chose_it ?? "",
@@ -235,7 +237,7 @@ export function parseCopyProviderJson(text: string, provider: string, model: str
     detectedProductBrand: parsed.detected_product_brand ?? "",
     detectedCategory: parsed.detected_category ?? "",
     sku: parsed.sku ?? "",
-    spec: parsed.spec ?? "",
+    spec: repairSpecText(parsed.spec ?? ""),
     titleIp: parsed.title_ip ?? "",
     titleBrand: parsed.title_brand ?? "",
     titleItem: parsed.title_item ?? "",
@@ -309,7 +311,7 @@ export function parseCopySegments(text: string, provider: string, model: string)
   return {
     enrichedTitle: get("enriched_title"),
     generatedDescriptionHtml: get("generated_description_html"),
-    generatedFaqHtml: get("generated_faq_html"),
+    generatedFaqHtml: normalizeFaqOutput(get("generated_faq_html")),
     seoTitle: get("seo_title"),
     metaDescription: get("meta_description"),
     whyWeChoseIt: get("why_we_chose_it"),
@@ -320,7 +322,7 @@ export function parseCopySegments(text: string, provider: string, model: string)
     detectedProductBrand: get("detected_product_brand"),
     detectedCategory: get("detected_category"),
     sku: get("sku"),
-    spec: get("spec"),
+    spec: repairSpecText(get("spec")),
     titleIp: get("title_ip"),
     titleBrand: get("title_brand"),
     titleItem: get("title_item"),

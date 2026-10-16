@@ -49,6 +49,15 @@ export const SYNC_PRODUCT_CORE_MUTATION = `
   }
 `;
 
+export const DELETE_PRODUCT_METAFIELDS_MUTATION = `
+  mutation DeleteProductMetafields($metafields: [MetafieldIdentifierInput!]!) {
+    metafieldsDelete(metafields: $metafields) {
+      deletedMetafields { ownerId namespace key }
+      userErrors { field message }
+    }
+  }
+`;
+
 export const SYNC_PRODUCT_VARIANTS_MUTATION = `
   mutation SyncProductVariants($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
     productVariantsBulkUpdate(productId: $productId, variants: $variants) {

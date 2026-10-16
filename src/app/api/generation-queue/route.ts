@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { canOperate } from "@/lib/auth/roles";
+import { canOperate, canReview } from "@/lib/auth/roles";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import {
   hasUnconfirmedPlaceholderCny,
@@ -109,7 +109,22 @@ async function requireOperator() {
     };
   }
 
-  return { ok: true as const, user };
+  return { ok: true as const, user, role: profile?.role, authSupabase };
+}
+
+async function assertDraftAccessible(
+  authSupabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  draftId: string,
+): Promise<Response | null> {
+  const { data, error } = await authSupabase
+    .from("product_drafts")
+    .select("id")
+    .eq("id", draftId)
+    .maybeSingle();
+  if (error || !data) {
+    return Response.json({ error: "Draft not found" }, { status: 404 });
+  }
+  return null;
 }
 
 async function markNetworkFailure(
@@ -117,7 +132,17 @@ async function markNetworkFailure(
   draftId: string,
   runId: string,
   message: string,
-) {
+): Promise<"failed" | "already_completed" | "already_failed" | "not_found"> {
+  const { data: run, error } = await serviceSupabase
+    .from("generation_runs")
+    .select("status")
+    .eq("id", runId)
+    .eq("draft_id", draftId)
+    .maybeSingle();
+  if (error || !run) return "not_found";
+  if (run.status === "completed") return "already_completed";
+  if (run.status === "failed") return "already_failed";
+
   const completedAt = new Date().toISOString();
   await serviceSupabase
     .from("generation_runs")
@@ -127,7 +152,8 @@ async function markNetworkFailure(
       completed_at: completedAt,
     })
     .eq("id", runId)
-    .eq("draft_id", draftId);
+    .eq("draft_id", draftId)
+    .in("status", ["pending", "processing"]);
 
   await serviceSupabase
     .from("product_drafts")
@@ -141,7 +167,10 @@ async function markNetworkFailure(
       worker_lock_expires_at: null,
       next_retry_at: null,
     })
-    .eq("id", draftId);
+    .eq("id", draftId)
+    .in("status", ["pending_copy", "processing"])
+    .in("generation_status", ["pending", "processing"]);
+  return "failed";
 }
 
 export async function POST(request: NextRequest) {
@@ -158,6 +187,8 @@ export async function POST(request: NextRequest) {
     if (!draftId || !isQueueInput(rawInput)) {
       return Response.json({ error: "draftId and valid queue input are required" }, { status: 400 });
     }
+    const denied = await assertDraftAccessible(auth.authSupabase, draftId);
+    if (denied) return denied;
 
     const { data: draft, error: draftError } = await serviceSupabase
       .from("product_drafts")
@@ -263,6 +294,8 @@ export async function POST(request: NextRequest) {
     ) {
       return Response.json({ error: "draftId and valid regeneration input are required" }, { status: 400 });
     }
+    const denied = await assertDraftAccessible(auth.authSupabase, draftId);
+    if (denied) return denied;
 
     const { data: draft, error: draftError } = await serviceSupabase
       .from("product_drafts")
@@ -349,6 +382,8 @@ export async function POST(request: NextRequest) {
   if (action === "regen_status") {
     const draftId = typeof body.draftId === "string" ? body.draftId : "";
     if (!draftId) return Response.json({ error: "draftId is required" }, { status: 400 });
+    const denied = await assertDraftAccessible(auth.authSupabase, draftId);
+    if (denied) return denied;
 
     const { data: rows, error } = await serviceSupabase
       .from("generation_runs")
@@ -448,11 +483,13 @@ export async function POST(request: NextRequest) {
       return Response.json({ ok: true, claimed: [] });
     }
 
-    const { data: candidates, error: candidateError } = await serviceSupabase
+    let candidateQuery = serviceSupabase
       .from("generation_runs")
       .select("id,draft_id,status,input_payload,created_at")
       .eq("status", "pending")
-      .contains("input_payload", { queueVersion: QUEUE_VERSION })
+      .contains("input_payload", { queueVersion: QUEUE_VERSION });
+    if (!canReview(auth.role)) candidateQuery = candidateQuery.eq("created_by", auth.user.id);
+    const { data: candidates, error: candidateError } = await candidateQuery
       .order("created_at", { ascending: true })
       .limit(Math.max(claimLimit * 4, claimLimit));
 
@@ -649,16 +686,21 @@ export async function POST(request: NextRequest) {
     if (!draftId || !runId) {
       return Response.json({ error: "draftId and runId are required" }, { status: 400 });
     }
+    const denied = await assertDraftAccessible(auth.authSupabase, draftId);
+    if (denied) return denied;
 
     const { data: run } = await serviceSupabase
       .from("generation_runs")
-      .select("input_payload")
+      .select("status,input_payload")
       .eq("id", runId)
       .eq("draft_id", draftId)
       .maybeSingle();
     const input = run && isQueueInput(run.input_payload) ? run.input_payload : null;
 
     if (input && isRegenJob(input)) {
+      if (run?.status === "completed") {
+        return Response.json({ ok: true, status: "already_completed" });
+      }
       await serviceSupabase
         .from("generation_runs")
         .update({
@@ -667,9 +709,14 @@ export async function POST(request: NextRequest) {
           completed_at: new Date().toISOString(),
         })
         .eq("id", runId)
-        .eq("draft_id", draftId);
+        .eq("draft_id", draftId)
+        .in("status", ["pending", "processing"]);
     } else {
-      await markNetworkFailure(serviceSupabase, draftId, runId, message);
+      const result = await markNetworkFailure(serviceSupabase, draftId, runId, message);
+      if (result === "not_found") {
+        return Response.json({ error: "Run not found" }, { status: 404 });
+      }
+      return Response.json({ ok: true, status: result });
     }
     return Response.json({ ok: true, status: "failed" });
   }
@@ -679,6 +726,8 @@ export async function POST(request: NextRequest) {
     if (!draftId) {
       return Response.json({ error: "draftId is required" }, { status: 400 });
     }
+    const denied = await assertDraftAccessible(auth.authSupabase, draftId);
+    if (denied) return denied;
 
     const { data: draft, error: draftError } = await serviceSupabase
       .from("product_drafts")

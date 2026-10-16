@@ -71,7 +71,9 @@ export function normalizeFaqOutput(raw: string): string {
 /** Remove placeholder prefixes only; preserve all other spec lines verbatim. */
 export function repairSpecText(text: string): string {
   return text.split("\n").flatMap((line) => {
-    const cleaned = line.replace(/^\s*(?:項目|規格名稱|名稱|規格項目)\s*[:：]\s*/, "");
+    const placeholder = /^\s*(?:項目|規格名稱|名稱|規格項目)\s*[:：]\s*/;
+    if (!placeholder.test(line)) return [line];
+    const cleaned = line.replace(placeholder, "");
     return cleaned === "" ? [] : [cleaned];
   }).join("\n");
 }

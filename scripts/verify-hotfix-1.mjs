@@ -70,7 +70,7 @@ await check("A2: fullwidth/question/answer prefixes and multiline ASCII/CJK join
   assert.equal(pairs[1].question, "Battery life?");
   assert.equal(pairs[1].answer, "About 8 hours");
   assert.equal(pairs[2].answer, "好。");
-  assert.equal(repair.normalizeFaqOutput("Q：問題\nA：內容").includes("<h3>"), true);
+  assert.equal(repair.normalizeFaqOutput("Q：真的問題？\nA：內容").includes("<h3>"), true);
   assert.equal(repair.normalizeFaqOutput("Q：問題\nA：").trim(), "");
 });
 await check("A3: real malformed FAQ sample retains true question and answer", () => {

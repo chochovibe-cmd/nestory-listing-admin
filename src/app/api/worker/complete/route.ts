@@ -3,6 +3,7 @@ import { requireWorkerToken, jsonError } from "@/lib/api/auth";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { notifyMake } from "@/lib/notifications/make";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { repairSpecText } from "@/lib/contentGenerator/copyFormatRepair";
 
 interface CompletePayload {
   draftId?: string;
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     shopify_tags: output.shopify_tags ?? [],
     collection_suggestion: output.collection_suggestion ?? null,
     shopify_collections: output.shopify_collections ?? [],
-    spec_text: output.spec_text ?? null,
+    spec_text: output.spec_text ? repairSpecText(output.spec_text) : null,
     warnings: output.warnings ?? [],
     status: "ready_for_review",
     pipeline_stage: mapStatusToPipelineStage("ready_for_review"),

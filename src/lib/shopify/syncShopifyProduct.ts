@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
-import { buildShopifyProductPayload } from "@/lib/shopify/payload";
+import { buildShopifyProductPayload, isShopifyProductMediaImage } from "@/lib/shopify/payload";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import {
   ADD_PRODUCT_MEDIA_MUTATION,
@@ -558,6 +558,18 @@ export async function syncShopifyProduct(
   }
 
   const previousRemoteUpdatedAt = draft.shopify_remote_updated_at as string | null;
+  if (!forceRemoteOverwrite && !previousRemoteUpdatedAt) {
+    await markSyncState(serviceSupabase, draftId, {
+      shopify_sync_status: "conflict",
+      shopify_sync_error: "Never synced; remote baseline unknown"
+    });
+    return {
+      ok: false,
+      status: 409,
+      error: "這件商品還沒有同步紀錄，無法確認 Shopify 後台是否被手動修改過；已停止覆蓋，請先比對差異",
+      code: "remote_conflict"
+    };
+  }
   if (
     !forceRemoteOverwrite &&
     previousRemoteUpdatedAt &&
@@ -584,7 +596,7 @@ export async function syncShopifyProduct(
     (linkSettingsRow?.value as Record<string, string> | null) ?? null
   );
   const images = ((draft.product_images ?? []) as ProductImage[])
-    .filter((image) => image.image_type !== "spec")
+    .filter(isShopifyProductMediaImage)
     .sort((a, b) => a.sort_order - b.sort_order);
   const built = buildShopifyProductPayload(
     { ...draft, product_images: draft.product_images ?? [], product_variants: variantRows },

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 
 const scripts = [
   "scripts/verify-hotfix-1.mjs",
+  "scripts/verify-hotfix-2.mjs",
   "scripts/verify-static.mjs",
   "scripts/verify-requirements.mjs",
   "scripts/verify-contracts.mjs",

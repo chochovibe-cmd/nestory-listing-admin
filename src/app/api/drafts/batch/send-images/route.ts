@@ -22,6 +22,7 @@ import {
 } from "@/lib/images/sendImagesAutoChain";
 import { notifyMake } from "@/lib/notifications/make";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -60,11 +61,15 @@ export async function POST(request: NextRequest) {
   }
 
   const { data: images, error: imageError } = authorizedDraftIds.length
-    ? await serviceSupabase
-        .from("product_images")
-        .select("id, draft_id, image_type, process_intent, is_spec_process, sort_order, created_at")
-        .in("draft_id", authorizedDraftIds)
-        .order("sort_order", { ascending: true })
+    ? await fetchAllRows((from, to) =>
+        serviceSupabase
+          .from("product_images")
+          .select("id, draft_id, image_type, process_intent, is_spec_process, sort_order, created_at")
+          .in("draft_id", authorizedDraftIds)
+          .order("sort_order", { ascending: true })
+          .order("id")
+          .range(from, to)
+      )
     : { data: [], error: null };
 
   if (imageError) {

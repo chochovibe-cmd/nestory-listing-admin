@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ImageCompareSlider } from "@/components/review/ImageCompareSlider";
 import { isAdmin } from "@/lib/auth/roles";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import {
   REVIEW_DRAFT_SELECT_COLUMNS,
   REVIEW_FETCH_LIMIT,
@@ -144,15 +145,19 @@ export function ImageReviewPanel() {
       const ids = classified.map((c) => c.draft.id);
       let imagesByDraft = new Map<string, ReviewImageRow[]>();
       if (ids.length > 0) {
-        const { data: images, error: imageError } = await supabase
-          .from("product_images")
-          .select(
-            "id, draft_id, image_type, original_file_url, processed_file_url, process_intent, is_spec_process, processing_error, sort_order, created_at"
-          )
-          .in("draft_id", ids)
-          // SYN-1: include generated_detail so composed detail appears on the card
-          .in("image_type", ["main", "spec", "variant", "generated_detail"])
-          .order("sort_order", { ascending: true });
+        const { data: images, error: imageError } = await fetchAllRows((from, to) =>
+          supabase
+            .from("product_images")
+            .select(
+              "id, draft_id, image_type, original_file_url, processed_file_url, process_intent, is_spec_process, processing_error, sort_order, created_at"
+            )
+            .in("draft_id", ids)
+            // SYN-1: include generated_detail so composed detail appears on the card
+            .in("image_type", ["main", "spec", "variant", "generated_detail"])
+            .order("sort_order", { ascending: true })
+            .order("id")
+            .range(from, to)
+        );
 
         if (imageError) {
           showToast(`圖審圖片載入失敗：${imageError.message}`, "error");

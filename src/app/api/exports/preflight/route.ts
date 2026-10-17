@@ -6,6 +6,7 @@ import {
 } from "@/lib/csv/exportPreflight";
 import { normalizeShowmoreMarkupPercent } from "@/lib/csv/showmorePricing";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 
 /**
  * D9-open: field preflight without generating CSV or marking csv_ready.
@@ -53,11 +54,16 @@ export async function POST(request: NextRequest) {
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
-  const { data: variantRows } = await serviceSupabase
-    .from("product_variants")
-    .select("draft_id, option1_value, option2_value, option3_value, twd_price, sku, sort_order")
-    .in("draft_id", ids as string[])
-    .order("sort_order", { ascending: true });
+  const { data: variantRows, error: variantError } = await fetchAllRows((from, to) =>
+    serviceSupabase
+      .from("product_variants")
+      .select("draft_id, option1_value, option2_value, option3_value, twd_price, sku, sort_order")
+      .in("draft_id", ids as string[])
+      .order("sort_order", { ascending: true })
+      .order("id")
+      .range(from, to)
+  );
+  if (variantError) return Response.json({ error: variantError.message }, { status: 500 });
 
   const variantsByDraft = new Map<string, PreflightDraftInput["product_variants"]>();
   for (const row of variantRows ?? []) {

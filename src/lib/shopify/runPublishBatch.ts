@@ -41,6 +41,7 @@ import { notifyMake } from "@/lib/notifications/make";
 import { safeTryNotifyPublishBatchIfComplete } from "@/lib/notifications/tryNotifyPublishBatchIfComplete";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import { publishDraft, type PublishDraftResult } from "@/lib/shopify/publishDraft";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { PublishBatchStatus, PublishMode } from "@/types/domain";
 
@@ -304,10 +305,17 @@ export async function createPublishBatchRecords(input: {
   }
 
   // R4 Q3-A: freeze processTag into snapshot at publish time (no migration).
-  const { data: imageRows } = await serviceSupabase
-    .from("product_images")
-    .select("draft_id, image_type, process_intent")
-    .in("draft_id", uniqueIds);
+  const { data: imageRows, error: imageError } = await fetchAllRows((from, to) =>
+    serviceSupabase
+      .from("product_images")
+      .select("draft_id, image_type, process_intent")
+      .in("draft_id", uniqueIds)
+      .order("id")
+      .range(from, to)
+  );
+  if (imageError) {
+    return { ok: false, error: imageError.message, status: 500 };
+  }
 
   const imagesByDraft = new Map<
     string,

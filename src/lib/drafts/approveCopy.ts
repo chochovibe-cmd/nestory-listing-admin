@@ -3,6 +3,7 @@
  */
 
 import { unmarkedPipelineImageIds } from "@/lib/images/processMarks";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import type { ProductImage } from "@/types/domain";
 
 /**
@@ -33,10 +34,17 @@ export async function applyDefaultKeepMarks(
     return { updatedCount: 0, imageIds: [] };
   }
 
-  const { data: images, error: loadError } = await serviceSupabase
-    .from("product_images")
-    .select("id, draft_id, image_type, process_intent")
-    .in("draft_id", draftIds);
+  const { data: images, error: loadError } = await fetchAllRows<
+    Pick<ProductImage, "id" | "draft_id" | "image_type" | "process_intent">,
+    { message: string }
+  >((from, to) =>
+    serviceSupabase
+      .from("product_images")
+      .select("id, draft_id, image_type, process_intent")
+      .in("draft_id", draftIds)
+      .order("id")
+      .range(from, to)
+  );
 
   if (loadError) {
     return { updatedCount: 0, imageIds: [], error: loadError.message };

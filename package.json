@@ -52,6 +52,7 @@
     "verify:mobile-variant-workspace": "node scripts/verify-mobile-variant-workspace.mjs",
     "verify:variant-clean": "node scripts/verify-variant-clean.mjs",
     "verify:hotfix-1": "node scripts/verify-hotfix-1.mjs",
+    "verify:hotfix-2": "node scripts/verify-hotfix-2.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

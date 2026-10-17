@@ -17,6 +17,7 @@ import {
   type LibraryDraftRow
 } from "@/lib/library/productLibrary";
 import { createClient, hasSupabaseBrowserEnv } from "@/lib/supabase/client";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
 
@@ -126,12 +127,16 @@ export function ProductLibraryModal({
       // Thumbnails when present (no fake product images).
       const draftIds = list.map((r) => r.id);
       if (draftIds.length > 0) {
-        const { data: images } = await supabase
-          .from("product_images")
-          .select("draft_id, original_file_url, processed_file_url, image_type, sort_order")
-          .in("draft_id", draftIds)
-          .in("image_type", ["main", "variant"])
-          .order("sort_order", { ascending: true });
+        const { data: images } = await fetchAllRows((from, to) =>
+          supabase
+            .from("product_images")
+            .select("draft_id, original_file_url, processed_file_url, image_type, sort_order")
+            .in("draft_id", draftIds)
+            .in("image_type", ["main", "variant"])
+            .order("sort_order", { ascending: true })
+            .order("id")
+            .range(from, to)
+        );
 
         type ImgRow = {
           draft_id: string;

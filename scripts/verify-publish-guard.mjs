@@ -100,7 +100,7 @@ function createFakeSupabase(seed) {
   let idCounter = 0;
 
   function from(table) {
-    const state = { table, op: "select", filters: [], payload: null, single: false, maybe: false };
+    const state = { table, op: "select", filters: [], orders: [], range: null, payload: null, single: false, maybe: false };
     const matches = (row) => state.filters.every((f) => f(row));
     const withEmbeds = (row) =>
       table === "product_drafts"
@@ -123,7 +123,18 @@ function createFakeSupabase(seed) {
         return { data: hit.map((r) => ({ id: r.id })), error: null };
       }
       if (state.op === "delete" || state.op === "upsert") return { data: null, error: null };
-      const hit = rows.filter(matches).map(withEmbeds);
+      let hit = rows.filter(matches).map(withEmbeds);
+      for (const { column, ascending } of [...state.orders].reverse()) {
+        hit.sort((a, b) => {
+          const left = a[column] ?? null;
+          const right = b[column] ?? null;
+          if (left === right) return 0;
+          if (left === null) return ascending ? -1 : 1;
+          if (right === null) return ascending ? 1 : -1;
+          return (left < right ? -1 : 1) * (ascending ? 1 : -1);
+        });
+      }
+      if (state.range) hit = hit.slice(state.range[0], state.range[1] + 1);
       if (state.single) {
         return hit[0]
           ? { data: hit[0], error: null }
@@ -170,7 +181,12 @@ function createFakeSupabase(seed) {
         state.filters.push((row) => values.includes(row[column]));
         return api;
       },
-      order() {
+      order(column, options = {}) {
+        state.orders.push({ column, ascending: options.ascending !== false });
+        return api;
+      },
+      range(from, to) {
+        state.range = [from, to];
         return api;
       },
       limit() {

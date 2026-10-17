@@ -7,6 +7,7 @@ import {
   recordCsvExportBatch,
 } from "@/lib/drafts/recordCsvExportBatch";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import type { ProductVariantRow } from "@/types/domain";
 
 export async function POST(request: NextRequest) {
@@ -51,11 +52,16 @@ export async function POST(request: NextRequest) {
 
   let variantsByDraft = new Map<string, ProductVariantRow[]>();
   if (draftIds.length) {
-    const { data: variantRows } = await serviceSupabase
-      .from("product_variants")
-      .select("*")
-      .in("draft_id", draftIds)
-      .order("sort_order", { ascending: true });
+    const { data: variantRows, error: variantError } = await fetchAllRows((from, to) =>
+      serviceSupabase
+        .from("product_variants")
+        .select("*")
+        .in("draft_id", draftIds)
+        .order("sort_order", { ascending: true })
+        .order("id")
+        .range(from, to)
+    );
+    if (variantError) return Response.json({ error: variantError.message }, { status: 500 });
     variantsByDraft = new Map();
     for (const row of (variantRows ?? []) as ProductVariantRow[]) {
       const list = variantsByDraft.get(row.draft_id) ?? [];

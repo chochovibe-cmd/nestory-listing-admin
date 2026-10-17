@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 
 // IMAGE-INTEGRITY: the only place that deletes product_images rows from the client.
 // Invariant: unbind variants -> DB delete -> (reference check) -> Storage remove. Never Storage first.
@@ -122,9 +123,13 @@ async function run(fn: () => PromiseLike<unknown>): Promise<DbResult> {
 }
 
 // product_images rows with every URL column; retries without the 039 columns if they are missing.
-async function selectImageRows(build: (columns: string) => PromiseLike<unknown>): Promise<DbResult> {
-  const full = await run(() => build(IMAGE_ROW_COLUMNS_FULL));
-  return full.error ? run(() => build(IMAGE_ROW_COLUMNS_BASE)) : full;
+async function selectImageRows(
+  build: (columns: string, from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: DbError }>
+): Promise<DbResult> {
+  const load = (columns: string) =>
+    run(() => fetchAllRows((from, to) => build(columns, from, to)));
+  const full = await load(IMAGE_ROW_COLUMNS_FULL);
+  return full.error ? load(IMAGE_ROW_COLUMNS_BASE) : full;
 }
 
 function idsOf(data: unknown): string[] {
@@ -141,7 +146,14 @@ export async function findVariantBindings(
   const ids = dedupeIds(imageIds);
   if (ids.length === 0) return { ok: true, byImageId: {}, total: 0 };
   const res = await run(() =>
-    supabase.from("product_variants").select("id, image_id").in("image_id", ids)
+    fetchAllRows((from, to) =>
+      supabase
+        .from("product_variants")
+        .select("id, image_id")
+        .in("image_id", ids)
+        .order("id")
+        .range(from, to)
+    )
   );
   if (res.error) return { ok: false, error: res.error.message };
   const byImageId: Record<string, string[]> = {};
@@ -218,8 +230,13 @@ async function cleanupStorage(
     }
     if (candidates.size > 0) {
       // 5b) Reference guard: a path any remaining row of those drafts still uses is a shared file.
-      const remaining = await selectImageRows((columns) =>
-        supabase.from("product_images").select(columns).in("draft_id", Array.from(draftIds))
+      const remaining = await selectImageRows((columns, from, to) =>
+        supabase
+          .from("product_images")
+          .select(columns)
+          .in("draft_id", Array.from(draftIds))
+          .order("id")
+          .range(from, to)
       );
       if (remaining.error) {
         warn(`無法確認圖片檔案是否仍被使用，已略過檔案清理（資料已刪除）：${remaining.error.message}`);
@@ -273,7 +290,14 @@ export async function deleteProductImages(
   // 1) Every URL we will need + 2) variants bound to these images (FK product_variants.image_id
   //    has no ON DELETE action). Independent read-only queries: run them together, BEFORE touching anything.
   const [selected, bindings] = await Promise.all([
-    selectImageRows((columns) => supabase.from("product_images").select(columns).in("id", ids)),
+    selectImageRows((columns, from, to) =>
+      supabase
+        .from("product_images")
+        .select(columns)
+        .in("id", ids)
+        .order("id")
+        .range(from, to)
+    ),
     findVariantBindings(supabase, ids)
   ]);
   if (selected.error) return fail(`讀取圖片資料失敗：${selected.error.message}`);

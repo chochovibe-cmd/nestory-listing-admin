@@ -12,6 +12,7 @@ import {
   type WorkspaceFormSeed
 } from "@/lib/drafts/mapDraftToWorkspaceForm";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -81,17 +82,25 @@ export default async function NewDraftPage({
       // fail the whole query, so the form shows axis values and 尚無款式.
       const variantSelectFull = `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options`;
 
-      const { data: seedImages } = await supabase
-        .from("product_images")
-        .select("*")
-        .eq("draft_id", typed.id)
-        .order("sort_order");
+      const { data: seedImages } = await fetchAllRows((from, to) =>
+        supabase
+          .from("product_images")
+          .select("*")
+          .eq("draft_id", typed.id)
+          .order("sort_order")
+          .order("id")
+          .range(from, to)
+      );
 
-      let { data: seedVariants } = await supabase
-        .from("product_variants")
-        .select(variantSelectFull)
-        .eq("draft_id", typed.id)
-        .order("sort_order", { ascending: true });
+      let { data: seedVariants } = await fetchAllRows((from, to) =>
+        supabase
+          .from("product_variants")
+          .select(variantSelectFull)
+          .eq("draft_id", typed.id)
+          .order("sort_order", { ascending: true })
+          .order("id")
+          .range(from, to)
+      );
 
       // Step down one migration at a time so the PRICE-GUARD inherit flag survives a DB
       // that only lacks the VARIANT-CLEAN source_* columns.
@@ -100,11 +109,15 @@ export default async function NewDraftPage({
           `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked`,
           variantSelectBase
         ]) {
-          const fallback = await supabase
-            .from("product_variants")
-            .select(columns)
-            .eq("draft_id", typed.id)
-            .order("sort_order", { ascending: true });
+          const fallback = await fetchAllRows((from, to) =>
+            supabase
+              .from("product_variants")
+              .select(columns)
+              .eq("draft_id", typed.id)
+              .order("sort_order", { ascending: true })
+              .order("id")
+              .range(from, to)
+          );
           seedVariants = fallback.data as typeof seedVariants;
           if (seedVariants) break;
         }
@@ -150,12 +163,24 @@ export default async function NewDraftPage({
     const workbenchVariantBase =
       "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id";
     const [{ data: images }, fullVariants] = await Promise.all([
-      supabase.from("product_images").select("*").in("draft_id", draftIds).order("sort_order"),
-      supabase
-        .from("product_variants")
-        .select(workbenchVariantSelectFull)
-        .in("draft_id", draftIds)
-        .order("sort_order", { ascending: true })
+      fetchAllRows((from, to) =>
+        supabase
+          .from("product_images")
+          .select("*")
+          .in("draft_id", draftIds)
+          .order("sort_order")
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAllRows((from, to) =>
+        supabase
+          .from("product_variants")
+          .select(workbenchVariantSelectFull)
+          .in("draft_id", draftIds)
+          .order("sort_order", { ascending: true })
+          .order("id")
+          .range(from, to)
+      )
     ]);
     let variants = fullVariants.data as unknown as WorkbenchVariantPrice[] | null;
     // A missing column makes PostgREST fail the whole query, so step down one migration at a
@@ -165,11 +190,15 @@ export default async function NewDraftPage({
         `${workbenchVariantBase}, cost_is_inherited, sell_price_locked, compare_at_locked`,
         workbenchVariantBase
       ]) {
-        const fallback = await supabase
-          .from("product_variants")
-          .select(columns)
-          .in("draft_id", draftIds)
-          .order("sort_order", { ascending: true });
+        const fallback = await fetchAllRows((from, to) =>
+          supabase
+            .from("product_variants")
+            .select(columns)
+            .in("draft_id", draftIds)
+            .order("sort_order", { ascending: true })
+            .order("id")
+            .range(from, to)
+        );
         if (!fallback.error && fallback.data) {
           variants = fallback.data as unknown as WorkbenchVariantPrice[];
           break;

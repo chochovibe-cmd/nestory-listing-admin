@@ -1560,13 +1560,27 @@ function makeDraftImageCleanupFake() {
     from(table) {
       let op = "select";
       const filters = [];
+      const orders = [];
+      let pageRange = null;
       const query = {
         select() { return query; },
         delete() { op = "delete"; return query; },
         eq(column, value) { filters.push((row) => row[column] === value); return query; },
         in(column, values) { filters.push((row) => values.includes(row[column])); return query; },
+        order(column, options = {}) {
+          orders.push({ column, ascending: options.ascending !== false });
+          return query;
+        },
+        range(from, to) { pageRange = [from, to]; return query; },
         then(resolve, reject) {
-          const hit = tables[table].filter((row) => filters.every((f) => f(row)));
+          let hit = tables[table].filter((row) => filters.every((f) => f(row)));
+          for (const { column, ascending } of [...orders].reverse()) {
+            hit.sort((a, b) => {
+              if (a[column] === b[column]) return 0;
+              return (a[column] < b[column] ? -1 : 1) * (ascending ? 1 : -1);
+            });
+          }
+          if (pageRange) hit = hit.slice(pageRange[0], pageRange[1] + 1);
           if (op === "delete") {
             tables[table] = tables[table].filter((row) => !hit.includes(row));
           }

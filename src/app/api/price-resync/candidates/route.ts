@@ -5,6 +5,7 @@
  */
 import { canPublish } from "@/lib/auth/roles";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import type { UserRole } from "@/types/domain";
 
 export const runtime = "nodejs";
@@ -33,11 +34,15 @@ export async function GET() {
 
   const ids = (drafts ?? []).map((d) => d.id as string);
   const { data: variants, error: variantError } = ids.length
-    ? await supabase
-        .from("product_variants")
-        .select("*")
-        .in("draft_id", ids)
-        .order("sort_order", { ascending: true })
+    ? await fetchAllRows((from, to) =>
+        supabase
+          .from("product_variants")
+          .select("*")
+          .in("draft_id", ids)
+          .order("sort_order", { ascending: true })
+          .order("id")
+          .range(from, to)
+      )
     : { data: [], error: null };
   if (variantError) return Response.json({ error: variantError.message }, { status: 500 });
 

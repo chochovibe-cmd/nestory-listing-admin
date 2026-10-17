@@ -41,12 +41,29 @@ async function check(name, fn) {
 // ---------------------------------------------------------------------------
 // Load the TS helper standalone (transpile -> temp .mjs -> import)
 // ---------------------------------------------------------------------------
-const helperSource = fs.readFileSync(path.join(root, HELPER_REL), "utf8");
+const rawHelperSource = fs.readFileSync(path.join(root, HELPER_REL), "utf8");
+const paginationSource = fs.readFileSync(path.join(root, "src/lib/supabase/fetchAllRows.ts"), "utf8");
+const paginationAst = ts.createSourceFile(
+  "src/lib/supabase/fetchAllRows.ts",
+  paginationSource,
+  ts.ScriptTarget.Latest,
+  true
+);
+const paginationFunction = paginationAst.statements.find((statement) =>
+  ts.isFunctionDeclaration(statement) && statement.name?.text === "fetchAllRows"
+);
+assert.ok(paginationFunction, "load the real fetchAllRows implementation");
+const paginationImplementation = paginationSource.slice(paginationFunction.pos, paginationFunction.end);
+const helperSource = rawHelperSource.replace(
+  'import { fetchAllRows } from "@/lib/supabase/fetchAllRows";',
+  paginationImplementation
+);
+assert.notEqual(helperSource, rawHelperSource, "inline the real pagination helper into the standalone fixture");
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nestory-image-integrity-"));
 const helperJs = ts.transpileModule(helperSource, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
   fileName: HELPER_REL
 }).outputText;
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nestory-image-integrity-"));
 const helperFile = path.join(tmpDir, "deleteProductImages.mjs");
 fs.writeFileSync(helperFile, helperJs);
 const helper = await import(pathToFileURL(helperFile).href);
@@ -100,17 +117,19 @@ function makeFake(initial, opts = {}) {
         return { data: null, error: { message: "column product_images.list_thumb_url does not exist" } };
       }
       const cols = q.columns.split(",").map((c) => c.trim());
-      const rows = state.images
+      let rows = state.images
         .filter((row) => q.filter.vals.includes(row[q.filter.col]))
         .map((row) => Object.fromEntries(cols.map((c) => [c, row[c] ?? null])));
+      rows = applyOrderAndRange(rows, q);
       return { data: rows, error: null };
     }
     if (q.table === "product_variants" && q.kind === "select") {
       log.push({ op });
       if (o.variantsSelectError) return { data: null, error: { message: o.variantsSelectError } };
-      const rows = state.variants
+      let rows = state.variants
         .filter((v) => !v.hidden && q.filter.vals.includes(v.image_id))
         .map((v) => ({ id: v.id, image_id: v.image_id }));
+      rows = applyOrderAndRange(rows, q);
       return { data: rows, error: null };
     }
     if (q.table === "product_variants" && q.kind === "update") {
@@ -158,8 +177,24 @@ function makeFake(initial, opts = {}) {
     return gate ? gate.then(() => res) : res;
   }
 
+  function applyOrderAndRange(rows, q) {
+    const ordered = rows.slice();
+    for (const { column, ascending } of [...(q.orders ?? [])].reverse()) {
+      ordered.sort((a, b) => {
+        const left = a[column] ?? null;
+        const right = b[column] ?? null;
+        if (left === right) return 0;
+        if (left === null) return ascending ? -1 : 1;
+        if (right === null) return ascending ? 1 : -1;
+        return (left < right ? -1 : 1) * (ascending ? 1 : -1);
+      });
+    }
+    const [from, to] = q.range ?? [0, 999];
+    return ordered.slice(from, to + 1);
+  }
+
   function builder(table) {
-    const q = { table, kind: null, columns: null, patch: null, returning: false, filter: null };
+    const q = { table, kind: null, columns: null, patch: null, returning: false, filter: null, orders: [], range: null };
     const b = {
       select(columns) {
         if (q.kind === null) {
@@ -181,6 +216,14 @@ function makeFake(initial, opts = {}) {
       },
       in(col, vals) {
         q.filter = { col, vals: [...vals] };
+        return b;
+      },
+      order(column, options = {}) {
+        q.orders.push({ column, ascending: options.ascending !== false });
+        return b;
+      },
+      range(from, to) {
+        q.range = [from, to];
         return b;
       },
       then(resolve, reject) {

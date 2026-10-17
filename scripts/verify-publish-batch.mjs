@@ -112,6 +112,7 @@ function createFakeSupabase(seed) {
     ...structuredClone(seed)
   };
   const writes = [];
+  const failures = [];
   let idCounter = 0;
 
   function from(table) {
@@ -123,6 +124,11 @@ function createFakeSupabase(seed) {
         : row;
     function execute() {
       const rows = tables[table] ?? [];
+      const failureIndex = failures.findIndex((f) => f.table === table && f.op === state.op && (!f.match || f.match(state)));
+      if (failureIndex >= 0) {
+        const [{ error }] = failures.splice(failureIndex, 1);
+        return { data: null, error };
+      }
       if (state.op === "insert") {
         const list = Array.isArray(state.payload) ? state.payload : [state.payload];
         const inserted = list.map((row) => ({ id: row.id ?? `fake-${table}-${++idCounter}`, ...row }));
@@ -138,17 +144,21 @@ function createFakeSupabase(seed) {
       }
       if (state.op === "delete" || state.op === "upsert") return { data: null, error: null };
       let hit = rows.filter(matches).map(withEmbeds);
-      for (const { column, ascending } of [...state.orders].reverse()) {
+      if (state.orders.length) {
         hit.sort((a, b) => {
-          const left = a[column] ?? null;
-          const right = b[column] ?? null;
-          if (left === right) return 0;
-          if (left === null) return ascending ? -1 : 1;
-          if (right === null) return ascending ? 1 : -1;
-          return (left < right ? -1 : 1) * (ascending ? 1 : -1);
+          for (const { column, ascending } of state.orders) {
+            const left = a[column] ?? null;
+            const right = b[column] ?? null;
+            if (left === right) continue;
+            if (left === null) return ascending ? -1 : 1;
+            if (right === null) return ascending ? 1 : -1;
+            if (left !== right) return (left < right ? -1 : 1) * (ascending ? 1 : -1);
+          }
+          return 0;
         });
       }
       if (state.range) hit = hit.slice(state.range[0], state.range[1] + 1);
+      if (state.limit != null) hit = hit.slice(0, state.limit);
       if (state.single) {
         return hit[0]
           ? { data: hit[0], error: null }
@@ -203,7 +213,8 @@ function createFakeSupabase(seed) {
         state.range = [from, to];
         return api;
       },
-      limit() {
+      limit(count) {
+        state.limit = count;
         return api;
       },
       single() {
@@ -221,7 +232,14 @@ function createFakeSupabase(seed) {
     return api;
   }
 
-  return { from, writes, tables };
+  return {
+    from,
+    writes,
+    tables,
+    failNext({ table, op, match, error = { message: "injected fake query error" } }) {
+      failures.push({ table, op, match, error });
+    }
+  };
 }
 
 // --- fixtures ----------------------------------------------------------------
@@ -1026,7 +1044,7 @@ await check("same publishMode + confirmedBy semantics as the one-shot batch", as
   });
 });
 
-await check("two concurrent steps over 2 items take DIFFERENT items; each is published once", async () => {
+await check("two concurrent steps over 2 items: one claims the first and the other waits instead of skipping", async () => {
   await live(async () => {
     const fake = plainWorld(["d1", "d2"]);
     const log = [];
@@ -1036,9 +1054,14 @@ await check("two concurrent steps over 2 items take DIFFERENT items; each is pub
     });
     const run = () => stepPublishBatch({ serviceSupabase: fake, batchId: created.batchId, actorId: "u1", publishOne, now: () => NOW });
     const [a, b] = await Promise.all([run(), run()]);
-    assert.deepEqual([a.processed.draftId, b.processed.draftId].sort(), ["d1", "d2"]);
-    assert.equal(log.length, 2);
-    assert.deepEqual(log.map((l) => l.id).sort(), ["d1", "d2"]);
+    assert.ok(a.ok && b.ok);
+    assert.equal(a.done, false);
+    assert.equal(b.done, false);
+    assert.equal([a, b].filter((r) => r.processed).length, 1);
+    assert.equal(log.length, 1);
+    assert.deepEqual(log.map((l) => l.id), ["d1"]);
+    assert.equal([a, b].filter((r) => r.processed === null).length, 1);
+    assert.equal(itemRow(fake, "d2").item_status, "queued");
   });
 });
 
@@ -1059,6 +1082,90 @@ await check("two concurrent steps over 1 item: only ONE publishes, the other get
     assert.equal(losers.length, 1);
     assert.equal(losers[0].done, false, "the batch is not finished while the winner is still publishing");
     assert.equal(losers[0].counts.processing, 1);
+  });
+});
+
+await check("existing processing item blocks later queued item without publishing or finalizing", async () => {
+  await live(async () => {
+    const fake = plainWorld(["d1", "d2"]);
+    const log = [];
+    const created = await createStepwisePublishBatch({
+      serviceSupabase: fake, draftIds: ["d1", "d2"], publishMode: "draft", createdBy: "u1", now: () => NOW
+    });
+    itemRow(fake, "d2").item_status = "processing";
+    itemRow(fake, "d1").created_at = "2026-10-17T00:00:00.000Z";
+    itemRow(fake, "d2").created_at = "2026-10-17T00:00:01.000Z";
+    const res = await stepPublishBatch({ serviceSupabase: fake, batchId: created.batchId, actorId: "u1", publishOne: stubPublish(log), now: () => NOW });
+    assert.equal(res.done, false);
+    assert.equal(res.processed, null);
+    assert.equal(log.length, 0);
+    assert.equal(itemRow(fake, "d1").item_status, "queued");
+    assert.equal(itemRow(fake, "d2").item_status, "processing");
+    assert.equal(batchRow(fake, created.batchId).status, "processing");
+  });
+});
+
+await check("CAS loser waits on the contested first item and does not claim the next", async () => {
+  await live(async () => {
+    const fake = plainWorld(["d1", "d2"]);
+    const log = [];
+    const created = await createStepwisePublishBatch({
+      serviceSupabase: fake, draftIds: ["d1", "d2"], publishMode: "draft", createdBy: "u1", now: () => NOW
+    });
+    fake.failNext({
+      table: "publish_batch_items", op: "update",
+      match: (state) => state.filters.length > 0,
+      error: null
+    });
+    // A zero-row conditional update is the ordinary CAS-loser result.
+    const res = await stepPublishBatch({ serviceSupabase: fake, batchId: created.batchId, actorId: "u1", publishOne: stubPublish(log), now: () => NOW });
+    assert.equal(res.processed, null);
+    assert.equal(log.length, 0);
+    assert.equal(itemRow(fake, "d2").item_status, "queued");
+    assert.equal(batchRow(fake, created.batchId).status, "processing");
+  });
+});
+
+await check("same created_at rows use id as deterministic tie-breaker", async () => {
+  await live(async () => {
+    const fake = plainWorld(["d1", "d2"]);
+    const log = [];
+    const created = await createStepwisePublishBatch({
+      serviceSupabase: fake, draftIds: ["d1", "d2"], publishMode: "draft", createdBy: "u1", now: () => NOW
+    });
+    itemRow(fake, "d1").id = "z-item";
+    itemRow(fake, "d2").id = "a-item";
+    itemRow(fake, "d1").created_at = NOW;
+    itemRow(fake, "d2").created_at = NOW;
+    const res = await stepPublishBatch({ serviceSupabase: fake, batchId: created.batchId, actorId: "u1", publishOne: stubPublish(log), now: () => NOW });
+    assert.equal(res.processed.draftId, "d2");
+    assert.deepEqual(log.map((row) => row.id), ["d2"]);
+  });
+});
+
+await check("claim read and CAS errors throw and never publish or finalize", async () => {
+  await live(async () => {
+    for (const phase of ["read", "claim"]) {
+      const fake = plainWorld(["d1", "d2"]);
+      const log = [];
+      const created = await createStepwisePublishBatch({
+        serviceSupabase: fake, draftIds: ["d1", "d2"], publishMode: "draft", createdBy: "u1", now: () => NOW
+      });
+      fake.failNext({
+        table: "publish_batch_items",
+        op: phase === "read" ? "select" : "update",
+        match: phase === "claim" ? (state) => state.filters.length > 0 : phase === "read" ? (state) => state.orders.length > 0 : undefined,
+        error: { message: `${phase} failed` }
+      });
+      await assert.rejects(
+        stepPublishBatch({ serviceSupabase: fake, batchId: created.batchId, actorId: "u1", publishOne: stubPublish(log), now: () => NOW }),
+        new RegExp(`${phase} failed`)
+      );
+      assert.equal(log.length, 0);
+      assert.equal(itemRow(fake, "d1").item_status, "queued");
+      assert.equal(itemRow(fake, "d2").item_status, "queued");
+      assert.equal(batchRow(fake, created.batchId).status, "processing");
+    }
   });
 });
 

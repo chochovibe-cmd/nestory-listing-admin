@@ -350,40 +350,45 @@ export async function stepPublishBatch(input: StepPublishBatchInput): Promise<St
 }
 
 /**
- * queued → processing, atomically. Candidates are read first, then each is taken with a
- * conditional update (`item_status = 'queued'`); the loser of a race gets no row back
- * and moves on to the next candidate. Also bumps the batch header's updated_at (the
- * liveness clock the stale-recovery reads).
+ * Claim the oldest runnable item without skipping work already in progress. The single
+ * ordered read puts `processing` before `queued`; if another request owns that item, this
+ * request waits instead of racing ahead to a later draft. The conditional update remains
+ * the claim CAS. Also bumps the batch header's updated_at (the stale-recovery liveness clock).
  */
 async function claimNextQueuedItem(
   serviceSupabase: PublishBatchServiceClient,
   batchId: string,
   now: () => number
 ): Promise<{ id: string; draft_id: string } | null> {
-  const { data: candidates } = await serviceSupabase
+  const { data: candidates, error: candidatesError } = await serviceSupabase
     .from("publish_batch_items")
-    .select("id, draft_id")
+    .select("id, draft_id, item_status")
     .eq("batch_id", batchId)
-    .eq("item_status", "queued")
+    .in("item_status", ["processing", "queued"])
+    .order("item_status", { ascending: true })
     .order("created_at", { ascending: true })
-    .limit(10);
+    .order("id", { ascending: true })
+    .limit(1);
 
-  for (const candidate of (candidates ?? []) as Array<{ id: string; draft_id: string }>) {
-    const { data: won } = await serviceSupabase
-      .from("publish_batch_items")
-      .update({ item_status: "processing" })
-      .eq("id", candidate.id)
-      .eq("item_status", "queued")
-      .select("id")
-      .maybeSingle();
-    if (won?.id) {
-      await serviceSupabase
-        .from("publish_batches")
-        .update({ updated_at: new Date(now()).toISOString() })
-        .eq("id", batchId)
-        .eq("status", "processing");
-      return { id: candidate.id, draft_id: candidate.draft_id };
-    }
-  }
-  return null;
+  if (candidatesError) throw new Error(`讀取待發布項目失敗：${candidatesError.message}`);
+  if (!candidates?.length) return null;
+  const candidate = (candidates as Array<{ id: string; draft_id: string; item_status: string }>)[0];
+  if (candidate.item_status === "processing") return null;
+
+  const { data: won, error } = await serviceSupabase
+    .from("publish_batch_items")
+    .update({ item_status: "processing" })
+    .eq("id", candidate.id)
+    .eq("item_status", "queued")
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`發布項目領取失敗：${error.message}`);
+  if (!won?.id) return null;
+
+  await serviceSupabase
+    .from("publish_batches")
+    .update({ updated_at: new Date(now()).toISOString() })
+    .eq("id", batchId)
+    .eq("status", "processing");
+  return { id: candidate.id, draft_id: candidate.draft_id };
 }

@@ -29,7 +29,11 @@ export function ResultCardTagsPanel({
   ipName,
   quickAddingCharacter,
   regenerating,
-  onQuickAddCharacter
+  canRecomputeTags,
+  recomputingTags,
+  hasUnsavedCardEdits,
+  onQuickAddCharacter,
+  onRecomputeTags
 }: {
   tags: string;
   onTagsChange: (value: string) => void;
@@ -44,7 +48,11 @@ export function ResultCardTagsPanel({
   ipName: string | null | undefined;
   quickAddingCharacter: string | null;
   regenerating: boolean;
+  canRecomputeTags: boolean;
+  recomputingTags: boolean;
+  hasUnsavedCardEdits: boolean;
   onQuickAddCharacter: (name: string) => void;
+  onRecomputeTags: () => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
@@ -225,6 +233,20 @@ export function ResultCardTagsPanel({
                 </div>
               ) : null
             )}
+            {canRecomputeTags ? (
+              <div className="rc-warning-line">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={recomputingTags || hasUnsavedCardEdits || regenerating}
+                  onClick={onRecomputeTags}
+                  title={hasUnsavedCardEdits ? "有未儲存的修改，請先儲存" : "字典補好後重新檢查角色／IP／類型 tag；不呼叫 AI、不改文案"}
+                  type="button"
+                >
+                  {recomputingTags ? "重算中…" : "重算 tags（不改文案）"}
+                </Button>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="muted">目前沒有待確認提醒。</div>

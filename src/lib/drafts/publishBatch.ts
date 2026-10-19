@@ -63,14 +63,24 @@ export type PublishBatchItemResult = {
 /** Stored in publish_batch_items.error_message when a killed run is closed by recovery. */
 export const PUBLISH_INTERRUPTED_ITEM_MESSAGE = "上次發布被中斷（逾時），可在發布紀錄重試";
 
+/** Stored when an item was killed on its last allowed attempt. */
+export const PUBLISH_MAX_ATTEMPTS_EXHAUSTED_MESSAGE =
+  "已自動續跑 3 次仍逾時，請到發布紀錄按「重送失敗件」";
+
 /** Queued items of an abandoned (idle) batch. */
 export const PUBLISH_BATCH_ABORTED_SKIP_REASON = "批次中斷，未執行";
 
-/** An item stuck in `processing` this long (no batch activity) means its function was killed. */
-export const PUBLISH_STALE_ITEM_MS = 3 * 60_000;
+/** Must equal the literal maxDuration of the step and single-publish routes. */
+export const PUBLISH_STEP_MAX_SECONDS = 300;
+
+/** An item stuck in `processing` this long (since started_at) means its function was killed. */
+export const PUBLISH_STALE_ITEM_MS = (PUBLISH_STEP_MAX_SECONDS + 90) * 1000;
 
 /** A `processing` batch with no activity for this long gets its queued items skipped. */
-export const PUBLISH_IDLE_BATCH_MS = 10 * 60_000;
+export const PUBLISH_IDLE_BATCH_MS = 20 * 60_000;
+
+/** An item killed mid-publish is re-queued until it has been claimed this many times. */
+export const PUBLISH_MAX_ATTEMPTS = 3;
 
 /**
  * PUBLISH-GUARD: mock mode is a dry run. runPublishBatch writes no

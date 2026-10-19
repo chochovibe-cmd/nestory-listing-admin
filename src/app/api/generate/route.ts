@@ -77,6 +77,8 @@ import {
 } from "@/lib/providers/customerFacingFinalizer";
 import { resolveCopyTone } from "@/lib/providers/systemPrompt";
 import { resolveCanonicalCharacterName } from "@/lib/characters/resolveCanonicalCharacter";
+import { splitCharacterNames } from "@/lib/characters/splitCharacterNames";
+import { toListingDraftInput, type DetectedClassification } from "@/lib/drafts/listingDraftInput";
 import {
   mergeWebSearchCacheLayers,
   resolveIpBackgroundSearchForGenerate,
@@ -156,14 +158,6 @@ function buildStoredVariantSummary(rows: StoredVariantEvidenceRow[]): string | u
   return summary ? summary.slice(0, 2000) : undefined;
 }
 
-type DetectedClassification = {
-  ip: string;
-  character: string;
-  productType: string;
-  category: string;
-  sku: string;
-};
-
 function resolvedGenerationTone(
   tone: CopyTone,
   detectedIpName: string | null | undefined,
@@ -173,38 +167,6 @@ function resolvedGenerationTone(
   if (resolved === "依IP自動匹配") return null;
   if (!(COPY_TONES as readonly string[]).includes(resolved)) return null;
   return resolved;
-}
-
-function toListingDraftInput(
-  draft: ProductDraft,
-  detected: DetectedClassification,
-  variantSummary?: string | null,
-  productBrand?: string | null,
-): ListingDraftInput {
-  return {
-    source_url: draft.source_url,
-    product_status: draft.is_secondhand ? "secondhand" : "general",
-    ip: detected.ip,
-    characters: detected.character ? [detected.character] : [],
-    product_brand: productBrand ?? draft.product_brand ?? null,
-    variant_text: variantSummary ?? null,
-    product_types: detected.productType ? [detected.productType] : [],
-    use_cases: [],
-    sale_status: draft.sale_status,
-    recommend_tags: [],
-    product_name: draft.title_zh ?? draft.taobao_title ?? draft.original_title ?? "",
-    variant_feature: null,
-    usage_scene: null,
-    intro: draft.note,
-    notes: draft.note,
-    price: draft.twd_price,
-    compare_at_price: draft.compare_at_price,
-    image_description: draft.image_description,
-    sku: detected.sku || null,
-    secondhand_grade: draft.secondhand_grade,
-    secondhand_condition: draft.secondhand_condition,
-    secondhand_notes: draft.secondhand_notes,
-  };
 }
 
 /** P2-82: true when plain-text description has a non-empty 「商品資訊」/ D 段. */
@@ -1025,12 +987,15 @@ export async function POST(request: NextRequest) {
       stageMs.copy = Date.now() - copyStarted;
       afterCopyAt = Date.now();
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
-      const resolvedCharacter =
-        resolveCanonicalCharacterName(raw.detectedCharacterName, {
-          ipName: resolvedIp,
-          ipCharacters: displayContext.ipCharacters ?? [],
-          ipCatalog: ipCatalogEntries,
-        }) ?? (raw.detectedCharacterName || "");
+      const resolvedCharacter = splitCharacterNames(raw.detectedCharacterName)
+        .map((part) =>
+          resolveCanonicalCharacterName(part, {
+            ipName: resolvedIp,
+            ipCharacters: displayContext.ipCharacters ?? [],
+            ipCatalog: ipCatalogEntries,
+          }) ?? part
+        )
+        .join("、");
       detected = {
         ip: resolvedIp,
         character: resolvedCharacter,

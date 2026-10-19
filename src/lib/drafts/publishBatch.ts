@@ -79,8 +79,8 @@ export const PUBLISH_STALE_ITEM_MS = (PUBLISH_STEP_MAX_SECONDS + 90) * 1000;
 /** A `processing` batch with no activity for this long gets its queued items skipped. */
 export const PUBLISH_IDLE_BATCH_MS = 20 * 60_000;
 
-/** An item killed mid-publish is re-queued until it has been claimed this many times. */
-export const PUBLISH_MAX_ATTEMPTS = 3;
+/** Claims allowed per item: the first try plus 3 automatic resumes after a killed run. */
+export const PUBLISH_MAX_ATTEMPTS = 4;
 
 /**
  * PUBLISH-GUARD: mock mode is a dry run. runPublishBatch writes no

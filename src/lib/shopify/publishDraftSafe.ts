@@ -473,6 +473,7 @@ export async function publishDraft(
 
   let resumeExistingDraftId: string | null = null;
   let resumeExistingMediaCount = 0;
+  let resumeExistingMediaNodes: Array<{ id?: unknown; mediaContentType?: unknown }> = [];
 
   // Retry idempotency: an api_failed row with a real Shopify DRAFT resumes the
   // same remote product. Never delete/recreate a recoverable DRAFT.
@@ -530,7 +531,7 @@ export async function publishDraft(
         query ResumeShopifyDraft($id: ID!) {
           product(id: $id) {
             id status
-            media(first: 50) { nodes { id } }
+            media(first: 250) { nodes { id mediaContentType } }
             variants(first: 1) { nodes { id } }
           }
         }
@@ -553,9 +554,8 @@ export async function publishDraft(
           };
         }
         resumeExistingDraftId = existingProductId;
-        resumeExistingMediaCount = Array.isArray(remoteProduct?.media?.nodes)
-          ? remoteProduct.media.nodes.length
-          : 0;
+        resumeExistingMediaNodes = Array.isArray(remoteProduct?.media?.nodes) ? remoteProduct.media.nodes : [];
+        resumeExistingMediaCount = resumeExistingMediaNodes.length;
       } catch (resumeError) {
         return {
           ok: false,
@@ -1073,8 +1073,11 @@ export async function publishDraft(
   // checkpoint with the real ID. If the serverless request is killed, retry can
   // resume this same DRAFT instead of creating a duplicate product.
   const mediaInputs = Array.isArray(payload.media) ? payload.media : [];
-  // Set only when this run attached the media itself (a resume that already has media skips it).
-  let attachedMediaNodes: Array<{ id?: unknown; mediaContentType?: unknown }> | null = null;
+  // This run's media nodes, or a resume's complete existing media (it skips the attach step).
+  let attachedMediaNodes: Array<{ id?: unknown; mediaContentType?: unknown }> | null =
+    resumeExistingDraftId && resumeExistingMediaCount > 0 && resumeExistingMediaCount === mediaInputs.length
+      ? resumeExistingMediaNodes
+      : null;
   if (mediaInputs.length > 0) {
     if (resumeExistingDraftId && resumeExistingMediaCount > 0 && resumeExistingMediaCount < mediaInputs.length) {
       return failAfterCreate(

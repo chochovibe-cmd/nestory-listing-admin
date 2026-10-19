@@ -1327,7 +1327,7 @@ await check("stale processing item + remote ACTIVE (active batch) -> reconciled 
   await live(async () => {
     const fake = seedBatch({
       updatedMinutesAgo: 8,
-      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
+      items: [{ draftId: "d1", status: "processing", attempt: 4 }],
       drafts: [
         draftRow({ id: "d1", status: "api_failed", publish_status: "api_failed", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })
       ]
@@ -1350,7 +1350,7 @@ await check("stale processing item, remote not live -> item failed + draft publi
   await live(async () => {
     const fake = seedBatch({
       updatedMinutesAgo: 8,
-      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
+      items: [{ draftId: "d1", status: "processing", attempt: 4 }],
       drafts: [
         draftRow({ id: "d1", status: "publishing", publish_status: "publishing", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })
       ]
@@ -1376,7 +1376,7 @@ await check("stale item whose draft never got a product id -> failed + api_faile
   await live(async () => {
     const fake = seedBatch({
       updatedMinutesAgo: 8,
-      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
+      items: [{ draftId: "d1", status: "processing", attempt: 4 }],
       drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", current_publish_batch_id: "b1" })]
     });
     const shop = createShop();
@@ -1391,7 +1391,7 @@ await check("a draft that was never moved to publishing (killed during image pre
   await live(async () => {
     const fake = seedBatch({
       updatedMinutesAgo: 8,
-      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
+      items: [{ draftId: "d1", status: "processing", attempt: 4 }],
       drafts: [draftRow({ id: "d1", status: "approved", current_publish_batch_id: "b1" })]
     });
     await recoverStalePublishBatches(fake, recoverOpts(createShop(), { batchId: "b1" }));
@@ -1404,7 +1404,7 @@ await check("a 'publishing' draft now owned by a NEWER batch is not touched", as
   await live(async () => {
     const fake = seedBatch({
       updatedMinutesAgo: 8,
-      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
+      items: [{ draftId: "d1", status: "processing", attempt: 4 }],
       drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", current_publish_batch_id: "newer" })]
     });
     await recoverStalePublishBatches(fake, recoverOpts(createShop(), { batchId: "b1" }));
@@ -1433,7 +1433,7 @@ await check("draft-mode batches never reconcile (a live product there is not 'su
     const fake = seedBatch({
       publishMode: "draft",
       updatedMinutesAgo: 8,
-      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
+      items: [{ draftId: "d1", status: "processing", attempt: 4 }],
       drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })]
     });
     let reconcileCalls = 0;
@@ -1517,7 +1517,7 @@ await check("step route recovers a killed item first, then continues with the ne
     const fake = seedBatch({
       updatedMinutesAgo: 8,
       items: [
-        { draftId: "d1", status: "processing", attempt: 3 },
+        { draftId: "d1", status: "processing", attempt: 4 },
         { draftId: "d2", status: "queued" }
       ],
       drafts: [
@@ -1859,7 +1859,7 @@ await check("L2 per-item clock: <6.5 min untouched; stale + attempt<3 -> queued 
     // third attempt dies too: failed with the new wording
     const last = seedBatch({
       updatedMinutesAgo: 1,
-      items: [{ draftId: "d1", status: "processing", attempt: 3, startedMinutesAgo: 7 }],
+      items: [{ draftId: "d1", status: "processing", attempt: 4, startedMinutesAgo: 7 }],
       drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })]
     });
     const done = await recoverStalePublishBatches(last, recoverOpts(createShop({ remoteStatus: "DRAFT" }), { batchId: "b1" }));
@@ -2051,7 +2051,7 @@ await check("L7 maxDuration literals equal PUBLISH_STEP_MAX_SECONDS; stale windo
   assert.ok(batchHelpers.PUBLISH_STALE_ITEM_MS > seconds * 1000);
   assert.equal(batchHelpers.PUBLISH_STALE_ITEM_MS, 390_000);
   assert.equal(batchHelpers.PUBLISH_IDLE_BATCH_MS, 20 * 60_000);
-  assert.equal(batchHelpers.PUBLISH_MAX_ATTEMPTS, 3);
+  assert.equal(batchHelpers.PUBLISH_MAX_ATTEMPTS, 4);
 });
 
 await check("L8 media ids are written back in order; count mismatch -> warning only; one failed write -> warning only", async () => {

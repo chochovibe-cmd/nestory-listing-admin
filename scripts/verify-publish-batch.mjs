@@ -11,6 +11,7 @@
  *   D  stepwise create / step / atomic claim / finalize once
  *   E  stale recovery (killed function) + idle batch + cron wiring
  *   F  client helper (old response shape, progress, step retry, mock)
+ *   L  PUBLISH-LITE: attempt counting, auto-resume, preflight, continue, media ids
  *   G  static wiring (callers, routes, package.json, verify-all)
  *
  * Run: node scripts/verify-publish-batch.mjs  |  npm run verify:publish-batch
@@ -39,7 +40,11 @@ const { createStepwisePublishBatch, stepPublishBatch } = await import(
 const { recoverStalePublishBatches, recoverStalePublishBatchesBestEffort } = await import(
   src("src/lib/shopify/recoverStalePublishBatches.ts")
 );
-const { runStepwisePublishBatch } = await import(src("src/lib/drafts/publishBatchClient.ts"));
+const { runStepwisePublishBatch, continueStepwisePublishBatch } = await import(
+  src("src/lib/drafts/publishBatchClient.ts")
+);
+const { writeBackMediaIds } = await import(src("src/lib/shopify/publishDraftSafe.ts"));
+const { hashSource } = await import(src("src/lib/shopify/syncShopifyProduct.ts"));
 const batchHelpers = await import(src("src/lib/drafts/publishBatch.ts"));
 const { mapStatusToPipelineStage } = await import(src("src/lib/drafts/pipelineStage.ts"));
 const { syncReconciledBatchItems } = await import(src("src/lib/shopify/syncReconciledBatchItems.ts"));
@@ -99,6 +104,8 @@ const LIVE = {
 };
 const live = (fn, extra = {}) => withEnv({ ...LIVE, ...extra }, fn);
 
+const withItemDefaults = (row) => ({ attempt_count: 0, started_at: null, ...row });
+
 /** In-memory Supabase fake. Every insert / update / upsert / delete lands in `writes`. */
 function createFakeSupabase(seed) {
   const tables = {
@@ -111,6 +118,8 @@ function createFakeSupabase(seed) {
     publish_jobs: [],
     ...structuredClone(seed)
   };
+  // Model the column defaults of publish_batch_items (attempt_count 0, started_at null).
+  tables.publish_batch_items = tables.publish_batch_items.map(withItemDefaults);
   const writes = [];
   const failures = [];
   let idCounter = 0;
@@ -131,7 +140,10 @@ function createFakeSupabase(seed) {
       }
       if (state.op === "insert") {
         const list = Array.isArray(state.payload) ? state.payload : [state.payload];
-        const inserted = list.map((row) => ({ id: row.id ?? `fake-${table}-${++idCounter}`, ...row }));
+        const inserted = list.map((row) => ({
+          id: row.id ?? `fake-${table}-${++idCounter}`,
+          ...(table === "publish_batch_items" ? withItemDefaults(row) : row)
+        }));
         rows.push(...inserted);
         tables[table] = rows;
         return { data: state.single ? inserted[0] : inserted, error: null };
@@ -419,6 +431,8 @@ function seedBatch({
       draft_id: i.draftId,
       item_status: i.status ?? "queued",
       error_message: null,
+      attempt_count: i.attempt ?? 0,
+      started_at: i.startedMinutesAgo != null ? minutesAgo(i.startedMinutesAgo) : null,
       created_at: minutesAgo(10 - idx)
     }))
   });
@@ -1312,8 +1326,8 @@ const recoverOpts = (shop, extra = {}) => ({ now: () => NOW, caller: shop?.calle
 await check("stale processing item + remote ACTIVE (active batch) -> reconciled to done, draft active_published, batch finalized", async () => {
   await live(async () => {
     const fake = seedBatch({
-      updatedMinutesAgo: 5,
-      items: [{ draftId: "d1", status: "processing" }],
+      updatedMinutesAgo: 8,
+      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
       drafts: [
         draftRow({ id: "d1", status: "api_failed", publish_status: "api_failed", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })
       ]
@@ -1335,8 +1349,8 @@ await check("stale processing item + remote ACTIVE (active batch) -> reconciled 
 await check("stale processing item, remote not live -> item failed + draft publishing -> api_failed (resume-able)", async () => {
   await live(async () => {
     const fake = seedBatch({
-      updatedMinutesAgo: 5,
-      items: [{ draftId: "d1", status: "processing" }],
+      updatedMinutesAgo: 8,
+      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
       drafts: [
         draftRow({ id: "d1", status: "publishing", publish_status: "publishing", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })
       ]
@@ -1346,7 +1360,7 @@ await check("stale processing item, remote not live -> item failed + draft publi
     const out = await recoverStalePublishBatches(fake, recoverOpts(shop, { batchId: "b1" }));
     assert.equal(out.itemsFailed, 1);
     assert.equal(itemRow(fake, "d1").item_status, "failed");
-    assert.equal(itemRow(fake, "d1").error_message, "上次發布被中斷（逾時），可在發布紀錄重試");
+    assert.equal(itemRow(fake, "d1").error_message, "已自動續跑 3 次仍逾時，請到發布紀錄按「重送失敗件」");
     const draft = draftOf(fake, "d1");
     assert.equal(draft.status, "api_failed");
     assert.equal(draft.publish_status, "api_failed");
@@ -1361,8 +1375,8 @@ await check("stale processing item, remote not live -> item failed + draft publi
 await check("stale item whose draft never got a product id -> failed + api_failed (no Shopify call)", async () => {
   await live(async () => {
     const fake = seedBatch({
-      updatedMinutesAgo: 5,
-      items: [{ draftId: "d1", status: "processing" }],
+      updatedMinutesAgo: 8,
+      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
       drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", current_publish_batch_id: "b1" })]
     });
     const shop = createShop();
@@ -1376,8 +1390,8 @@ await check("stale item whose draft never got a product id -> failed + api_faile
 await check("a draft that was never moved to publishing (killed during image prep) keeps its status", async () => {
   await live(async () => {
     const fake = seedBatch({
-      updatedMinutesAgo: 5,
-      items: [{ draftId: "d1", status: "processing" }],
+      updatedMinutesAgo: 8,
+      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
       drafts: [draftRow({ id: "d1", status: "approved", current_publish_batch_id: "b1" })]
     });
     await recoverStalePublishBatches(fake, recoverOpts(createShop(), { batchId: "b1" }));
@@ -1389,8 +1403,8 @@ await check("a draft that was never moved to publishing (killed during image pre
 await check("a 'publishing' draft now owned by a NEWER batch is not touched", async () => {
   await live(async () => {
     const fake = seedBatch({
-      updatedMinutesAgo: 5,
-      items: [{ draftId: "d1", status: "processing" }],
+      updatedMinutesAgo: 8,
+      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
       drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", current_publish_batch_id: "newer" })]
     });
     await recoverStalePublishBatches(fake, recoverOpts(createShop(), { batchId: "b1" }));
@@ -1418,8 +1432,8 @@ await check("draft-mode batches never reconcile (a live product there is not 'su
   await live(async () => {
     const fake = seedBatch({
       publishMode: "draft",
-      updatedMinutesAgo: 5,
-      items: [{ draftId: "d1", status: "processing" }],
+      updatedMinutesAgo: 8,
+      items: [{ draftId: "d1", status: "processing", attempt: 3 }],
       drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })]
     });
     let reconcileCalls = 0;
@@ -1435,10 +1449,10 @@ await check("draft-mode batches never reconcile (a live product there is not 'su
   });
 });
 
-await check("idle batch (>10 min): queued items skipped 批次中斷，未執行, batch finalized, notification once", async () => {
+await check("idle batch (>20 min): queued items skipped 批次中斷，未執行, batch finalized, notification once", async () => {
   await live(async () => {
     const fake = seedBatch({
-      updatedMinutesAgo: 11,
+      updatedMinutesAgo: 21,
       items: [
         { draftId: "d1", status: "done" },
         { draftId: "d2", status: "queued" },
@@ -1464,7 +1478,7 @@ await check("idle batch (>10 min): queued items skipped 批次中斷，未執行
   });
 });
 
-await check("processing batch with 3-10 min idle keeps its queued items (still alive)", async () => {
+await check("processing batch with 5 min idle keeps its queued items (still alive)", async () => {
   await live(async () => {
     const fake = seedBatch({
       updatedMinutesAgo: 5,
@@ -1501,9 +1515,9 @@ await check("a header whose items are not inserted yet is not closed prematurely
 await check("step route recovers a killed item first, then continues with the next queued one", async () => {
   await live(async () => {
     const fake = seedBatch({
-      updatedMinutesAgo: 5,
+      updatedMinutesAgo: 8,
       items: [
-        { draftId: "d1", status: "processing" },
+        { draftId: "d1", status: "processing", attempt: 3 },
         { draftId: "d2", status: "queued" }
       ],
       drafts: [
@@ -1516,7 +1530,7 @@ await check("step route recovers a killed item first, then continues with the ne
       serviceSupabase: fake, batchId: "b1", actorId: "u1", publishOne: stubPublish(log), now: () => NOW
     });
     assert.equal(itemRow(fake, "d1").item_status, "failed");
-    assert.equal(itemRow(fake, "d1").error_message, "上次發布被中斷（逾時），可在發布紀錄重試");
+    assert.equal(itemRow(fake, "d1").error_message, "已自動續跑 3 次仍逾時，請到發布紀錄按「重送失敗件」");
     assert.equal(draftOf(fake, "d1").status, "api_failed");
     assert.equal(res.processed.draftId, "d2");
     assert.equal(res.processed.ok, true);
@@ -1623,8 +1637,8 @@ await check("aggregates the stepwise run into the OLD batch response shape + pro
     assert.match(out.message, /成功 2 筆／失敗 1 筆/);
     assert.equal(calls.create, 1);
     assert.equal(calls.step, 4, "3 items + 1 finishing call");
-    assert.deepEqual(progress.slice(0, 1), ["發布中 0/3…"]);
-    assert.ok(progress.includes("發布中 1/3…") && progress.includes("發布中 2/3…") && progress.includes("發布中 3/3…"));
+    assert.deepEqual(progress.slice(0, 1), ["發布中 0/3…（請勿關閉此頁）"]);
+    assert.ok(progress.includes("發布中 1/3…（請勿關閉此頁）") && progress.includes("發布中 2/3…（請勿關閉此頁）") && progress.includes("發布中 3/3…（請勿關閉此頁）"));
   });
 });
 
@@ -1730,6 +1744,379 @@ await check("waiting on another tab: polls (does not give up) until that item fi
 });
 
 // =====================================================================
+// L: PUBLISH-LITE (attempt counting, auto-resume, preflight, continue, media ids)
+// =====================================================================
+console.log("\nL — PUBLISH-LITE");
+
+const MAX_EXHAUSTED = "已自動續跑 3 次仍逾時，請到發布紀錄按「重送失敗件」";
+
+await check("L1 claim writes attempt_count+1 and started_at; a CAS loser changes nothing", async () => {
+  await live(async () => {
+    const fake = seedBatch({ items: [{ draftId: "d1" }, { draftId: "d2" }] });
+    let during = null;
+    const publishOne = async (_c, id) => {
+      during = { ...itemRow(fake, id) };
+      await new Promise((r) => setTimeout(r, 20));
+      return { ok: true, productId: `gid://shopify/Product/${id}`, adminUrl: null };
+    };
+    const winner = stepPublishBatch({ serviceSupabase: fake, batchId: "b1", actorId: "u1", publishOne, now: () => NOW });
+    const loser = stepPublishBatch({ serviceSupabase: fake, batchId: "b1", actorId: "u2", publishOne, now: () => NOW });
+    const [a, b] = await Promise.all([winner, loser]);
+    assert.equal(during.item_status, "processing");
+    assert.equal(during.attempt_count, 1);
+    assert.equal(during.started_at, new Date(NOW).toISOString());
+    assert.equal([a, b].filter((r) => r.processed).length, 1, "only one request published");
+    assert.equal(itemRow(fake, "d1").attempt_count, 1, "the loser did not bump the counter");
+    assert.equal(itemRow(fake, "d2").attempt_count, 0, "the next item was not touched");
+
+    // The claim is a CAS on attempt_count too: a stale read cannot win.
+    const stale = seedBatch({ items: [{ draftId: "d1" }] });
+    const realFrom = stale.from;
+    let raced = false;
+    stale.from = (table) => {
+      const api = realFrom(table);
+      if (table !== "publish_batch_items") return api;
+      const realThen = api.then;
+      const realLimit = api.limit;
+      let isClaimRead = false;
+      api.limit = (count) => {
+        isClaimRead = true; // only the claim's candidate read uses limit(1)
+        return realLimit.call(api, count);
+      };
+      api.then = (resolve, reject) =>
+        realThen.call(
+          api,
+          (res) => {
+            if (!raced && isClaimRead && Array.isArray(res?.data) && res.data[0]?.item_status === "queued") {
+              raced = true;
+              // the caller keeps its (now stale) copy of the row
+              res = { ...res, data: res.data.map((row) => ({ ...row })) };
+              itemRow(stale, "d1").attempt_count = 1; // somebody else claimed + requeued meanwhile
+            }
+            return resolve(res);
+          },
+          reject
+        );
+      return api;
+    };
+    const log = [];
+    const lost = await stepPublishBatch({
+      serviceSupabase: stale, batchId: "b1", actorId: "u1", publishOne: stubPublish(log), now: () => NOW
+    });
+    assert.equal(raced, true);
+    assert.equal(log.length, 0, "CAS loser never publishes");
+    assert.equal(lost.processed, null);
+    assert.equal(itemRow(stale, "d1").item_status, "queued");
+    assert.equal(itemRow(stale, "d1").attempt_count, 1);
+  });
+});
+
+await check("L2 per-item clock: <6.5 min untouched; stale + attempt<3 -> queued + draft api_failed; 3rd -> failed", async () => {
+  await live(async () => {
+    // started 6 min ago (batch itself is old): still inside the window
+    const young = seedBatch({
+      updatedMinutesAgo: 9,
+      items: [{ draftId: "d1", status: "processing", attempt: 1, startedMinutesAgo: 6 }],
+      drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })]
+    });
+    const none = await recoverStalePublishBatches(young, recoverOpts(createShop({ remoteStatus: "DRAFT" }), { batchId: "b1" }));
+    assert.equal(none.itemsRequeued + none.itemsFailed + none.itemsReconciled, 0);
+    assert.equal(itemRow(young, "d1").item_status, "processing");
+    assert.equal(young.writes.length, 0);
+
+    // started 7 min ago, batch header fresh: the item's own started_at decides
+    const dead = seedBatch({
+      updatedMinutesAgo: 1,
+      items: [{ draftId: "d1", status: "processing", attempt: 1, startedMinutesAgo: 7 }],
+      drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })]
+    });
+    const out = await recoverStalePublishBatches(dead, recoverOpts(createShop({ remoteStatus: "DRAFT" }), { batchId: "b1" }));
+    assert.equal(out.itemsRequeued, 1);
+    assert.equal(out.itemsFailed, 0);
+    const item = itemRow(dead, "d1");
+    assert.equal(item.item_status, "queued");
+    assert.equal(item.error_message, "上次發布逾時，系統自動續跑（第 1 次）");
+    assert.equal(item.started_at, null);
+    assert.equal(item.attempt_count, 1, "the counter is only bumped by a claim");
+    assert.equal(draftOf(dead, "d1").status, "api_failed");
+    assert.equal(draftOf(dead, "d1").shopify_product_id, PRODUCT);
+    assert.equal(batchRow(dead).status, "processing", "the batch stays open");
+
+    // the next step claims the SAME item again (attempt 2) before anything later
+    dead.tables.publish_batch_items.push({
+      id: "item-d2", batch_id: "b1", draft_id: "d2", item_status: "queued", error_message: null,
+      attempt_count: 0, started_at: null, created_at: minutesAgo(1)
+    });
+    dead.tables.product_drafts.push(draftRow({ id: "d2" }));
+    const log = [];
+    const res = await stepPublishBatch({
+      serviceSupabase: dead, batchId: "b1", actorId: "u1", publishOne: stubPublish(log), now: () => NOW
+    });
+    assert.equal(res.processed.draftId, "d1");
+    assert.equal(itemRow(dead, "d1").attempt_count, 2);
+    assert.equal(itemRow(dead, "d2").item_status, "queued");
+
+    // third attempt dies too: failed with the new wording
+    const last = seedBatch({
+      updatedMinutesAgo: 1,
+      items: [{ draftId: "d1", status: "processing", attempt: 3, startedMinutesAgo: 7 }],
+      drafts: [draftRow({ id: "d1", status: "publishing", publish_status: "publishing", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })]
+    });
+    const done = await recoverStalePublishBatches(last, recoverOpts(createShop({ remoteStatus: "DRAFT" }), { batchId: "b1" }));
+    assert.equal(done.itemsFailed, 1);
+    assert.equal(done.itemsRequeued, 0);
+    assert.equal(itemRow(last, "d1").item_status, "failed");
+    assert.equal(itemRow(last, "d1").error_message, MAX_EXHAUSTED);
+    assert.equal(draftOf(last, "d1").status, "api_failed");
+    assert.equal(batchRow(last).status, "failed");
+  });
+});
+
+await check("L3 ACTIVE reconcile still wins over auto-resume", async () => {
+  await live(async () => {
+    const fake = seedBatch({
+      updatedMinutesAgo: 1,
+      items: [{ draftId: "d1", status: "processing", attempt: 1, startedMinutesAgo: 8 }],
+      drafts: [draftRow({ id: "d1", status: "api_failed", publish_status: "api_failed", shopify_product_id: PRODUCT, current_publish_batch_id: "b1" })]
+    });
+    const shop = createShop({ remoteStatus: "ACTIVE", publishedOn: ALL_THREE });
+    const out = await recoverStalePublishBatches(fake, recoverOpts(shop, { batchId: "b1" }));
+    assert.equal(out.itemsReconciled, 1);
+    assert.equal(out.itemsRequeued, 0);
+    assert.equal(itemRow(fake, "d1").item_status, "done");
+    assert.equal(draftOf(fake, "d1").status, "active_published");
+  });
+});
+
+await check("L4 preflight: blocked draft fails up front (no publishOne, draft untouched); others run; preflightBlocked returned", async () => {
+  await live(async () => {
+    const fake = createFakeSupabase({
+      product_drafts: ["d1", "d2", "d3"].map((id) => draftRow({ id, title_zh: `商品 ${id}` })),
+      product_variants: [
+        { id: "v1", draft_id: "d2", option1_value: "勿拍", twd_price: 100, sort_order: 0 },
+        { id: "v2", draft_id: "d2", option1_value: "紅色", twd_price: 100, sort_order: 1 },
+        { id: "v3", draft_id: "d1", option1_value: "紅色", twd_price: 100, sort_order: 0 }
+      ]
+    });
+    const created = await createStepwisePublishBatch({
+      serviceSupabase: fake, draftIds: ["d1", "d2", "d3"], publishMode: "draft", createdBy: "u1", now: () => NOW
+    });
+    assert.equal(created.ok, true);
+    assert.equal(created.preflightBlocked.length, 1);
+    assert.equal(created.preflightBlocked[0].draftId, "d2");
+    assert.equal(created.preflightBlocked[0].title, "商品 d2");
+    assert.match(created.preflightBlocked[0].error, /^發布前檢查擋下：/);
+    assert.match(created.preflightBlocked[0].error, /勿拍/);
+    assert.equal(itemRow(fake, "d2").item_status, "failed");
+    assert.equal(itemRow(fake, "d2").error_message, created.preflightBlocked[0].error);
+    assert.ok(itemRow(fake, "d2").completed_at);
+    assert.equal(itemRow(fake, "d1").item_status, "queued");
+    assert.equal(itemRow(fake, "d3").item_status, "queued");
+    assert.equal(draftOf(fake, "d2").status, "approved", "the blocked draft is not moved");
+    const log = [];
+    let last;
+    for (let i = 0; i < 6; i += 1) {
+      last = await stepPublishBatch({
+        serviceSupabase: fake, batchId: created.batchId, actorId: "u1", publishOne: stubPublish(log), now: () => NOW
+      });
+      if (last.done) break;
+    }
+    assert.deepEqual(log.map((c) => c.id), ["d1", "d3"], "publishOne never sees the blocked draft");
+    assert.equal(last.done, true);
+    assert.equal(batchRow(fake, created.batchId).status, "partial_failed");
+    assert.equal(batchRow(fake, created.batchId).done_count, 2);
+    assert.equal(batchRow(fake, created.batchId).failed_count, 1);
+  });
+});
+
+/** Clock-driven server: sleep() advances `clock`, so waiting out the stale window is instant. */
+function clockServer(fake, publishOne, clock, { killFirstStepFor = null } = {}) {
+  const calls = { create: 0, step: 0, urls: [] };
+  let killed = false;
+  const json = (status, body) => ({ ok: status < 400, status, json: async () => body });
+  const fetchImpl = async (url) => {
+    calls.urls.push(url);
+    if (url === "/api/drafts/batch/publish") {
+      calls.create += 1;
+      return json(500, { error: "create must not be called" });
+    }
+    const m = /^\/api\/publish-batches\/([^/]+)\/step$/.exec(url);
+    calls.step += 1;
+    if (killFirstStepFor && !killed) {
+      killed = true;
+      // the function claimed the item, then Vercel killed it: 504 with no JSON
+      const row = itemRow(fake, killFirstStepFor);
+      row.item_status = "processing";
+      row.attempt_count += 1;
+      row.started_at = new Date(clock.t).toISOString();
+      draftOf(fake, killFirstStepFor).status = "publishing";
+      draftOf(fake, killFirstStepFor).publish_status = "publishing";
+      return json(504, null);
+    }
+    const result = await stepPublishBatch({
+      serviceSupabase: fake, batchId: m[1], actorId: "u1", publishOne, now: () => clock.t
+    });
+    return json(result.ok ? 200 : result.status, result);
+  };
+  return { fetchImpl, calls };
+}
+
+await check("L5 client: killed step (504) -> waits, item returns to queued, SAME item continues (no skip); no-progress timeout stops", async () => {
+  await live(async () => {
+    const clock = { t: NOW };
+    const fake = seedBatch({ publishMode: "draft", items: [{ draftId: "d1" }, { draftId: "d2" }] });
+    const log = [];
+    const server = clockServer(fake, stubPublish(log), clock, { killFirstStepFor: "d1" });
+    const out = await continueStepwisePublishBatch({
+      batchId: "b1", total: 2, draftIds: ["d1", "d2"], fetchImpl: server.fetchImpl,
+      sleep: async (ms) => { clock.t += ms; }, now: () => clock.t
+    });
+    assert.equal(out.ok, true);
+    assert.equal(out.succeeded, 2);
+    assert.deepEqual(log.map((c) => c.id), ["d1", "d2"], "d1 resumed first, d2 not started early");
+    assert.equal(itemRow(fake, "d1").attempt_count, 2);
+    assert.equal(itemRow(fake, "d2").attempt_count, 1);
+    assert.equal(itemRow(fake, "d1").item_status, "done");
+    assert.ok(clock.t - NOW >= 390_000, "the client really waited out the stale window");
+    assert.equal(batchRow(fake).status, "completed");
+  });
+
+  // Nothing ever changes: the client gives up only after PUBLISH_STALE_ITEM_MS + 120s of no progress.
+  const clock = { t: NOW };
+  let calls = 0;
+  const idle = await continueStepwisePublishBatch({
+    batchId: "b1", total: 1, draftIds: ["d1"],
+    fetchImpl: async () => {
+      calls += 1;
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          ok: true, done: false, processed: null, batchStatus: "processing",
+          counts: { total: 1, done: 0, failed: 0, skipped: 0, queued: 0, processing: 1 }
+        })
+      };
+    },
+    sleep: async (ms) => { clock.t += ms; }, now: () => clock.t
+  });
+  assert.equal(idle.ok, false);
+  assert.equal(idle.stoppedEarly, true);
+  assert.ok(clock.t - NOW > batchHelpers.PUBLISH_STALE_ITEM_MS + 120_000, "waited the full window");
+  assert.ok(clock.t - NOW < batchHelpers.PUBLISH_STALE_ITEM_MS + 120_000 + 10_000, "and stopped right after it");
+  assert.ok(calls > 50, "polling, not a fixed small iteration count");
+});
+
+await check("L6 continueStepwisePublishBatch never calls the create API; runStepwise writes preflightBlocked into results", async () => {
+  await live(async () => {
+    const fake = seedBatch({ publishMode: "draft", items: [{ draftId: "d1" }, { draftId: "d2" }] });
+    const { fetchImpl, calls } = serverFetch(fake, { publishOne: stubPublish([]) });
+    const urls = [];
+    const out = await continueStepwisePublishBatch({
+      batchId: "b1", total: 2, draftIds: ["d1", "d2"], sleep: noSleep,
+      fetchImpl: async (url, init) => { urls.push(url); return fetchImpl(url, init); }
+    });
+    assert.equal(out.ok, true);
+    assert.equal(out.succeeded, 2);
+    assert.equal(calls.create, 0);
+    assert.ok(!urls.includes("/api/drafts/batch/publish"));
+    assert.ok(urls.every((u) => u === "/api/publish-batches/b1/step"));
+
+    const world = createFakeSupabase({
+      product_drafts: ["d1", "d2"].map((id) => draftRow({ id, title_zh: `商品 ${id}` })),
+      product_variants: [{ id: "v1", draft_id: "d2", option1_value: "補差價", twd_price: 100, sort_order: 0 }]
+    });
+    const handler = serverFetch(world, { publishOne: stubPublish([]) });
+    const run = await runStepwisePublishBatch({
+      draftIds: ["d1", "d2"], publishMode: "draft", fetchImpl: handler.fetchImpl, sleep: noSleep
+    });
+    assert.equal(run.ok, true);
+    const blocked = run.results.find((r) => r.id === "d2");
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.itemStatus, "failed");
+    assert.match(blocked.error, /^發布前檢查擋下：/);
+    assert.equal(run.succeeded, 1);
+    assert.equal(run.failed, 1);
+  });
+});
+
+await check("L7 maxDuration literals equal PUBLISH_STEP_MAX_SECONDS; stale window > the max duration", () => {
+  const literal = (rel) => {
+    const m = /^export const maxDuration = (\d+);$/m.exec(read(rel));
+    assert.ok(m, `${rel} needs a literal maxDuration`);
+    return Number(m[1]);
+  };
+  const seconds = batchHelpers.PUBLISH_STEP_MAX_SECONDS;
+  assert.equal(literal("src/app/api/publish-batches/[batchId]/step/route.ts"), seconds);
+  assert.equal(literal("src/app/api/drafts/[id]/publish/route.ts"), seconds);
+  assert.equal(seconds, 300);
+  assert.ok(batchHelpers.PUBLISH_STALE_ITEM_MS > seconds * 1000);
+  assert.equal(batchHelpers.PUBLISH_STALE_ITEM_MS, 390_000);
+  assert.equal(batchHelpers.PUBLISH_IDLE_BATCH_MS, 20 * 60_000);
+  assert.equal(batchHelpers.PUBLISH_MAX_ATTEMPTS, 3);
+});
+
+await check("L8 media ids are written back in order; count mismatch -> warning only; one failed write -> warning only", async () => {
+  const inputs = [
+    { originalSource: "https://img.test/a.jpg", mediaContentType: "IMAGE" },
+    { originalSource: "https://img.test/b.jpg", mediaContentType: "IMAGE" },
+    { originalSource: "https://img.test/c.jpg", mediaContentType: "IMAGE" },
+    { originalSource: "https://video.test/v", mediaContentType: "EXTERNAL_VIDEO" }
+  ];
+  const nodes = [
+    { id: "gid://shopify/MediaImage/1", mediaContentType: "IMAGE" },
+    { id: "gid://shopify/MediaImage/2", mediaContentType: "IMAGE" },
+    { id: "gid://shopify/MediaImage/3", mediaContentType: "IMAGE" },
+    { id: "gid://shopify/Video/9", mediaContentType: "EXTERNAL_VIDEO" }
+  ];
+  const seedImages = () => [
+    { id: "i1", draft_id: "d1", image_type: "main", sort_order: 0 },
+    { id: "i2", draft_id: "d1", image_type: "main", sort_order: 1 },
+    { id: "i3", draft_id: "d1", image_type: "variant", sort_order: 2 }
+  ];
+  const imageUpdates = (fake) => fake.writes.filter((w) => w.table === "product_images" && w.op === "update");
+
+  const fake = createFakeSupabase({ product_images: seedImages() });
+  const warnings = await writeBackMediaIds(fake, fake.tables.product_images, inputs, nodes);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(
+    imageUpdates(fake).map((w) => w.payload),
+    ["a", "b", "c"].map((name, i) => ({
+      shopify_media_id: `gid://shopify/MediaImage/${i + 1}`,
+      shopify_source_hash: hashSource(`https://img.test/${name}.jpg`)
+    }))
+  );
+
+  // already identical -> skipped (no writes)
+  const again = createFakeSupabase({ product_images: seedImages() });
+  const done = again.tables.product_images.map((row, i) => ({
+    ...row,
+    shopify_media_id: `gid://shopify/MediaImage/${i + 1}`,
+    shopify_source_hash: hashSource(inputs[i].originalSource)
+  }));
+  assert.deepEqual(await writeBackMediaIds(again, done, inputs, nodes), []);
+  assert.equal(imageUpdates(again).length, 0);
+
+  // count mismatch -> one warning, zero writes
+  const mismatch = createFakeSupabase({ product_images: seedImages() });
+  const short = await writeBackMediaIds(mismatch, mismatch.tables.product_images, inputs, nodes.slice(1));
+  assert.deepEqual(short, ["圖片編號未寫回：數量不一致"]);
+  assert.equal(imageUpdates(mismatch).length, 0);
+
+  // one write fails -> warning, the others still land
+  const flaky = createFakeSupabase({ product_images: seedImages() });
+  flaky.failNext({ table: "product_images", op: "update" });
+  const partial = await writeBackMediaIds(flaky, flaky.tables.product_images, inputs, nodes);
+  assert.equal(partial.length, 1);
+  assert.match(partial[0], /圖片編號未寫回/);
+  assert.equal(imageUpdates(flaky).length, 3);
+  assert.equal(flaky.tables.product_images[1].shopify_media_id, "gid://shopify/MediaImage/2");
+
+  // wiring: the media mutation asks for the nodes and the helper runs after a successful attach
+  const safe = read("src/lib/shopify/publishDraftSafe.ts");
+  assert.match(safe, /media\(first: 250\) \{ nodes \{ id mediaContentType \} \}/);
+  assert.match(safe, /writeBackMediaIds\(serviceSupabase, mediaRows, mediaInputs, attachedMediaNodes\)/);
+});
+
+// =====================================================================
 // G: static wiring
 // =====================================================================
 console.log("\nG — static wiring");
@@ -1754,10 +2141,10 @@ await check("batch callers use the stepwise helper instead of one long request",
   assert.match(read("src/components/listing/ResultCard.tsx"), /\/api\/drafts\/\$\{[^}]+\}\/publish/);
 });
 
-await check("routes: step (nodejs/60s/canPublish), stepwise flag on the batch route, reconcile route", () => {
+await check("routes: step (nodejs/300s/canPublish), stepwise flag on the batch route, reconcile route", () => {
   const step = read("src/app/api/publish-batches/[batchId]/step/route.ts");
   assert.match(step, /export const runtime = "nodejs"/);
-  assert.match(step, /export const maxDuration = 60/);
+  assert.match(step, /export const maxDuration = 300/);
   assert.match(step, /canPublish/);
   assert.match(step, /stepPublishBatch/);
   const batch = read("src/app/api/drafts/batch/publish/route.ts");

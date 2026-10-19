@@ -333,7 +333,7 @@ await check("WorkspaceInputPanel compares auto-tone against preferred tone and w
   assert.match(panel, /current !== preferredToneRef\.current/);
   assert.match(panel, /writeWorkspacePref[\s\S]*?priceMode: next/);
   assert.match(panel, /setPreferredTone\(option\.value\)[\s\S]*?writeWorkspacePref/);
-  const serverSeed = panel.slice(panel.indexOf("function applyServerFormSeed"), panel.indexOf("function restoreWorkspaceSnapshot"));
+  const serverSeed = panel.slice(panel.indexOf("function applyServerFormSeed"), panel.indexOf("function continueRestore"));
   assert.doesNotMatch(serverSeed, /writeWorkspacePref/);
 });
 

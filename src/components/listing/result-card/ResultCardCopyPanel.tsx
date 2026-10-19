@@ -19,10 +19,13 @@ export function ResultCardCopyPanel({
   characterChipWarned,
   detectTypeLabel,
   sku,
-  detectedCategory,
+  productType,
   missingCharacters,
   quickAddingCharacter,
   regenerating,
+  canRecomputeTags,
+  recomputingTags,
+  hasUnsavedCardEdits,
   regeneratingField,
   comboSaving,
   historyLoaded,
@@ -40,9 +43,10 @@ export function ResultCardCopyPanel({
   faqView,
   specText,
   onSpecTextChange,
-  onDetectedCategoryChange,
+  onProductTypeChange,
   onSkuChange,
   onQuickAddCharacter,
+  onRecomputeTags,
   onSwitchVersion,
   onRegenField,
   onSetFieldDisplay,
@@ -55,10 +59,13 @@ export function ResultCardCopyPanel({
   characterChipWarned: boolean;
   detectTypeLabel: string;
   sku: string;
-  detectedCategory: string;
+  productType: string;
   missingCharacters: string[];
   quickAddingCharacter: string | null;
   regenerating: boolean;
+  canRecomputeTags: boolean;
+  recomputingTags: boolean;
+  hasUnsavedCardEdits: boolean;
   regeneratingField: CopyVersionField | null;
   comboSaving: boolean;
   historyLoaded: boolean;
@@ -77,9 +84,10 @@ export function ResultCardCopyPanel({
   /** UX-PKG5: local editable mid-field (not CopyVersionField). */
   specText: string;
   onSpecTextChange: (value: string) => void;
-  onDetectedCategoryChange: (value: string) => void;
+  onProductTypeChange: (value: string) => void;
   onSkuChange: (value: string) => void;
   onQuickAddCharacter: (name: string) => void;
+  onRecomputeTags: () => void;
   onSwitchVersion: (field: CopyVersionField, nextIndex: number) => void;
   onRegenField: (field: CopyVersionField) => void;
   onSetFieldDisplay: (field: CopyVersionField, value: string, dirty: boolean) => void;
@@ -155,16 +163,45 @@ export function ResultCardCopyPanel({
                   </Button>
                 </div>
               ))}
+              {canRecomputeTags ? (
+                <div className="rc-quick-add-row">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={recomputingTags || hasUnsavedCardEdits || regenerating || regeneratingField != null}
+                    onClick={onRecomputeTags}
+                    title={hasUnsavedCardEdits ? "有未儲存的修改，請先儲存" : "字典補好後重新檢查角色／IP／類型 tag；不呼叫 AI、不改文案"}
+                    type="button"
+                  >
+                    {recomputingTags ? "重算中…" : "重算 tags（不改文案）"}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : canRecomputeTags ? (
+            <div className="rc-quick-add-list">
+              <div className="rc-quick-add-row">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={recomputingTags || hasUnsavedCardEdits || regenerating || regeneratingField != null}
+                  onClick={onRecomputeTags}
+                  title={hasUnsavedCardEdits ? "有未儲存的修改，請先儲存" : "字典補好後重新檢查角色／IP／類型 tag；不呼叫 AI、不改文案"}
+                  type="button"
+                >
+                  {recomputingTags ? "重算中…" : "重算 tags（不改文案）"}
+                </Button>
+              </div>
             </div>
           ) : null}
         </div>
         <div className="row rc-span-2">
           <div className="field">
-            <label>AI 偵測類型</label>
+            <label>商品型態</label>
             <input
               className="edit-input"
-              onChange={(event) => onDetectedCategoryChange(event.target.value)}
-              value={detectedCategory}
+              onChange={(event) => onProductTypeChange(event.target.value)}
+              value={productType}
             />
           </div>
           <div className="field">

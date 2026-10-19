@@ -252,7 +252,9 @@ export async function runSharpBatchForDraft(
         throw new Error(afterAi ? "missing generated_file_url" : "missing original_file_url");
       }
       const buffer = await fetchOriginalBuffer(sourceUrl);
-      const out = await processImageBuffer(buffer, { square: false });
+      const out = await processImageBuffer(buffer, {
+        squareMode: img.image_type === "main" || img.image_type === "variant" ? "blur-extend" : "none"
+      });
 
       const pathHint = storagePathFromProductImagesPublicUrl(
         img.original_file_url || sourceUrl

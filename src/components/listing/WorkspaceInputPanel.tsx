@@ -37,6 +37,7 @@ import {
 } from "@/components/listing/generationProgress";
 import { createClient } from "@/lib/supabase/client";
 import { deleteProductImages } from "@/lib/images/deleteProductImages";
+import { buildUploadBlobs } from "@/lib/images/clientImageResize";
 import { removeUnusedVariantImagesFromDraft } from "@/lib/variants/variantImageCleanup";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import {
@@ -949,23 +950,36 @@ export function WorkspaceInputPanel({
 
   /** 暫存截圖 → 公開 URL；路徑 {userId}/temp-screenshots/{uuid}.ext（4A 不建草稿） */
   async function uploadTempScreenshots(files: File[]): Promise<{ urls: string[]; paths: string[] }> {
-    const urls: string[] = [];
-    const paths: string[] = [];
-    for (const file of files.slice(0, MAX_SCREENSHOT_IMAGES)) {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${userId}/temp-screenshots/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("product-images").upload(path, file, {
-        contentType: file.type || "image/jpeg",
-        upsert: false
-      });
-      if (error) {
-        throw new Error(`截圖上傳失敗：${error.message}`);
-      }
-      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
-      urls.push(data.publicUrl);
-      paths.push(path);
+    // SHOP-LISTING: screenshots are read by OCR → keep text sharp (long edge 3072), upload in parallel
+    // (≤ MAX_SCREENSHOT_IMAGES files). urls / paths keep the file order.
+    const settled = await Promise.allSettled(
+      files.slice(0, MAX_SCREENSHOT_IMAGES).map(async (file) => {
+        const blobs = await buildUploadBlobs(file, { maxEdge: 3072 });
+        const path = `${userId}/temp-screenshots/${crypto.randomUUID()}.${blobs.uploadExt}`;
+        const { error } = await supabase.storage.from("product-images").upload(path, blobs.upload, {
+          contentType: blobs.uploadContentType,
+          upsert: false
+        });
+        if (error) {
+          throw new Error(`截圖上傳失敗：${error.message}`);
+        }
+        const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+        return { url: data.publicUrl, path };
+      })
+    );
+
+    const uploadedOk = settled.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+    const firstFailure = settled.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected"
+    );
+    if (firstFailure) {
+      // The caller only learns `paths` on success, so clean up what already went up here.
+      await removeTempScreenshots(uploadedOk.map((item) => item.path));
+      throw firstFailure.reason instanceof Error
+        ? firstFailure.reason
+        : new Error(String(firstFailure.reason));
     }
-    return { urls, paths };
+    return { urls: uploadedOk.map((item) => item.url), paths: uploadedOk.map((item) => item.path) };
   }
 
   async function removeTempScreenshots(paths: string[]) {

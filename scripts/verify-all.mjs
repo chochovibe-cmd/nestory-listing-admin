@@ -82,7 +82,9 @@ const scripts = [
   // MOBILE-VARIANT-LAYOUT: Workspace accordion grid must not blow out the variant table.
   "scripts/verify-mobile-variant-workspace.mjs",
   // VARIANT-CLEAN: fake options excluded at import, rule + AI-validated names, NS- SKU, variant image bind, resync.
-  "scripts/verify-variant-clean.mjs"
+  "scripts/verify-variant-clean.mjs",
+  // SHOP-LISTING: Shopify category, blur-extend square images, 2048 WebP shrink + concurrent upload.
+  "scripts/verify-shop-listing.mjs"
 ];
 
 for (const script of scripts) {

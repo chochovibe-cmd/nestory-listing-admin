@@ -10,9 +10,11 @@ import {
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  buildDualSizeBlobs,
+  UPLOAD_CONCURRENCY,
+  buildUploadBlobs,
   dualSizeExt
 } from "@/lib/images/clientImageResize";
+import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
 import { intentForSpecToggle } from "@/lib/images/processMarks";
 import { showToast } from "@/components/Toast";
 import {
@@ -257,11 +259,10 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
   }) {
     const { type, file, clientKey, sortOrder, resolvedDraftId, blobUrl } = params;
     const baseId = crypto.randomUUID();
-    const origExt = file.name.split(".").pop() || "jpg";
-    const origPath = `${userId}/${resolvedDraftId}/${type}/${baseId}-orig.${origExt}`;
 
-    // A19: resize mid/thumb in browser while original path is ready
-    const dual = await buildDualSizeBlobs(file);
+    // A19 + SHOP-LISTING: decode once in browser → ≤2048 WebP upload copy + mid/thumb
+    const dual = await buildUploadBlobs(file);
+    const origPath = `${userId}/${resolvedDraftId}/${type}/${baseId}-orig.${dual.uploadExt}`;
     const midExt = dualSizeExt(dual.mid, file);
     const thumbExt = dualSizeExt(dual.thumb, file);
     const midPath = dual.mid
@@ -271,11 +272,12 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
       ? `${userId}/${resolvedDraftId}/${type}/${baseId}-320.${thumbExt}`
       : null;
 
-    // Upload mid first (Vision can use it sooner), then thumb + original in parallel.
+    // SHOP-LISTING: mid, thumb and original are uploaded at the same time.
     let midUrl: string | null = null;
     let thumbUrl: string | null = null;
 
-    if (midPath && dual.mid) {
+    const uploadMid = async () => {
+      if (!midPath || !dual.mid) return;
       const { error: midErr } = await supabase.storage
         .from("product-images")
         .upload(midPath, dual.mid, {
@@ -285,9 +287,10 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
       if (!midErr) {
         midUrl = supabase.storage.from("product-images").getPublicUrl(midPath).data.publicUrl;
       }
-    }
+    };
 
-    if (thumbPath && dual.thumb) {
+    const uploadThumb = async () => {
+      if (!thumbPath || !dual.thumb) return;
       const { error: thumbErr } = await supabase.storage
         .from("product-images")
         .upload(thumbPath, dual.thumb, {
@@ -298,14 +301,16 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
         thumbUrl = supabase.storage.from("product-images").getPublicUrl(thumbPath).data
           .publicUrl;
       }
-    }
+    };
 
-    const { error: storageError } = await supabase.storage
-      .from("product-images")
-      .upload(origPath, file, {
-        contentType: file.type || "image/jpeg",
+    const [, , { error: storageError }] = await Promise.all([
+      uploadMid(),
+      uploadThumb(),
+      supabase.storage.from("product-images").upload(origPath, dual.upload, {
+        contentType: dual.uploadContentType,
         upsert: false
-      });
+      })
+    ]);
 
     if (storageError) {
       // Best-effort cleanup of derivatives already uploaded
@@ -471,19 +476,25 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
         return;
       }
 
-      // Parallel per-file; one failure does not block others.
-      await Promise.all(
-        pending.map((item) =>
-          uploadOneFile({
-            type,
-            file: item.file!,
-            clientKey: item.clientKey,
-            sortOrder: item.sort_order,
-            resolvedDraftId,
-            blobUrl: item.blobUrl!
-          })
-        )
+      // SHOP-LISTING: at most UPLOAD_CONCURRENCY files in flight; one failure does not block others.
+      const settled = await runWithConcurrency(pending, UPLOAD_CONCURRENCY, (item) =>
+        uploadOneFile({
+          type,
+          file: item.file!,
+          clientKey: item.clientKey,
+          sortOrder: item.sort_order,
+          resolvedDraftId,
+          blobUrl: item.blobUrl!
+        })
       );
+      settled.forEach((result, index) => {
+        if (result.status === "rejected") {
+          patchPreview(pending[index].clientKey, type, {
+            status: "failed",
+            errorMessage: result.reason instanceof Error ? result.reason.message : String(result.reason)
+          });
+        }
+      });
 
       // UX-A T24: transient success → toast (do not pin form height)
       setMessage("");

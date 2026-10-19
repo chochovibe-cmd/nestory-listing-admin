@@ -10,6 +10,7 @@ import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
 import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildImageFileNameSlug } from "@/lib/contentGenerator/imageFileNameGenerator";
 import { buildExternalVideoMedia } from "@/lib/media/videoUrls";
+import { resolveShopifyCategoryId } from "@/lib/shopify/taxonomyCategory";
 import type { ProductDraft, ProductImage, ProductVariantRow, PublishMode } from "@/types/domain";
 import {
   buildVariantPublishPlan,
@@ -151,6 +152,11 @@ export function buildShopifyProductPayload(
     .find((value) => value && !isAutoSku(value));
   const publishSku = manualSku ?? deriveDraftSku(draft.id, draft.sku);
   const tags = draft.shopify_tags?.length ? draft.shopify_tags : draft.tags || [];
+  // SHOP-LISTING: Shopify Standard Product Taxonomy category. AI-generated `category`
+  // keys are dropped so only our verified gid (or nothing) is ever sent.
+  const generatedProductWithoutCategory: Record<string, unknown> = { ...generatedProduct };
+  delete generatedProductWithoutCategory.category;
+  const categoryId = resolveShopifyCategoryId({ tags, productType: draft.product_type });
 
   // COPY C1.1: only 潮巢導購版 changes the Shopify semantic hierarchy.
   // Original six tones keep the historical notice + <h3> formatter path byte-for-behavior.
@@ -180,7 +186,8 @@ export function buildShopifyProductPayload(
     ...(draft.shopify_handle ? { handle: draft.shopify_handle } : {}),
     metafields: buildProductMetafields(draft),
     ...(Array.isArray(draft.metafields_json) ? { metafields: draft.metafields_json } : {}),
-    ...generatedProduct
+    ...generatedProductWithoutCategory,
+    ...(categoryId ? { category: categoryId } : {})
   };
 
   const variantPlan: VariantPublishPlan = buildVariantPublishPlan(

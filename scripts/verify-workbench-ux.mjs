@@ -40,8 +40,11 @@ async function check(name, fn) {
 console.log("WB-1 — character tags + recompute");
 
 await check("splitCharacterNames supports the approved separators, preserves spaces, dedupes", () => {
-  assert.deepEqual(splitNames.splitCharacterNames("耿鬼、路卡利歐"), ["耿鬼", "路卡利歐"]);
+  assert.deepEqual(splitNames.splitCharacterNames("耿鬼、路卡利歐、沙奈朵"), ["耿鬼", "路卡利歐", "沙奈朵"]);
   assert.deepEqual(splitNames.splitCharacterNames("Hello Kitty, 酷洛米"), ["Hello Kitty", "酷洛米"]);
+  assert.deepEqual(splitNames.splitCharacterNames("皮卡丘、皮卡丘"), ["皮卡丘"]);
+  assert.deepEqual(splitNames.splitCharacterNames("不指定"), []);
+  assert.deepEqual(splitNames.splitCharacterNames(null), []);
   assert.deepEqual(splitNames.splitCharacterNames("A，B／C｜D＋E+F/G|H"), ["A", "B", "C", "D", "E", "F", "G", "H"]);
   assert.deepEqual(splitNames.splitCharacterNames("Hello Kitty"), ["Hello Kitty"]);
   assert.deepEqual(splitNames.splitCharacterNames("A & B 和 C 與 D"), ["A & B 和 C 與 D"]);
@@ -55,7 +58,7 @@ await check("buildNestoryTagsV2Result emits one 角色_ tag per split character"
     {
       product_status: "general",
       ip: "寶可夢",
-      characters: ["耿鬼、路卡利歐"],
+      characters: ["耿鬼、路卡利歐、沙奈朵"],
       variants: [],
       product_types: ["公仔模型"],
       use_cases: [],
@@ -69,12 +72,14 @@ await check("buildNestoryTagsV2Result emits one 角色_ tag per split character"
       ipCharacters: [
         { ip_name: "寶可夢", character_name: "耿鬼", aliases: [] },
         { ip_name: "寶可夢", character_name: "路卡利歐", aliases: [] },
+        { ip_name: "寶可夢", character_name: "沙奈朵", aliases: [] },
       ],
     },
   );
   assert.ok(result.tags.includes("角色_耿鬼"));
   assert.ok(result.tags.includes("角色_路卡利歐"));
-  assert.ok(!result.tags.includes("角色_耿鬼、路卡利歐"));
+  assert.ok(result.tags.includes("角色_沙奈朵"));
+  assert.ok(!result.warnings.some((warning) => warning.includes("尚未建立")));
 });
 
 await check("toListingDraftInput uses split character array", () => {
@@ -103,9 +108,9 @@ await check("toListingDraftInput uses split character array", () => {
 await check("missing-character warning parser returns split individual names", () => {
   assert.deepEqual(
     missingWarnings.extractMissingCharacterNames([
-      "角色「耿鬼、路卡利歐」尚未建立 V2 字典 canonical name，未輸出角色_ tag。",
+      "角色「Hello Kitty, 酷洛米」尚未建立 V2 字典 canonical name，未輸出角色_ tag。",
     ]),
-    ["耿鬼", "路卡利歐"],
+    ["Hello Kitty", "酷洛米"],
   );
 });
 
@@ -122,15 +127,19 @@ await check("recompute helpers recognize all approved dictionary warning familie
   assert.equal(recompute.isTagDictWarning("售價待確認"), false);
 });
 
-await check("recompute tags preserves unrelated tags and replaces 類型_ only when a derived type exists", () => {
-  assert.deepEqual(
-    recompute.buildRecomputedTags(
-      ["定位_IP周邊", "類型_舊類型", "營運_保留"],
-      ["IP_寶可夢", "角色_耿鬼", "類型_公仔模型"],
-    ),
-    ["定位_IP周邊", "IP_寶可夢", "角色_耿鬼", "類型_公仔模型", "營運_保留"],
+await check("recompute tags preserves manual role tags, ignores unrelated derived prefixes, and conditionally replaces type", () => {
+  const next = recompute.buildRecomputedTags(
+    ["定位_IP周邊", "類型_吊飾掛件", "角色_自己加的"],
+    ["IP_寶可夢", "角色_耿鬼", "類型_公仔模型", "定位_收藏選物"],
   );
-  assert.ok(recompute.buildRecomputedTags(["類型_舊類型"], ["IP_寶可夢"]).includes("類型_舊類型"));
+  assert.ok(next.includes("IP_寶可夢"));
+  assert.ok(next.includes("角色_耿鬼"));
+  assert.ok(next.includes("角色_自己加的"));
+  assert.ok(next.includes("類型_公仔模型"));
+  assert.ok(next.includes("定位_IP周邊"));
+  assert.ok(!next.includes("類型_吊飾掛件"));
+  assert.ok(!next.includes("定位_收藏選物"));
+  assert.ok(recompute.buildRecomputedTags(["類型_吊飾掛件"], ["IP_寶可夢"]).includes("類型_吊飾掛件"));
 });
 
 await check("recompute warnings clear only dictionary warnings and resolved AI IP warning", () => {
@@ -144,6 +153,12 @@ await check("recompute warnings clear only dictionary warnings and resolved AI I
     { ipInCatalog: true },
   );
   assert.deepEqual(next, ["售價待確認", "角色「B」尚未建立 V2 字典 canonical name"]);
+  const unresolved = recompute.buildRecomputedWarnings(
+    ["AI 判斷 IP「X」不在建檔清單中，tag 可能不完整", "價格 warning"],
+    [],
+    { ipInCatalog: false },
+  );
+  assert.deepEqual(unresolved, ["AI 判斷 IP「X」不在建檔清單中，tag 可能不完整", "價格 warning"]);
 });
 
 await check("quick-add rejects multi-character input before auth; recompute route is POST-only and AI-free", () => {
@@ -156,6 +171,8 @@ await check("quick-add rejects multi-character input before auth; recompute rout
   assert.match(route, /export async function POST/);
   assert.doesNotMatch(route, /export\s+(?:async\s+function|const)\s+(?!POST\b)/);
   assert.match(route, /buildNestoryTagsV2Result/);
+  assert.match(route, /shopify_product_id/);
+  assert.match(route, /code: "published"/);
   assert.match(route, /shopify_tags: nextTags/);
   assert.doesNotMatch(route, /openai|anthropic|\/api\/generate|generateListingContent/i);
 });
@@ -202,6 +219,15 @@ await check("Shopify main helper filters main+variant and stable-sorts by sort_o
     "main-late",
   ]);
   assert.equal(mainImage.pickShopifyMainImage(images)?.id, "variant-first-a");
+  assert.equal(
+    mainImage.pickShopifyMainImage([
+      { id: "detail", image_type: "detail", sort_order: 0 },
+      { id: "main-3", image_type: "main", sort_order: 3 },
+      { id: "main-1", image_type: "main", sort_order: 1 },
+    ])?.id,
+    "main-1",
+  );
+  assert.equal(mainImage.pickShopifyMainImage([]), null);
   assert.equal(mainImage.pickShopifyMainImage([{ id: "d", image_type: "detail", sort_order: 0 }]), null);
 });
 
@@ -267,7 +293,7 @@ class FakeStorage {
   getItem(key) { return this.map.has(key) ? this.map.get(key) : null; }
   setItem(key, value) { this.map.set(key, String(value)); }
 }
-const VALID_TONES = ["黑膠文藝收藏感", "潮巢導購版", "依IP自動匹配"];
+const VALID_TONES = ["黑膠文藝收藏感", "小編聊天口吻", "潮巢導購版", "依IP自動匹配"];
 
 await check("workspace prefs default to single + 潮巢導購版 and persist manual choices", () => {
   const storage = new FakeStorage();
@@ -275,12 +301,24 @@ await check("workspace prefs default to single + 潮巢導購版 and persist man
     priceMode: "single",
     tone: "潮巢導購版",
   });
-  workspacePrefs.writeWorkspacePref(storage, { priceMode: "sale" });
-  workspacePrefs.writeWorkspacePref(storage, { tone: "黑膠文藝收藏感" });
+  storage.setItem(
+    workspacePrefs.WORKSPACE_PREFS_KEY,
+    JSON.stringify({ priceMode: "sale", tone: "小編聊天口吻" }),
+  );
   assert.deepEqual(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES), {
     priceMode: "sale",
-    tone: "黑膠文藝收藏感",
+    tone: "小編聊天口吻",
   });
+  storage.setItem(
+    workspacePrefs.WORKSPACE_PREFS_KEY,
+    JSON.stringify({ priceMode: "sale", tone: "不存在的語氣" }),
+  );
+  assert.deepEqual(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES), {
+    priceMode: "sale",
+    tone: "潮巢導購版",
+  });
+  workspacePrefs.writeWorkspacePref(storage, { priceMode: "single" });
+  assert.equal(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES).priceMode, "single");
   storage.setItem(workspacePrefs.WORKSPACE_PREFS_KEY, "{broken");
   assert.deepEqual(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES), {
     priceMode: "single",

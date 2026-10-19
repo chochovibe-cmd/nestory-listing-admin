@@ -1,5 +1,6 @@
 "use client";
 
+import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
 import {
   imageSlotLabel,
   PROCESS_INTENT_LABELS,
@@ -34,6 +35,8 @@ export function ResultCardImagesPanel({
       </div>
     );
   }
+
+  const shopifyMainId = pickShopifyMainImage(imageMarks)?.id ?? null;
 
   return (
     <div className="rc-tabpanel" role="tabpanel">
@@ -77,7 +80,9 @@ export function ResultCardImagesPanel({
                       ✕
                     </button>
                   </div>
-                  <span className="imgmark-slot-label">{slot}</span>
+                  <span className="imgmark-slot-label">
+                    {image.id === shopifyMainId ? "⭐ Shopify 主圖" : slot}
+                  </span>
                   <span className="imgmark-btns">
                     {intents.map((intent) => (
                       <button

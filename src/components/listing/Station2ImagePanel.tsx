@@ -9,6 +9,8 @@ import {
   deleteProductImages,
   deleteProductImagesFailureMessage
 } from "@/lib/images/deleteProductImages";
+import { UPLOAD_CONCURRENCY, buildUploadBlobs } from "@/lib/images/clientImageResize";
+import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
 import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
 import {
   imageSlotLabel,
@@ -347,19 +349,20 @@ export function Station2ImagePanel({
           ? img.image_type === "main" || img.image_type === "variant"
           : img.image_type === "detail"
       );
-      let nextSort =
+      // SHOP-LISTING: sort_order is fixed by file order before the uploads run in parallel.
+      const baseSort =
         existingOfType.reduce((max, img) => Math.max(max, img.sort_order ?? 0), -1) + 1;
 
-      const added: ProductImage[] = [];
-      for (const file of files) {
-        const ext = file.name.split(".").pop() || "jpg";
-        const path = `${userId}/${draftId}/${imageType}/${crypto.randomUUID()}.${ext}`;
+      const settled = await runWithConcurrency(files, UPLOAD_CONCURRENCY, async (file, index) => {
+        // Browser-side shrink (≤2048 WebP); mid/thumb are not uploaded here.
+        const blobs = await buildUploadBlobs(file);
+        const path = `${userId}/${draftId}/${imageType}/${crypto.randomUUID()}.${blobs.uploadExt}`;
         const { error: storageError } = await supabase.storage
           .from("product-images")
-          .upload(path, file, { contentType: file.type, upsert: false });
+          .upload(path, blobs.upload, { contentType: blobs.uploadContentType, upsert: false });
         if (storageError) {
           showToast(`上傳失敗：${storageError.message}`, "error");
-          continue;
+          return null;
         }
         const { data: pub } = supabase.storage.from("product-images").getPublicUrl(path);
         const { data: row, error: insertError } = await supabase
@@ -369,7 +372,7 @@ export function Station2ImagePanel({
             image_type: imageType,
             original_file_url: pub.publicUrl,
             processed_file_url: pub.publicUrl,
-            sort_order: nextSort,
+            sort_order: baseSort + index,
             processing_status: "uploaded",
             process_intent: null,
             is_spec_process: false,
@@ -378,10 +381,14 @@ export function Station2ImagePanel({
           .single();
         if (insertError || !row) {
           showToast(`寫入失敗：${insertError?.message ?? "未知錯誤"}`, "error");
-          continue;
+          return null;
         }
-        added.push(row as ProductImage);
-        nextSort += 1;
+        return row as ProductImage;
+      });
+      // Keep original file order; failed files are skipped.
+      const added: ProductImage[] = [];
+      for (const result of settled) {
+        if (result.status === "fulfilled" && result.value) added.push(result.value);
       }
       if (added.length) {
         onImagesChange([...images, ...added]);

@@ -331,7 +331,7 @@ export function DraftResultsPanel({
         model.steps.length > 0 &&
         model.steps.every((step) => step.status === "done")
       ) {
-        armDoneFlash(model.draftId);
+        if (model.draftId) armDoneFlash(model.draftId);
       }
     }
     window.addEventListener(GENERATION_PROGRESS_EVENT, onProgress);

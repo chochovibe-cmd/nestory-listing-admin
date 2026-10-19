@@ -154,6 +154,8 @@ import {
   extractMissingCharacterNames,
   isCharacterMissingInWarnings,
 } from "@/lib/characters/missingCharacterWarnings";
+import { hasTagDictWarnings } from "@/lib/drafts/recomputeDraftTags";
+import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
 import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
 import { type DiscardArm } from "@/components/listing/result-card/resultCardUi";
 import { isCardGestureInteractiveTarget } from "@/components/listing/result-card/cardGestureTarget";
@@ -210,19 +212,12 @@ function emptyDirtyMap(): Partial<Record<CopyVersionField, boolean>> {
 }
 
 function mainThumbUrl(images: ProductImage[]): string | null {
-  const mains = images
-    .filter((image) => image.image_type === "main")
-    .sort((a, b) => a.sort_order - b.sort_order);
-  const first = mains[0] ?? images.find((image) => image.image_type !== "detail") ?? images[0];
+  const first =
+    pickShopifyMainImage(images) ??
+    images.find((image) => image.image_type !== "detail") ??
+    images[0];
   if (!first) return null;
-  // A19: list prefers 320px thumb when present
-  return (
-    first.list_thumb_url ??
-    first.processed_file_url ??
-    first.original_file_url ??
-    first.generated_file_url ??
-    null
-  );
+  return first.list_thumb_url ?? first.processed_file_url ?? first.original_file_url ?? first.generated_file_url ?? null;
 }
 
 export function ResultCard({
@@ -319,7 +314,7 @@ export function ResultCard({
   const [faq, setFaq] = useState(draft.generated_faq_html ?? "");
   const [sellPrice, setSellPrice] = useState(draft.twd_price?.toString() ?? "");
   const [compareAtPrice, setCompareAtPrice] = useState(draft.compare_at_price?.toString() ?? "");
-  const [detectedCategory, setDetectedCategory] = useState(draft.detected_category ?? "");
+  const [productType, setProductType] = useState(draft.product_type ?? "");
   const [sku, setSku] = useState(draft.sku ?? "");
   // UX-PKG5: editable mid-field spec_text (local state; not CopyVersionField)
   const [specText, setSpecText] = useState(draft.spec_text ?? "");
@@ -406,6 +401,7 @@ export function ResultCard({
 
   useEffect(() => () => clearCardArchiveUndoTimer(), []);
   const [quickAddingCharacter, setQuickAddingCharacter] = useState<string | null>(null);
+  const [recomputingTags, setRecomputingTags] = useState(false);
   const [faqView, setFaqView] = useState<"preview" | "html">("preview");
   const [descriptionView, setDescriptionView] = useState<"preview" | "source">("preview");
   // Local mirror of pipeline marks so toggles feel instant; re-synced on refresh.
@@ -545,6 +541,13 @@ export function ResultCard({
   const unmarkedImages = listUnmarkedPipelineImages(imageMarks);
   const unmarkedBlockMessage = formatUnmarkedBlockMessage(imageMarks);
   const missingCharacters = extractMissingCharacterNames(draft.warnings);
+  const tagsSavedString = draft.tags?.join(", ") ?? "";
+  const hasUnsavedCardEdits =
+    anyCopyDirty(copyDirty) || variantsDirty || tags !== tagsSavedString;
+  const canRecomputeTags =
+    hasTagDictWarnings(draft.warnings) &&
+    !draft.shopify_product_id &&
+    draft.status !== "archived";
   const characterChipWarned = isCharacterMissingInWarnings(draft.character_name, draft.warnings);
   const station = resolveDraftStation(draft);
   const isCopyStation = station === "copy_review";
@@ -816,7 +819,7 @@ export function ResultCard({
     setFaq(draft.generated_faq_html ?? "");
     setSellPrice(draft.twd_price?.toString() ?? "");
     setCompareAtPrice(draft.compare_at_price?.toString() ?? "");
-    setDetectedCategory(draft.detected_category ?? "");
+    setProductType(draft.product_type ?? "");
     setSku(draft.sku ?? "");
     setSpecText(draft.spec_text ?? "");
     setPublishMode(draft.publish_mode);
@@ -1088,7 +1091,7 @@ export function ResultCard({
         // B6: 單一售價存檔時強制清掉定價，避免殘留劃線價。
         compare_at_price:
           priceMode === "single" ? null : compareAtPrice ? Number(compareAtPrice) : null,
-        detected_category: detectedCategory || null,
+        product_type: productType.trim() || null,
         sku: sku || null,
         // UX-PKG5: editable result-card mid-field
         spec_text: specText.trim() || null,
@@ -1132,8 +1135,27 @@ export function ResultCard({
       }
       setVariantsDirty(false);
       await markShopifyDirty();
+
+      const productTypeChanged =
+        (productType.trim() || null) !== (draft.product_type ?? null);
+      if (productTypeChanged && !draft.shopify_product_id) {
+        try {
+          const tagResponse = await fetch(`/api/drafts/${draft.id}/recompute-tags`, {
+            method: "POST",
+          });
+          if (!tagResponse.ok) {
+            showToast("型態已存，但 類型_ tag 沒更新，請到 Tags 分頁確認", "warn");
+          }
+        } catch {
+          showToast("型態已存，但 類型_ tag 沒更新，請到 Tags 分頁確認", "warn");
+        }
+      }
+
       // UX-A T2 / UX-L T62: transient success → toast only
-      const okMsg = comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改";
+      let okMsg = comboNote ? `已儲存修改（${comboNote}）` : "已儲存修改";
+      if (productTypeChanged && draft.shopify_product_id) {
+        okMsg = "已儲存修改（型態已改，類型_ tag 請到 Tags 分頁確認）";
+      }
       setMessage("");
       showToast(okMsg, "success");
       router.refresh();
@@ -1561,6 +1583,40 @@ export function ResultCard({
     }
   }
 
+  async function recomputeTags(): Promise<boolean> {
+    if (recomputingTags) return false;
+    if (hasUnsavedCardEdits) {
+      showToast("有未儲存的修改，請先按儲存再重算 tags", "warn");
+      return false;
+    }
+    setRecomputingTags(true);
+    try {
+      const response = await fetch(`/api/drafts/${draft.id}/recompute-tags`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        showToast(payload.error ?? "重算 tags 失敗", "error");
+        return false;
+      }
+      if (payload.remainingDictWarnings > 0) {
+        showToast(
+          `已重算 tags，還有 ${payload.remainingDictWarnings} 項角色／IP 不在字典`,
+          "warn",
+        );
+      } else {
+        showToast("已重算 tags（文案沒有變）", "success");
+      }
+      return true;
+    } catch {
+      showToast("重算 tags 連線失敗", "error");
+      return false;
+    } finally {
+      setRecomputingTags(false);
+      router.refresh();
+    }
+  }
+
   // B4: one-click write ip_characters (pending). Does not auto-regenerate (5A).
   async function quickAddCharacter(characterName: string) {
     if (!characterName.trim()) return;
@@ -1581,11 +1637,14 @@ export function ResultCard({
         showToast(payload.error ?? "一鍵新增角色失敗", "error");
         return;
       }
-      const okMsg =
-        typeof payload.message === "string"
-          ? payload.message
-          : `已處理角色「${characterName}」，請按重新生成以產出角色 tag`;
-      showToast(okMsg, "success");
+      if (hasUnsavedCardEdits) {
+        showToast(
+          `已新增「${characterName}」。有未儲存的修改，儲存後再按「重算 tags」`,
+          "warn",
+        );
+      } else {
+        await recomputeTags();
+      }
     } catch {
       showToast("一鍵新增角色連線失敗", "error");
     } finally {
@@ -3071,7 +3130,7 @@ export function ResultCard({
               description={description}
               descriptionView={descriptionView}
               detectTypeLabel={detectTypeLabel}
-              detectedCategory={detectedCategory}
+              productType={productType}
               discardArm={discardArm}
               displayByField={displayByField}
               draft={draft}
@@ -3079,10 +3138,14 @@ export function ResultCard({
               faqView={faqView}
               historyLoaded={historyLoaded}
               missingCharacters={missingCharacters}
+              canRecomputeTags={canRecomputeTags}
+              recomputingTags={recomputingTags}
+              hasUnsavedCardEdits={hasUnsavedCardEdits}
               onDescriptionViewChange={setDescriptionView}
-              onDetectedCategoryChange={setDetectedCategory}
+              onProductTypeChange={setProductType}
               onFaqViewChange={setFaqView}
               onQuickAddCharacter={(name) => void quickAddCharacter(name)}
+              onRecomputeTags={() => void recomputeTags()}
               onRegenField={(field) => void regenerateField(field)}
               onSaveCombo={() => void saveComboOnly()}
               onSetFieldDisplay={setFieldDisplay}
@@ -3189,7 +3252,11 @@ export function ResultCard({
               blockWarnCount={blockWarnCount}
               confirmWarnCount={confirmWarnCount}
               ipName={draft.ip_name}
+              canRecomputeTags={canRecomputeTags}
+              recomputingTags={recomputingTags}
+              hasUnsavedCardEdits={hasUnsavedCardEdits}
               onQuickAddCharacter={(name) => void quickAddCharacter(name)}
+              onRecomputeTags={() => void recomputeTags()}
               onTagsChange={setTags}
               quickAddingCharacter={quickAddingCharacter}
               regenerating={regenerating}

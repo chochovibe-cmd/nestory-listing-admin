@@ -84,13 +84,17 @@ function queueItemTitle(item: SequentialReviewQueueItem | undefined): string {
 export function SequentialReviewOverlay({
   open,
   queue,
+  roundId,
+  flashDraftId,
   onClose,
   onItemDone,
   mode = "copy"
 }: {
   open: boolean;
-  /** Snapshot at open time (order fixed; ids do not re-sort after approve). */
+  /** Order is fixed at open; item data is live as refreshed props arrive. */
   queue: SequentialReviewQueueItem[];
+  roundId: number;
+  flashDraftId?: string | null;
   onClose: () => void;
   /**
    * An item was actioned successfully (approve / 標圖通過 / return).
@@ -111,11 +115,11 @@ export function SequentialReviewOverlay({
     setReview((state) => reduceSequentialReview(state, action));
   }, []);
 
-  // Reset when opened with a new queue (render-phase reset: no stale first frame, and the
-  // close effect below can never see the previous round's "closed" state).
-  const [syncedQueue, setSyncedQueue] = useState(queue);
-  if (syncedQueue !== queue) {
-    setSyncedQueue(queue);
+  // Reset only when a new review round opens. Queue object identity can change on refresh
+  // because item data is live, but that must not reset navigation/progress.
+  const [syncedRoundId, setSyncedRoundId] = useState(-1);
+  if (syncedRoundId !== roundId) {
+    setSyncedRoundId(roundId);
     setReview(createSequentialReviewState(queue.map((item) => item.draft.id)));
   }
   useEffect(() => {
@@ -123,7 +127,7 @@ export function SequentialReviewOverlay({
     setApproveSignal(0);
     setExternalTab(isImageMode ? "images" : null);
     setShowHints(true);
-  }, [open, queue, isImageMode]);
+  }, [open, roundId, isImageMode]);
 
   const queueById = useMemo(() => {
     const map = new Map<string, SequentialReviewQueueItem>();
@@ -211,6 +215,8 @@ export function SequentialReviewOverlay({
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.isComposing) return;
+      // WB-2: another dialog (重生／版本／確認) is on top → its own Esc/keys win.
+      if (document.querySelector(".modal-overlay.open:not(.seq-review-overlay)")) return;
       if (isTypingTarget(event.target)) return;
 
       const key = event.key;
@@ -409,6 +415,7 @@ export function SequentialReviewOverlay({
               draft={current.draft}
               externalTab={externalTab}
               images={current.images}
+              isJumpTarget={flashDraftId === current.draft.id}
               onApproveSuccess={handleApproveSuccess}
               sequentialMode
               sequentialStation={isImageMode ? "image" : "copy"}

@@ -11,6 +11,7 @@ import {
 } from "@/lib/images/deleteProductImages";
 import { UPLOAD_CONCURRENCY, buildUploadBlobs } from "@/lib/images/clientImageResize";
 import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
+import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
 import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
 import {
   imageSlotLabel,
@@ -113,6 +114,10 @@ export function Station2ImagePanel({
   );
   const canUpload = station2UploadImageType(subtab) != null;
   const showMarks = subtab === "main" || subtab === "spec";
+  const shopifyMainId = pickShopifyMainImage(images)?.id ?? null;
+  const shopifyMainIsSpec =
+    shopifyMainId != null &&
+    images.some((image) => image.id === shopifyMainId && isSpecImage(image));
 
   async function setProcessIntent(image: ProductImage, intent: ImageProcessIntent) {
     const patch = patchForProcessIntentPick(intent, image.is_spec_process);
@@ -299,6 +304,44 @@ export function Station2ImagePanel({
     }
   }
 
+  async function makeShopifyMain(imageId: string) {
+    const pool = images
+      .filter(
+        (img) =>
+          img.image_type === "main" ||
+          img.image_type === "variant" ||
+          img.image_type === "spec",
+      )
+      .slice()
+      .sort(sortByOrder);
+    const selectedIndex = pool.findIndex((item) => item.id === imageId);
+    if (selectedIndex < 0) return;
+
+    const [selected] = pool.splice(selectedIndex, 1);
+    const rebuilt = [selected, ...pool];
+    const reindexed = rebuilt.map((item, index) => ({ ...item, sort_order: index }));
+    const byId = new Map(reindexed.map((row) => [row.id, row]));
+    const nextAll = images.map((row) => {
+      const hit = byId.get(row.id);
+      return hit ? { ...row, sort_order: hit.sort_order } : row;
+    });
+    onImagesChange(nextAll);
+
+    const results = await Promise.all(
+      reindexed.map((item) =>
+        supabase.from("product_images").update({ sort_order: item.sort_order }).eq("id", item.id)
+      )
+    );
+    const firstErr = results.find((result) => result.error)?.error;
+    if (firstErr) {
+      const msg = `排序儲存失敗：${firstErr.message}`;
+      setLocalMsg(msg);
+      showToast(msg, "error");
+      return;
+    }
+    showToast("已設為 Shopify 主圖", "success");
+  }
+
   async function setGenerateDetail(enabled: boolean) {
     if (flagBusy) return;
     setFlagBusy(true);
@@ -453,6 +496,12 @@ export function Station2ImagePanel({
               : "詳情圖（供 AI 參考，不上架）"}
         </div>
 
+        {subtab === "main" && shopifyMainIsSpec ? (
+          <div className="price-soft-warn">
+            ⚠ 目前排第一的是規格圖，Shopify 會用它當主圖；想換就在要的那張按「設為主圖」。
+          </div>
+        ) : null}
+
         {list.length > 0 ? (
           /* UX-B2-P10: horizontal strip + large thumbs; tools under each card; spec = corner badge */
           <div className="imgmark-list imgmark-strip">
@@ -532,7 +581,9 @@ export function Station2ImagePanel({
                       </button>
                     ) : null}
                   </div>
-                  <span className="imgmark-slot-label">{slot}</span>
+                  <span className="imgmark-slot-label">
+                    {subtab === "main" && image.id === shopifyMainId ? "⭐ Shopify 主圖" : slot}
+                  </span>
                   {showMarks ? (
                     <span className="imgmark-btns pthumb-tools">
                       {PROCESS_INTENT_OPTIONS.map((intent) => (
@@ -553,6 +604,21 @@ export function Station2ImagePanel({
                             : PROCESS_INTENT_LABELS[intent]}
                         </button>
                       ))}
+                      {subtab === "main" && image.id !== shopifyMainId ? (
+                        <button
+                          className="img-mark-btn"
+                          disabled={busyId === image.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void makeShopifyMain(image.id);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          title="移到第一張，Shopify 會用這張當主圖"
+                          type="button"
+                        >
+                          設為主圖
+                        </button>
+                      ) : null}
                     </span>
                   ) : (
                     <span className="muted s2-detail-hint">

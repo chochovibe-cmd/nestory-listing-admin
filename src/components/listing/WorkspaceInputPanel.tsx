@@ -31,6 +31,12 @@ import {
   rememberToneForIp
 } from "@/lib/drafts/toneMemory";
 import {
+  FACTORY_DEFAULT_PRICE_MODE,
+  FACTORY_DEFAULT_TONE,
+  readWorkspacePrefs,
+  writeWorkspacePref,
+} from "@/lib/drafts/workspacePrefs";
+import {
   GENERATION_PROGRESS_EVENT,
   GENERATION_STEP_LABELS,
   type GenerationProgress
@@ -182,7 +188,7 @@ const TONE_OPTIONS = [
 ] as const;
 
 const LENGTH_OPTIONS = ["精簡", "標準", "詳細"] as const;
-const DEFAULT_TONE = TONE_OPTIONS[0].value;
+const DEFAULT_TONE = FACTORY_DEFAULT_TONE;
 const DEFAULT_COPY_LENGTH: (typeof LENGTH_OPTIONS)[number] = "標準";
 const DEFAULT_WEB_SEARCH = true;
 const MODEL_CYCLE: Array<"claude" | "openai"> = ["claude", "openai"];
@@ -271,6 +277,9 @@ export function WorkspaceInputPanel({
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [inventoryNotice, setInventoryNotice] = useState("");
   const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>(DEFAULT_TONE);
+  const [preferredTone, setPreferredTone] = useState<string>(DEFAULT_TONE);
+  const preferredToneRef = useRef(preferredTone);
+  preferredToneRef.current = preferredTone;
   const [copyLength, setCopyLength] = useState<(typeof LENGTH_OPTIONS)[number]>(DEFAULT_COPY_LENGTH);
   /** BX7: image counts from ImageUploader for cost hint */
   const [imageCounts, setImageCounts] = useState({ main: 0, detail: 0 });
@@ -302,8 +311,8 @@ export function WorkspaceInputPanel({
   const [manualPricingEnabled, setManualPricingEnabled] = useState(false);
   const [manualCompareAtPrice, setManualCompareAtPrice] = useState("");
   const [manualSellPrice, setManualSellPrice] = useState("");
-  // B6: 特價/單一售價；預設特價。切到單一暫留定價，送出才寫 null。
-  const [priceMode, setPriceMode] = useState<PriceMode>("sale");
+  // B6: 特價/單一售價；預設單一售價（WB-4，每台裝置記住）。切到單一暫留定價，送出才寫 null。
+  const [priceMode, setPriceMode] = useState<PriceMode>(FACTORY_DEFAULT_PRICE_MODE);
   const [retainedCompareAt, setRetainedCompareAt] = useState<number | null>(null);
   // B6 A 案：利潤手改驅動售價；成本／幣別／匯率變動時必須清掉，避免殘留舊值。
   const [profitDriven, setProfitDriven] = useState(false);
@@ -381,7 +390,7 @@ export function WorkspaceInputPanel({
   // B17: auto-expand advanced sections when content appears (typing, screenshot fill, B13 restore).
   // Only open on false→true so the operator can still collapse manually.
   const aiHasContent =
-    tone !== DEFAULT_TONE ||
+    tone !== preferredTone ||
     copyLength !== DEFAULT_COPY_LENGTH ||
     useWebSearch !== DEFAULT_WEB_SEARCH ||
     sessionProvider !== null;
@@ -485,6 +494,17 @@ export function WorkspaceInputPanel({
       window.removeEventListener("storage", onStorage);
     };
   }, []);
+
+  useEffect(() => {
+    if (initialFromServer) return;
+    const prefs = readWorkspacePrefs(
+      typeof window !== "undefined" ? window.localStorage : null,
+      TONE_OPTIONS.map((option) => option.value),
+    );
+    setPriceMode(prefs.priceMode);
+    setTone(prefs.tone as (typeof TONE_OPTIONS)[number]["value"]);
+    setPreferredTone(prefs.tone);
+  }, [initialFromServer]);
 
   // CAP-2.5: apply server seed once (URL ?draft= wins over localStorage restore).
   // Does not clear autosave key (Fable E); only skips auto-showing restore bar.
@@ -696,6 +716,7 @@ export function WorkspaceInputPanel({
       setManualCompareAtPrice(String(retainedCompareAt));
     }
     setPriceMode(next);
+    writeWorkspacePref(typeof window !== "undefined" ? window.localStorage : null, { priceMode: next });
   }
 
   // 非利潤驅動時，把利潤輸入同步成「售價−成本」，避免幣別／匯率切換後殘留舊利潤。
@@ -1547,7 +1568,7 @@ export function WorkspaceInputPanel({
 
     // B17 req1: B13 restore must open sections that already have content (don't look like data lost).
     const restoredAi =
-      (TONE_OPTIONS.some((t) => t.value === fields.tone) && fields.tone !== DEFAULT_TONE) ||
+      (TONE_OPTIONS.some((t) => t.value === fields.tone) && fields.tone !== preferredToneRef.current) ||
       fields.copyLength !== DEFAULT_COPY_LENGTH ||
       fields.useWebSearch !== DEFAULT_WEB_SEARCH;
     const restoredVariants =
@@ -1948,7 +1969,7 @@ export function WorkspaceInputPanel({
     if (!TONE_OPTIONS.some((t) => t.value === hit.tone)) return;
     setTone((current) => {
       // only auto-switch from default so we don't fight manual picks
-      if (current !== DEFAULT_TONE) return current;
+      if (current !== preferredToneRef.current) return current;
       return hit.tone as (typeof TONE_OPTIONS)[number]["value"];
     });
   }, [title]);
@@ -2439,7 +2460,7 @@ export function WorkspaceInputPanel({
               </div>
             ) : null}
 
-            {/* B6: 特價 / 單一售價二選一（預設特價） */}
+            {/* B6: 特價 / 單一售價二選一（預設單一售價；WB-4 每台裝置記住） */}
             <div className="price-mode" role="group" aria-label="定價模式">
               <button
                 className={`price-mode-btn${priceMode === "sale" ? " active" : ""}`}
@@ -2660,7 +2681,14 @@ export function WorkspaceInputPanel({
                     <button
                       className={`tone-card${tone === option.value ? " active" : ""}`}
                       key={option.value}
-                      onClick={() => setTone(option.value)}
+                      onClick={() => {
+                        setTone(option.value);
+                        setPreferredTone(option.value);
+                        writeWorkspacePref(
+                          typeof window !== "undefined" ? window.localStorage : null,
+                          { tone: option.value },
+                        );
+                      }}
                       type="button"
                     >
                       <span className="tone-emoji">{option.emoji}</span>

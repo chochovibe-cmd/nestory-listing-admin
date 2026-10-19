@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
@@ -12,6 +12,10 @@ import {
   type SequentialReviewQueueItem
 } from "@/components/listing/SequentialReviewOverlay";
 import { StageFilterPills } from "@/components/drafts/StageFilterPills";
+import {
+  REGEN_QUEUE_STATUS_EVENT,
+  type RegenQueueStatusDetail,
+} from "@/components/listing/GenerationQueueRunner";
 import { FactoryBridgeStrip } from "@/components/listing/FactoryBridgeStrip";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
@@ -245,6 +249,24 @@ export function DraftResultsPanel({
   /** UX-AE T133: Dashboard / deep-link arrival pulse target (clears after ~3s). */
   const [jumpTargetId, setJumpTargetId] = useState<string | null>(null);
   const jumpHighlightTimerRef = useRef<number | null>(null);
+  const [doneFlashId, setDoneFlashId] = useState<string | null>(null);
+  const doneFlashTimerRef = useRef<number | null>(null);
+  const armDoneFlash = useCallback((draftId: string) => {
+    if (doneFlashTimerRef.current != null) {
+      window.clearTimeout(doneFlashTimerRef.current);
+    }
+    setDoneFlashId(draftId);
+    doneFlashTimerRef.current = window.setTimeout(() => {
+      setDoneFlashId(null);
+      doneFlashTimerRef.current = null;
+    }, 8000);
+  }, []);
+  useEffect(
+    () => () => {
+      if (doneFlashTimerRef.current != null) window.clearTimeout(doneFlashTimerRef.current);
+    },
+    [],
+  );
   const jumpArrivalHandledRef = useRef(false);
   /** Gate T133 until sessionStorage stage/sort restore finishes (avoid wrong first card). */
   const [prefsReady, setPrefsReady] = useState(false);
@@ -273,12 +295,15 @@ export function DraftResultsPanel({
     /** PUBLISH-GUARD: batch API answered mock:true (dry run on the test site). */
     mock?: boolean;
   } | null>(null);
-  /** UX-Q T70 / BX1 延伸: sequential copy or image review (snapshot at open). */
+  /** UX-Q T70 / BX1 延伸: sequential review order is fixed at open; item data stays live. */
   const [seqReviewOpen, setSeqReviewOpen] = useState(false);
   const [seqReviewMode, setSeqReviewMode] = useState<SequentialReviewMode>("copy");
-  const [seqReviewQueue, setSeqReviewQueue] = useState<SequentialReviewQueueItem[]>(
-    []
-  );
+  const [seqReviewRound, setSeqReviewRound] = useState<{
+    id: number;
+    ids: string[];
+    snapshot: Map<string, SequentialReviewQueueItem>;
+  } | null>(null);
+  const seqRoundCounterRef = useRef(0);
 
   // B1: the input panel (left) drives the 生成 progress card via a window event;
   // this panel (right) renders it at the top of the results list, matching the
@@ -300,10 +325,27 @@ export function DraftResultsPanel({
         return;
       }
       setProgress(model);
+      if (
+        model.visible &&
+        !model.error &&
+        model.steps.length > 0 &&
+        model.steps.every((step) => step.status === "done")
+      ) {
+        if (model.draftId) armDoneFlash(model.draftId);
+      }
     }
     window.addEventListener(GENERATION_PROGRESS_EVENT, onProgress);
     return () => window.removeEventListener(GENERATION_PROGRESS_EVENT, onProgress);
-  }, []);
+  }, [armDoneFlash]);
+
+  useEffect(() => {
+    function onRegenStatus(event: Event) {
+      const detail = (event as CustomEvent<RegenQueueStatusDetail>).detail;
+      if (detail?.status === "completed") armDoneFlash(detail.draftId);
+    }
+    window.addEventListener(REGEN_QUEUE_STATUS_EVENT, onRegenStatus);
+    return () => window.removeEventListener(REGEN_QUEUE_STATUS_EVENT, onRegenStatus);
+  }, [armDoneFlash]);
 
   // UX-B2-P14: resolve role so only admin sees「全部成員」toggle
   useEffect(() => {
@@ -530,6 +572,23 @@ export function DraftResultsPanel({
     }
     return map;
   }, [variants]);
+
+  const draftsById = useMemo(
+    () => new Map(drafts.map((draft) => [draft.id, draft])),
+    [drafts],
+  );
+  const seqReviewQueue = useMemo<SequentialReviewQueueItem[]>(() => {
+    if (!seqReviewRound) return [];
+    return seqReviewRound.ids.map((id) => {
+      const live = draftsById.get(id);
+      if (!live) return seqReviewRound.snapshot.get(id)!;
+      return {
+        draft: live,
+        images: imagesByDraft.get(id) ?? [],
+        variantPrices: variantsByDraft.get(id) ?? EMPTY_VARIANT_PRICES,
+      };
+    });
+  }, [seqReviewRound, draftsById, imagesByDraft, variantsByDraft]);
 
   const stageImages = useMemo(
     () =>
@@ -1053,6 +1112,7 @@ export function DraftResultsPanel({
         if (!response.ok && !payload.ok) {
           setMessage(messages.join("\n"));
           showToast(messages.join("；") || "批次分流失敗", "error");
+          router.refresh();
           return;
         }
       }
@@ -1077,6 +1137,7 @@ export function DraftResultsPanel({
           messages.push((payload.error ?? "送生圖工廠失敗") + hint);
           setMessage(messages.join("\n"));
           showToast(payload.error ?? "送生圖工廠失敗", "error");
+          router.refresh();
           return;
         }
         messages.push(
@@ -1688,8 +1749,13 @@ export function DraftResultsPanel({
       images: imagesByDraft.get(draft.id) ?? [],
       variantPrices: variantsByDraft.get(draft.id) ?? EMPTY_VARIANT_PRICES
     }));
+    seqRoundCounterRef.current += 1;
     setSeqReviewMode(isImageStation ? "image" : "copy");
-    setSeqReviewQueue(queue);
+    setSeqReviewRound({
+      id: seqRoundCounterRef.current,
+      ids: queue.map((item) => item.draft.id),
+      snapshot: new Map(queue.map((item) => [item.draft.id, item])),
+    });
     setSeqReviewOpen(true);
   }
 
@@ -2081,7 +2147,7 @@ export function DraftResultsPanel({
                   checked={selectedIds.has(draft.id)}
                   draft={draft}
                   images={imagesByDraft.get(draft.id) ?? []}
-                  isJumpTarget={jumpTargetId === draft.id}
+                  isJumpTarget={jumpTargetId === draft.id || doneFlashId === draft.id}
                   key={draft.id}
                   leaving={leavingIds.has(draft.id)}
                   onGestureStart={() => {
@@ -2118,7 +2184,7 @@ export function DraftResultsPanel({
         mode={seqReviewMode}
         onClose={() => {
           setSeqReviewOpen(false);
-          setSeqReviewQueue([]);
+          setSeqReviewRound(null);
           setSeqReviewMode("copy");
         }}
         // REVIEW-FLOW B4: items actioned in the overlay must not blink back on the list
@@ -2128,6 +2194,8 @@ export function DraftResultsPanel({
         }}
         open={seqReviewOpen}
         queue={seqReviewQueue}
+        roundId={seqReviewRound?.id ?? 0}
+        flashDraftId={doneFlashId}
       />
 
       <ReviewConfirmModal

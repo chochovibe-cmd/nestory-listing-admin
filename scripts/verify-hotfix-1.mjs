@@ -415,8 +415,10 @@ await check("S1: only 2 main + 3 variant media survive 10 detail + 1 generated_d
 });
 await check("S2: shared media predicate is used by both payload and sync", () => {
   const payloadSource = read("src/lib/shopify/payload.ts");
+  const mediaPredicateSource = read("src/lib/images/shopifyMainImage.ts");
   const syncSource = read("src/lib/shopify/syncShopifyProduct.ts");
-  assert.match(payloadSource, /export function isShopifyProductMediaImage\(/);
+  assert.match(payloadSource, /export \{ isShopifyProductMediaImage \} from "@\/lib\/images\/shopifyMainImage"/);
+  assert.match(mediaPredicateSource, /export function isShopifyProductMediaImage\(/);
   assert.match(payloadSource, /\.filter\(isShopifyProductMediaImage\)/);
   assert.match(syncSource, /import \{ buildShopifyProductPayload, isShopifyProductMediaImage \} from "@\/lib\/shopify\/payload"/);
   assert.match(syncSource, /\.filter\(isShopifyProductMediaImage\)/);

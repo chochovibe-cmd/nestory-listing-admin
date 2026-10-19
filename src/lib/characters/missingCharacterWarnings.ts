@@ -1,3 +1,5 @@
+import { splitCharacterNames } from "@/lib/characters/splitCharacterNames";
+
 /**
  * B4: parse generate-time warnings for missing character dictionary entries.
  * Covers both Tags V2 wording and legacy tag_rules wording (filtered after regen).
@@ -17,8 +19,9 @@ export function extractMissingCharacterNames(warnings: string[] | null | undefin
     for (const pattern of MISSING_CHARACTER_PATTERNS) {
       const match = warning.match(pattern);
       if (match?.[1]) {
-        const name = match[1].trim();
-        if (name && !found.includes(name)) found.push(name);
+        for (const name of splitCharacterNames(match[1])) {
+          if (!found.includes(name)) found.push(name);
+        }
       }
     }
   }

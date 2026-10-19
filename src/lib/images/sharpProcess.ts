@@ -111,9 +111,11 @@ async function processBlurExtend(
   quality: number
 ): Promise<SharpProcessResult> {
   // Orientation-corrected pixels first, so EXIF width/height swaps cannot skew the maths.
-  // Raw output keeps this intermediate step lossless.
+  // Raw output keeps this intermediate step lossless; clamping to the long-edge cap first
+  // keeps the raw buffer small for huge sources (an 8000px RGBA raw would be ~256MB).
   const rotated = await sharp(input, { failOn: "none" })
     .rotate()
+    .resize(maxLongEdge, maxLongEdge, { fit: "inside", withoutEnlargement: true })
     .raw()
     .toBuffer({ resolveWithObject: true });
   const { width: w, height: h, channels } = rotated.info;

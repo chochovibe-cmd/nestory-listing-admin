@@ -6,6 +6,7 @@ const root = process.cwd();
 const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 const safe = read("src/lib/shopify/publishDraftSafe.ts");
 const payload = read("src/lib/shopify/payload.ts");
+const shopifyMainImage = read("src/lib/images/shopifyMainImage.ts");
 const prep = read("src/lib/images/prepareImagesForPublish.ts");
 const lifecycle = read("src/lib/shopify/productLifecycle.ts");
 const unpublish = read("src/app/api/drafts/[id]/unpublish/route.ts");
@@ -58,7 +59,8 @@ assert.match(safe, /media sync is pending/, "pre-media recovery checkpoint missi
 // VARIANT-CLEAN: a SKU a person typed stays authoritative; empty / NS- / Taobao id / old AI SKUs become NS-<draft>-01.
 assert.match(payload, /const publishSku = manualSku \?\? deriveDraftSku\(draft\.id, draft\.sku\);/, "a reviewed (manual) draft SKU must be authoritative when present");
 assert.match(payload, /\.\.\.generatedVariantSeed,[\s\S]*sku: publishSku/, "generated variant seed must not override reviewed draft SKU");
-assert.match(payload, /image\.image_type === "main" \|\| image\.image_type === "variant"/, "Shopify product media must only include main and variant images");
+assert.match(payload, /isShopifyProductMediaImage/, "payload must use shared Shopify media predicate");
+assert.match(shopifyMainImage, /image\.image_type === "main" \|\| image\.image_type === "variant"/, "Shopify product media must only include main and variant images");
 assert.match(prep, /processing_status === "done"/, "publish image prep must reuse completed processed images");
 assert.match(prep, /isShopifyCdnUrl\(img\.processed_file_url\)/, "publish image prep must recognize existing Shopify CDN URLs");
 assert.match(prep, /shouldRunSharp/, "publish image prep sharp fast-path missing");

@@ -8,7 +8,10 @@ import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
 import { PriceResyncPanel } from "@/components/records/PriceResyncPanel";
 import { isAdmin } from "@/lib/auth/roles";
-import { runStepwisePublishBatch } from "@/lib/drafts/publishBatchClient";
+import {
+  continueStepwisePublishBatch,
+  runStepwisePublishBatch
+} from "@/lib/drafts/publishBatchClient";
 import {
   MIGRATION_027_HINT,
   formatMockPublishResponseMessage,
@@ -427,6 +430,38 @@ export function PublishRecordsPanel() {
     }
   }
 
+  async function continueBatch(row: PublishBatchListRow) {
+    setRetryBusyId(row.id);
+    setNotice(null);
+    try {
+      const items = await ensureItems(row.id);
+      const payload = await continueStepwisePublishBatch({
+        batchId: row.id,
+        total: row.total_count ?? items.length,
+        draftIds: items.map((item) => item.draft_id),
+        publishMode: row.publish_mode === "active" ? "active" : "draft",
+        onProgress: (progress) => setNotice(progress.text)
+      });
+      if (!payload.ok) {
+        const line = [payload.error ?? "繼續發布失敗", payload.hint].filter(Boolean).join(" — ");
+        showToast(line, "error");
+      } else {
+        showToast(
+          payload.message ??
+            `已繼續發布：成功 ${payload.succeeded ?? 0}／失敗 ${payload.failed ?? 0}`,
+          "success"
+        );
+      }
+      setNotice(null);
+      await loadBatches();
+    } catch {
+      showToast("繼續發布連線失敗", "error");
+      setNotice(null);
+    } finally {
+      setRetryBusyId(null);
+    }
+  }
+
   async function runRetryPublish(draftIds: string[], publishMode: PublishMode) {
     setNotice(null);
     try {
@@ -747,6 +782,21 @@ export function PublishRecordsPanel() {
                       ) : null}
                       <span className="ir-head-chev">{open ? "▴" : "▾"}</span>
                     </button>
+                    {row.status === "processing" ? (
+                      <Button
+                        size="sm"
+                        type="button"
+                        className="rec-retry"
+                        loading={retryBusy}
+                        disabled={!!retryBusyId}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void continueBatch(row);
+                        }}
+                      >
+                        ▶ 繼續發布
+                      </Button>
+                    ) : null}
                     {showRetry ? (
                       <Button
                         size="sm"

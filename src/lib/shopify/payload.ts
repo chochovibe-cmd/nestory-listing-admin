@@ -11,6 +11,8 @@ import { buildInternalLinkHtml, InternalLinkMap } from "@/lib/contentGenerator/i
 import { buildImageFileNameSlug } from "@/lib/contentGenerator/imageFileNameGenerator";
 import { buildExternalVideoMedia } from "@/lib/media/videoUrls";
 import { resolveShopifyCategoryId } from "@/lib/shopify/taxonomyCategory";
+import { isShopifyProductMediaImage } from "@/lib/images/shopifyMainImage";
+export { isShopifyProductMediaImage } from "@/lib/images/shopifyMainImage";
 import type { ProductDraft, ProductImage, ProductVariantRow, PublishMode } from "@/types/domain";
 import {
   buildVariantPublishPlan,
@@ -19,10 +21,6 @@ import {
 import { deriveDraftSku, isAutoSku } from "@/lib/variants/variantSku";
 
 const CHAOCHAO_SALES_TONE = "潮巢導購版";
-
-export function isShopifyProductMediaImage(image: { image_type: string }): boolean {
-  return image.image_type === "main" || image.image_type === "variant";
-}
 
 export interface ShopifyPublishDraft extends ProductDraft {
   product_images?: ProductImage[];

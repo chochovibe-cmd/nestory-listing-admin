@@ -84,7 +84,9 @@ const scripts = [
   // VARIANT-CLEAN: fake options excluded at import, rule + AI-validated names, NS- SKU, variant image bind, resync.
   "scripts/verify-variant-clean.mjs",
   // SHOP-LISTING: Shopify category, blur-extend square images, 2048 WebP shrink + concurrent upload.
-  "scripts/verify-shop-listing.mjs"
+  "scripts/verify-shop-listing.mjs",
+  // WORKBENCH-UX: role tags, sequential review, Shopify main image, workspace defaults.
+  "scripts/verify-workbench-ux.mjs"
 ];
 
 for (const script of scripts) {

@@ -20,6 +20,11 @@ import {
 } from "@/lib/drafts/publishBatch";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import {
+  checkPublishReadiness,
+  formatPublishBlockMessage,
+  type ReadinessVariantRow
+} from "@/lib/shopify/publishReadiness";
+import {
   recoverStalePublishBatches,
   type RecoverStalePublishBatchesOptions
 } from "@/lib/shopify/recoverStalePublishBatches";
@@ -35,6 +40,7 @@ import {
   type RunPublishBatchInput,
   type RunPublishBatchResult
 } from "@/lib/shopify/runPublishBatch";
+import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import type { PublishBatchStatus, PublishMode } from "@/types/domain";
 
 export type StepwiseCreateResult =
@@ -46,6 +52,8 @@ export type StepwiseCreateResult =
       total: number;
       publishMode: PublishMode;
       items: Array<{ draftId: string; itemStatus: "queued" }>;
+      /** Items the pre-publish readiness check already failed (never sent to Shopify). */
+      preflightBlocked: Array<{ draftId: string; title: string; error: string }>;
     }
   // Mock dry run: the complete one-shot answer (nothing was written).
   | Extract<RunPublishBatchResult, { ok: true }>
@@ -89,6 +97,12 @@ export async function createStepwisePublishBatch(
       batchId: created.batchId ?? null
     };
   }
+  const preflightBlocked = await preflightBlockItems(
+    serviceSupabase,
+    created.batchId,
+    created.ordered,
+    now
+  );
   return {
     ok: true,
     mock: false,
@@ -96,8 +110,79 @@ export async function createStepwisePublishBatch(
     batchStatus: "processing",
     total: created.ordered.length,
     publishMode,
-    items: created.ordered.map((item) => ({ draftId: item.draftId, itemStatus: "queued" as const }))
+    items: created.ordered.map((item) => ({ draftId: item.draftId, itemStatus: "queued" as const })),
+    preflightBlocked
   };
+}
+
+/**
+ * Run the pure readiness check over the whole batch once, so a draft that publishDraft would
+ * refuse is failed up front (no Shopify call, draft untouched). A read error skips the
+ * preflight: publishDraft still runs the same check per item.
+ */
+async function preflightBlockItems(
+  serviceSupabase: PublishBatchServiceClient,
+  batchId: string,
+  ordered: Array<{ draftId: string; title: string }>,
+  now: () => number
+): Promise<Array<{ draftId: string; title: string; error: string }>> {
+  const ids = ordered.map((item) => item.draftId);
+  const { data: draftRows, error: draftError } = await fetchAllRows((from, to) =>
+    serviceSupabase
+      .from("product_drafts")
+      .select("id, cny_price, twd_price, raw_capture")
+      .in("id", ids)
+      .order("id")
+      .range(from, to)
+  );
+  if (draftError || !draftRows) return [];
+  const { data: variantRows, error: variantError } = await fetchAllRows((from, to) =>
+    serviceSupabase
+      .from("product_variants")
+      .select("*")
+      .in("draft_id", ids)
+      .order("draft_id")
+      .order("sort_order", { ascending: true })
+      .order("id")
+      .range(from, to)
+  );
+  if (variantError || !variantRows) return [];
+
+  const variantsByDraft = new Map<string, ReadinessVariantRow[]>();
+  for (const row of variantRows as Array<ReadinessVariantRow & { draft_id: string }>) {
+    const list = variantsByDraft.get(row.draft_id) ?? [];
+    list.push(row);
+    variantsByDraft.set(row.draft_id, list);
+  }
+  const draftById = new Map(
+    (draftRows as Array<{ id: string; cny_price: unknown; twd_price: unknown; raw_capture: unknown }>).map(
+      (row) => [row.id, row] as const
+    )
+  );
+
+  const blocked: Array<{ draftId: string; title: string; error: string }> = [];
+  for (const item of ordered) {
+    const draft = draftById.get(item.draftId);
+    if (!draft) continue; // missing drafts are failed by runPublishBatchItem
+    const readiness = checkPublishReadiness(draft, variantsByDraft.get(item.draftId) ?? [], {
+      confirmVariantPrices: false
+    });
+    if (!readiness.blocked) continue;
+    const error = "發布前檢查擋下：" + formatPublishBlockMessage(readiness.blockers);
+    const { error: writeError } = await serviceSupabase
+      .from("publish_batch_items")
+      .update({
+        item_status: "failed",
+        error_message: error.slice(0, 500),
+        completed_at: new Date(now()).toISOString()
+      })
+      .eq("batch_id", batchId)
+      .eq("draft_id", item.draftId)
+      .eq("item_status", "queued");
+    if (writeError) continue; // stays queued; publishDraft blocks it at its own turn
+    blocked.push({ draftId: item.draftId, title: item.title, error });
+  }
+  return blocked;
 }
 
 export type StepPublishBatchInput = {
@@ -350,40 +435,53 @@ export async function stepPublishBatch(input: StepPublishBatchInput): Promise<St
 }
 
 /**
- * queued → processing, atomically. Candidates are read first, then each is taken with a
- * conditional update (`item_status = 'queued'`); the loser of a race gets no row back
- * and moves on to the next candidate. Also bumps the batch header's updated_at (the
- * liveness clock the stale-recovery reads).
+ * Claim the oldest runnable item without skipping work already in progress. The single
+ * ordered read puts `processing` before `queued`; if another request owns that item, this
+ * request waits instead of racing ahead to a later draft. The conditional update remains
+ * the claim CAS. Also bumps the batch header's updated_at (the stale-recovery liveness clock).
  */
 async function claimNextQueuedItem(
   serviceSupabase: PublishBatchServiceClient,
   batchId: string,
   now: () => number
 ): Promise<{ id: string; draft_id: string } | null> {
-  const { data: candidates } = await serviceSupabase
+  const { data: candidates, error: candidatesError } = await serviceSupabase
     .from("publish_batch_items")
-    .select("id, draft_id")
+    .select("id, draft_id, item_status, attempt_count")
     .eq("batch_id", batchId)
-    .eq("item_status", "queued")
+    .in("item_status", ["processing", "queued"])
+    .order("item_status", { ascending: true })
     .order("created_at", { ascending: true })
-    .limit(10);
+    .order("id", { ascending: true })
+    .limit(1);
 
-  for (const candidate of (candidates ?? []) as Array<{ id: string; draft_id: string }>) {
-    const { data: won } = await serviceSupabase
-      .from("publish_batch_items")
-      .update({ item_status: "processing" })
-      .eq("id", candidate.id)
-      .eq("item_status", "queued")
-      .select("id")
-      .maybeSingle();
-    if (won?.id) {
-      await serviceSupabase
-        .from("publish_batches")
-        .update({ updated_at: new Date(now()).toISOString() })
-        .eq("id", batchId)
-        .eq("status", "processing");
-      return { id: candidate.id, draft_id: candidate.draft_id };
-    }
-  }
-  return null;
+  if (candidatesError) throw new Error(`讀取待發布項目失敗：${candidatesError.message}`);
+  if (!candidates?.length) return null;
+  const candidate = (
+    candidates as Array<{ id: string; draft_id: string; item_status: string; attempt_count: number | null }>
+  )[0];
+  if (candidate.item_status === "processing") return null;
+  const attemptCount = candidate.attempt_count ?? 0;
+
+  const { data: won, error } = await serviceSupabase
+    .from("publish_batch_items")
+    .update({
+      item_status: "processing",
+      attempt_count: attemptCount + 1,
+      started_at: new Date(now()).toISOString()
+    })
+    .eq("id", candidate.id)
+    .eq("item_status", "queued")
+    .eq("attempt_count", attemptCount)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`發布項目領取失敗：${error.message}`);
+  if (!won?.id) return null;
+
+  await serviceSupabase
+    .from("publish_batches")
+    .update({ updated_at: new Date(now()).toISOString() })
+    .eq("id", batchId)
+    .eq("status", "processing");
+  return { id: candidate.id, draft_id: candidate.draft_id };
 }

@@ -4,7 +4,7 @@
  *   1. POST /api/drafts/batch/publish { stepwise:true }  → batch + queued items, nothing published
  *   2. POST /api/publish-batches/[batchId]/step           → ONE item per request, until done:true
  *
- * Every item therefore gets its own 60s server budget (the old single long request killed
+ * Every item therefore gets its own server time budget (the old single long request killed
  * the rest of the batch when one item was slow). The helper returns the SAME shape the old
  * one-shot batch response had (ok, batchId, batchStatus, succeeded, failed, skipped,
  * results[], message) so the three batch callers keep their existing result handling.
@@ -13,6 +13,7 @@
  * which is returned as is — no step calls, nothing written.
  */
 import {
+  PUBLISH_STALE_ITEM_MS,
   formatPublishBatchOperatorMessage,
   summarizePublishBatchStatus
 } from "@/lib/drafts/publishBatch";
@@ -73,8 +74,21 @@ export type RunStepwisePublishBatchInput = {
   stepRetries?: number;
   /** Pause between two step requests. Default 300 ms. */
   stepGapMs?: number;
-  /** Pause when nothing was claimable because another tab is publishing. Default 1500 ms. */
+  /** Pause when nothing was claimable because another tab is publishing. Default 5000 ms. */
   waitingGapMs?: number;
+  /** Inject for tests (the no-progress timeout reads it). */
+  now?: () => number;
+};
+
+export type ContinueStepwisePublishBatchInput = {
+  batchId: string;
+  total: number;
+  draftIds: string[];
+  publishMode?: PublishMode;
+  onProgress?: (progress: StepwiseProgress) => void;
+  fetchImpl?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
 };
 
 type CountsPayload = {
@@ -89,7 +103,7 @@ type CountsPayload = {
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export function formatStepwiseProgressText(processed: number, total: number): string {
-  return `發布中 ${Math.min(processed, total)}/${total}…`;
+  return `發布中 ${Math.min(processed, total)}/${total}…（請勿關閉此頁）`;
 }
 
 function failure(status: number, error: string, extra: Partial<StepwisePublishSummary> = {}): StepwisePublishSummary {
@@ -139,7 +153,8 @@ export async function runStepwisePublishBatch(
     sleep = defaultSleep,
     stepRetries = 2,
     stepGapMs = 300,
-    waitingGapMs = 1500
+    waitingGapMs = 5000,
+    now = () => Date.now()
   } = input;
 
   // ---- 1) create -----------------------------------------------------------
@@ -185,88 +200,198 @@ export async function runStepwisePublishBatch(
     ? createdPayload.items
     : draftIds.map((draftId) => ({ draftId }));
 
+  const preflightBlocked: Array<{ draftId: string; title?: string; error: string }> = Array.isArray(
+    createdPayload.preflightBlocked
+  )
+    ? createdPayload.preflightBlocked
+    : [];
+  return stepUntilDone({
+    batchId,
+    total,
+    createdItems,
+    preflightBlocked,
+    publishMode,
+    onProgress,
+    fetchImpl,
+    sleep,
+    stepRetries,
+    stepGapMs,
+    waitingGapMs,
+    now
+  });
+}
+
+/** Resume driving an existing batch (no create call), e.g. after the tab was closed. */
+export async function continueStepwisePublishBatch(
+  input: ContinueStepwisePublishBatchInput
+): Promise<StepwisePublishSummary> {
+  const {
+    batchId,
+    total,
+    draftIds,
+    publishMode = "draft",
+    onProgress,
+    fetchImpl = (...args: Parameters<typeof fetch>) => fetch(...args),
+    sleep = defaultSleep,
+    now = () => Date.now()
+  } = input;
+  return stepUntilDone({
+    batchId,
+    total,
+    createdItems: draftIds.map((draftId) => ({ draftId })),
+    preflightBlocked: [],
+    publishMode,
+    onProgress,
+    fetchImpl,
+    sleep,
+    stepRetries: 2,
+    stepGapMs: 300,
+    waitingGapMs: 5000,
+    now
+  });
+}
+
+async function stepUntilDone(ctx: {
+  batchId: string;
+  total: number;
+  createdItems: Array<{ draftId: string }>;
+  preflightBlocked: Array<{ draftId: string; title?: string; error: string }>;
+  publishMode: PublishMode;
+  onProgress?: (progress: StepwiseProgress) => void;
+  fetchImpl: typeof fetch;
+  sleep: (ms: number) => Promise<void>;
+  stepRetries: number;
+  stepGapMs: number;
+  waitingGapMs: number;
+  now: () => number;
+}): Promise<StepwisePublishSummary> {
+  const {
+    batchId,
+    total,
+    createdItems,
+    preflightBlocked,
+    publishMode,
+    onProgress,
+    fetchImpl,
+    sleep,
+    stepRetries,
+    stepGapMs,
+    waitingGapMs,
+    now
+  } = ctx;
+
   const results = new Map<string, StepwisePublishResultRow>();
+  for (const blocked of preflightBlocked) {
+    results.set(blocked.draftId, {
+      id: blocked.draftId,
+      ok: false,
+      itemStatus: "failed",
+      error: blocked.error
+    });
+  }
   let lastCounts: CountsPayload | null = null;
   let lastStatus: PublishBatchStatus | null = null;
   let finalMessage: string | undefined;
   let finished = false;
   let aborted = false;
   let consecutiveFailedSteps = 0;
-  const maxIterations = total * 4 + 200;
+  // No-progress guard: a killed item needs PUBLISH_STALE_ITEM_MS to be re-queued by the server.
+  const maxIdleMs = PUBLISH_STALE_ITEM_MS + 120_000;
+  let lastCountsKey: string | null = null;
+  let lastProgressAt = now();
 
   onProgress?.({ processed: 0, total, text: formatStepwiseProgressText(0, total) });
 
+  // Closing the tab mid-run only pauses it (the 發布紀錄 panel can continue), so warn first.
+  const warnOnUnload =
+    typeof window === "undefined"
+      ? null
+      : (event: BeforeUnloadEvent) => {
+          event.preventDefault();
+          event.returnValue = "";
+        };
+  if (warnOnUnload) window.addEventListener("beforeunload", warnOnUnload);
+
   // ---- 2) step until done ----------------------------------------------------
-  for (let iteration = 0; iteration < maxIterations && !finished; iteration += 1) {
-    let step: Awaited<ReturnType<typeof postJson>> | null = null;
-    for (let attempt = 0; attempt <= stepRetries; attempt += 1) {
-      try {
-        const answer = await postJson(fetchImpl, `/api/publish-batches/${batchId}/step`);
-        if (answer.status >= 500 || answer.payload == null) {
-          throw new StepTransportError(`HTTP ${answer.status}`);
+  try {
+    while (!finished) {
+      let step: Awaited<ReturnType<typeof postJson>> | null = null;
+      for (let attempt = 0; attempt <= stepRetries; attempt += 1) {
+        try {
+          const answer = await postJson(fetchImpl, `/api/publish-batches/${batchId}/step`);
+          if (answer.status >= 500 || answer.payload == null) {
+            throw new StepTransportError(`HTTP ${answer.status}`);
+          }
+          step = answer;
+          break;
+        } catch {
+          if (attempt < stepRetries) await sleep(500 * (attempt + 1));
         }
-        step = answer;
-        break;
-      } catch {
-        if (attempt < stepRetries) await sleep(500 * (attempt + 1));
       }
-    }
 
-    if (!step) {
-      // Out of retries for this call. The server-side stale recovery settles whatever this
-      // request left half-done, so move on instead of failing the whole batch — but give up
-      // when the server is clearly not answering at all.
-      consecutiveFailedSteps += 1;
-      if (consecutiveFailedSteps >= 3) {
-        aborted = true;
-        break;
+      if (!step) {
+        // Out of retries for this call. The server-side stale recovery settles whatever this
+        // request left half-done, so move on instead of failing the whole batch — but give up
+        // when the server is clearly not answering at all.
+        consecutiveFailedSteps += 1;
+        if (consecutiveFailedSteps >= 3) {
+          aborted = true;
+          break;
+        }
+        await sleep(stepGapMs);
+        continue;
       }
-      await sleep(stepGapMs);
-      continue;
-    }
-    consecutiveFailedSteps = 0;
+      consecutiveFailedSteps = 0;
 
-    if (!step.ok) {
-      // 4xx: the batch cannot continue (auth, guard, missing batch).
-      return summarize({
-        ok: false,
-        error: step.payload?.error ?? "批次發布中斷"
+      if (!step.ok) {
+        // 4xx: the batch cannot continue (auth, guard, missing batch).
+        return summarize({
+          ok: false,
+          error: step.payload?.error ?? "批次發布中斷"
+        });
+      }
+
+      const body = step.payload;
+      lastStatus = body.batchStatus ?? lastStatus;
+      if (body.counts) lastCounts = body.counts;
+      const item = body.processed;
+      if (item?.draftId) {
+        results.set(item.draftId, {
+          id: item.draftId,
+          ok: item.ok === true,
+          error: item.error,
+          productId: item.productId ?? null,
+          adminUrl: item.adminUrl ?? null,
+          itemStatus: item.itemStatus,
+          code: item.code,
+          blockers: item.blockers,
+          reconciled: item.reconciled,
+          warnings: item.warnings
+        });
+      }
+      if (body.done === true) {
+        finished = true;
+        finalMessage = body.message;
+      }
+
+      const processedCount = lastCounts
+        ? lastCounts.done + lastCounts.failed + lastCounts.skipped
+        : results.size;
+      onProgress?.({
+        processed: processedCount,
+        total,
+        text: formatStepwiseProgressText(processedCount, total)
       });
-    }
 
-    const body = step.payload;
-    lastStatus = body.batchStatus ?? lastStatus;
-    if (body.counts) lastCounts = body.counts;
-    const item = body.processed;
-    if (item?.draftId) {
-      results.set(item.draftId, {
-        id: item.draftId,
-        ok: item.ok === true,
-        error: item.error,
-        productId: item.productId ?? null,
-        adminUrl: item.adminUrl ?? null,
-        itemStatus: item.itemStatus,
-        code: item.code,
-        blockers: item.blockers,
-        reconciled: item.reconciled,
-        warnings: item.warnings
-      });
-    }
-    if (body.done === true) {
-      finished = true;
-      finalMessage = body.message;
-    }
+      const countsKey = lastCounts ? JSON.stringify(lastCounts) : null;
+      if (item || countsKey !== lastCountsKey) lastProgressAt = now();
+      lastCountsKey = countsKey;
+      if (!finished && now() - lastProgressAt > maxIdleMs) break;
 
-    const processedCount = lastCounts
-      ? lastCounts.done + lastCounts.failed + lastCounts.skipped
-      : results.size;
-    onProgress?.({
-      processed: processedCount,
-      total,
-      text: formatStepwiseProgressText(processedCount, total)
-    });
-
-    if (!finished) await sleep(item ? stepGapMs : waitingGapMs);
+      if (!finished) await sleep(item ? stepGapMs : waitingGapMs);
+    }
+  } finally {
+    if (warnOnUnload) window.removeEventListener("beforeunload", warnOnUnload);
   }
 
   return summarize({ ok: finished });

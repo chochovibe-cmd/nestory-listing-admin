@@ -6,26 +6,27 @@
  * forever, while item 3's draft was api_failed even though Shopify had the product.
  *
  * Rules (per `processing` batch):
- *  1. items `processing` and no batch activity for > staleItemMs  → the run died:
+ *  1. item `processing` for > staleItemMs (since its own started_at) → the run died:
  *       - active batch + draft has a real Shopify product → reconcile (remote ACTIVE
  *         ⇒ item done), otherwise
- *       - item failed (PUBLISH_INTERRUPTED_ITEM_MESSAGE); a draft still in "publishing"
- *         goes to api_failed exactly like markDraftFailed, so the normal retry/resume
- *         path can pick it up.
+ *       - attempt_count < PUBLISH_MAX_ATTEMPTS → item back to queued (auto-resume); a draft
+ *         still in "publishing" goes to api_failed exactly like markDraftFailed, so the
+ *         next claim takes the normal resume path, otherwise
+ *       - item failed (PUBLISH_MAX_ATTEMPTS_EXHAUSTED_MESSAGE), draft handled the same way.
  *  2. no batch activity for > idleBatchMs and items still `queued` → skipped
  *     (PUBLISH_BATCH_ABORTED_SKIP_REASON).
  *  3. no queued / processing items left → finalize (terminal status + notice, once).
  *
- * Activity proxy: publish_batch_items has no updated_at column (and this package adds no
- * migration), so the batch header's updated_at is the clock. The stepwise route bumps it
- * whenever it claims or completes an item, so a legitimately running item (≤ 60s) is
- * always far younger than staleItemMs.
+ * Clock: publish_batch_items.started_at (written at claim). Rows claimed before that column
+ * existed fall back to the batch header's updated_at, which the stepwise route bumps on claim.
  */
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import {
   PUBLISH_BATCH_ABORTED_SKIP_REASON,
   PUBLISH_IDLE_BATCH_MS,
   PUBLISH_INTERRUPTED_ITEM_MESSAGE,
+  PUBLISH_MAX_ATTEMPTS,
+  PUBLISH_MAX_ATTEMPTS_EXHAUSTED_MESSAGE,
   PUBLISH_STALE_ITEM_MS
 } from "@/lib/drafts/publishBatch";
 import { isRealShopifyProductId, type ShopifyAdminGraphQLCaller } from "@/lib/shopify/productLifecycle";
@@ -60,9 +61,18 @@ export type RecoverStalePublishBatchesResult = {
   batchesChecked: number;
   itemsReconciled: number;
   itemsFailed: number;
+  itemsRequeued: number;
   itemsSkipped: number;
   batchesFinalized: number;
   errors: string[];
+};
+
+type StaleCandidateItem = {
+  id: string;
+  draft_id: string;
+  item_status: string;
+  attempt_count?: number | null;
+  started_at?: string | null;
 };
 
 type BatchHeader = {
@@ -97,6 +107,7 @@ export async function recoverStalePublishBatches(
     batchesChecked: 0,
     itemsReconciled: 0,
     itemsFailed: 0,
+    itemsRequeued: 0,
     itemsSkipped: 0,
     batchesFinalized: 0,
     errors: []
@@ -131,17 +142,19 @@ export async function recoverStalePublishBatches(
 
     const { data: itemRows, error: itemsError } = await serviceSupabase
       .from("publish_batch_items")
-      .select("id, draft_id, item_status")
+      .select("id, draft_id, item_status, attempt_count, started_at")
       .eq("batch_id", batch.id);
     if (itemsError) {
       out.errors.push(`${batch.id}: ${itemsError.message}`);
       return;
     }
-    const items = (itemRows ?? []) as Array<{ id: string; draft_id: string; item_status: string }>;
+    const items = (itemRows ?? []) as StaleCandidateItem[];
 
-    // 1) Killed mid-publish.
-    if (idleMs > staleItemMs) {
-      for (const item of items.filter((i) => i.item_status === "processing")) {
+    // 1) Killed mid-publish: judged per item from its own started_at.
+    const itemFallbackMs = parseMs(batch.updated_at) || parseMs(batch.created_at);
+    for (const item of items.filter((i) => i.item_status === "processing")) {
+      const startedMs = parseMs(item.started_at) || itemFallbackMs;
+      if (now() - startedMs > staleItemMs) {
         await recoverStaleItem(batch, item, publishMode);
       }
     }
@@ -182,7 +195,7 @@ export async function recoverStalePublishBatches(
 
   async function recoverStaleItem(
     batch: BatchHeader,
-    item: { id: string; draft_id: string },
+    item: StaleCandidateItem,
     publishMode: PublishMode
   ) {
     const { data: draft } = await serviceSupabase
@@ -224,11 +237,50 @@ export async function recoverStalePublishBatches(
       }
     }
 
+    const attemptCount = item.attempt_count ?? 0;
+    const willRequeue = attemptCount < PUBLISH_MAX_ATTEMPTS;
+    // A draft still stuck in "publishing" belongs to this dead run (unless a newer batch
+    // owns it): move it to api_failed like markDraftFailed so retry/resume works.
+    const releaseDraft = async (message: string) => {
+      const ownedByThisBatch =
+        !draft?.current_publish_batch_id || draft.current_publish_batch_id === batch.id;
+      if (draft && draft.status === "publishing" && ownedByThisBatch) {
+        await serviceSupabase
+          .from("product_drafts")
+          .update({
+            status: "api_failed",
+            pipeline_stage: mapStatusToPipelineStage("api_failed"),
+            publish_status: "api_failed",
+            error_message: message
+          })
+          .eq("id", item.draft_id)
+          .eq("status", "publishing");
+      }
+    };
+
+    // Auto-resume: hand the item back to the queue; the next claim resumes from whatever
+    // Shopify already has (the draft is api_failed with its product id).
+    if (willRequeue) {
+      const requeueMessage = `上次發布逾時，系統自動續跑（第 ${attemptCount} 次）`;
+      const { data: requeuedRow } = await serviceSupabase
+        .from("publish_batch_items")
+        .update({ item_status: "queued", error_message: requeueMessage, started_at: null })
+        .eq("id", item.id)
+        .eq("item_status", "processing")
+        .eq("attempt_count", attemptCount)
+        .select("id")
+        .maybeSingle();
+      if (!requeuedRow) return; // someone else already settled it
+      out.itemsRequeued += 1;
+      await releaseDraft(PUBLISH_INTERRUPTED_ITEM_MESSAGE);
+      return;
+    }
+
     const { data: failedRow } = await serviceSupabase
       .from("publish_batch_items")
       .update({
         item_status: "failed",
-        error_message: PUBLISH_INTERRUPTED_ITEM_MESSAGE,
+        error_message: PUBLISH_MAX_ATTEMPTS_EXHAUSTED_MESSAGE,
         completed_at: new Date(now()).toISOString()
       })
       .eq("id", item.id)
@@ -237,23 +289,7 @@ export async function recoverStalePublishBatches(
       .maybeSingle();
     if (!failedRow) return; // someone else already settled it
     out.itemsFailed += 1;
-
-    // A draft still stuck in "publishing" belongs to this dead run (unless a newer batch
-    // owns it): move it to api_failed like markDraftFailed so retry/resume works.
-    const ownedByThisBatch =
-      !draft?.current_publish_batch_id || draft.current_publish_batch_id === batch.id;
-    if (draft && draft.status === "publishing" && ownedByThisBatch) {
-      await serviceSupabase
-        .from("product_drafts")
-        .update({
-          status: "api_failed",
-          pipeline_stage: mapStatusToPipelineStage("api_failed"),
-          publish_status: "api_failed",
-          error_message: PUBLISH_INTERRUPTED_ITEM_MESSAGE
-        })
-        .eq("id", item.draft_id)
-        .eq("status", "publishing");
-    }
+    await releaseDraft(PUBLISH_INTERRUPTED_ITEM_MESSAGE);
   }
 }
 

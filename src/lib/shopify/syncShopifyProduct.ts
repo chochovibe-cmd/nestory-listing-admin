@@ -105,7 +105,7 @@ function hashJson(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-function hashSource(value: string): string {
+export function hashSource(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 

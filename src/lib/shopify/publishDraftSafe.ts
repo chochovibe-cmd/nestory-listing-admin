@@ -5,7 +5,12 @@ import {
   hasUnconfirmedPlaceholderCny,
   MISSING_COST_BLOCK_MESSAGE,
 } from "@/lib/import/captureTypes";
-import { buildShopifyProductPayload, shopifyAdminUrl } from "@/lib/shopify/payload";
+import {
+  buildShopifyProductPayload,
+  isShopifyProductMediaImage,
+  shopifyAdminUrl
+} from "@/lib/shopify/payload";
+import { hashSource } from "@/lib/shopify/syncShopifyProduct";
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import {
@@ -271,6 +276,43 @@ async function persistVariantPriceConfirmation(
     .eq("id", id);
 }
 
+type MediaIdLocalRow = {
+  id: string;
+  shopify_media_id?: string | null;
+  shopify_source_hash?: string | null;
+};
+
+/**
+ * Remember which Shopify image is which: local main/variant images, the payload's IMAGE
+ * inputs and the IMAGE nodes Shopify returned all line up by order. Never fails the publish;
+ * anything it cannot write becomes a warning (the 重同步工具 can still rematch later).
+ */
+export async function writeBackMediaIds(
+  serviceSupabase: ServiceSupabase,
+  localRows: MediaIdLocalRow[],
+  mediaInputs: Array<{ originalSource?: unknown; mediaContentType?: unknown }>,
+  mediaNodes: Array<{ id?: unknown; mediaContentType?: unknown }>
+): Promise<string[]> {
+  const inputs = mediaInputs.filter((item) => item.mediaContentType === "IMAGE");
+  const nodes = mediaNodes.filter((node) => node.mediaContentType === "IMAGE");
+  if (inputs.length !== nodes.length || inputs.length !== localRows.length) {
+    return ["圖片編號未寫回：數量不一致"];
+  }
+  const warnings: string[] = [];
+  for (let index = 0; index < localRows.length; index += 1) {
+    const row = localRows[index];
+    const mediaId = String(nodes[index].id);
+    const sourceHash = hashSource(String(inputs[index].originalSource));
+    if (row.shopify_media_id === mediaId && row.shopify_source_hash === sourceHash) continue;
+    const { error } = await serviceSupabase
+      .from("product_images")
+      .update({ shopify_media_id: mediaId, shopify_source_hash: sourceHash })
+      .eq("id", row.id);
+    if (error) warnings.push(`圖片編號未寫回（第 ${index + 1} 張）：${error.message}`);
+  }
+  return warnings;
+}
+
 async function republishExistingDraft(
   serviceSupabase: ServiceSupabase,
   id: string,
@@ -431,6 +473,7 @@ export async function publishDraft(
 
   let resumeExistingDraftId: string | null = null;
   let resumeExistingMediaCount = 0;
+  let resumeExistingMediaNodes: Array<{ id?: unknown; mediaContentType?: unknown }> = [];
 
   // Retry idempotency: an api_failed row with a real Shopify DRAFT resumes the
   // same remote product. Never delete/recreate a recoverable DRAFT.
@@ -488,7 +531,7 @@ export async function publishDraft(
         query ResumeShopifyDraft($id: ID!) {
           product(id: $id) {
             id status
-            media(first: 50) { nodes { id } }
+            media(first: 250) { nodes { id mediaContentType } }
             variants(first: 1) { nodes { id } }
           }
         }
@@ -511,9 +554,8 @@ export async function publishDraft(
           };
         }
         resumeExistingDraftId = existingProductId;
-        resumeExistingMediaCount = Array.isArray(remoteProduct?.media?.nodes)
-          ? remoteProduct.media.nodes.length
-          : 0;
+        resumeExistingMediaNodes = Array.isArray(remoteProduct?.media?.nodes) ? remoteProduct.media.nodes : [];
+        resumeExistingMediaCount = resumeExistingMediaNodes.length;
       } catch (resumeError) {
         return {
           ok: false,
@@ -1031,6 +1073,11 @@ export async function publishDraft(
   // checkpoint with the real ID. If the serverless request is killed, retry can
   // resume this same DRAFT instead of creating a duplicate product.
   const mediaInputs = Array.isArray(payload.media) ? payload.media : [];
+  // This run's media nodes, or a resume's complete existing media (it skips the attach step).
+  let attachedMediaNodes: Array<{ id?: unknown; mediaContentType?: unknown }> | null =
+    resumeExistingDraftId && resumeExistingMediaCount > 0 && resumeExistingMediaCount === mediaInputs.length
+      ? resumeExistingMediaNodes
+      : null;
   if (mediaInputs.length > 0) {
     if (resumeExistingDraftId && resumeExistingMediaCount > 0 && resumeExistingMediaCount < mediaInputs.length) {
       return failAfterCreate(
@@ -1050,7 +1097,7 @@ export async function publishDraft(
       const mediaMutation = `
         mutation ProductAttachMedia($product: ProductUpdateInput!, $media: [CreateMediaInput!]) {
           productUpdate(product: $product, media: $media) {
-            product { id status }
+            product { id status media(first: 250) { nodes { id mediaContentType } } }
             userErrors { field message }
           }
         }
@@ -1071,12 +1118,28 @@ export async function publishDraft(
             mediaResult
           );
         }
+        attachedMediaNodes = mediaResult?.data?.productUpdate?.product?.media?.nodes ?? [];
       } catch (mediaError) {
         return failAfterCreate(
           `商品與價格已建立，但圖片同步失敗：${stringifyError(mediaError)}`,
           null
         );
       }
+    }
+  }
+
+  const mediaIdWarnings: string[] = [];
+  if (attachedMediaNodes) {
+    const mediaRows = ((draftForPayload.product_images ?? []) as any[])
+      .filter(isShopifyProductMediaImage)
+      .filter((image) => image.processed_file_url || image.original_file_url || image.generated_file_url)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    try {
+      mediaIdWarnings.push(
+        ...(await writeBackMediaIds(serviceSupabase, mediaRows, mediaInputs, attachedMediaNodes))
+      );
+    } catch (writeBackError) {
+      mediaIdWarnings.push(`圖片編號未寫回：${stringifyError(writeBackError)}`);
     }
   }
 
@@ -1136,6 +1199,7 @@ export async function publishDraft(
   const publishWarnings = [
     ...(priceSyncWarning ? [priceSyncWarning] : []),
     ...resumeWarnings,
+    ...mediaIdWarnings,
     ...mediaBindWarnings,
     ...videoWarnings,
     ...channelWarnings

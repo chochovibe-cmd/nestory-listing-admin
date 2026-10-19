@@ -6,6 +6,7 @@ import {
   normalizeCharacterIdentity,
 } from "@/lib/characters/normalizeCharacterIdentity";
 import { localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
+import { hasCharacterNameSeparator } from "@/lib/characters/splitCharacterNames";
 
 /**
  * B4: one-click add missing character into ip_characters as pending.
@@ -34,6 +35,12 @@ export async function POST(request: NextRequest) {
 
   if (!characterName) {
     return Response.json({ error: "請提供角色名稱" }, { status: 400 });
+  }
+  if (hasCharacterNameSeparator(characterName)) {
+    return Response.json(
+      { error: "一次只能新增一個角色（名稱不能有「、」「，」「/」這類分隔符號）", code: "multi_character_name" },
+      { status: 400 },
+    );
   }
   if (!ipName) {
     return Response.json(

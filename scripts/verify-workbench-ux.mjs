@@ -129,7 +129,7 @@ await check("recompute helpers recognize all approved dictionary warning familie
 
 await check("recompute tags preserves manual role tags, ignores unrelated derived prefixes, and conditionally replaces type", () => {
   const next = recompute.buildRecomputedTags(
-    ["定位_IP周邊", "類型_吊飾掛件", "角色_自己加的"],
+    ["定位_IP周邊", "類型_吊飾徽章", "角色_自己加的"],
     ["IP_寶可夢", "角色_耿鬼", "類型_公仔模型", "定位_收藏選物"],
   );
   assert.ok(next.includes("IP_寶可夢"));
@@ -137,9 +137,9 @@ await check("recompute tags preserves manual role tags, ignores unrelated derive
   assert.ok(next.includes("角色_自己加的"));
   assert.ok(next.includes("類型_公仔模型"));
   assert.ok(next.includes("定位_IP周邊"));
-  assert.ok(!next.includes("類型_吊飾掛件"));
+  assert.ok(!next.includes("類型_吊飾徽章"));
   assert.ok(!next.includes("定位_收藏選物"));
-  assert.ok(recompute.buildRecomputedTags(["類型_吊飾掛件"], ["IP_寶可夢"]).includes("類型_吊飾掛件"));
+  assert.ok(recompute.buildRecomputedTags(["類型_吊飾徽章"], ["IP_寶可夢"]).includes("類型_吊飾徽章"));
 });
 
 await check("recompute warnings clear only dictionary warnings and resolved AI IP warning", () => {

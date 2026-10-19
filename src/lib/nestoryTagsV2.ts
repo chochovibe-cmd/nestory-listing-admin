@@ -7,6 +7,7 @@ import type {
 } from './contentGenerator/sourceTypes';
 import { localizeToTaiwanTraditionalText } from './zhTwLocalizer';
 import { CHARM_ACCESSORY_TAG_LABEL, normalizeProductTypeForTags } from './productTypeLabels';
+import { splitCharacterNames } from './characters/splitCharacterNames';
 
 export const NESTORY_TAG_PREFIX_ORDER = [
   '定位_',
@@ -866,7 +867,7 @@ export function buildNestoryTagsV2Result(
   }
 
   const rawCharacters = [
-    ...(draft.characters ?? []),
+    ...(draft.characters ?? []).flatMap((value) => splitCharacterNames(value)),
     ...(draft.variants ?? []).flatMap((variant) => [
       variant.character_name ?? '',
       variant.option1_value,

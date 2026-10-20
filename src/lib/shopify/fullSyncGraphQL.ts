@@ -18,12 +18,6 @@ export const PRODUCT_SYNC_SNAPSHOT_QUERY = `
           inventoryItem {
             id tracked
             unitCost { amount currencyCode }
-            inventoryLevels(first: 20) {
-              nodes {
-                location { id name }
-                quantities(names: ["available"]) { name quantity }
-              }
-            }
           }
         }
       }
@@ -36,6 +30,27 @@ export const PRODUCT_SYNC_SNAPSHOT_QUERY = `
       }
       metafields(first: 50, namespace: "custom") {
         nodes { id namespace key type value updatedAt }
+      }
+    }
+  }
+`;
+
+export const PRODUCT_SYNC_INVENTORY_QUERY = `
+  query ProductSyncInventory($id: ID!) {
+    product(id: $id) {
+      variants(first: 100) {
+        nodes {
+          id
+          inventoryItem {
+            id
+            inventoryLevels(first: 20) {
+              nodes {
+                location { id name }
+                quantities(names: ["available"]) { name quantity }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -142,7 +157,7 @@ export type ShopifySyncSnapshot = {
         id: string;
         tracked: boolean;
         unitCost?: { amount: string; currencyCode: string } | null;
-        inventoryLevels: {
+        inventoryLevels?: {
           nodes: Array<{
             location: { id: string; name: string };
             quantities: Array<{ name: string; quantity: number }>;

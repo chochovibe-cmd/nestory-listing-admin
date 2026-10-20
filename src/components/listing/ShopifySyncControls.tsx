@@ -164,9 +164,7 @@ export function ShopifySyncControls({
       const response = await fetch(`/api/drafts/${draftId}/shopify-diff`);
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload.ok === false) {
-        setDiffError(
-          typeof payload.error === "string" ? payload.error : "比對失敗，請稍後再試"
-        );
+        setDiffError(payload.error || "比對失敗，請稍後再試");
         return;
       }
       const nextDiff = payload as ShopifyDiffPayload;
@@ -552,10 +550,7 @@ export function ShopifySyncControls({
                   ) : diff ? (
                     <>
                       <p className="vc-note">
-                        每一欄選要留哪一邊。選「Shopify」的會先存回工具，再把整件同步上 Shopify。
-                        {!diff.hasBaseline
-                          ? "　這件還沒有比對紀錄，不一樣的欄位都要自己選。"
-                          : ""}
+                        {`每一欄選要留哪一邊。選「Shopify」的會先存回工具，再把整件同步上 Shopify。${!diff.hasBaseline ? "　這件還沒有比對紀錄，不一樣的欄位都要自己選。" : ""}`}
                       </p>
                       {diff.productStatus === "ACTIVE" ? (
                         <p className="price-soft-warn" role="note">

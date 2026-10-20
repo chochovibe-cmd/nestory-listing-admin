@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { canOperate, canReview } from "@/lib/auth/roles";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
+import { effectiveQueueProvider, hasClaudeKey } from "@/lib/drafts/queueProvider";
 import {
   hasUnconfirmedPlaceholderCny,
   MISSING_COST_BLOCK_MESSAGE,
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest) {
     const input: QueueInput = {
       queueVersion: QUEUE_VERSION,
       title: rawInput.title.trim().slice(0, 120),
-      provider: rawInput.provider,
+      provider: effectiveQueueProvider(rawInput.provider, hasClaudeKey()),
       mode: rawInput.mode,
       useWebSearch: rawInput.useWebSearch,
       source: typeof rawInput.source === "string" && rawInput.source.trim() ? rawInput.source.trim() : undefined,
@@ -339,7 +340,7 @@ export async function POST(request: NextRequest) {
       queueVersion: QUEUE_VERSION,
       jobKind,
       title: rawInput.title.trim().slice(0, 120),
-      provider: rawInput.provider,
+      provider: effectiveQueueProvider(rawInput.provider, hasClaudeKey()),
       mode: rawInput.mode,
       useWebSearch: rawInput.useWebSearch,
       tone: rawInput.tone.trim().slice(0, 120),
@@ -758,16 +759,21 @@ export async function POST(request: NextRequest) {
     if (!prior || !isQueueInput(prior.input_payload)) {
       return Response.json({ error: "No retryable V1.1 queue request found" }, { status: 409 });
     }
+    const priorInput = prior.input_payload as QueueInput;
+    const requestedProvider =
+      body.provider === "openai" || body.provider === "claude" ? body.provider : priorInput.provider;
+    const retryProvider = effectiveQueueProvider(requestedProvider, hasClaudeKey());
+    const retryInput = { ...priorInput, provider: retryProvider };
 
     const { data: run, error: insertError } = await serviceSupabase
       .from("generation_runs")
       .insert({
         draft_id: draftId,
         mode: "api_llm",
-        provider: prior.provider,
+        provider: generationProvider(retryProvider),
         rule_version: "nestory-v1.1-queue",
         status: "pending",
-        input_payload: prior.input_payload,
+        input_payload: retryInput,
         created_by: auth.user.id,
       })
       .select("id")
@@ -782,6 +788,7 @@ export async function POST(request: NextRequest) {
       .update({
         status: "pending_copy",
         pipeline_stage: mapStatusToPipelineStage("pending_copy"),
+        generation_provider: generationProvider(retryProvider),
         generation_status: "pending",
         generation_error: null,
         worker_id: null,

@@ -782,7 +782,7 @@ await check("C3 both GraphQL contracts include category", () => {
 });
 await check("C4 publish baseline capture is after finishLocalSuccess and inside try", () => {
   const source = read("src/lib/shopify/publishDraftSafe.ts");
-  const capture = source.indexOf("captureShopifySyncBaseline(");
+  const capture = source.lastIndexOf("captureShopifySyncBaseline(");
   const finish = source.lastIndexOf("finishLocalSuccess(", capture);
   assert.ok(capture > finish);
   const tryIndex = source.lastIndexOf("try {", capture);

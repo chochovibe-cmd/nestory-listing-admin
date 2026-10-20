@@ -7,6 +7,7 @@ import {
   CREATE_PRODUCT_VARIANTS_MUTATION,
   DELETE_PRODUCT_VARIANTS_MUTATION,
   DELETE_PRODUCT_METAFIELDS_MUTATION,
+  PRODUCT_SYNC_INVENTORY_QUERY,
   PRODUCT_SYNC_SNAPSHOT_QUERY,
   SYNC_PRODUCT_CORE_MUTATION,
   SYNC_PRODUCT_VARIANTS_MUTATION,
@@ -158,11 +159,29 @@ export async function loadSnapshot(
   return product;
 }
 
+async function attachInventoryLevels(
+  snapshot: ShopifySyncSnapshot,
+  productId: string,
+  caller: ShopifyAdminGraphQLCaller
+): Promise<void> {
+  const { response, result } = await caller(PRODUCT_SYNC_INVENTORY_QUERY, { id: productId });
+  if (!response.ok || (Array.isArray(result?.errors) && result.errors.length > 0)) {
+    throw new Error("SHOPIFY_INVENTORY_READ_FAILED");
+  }
+  const nodes = result?.data?.product?.variants?.nodes ?? [];
+  for (const node of nodes) {
+    const target = snapshot.variants.nodes.find((variant) => variant.id === node.id);
+    if (target && node.inventoryItem?.inventoryLevels) {
+      target.inventoryItem.inventoryLevels = node.inventoryItem.inventoryLevels;
+    }
+  }
+}
+
 function currentAvailable(
   variant: ShopifySyncSnapshot["variants"]["nodes"][number],
   locationId: string
 ): number | null {
-  const level = variant.inventoryItem.inventoryLevels.nodes.find(
+  const level = variant.inventoryItem.inventoryLevels?.nodes.find(
     (item) => item.location.id === locationId
   );
   const quantity = level?.quantities.find((item) => item.name === "available")?.quantity;
@@ -772,6 +791,22 @@ export async function syncShopifyProduct(
     };
   }
 
+  const needsInventory = desiredVariants.some(
+    (item) => item.seed.inventoryPolicy === "DENY" && Number.isInteger(item.seed.inventoryQuantity)
+  );
+  if (needsInventory) {
+    try {
+      await attachInventoryLevels(before, productId, caller);
+    } catch {
+      return {
+        ok: false,
+        status: 502,
+        code: "inventory_read_failed",
+        error: "這件商品有設定有限庫存，但目前 Shopify App 沒有讀取庫存的權限（read_inventory），已停止同步；Shopify 沒有被改動"
+      };
+    }
+  }
+
   if (imageMediaInputs.length !== images.length) {
     return {
       ok: false,
@@ -1079,6 +1114,14 @@ export async function syncShopifyProduct(
 
     const after = await loadSnapshot(productId, caller);
     if (!after) return fail("remote_deleted_after_sync", "Shopify product disappeared during sync");
+
+    if (needsInventory) {
+      try {
+        await attachInventoryLevels(after, productId, caller);
+      } catch {
+        return fail("inventory_read_failed", "Shopify 已同步，但讀不到庫存，無法核對有限庫存（read_inventory 權限）");
+      }
+    }
 
     const rematchedVariants = matchVariants(rows, seeds, after.variants.nodes);
     const rematchedImages = matchImages(images, imageMediaInputs, after.media.nodes, false).desired;

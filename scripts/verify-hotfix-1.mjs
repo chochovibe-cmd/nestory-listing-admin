@@ -125,6 +125,7 @@ const testDraft = (overrides = {}) => ({
   spec_text: "",
   shopify_product_id: "gid://shopify/Product/500",
   shopify_remote_updated_at: "2026-10-15T00:00:00.000Z",
+  shopify_sync_hash: "legacy-full-sync",
   shopify_sync_status: "idle",
   generation_tone: "小編聊天口吻",
   sale_status: "",

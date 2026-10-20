@@ -2,6 +2,7 @@ import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import type { ShopifyAdminGraphQLCaller } from "@/lib/shopify/productLifecycle";
 import {
+  buildBaselineFromSnapshot,
   computeReconcileRows,
   isBlockedAutoSku,
   localPatchForChoice,
@@ -469,9 +470,7 @@ export async function captureShopifySyncBaseline(
   const { error } = await serviceSupabase
     .from("product_drafts")
     .update({
-      shopify_sync_baseline: (
-        await import("@/lib/shopify/reconcileFields")
-      ).buildBaselineFromSnapshot(snapshot, capturedAt),
+      shopify_sync_baseline: buildBaselineFromSnapshot(snapshot, capturedAt),
       shopify_remote_updated_at: snapshot.updatedAt,
       shopify_sync_status: "synced",
       shopify_synced_at: capturedAt,

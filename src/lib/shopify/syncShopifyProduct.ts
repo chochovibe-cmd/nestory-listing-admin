@@ -793,13 +793,6 @@ export async function syncShopifyProduct(
   const matchedMediaIds = new Set(
     desiredImages.flatMap((item) => (item.remote && !item.replace ? [item.remote.id] : []))
   );
-  const desiredVideoInputs = (built.media as Array<Record<string, unknown>>)
-    .filter((item) => item.mediaContentType === "EXTERNAL_VIDEO")
-    .map((item) => ({
-      originalSource: String(item.originalSource),
-      alt: String(item.alt ?? ""),
-      mediaContentType: "EXTERNAL_VIDEO" as const
-    }));
   const desiredVideoUrls = desiredVideoInputs.map((item) => item.originalSource);
   for (const remote of before.media.nodes) {
     if (remote.mediaContentType === "EXTERNAL_VIDEO" && remote.originUrl && desiredVideoUrls.includes(remote.originUrl)) {

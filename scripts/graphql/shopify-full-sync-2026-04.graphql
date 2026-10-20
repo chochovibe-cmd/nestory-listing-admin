@@ -36,18 +36,6 @@ query ProductSyncSnapshot($id: ID!) {
             amount
             currencyCode
           }
-          inventoryLevels(first: 20) {
-            nodes {
-              location {
-                id
-                name
-              }
-              quantities(names: ["available"]) {
-                name
-                quantity
-              }
-            }
-          }
         }
       }
     }
@@ -75,6 +63,25 @@ query ProductSyncSnapshot($id: ID!) {
         type
         value
         updatedAt
+      }
+    }
+  }
+}
+
+query ProductSyncInventory($id: ID!) {
+  product(id: $id) {
+    variants(first: 100) {
+      nodes {
+        id
+        inventoryItem {
+          id
+          inventoryLevels(first: 20) {
+            nodes {
+              location { id name }
+              quantities(names: ["available"]) { name quantity }
+            }
+          }
+        }
       }
     }
   }

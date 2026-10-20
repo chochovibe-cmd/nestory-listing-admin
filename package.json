@@ -54,6 +54,7 @@
     "verify:hotfix-1": "node scripts/verify-hotfix-1.mjs",
     "verify:hotfix-2": "node scripts/verify-hotfix-2.mjs",
     "verify:workbench-ux": "node scripts/verify-workbench-ux.mjs",
+    "verify:hotfix-provider": "node scripts/verify-hotfix-provider.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

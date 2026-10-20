@@ -13,6 +13,10 @@ query ProductSyncSnapshot($id: ID!) {
       title
       description
     }
+    category {
+      id
+      name
+    }
     variants(first: 100) {
       nodes {
         id

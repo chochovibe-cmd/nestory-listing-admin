@@ -507,7 +507,7 @@ await check("P3 localPatch converts highlights FAQ and multi price", () => {
   const before = snapshotFromDraft(local);
   before.metafields.nodes = [
     { id: "h", namespace: "custom", key: "product_highlights", type: "multi_line_text_field", value: "・甲\n・乙\n\n", updatedAt: "" },
-    { id: "f", namespace: "custom", key: "product_faq", type: "multi_line_text_field", value: "Q：問\nA：答", updatedAt: "" }
+    { id: "f", namespace: "custom", key: "product_faq", type: "multi_line_text_field", value: "Q：商品可以水洗嗎？\nA：請依商品洗標清潔。", updatedAt: "" }
   ];
   const highlights = fields.localPatchForChoice({
     row: row({ key: "product:highlights", field: "highlights", label: "商品賣點" }),
@@ -519,7 +519,7 @@ await check("P3 localPatch converts highlights FAQ and multi price", () => {
     snapshot: before, draftId: local.id, planMode: "single", variantRowId: null
   });
   assert.match(faqPatch.patch.generated_faq_html, /<h3>/);
-  assert.equal(html.htmlFaqToPlainText(faqPatch.patch.generated_faq_html), "Q：問\nA：答");
+  assert.equal(html.htmlFaqToPlainText(faqPatch.patch.generated_faq_html), "Q：商品可以水洗嗎？\nA：請依商品洗標清潔。");
 
   const variantId = before.variants.nodes[0].id;
   const pricePatch = fields.localPatchForChoice({

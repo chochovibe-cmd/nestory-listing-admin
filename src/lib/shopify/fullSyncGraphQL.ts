@@ -10,6 +10,7 @@ export const PRODUCT_SYNC_SNAPSHOT_QUERY = `
     product(id: $id) {
       id title handle descriptionHtml vendor productType tags status updatedAt
       seo { title description }
+      category { id name }
       variants(first: 100) {
         nodes {
           id title sku price compareAtPrice inventoryPolicy
@@ -127,6 +128,7 @@ export type ShopifySyncSnapshot = {
   status: ShopifyProductStatus;
   updatedAt: string;
   seo?: { title?: string | null; description?: string | null } | null;
+  category?: { id: string; name: string } | null;
   variants: {
     nodes: Array<{
       id: string;

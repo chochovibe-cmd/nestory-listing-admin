@@ -466,14 +466,13 @@ export async function captureShopifySyncBaseline(
 ): Promise<void> {
   const snapshot = await loadSnapshot(productId, caller);
   if (!snapshot) return;
-  const capturedAt = nowIso();
   const { error } = await serviceSupabase
     .from("product_drafts")
     .update({
-      shopify_sync_baseline: buildBaselineFromSnapshot(snapshot, capturedAt),
+      shopify_sync_baseline: buildBaselineFromSnapshot(snapshot, nowIso()),
       shopify_remote_updated_at: snapshot.updatedAt,
       shopify_sync_status: "synced",
-      shopify_synced_at: capturedAt,
+      shopify_synced_at: nowIso(),
       shopify_sync_error: null
     })
     .eq("id", draftId);

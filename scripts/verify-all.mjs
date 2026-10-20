@@ -86,7 +86,9 @@ const scripts = [
   // SHOP-LISTING: Shopify category, blur-extend square images, 2048 WebP shrink + concurrent upload.
   "scripts/verify-shop-listing.mjs",
   // WORKBENCH-UX: role tags, sequential review, Shopify main image, workspace defaults.
-  "scripts/verify-workbench-ux.mjs"
+  "scripts/verify-workbench-ux.mjs",
+  // HOTFIX-PROVIDER: no Claude key → GPT; retry follows current model.
+  "scripts/verify-hotfix-provider.mjs"
 ];
 
 for (const script of scripts) {

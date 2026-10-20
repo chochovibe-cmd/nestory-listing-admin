@@ -27,6 +27,7 @@ import {
   finalizeProductTitle,
 } from "@/lib/contentGenerator/titleGenerator";
 import { buildGenerateSuccessStatusPatch } from "@/lib/drafts/generateSuccessStatus";
+import { effectiveQueueProvider, hasClaudeKey } from "@/lib/drafts/queueProvider";
 import { extractFeatureTerms } from "@/lib/contentGenerator/featureTerms";
 import { buildMetaContentGapWarning, buildMetaDuplicateWarning } from "@/lib/contentGenerator/metaUniqueness";
 import { normalizeProductTypeForDisplay } from "@/lib/productTypeLabels";
@@ -519,7 +520,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
   const queueRunId = typeof body.queueRunId === "string" ? body.queueRunId : null;
-  const providerKey: "openai" | "claude" = body.provider === "claude" ? "claude" : "openai";
+  const providerKey: "openai" | "claude" = effectiveQueueProvider(body.provider, hasClaudeKey());
   const runMode: "test" | "llm" = body.mode === "test" ? "test" : "llm";
   const useWebSearch = body.useWebSearch !== false;
   const source = typeof body.source === "string" ? body.source : undefined;

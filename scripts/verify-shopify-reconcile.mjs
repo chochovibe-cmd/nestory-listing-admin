@@ -206,7 +206,7 @@ function fakeDb(initial) {
   return { from, tables, writes };
 }
 
-function shopifyFake(initialSnapshot) {
+function shopifyFake(initialSnapshot, { inventoryErrors = null } = {}) {
   const state = { product: structuredClone(initialSnapshot) };
   const calls = [];
   const ok = (data) => ({ response: { ok: true, status: 200 }, result: { data } });
@@ -214,6 +214,27 @@ function shopifyFake(initialSnapshot) {
     const name = /(?:query|mutation)\s+(\w+)/.exec(query)?.[1] ?? "unknown";
     calls.push({ name, variables: structuredClone(variables) });
     if (name === "ProductSyncSnapshot") return ok({ product: structuredClone(state.product) });
+    if (name === "ProductSyncInventory") {
+      if (inventoryErrors) {
+        return {
+          response: { ok: true, status: 200 },
+          result: { errors: structuredClone(inventoryErrors) }
+        };
+      }
+      return ok({
+        product: {
+          variants: {
+            nodes: state.product.variants.nodes.map((variant) => ({
+              id: variant.id,
+              inventoryItem: {
+                id: variant.inventoryItem.id,
+                inventoryLevels: structuredClone(variant.inventoryItem.inventoryLevels)
+              }
+            }))
+          }
+        }
+      });
+    }
     if (name === "SyncProductCore") {
       const product = variables.product;
       for (const key of ["title", "descriptionHtml", "vendor", "productType", "tags", "status", "handle"]) {
@@ -268,7 +289,12 @@ function shopifyFake(initialSnapshot) {
   return { caller, calls, state };
 }
 
-function harness({ draftOverrides = {}, snapshotOverrides = {}, variantRows = [] } = {}) {
+function harness({
+  draftOverrides = {},
+  snapshotOverrides = {},
+  variantRows = [],
+  inventoryErrors = null
+} = {}) {
   const localDraft = draft(draftOverrides);
   const snapshot = snapshotFromDraft(localDraft, snapshotOverrides);
   const db = fakeDb({
@@ -278,7 +304,7 @@ function harness({ draftOverrides = {}, snapshotOverrides = {}, variantRows = []
     team_settings: [],
     shopify_sync_jobs: []
   });
-  const shop = shopifyFake(snapshot);
+  const shop = shopifyFake(snapshot, { inventoryErrors });
   return { localDraft, snapshot, db, shop };
 }
 
@@ -532,9 +558,29 @@ await check("P3 localPatch converts highlights FAQ and multi price", () => {
   assert.deepEqual(pricePatch.patch, { twd_price: 2480, sell_price_locked: true });
 });
 
+console.log("SHOPIFY-RECONCILE I — inventory read gating");
+await check("I1 snapshot query omits inventory while inventory query owns it", () => {
+  const runtimeGraphql = read("src/lib/shopify/fullSyncGraphQL.ts");
+  const snapshotQuery = /export const PRODUCT_SYNC_SNAPSHOT_QUERY = `([\s\S]*?)`;/m.exec(runtimeGraphql)?.[1];
+  const inventoryQuery = /export const PRODUCT_SYNC_INVENTORY_QUERY = `([\s\S]*?)`;/m.exec(runtimeGraphql)?.[1];
+  assert.ok(snapshotQuery, "PRODUCT_SYNC_SNAPSHOT_QUERY missing");
+  assert.ok(inventoryQuery, "PRODUCT_SYNC_INVENTORY_QUERY missing");
+  assert.equal(snapshotQuery.includes("inventoryLevels"), false);
+  assert.equal(inventoryQuery.includes("inventoryLevels"), true);
+
+  const contract = read("scripts/graphql/shopify-full-sync-2026-04.graphql");
+  assert.equal((contract.match(/inventoryLevels/g) ?? []).length, 1);
+  assert.match(contract, /ProductSyncInventory/);
+});
+
 console.log("SHOPIFY-RECONCILE E — sync engine");
-async function runSync({ draftOverrides = {}, snapshotOverrides = {}, forceRemoteOverwrite = false } = {}) {
-  const h = harness({ draftOverrides, snapshotOverrides });
+async function runSync({
+  draftOverrides = {},
+  snapshotOverrides = {},
+  forceRemoteOverwrite = false,
+  inventoryErrors = null
+} = {}) {
+  const h = harness({ draftOverrides, snapshotOverrides, inventoryErrors });
   const result = await sync.syncShopifyProduct({
     serviceSupabase: h.db,
     draftId: h.localDraft.id,
@@ -544,6 +590,24 @@ async function runSync({ draftOverrides = {}, snapshotOverrides = {}, forceRemot
   });
   return { ...h, result };
 }
+await check("I2 CONTINUE-only sync does not read inventory", async () => {
+  const h = await runSync();
+  assert.equal(h.result.ok, true, JSON.stringify(h.result));
+  assert.equal(h.shop.calls.some((call) => call.name === "ProductSyncInventory"), false);
+});
+await check("I3 finite inventory access denial stops before Shopify writes", async () => {
+  const h = await runSync({
+    draftOverrides: { inventory_policy: "deny", inventory_quantity: 3 },
+    inventoryErrors: [{ message: "Access denied for inventoryLevels field." }]
+  });
+  assert.equal(h.result.ok, false);
+  assert.equal(h.result.code, "inventory_read_failed");
+  assert.deepEqual(
+    h.shop.calls.map((call) => call.name),
+    ["ProductSyncSnapshot", "ProductSyncInventory"]
+  );
+});
+
 await check("E1 no baseline + different title stops at remote_conflict before writes", async () => {
   const h = await runSync({ snapshotOverrides: { title: "Shopify 標題" } });
   assert.equal(h.result.ok, false);

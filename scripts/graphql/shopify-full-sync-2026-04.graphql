@@ -13,6 +13,10 @@ query ProductSyncSnapshot($id: ID!) {
       title
       description
     }
+    category {
+      id
+      name
+    }
     variants(first: 100) {
       nodes {
         id
@@ -31,18 +35,6 @@ query ProductSyncSnapshot($id: ID!) {
           unitCost {
             amount
             currencyCode
-          }
-          inventoryLevels(first: 20) {
-            nodes {
-              location {
-                id
-                name
-              }
-              quantities(names: ["available"]) {
-                name
-                quantity
-              }
-            }
           }
         }
       }
@@ -71,6 +63,25 @@ query ProductSyncSnapshot($id: ID!) {
         type
         value
         updatedAt
+      }
+    }
+  }
+}
+
+query ProductSyncInventory($id: ID!) {
+  product(id: $id) {
+    variants(first: 100) {
+      nodes {
+        id
+        inventoryItem {
+          id
+          inventoryLevels(first: 20) {
+            nodes {
+              location { id name }
+              quantities(names: ["available"]) { name quantity }
+            }
+          }
+        }
       }
     }
   }

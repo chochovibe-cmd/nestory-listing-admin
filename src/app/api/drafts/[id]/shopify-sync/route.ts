@@ -8,7 +8,7 @@ import { syncShopifyProduct } from "@/lib/shopify/syncShopifyProduct";
 import type { UserRole } from "@/types/domain";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(
   request: NextRequest,
@@ -48,7 +48,8 @@ export async function POST(
       {
         error: result.error,
         code: result.code ?? null,
-        removals: result.removals ?? null
+        removals: result.removals ?? null,
+        conflictCount: result.conflictCount ?? null
       },
       { status: result.status }
     );

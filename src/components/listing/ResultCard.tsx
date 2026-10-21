@@ -1313,7 +1313,7 @@ export function ResultCard({
         const retryResponse = await fetch("/api/generation-queue", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "retry", draftId: draft.id })
+          body: JSON.stringify({ action: "retry", draftId: draft.id, provider: readStoredAiProvider() })
         });
         const retryPayload = await retryResponse.json().catch(() => ({}));
         if (retryResponse.ok) {

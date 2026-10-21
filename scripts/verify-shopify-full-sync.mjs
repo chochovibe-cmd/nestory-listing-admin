@@ -62,6 +62,7 @@ assert.ok(addMediaIndex >= 0 && removeCommentIndex > addMediaIndex, "media repla
 
 for (const operation of [
   "ProductSyncSnapshot",
+  "ProductSyncInventory",
   "SyncProductCore",
   "SyncProductVariants",
   "CreateProductVariants",

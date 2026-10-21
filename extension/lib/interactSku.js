@@ -8,7 +8,9 @@
     return !!(payload &&
       (payload.source_platform === "taobao" || payload.source_platform === "tmall") &&
       Array.isArray(payload.variants_flat) && payload.variants_flat.length >= 2 &&
-      payload.variants_flat.some(function (row) { return row && row.cny_price == null; }));
+      payload.variants_flat.some(function (row) {
+        return row && row.cny_price == null && row.source_stock_status !== "sold_out";
+      }));
   }
 
   function nameKey(v) {
@@ -33,6 +35,15 @@
     var n = Number(value);
     return value != null && Number.isFinite(n) && n > 0;
   }
+  function sampleList(list, unique) {
+    var out = [];
+    for (var i = 0; i < list.length && out.length < 5; i++) {
+      var text = String(list[i] == null ? "" : list[i]).slice(0, 40);
+      if (!text || (unique && out.indexOf(text) >= 0)) continue;
+      out.push(text);
+    }
+    return out;
+  }
   function callProgress(fn, done, total) {
     if (typeof fn === "function") {
       try { fn(done, total); } catch (_e) { /* UI must not interrupt capture */ }
@@ -56,6 +67,16 @@
     var ice = adapters.taobaoIce;
     var iceRes = ice && ice.res && ice.parse ? ice.res(ice.parse(doc)) : null;
     var info = iceRes && iceRes.skuCore && iceRes.skuCore.sku2info || {};
+    var iceProps = iceRes && iceRes.skuBase && Array.isArray(iceRes.skuBase.props) ? iceRes.skuBase.props : [];
+    var vidsBySku = {};
+    (iceRes && iceRes.skuBase && Array.isArray(iceRes.skuBase.skus) ? iceRes.skuBase.skus : [])
+      .forEach(function (s) {
+        if (!s || s.skuId == null) return;
+        vidsBySku[String(s.skuId)] = String(s.propPath || "").split(";").map(function (part) {
+          var i = part.indexOf(":");
+          return i >= 0 ? part.slice(i + 1).trim() : "";
+        });
+      });
     var states = targets.map(function (row, index) {
       return { row: row, index: index,
         report: { sku: row.sku == null ? null : String(row.sku),
@@ -66,7 +87,10 @@
     var allowed = 0;
     states.forEach(function (entry) {
       var skuInfo = entry.row.sku != null ? info[String(entry.row.sku)] : null;
-      if (skuInfo && skuInfo.quantity != null && Number(skuInfo.quantity) === 0) {
+      var soldOutByField = entry.row.source_stock_status === "sold_out";
+      var soldOutByIce = entry.row.source_stock_status == null &&
+        skuInfo && skuInfo.quantity != null && Number(skuInfo.quantity) === 0;
+      if (soldOutByField || soldOutByIce) {
         entry.report.status = "sold_out";
       } else if (allowed >= maxCombos) {
         entry.report.status = "over_limit";
@@ -77,14 +101,16 @@
     });
 
     var result = {
-      version: 1, status: "complete", abort_reason: null,
-      targets: targets.length, ok: 0, elapsed_ms: 0,
+      version: 2, status: "complete", abort_reason: null,
+      targets: targets.length, ok: 0, sold_out: 0, readable: targets.length, elapsed_ms: 0,
       requires_confirmation: false, reasons: [], rows: []
     };
     function finalize() {
       var okRows = states.filter(function (e) { return e.report.status === "ok"; });
       result.ok = okRows.length;
-      if (states.some(function (e) { return e.report.status !== "ok"; })) {
+      result.sold_out = states.filter(function (e) { return e.report.status === "sold_out"; }).length;
+      result.readable = targets.length - result.sold_out;
+      if (states.some(function (e) { return e.report.status !== "ok" && e.report.status !== "sold_out"; })) {
         if (result.status !== "aborted") result.status = "partial";
         result.reasons.push("incomplete");
       }
@@ -109,10 +135,57 @@
       result.abort_reason = "no_sku_nodes";
       return finalize();
     }
+    if (eligible.length > 0) {
+      var anyResolves = eligible.some(function (e) {
+        var axesNow = adapters.taobaoSkuNodes(doc, host);
+        for (var d = 1; d <= 3; d++) {
+          var v = e.row["option" + d + "_value"];
+          if (v == null || String(v).trim() === "") continue;
+          if (!findOption(axesNow, e.row, d)) return false;
+        }
+        return true;
+      });
+      if (!anyResolves) {
+        result.status = "aborted";
+        result.abort_reason = "dom_mismatch";
+        var sampleAxes = adapters.taobaoSkuNodes(doc, host) || [];
+        result.dom_sample = {
+          labels: sampleList(sampleAxes.map(function (axis) { return axis.label; })),
+          values: sampleList((sampleAxes[0] ? sampleAxes[0].values : []).map(function (v) { return v.text; })),
+          ice_labels: sampleList(eligible.map(function (e) { return e.row.option1_name; }), true),
+          ice_values: sampleList(eligible.map(function (e) { return e.row.option1_value; }))
+        };
+        eligible.forEach(function (e) { e.report.status = "node_not_found"; });
+        return finalize();
+      }
+    }
     var done = 0, total = eligible.length * 2, consecutiveClickFails = 0;
     callProgress(opts.onProgress, done, total);
 
     function findOption(axes, row, dimension) {
+      var wantedVids = row.sku != null ? vidsBySku[String(row.sku)] : null;
+      var wantedVid = wantedVids && wantedVids[dimension - 1] ? wantedVids[dimension - 1] : null;
+      var preferred = axes[dimension - 1] || null;
+      if (wantedVid) {                       // 1) vid: same-position axis first, then the others
+        var searchOrder = (preferred ? [preferred] : []).concat(axes.filter(function (a) { return a !== preferred; }));
+        for (var si = 0; si < searchOrder.length; si++) {
+          var hit = searchOrder[si].values.find(function (v) { return v.vid === wantedVid; });
+          if (hit) return hit;
+        }
+      }
+      var domAxis = axes[dimension - 1];     // 2) position: only with no vid to compare, or this DOM axis has no vids
+      var iceProp = iceProps[dimension - 1];
+      var positionSafe = !wantedVid || (domAxis && domAxis.values.every(function (v) { return !v.vid; }));
+      if (positionSafe && domAxis && iceProp && Array.isArray(iceProp.values) &&
+          domAxis.values.length === iceProp.values.length) {
+        var wantedText = valueKey(row["option" + dimension + "_value"]);
+        for (var pi = 0; pi < iceProp.values.length; pi++) {
+          if (wantedText && valueKey(iceProp.values[pi] && iceProp.values[pi].name) === wantedText) {
+            return domAxis.values[pi] || null;
+          }
+        }
+      }
+      // 3) the original name / text matching (unchanged)
       var expectedLabel = row["option" + dimension + "_name"];
       var expectedText = row["option" + dimension + "_value"];
       if (expectedText == null || String(expectedText).trim() === "") return null;

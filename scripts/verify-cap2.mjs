@@ -212,7 +212,7 @@ check("selectors: single catalog has taobao/tmall/shopee/generic", () => {
     Cap.SELECTORS.tmall.detailImages.includes(".desc-root img"),
     "tmall detail rules must include desc-root"
   );
-  assert.equal(Cap.CAPTURE_BUILD, "capture-20261015-interact1");
+  assert.equal(Cap.CAPTURE_BUILD, "capture-20261020-capturefix1");
 });
 
 check("parsePrice: honest nulls", () => {

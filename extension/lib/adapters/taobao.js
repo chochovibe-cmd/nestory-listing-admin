@@ -18,7 +18,7 @@
   }
 
   var ORIGIN_LABEL_RE = /优惠前|優惠前|划线价|劃線價|原价|原價|吊牌价|吊牌價/;
-  var PROMO_LABEL_RE = /店铺优惠后|店鋪優惠後|优惠后|優惠後|券后|券後|到手价|到手價|促销价|促銷價/;
+  var PROMO_LABEL_RE = /店铺优惠后|店鋪優惠後|优惠后|優惠後|券后|券後|到手价|到手價|促销价|促銷價|平台加补后|平台加補後/;
   var BASE_PRICE_KEY_RE = /origin|original|list|market|tag|reserve|regular|standard|before/i;
   var PROMO_PRICE_KEY_RE = /promo|promotion|coupon|discount|activity|sale|deal|after/i;
 
@@ -890,15 +890,17 @@
       var seen = {}, values = [];
       nodes.forEach(function (n) {
         var t = skuValueText(n, dom);
-        if (!t || seen[t]) return;
-        seen[t] = true;
+        var vid = (n.getAttribute && n.getAttribute("data-vid")) || null;
+        var seenKey = vid ? "vid:" + vid : "text:" + t;
+        if (!t || seen[seenKey]) return;
+        seen[seenKey] = true;
         var cls = (n.getAttribute && n.getAttribute("class")) || "";
         values.push({
-          text: t, node: n,
+          text: t, node: n, vid: vid,
           selected: /isSelected|selected|active|checked/i.test(cls) ||
             n.getAttribute("aria-checked") === "true" || n.getAttribute("aria-selected") === "true",
           disabled: /isDisabled|disabled|soldOut|sold-out/i.test(cls) ||
-            n.getAttribute("aria-disabled") === "true"
+            n.getAttribute("aria-disabled") === "true" || n.getAttribute("data-disabled") === "true"
         });
       });
       if (values.length) axes.push({ label: label, values: values });
@@ -1169,6 +1171,12 @@
     return params;
   }
 
+  function readSourceQuantity(info) {
+    if (!info || typeof info !== "object" || info.quantity == null || info.quantity === "") return null;
+    var n = Number(info.quantity);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+  }
+
   function iceSkuFromRes(res) {
     var base = res && res.skuBase;
     if (!base || !Array.isArray(base.props) || !base.props.length) return null;
@@ -1232,7 +1240,9 @@
         price_confidence: "unknown",
         price_candidates: [],
         sku: sku.skuId ? String(sku.skuId) : null,
-        image_url: null
+        image_url: null,
+        source_quantity: null,
+        source_stock_status: "unknown"
       };
       var ok = true;
       for (var d = 0; d < Math.min(parts.length, 3); d++) {
@@ -1246,6 +1256,9 @@
       }
       if (!ok || !flat.option1_value) continue;
       var info = infoMap[sku.skuId] || infoMap[String(sku.skuId)] || {};
+      flat.source_quantity = readSourceQuantity(info);
+      flat.source_stock_status =
+        flat.source_quantity == null ? "unknown" : flat.source_quantity === 0 ? "sold_out" : "in_stock";
       var skuPrices = structuredSkuPrices(info);
       flat.cny_price = skuPrices.base;
       flat.promo_price_cny = skuPrices.promo;

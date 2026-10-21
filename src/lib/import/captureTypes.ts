@@ -19,6 +19,8 @@ export type CaptureVariantFlat = {
   price_confidence?: "high" | "structured_pair" | "structured_primary" | "interact_verified" | "display_only" | "needs_confirmation" | "conflict" | "unknown";
   price_candidates?: Array<{ key?: string; source?: string; value: number; kind?: string }>;
   sku?: string | null;
+  source_quantity?: number | null;
+  source_stock_status?: "in_stock" | "sold_out" | "unknown";
   /** CAP-2.6 / 88: SKU option thumb URL (server fetches → product_images variant + image_id). */
   image_url?: string | null;
 };
@@ -31,6 +33,9 @@ export type CaptureMeta = {
     abort_reason?: string | null;
     targets?: number;
     ok?: number;
+    sold_out?: number;
+    readable?: number;
+    dom_sample?: { labels?: string[]; values?: string[]; ice_labels?: string[]; ice_values?: string[] } | null;
     elapsed_ms?: number;
     requires_confirmation?: boolean;
     reasons?: string[];
@@ -128,6 +133,16 @@ export type CaptureImportUpdated = {
   warnings: string[];
 };
 
+/** CAPTURE-FIX: 同網址重新擷取＝更新價格／庫存狀態。 */
+export type CaptureImportRefreshed = {
+  ok: true;
+  status: "refreshed";
+  draft_id: string;
+  open_path: string;
+  message: string;
+  refreshed: { prices: number; stock: number; price_skipped_reason: "published" | "confirmed" | null };
+};
+
 export type CaptureImportError = {
   ok: false;
   error: string;
@@ -138,6 +153,7 @@ export type CaptureImportResponse =
   | CaptureImportCreated
   | CaptureImportExists
   | CaptureImportUpdated
+  | CaptureImportRefreshed
   | CaptureImportError;
 
 export const PRICE_PLACEHOLDER_CNY = 0.01;

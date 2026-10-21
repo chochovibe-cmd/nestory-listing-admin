@@ -149,6 +149,8 @@ import {
   type VariantFormRow
 } from "@/lib/variants";
 import { readExcludedVariants } from "@/lib/variants/restoreExcludedVariant";
+import { readPriceRefreshSkuIds } from "@/lib/import/refreshCapture";
+import type { VariantSourceOptions } from "@/lib/variants/types";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -199,7 +201,7 @@ type ResultCardVariantRow = {
   sku?: string | null;
   image_id?: string | null;
   source_sku_id?: string | null;
-  source_options?: { names: Array<string | null>; values: Array<string | null> } | null;
+  source_options?: VariantSourceOptions | null;
 };
 
 
@@ -496,7 +498,12 @@ export function ResultCard({
 
   // VARIANT-CLEAN: options the capture import kept out of 款式 (restorable on the 規格 tab).
   const excludedVariants = useMemo(() => readExcludedVariants(draft.raw_capture), [draft.raw_capture]);
+  const priceRefreshSkuIds = useMemo(() => new Set(readPriceRefreshSkuIds(draft.raw_capture)), [draft.raw_capture]);
+  const priceRecalcPending = variantRows.filter(
+    (row) => isVariantRowFilled(row) && row.sourceSkuId && priceRefreshSkuIds.has(row.sourceSkuId) && !row.sellPrice.trim()
+  ).length;
   const [restoreBusyIndex, setRestoreBusyIndex] = useState<number | null>(null);
+  const [restoreAllBusy, setRestoreAllBusy] = useState(false);
 
   async function restoreExcludedVariant(index: number) {
     setRestoreBusyIndex(index);
@@ -511,12 +518,39 @@ export function ResultCard({
         showToast(payload?.error ?? "恢復款式失敗", "error");
         return;
       }
-      showToast("已恢復這個款式", "success");
+      showToast(
+        payload?.price_unconfirmed
+          ? "已加回這個款式（成本暫用商品成本，發布前請確認）"
+          : "已恢復這個款式",
+        "success"
+      );
       scheduleRouterRefresh(() => router.refresh());
     } catch {
       showToast("恢復款式連線失敗", "error");
     } finally {
       setRestoreBusyIndex(null);
+    }
+  }
+
+  async function restoreAllSoldOutVariants() {
+    setRestoreAllBusy(true);
+    try {
+      const response = await fetch(`/api/drafts/${draft.id}/excluded-variants/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true, reason: "source_sold_out" })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        showToast(payload?.error ?? "加回款式失敗", "error");
+        return;
+      }
+      showToast(`已加回 ${payload.restored} 款（成本暫用商品成本，發布前請確認）`, "success");
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      showToast("加回款式連線失敗", "error");
+    } finally {
+      setRestoreAllBusy(false);
     }
   }
 
@@ -3176,6 +3210,9 @@ export function ResultCard({
                 brand: draft.product_brand ?? null
               }}
               onRestoreExcluded={(index) => void restoreExcludedVariant(index)}
+              onRestoreAllSoldOut={() => void restoreAllSoldOutVariants()}
+              priceRecalcPending={priceRecalcPending}
+              restoreAllBusy={restoreAllBusy}
               restoreBusyIndex={restoreBusyIndex}
               restoreDisabledReason={variantsDirty ? "規格有尚未儲存的修改，請先儲存再恢復。" : null}
               onDimensionsChange={(dims) => {

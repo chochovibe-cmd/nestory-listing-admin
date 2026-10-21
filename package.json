@@ -56,6 +56,7 @@
     "verify:workbench-ux": "node scripts/verify-workbench-ux.mjs",
     "verify:shopify-reconcile": "node scripts/verify-shopify-reconcile.mjs",
     "verify:hotfix-provider": "node scripts/verify-hotfix-provider.mjs",
+    "verify:capture-fix": "node scripts/verify-capture-fix.mjs",
     "verify:staging-fence": "node scripts/verify-staging-fence.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"

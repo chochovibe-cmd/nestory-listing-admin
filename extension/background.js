@@ -130,9 +130,16 @@ function formatCreatedLine(json, payload) {
 function interactSuffix(payload) {
   var i = payload && payload.capture_meta && payload.capture_meta.interact;
   if (!i || typeof i.targets !== "number" || typeof i.ok !== "number") return "";
-  return i.ok === i.targets
-    ? "（逐款讀價 " + i.ok + "/" + i.targets + "）"
-    : "（逐款讀價 " + i.ok + "/" + i.targets + "，" + (i.targets - i.ok) + " 款請確認）";
+  if (i.abort_reason === "dom_mismatch") {
+    return "（逐款讀價沒做：頁面文字對不上，請關閉瀏覽器翻譯後重抓）";
+  }
+  var readable = typeof i.readable === "number" ? i.readable : i.targets;
+  var soldOut = typeof i.sold_out === "number" ? i.sold_out : 0;
+  var soldText = soldOut > 0 ? "，" + soldOut + " 款來源售完" : "";
+  if (readable === 0) return soldOut > 0 ? "（款式全部來源售完）" : "";
+  return i.ok === readable
+    ? "（逐款讀價 " + i.ok + "/" + readable + soldText + "）"
+    : "（逐款讀價 " + i.ok + "/" + readable + soldText + "，" + (readable - i.ok) + " 款請確認）";
 }
 
 async function setBadge(kind, text) {
@@ -376,6 +383,24 @@ async function captureActiveTab() {
       tab.id,
       "warn",
       "⚠ 這個網址之前已抓過，已補上缺少資料：" + capturedTitle + interactSuffix(payload)
+    );
+    return;
+  }
+
+  if (json.ok && json.status === "refreshed") {
+    await setLastResult({
+      ok: true,
+      status: "refreshed",
+      line: (json.message || "已更新這個網址的草稿") + interactSuffix(payload),
+      draft_id: json.draft_id,
+      open_path: json.open_path,
+      at: new Date().toISOString()
+    });
+    await setBadge("ok", "✓");
+    await showPageToast(
+      tab.id,
+      "ok",
+      "✓ 這個網址之前已抓過，" + (json.message || "已更新") + "：" + capturedTitle + interactSuffix(payload)
     );
     return;
   }

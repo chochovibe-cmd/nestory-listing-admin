@@ -90,7 +90,9 @@ const scripts = [
   // 1.5a SHOPIFY-RECONCILE: per-field compare table, baseline, category fill-only.
   "scripts/verify-shopify-reconcile.mjs",
   // HOTFIX-PROVIDER: no Claude key → GPT; retry follows current model.
-  "scripts/verify-hotfix-provider.mjs"
+  "scripts/verify-hotfix-provider.mjs",
+  // CAPTURE-FIX: vid matching, dom_mismatch, source stock, sold-out exclusion, refresh.
+  "scripts/verify-capture-fix.mjs"
 ];
 
 for (const script of scripts) {

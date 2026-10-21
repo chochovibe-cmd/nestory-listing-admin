@@ -6,7 +6,7 @@
   var NestoryCap = root.NestoryCap || (root.NestoryCap = {});
   // Runtime stamp: every capture stores this so live QA can prove which
   // unpacked extension build actually ran.
-  NestoryCap.CAPTURE_BUILD = "capture-20261015-interact1";
+  NestoryCap.CAPTURE_BUILD = "capture-20261020-capturefix1";
 
   var taobao = {
     title: [

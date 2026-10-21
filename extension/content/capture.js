@@ -144,12 +144,16 @@
         var warns = Array.isArray(payload.capture_meta.warnings_from_client)
           ? payload.capture_meta.warnings_from_client.slice() : [];
         var flats = payload.variants_flat || [];
-        if (flats.length && flats.every(function (r) { return r.cny_price != null; })) {
+        if (flats.length && flats.filter(function (r) { return r.source_stock_status !== "sold_out"; })
+              .every(function (r) { return r.cny_price != null; })) {
           warns = warns.filter(function (w) {
             return w !== "sku: 個別未優惠價未完整取得；未以商品價假裝 SKU 價格";
           });
         }
-        if (interact.ok < interact.targets) {
+        var readable = typeof interact.readable === "number" ? interact.readable : interact.targets;
+        var skipSoldOutRows = typeof interact.readable === "number";
+        var domMismatch = interact.status === "aborted" && interact.abort_reason === "dom_mismatch";
+        if (!domMismatch && interact.ok < readable) {
           var names = {
             sold_out: "來源缺貨", over_limit: "超過上限", timeout: "頁面沒反應",
             click_failed: "點不到", node_not_found: "找不到款式按鈕",
@@ -160,7 +164,8 @@
           };
           var counts = {};
           (interact.rows || []).forEach(function (r) {
-            if (r.status !== "ok") counts[r.status] = (counts[r.status] || 0) + 1;
+            if (r.status === "ok" || (skipSoldOutRows && r.status === "sold_out")) return;
+            counts[r.status] = (counts[r.status] || 0) + 1;
           });
           // Interaction metadata intentionally contains at most 60 rows.
           var hidden = Math.max(0, interact.targets - (interact.rows || []).length);
@@ -168,8 +173,18 @@
           var reasons = Object.keys(counts).map(function (status) {
             return (names[status] || status) + " " + counts[status];
           }).join("、");
-          warns.push("逐款讀價：" + (interact.targets - interact.ok) +
+          warns.push("逐款讀價：" + (readable - interact.ok) +
             " 款沒讀到價格（" + reasons + "），請逐款確認");
+        }
+        var ABORT_REASON_TEXT = {
+          dom_mismatch: "頁面上的款式文字和資料對不上（可能是淘寶改版，或翻譯外掛改寫了頁面），請關閉這個網站的翻譯後重新擷取；仍失敗請回報",
+          click_failed: "連續點不到款式按鈕",
+          no_sku_nodes: "找不到款式面板",
+          verify_failed: "抽查讀到的價格不一致，整批讀價作廢",
+          slow_page: "頁面回應太慢，整批讀價作廢"
+        };
+        if (interact.status === "aborted" && ABORT_REASON_TEXT[interact.abort_reason]) {
+          warns.push("逐款讀價中止：" + ABORT_REASON_TEXT[interact.abort_reason]);
         }
         if ((interact.reasons || []).indexOf("all_identical") >= 0) {
           warns.push("逐款讀價：每款讀到的價格都一樣，可能沒讀到真正價格，請逐款確認");

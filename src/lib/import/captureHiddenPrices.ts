@@ -55,6 +55,22 @@ export function interactRequiresConfirmation(clientMeta: unknown): boolean {
   const interact = (clientMeta as Record<string, unknown>).interact;
   if (!interact || typeof interact !== "object" || Array.isArray(interact)) return false;
   const data = interact as Record<string, unknown>;
-  return data.requires_confirmation === true ||
-    data.status === "partial" || data.status === "aborted";
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const rows = Array.isArray(data.rows) ? (data.rows as Array<Record<string, unknown> | null>) : [];
+  const soldOut = num(data.sold_out) ?? rows.filter((r) => r?.status === "sold_out").length;
+  const targets = num(data.targets);
+  const ok = num(data.ok);
+  // 沒讀到價格、而且不是來源售完的款數；算不出來 → null
+  const pending = targets != null && ok != null ? Math.max(0, targets - ok - soldOut) : null;
+  if (data.status === "aborted") return true;
+  if (Array.isArray(data.reasons)) {
+    const effective = (data.reasons as unknown[]).filter(
+      (r) => typeof r === "string" && !(r === "incomplete" && pending === 0)
+    );
+    if (effective.length > 0) return true;
+  } else if (data.requires_confirmation === true) {
+    return true; // 舊格式沒有 reasons
+  }
+  if (data.status === "partial") return pending == null ? true : pending > 0;
+  return false;
 }

@@ -1,0 +1,271 @@
+{
+  "skuBase": {
+    "props": [
+      {
+        "pid": "1627207",
+        "name": "颜色分类",
+        "values": [
+          {
+            "vid": "38011069350",
+            "name": "【纸夹透卡盲袋】随机1包"
+          },
+          {
+            "vid": "38011069353",
+            "name": "【纸夹透卡盲袋】随机8包"
+          },
+          {
+            "vid": "38011069355",
+            "name": "【纸夹透卡盲袋】整盒24包"
+          },
+          {
+            "vid": "38011069356",
+            "name": "【纸夹透卡】奈奈生"
+          },
+          {
+            "vid": "38011069357",
+            "name": "【纸夹透卡】巴卫"
+          },
+          {
+            "vid": "38011069358",
+            "name": "【纸夹透卡】奈奈生和巴卫A"
+          },
+          {
+            "vid": "38011069359",
+            "name": "【纸夹透卡】奈奈生和巴卫B"
+          },
+          {
+            "vid": "38011069360",
+            "name": "【纸夹透卡】奈奈生和瑞希"
+          },
+          {
+            "vid": "38011069361",
+            "name": "【纸夹透卡】巴卫和恶罗王"
+          },
+          {
+            "vid": "38437122115",
+            "name": "【色纸】奈奈生（140*172mm）"
+          },
+          {
+            "vid": "38437122116",
+            "name": "【色纸】巴卫（140*172mm）"
+          },
+          {
+            "vid": "38437122117",
+            "name": "【色纸】瑞希（140*172mm）"
+          },
+          {
+            "vid": "38437122118",
+            "name": "【镭射票】奈奈生（140*70mm）"
+          },
+          {
+            "vid": "38437122119",
+            "name": "【镭射票】巴卫（140*70mm）"
+          },
+          {
+            "vid": "38437122120",
+            "name": "【镭射票】瑞希（140*70mm）"
+          }
+        ]
+      }
+    ],
+    "skus": [
+      {
+        "propPath": "1627207:38011069350",
+        "skuId": "5784136669434"
+      },
+      {
+        "propPath": "1627207:38011069353",
+        "skuId": "5784136669437"
+      },
+      {
+        "propPath": "1627207:38011069355",
+        "skuId": "5784136669439"
+      },
+      {
+        "propPath": "1627207:38011069356",
+        "skuId": "5784136669440"
+      },
+      {
+        "propPath": "1627207:38011069357",
+        "skuId": "5784136669441"
+      },
+      {
+        "propPath": "1627207:38011069358",
+        "skuId": "5784136669442"
+      },
+      {
+        "propPath": "1627207:38011069359",
+        "skuId": "5784136669443"
+      },
+      {
+        "propPath": "1627207:38011069360",
+        "skuId": "5784136669444"
+      },
+      {
+        "propPath": "1627207:38011069361",
+        "skuId": "5784136669445"
+      },
+      {
+        "propPath": "1627207:38437122115",
+        "skuId": "5802933752742"
+      },
+      {
+        "propPath": "1627207:38437122116",
+        "skuId": "5802933752743"
+      },
+      {
+        "propPath": "1627207:38437122117",
+        "skuId": "5802933752744"
+      },
+      {
+        "propPath": "1627207:38437122118",
+        "skuId": "5802933752745"
+      },
+      {
+        "propPath": "1627207:38437122119",
+        "skuId": "5802933752746"
+      },
+      {
+        "propPath": "1627207:38437122120",
+        "skuId": "5802933752747"
+      }
+    ]
+  },
+  "skuCore": {
+    "skuItem": {
+      "renderSku": "true",
+      "itemStatus": 0,
+      "unitBuy": 1,
+      "hideOtherPrice": "true"
+    },
+    "sku2info": {
+      "0": {
+        "moreQuantity": "true",
+        "quantity": 200,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5802933752745": {
+        "moreQuantity": "false",
+        "quantity": 99,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5802933752744": {
+        "moreQuantity": "false",
+        "quantity": 29,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5802933752747": {
+        "moreQuantity": "false",
+        "quantity": 84,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5802933752746": {
+        "moreQuantity": "false",
+        "quantity": 0,
+        "quantityDisplayValue": 1,
+        "quantityText": "无货",
+        "quantityErrorMsg": "超出商品库存限制"
+      },
+      "5784136669443": {
+        "moreQuantity": "false",
+        "quantity": 17,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5784136669442": {
+        "moreQuantity": "false",
+        "quantity": 0,
+        "quantityDisplayValue": 1,
+        "quantityText": "无货",
+        "quantityErrorMsg": "超出商品库存限制"
+      },
+      "5784136669441": {
+        "moreQuantity": "false",
+        "quantity": 0,
+        "quantityDisplayValue": 1,
+        "quantityText": "无货",
+        "quantityErrorMsg": "超出商品库存限制"
+      },
+      "5784136669440": {
+        "moreQuantity": "false",
+        "quantity": 27,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5784136669445": {
+        "moreQuantity": "false",
+        "quantity": 34,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5802933752743": {
+        "moreQuantity": "false",
+        "quantity": 11,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5784136669444": {
+        "moreQuantity": "false",
+        "quantity": 84,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5802933752742": {
+        "moreQuantity": "false",
+        "quantity": 44,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5784136669434": {
+        "moreQuantity": "true",
+        "quantity": 200,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5784136669439": {
+        "moreQuantity": "false",
+        "quantity": 49,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      },
+      "5784136669437": {
+        "moreQuantity": "false",
+        "quantity": 148,
+        "quantityDisplayValue": 1,
+        "quantityText": "有货"
+      }
+    }
+  },
+  "componentsVO": {
+    "priceVO": {
+      "extraPrice": {
+        "priceUnit": "￥",
+        "priceColor": "#FFFFFF",
+        "priceTitle": "平台加补后",
+        "priceColorNew": "#FF5000",
+        "priceBgColor": "#FF5000",
+        "priceTitleColor": "#FFFFFF",
+        "priceText": "9.7",
+        "priceDesc": "起",
+        "priceMoney": "970",
+        "hiddenPrice": "false"
+      },
+      "price": {
+        "priceUnit": "￥",
+        "priceColor": "#FF4F00",
+        "priceTitle": "优惠前",
+        "priceColorNew": "#7A7A7A",
+        "priceTitleColor": "#FF4F00",
+        "priceText": "10",
+        "priceDesc": "起",
+        "priceMoney": "1000",
+        "hiddenPrice": "false"
+      },
+      "isNewStyle": "true"
+    }
+  }
+}

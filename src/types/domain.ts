@@ -1,4 +1,5 @@
 import type { SaleStatusOption } from "@/lib/saleStatus";
+import type { VariantSourceOptions } from "@/lib/variants/types";
 
 export type UserRole = "admin" | "operator" | "reviewer";
 export type SaleStatus = SaleStatusOption;
@@ -381,7 +382,7 @@ export interface ProductVariantRow {
   shopify_inventory_item_id?: string | null;
   /** VARIANT-CLEAN (migration 20261014100000): Taobao skuId + imported option text. */
   source_sku_id?: string | null;
-  source_options?: { names: Array<string | null>; values: Array<string | null> } | null;
+  source_options?: VariantSourceOptions | null;
   created_at: string;
 }
 

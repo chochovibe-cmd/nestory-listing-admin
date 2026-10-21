@@ -1,0 +1,113 @@
+{
+  "skuBase": {
+    "props": [
+      {
+        "pid": "1627207",
+        "name": "颜色分类",
+        "values": [
+          {
+            "vid": "120435789",
+            "name": "弗利萨"
+          },
+          {
+            "vid": "15854208",
+            "name": "贝吉塔"
+          },
+          {
+            "vid": "3910076",
+            "name": "孙悟空"
+          },
+          {
+            "vid": "59400361",
+            "name": "赛亚人孙悟空"
+          }
+        ]
+      }
+    ],
+    "skus": [
+      {
+        "propPath": "1627207:120435789",
+        "skuId": "6290326899775"
+      },
+      {
+        "propPath": "1627207:15854208",
+        "skuId": "6290326899776"
+      },
+      {
+        "propPath": "1627207:3910076",
+        "skuId": "6290326899777"
+      },
+      {
+        "propPath": "1627207:59400361",
+        "skuId": "6290326899778"
+      }
+    ]
+  },
+  "skuCore": {
+    "skuItem": {
+      "renderSku": "true",
+      "itemStatus": 0,
+      "unitBuy": 1,
+      "hideOtherPrice": "true"
+    },
+    "sku2info": {
+      "0": {
+        "moreQuantity": "false",
+        "quantity": 6,
+        "quantityDisplayValue": 1,
+        "quantityText": "即将售罄"
+      },
+      "6290326899775": {
+        "moreQuantity": "false",
+        "quantity": 2,
+        "quantityDisplayValue": 1,
+        "quantityText": "即将售罄"
+      },
+      "6290326899778": {
+        "moreQuantity": "false",
+        "quantity": 2,
+        "quantityDisplayValue": 1,
+        "quantityText": "即将售罄"
+      },
+      "6290326899777": {
+        "moreQuantity": "false",
+        "quantity": 2,
+        "quantityDisplayValue": 1,
+        "quantityText": "即将售罄"
+      },
+      "6290326899776": {
+        "moreQuantity": "false",
+        "quantity": 0,
+        "quantityDisplayValue": 1,
+        "quantityText": "无货",
+        "quantityErrorMsg": "超出商品库存限制"
+      }
+    }
+  },
+  "componentsVO": {
+    "priceVO": {
+      "extraPrice": {
+        "priceUnit": "￥",
+        "priceColor": "#FFFFFF",
+        "priceTitle": "店铺优惠后",
+        "priceColorNew": "#FF5000",
+        "priceBgColor": "#FF5000",
+        "priceTitleColor": "#FFFFFF",
+        "priceText": "48.9",
+        "priceMoney": "4890",
+        "hiddenPrice": "false"
+      },
+      "price": {
+        "priceUnit": "￥",
+        "priceColor": "#FF4F00",
+        "priceTitle": "优惠前",
+        "priceColorNew": "#7A7A7A",
+        "priceTitleColor": "#FF4F00",
+        "priceText": "49.9",
+        "priceMoney": "4990",
+        "hiddenPrice": "false"
+      },
+      "isNewStyle": "true"
+    }
+  }
+}

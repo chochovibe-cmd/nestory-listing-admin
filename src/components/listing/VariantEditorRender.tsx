@@ -10,6 +10,7 @@ import type {
 } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
+import { isSourceSoldOut } from "@/lib/variants/sourceStock";
 import type { PriceMode, PriceResult } from "@/lib/pricing";
 import {
   MAX_VARIANT_ROWS,
@@ -465,6 +466,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
                       </div>
                       <div className="v-mobile-price-cell v-mobile-price-cell--sell">
                         <span className="v-mobile-price-value">NT${row.sellPrice || "—"}</span>
+                        {isSourceSoldOut(row) ? <span className="rc-tag warned" title="來源網站這款已經沒有庫存（最近一次擷取的結果）">來源售完</span> : null}
                         {row.sellPriceLocked ? <span className="rc-tag v-manual-override-tag">已手動覆蓋</span> : null}
                       </div>
                       {priceMode === "sale" ? (
@@ -584,6 +586,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
                 <div className="vgrid-sub">
                   <span className="twd">
                     {formatVariantPriceLine(row, priceMode, { productCost })}
+                    {isSourceSoldOut(row) ? <>{" · "}<span className="rc-tag warned" title="來源網站這款已經沒有庫存（最近一次擷取的結果）">來源售完</span></> : null}
                     {isVariantRowFilled(row) ? (
                       <>
                         {" · "}<button className="v-inline-edit" type="button" onClick={() => openEditorModal({ kind: "edit-price", rowIndex: index })}>改售價</button>

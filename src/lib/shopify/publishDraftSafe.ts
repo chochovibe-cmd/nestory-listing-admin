@@ -11,6 +11,7 @@ import {
   shopifyAdminUrl
 } from "@/lib/shopify/payload";
 import { hashSource } from "@/lib/shopify/syncShopifyProduct";
+import { captureShopifySyncBaseline } from "@/lib/shopify/shopifyDiff";
 import { hasShopifyAdminCredentials } from "@/lib/shopify/adminToken";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import {
@@ -1232,6 +1233,16 @@ export async function publishDraft(
     const message = `Shopify lifecycle completed for ${productId}, but final local state persistence failed: ${finalPersistError}; manual reconciliation required.`;
     await markDraftFailed(serviceSupabase, id, message, productId);
     return { ok: false, status: 500, error: message };
+  }
+
+  // 1.5a SHOPIFY-RECONCILE: remember what Shopify holds right after publish so the first
+  // sync only stops when someone actually edits Shopify. Best-effort: never fails a publish.
+  if (!mockMode) {
+    try {
+      await captureShopifySyncBaseline(serviceSupabase, id, productId, caller);
+    } catch {
+      // baseline is optional; the first sync falls back to the per-field compare table
+    }
   }
 
   await notifyMake(finalStatus, {

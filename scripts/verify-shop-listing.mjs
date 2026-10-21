@@ -160,12 +160,21 @@ await check("payload: no match → no category key, and AI category is dropped",
   );
   assert.equal("category" in withBad.product, false);
 });
-await check("category only flows into productCreate; sync/full-sync inputs untouched", () => {
+await check("category flows into productCreate; full sync reads it and only fills an empty remote category", () => {
   const safe = read("src/lib/shopify/publishDraftSafe.ts");
   assert.match(safe, /productCreate\(product: \$product\)/);
   assert.match(safe, /product: \{ \.\.\.payload\.product, status: "DRAFT" \}/);
-  assert.doesNotMatch(read("src/lib/shopify/syncShopifyProduct.ts"), /category/);
-  assert.doesNotMatch(read("src/lib/shopify/fullSyncGraphQL.ts"), /category/);
+
+  const syncSource = read("src/lib/shopify/syncShopifyProduct.ts");
+  assert.match(syncSource, /before\.category\?\.id \?\? null/);
+  assert.match(
+    syncSource,
+    /\.\.\.\(product\.category && !remoteCategoryId \? \{ category: product\.category \} : \{\}\)/
+  );
+  assert.doesNotMatch(syncSource, /category:\s*null/);
+
+  const fullSyncSource = read("src/lib/shopify/fullSyncGraphQL.ts");
+  assert.match(fullSyncSource, /category \{ id name \}/);
 });
 
 // ---------------------------------------------------------------- B: blur-extend

@@ -55,6 +55,19 @@ export type ShopifySyncStatus =
   | "conflict"
   | "remote_deleted";
 
+/** 1.5a SHOPIFY-RECONCILE: Shopify values (normalized strings) right after the last verified sync/publish. */
+export interface ShopifySyncBaseline {
+  version: 1;
+  capturedAt: string;
+  remoteUpdatedAt: string;
+  product: Partial<Record<
+    | "title" | "description" | "seoTitle" | "seoDescription" | "why" | "highlights"
+    | "faq" | "specs" | "tags" | "vendor" | "productType" | "handle",
+    string
+  >>;
+  variants: Record<string, { price: string; compareAtPrice: string; sku: string }>;
+}
+
 /** G4: auditable Shopify synchronization operation. */
 export type ShopifySyncOperation =
   | "create"
@@ -165,6 +178,8 @@ export interface ProductDraft {
   shopify_remote_updated_at?: string | null;
   shopify_sync_hash?: string | null;
   shopify_sync_error?: string | null;
+  /** 1.5a SHOPIFY-RECONCILE (migration 20261020100000). */
+  shopify_sync_baseline?: ShopifySyncBaseline | null;
   error_message: string | null;
   created_by: string | null;
   reviewed_by: string | null;

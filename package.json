@@ -57,6 +57,7 @@
     "verify:shopify-reconcile": "node scripts/verify-shopify-reconcile.mjs",
     "verify:hotfix-provider": "node scripts/verify-hotfix-provider.mjs",
     "verify:capture-fix": "node scripts/verify-capture-fix.mjs",
+    "verify:staging-fence": "node scripts/verify-staging-fence.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },
@@ -76,6 +77,7 @@
     "eslint": "^9.14.0",
     "eslint-config-next": "^15.0.3",
     "linkedom": "^0.18.12",
+    "pg": "^8.23.1",
     "typescript": "^5.6.3"
   }
 }

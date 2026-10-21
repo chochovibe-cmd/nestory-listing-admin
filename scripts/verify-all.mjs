@@ -92,7 +92,9 @@ const scripts = [
   // HOTFIX-PROVIDER: no Claude key → GPT; retry follows current model.
   "scripts/verify-hotfix-provider.mjs",
   // CAPTURE-FIX: vid matching, dom_mismatch, source stock, sold-out exclusion, refresh.
-  "scripts/verify-capture-fix.mjs"
+  "scripts/verify-capture-fix.mjs",
+  // STAGING 1.6: environment fence (prod/staging identity), banner, staging scripts. No network, no DB.
+  "scripts/verify-staging-fence.mjs"
 ];
 
 for (const script of scripts) {

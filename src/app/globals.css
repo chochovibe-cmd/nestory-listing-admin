@@ -10488,3 +10488,87 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
     min-height: 44px;
   }
 }
+
+/* 1.5a SHOPIFY-RECONCILE: 逐欄比對表 — layout only, tokens only.
+   Reuses .modal-box.vc-modal, .vc-note, .vc-toolbar, .vc-orig, .vc-warn-text, .vr-notes,
+   .schip, .sel--tint, .approve-sum-actions; no new colors, radii or shadows. */
+.modal-box.rcx-modal {
+  width: min(880px, 96vw);
+}
+.rcx-section-title {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.rcx-variant-name {
+  margin: var(--sp-3) 0 var(--sp-1);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  word-break: break-word;
+}
+.rcx-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0 var(--sp-3);
+  border-bottom: 1px solid var(--border-soft);
+}
+.rcx-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.rcx-row-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.rcx-picks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-2);
+}
+.rcx-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  min-height: 44px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.rcx-pick:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.rcx-pick:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.rcx-pick-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.rcx-pick-value {
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+}
+@media (max-width: 959px) {
+  .rcx-picks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

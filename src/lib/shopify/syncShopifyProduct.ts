@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mergeInternalLinkMap } from "@/lib/contentGenerator/internalLinks";
+import { mergeInternalLinkMap, type InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildShopifyProductPayload, isShopifyProductMediaImage } from "@/lib/shopify/payload";
 import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
 import {
@@ -7,12 +7,20 @@ import {
   CREATE_PRODUCT_VARIANTS_MUTATION,
   DELETE_PRODUCT_VARIANTS_MUTATION,
   DELETE_PRODUCT_METAFIELDS_MUTATION,
+  PRODUCT_SYNC_INVENTORY_QUERY,
   PRODUCT_SYNC_SNAPSHOT_QUERY,
   SYNC_PRODUCT_CORE_MUTATION,
   SYNC_PRODUCT_VARIANTS_MUTATION,
   UPDATE_PRODUCT_FILES_MUTATION,
   type ShopifySyncSnapshot
 } from "@/lib/shopify/fullSyncGraphQL";
+import {
+  blockingRows,
+  buildBaselineFromSnapshot,
+  computeReconcileRows,
+  shopifyValuesFromSnapshot,
+  toolValuesFromDesired
+} from "@/lib/shopify/reconcileFields";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
 import {
   isRealShopifyProductId,
@@ -22,11 +30,12 @@ import {
   buildVariantPublishPlan,
   findDuplicateProductVariantRows,
   toBulkVariantInput,
-  type MultiVariantPublishPlan
+  type MultiVariantPublishPlan,
+  type VariantPublishPlan
 } from "@/lib/variants/shopifyVariants";
 import type { ShopifyVariantSeed } from "@/lib/variants/types";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
-import type { ProductImage, ProductVariantRow } from "@/types/domain";
+import type { ProductImage, ProductVariantRow, ShopifySyncBaseline } from "@/types/domain";
 
 type ServiceSupabase = ReturnType<typeof createServiceSupabaseClient>;
 
@@ -55,6 +64,7 @@ export type SyncShopifyProductInput = {
   forceRemoteOverwrite?: boolean;
   confirmRemovals?: boolean;
   confirmActiveUpdate?: boolean;
+  reconcileAudit?: { choices: Record<string, "tool" | "shopify">; pulledKeys: string[] };
   deps?: SyncDeps;
 };
 
@@ -72,9 +82,10 @@ export type SyncShopifyProductResult =
       error: string;
       code?: string;
       removals?: { variants: number; media: number };
+      conflictCount?: number;
     };
 
-type DesiredVariant = {
+export type DesiredVariant = {
   row: ProductVariantRow | null;
   seed: ShopifyVariantSeed;
   remote: ShopifySyncSnapshot["variants"]["nodes"][number] | null;
@@ -133,7 +144,7 @@ function userErrors(result: any, path: string): unknown[] {
   return Array.isArray(errors) ? errors : [];
 }
 
-async function loadSnapshot(
+export async function loadSnapshot(
   productId: string,
   caller: ShopifyAdminGraphQLCaller
 ): Promise<ShopifySyncSnapshot | null> {
@@ -148,11 +159,29 @@ async function loadSnapshot(
   return product;
 }
 
+async function attachInventoryLevels(
+  snapshot: ShopifySyncSnapshot,
+  productId: string,
+  caller: ShopifyAdminGraphQLCaller
+): Promise<void> {
+  const { response, result } = await caller(PRODUCT_SYNC_INVENTORY_QUERY, { id: productId });
+  if (!response.ok || (Array.isArray(result?.errors) && result.errors.length > 0)) {
+    throw new Error("SHOPIFY_INVENTORY_READ_FAILED");
+  }
+  const nodes = result?.data?.product?.variants?.nodes ?? [];
+  for (const node of nodes) {
+    const target = snapshot.variants.nodes.find((variant) => variant.id === node.id);
+    if (target && node.inventoryItem?.inventoryLevels) {
+      target.inventoryItem.inventoryLevels = node.inventoryItem.inventoryLevels;
+    }
+  }
+}
+
 function currentAvailable(
   variant: ShopifySyncSnapshot["variants"]["nodes"][number],
   locationId: string
 ): number | null {
-  const level = variant.inventoryItem.inventoryLevels.nodes.find(
+  const level = variant.inventoryItem.inventoryLevels?.nodes.find(
     (item) => item.location.id === locationId
   );
   const quantity = level?.quantities.find((item) => item.name === "available")?.quantity;
@@ -299,7 +328,12 @@ function matchImages(
   return { desired, identityError: null };
 }
 
-function desiredCore(productId: string, product: Record<string, any>, status: string) {
+function desiredCore(
+  productId: string,
+  product: Record<string, any>,
+  status: string,
+  remoteCategoryId: string | null
+) {
   return {
     id: productId,
     title: product.title,
@@ -308,6 +342,7 @@ function desiredCore(productId: string, product: Record<string, any>, status: st
     productType: product.productType,
     tags: product.tags,
     status,
+    ...(product.category && !remoteCategoryId ? { category: product.category } : {}),
     seo: product.seo,
     ...(product.handle ? { handle: product.handle, redirectNewHandle: true } : {}),
     ...(Array.isArray(product.metafields) ? { metafields: product.metafields } : {})
@@ -331,6 +366,7 @@ function verifyReadback(
   const localTags = [...(core.tags ?? [])].sort().join("\u0001");
   const remoteTags = [...(remote.tags ?? [])].sort().join("\u0001");
   if (localTags !== remoteTags) mismatches.push("product.tags");
+  if (core.category && remote.category?.id !== core.category) mismatches.push("product.category");
 
   for (const desired of desiredVariants) {
     const match = remote.variants.nodes.find((variant) => {
@@ -471,21 +507,13 @@ async function finishSyncJob(
     .eq("id", jobId);
 }
 
-export async function syncShopifyProduct(
-  input: SyncShopifyProductInput
-): Promise<SyncShopifyProductResult> {
-  const {
-    serviceSupabase,
-    draftId,
-    createdBy,
-    forceRemoteOverwrite = false,
-    confirmRemovals = false,
-    confirmActiveUpdate = false,
-    deps = {}
-  } = input;
-  const guardError = checkLiveTestGuard({ draftIds: [draftId], operation: "sync" });
-  if (guardError) return { ok: false, status: 403, error: guardError, code: "live_test_guard" };
-
+export async function loadSyncInputs(
+  serviceSupabase: ServiceSupabase,
+  draftId: string
+): Promise<
+  | { ok: true; draft: any; variantRows: ProductVariantRow[]; internalLinkMap: InternalLinkMap }
+  | { ok: false; status: number; error: string; code?: string }
+> {
   const { data: draft, error: draftError } = await serviceSupabase
     .from("product_drafts")
     .select("*, product_images(*)")
@@ -503,15 +531,6 @@ export async function syncShopifyProduct(
       code: "missing_product_id"
     };
   }
-  if (process.env.SHOPIFY_PUBLISH_MOCK !== "false" && !deps.callGraphQL) {
-    return {
-      ok: true,
-      mock: true,
-      productId,
-      remoteUpdatedAt: draft.shopify_remote_updated_at ?? nowIso(),
-      warnings: ["SHOPIFY_PUBLISH_MOCK is enabled; no Shopify update was sent"]
-    };
-  }
 
   const { data: variantData, error: variantError } = await serviceSupabase
     .from("product_variants")
@@ -522,68 +541,11 @@ export async function syncShopifyProduct(
   const variantRows = (variantData ?? []) as ProductVariantRow[];
   const duplicateRows = findDuplicateProductVariantRows(variantRows);
   if (duplicateRows.length > 0) {
-    return { ok: false, status: 409, error: "款式組合重複，Shopify 同步已停止", code: "duplicate_variants" };
-  }
-
-  const caller: ShopifyAdminGraphQLCaller =
-    deps.callGraphQL ?? ((query, variables) => callShopifyAdminGraphQL(query, variables));
-  let before: ShopifySyncSnapshot | null;
-  try {
-    before = await loadSnapshot(productId, caller);
-  } catch (error) {
-    return { ok: false, status: 502, error: message(error), code: "readback_failed" };
-  }
-  if (!before) {
-    await markSyncState(serviceSupabase, draftId, {
-      shopify_sync_status: "remote_deleted",
-      shopify_sync_error: "Shopify product no longer exists"
-    });
-    return { ok: false, status: 410, error: "Shopify product no longer exists", code: "remote_deleted" };
-  }
-  if (process.env.SHOPIFY_LIVE_TEST_DRAFT_ID?.trim() && before.status !== "DRAFT") {
     return {
       ok: false,
       status: 409,
-      error: `G4 live test only permits a remote DRAFT; Shopify returned ${before.status}`,
-      code: "unsafe_remote_status"
-    };
-  }
-  if (before.status === "ACTIVE" && !confirmActiveUpdate) {
-    return {
-      ok: false,
-      status: 409,
-      error: "Shopify 商品目前是 ACTIVE；更新公開商品需要明確 confirmActiveUpdate=true",
-      code: "active_update_confirmation_required"
-    };
-  }
-
-  const previousRemoteUpdatedAt = draft.shopify_remote_updated_at as string | null;
-  if (!forceRemoteOverwrite && !previousRemoteUpdatedAt) {
-    await markSyncState(serviceSupabase, draftId, {
-      shopify_sync_status: "conflict",
-      shopify_sync_error: "Never synced; remote baseline unknown"
-    });
-    return {
-      ok: false,
-      status: 409,
-      error: "這件商品還沒有同步紀錄，無法確認 Shopify 後台是否被手動修改過；已停止覆蓋，請先比對差異",
-      code: "remote_conflict"
-    };
-  }
-  if (
-    !forceRemoteOverwrite &&
-    previousRemoteUpdatedAt &&
-    Date.parse(before.updatedAt) > Date.parse(previousRemoteUpdatedAt) + 1000
-  ) {
-    await markSyncState(serviceSupabase, draftId, {
-      shopify_sync_status: "conflict",
-      shopify_sync_error: "Shopify was updated after the last successful sync"
-    });
-    return {
-      ok: false,
-      status: 409,
-      error: "Shopify 後台在上次同步後有新修改；已停止覆蓋，請先查看差異",
-      code: "remote_conflict"
+      error: "款式組合重複，Shopify 同步已停止",
+      code: "duplicate_variants"
     };
   }
 
@@ -595,6 +557,32 @@ export async function syncShopifyProduct(
   const internalLinkMap = mergeInternalLinkMap(
     (linkSettingsRow?.value as Record<string, string> | null) ?? null
   );
+  return { ok: true, draft, variantRows, internalLinkMap };
+}
+
+export function buildSyncDesiredState(input: {
+  draft: any;
+  variantRows: ProductVariantRow[];
+  internalLinkMap: InternalLinkMap;
+  before: ShopifySyncSnapshot;
+  productId: string;
+}): {
+  built: any;
+  core: Record<string, any>;
+  rows: ProductVariantRow[];
+  plan: VariantPublishPlan;
+  seeds: ShopifyVariantSeed[];
+  desiredVariants: DesiredVariant[];
+  variantRemovals: ShopifySyncSnapshot["variants"]["nodes"];
+  images: ProductImage[];
+  imageMediaInputs: Array<{ originalSource: string; alt: string; mediaContentType: "IMAGE" }>;
+  desiredVideoInputs: Array<{
+    originalSource: string;
+    alt: string;
+    mediaContentType: "EXTERNAL_VIDEO";
+  }>;
+} {
+  const { draft, variantRows, internalLinkMap, before, productId } = input;
   const images = ((draft.product_images ?? []) as ProductImage[])
     .filter(isShopifyProductMediaImage)
     .sort((a, b) => a.sort_order - b.sort_order);
@@ -603,7 +591,12 @@ export async function syncShopifyProduct(
     "draft",
     internalLinkMap
   ) as any;
-  const core = desiredCore(productId, built.product as Record<string, any>, before.status);
+  const core = desiredCore(
+    productId,
+    built.product as Record<string, any>,
+    before.status,
+    before.category?.id ?? null
+  );
 
   const rows = localVariantRows(variantRows);
   const plan = buildVariantPublishPlan(rows, {
@@ -611,7 +604,7 @@ export async function syncShopifyProduct(
     twd_cost: draft.twd_cost,
     price_mode: draft.price_mode
   });
-  const seeds =
+  const seeds: ShopifyVariantSeed[] =
     plan.mode === "multi"
       ? (plan as MultiVariantPublishPlan).all
       : [
@@ -640,7 +633,6 @@ export async function syncShopifyProduct(
     desiredVariants.flatMap((item) => (item.remote ? [item.remote.id] : []))
   );
   const variantRemovals = before.variants.nodes.filter((item) => !matchedVariantIds.has(item.id));
-
   const imageMediaInputs = (built.media as Array<Record<string, unknown>>)
     .filter((item) => item.mediaContentType === "IMAGE")
     .map((item) => ({
@@ -648,6 +640,173 @@ export async function syncShopifyProduct(
       alt: String(item.alt ?? ""),
       mediaContentType: "IMAGE" as const
     }));
+  const desiredVideoInputs = (built.media as Array<Record<string, unknown>>)
+    .filter((item) => item.mediaContentType === "EXTERNAL_VIDEO")
+    .map((item) => ({
+      originalSource: String(item.originalSource),
+      alt: String(item.alt ?? ""),
+      mediaContentType: "EXTERNAL_VIDEO" as const
+    }));
+  return {
+    built,
+    core,
+    rows,
+    plan,
+    seeds,
+    desiredVariants,
+    variantRemovals,
+    images,
+    imageMediaInputs,
+    desiredVideoInputs
+  };
+}
+
+export async function syncShopifyProduct(
+  input: SyncShopifyProductInput
+): Promise<SyncShopifyProductResult> {
+  const {
+    serviceSupabase,
+    draftId,
+    createdBy,
+    forceRemoteOverwrite = false,
+    confirmRemovals = false,
+    confirmActiveUpdate = false,
+    reconcileAudit,
+    deps = {}
+  } = input;
+  const guardError = checkLiveTestGuard({ draftIds: [draftId], operation: "sync" });
+  if (guardError) return { ok: false, status: 403, error: guardError, code: "live_test_guard" };
+
+  const loaded = await loadSyncInputs(serviceSupabase, draftId);
+  if (!loaded.ok) return loaded;
+  const { draft, variantRows, internalLinkMap } = loaded;
+  const productId = draft.shopify_product_id as string;
+
+  if (process.env.SHOPIFY_PUBLISH_MOCK !== "false" && !deps.callGraphQL) {
+    return {
+      ok: true,
+      mock: true,
+      productId,
+      remoteUpdatedAt: draft.shopify_remote_updated_at ?? nowIso(),
+      warnings: ["SHOPIFY_PUBLISH_MOCK is enabled; no Shopify update was sent"]
+    };
+  }
+
+  const caller: ShopifyAdminGraphQLCaller =
+    deps.callGraphQL ?? ((query, variables) => callShopifyAdminGraphQL(query, variables));
+  let before: ShopifySyncSnapshot | null;
+  try {
+    before = await loadSnapshot(productId, caller);
+  } catch (error) {
+    return { ok: false, status: 502, error: message(error), code: "readback_failed" };
+  }
+  if (!before) {
+    await markSyncState(serviceSupabase, draftId, {
+      shopify_sync_status: "remote_deleted",
+      shopify_sync_error: "Shopify product no longer exists"
+    });
+    return { ok: false, status: 410, error: "Shopify product no longer exists", code: "remote_deleted" };
+  }
+  if (process.env.SHOPIFY_LIVE_TEST_DRAFT_ID?.trim() && before.status !== "DRAFT") {
+    return {
+      ok: false,
+      status: 409,
+      error: `G4 live test only permits a remote DRAFT; Shopify returned ${before.status}`,
+      code: "unsafe_remote_status"
+    };
+  }
+
+  const desired = buildSyncDesiredState({
+    draft,
+    variantRows,
+    internalLinkMap,
+    before,
+    productId
+  });
+  const {
+    core,
+    rows,
+    seeds,
+    desiredVariants,
+    variantRemovals,
+    images,
+    imageMediaInputs,
+    desiredVideoInputs
+  } = desired;
+
+  if (!forceRemoteOverwrite) {
+    const baseline = (draft.shopify_sync_baseline ?? null) as ShopifySyncBaseline | null;
+    const previousRemoteUpdatedAt = draft.shopify_remote_updated_at as string | null;
+    // Only a full sync writes shopify_sync_hash. Archive/restore also set
+    // shopify_remote_updated_at without syncing content, so that alone proves nothing.
+    const legacyFullSync =
+      !baseline && Boolean(draft.shopify_sync_hash) && Boolean(previousRemoteUpdatedAt);
+    const legacyUnchanged =
+      legacyFullSync &&
+      Date.parse(before.updatedAt) <= Date.parse(previousRemoteUpdatedAt!) + 1000;
+    const rowsNow = computeReconcileRows({
+      tool: toolValuesFromDesired(desired),
+      shopify: shopifyValuesFromSnapshot(before),
+      baseline,
+      legacyUnchanged,
+      variantLabels: {},
+      pullability: {}
+    });
+    const blocking = blockingRows(rowsNow);
+    if (blocking.length > 0) {
+      if (!baseline && !legacyFullSync) {
+        await markSyncState(serviceSupabase, draftId, {
+          shopify_sync_status: "conflict",
+          shopify_sync_error: "Never synced; remote baseline unknown"
+        });
+        return {
+          ok: false,
+          status: 409,
+          code: "remote_conflict",
+          error:
+            "這件商品還沒有同步紀錄，無法確認 Shopify 後台是否被手動修改過；已停止覆蓋，請先比對差異",
+          conflictCount: blocking.length
+        };
+      }
+      await markSyncState(serviceSupabase, draftId, {
+        shopify_sync_status: "conflict",
+        shopify_sync_error: "Shopify was updated after the last successful sync"
+      });
+      return {
+        ok: false,
+        status: 409,
+        code: "remote_conflict",
+        error: "Shopify 後台在上次同步後有新修改；已停止覆蓋，請先查看差異",
+        conflictCount: blocking.length
+      };
+    }
+  }
+
+  if (before.status === "ACTIVE" && !confirmActiveUpdate) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Shopify 商品目前是 ACTIVE；更新公開商品需要明確 confirmActiveUpdate=true",
+      code: "active_update_confirmation_required"
+    };
+  }
+
+  const needsInventory = desiredVariants.some(
+    (item) => item.seed.inventoryPolicy === "DENY" && Number.isInteger(item.seed.inventoryQuantity)
+  );
+  if (needsInventory) {
+    try {
+      await attachInventoryLevels(before, productId, caller);
+    } catch {
+      return {
+        ok: false,
+        status: 502,
+        code: "inventory_read_failed",
+        error: "這件商品有設定有限庫存，但目前 Shopify App 沒有讀取庫存的權限（read_inventory），已停止同步；Shopify 沒有被改動"
+      };
+    }
+  }
+
   if (imageMediaInputs.length !== images.length) {
     return {
       ok: false,
@@ -669,13 +828,6 @@ export async function syncShopifyProduct(
   const matchedMediaIds = new Set(
     desiredImages.flatMap((item) => (item.remote && !item.replace ? [item.remote.id] : []))
   );
-  const desiredVideoInputs = (built.media as Array<Record<string, unknown>>)
-    .filter((item) => item.mediaContentType === "EXTERNAL_VIDEO")
-    .map((item) => ({
-      originalSource: String(item.originalSource),
-      alt: String(item.alt ?? ""),
-      mediaContentType: "EXTERNAL_VIDEO" as const
-    }));
   const desiredVideoUrls = desiredVideoInputs.map((item) => item.originalSource);
   for (const remote of before.media.nodes) {
     if (remote.mediaContentType === "EXTERNAL_VIDEO" && remote.originUrl && desiredVideoUrls.includes(remote.originUrl)) {
@@ -706,7 +858,8 @@ export async function syncShopifyProduct(
     videoCount: desiredVideoInputs.length,
     variantRemovals: variantRemovals.map((item) => item.id),
     mediaRemovals: mediaRemovals.map((item) => item.id),
-    forceRemoteOverwrite
+    forceRemoteOverwrite,
+    ...(reconcileAudit ? { reconcile: reconcileAudit } : {})
   };
   const claim = await claimSyncing(serviceSupabase, draftId);
   if (!claim.ok) {
@@ -962,6 +1115,14 @@ export async function syncShopifyProduct(
     const after = await loadSnapshot(productId, caller);
     if (!after) return fail("remote_deleted_after_sync", "Shopify product disappeared during sync");
 
+    if (needsInventory) {
+      try {
+        await attachInventoryLevels(after, productId, caller);
+      } catch {
+        return fail("inventory_read_failed", "Shopify 已同步，但讀不到庫存，無法核對有限庫存（read_inventory 權限）");
+      }
+    }
+
     const rematchedVariants = matchVariants(rows, seeds, after.variants.nodes);
     const rematchedImages = matchImages(images, imageMediaInputs, after.media.nodes, false).desired;
     const mismatches = verifyReadback(
@@ -1018,6 +1179,7 @@ export async function syncShopifyProduct(
       shopify_synced_at: nowIso(),
       shopify_remote_updated_at: after.updatedAt,
       shopify_sync_hash: requestHash,
+      shopify_sync_baseline: buildBaselineFromSnapshot(after, nowIso()),
       shopify_sync_error: null
     });
     if (finalPersistError) {

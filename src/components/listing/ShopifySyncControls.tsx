@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { showToast } from "@/components/Toast";
 import { Button } from "@/components/ui/Button";
+import type { ShopifyDiffPayload } from "@/lib/shopify/reconcileFields";
 import type { ShopifySyncStatus } from "@/types/domain";
 
 type SyncRequestOptions = {
@@ -19,10 +20,17 @@ type ModalKind =
   | "archive"
   | "restore"
   | "delete"
-  | "conflict"
+  | "compare"
   | "removals"
   | "active"
   | "error";
+
+const STATE_CHIP = {
+  tool: { className: "schip schip--ok", label: "工具有改" },
+  shopify: { className: "schip schip--warn", label: "Shopify 有改" },
+  both: { className: "schip schip--error", label: "兩邊都改" },
+  unknown: { className: "schip schip--idle", label: "沒有比對紀錄" }
+} as const;
 
 function isRealProductId(value: string | null): value is string {
   return Boolean(value && value !== "mock-product-id");
@@ -111,6 +119,10 @@ export function ShopifySyncControls({
   const [deleteTitle, setDeleteTitle] = useState("");
   const [removals, setRemovals] = useState<RemovalCounts>({ variants: 0, media: 0 });
   const [pendingSync, setPendingSync] = useState<SyncRequestOptions>({});
+  const [diff, setDiff] = useState<ShopifyDiffPayload | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState("");
+  const [choices, setChoices] = useState<Record<string, "tool" | "shopify">>({});
 
   const realProduct = isRealProductId(productId);
   const remoteDeleted = syncStatus === "remote_deleted";
@@ -144,6 +156,107 @@ export function ShopifySyncControls({
     }
   }
 
+  async function loadDiff() {
+    setDiffLoading(true);
+    setDiffError("");
+    setDiff(null);
+    try {
+      const response = await fetch(`/api/drafts/${draftId}/shopify-diff`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.ok === false) {
+        setDiffError(payload.error || "比對失敗，請稍後再試");
+        return;
+      }
+      const nextDiff = payload as ShopifyDiffPayload;
+      setDiff(nextDiff);
+      setChoices(
+        Object.fromEntries(
+          nextDiff.rows
+            .filter((row) => row.preselect !== null)
+            .map((row) => [row.key, row.preselect as "tool" | "shopify"])
+        )
+      );
+    } catch {
+      setDiffError("比對失敗，請稍後再試");
+    } finally {
+      setDiffLoading(false);
+    }
+  }
+
+  async function applyReconcile() {
+    if (!diff) return;
+    setBusy(true);
+    onStatusChange("syncing", null);
+    const confirmActiveUpdate = diff.productStatus === "ACTIVE";
+    try {
+      const response = await fetch(`/api/drafts/${draftId}/shopify-resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          remoteUpdatedAt: diff.remoteUpdatedAt,
+          draftUpdatedAt: diff.draftUpdatedAt,
+          choices,
+          confirmActiveUpdate,
+          confirmRemovals: false
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      const pulledCount = Number(payload.pulledCount ?? 0);
+      if (response.ok && payload.ok !== false) {
+        if (payload.mock === true) {
+          onStatusChange(hasLocalChanges ? "dirty" : syncStatus ?? "never", null);
+          setModal(null);
+          showToast("安全模式檢查完成，沒有寫入 Shopify", "info");
+          return;
+        }
+        onStatusChange("synced", null);
+        setModal(null);
+        showToast("已依你的選擇同步，並完成回讀核對", "success");
+        onRefresh();
+        return;
+      }
+
+      const code = typeof payload.code === "string" ? payload.code : "";
+      const error = typeof payload.error === "string" ? payload.error : "Shopify 同步失敗";
+      if (code === "diff_stale" || code === "diff_changed") {
+        onStatusChange("conflict", error);
+        showToast(error, "warn");
+        await loadDiff();
+        return;
+      }
+      if (code === "removal_confirmation_required") {
+        setPendingSync({ forceRemoteOverwrite: true, confirmActiveUpdate });
+        setRemovals({
+          variants: Number(payload.removals?.variants ?? 0),
+          media: Number(payload.removals?.media ?? 0)
+        });
+        onStatusChange("dirty", null);
+        setModal("removals");
+        if (pulledCount > 0) onRefresh();
+        return;
+      }
+
+      const nextStatus: ShopifySyncStatus =
+        code === "remote_deleted"
+          ? "remote_deleted"
+          : code === "manual_reconciliation_required"
+            ? "partial"
+            : "error";
+      onStatusChange(nextStatus, error);
+      setModalError(error);
+      setModal("error");
+      showToast(error, "error");
+      if (pulledCount > 0) onRefresh();
+    } catch {
+      const error = "Shopify 同步連線失敗";
+      onStatusChange("error", error);
+      setModalError(error);
+      setModal("error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function requestSync(options: SyncRequestOptions = {}) {
     setBusy(true);
     onStatusChange("syncing", null);
@@ -160,7 +273,8 @@ export function ShopifySyncControls({
         setPendingSync(options);
         if (code === "remote_conflict") {
           onStatusChange("conflict", error);
-          setModal("conflict");
+          setModal("compare");
+          await loadDiff();
           return;
         }
         if (code === "removal_confirmation_required") {
@@ -347,8 +461,10 @@ export function ShopifySyncControls({
           ? "恢復 Shopify 商品"
           : modal === "delete"
             ? "永久刪除 Shopify 商品"
-            : modal === "conflict"
-              ? "Shopify 有較新的修改"
+            : modal === "compare"
+              ? diff
+                ? `Shopify 和工具有 ${diff.rows.length} 欄不一樣`
+                : "比對 Shopify 和工具"
               : modal === "removals"
                 ? "確認移除 Shopify 資料"
                 : modal === "active"
@@ -367,7 +483,13 @@ export function ShopifySyncControls({
             }}
             role="dialog"
           >
-            <div className="modal-box approve-summary-modal">
+            <div
+              className={
+                modal === "compare"
+                  ? "modal-box approve-summary-modal vc-modal rcx-modal"
+                  : "modal-box approve-summary-modal"
+              }
+            >
               <div className="modal-hdr">
                 <span id={titleId}>{modalTitle}</span>
                 <button
@@ -418,10 +540,244 @@ export function ShopifySyncControls({
                     商品會恢復為 Shopify DRAFT，不會直接公開 ACTIVE。
                   </p>
                 ) : null}
-                {modal === "conflict" ? (
-                  <p className="export-pf-overview">
-                    Shopify 後台在上次同步後有新修改，所以系統已先停止覆蓋。若確定以工具版本為準，才繼續覆蓋。
-                  </p>
+                {modal === "compare" ? (
+                  diffLoading ? (
+                    <p className="vc-note">正在比對 Shopify 和工具…</p>
+                  ) : diffError ? (
+                    <p className="price-soft-warn" role="alert">{diffError}</p>
+                  ) : diff && diff.rows.length === 0 ? (
+                    <p className="vc-note">現在兩邊內容一樣，可以直接同步。</p>
+                  ) : diff ? (
+                    <>
+                      <p className="vc-note">
+                        {`每一欄選要留哪一邊。選「Shopify」的會先存回工具，再把整件同步上 Shopify。${!diff.hasBaseline ? "　這件還沒有比對紀錄，不一樣的欄位都要自己選。" : ""}`}
+                      </p>
+                      {diff.productStatus === "ACTIVE" ? (
+                        <p className="price-soft-warn" role="note">
+                          這是公開中的商品，套用後顧客會立刻看到新的內容。
+                        </p>
+                      ) : null}
+                      <div className="vc-toolbar">
+                        <Button
+                          disabled={busy}
+                          onClick={() =>
+                            setChoices(
+                              Object.fromEntries(diff.rows.map((row) => [row.key, "tool"]))
+                            )
+                          }
+                          size="sm"
+                          type="button"
+                        >
+                          全部用工具
+                        </Button>
+                        <Button
+                          disabled={busy}
+                          onClick={() =>
+                            setChoices((current) => {
+                              const next = { ...current };
+                              diff.rows.forEach((row) => {
+                                if (row.pullable) next[row.key] = "shopify";
+                              });
+                              return next;
+                            })
+                          }
+                          size="sm"
+                          type="button"
+                        >
+                          全部用 Shopify
+                        </Button>
+                        <span className="vc-orig">
+                          已選 {Object.keys(choices).filter((key) => choices[key]).length}／{diff.rows.length} 欄
+                        </span>
+                      </div>
+                      {diff.rows.filter((row) => row.group === "product").length > 0 ? (
+                        <>
+                          <h3 className="rcx-section-title">
+                            商品內容（{diff.rows.filter((row) => row.group === "product").length} 欄）
+                          </h3>
+                          {diff.rows
+                            .filter((row) => row.group === "product")
+                            .map((row) => (
+                              <div className="rcx-row" key={row.key}>
+                                <div className="rcx-row-head">
+                                  <span className="rcx-row-label">{row.label}</span>
+                                  <span className={STATE_CHIP[row.state].className}>
+                                    {STATE_CHIP[row.state].label}
+                                  </span>
+                                </div>
+                                <div className="rcx-picks" role="radiogroup" aria-label={row.label}>
+                                  <button
+                                    aria-checked={choices[row.key] === "tool"}
+                                    className={`rcx-pick${choices[row.key] === "tool" ? " sel--tint" : ""}`}
+                                    disabled={busy}
+                                    onClick={() =>
+                                      setChoices((current) => ({ ...current, [row.key]: "tool" }))
+                                    }
+                                    role="radio"
+                                    type="button"
+                                  >
+                                    <span className="rcx-pick-label">工具版本</span>
+                                    <span className="rcx-pick-value">{row.toolDisplay}</span>
+                                  </button>
+                                  <button
+                                    aria-checked={choices[row.key] === "shopify"}
+                                    className={`rcx-pick${choices[row.key] === "shopify" ? " sel--tint" : ""}`}
+                                    disabled={busy || !row.pullable}
+                                    onClick={() =>
+                                      setChoices((current) => ({ ...current, [row.key]: "shopify" }))
+                                    }
+                                    role="radio"
+                                    type="button"
+                                  >
+                                    <span className="rcx-pick-label">Shopify 版本</span>
+                                    <span className="rcx-pick-value">{row.shopifyDisplay}</span>
+                                  </button>
+                                </div>
+                                {!row.pullable && row.pullBlockedReason ? (
+                                  <p className="vc-warn-text">{row.pullBlockedReason}</p>
+                                ) : null}
+                              </div>
+                            ))}
+                        </>
+                      ) : null}
+                      {diff.rows.filter((row) => row.group === "variant").length > 0 ? (
+                        <>
+                          <h3 className="rcx-section-title">
+                            款式價格與 SKU（{diff.variantTotal} 款，
+                            {new Set(
+                              diff.rows
+                                .filter((row) => row.group === "variant")
+                                .map((row) => row.variantId)
+                                .filter(Boolean)
+                            ).size} 款有差異）
+                          </h3>
+                          {new Set(
+                            diff.rows
+                              .filter((row) => row.group === "variant")
+                              .map((row) => row.variantId)
+                              .filter(Boolean)
+                          ).size >= 2 ? (
+                            <div className="vc-toolbar">
+                              <Button
+                                disabled={busy}
+                                onClick={() =>
+                                  setChoices((current) => {
+                                    const next = { ...current };
+                                    diff.rows
+                                      .filter((row) => row.group === "variant")
+                                      .forEach((row) => {
+                                        next[row.key] = "tool";
+                                      });
+                                    return next;
+                                  })
+                                }
+                                size="sm"
+                                type="button"
+                              >
+                                這區全用工具
+                              </Button>
+                              <Button
+                                disabled={busy}
+                                onClick={() =>
+                                  setChoices((current) => {
+                                    const next = { ...current };
+                                    diff.rows
+                                      .filter((row) => row.group === "variant")
+                                      .forEach((row) => {
+                                        if (row.pullable) next[row.key] = "shopify";
+                                      });
+                                    return next;
+                                  })
+                                }
+                                size="sm"
+                                type="button"
+                              >
+                                這區全用 Shopify
+                              </Button>
+                            </div>
+                          ) : null}
+                          {[...new Map(
+                            diff.rows
+                              .filter((row) => row.group === "variant" && row.variantId)
+                              .map((row) => [row.variantId as string, row.variantLabel || "單一款式"])
+                          )].map(([variantId, variantLabel]) => (
+                            <div key={variantId}>
+                              <p className="rcx-variant-name">{variantLabel}</p>
+                              {diff.rows
+                                .filter((row) => row.variantId === variantId)
+                                .map((row) => (
+                                  <div className="rcx-row" key={row.key}>
+                                    <div className="rcx-row-head">
+                                      <span className="rcx-row-label">{row.label}</span>
+                                      <span className={STATE_CHIP[row.state].className}>
+                                        {STATE_CHIP[row.state].label}
+                                      </span>
+                                    </div>
+                                    <div className="rcx-picks" role="radiogroup" aria-label={row.label}>
+                                      <button
+                                        aria-checked={choices[row.key] === "tool"}
+                                        className={`rcx-pick${choices[row.key] === "tool" ? " sel--tint" : ""}`}
+                                        disabled={busy}
+                                        onClick={() =>
+                                          setChoices((current) => ({ ...current, [row.key]: "tool" }))
+                                        }
+                                        role="radio"
+                                        type="button"
+                                      >
+                                        <span className="rcx-pick-label">工具版本</span>
+                                        <span className="rcx-pick-value">{row.toolDisplay}</span>
+                                      </button>
+                                      <button
+                                        aria-checked={choices[row.key] === "shopify"}
+                                        className={`rcx-pick${choices[row.key] === "shopify" ? " sel--tint" : ""}`}
+                                        disabled={busy || !row.pullable}
+                                        onClick={() =>
+                                          setChoices((current) => ({ ...current, [row.key]: "shopify" }))
+                                        }
+                                        role="radio"
+                                        type="button"
+                                      >
+                                        <span className="rcx-pick-label">Shopify 版本</span>
+                                        <span className="rcx-pick-value">{row.shopifyDisplay}</span>
+                                      </button>
+                                    </div>
+                                    {!row.pullable && row.pullBlockedReason ? (
+                                      <p className="vc-warn-text">{row.pullBlockedReason}</p>
+                                    ) : null}
+                                  </div>
+                                ))}
+                            </div>
+                          ))}
+                        </>
+                      ) : null}
+                      <details
+                        className="vr-notes"
+                        open={
+                          diff.toolOnlyVariants.length > 0 ||
+                          diff.shopifyOnlyVariants.length > 0
+                        }
+                      >
+                        <summary>不在這張表的東西</summary>
+                        <ul>
+                          {diff.toolOnlyVariants.length > 0 ? (
+                            <li>
+                              只在工具的款式 {diff.toolOnlyVariants.length} 個：
+                              {diff.toolOnlyVariants.join("、")}。同步後會新增到 Shopify。
+                            </li>
+                          ) : null}
+                          {diff.shopifyOnlyVariants.length > 0 ? (
+                            <li>
+                              只在 Shopify 的款式 {diff.shopifyOnlyVariants.length} 個：
+                              {diff.shopifyOnlyVariants.join("、")}。同步時會再請你確認是否刪除。
+                            </li>
+                          ) : null}
+                          <li>
+                            上架狀態和庫存以 Shopify 為準；圖片以工具為準（要移除會另外確認）；商品類別只會補空的。
+                          </li>
+                        </ul>
+                      </details>
+                    </>
+                  ) : null
                 ) : null}
                 {modal === "removals" ? (
                   <p className="export-pf-overview">
@@ -466,7 +822,7 @@ export function ShopifySyncControls({
                     ref={cancelRef}
                     type="button"
                   >
-                    {modal === "error" ? "關閉" : "取消"}
+                    {modal === "error" || (modal === "compare" && diffError) ? "關閉" : "取消"}
                   </button>
                   {modal === "archive" ? (
                     <button
@@ -498,16 +854,39 @@ export function ShopifySyncControls({
                       {busy ? "刪除中…" : "永久刪除"}
                     </button>
                   ) : null}
-                  {modal === "conflict" ? (
+                  {modal === "compare" && diffError ? (
                     <button
-                      className="approve-sum-btn primary danger"
+                      className="approve-sum-btn primary"
+                      onClick={() => void loadDiff()}
+                      type="button"
+                    >
+                      重新比對
+                    </button>
+                  ) : null}
+                  {modal === "compare" && diff && diff.rows.length === 0 ? (
+                    <button
+                      className="approve-sum-btn primary"
                       disabled={busy}
                       onClick={() =>
                         void requestSync({ ...pendingSync, forceRemoteOverwrite: true })
                       }
                       type="button"
                     >
-                      {busy ? "同步中…" : "以工具版本覆蓋"}
+                      {busy ? "同步中…" : "直接同步"}
+                    </button>
+                  ) : null}
+                  {modal === "compare" && diff && diff.rows.length > 0 ? (
+                    <button
+                      className="approve-sum-btn primary"
+                      disabled={
+                        busy ||
+                        Object.keys(choices).filter((key) => choices[key]).length !==
+                          diff.rows.length
+                      }
+                      onClick={() => void applyReconcile()}
+                      type="button"
+                    >
+                      {busy ? "同步中…" : `套用選擇並同步（${diff.rows.length} 欄）`}
                     </button>
                   ) : null}
                   {modal === "removals" ? (

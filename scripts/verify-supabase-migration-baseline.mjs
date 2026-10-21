@@ -13,7 +13,8 @@ const expectedActive = [
   "20260903100000_shopify_full_sync_state.sql",
   "20261014100000_variant_clean_columns.sql",
   "20261016100000_hotfix1_repair_faq_spec_format.sql",
-  "20261019100000_publish_item_attempts.sql"
+  "20261019100000_publish_item_attempts.sql",
+  "20261020100000_shopify_sync_baseline.sql"
 ];
 
 function fail(message) {

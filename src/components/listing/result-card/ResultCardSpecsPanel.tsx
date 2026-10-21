@@ -29,6 +29,9 @@ export function ResultCardSpecsPanel({
   restoreBusyIndex,
   restoreDisabledReason,
   onRestoreExcluded,
+  restoreAllBusy,
+  onRestoreAllSoldOut,
+  priceRecalcPending = 0,
   priceUnconfirmed = false,
   onDimensionsChange,
   onRowsChange,
@@ -48,6 +51,11 @@ export function ResultCardSpecsPanel({
   /** Non-null → 恢復 is disabled and this says why (e.g. unsaved edits). */
   restoreDisabledReason: string | null;
   onRestoreExcluded: (index: number) => void;
+  /** CAPTURE-FIX: 「全部加回」 for the source-sold-out group is in flight. */
+  restoreAllBusy: boolean;
+  onRestoreAllSoldOut: () => void;
+  /** CAPTURE-FIX: variants whose cost was refreshed by a re-capture but whose selling price is still blank. */
+  priceRecalcPending?: number;
   /** PRICE-GUARD: capture hid/flagged per-variant prices and nobody confirmed them yet. */
   priceUnconfirmed?: boolean;
   onDimensionsChange: (dims: VariantDimension[]) => void;
@@ -60,6 +68,13 @@ export function ResultCardSpecsPanel({
   const [cleanOpen, setCleanOpen] = useState(false);
   const [recalcOpen, setRecalcOpen] = useState(false);
   const [excludedOpen, setExcludedOpen] = useState(false);
+  const soldOutExcluded = excludedVariants
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.reason === "source_sold_out");
+  const otherExcluded = excludedVariants
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.reason !== "source_sold_out");
+  const [soldOutOpen, setSoldOutOpen] = useState(soldOutExcluded.length <= 3);
   const hasRows = variantRows.filter(isVariantRowFilled).length > 0;
 
   const unconfirmedLabels = priceUnconfirmed
@@ -83,6 +98,55 @@ export function ResultCardSpecsPanel({
             {unconfirmedLabels.slice(0, 6).map((label) => `「${label}」`).join("")}
             {unconfirmedLabels.length > 6 ? "…" : ""}
           </p>
+        ) : null}
+        {priceRecalcPending > 0 ? (
+          <p className="price-soft-warn" style={{ margin: "0 0 8px" }}>
+            ⚠ 重新擷取更新了成本，有 {priceRecalcPending} 款的售價還是空的；請按下方「依公式重算售價」重新計算，再按儲存。
+          </p>
+        ) : null}
+        {soldOutExcluded.length > 0 ? (
+          <CollapsibleSection
+            className="vc-excluded"
+            onToggle={() => setSoldOutOpen((open) => !open)}
+            open={soldOutOpen}
+            summary={
+              soldOutExcluded.slice(0, 3).map(({ entry }) => `「${entry.label}」`).join("") +
+              (soldOutExcluded.length > 3 ? "…" : "")
+            }
+            title={`已排除 ${soldOutExcluded.length} 款來源售完`}
+          >
+            <p className="vc-note">這些款式在來源網站已經沒有庫存，匯入時先排除，避免上架賣不到的款式。補貨了可以加回；加回的款式成本會暫用商品成本，發布前請確認。</p>
+            {restoreDisabledReason ? <p className="price-soft-warn">{restoreDisabledReason}</p> : null}
+            <ul className="vc-list">
+              {soldOutExcluded.map(({ entry, index }) => (
+                <li className="vc-excluded-row" key={`${entry.label}-${index}`}>
+                  <span className="vc-excluded-label">{entry.label}</span>
+                  <Button
+                    disabled={Boolean(restoreDisabledReason) || restoreBusyIndex !== null || restoreAllBusy}
+                    loading={restoreBusyIndex === index}
+                    onClick={() => onRestoreExcluded(index)}
+                    size="sm"
+                    type="button"
+                  >
+                    加回
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            {soldOutExcluded.length >= 2 ? (
+              <div className="vc-toolbar">
+                <Button
+                  disabled={Boolean(restoreDisabledReason) || restoreBusyIndex !== null || restoreAllBusy}
+                  loading={restoreAllBusy}
+                  onClick={onRestoreAllSoldOut}
+                  size="sm"
+                  type="button"
+                >
+                  全部加回
+                </Button>
+              </div>
+            ) : null}
+          </CollapsibleSection>
         ) : null}
         {variantDimensions.length === 0 && variantRows.filter(isVariantRowFilled).length === 0 ? (
           <p className="muted" style={{ margin: "0 0 8px", fontSize: 12 }}>
@@ -117,18 +181,18 @@ export function ResultCardSpecsPanel({
           />
         </div>
 
-        {excludedVariants.length > 0 ? (
+        {otherExcluded.length > 0 ? (
           <CollapsibleSection
             className="vc-excluded"
             onToggle={() => setExcludedOpen((open) => !open)}
             open={excludedOpen}
-            summary={`${excludedVariants.length} 個`}
+            summary={`${otherExcluded.length} 個`}
             title="已排除的款式"
           >
             <p className="vc-note">匯入時判斷不是商品（像「購買須知」「勿拍」「補差價」），所以沒有建立成款式。誤判的可以恢復。</p>
             {restoreDisabledReason ? <p className="price-soft-warn">{restoreDisabledReason}</p> : null}
             <ul className="vc-list">
-              {excludedVariants.map((entry, index) => (
+              {otherExcluded.map(({ entry, index }) => (
                 <li className="vc-excluded-row" key={`${entry.label}-${index}`}>
                   <span className="vc-excluded-label">{entry.label}</span>
                   <Button

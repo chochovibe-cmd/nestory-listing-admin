@@ -10,9 +10,11 @@ import type {
   CaptureImportBody,
   CaptureImportCreated,
   CaptureImportExists,
+  CaptureImportRefreshed,
   CaptureImportUpdated
 } from "@/lib/import/captureTypes";
 import { mapCaptureToDraftFields } from "@/lib/import/mapCaptureFields";
+import { refreshExistingCaptureDraft } from "@/lib/import/refreshCapture";
 import {
   applyVariantImageIds,
   fetchAndStoreCaptureImages
@@ -23,6 +25,7 @@ export type CreateCaptureDraftResult =
   | CaptureImportCreated
   | CaptureImportExists
   | CaptureImportUpdated
+  | CaptureImportRefreshed
   | { ok: false; error: string; message: string; status: number };
 
 function isBlankText(value: unknown): boolean {
@@ -269,6 +272,22 @@ export async function createCaptureDraft(input: {
       body: input.body
     });
     if (refill) return refill;
+    // CAPTURE-FIX: nothing empty to refill → refresh price / stock state from this capture.
+    const refreshed = await refreshExistingCaptureDraft({
+      serviceSupabase: input.serviceSupabase,
+      draftId: existing.id,
+      body: input.body
+    });
+    if (refreshed) {
+      return {
+        ok: true,
+        status: "refreshed",
+        draft_id: existing.id,
+        open_path: openPathForDraft(existing.id),
+        message: refreshed.message,
+        refreshed: refreshed.refreshed
+      };
+    }
     return {
       ok: true,
       status: "exists",

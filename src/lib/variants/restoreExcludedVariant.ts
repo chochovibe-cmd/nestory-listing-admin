@@ -90,7 +90,12 @@ export function planRestoreExcludedVariant(input: {
     base[`option${axis + 1}_name`] = cleaned.values[axis] != null ? name ?? null : cleaned.names[axis];
     base[`option${axis + 1}_value`] = cleaned.values[axis];
   });
+  if (entry.reason === "source_sold_out") {
+    base.cny_price = null; // a restored variant always follows the product cost, so the confirm flag stays honest
+    base.cost_is_inherited = true;
+  }
   const sortOrder = input.existing.reduce((max, r) => Math.max(max, (r.sort_order ?? 0) + 1), 0);
+  const priorStock = (entry.row.source_options as { stock?: unknown } | undefined)?.stock;
   const draft: Record<string, unknown> = {
     ...base,
     draft_id: input.draftId,
@@ -98,7 +103,8 @@ export function planRestoreExcludedVariant(input: {
     // Originals stay on record, same as imported rows.
     source_options: {
       names: [raw.option1_name ?? null, raw.option2_name ?? null, raw.option3_name ?? null],
-      values: [raw.option1_value ?? null, raw.option2_value ?? null, raw.option3_value ?? null]
+      values: [raw.option1_value ?? null, raw.option2_value ?? null, raw.option3_value ?? null],
+      ...(priorStock ? { stock: priorStock } : {})
     }
   };
 
@@ -127,4 +133,44 @@ export function planRestoreExcludedVariant(input: {
     remaining: input.excluded.filter((_, i) => i !== input.index),
     dimensions: addToDimensions(input.dimensions, base)
   };
+}
+
+export type RestoreAllPlan =
+  | { ok: true; rows: Array<Record<string, unknown>>; remaining: ExcludedVariantEntry[]; dimensions: Dimension[] }
+  | { ok: false; status: number; error: string };
+
+/**
+ * CAPTURE-FIX: restore every excluded entry of one `reason` (e.g. "source_sold_out") in one plan.
+ * All-or-nothing: the first failing entry fails the whole plan so nothing is written partially.
+ */
+export function planRestoreAllExcludedVariants(input: {
+  draftId: string;
+  excluded: ExcludedVariantEntry[];
+  reason: string;
+  existing: ExistingVariantLite[];
+  dimensions: Dimension[];
+}): RestoreAllPlan {
+  const rows: Array<Record<string, unknown>> = [];
+  const existing: ExistingVariantLite[] = [...input.existing];
+  let excluded = input.excluded;
+  let dimensions = input.dimensions;
+  for (;;) {
+    const index = excluded.findIndex((e) => e.reason === input.reason);
+    if (index < 0) break;
+    const plan = planRestoreExcludedVariant({ draftId: input.draftId, excluded, index, existing, dimensions });
+    if (!plan.ok) return plan;
+    rows.push(plan.row);
+    existing.push({
+      id: "pending-" + rows.length,
+      sku: (plan.row.sku as string | null | undefined) ?? null,
+      sort_order: plan.row.sort_order as number,
+      option1_value: (plan.row.option1_value as string | null | undefined) ?? null,
+      option2_value: (plan.row.option2_value as string | null | undefined) ?? null,
+      option3_value: (plan.row.option3_value as string | null | undefined) ?? null
+    });
+    excluded = plan.remaining;
+    dimensions = plan.dimensions;
+  }
+  if (rows.length === 0) return { ok: false, status: 404, error: "沒有可加回的款式" };
+  return { ok: true, rows, remaining: excluded, dimensions };
 }

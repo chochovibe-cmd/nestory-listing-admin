@@ -2,11 +2,19 @@
  * VARIANT-CLEAN: restore one option the import excluded as a non-product 款式.
  * Inserts it as a normal variant row (SKU assigned, no image), removes it from
  * raw_capture.server.excluded_variants and adds its values to variant_dimensions.
+ *
+ * CAPTURE-FIX: `{ all: true, reason: "source_sold_out" }` restores every source-sold-out entry
+ * in one go. A restored source-sold-out variant follows the product cost, so the draft goes back
+ * to "needs price confirmation".
  */
 import { NextRequest } from "next/server";
 import { canOperate } from "@/lib/auth/roles";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
-import { planRestoreExcludedVariant, readExcludedVariants } from "@/lib/variants/restoreExcludedVariant";
+import {
+  planRestoreAllExcludedVariants,
+  planRestoreExcludedVariant,
+  readExcludedVariants
+} from "@/lib/variants/restoreExcludedVariant";
 import { isMissingVariantOverrideColumn, omitVariantOverrideColumns } from "@/lib/variants/variantPersist";
 import type { UserRole } from "@/types/domain";
 
@@ -24,7 +32,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return Response.json({ error: "Operator role is required" }, { status: 403 });
   }
 
-  const body = (await request.json().catch(() => null)) as { index?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as
+    | { index?: unknown; all?: unknown; reason?: unknown }
+    | null;
+  const restoreAll = body?.all === true;
+  if (restoreAll && body?.reason !== "source_sold_out") {
+    return Response.json({ error: "不支援的加回類型" }, { status: 400 });
+  }
   const index = typeof body?.index === "number" ? body.index : Number.NaN;
 
   const serviceSupabase = createServiceSupabaseClient();
@@ -41,39 +55,77 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .eq("draft_id", id);
   if (existingError) return Response.json({ error: `讀取款式失敗：${existingError.message}` }, { status: 500 });
 
-  const plan = planRestoreExcludedVariant({
-    draftId: id,
-    excluded: readExcludedVariants(draft.raw_capture),
-    index,
-    existing: existing ?? [],
-    dimensions: Array.isArray(draft.variant_dimensions) ? draft.variant_dimensions : []
-  });
-  if (!plan.ok) return Response.json({ error: plan.error }, { status: plan.status });
+  const excluded = readExcludedVariants(draft.raw_capture);
+  const dimensions = Array.isArray(draft.variant_dimensions) ? draft.variant_dimensions : [];
 
-  let { error: insertError } = await serviceSupabase.from("product_variants").insert(plan.row);
+  let rows: Array<Record<string, unknown>>;
+  let remaining: typeof excluded;
+  let nextDimensions: typeof dimensions;
+  let restoredSoldOut: boolean;
+  if (restoreAll) {
+    const plan = planRestoreAllExcludedVariants({
+      draftId: id,
+      excluded,
+      reason: "source_sold_out",
+      existing: existing ?? [],
+      dimensions
+    });
+    if (!plan.ok) return Response.json({ error: plan.error }, { status: plan.status });
+    rows = plan.rows;
+    remaining = plan.remaining;
+    nextDimensions = plan.dimensions;
+    restoredSoldOut = true;
+  } else {
+    const plan = planRestoreExcludedVariant({
+      draftId: id,
+      excluded,
+      index,
+      existing: existing ?? [],
+      dimensions
+    });
+    if (!plan.ok) return Response.json({ error: plan.error }, { status: plan.status });
+    rows = [plan.row];
+    remaining = plan.remaining;
+    nextDimensions = plan.dimensions;
+    restoredSoldOut = excluded[index]?.reason === "source_sold_out";
+  }
+
+  let { error: insertError } = await serviceSupabase.from("product_variants").insert(rows);
   if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
     ({ error: insertError } = await serviceSupabase
       .from("product_variants")
-      .insert(omitVariantOverrideColumns([plan.row], insertError.message)[0]));
+      .insert(omitVariantOverrideColumns(rows, insertError.message)));
   }
   if (insertError && isMissingVariantOverrideColumn(insertError.message)) {
     ({ error: insertError } = await serviceSupabase
       .from("product_variants")
-      .insert(omitVariantOverrideColumns([plan.row])[0]));
+      .insert(omitVariantOverrideColumns(rows)));
   }
   if (insertError) return Response.json({ error: `恢復款式失敗：${insertError.message}` }, { status: 500 });
 
   const raw = (draft.raw_capture ?? {}) as Record<string, unknown>;
   const server = (raw.server ?? {}) as Record<string, unknown>;
+  const nextServer: Record<string, unknown> = { ...server, excluded_variants: remaining };
+  if (restoredSoldOut) {
+    // The restored cost is inherited from the product, so it must be confirmed again.
+    nextServer.price_requires_confirmation = true;
+    nextServer.variant_price_confirmed_at = null;
+    nextServer.variant_price_confirmed_by = null;
+  }
   const { error: patchError } = await serviceSupabase
     .from("product_drafts")
     .update({
-      variant_dimensions: plan.dimensions,
-      raw_capture: { ...raw, server: { ...server, excluded_variants: plan.remaining } }
+      variant_dimensions: nextDimensions,
+      raw_capture: { ...raw, server: nextServer }
     })
     .eq("id", id);
   if (patchError) {
     return Response.json({ error: `款式已恢復，但更新排除清單失敗：${patchError.message}` }, { status: 500 });
   }
-  return Response.json({ ok: true, remaining: plan.remaining.length });
+  return Response.json({
+    ok: true,
+    remaining: remaining.length,
+    restored: rows.length,
+    price_unconfirmed: restoredSoldOut
+  });
 }

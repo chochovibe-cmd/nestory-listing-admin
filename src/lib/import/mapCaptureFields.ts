@@ -26,6 +26,12 @@ import { keepOrInheritVariantCny } from "@/lib/import/captureVariantPrice";
 import { isFakeVariantRow } from "@/lib/shopify/publishReadiness";
 import { parsePriceRange } from "@/lib/shopify/publishReadiness";
 import { cleanVariantRows } from "@/lib/variants/variantNameRules";
+import { parseFlatSourceStock } from "@/lib/variants/sourceStock";
+import type { VariantSourceStock } from "@/lib/variants/types";
+import {
+  WARNING_ALL_SOURCE_SOLD_OUT,
+  formatSoldOutExcludedWarning
+} from "@/lib/import/captureSourceStock";
 import {
   WARNING_HIDDEN_VARIANT_PRICES,
   WARNING_INTERACT_NEEDS_CONFIRMATION,
@@ -68,7 +74,7 @@ export type MappedCaptureDraft = {
 /** A 款式 the import refused to create (購買須知／勿拍／補差價…). `row` is the full would-be variant row. */
 export type ExcludedCaptureVariant = {
   label: string;
-  reason: "non_product_option";
+  reason: "non_product_option" | "source_sold_out";
   row: Record<string, unknown>;
 };
 
@@ -341,14 +347,23 @@ export function stripOversizedCaptureFields(
 export function mapVariantRows(
   flats: CaptureVariantFlat[],
   skuTable?: unknown,
-  productPriceCny?: number | null
+  productPriceCny?: number | null,
+  opts?: { stockCheckedAt?: string }
 ): {
   rows: Array<Record<string, unknown>>;
   dimensions: Array<{ name: string }>;
   variantImageUrls: string[];
   excluded: ExcludedCaptureVariant[];
+  allSourceSoldOut: boolean;
 } {
+  const checkedAt = opts?.stockCheckedAt ?? new Date().toISOString();
   const rows: Array<Record<string, unknown>> = [];
+  const pending: Array<{
+    row: Record<string, unknown>;
+    stock: VariantSourceStock | null;
+    imageUrl: string | null;
+    label: string;
+  }> = [];
   const excluded: ExcludedCaptureVariant[] = [];
   const dimNames: string[] = [];
   const valuesByName = new Map<string, string[]>();
@@ -424,30 +439,57 @@ export function mapVariantRows(
       ...(imageUrl ? { image_url: imageUrl } : {})
     };
 
+    const stock = parseFlatSourceStock(v, checkedAt);
+    const label = [o1v, o2v, o3v].filter(Boolean).join("／");
+
     // Same predicate PUBLISH-GUARD uses, so import and publish can never disagree.
     // Applied before the image / axis bookkeeping: an excluded option leaves no trace.
     if (isFakeVariantRow(row)) {
       excluded.push({
-        label: [o1v, o2v, o3v].filter(Boolean).join("／"),
+        label,
         reason: "non_product_option",
         row
       });
       return;
     }
 
-    if (imageUrl && !seenImg.has(imageUrl)) {
-      seenImg.add(imageUrl);
-      imageUrls.push(imageUrl);
-    }
-    rows.push(row);
+    pending.push({ row, stock, imageUrl, label });
   });
+
+  // CAPTURE-FIX: source-sold-out variants are excluded (restorable), unless every variant is sold out.
+  const allSourceSoldOut = pending.length > 0 && pending.every((p) => p.stock?.status === "sold_out");
+  const rowStocks: Array<VariantSourceStock | null> = [];
+  for (const p of pending) {
+    if (!allSourceSoldOut && p.stock?.status === "sold_out") {
+      excluded.push({
+        label: p.label,
+        reason: "source_sold_out",
+        row: {
+          ...p.row,
+          source_options: {
+            names: [p.row.option1_name ?? null, p.row.option2_name ?? null, p.row.option3_name ?? null],
+            values: [p.row.option1_value ?? null, p.row.option2_value ?? null, p.row.option3_value ?? null],
+            stock: p.stock
+          }
+        }
+      });
+      continue; // excluded: no image record, no dimension, no row
+    }
+    if (p.imageUrl && !seenImg.has(p.imageUrl)) {
+      seenImg.add(p.imageUrl);
+      imageUrls.push(p.imageUrl);
+    }
+    rows.push(p.row);
+    rowStocks.push(p.stock);
+  }
 
   // VARIANT-CLEAN rule layer (no AI at import). The imported text is kept in source_options.
   const cleaned = cleanVariantRows(rows);
   rows.forEach((row, i) => {
     row.source_options = {
       names: [row.option1_name, row.option2_name, row.option3_name].map((n) => n ?? null),
-      values: [row.option1_value, row.option2_value, row.option3_value].map((n) => n ?? null)
+      values: [row.option1_value, row.option2_value, row.option3_value].map((n) => n ?? null),
+      ...(rowStocks[i] ? { stock: rowStocks[i] } : {})
     };
     row.option1_name = cleaned[i].names[0];
     row.option1_value = cleaned[i].values[0];
@@ -470,7 +512,7 @@ export function mapVariantRows(
         ? [{ name: "款式" }]
         : [];
 
-  return { rows, dimensions, variantImageUrls: imageUrls, excluded };
+  return { rows, dimensions, variantImageUrls: imageUrls, excluded, allSourceSoldOut };
 }
 
 /**
@@ -523,27 +565,40 @@ export function mapCaptureToDraftFields(
     }
   }
 
+  const receivedAt = opts.receivedAt ?? new Date().toISOString();
+
   const flats = Array.isArray(body.variants_flat) ? body.variants_flat : [];
   const {
     rows: variantRows,
     dimensions: variantDimensions,
     variantImageUrls,
-    excluded: excludedVariants
-  } = mapVariantRows(flats, body.sku_table, price);
+    excluded: excludedVariants,
+    allSourceSoldOut
+  } = mapVariantRows(flats, body.sku_table, price, { stockCheckedAt: receivedAt });
 
-  if (excludedVariants.length > 0) {
+  const nonProductExcluded = excludedVariants.filter((e) => e.reason === "non_product_option");
+  const soldOutExcluded = excludedVariants.filter((e) => e.reason === "source_sold_out");
+  if (nonProductExcluded.length > 0) {
     warnings.push(
-      `已排除 ${excludedVariants.length} 個非商品款式：${excludedVariants.map((e) => `「${e.label}」`).join("")}（可在規格頁籤恢復）`
+      `已排除 ${nonProductExcluded.length} 個非商品款式：${nonProductExcluded.map((e) => `「${e.label}」`).join("")}（可在規格頁籤恢復）`
     );
   }
+  if (soldOutExcluded.length > 0) {
+    warnings.push(formatSoldOutExcludedWarning(soldOutExcluded.map((e) => e.label)));
+  }
+  if (allSourceSoldOut) warnings.push(WARNING_ALL_SOURCE_SOLD_OUT);
 
   // PRICE-GUARD: Taobao may hide every per-variant price (hideOtherPrice / no sku2info price).
   // The extension warns, but the server must also demand a per-variant cost check, otherwise
   // all variants silently publish at the cheapest price. Multi-variant only.
-  const ownPricedFlats = flats.filter(
+  // CAPTURE-FIX: excluded source-sold-out variants must not inflate the priced-variant counts.
+  const keptFlats = allSourceSoldOut
+    ? flats
+    : flats.filter((v) => parseFlatSourceStock(v, receivedAt)?.status !== "sold_out");
+  const ownPricedFlats = keptFlats.filter(
     (v) => asPositiveNumber(v.cny_price) != null && !/^dom./.test(asTrimmedString(v.price_source) ?? "")
   ).length;
-  const domOnlyPricedFlats = flats.filter(
+  const domOnlyPricedFlats = keptFlats.filter(
     (v) => asPositiveNumber(v.cny_price) != null && /^dom./.test(asTrimmedString(v.price_source) ?? "")
   ).length;
   const hiddenVariantPrices = captureHidesVariantPrices({
@@ -582,9 +637,15 @@ export function mapCaptureToDraftFields(
     const values = variantRows.map((row) => asPositiveNumber(row.cny_price) as number);
     const min = Math.min(...values);
     const max = Math.max(...values);
-    const outside = (a: number, b: number) =>
-      Math.abs(a - b) > Math.max(0.5, Math.max(Math.abs(a), Math.abs(b)) * 0.015);
-    if (outside(min, pageRange.low) || outside(max, pageRange.high)) {
+    const tol = (a: number, b: number) => Math.max(0.5, Math.max(Math.abs(a), Math.abs(b)) * 0.015);
+    const outside = (a: number, b: number) => Math.abs(a - b) > tol(a, b);
+    const hasSoldOutExcluded = soldOutExcluded.length > 0;
+    // The page range may include the excluded sold-out variants' prices, so with some excluded
+    // only flag a kept range that pokes OUTSIDE the page range.
+    const rangeMismatch = hasSoldOutExcluded
+      ? min < pageRange.low - tol(min, pageRange.low) || max > pageRange.high + tol(max, pageRange.high)
+      : outside(min, pageRange.low) || outside(max, pageRange.high);
+    if (rangeMismatch) {
       priceRequiresConfirmation = true;
       if (priceConfidence !== "conflict") priceConfidence = "needs_confirmation";
       const rangeWarning = `外掛讀到的款式價格 ¥${min}–${max} 和頁面價格區間 ¥${pageRange.low}–${pageRange.high} 對不上，請逐款確認`;
@@ -615,8 +676,6 @@ export function mapCaptureToDraftFields(
   const detailImageUrls = stringList(body.detail_image_urls);
 
   const platform = asTrimmedString(body.source_platform);
-
-  const receivedAt = opts.receivedAt ?? new Date().toISOString();
 
   // Build payload for strip (body + raw)
   const payloadSource = {

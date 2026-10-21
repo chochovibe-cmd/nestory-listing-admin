@@ -58,6 +58,7 @@ import {
 import { resolveDraftStation } from "@/lib/drafts/stationFilter";
 import { formatDraftFailSummary } from "@/lib/drafts/failReasons";
 import { formatSaleStatusBadge } from "@/lib/saleStatus";
+import type { VariantSourceOptions } from "@/lib/variants/types";
 import {
   hasBlockingWarnings,
   countConfirmOnly
@@ -199,7 +200,7 @@ type ResultCardVariantRow = {
   sku?: string | null;
   image_id?: string | null;
   source_sku_id?: string | null;
-  source_options?: { names: Array<string | null>; values: Array<string | null> } | null;
+  source_options?: VariantSourceOptions | null;
 };
 
 

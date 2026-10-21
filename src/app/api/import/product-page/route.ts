@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (result.status === "exists") {
+  if (result.status === "exists" || result.status === "refreshed") {
     return Response.json(result, { status: 200 });
   }
 

@@ -36,6 +36,7 @@ const capture = await import(src("src/lib/import/mapCaptureFields.ts"));
 const roles = await import(src("src/lib/auth/roles.ts"));
 const pipeline = await import(src("src/lib/drafts/pipelineStage.ts"));
 const captureTypes = await import(src("src/lib/import/captureTypes.ts"));
+const queueProvider = await import(src("src/lib/drafts/queueProvider.ts"));
 const brokenFaq = "<h3><strong>問題</strong></h3><p>這款音箱是否支援無線連接功能？</p>\n<p>是的，這款音箱支援藍牙無線連接，方便隨時隨地使用。</p>";
 
 console.log("HOTFIX-1 A — copy format");
@@ -485,6 +486,7 @@ function queueHarness({ role = "operator", userId = "owner-1", draftOwner = "own
     if (moduleName === "@/lib/auth/roles") return roles;
     if (moduleName === "@/lib/drafts/pipelineStage") return pipeline;
     if (moduleName === "@/lib/import/captureTypes") return captureTypes;
+    if (moduleName === "@/lib/drafts/queueProvider") return queueProvider;
     if (moduleName === "@/lib/supabase/server") return {
       createServerSupabaseClient: async () => auth,
       createServiceSupabaseClient: () => service

@@ -1,0 +1,47 @@
+# Nestory 測試場 — 本機 .env.local 範本（只有名稱，值請自己貼在等號後面）
+# 用法：把這份內容存成專案根目錄的 .env.local。等號後面不要加引號、不要留空格。
+# 這份檔案不要提交到 git（.env.local 已被 .gitignore 擋掉）。
+
+# ── 測試場 Supabase（supabase.com → nestory-staging → Project Settings → API）──
+# 專案網址 Project URL（https://xxxx.supabase.co）
+NEXT_PUBLIC_SUPABASE_URL=
+# 公開金鑰 anon public key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+# service_role key（只放伺服器端，絕對不要貼到聊天或截圖）
+SUPABASE_SERVICE_ROLE_KEY=
+
+# ── 測試場專案代號與資料庫連線（給 scripts/staging 腳本用，有防呆）──
+# Project URL 裡 https:// 和 .supabase.co 中間那段
+STAGING_SUPABASE_REF=
+# Connect → Session pooler 的連線字串，[YOUR-PASSWORD] 要換成建立專案時的資料庫密碼
+STAGING_DB_URL=
+
+# ── 環境判斷（本機請維持 local）──
+NESTORY_ENV=local
+
+# ── 測試場 Shopify（開發商店＋app「Nestory 測試」）──
+# 開發商店網域（xxxx.myshopify.com）
+SHOPIFY_STORE_DOMAIN=
+# app 設定頁的 Client ID
+SHOPIFY_CLIENT_ID=
+# app 設定頁的 Client secret
+SHOPIFY_CLIENT_SECRET=
+# 測試場要真的寫入開發商店，所以是 false
+SHOPIFY_PUBLISH_MOCK=false
+# 測試場允許直接上架（開發商店不能收錢）
+SHOPIFY_ACTIVE_PUBLISH_ENABLED=true
+
+# ── AI 與搜尋金鑰（和正式站共用同一組）──
+# OpenAI 金鑰（文案生成）
+OPENAI_API_KEY=
+# Tavily 金鑰（網路搜尋）
+TAVILY_API_KEY=
+
+# ── 抓取模擬（測試場設定頁產生 capture token 後貼這裡）──
+STAGING_CAPTURE_TOKEN=
+
+# ── 背景工作與排程密鑰（測試場自己隨機設一組，不要和正式站相同）──
+# 背景工作 API 密鑰
+WORKER_API_TOKEN=
+# 排程呼叫（cron）密鑰
+CRON_SECRET=

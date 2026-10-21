@@ -1,3 +1,4 @@
+import { readNestoryEnvironment } from "@/lib/env/nestoryEnv";
 import { createServiceSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -20,6 +21,10 @@ export async function GET() {
     ? rawDomain.replace(/^https?:\/\//i, "").split("/")[0]?.toLowerCase() || null
     : null;
 
+  // STAGING 1.6: which environment this deployment believes it is in. Never
+  // includes the shop domain or any key (spec section 3.4).
+  const env = readNestoryEnvironment();
+
   return Response.json({
     supabase: supabaseOk,
     aiProvider: {
@@ -31,6 +36,14 @@ export async function GET() {
     shopify: Boolean(process.env.SHOPIFY_CLIENT_ID && process.env.SHOPIFY_CLIENT_SECRET && process.env.SHOPIFY_STORE_DOMAIN),
     shopifyMock: process.env.SHOPIFY_PUBLISH_MOCK !== "false",
     /** D9: Online Store host for product iframe (e.g. shop.myshopify.com) */
-    shopifyStoreDomain
+    shopifyStoreDomain,
+    environment: {
+      effective: env.effective,
+      declared: env.declared,
+      supabaseRef: env.supabaseRef,
+      supabaseIsProd: env.supabaseIsProd,
+      shopIsProd: env.shopIsProd,
+      problems: env.problems
+    }
   });
 }

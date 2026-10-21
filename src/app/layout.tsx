@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_TC, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { EnvironmentBanner } from "@/components/EnvironmentBanner";
 import { HeaderControls } from "@/components/HeaderControls";
 import { ToastHost } from "@/components/Toast";
 import { FailBatchRemoveBridge } from "@/components/listing/FailBatchRemoveBridge";
@@ -89,6 +90,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <VariantCharacterViewportBridge />
         <div className="app-root">
+          <EnvironmentBanner />
           <header className="topbar">
             <Link className="brand" href="/">
               <span className="brand-dot" />

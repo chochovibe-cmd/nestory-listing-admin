@@ -88,7 +88,9 @@ const scripts = [
   // WORKBENCH-UX: role tags, sequential review, Shopify main image, workspace defaults.
   "scripts/verify-workbench-ux.mjs",
   // 1.5a SHOPIFY-RECONCILE: per-field compare table, baseline, category fill-only.
-  "scripts/verify-shopify-reconcile.mjs"
+  "scripts/verify-shopify-reconcile.mjs",
+  // STAGING 1.6: environment fence (prod/staging identity), banner, staging scripts. No network, no DB.
+  "scripts/verify-staging-fence.mjs"
 ];
 
 for (const script of scripts) {

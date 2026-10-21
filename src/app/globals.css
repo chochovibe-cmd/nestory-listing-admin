@@ -10572,3 +10572,21 @@ body[data-theme="nordic"] .hdr-more-menu .pill-btn.active {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* STAGING 1.6（10-21）：環境橫幅，只在非正式環境或設定錯誤時出現 */
+.env-banner {
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text);
+}
+.env-banner--staging {
+  background: color-mix(in srgb, var(--warn) 22%, var(--surface2));
+  border-bottom: 1px solid var(--warn);
+}
+.env-banner--danger {
+  background: color-mix(in srgb, var(--danger) 25%, var(--surface2));
+  border-bottom: 2px solid var(--danger);
+}

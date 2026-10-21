@@ -8,6 +8,8 @@
 // Server-side only. SHOPIFY_CLIENT_ID/SHOPIFY_CLIENT_SECRET must never reach
 // the browser (not NEXT_PUBLIC_*, never returned in any API response).
 
+import { assertShopifyEnvironment } from "@/lib/env/nestoryEnv";
+
 interface CachedToken {
   accessToken: string;
   expiresAt: number; // epoch ms
@@ -78,6 +80,11 @@ async function exchangeToken(): Promise<CachedToken> {
  * firing their own request.
  */
 export async function getShopifyAdminToken(): Promise<string> {
+  // STAGING 1.6: every Shopify Admin call needs a token, so this is the single
+  // choke point. Throws before the cache is read and before any network call
+  // when NESTORY_ENV / Supabase / shop identities disagree.
+  assertShopifyEnvironment();
+
   if (cached && cached.expiresAt - SAFETY_MARGIN_MS > Date.now()) {
     return cached.accessToken;
   }

@@ -6,7 +6,11 @@ import { SetupNotice } from "@/components/listing/SetupNotice";
 import { StatusBadge } from "@/components/listing/StatusBadge";
 import { categoryLabel } from "@/lib/categories";
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
-import type { ProductDraft, ProductImage } from "@/types/domain";
+import type { ProductDraft, ProductImage, ProductVariantRow } from "@/types/domain";
+
+const DETAIL_VARIANT_SELECT_BASE =
+  "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id";
+const DETAIL_VARIANT_SELECT_FULL = `${DETAIL_VARIANT_SELECT_BASE}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options, shopify_variant_id`;
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +34,29 @@ export default async function DraftDetailPage({
     redirect("/login");
   }
 
-  const [{ data: draft, error }, { data: images }] = await Promise.all([
+  const [{ data: draft, error }, { data: images }, fullVariants] = await Promise.all([
     supabase.from("product_drafts").select("*").eq("id", id).single(),
-    supabase.from("product_images").select("*").eq("draft_id", id).order("sort_order")
+    supabase.from("product_images").select("*").eq("draft_id", id).order("sort_order"),
+    supabase
+      .from("product_variants")
+      .select(DETAIL_VARIANT_SELECT_FULL)
+      .eq("draft_id", id)
+      .order("sort_order", { ascending: true })
+      .order("id")
   ]);
+  // 10-22 STOCK: the card here used to get no variant rows at all, so the variant editor was
+  // empty and the 「來源售完 N 款」 shortcut could never appear. Same columns as the workbench;
+  // a missing column makes PostgREST fail the whole query, so fall back to the base list.
+  let variants = fullVariants.data as unknown as ProductVariantRow[] | null;
+  if (fullVariants.error || !variants) {
+    const fallback = await supabase
+      .from("product_variants")
+      .select(DETAIL_VARIANT_SELECT_BASE)
+      .eq("draft_id", id)
+      .order("sort_order", { ascending: true })
+      .order("id");
+    variants = (fallback.data as unknown as ProductVariantRow[] | null) ?? [];
+  }
 
   if (error || !draft) {
     return (
@@ -82,7 +105,7 @@ export default async function DraftDetailPage({
             <ImageUploader draftId={typedDraft.id} userId={user.id} />
           </div>
         </section>
-        <ResultCard defaultExpanded draft={typedDraft} images={typedImages} />
+        <ResultCard defaultExpanded draft={typedDraft} images={typedImages} variantPrices={variants ?? []} />
       </div>
     </main>
   );

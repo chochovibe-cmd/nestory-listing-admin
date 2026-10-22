@@ -460,6 +460,15 @@ await check("ST20 SKU fallback when shopify_variant_id is missing (unique on bot
   assert.match(read("src/lib/shopify/sourceStockSync.ts"), /\.select\("id, shopify_variant_id, sku, option1_value/);
 });
 
+// 10-22: 商品庫「編輯文案」 opens /drafts/[id], whose card got no variant rows → no shortcut button.
+await check("ST21 /drafts/[id] card receives variant rows with source_options + sku + shopify_variant_id", () => {
+  const page = read("src/app/drafts/[id]/page.tsx");
+  assert.match(page, /\.from\("product_variants"\)[\s\S]{0,80}\.select\(DETAIL_VARIANT_SELECT_FULL\)/);
+  assert.match(page, /DETAIL_VARIANT_SELECT_FULL = `\$\{DETAIL_VARIANT_SELECT_BASE\}, [^`]*source_options, shopify_variant_id`/);
+  assert.match(page, /DETAIL_VARIANT_SELECT_BASE =\s*"[^"]*\bsku\b/);
+  assert.match(page, /<ResultCard defaultExpanded draft=\{typedDraft\} images=\{typedImages\} variantPrices=\{variants \?\? \[\]\} \/>/);
+});
+
 await check("ST19 registered in verify:all and package.json", () => {
   assert.match(read("scripts/verify-all.mjs"), /"scripts\/verify-stock\.mjs"/);
   assert.match(read("package.json"), /"verify:stock": "node scripts\/verify-stock\.mjs"/);

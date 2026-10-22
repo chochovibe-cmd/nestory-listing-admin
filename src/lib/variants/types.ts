@@ -41,11 +41,21 @@ export type VariantFormRow = {
 export type SourceStockStatus = "in_stock" | "sold_out" | "unknown";
 /** CAPTURE-FIX: 來源網站（淘寶／天貓）庫存狀態；之後 STOCK 包讀這裡。 */
 export type VariantSourceStock = { status: SourceStockStatus; quantity: number | null; checked_at: string };
+export type ShopifyStockMark = {
+  applied: "sold_out" | "restored";
+  at: string;
+  prev: {
+    policy: "CONTINUE" | "DENY";
+    tracked: boolean;
+    available: number | null;
+  } | null;
+};
 /** names[3] / values[3], index = axis. */
 export type VariantSourceOptions = {
   names: Array<string | null>;
   values: Array<string | null>;
   stock?: VariantSourceStock | null;
+  shopify_stock?: ShopifyStockMark;
 };
 
 export type VariantDbInsert = {

@@ -15,7 +15,7 @@
 | 包 | 狀態 | 下一步 |
 |---|---|---|
 | 1.6 STAGING（帳號） | 程式已上線（#62）。等老闆照 `docs/STAGING-施工規格-2026-10-21.md` §2 建測試場帳號 | 老闆建好 → Claude 照 §4 驗收（`.env.local` 到時才改名成 `.env.prod-readonly.local`） |
-| 4b STOCK | Claude 寫規格中（分支 `docs/stock-spec`） | 規格＋`scripts/verify-stock.mjs` 推上 → 交 GPT 施工 `gpt/stock`；**開工前老闆在 Shopify App 加 read_inventory／write_inventory／read_locations** |
+| 4b STOCK | 規格完成：`docs/STOCK-施工規格-2026-10-22.md`＋`scripts/verify-stock.mjs`（ST01–ST19，Claude 用拋棄式參考實作驗過測試本身）＋migration `20261022100000`，分支 `docs/stock-spec` | **GPT 施工 `gpt/stock`**（唯一施工者）→ Claude 審查 → 老闆合併前貼 migration → 上線 → 照規格 §10 驗收；**開工前老闆在 Shopify App 加 read_inventory／write_inventory／read_locations** |
 
 之後：4a 問大家＋評價（外掛線，可與後台包並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF（細節見總表）。
 

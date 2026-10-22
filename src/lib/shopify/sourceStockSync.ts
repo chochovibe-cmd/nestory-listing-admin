@@ -57,7 +57,7 @@ type SoldOutAction = {
   variantId: string;
   shopifyVariantId: string;
   label: string;
-  prev: NonNullable<ShopifyStockMark["prev"]>;
+  prev: NonNullable<ShopifyStockMark["prev"]> & { available: number };
 };
 
 type RestoreAction = {

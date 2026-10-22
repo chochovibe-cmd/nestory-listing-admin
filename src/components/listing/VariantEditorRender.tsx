@@ -399,14 +399,32 @@ export function renderVariantEditorZoomModal(ctx: VariantEditorRenderContext): R
 export function renderVariantEditorResults(ctx: VariantEditorRenderContext): ReactNode {
   const {
     addRow, applyRowReorder, cancelRowLongPress, costLabel, dimHeaders, duplicateRow, finishTouchDrag,
-    gridCols, isNarrow, mobileSelected, onCostChange, onMobileRowClick, onTouchDragPointerDown,
+    isNarrow, mobileSelected, onCostChange, onMobileRowClick, onTouchDragPointerDown,
     onTouchDragPointerMove, openEditorModal, priceMode, productCost, removeRow, reorderDragKey,
     reorderOverKey, rows, rowsAtMax, setReorderDragKey, setReorderOverKey, showGrid, startRowLongPress,
     unconfirmedCost, updateRow
   } = ctx;
   const mobileHeaders = dimHeaders.length > 0 ? dimHeaders : [{ name: "款式" }];
+  const desktopDimCount = Math.max(1, Math.min(3, dimHeaders.length));
+
   return (
     <>
+      <style>{`
+        @media (min-width: 960px) {
+          .vgrid-hdr[data-dim-count="1"],
+          .vgrid-row[data-dim-count="1"] {
+            grid-template-columns: 28px 42px 1fr 72px 26px;
+          }
+          .vgrid-hdr[data-dim-count="2"],
+          .vgrid-row[data-dim-count="2"] {
+            grid-template-columns: 28px 42px 1fr 1fr 72px 26px;
+          }
+          .vgrid-hdr[data-dim-count="3"],
+          .vgrid-row[data-dim-count="3"] {
+            grid-template-columns: 28px 42px 1fr 1fr 1fr 72px 26px;
+          }
+        }
+      `}</style>
       <div className="vh-results-heading">
         <span>款式結果</span>
         <span className="muted">{rows.length ? `${rows.length} 款` : "尚無款式"}</span>
@@ -520,7 +538,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
         </div>
       ) : (
         <>
-          <div className="vgrid-hdr" style={{ gridTemplateColumns: gridCols }}>
+          <div className="vgrid-hdr" data-dim-count={desktopDimCount}>
             <span aria-hidden />
             <span>圖</span>
             {dimHeaders.length > 0 ? dimHeaders.map((dimension, index) => <span key={index}>{dimension.name}</span>) : <span>選項</span>}
@@ -533,7 +551,7 @@ export function renderVariantEditorResults(ctx: VariantEditorRenderContext): Rea
               <div key={index} className="vgrid-block">
                 <div
                   className={`vgrid-row${reorderDragKey === rowKey ? " is-dragging" : ""}${reorderOverKey === rowKey && reorderDragKey !== rowKey ? " is-drag-over" : ""}`}
-                  style={{ gridTemplateColumns: gridCols }}
+                  data-dim-count={desktopDimCount}
                   onDragOver={(event) => {
                     if (reorderDragKey == null) return;
                     event.preventDefault();

@@ -225,7 +225,7 @@ function matchVariants(
   });
 }
 
-function buildVariantUpdateInput(
+export function buildVariantUpdateInput(
   desired: DesiredVariant,
   locationId: string | null
 ): Record<string, unknown> {
@@ -244,14 +244,18 @@ function buildVariantUpdateInput(
       seed.compareAtPrice != null && seed.compareAtPrice > 0
         ? String(seed.compareAtPrice)
         : null,
-    inventoryPolicy: seed.inventoryPolicy,
     inventoryItem: {
       sku: seed.sku ?? "",
-      cost: String(seed.cost),
-      tracked: finite
+      cost: String(seed.cost)
     }
   };
   if (finite) {
+    input.inventoryPolicy = seed.inventoryPolicy;
+    input.inventoryItem = {
+      sku: seed.sku ?? "",
+      cost: String(seed.cost),
+      tracked: true
+    };
     if (!locationId) throw new Error("有限庫存同步需要已確認的 SHOPIFY_LOCATION_ID");
     const current = currentAvailable(remote, locationId);
     if (current == null) {
@@ -382,7 +386,7 @@ function verifyReadback(
       mismatches.push(`variant.compareAtPrice:${match.id}`);
     }
     if ((match.sku ?? "") !== (desired.seed.sku ?? "")) mismatches.push(`variant.sku:${match.id}`);
-    if (match.inventoryPolicy !== desired.seed.inventoryPolicy) {
+    if (desired.seed.inventoryPolicy === "DENY" && match.inventoryPolicy !== "DENY") {
       mismatches.push(`variant.inventoryPolicy:${match.id}`);
     }
     if (

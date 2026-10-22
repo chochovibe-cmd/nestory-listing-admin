@@ -15,6 +15,13 @@
 | `deployment-checklist.md`、`mock-flow.md` | 引用已作廢的環境變數（如 `SHOPIFY_ADMIN_ACCESS_TOKEN`、`WORKER_API_TOKEN`）；Shopify 認證已改 client_credentials（見施工清單 A1） |
 | `manual-qa-checklist.md`、`completion-audit.md`、`v0.1-local-wrap-up.md`、`v0.1-status-report.md`、`v0.1-team-handoff.md` | v0.1 里程碑的驗收快照與交接報告，屬歷史紀錄 |
 
+## 2026-10-21 入口文件瘦身：舊版原文快照
+
+| 文件 | 說明 |
+|---|---|
+| `AI_START_HERE-2026-10-21.md` | 瘦身前的 AI_START_HERE 原文（含 08-18 正式 DB reconcile 細節、PR #8／#10 歷史、舊 CI 分支）。長期規則已濃縮進新版 AI_START_HERE |
+| `STATUS-HISTORY-2026-10-21.md` | 瘦身前的 CURRENT_STATUS 原文（10-07～10-18 進度，含 Codex PUBLISH-RUNTHROUGH R1–R5，R2–R5 已凍結不用）。現況一律看 `docs/CURRENT_STATUS.md` |
+
 ## 仍然現役、沒有搬進來的（以免誤會）
 
 `rls-policy-guide.md`、`rls-smoke-tests.md`、`supabase-storage.md`、`admin-bootstrap.md`

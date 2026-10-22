@@ -21,7 +21,7 @@ export type WorkbenchVariantPrice = VariantPriceRow;
 
 const workbenchVariantSelectBase =
   "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, sku, cny_price, price_locked, inventory_quantity, inventory_policy, image_id";
-const workbenchVariantSelectFull = `${workbenchVariantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options`;
+const workbenchVariantSelectFull = `${workbenchVariantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options, shopify_variant_id`;
 
 function firstParam(
   value: string | string[] | undefined
@@ -80,7 +80,7 @@ export default async function NewDraftPage({
         "id, draft_id, twd_price, compare_at_price, sort_order, option1_value, option2_value, option3_value, option1_name, option2_name, option3_name, cny_price, sku, price_locked, inventory_quantity, inventory_policy, image_id";
       // D3.10A columns are not on production yet. Selecting them makes PostgREST
       // fail the whole query, so the form shows axis values and 尚無款式.
-      const variantSelectFull = `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options`;
+      const variantSelectFull = `${variantSelectBase}, cost_is_inherited, sell_price_locked, compare_at_locked, source_sku_id, source_options, shopify_variant_id`;
 
       const { data: seedImages } = await fetchAllRows((from, to) =>
         supabase

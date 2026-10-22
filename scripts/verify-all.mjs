@@ -94,7 +94,9 @@ const scripts = [
   // CAPTURE-FIX: vid matching, dom_mismatch, source stock, sold-out exclusion, refresh.
   "scripts/verify-capture-fix.mjs",
   // STAGING 1.6: environment fence (prod/staging identity), banner, staging scripts. No network, no DB.
-  "scripts/verify-staging-fence.mjs"
+  "scripts/verify-staging-fence.mjs",
+  // STOCK 4b: source stock planning, guarded Shopify inventory sync, UI wiring.
+  "scripts/verify-stock.mjs"
 ];
 
 for (const script of scripts) {

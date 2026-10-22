@@ -17,6 +17,7 @@ type RemovalCounts = { variants: number; media: number };
 
 type ModalKind =
   | "menu"
+  | "stock"
   | "archive"
   | "restore"
   | "delete"
@@ -24,6 +25,18 @@ type ModalKind =
   | "removals"
   | "active"
   | "error";
+
+type SourceStockSummary = { soldOut: number; restorable: number; low: number };
+type StockPlan = {
+  soldOut: Array<{ variantId: string; shopifyVariantId: string; label: string }>;
+  restore: Array<{ variantId: string; shopifyVariantId: string; label: string }>;
+  skipped: Array<{
+    variantId: string;
+    shopifyVariantId: string | null;
+    label: string;
+    reason: "already_sold_out" | "no_level" | "not_on_shopify" | "manual_change";
+  }>;
+};
 
 const STATE_CHIP = {
   tool: { className: "schip schip--ok", label: "工具有改" },
@@ -91,6 +104,7 @@ export function ShopifySyncControls({
   adminUrl,
   syncStatus,
   syncError,
+  sourceStockSummary,
   hasLocalChanges,
   disabled = false,
   onSaveLocal,
@@ -104,6 +118,7 @@ export function ShopifySyncControls({
   adminUrl: string | null;
   syncStatus?: ShopifySyncStatus | null;
   syncError?: string | null;
+  sourceStockSummary?: SourceStockSummary;
   hasLocalChanges: boolean;
   disabled?: boolean;
   onSaveLocal: () => Promise<boolean>;
@@ -123,7 +138,12 @@ export function ShopifySyncControls({
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState("");
   const [choices, setChoices] = useState<Record<string, "tool" | "shopify">>({});
+  const [stockPlan, setStockPlan] = useState<StockPlan | null>(null);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [stockError, setStockError] = useState("");
+  const [stockFailed, setStockFailed] = useState<Array<{ label: string; message: string }>>([]);
 
+  const stockSummary = sourceStockSummary ?? { soldOut: 0, restorable: 0, low: 0 };
   const realProduct = isRealProductId(productId);
   const remoteDeleted = syncStatus === "remote_deleted";
   const archived = draftStatus === "archived";
@@ -325,6 +345,99 @@ export function ShopifySyncControls({
     }
   }
 
+  async function previewStock(preserveError = "") {
+    setStockLoading(true);
+    setStockError(preserveError);
+    try {
+      const response = await fetch(`/api/drafts/${draftId}/shopify-stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "preview" })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.ok === false) {
+        setStockPlan(null);
+        setStockError(
+          preserveError ||
+            (typeof payload.error === "string" ? payload.error : "讀取 Shopify 庫存失敗")
+        );
+        return;
+      }
+      setStockPlan(payload.plan as StockPlan);
+    } catch {
+      setStockPlan(null);
+      setStockError(preserveError || "讀取 Shopify 庫存失敗");
+    } finally {
+      setStockLoading(false);
+    }
+  }
+
+  function openStock() {
+    setStockPlan(null);
+    setStockError("");
+    setStockFailed([]);
+    setModal("stock");
+    void previewStock();
+  }
+
+  async function applyStock() {
+    if (!stockPlan) return;
+    const expectedVariantIds = [...stockPlan.soldOut, ...stockPlan.restore].map(
+      (item) => item.variantId
+    );
+    setBusy(true);
+    setStockError("");
+    setStockFailed([]);
+    try {
+      const response = await fetch(`/api/drafts/${draftId}/shopify-stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "apply", expectedVariantIds })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.ok === false) {
+        const error =
+          typeof payload.error === "string" ? payload.error : "來源庫存同步到 Shopify 失敗";
+        if (payload.code === "plan_changed") {
+          await previewStock(error);
+          return;
+        }
+        setStockError(error);
+        return;
+      }
+
+      const failed = Array.isArray(payload.applied?.failed)
+        ? payload.applied.failed.filter(
+            (item: unknown): item is { label: string; message: string } =>
+              Boolean(
+                item &&
+                  typeof item === "object" &&
+                  "label" in item &&
+                  "message" in item &&
+                  typeof (item as { label?: unknown }).label === "string" &&
+                  typeof (item as { message?: unknown }).message === "string"
+              )
+          )
+        : [];
+      if (failed.length > 0) {
+        setStockFailed(failed);
+        await previewStock();
+        return;
+      }
+
+      showToast(
+        `Shopify 已更新：設為售完 ${Number(payload.applied?.soldOut ?? 0)} 款、恢復可賣 ${Number(payload.applied?.restore ?? 0)} 款`,
+        "success"
+      );
+      onRefresh();
+      setModal(null);
+    } catch {
+      setStockError("來源庫存同步到 Shopify 失敗");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveLocalOnly() {
     setBusy(true);
     try {
@@ -439,6 +552,18 @@ export function ShopifySyncControls({
       >
         Shopify 操作
       </Button>
+      {!remoteDeleted && (stockSummary.soldOut > 0 || stockSummary.restorable > 0) ? (
+        <Button
+          disabled={disabled || busy}
+          onClick={() => openStock()}
+          size="sm"
+          type="button"
+        >
+          {stockSummary.soldOut > 0
+            ? `來源售完 ${stockSummary.soldOut} 款`
+            : `來源補貨 ${stockSummary.restorable} 款`}
+        </Button>
+      ) : null}
       {adminUrl && !remoteDeleted ? (
         <a
           className="nb-btn nb-btn--secondary nb-btn--sm"
@@ -455,7 +580,9 @@ export function ShopifySyncControls({
   const modalTitle =
     modal === "menu"
       ? "Shopify 商品操作"
-      : modal === "archive"
+      : modal === "stock"
+        ? "來源庫存同步到 Shopify"
+        : modal === "archive"
         ? "封存 Shopify 商品"
         : modal === "restore"
           ? "恢復 Shopify 商品"
@@ -512,6 +639,14 @@ export function ShopifySyncControls({
                       <Button
                         disabled={busy}
                         fullWidth
+                        onClick={() => openStock()}
+                        type="button"
+                      >
+                        來源庫存同步到 Shopify
+                      </Button>
+                      <Button
+                        disabled={busy}
+                        fullWidth
                         onClick={() => setModal(archived ? "restore" : "archive")}
                         type="button"
                       >
@@ -527,6 +662,74 @@ export function ShopifySyncControls({
                         永久刪除 Shopify 商品
                       </Button>
                     </div>
+                  </>
+                ) : null}
+
+                {modal === "stock" ? (
+                  <>
+                    <p className="export-pf-overview">只改下面列出款式的庫存設定（追蹤庫存、賣完不接單、數量），不改價格、標題、圖片。</p>
+                    {stockLoading ? <p className="vc-note">正在讀取 Shopify 庫存…</p> : null}
+                    {stockError ? <p className="price-soft-warn" role="alert">{stockError}</p> : null}
+                    {stockFailed.length > 0 ? (
+                      <p className="price-soft-warn" role="alert">
+                        這些款沒改成功：{stockFailed.map((item) => `${item.label}（${item.message}）`).join("、")}
+                      </p>
+                    ) : null}
+                    {stockPlan?.soldOut.length ? (
+                      <>
+                        <h3 className="rcx-section-title">設為售完（{stockPlan.soldOut.length}）</h3>
+                        {stockPlan.soldOut.map((item) => (
+                          <div className="rcx-row" key={`sold-${item.variantId}`}>
+                            <div className="rcx-row-head">
+                              <span className="rcx-row-label">{item.label}</span>
+                              <span className="schip schip--warn">設為售完</span>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : null}
+                    {stockPlan?.restore.length ? (
+                      <>
+                        <h3 className="rcx-section-title">恢復可賣（{stockPlan.restore.length}）</h3>
+                        {stockPlan.restore.map((item) => (
+                          <div className="rcx-row" key={`restore-${item.variantId}`}>
+                            <div className="rcx-row-head">
+                              <span className="rcx-row-label">{item.label}</span>
+                              <span className="schip schip--ok">恢復可賣</span>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : null}
+                    {stockPlan?.skipped.length ? (
+                      <>
+                        <h3 className="rcx-section-title">不會改（{stockPlan.skipped.length}）</h3>
+                        {stockPlan.skipped.map((item) => {
+                          const chipText =
+                            item.reason === "already_sold_out"
+                              ? "Shopify 已是售完"
+                              : item.reason === "no_level"
+                                ? "出貨地點沒有這款的庫存紀錄"
+                                : item.reason === "not_on_shopify"
+                                  ? "這款不在 Shopify 上"
+                                  : "Shopify 上有人改過，不動";
+                          return (
+                            <div className="rcx-row" key={`skip-${item.variantId}`}>
+                              <div className="rcx-row-head">
+                                <span className="rcx-row-label">{item.label}</span>
+                                <span className="schip schip--idle">{chipText}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    ) : null}
+                    {!stockLoading &&
+                    stockPlan &&
+                    stockPlan.soldOut.length === 0 &&
+                    stockPlan.restore.length === 0 ? (
+                      <p className="vc-note">目前沒有需要改的款式。</p>
+                    ) : null}
                   </>
                 ) : null}
 
@@ -824,6 +1027,30 @@ export function ShopifySyncControls({
                   >
                     {modal === "error" || (modal === "compare" && diffError) ? "關閉" : "取消"}
                   </button>
+                  {modal === "stock" ? (
+                    <button
+                      className="approve-sum-btn"
+                      disabled={busy || stockLoading}
+                      onClick={() => void previewStock()}
+                      type="button"
+                    >
+                      重新檢查
+                    </button>
+                  ) : null}
+                  {modal === "stock" &&
+                  stockPlan &&
+                  stockPlan.soldOut.length + stockPlan.restore.length > 0 ? (
+                    <button
+                      className="approve-sum-btn primary"
+                      disabled={busy || stockLoading}
+                      onClick={() => void applyStock()}
+                      type="button"
+                    >
+                      {busy
+                        ? "處理中…"
+                        : `確認套用（${stockPlan.soldOut.length + stockPlan.restore.length} 款）`}
+                    </button>
+                  ) : null}
                   {modal === "archive" ? (
                     <button
                       className="approve-sum-btn primary"

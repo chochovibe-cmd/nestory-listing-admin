@@ -14,7 +14,6 @@
 ## 2. 進行中
 | 包 | 狀態 | 下一步 |
 |---|---|---|
-| 1.6 STAGING（帳號） | 程式已上線（#62）。等老闆照 `docs/STAGING-施工規格-2026-10-21.md` §2 建測試場帳號 | 老闆建好 → Claude 照 §4 驗收（`.env.local` 到時才改名成 `.env.prod-readonly.local`） |
 | 4b STOCK | 規格完成：`docs/STOCK-施工規格-2026-10-22.md`＋`scripts/verify-stock.mjs`（ST01–ST19，Claude 用拋棄式參考實作驗過測試本身）＋migration `20261022100000`，分支 `docs/stock-spec` | **GPT 施工 `gpt/stock`**（唯一施工者）→ Claude 審查 → 老闆合併前貼 migration → 上線 → 照規格 §10 驗收；**開工前老闆在 Shopify App 加 read_inventory／write_inventory／read_locations** |
 
 之後：4a 問大家＋評價（外掛線，可與後台包並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF（細節見總表）。
@@ -24,7 +23,7 @@
 - **Shopify 權限**：App「Nestory 上架工具」沒有 read_inventory／write_inventory／read_locations → 同步讀不到庫存（#59 已繞開）；做 STOCK 前要老闆補權限。
 - **完整同步**：10-21 #59 上線後，第一次真的同步成功還沒親眼確認（之前 63 件全部沒成功過）。
 - 已上架商品身上還有假款式（10-13 那批）。
-- 本機 `.env.local` 連的是**正式資料庫**（tbgtqwvuohmdxnxisrgr）→ 本機不可跑會寫資料的測試；只能唯讀查。STAGING 建好就解決。
+- 本機 `.env.local` 連的是**正式資料庫**（tbgtqwvuohmdxnxisrgr）→ 本機不可跑會寫資料的測試；只能唯讀查。
 
 ## 4. 不要做
 - 不要套用 Codex PUBLISH-RUNTHROUGH R2–R5（`.tmp/publish-runthrough-*`、`codex/publish-runthrough-*`，5 個 migration）：全域觸發器會在發布完成後鎖死已上架商品。10-19 審查後凍結。
@@ -32,7 +31,6 @@
 - 不要用 Vercel Promote API（會 422）；上線方式見第 6 節。
 
 ## 5. 等老闆
-- 照 STAGING 規格 §2 建測試場帳號（約 30 分鐘，有空時做）。
 - （以下截至 10-20）5 筆 ⛔ 草稿：三麗鷗類按「重算 tags」；波加曼、波克比各按一次「一鍵新增」；1b42068e 要先在設定新增 IP「元氣少女緣結神」。
 - 58f00e61 萌圓歡「端盒【6款不重複】」改成本後再發布。
 - 瀏覽器「設定」裡的 AI 供應商改回 GPT。
@@ -55,3 +53,9 @@
 - `gpt/** feat/** docs/** agent/**` 分支不觸發 Vercel 部署（省額度）。
 - 上線：合併到 handoff → 等預覽 READY → 以該部署「Redeploy 成 Production」一次 → 驗 `/login` 200＋SHA。
 - SQL 只產 migration 檔，由老闆在 Supabase 貼上執行；需要時在合併**前**套。
+
+## 7. 真店測試規則（10-22 老闆定案：STAGING 暫緩，優先「快又安全」推進）
+- STAGING 程式已上線（#62），但**測試場帳號暫不建**；遇到高風險包（整批改價、動發布流程、大量改資料）再由指揮提出建立。
+- 實機測試一律用 Shopify **草稿狀態**的專用測試商品「【測試勿買】Nestory 測試商品」（STOCK 驗收時建立）；客人看不到、買不到。
+- 正在賣的商品只唯讀查；唯一例外是「本來就該做」的動作（例：來源售完 → 設售完），且要先講清楚改什麼、怎麼改回，老闆說 OK 才做。
+- 任何寫入真店／正式資料庫前都先問老闆；改完回報改了什麼。

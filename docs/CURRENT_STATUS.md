@@ -16,7 +16,7 @@
 |---|---|---|
 | 4b STOCK 收尾 | 已上線並實測：Claude 用老闆登入的內建瀏覽器把 6232c6b0 貝吉塔設售完（Shopify 驗證 DENY／追蹤／0，標記已記錄）。所有已上架商品的 `shopify_variant_id` 都是空的（從沒完整同步過）→ #64 改用唯一 SKU 對應 | #65 上線後確認商品庫「編輯文案」頁出現「來源售完 N 款」；老闆重抓已上架的 8b3a323e（淘寶 1078633351499），Claude 確認同步狀態維持 `never`（驗 migration）|
 
-下一包候選（指揮下一個對話決定）：**SYNC-FIX**（見 §3 完整同步，影響全部已上架商品，建議優先）→ 4a 問大家＋評價（外掛線，可並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」。
+下一包候選（指揮下一個對話決定）：**SYNC-FIX**（見 §3 完整同步，影響全部已上架商品，建議優先）→ 4a 問大家＋評價（外掛線，可並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。

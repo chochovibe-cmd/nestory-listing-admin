@@ -15,7 +15,7 @@ export const SOURCE_STOCK_QUERY = `
       id
       variants(first: 100) {
         nodes {
-          id inventoryPolicy
+          id sku inventoryPolicy
           inventoryItem {
             id tracked
             inventoryLevels(first: 20) {
@@ -40,6 +40,7 @@ export const SOURCE_STOCK_MUTATION = `
 type LocalVariant = {
   id: string;
   shopify_variant_id?: string | null;
+  sku?: string | null;
   option1_value?: string | null;
   option2_value?: string | null;
   option3_value?: string | null;
@@ -48,6 +49,7 @@ type LocalVariant = {
 
 type RemoteVariant = {
   id: string;
+  sku?: string | null;
   inventoryPolicy: "CONTINUE" | "DENY";
   tracked: boolean;
   available: number | null;
@@ -125,13 +127,40 @@ export function planSourceStockSync({
   const restore: RestoreAction[] = [];
   const skipped: SkippedAction[] = [];
   const byId = new Map(remote.map((variant) => [variant.id, variant]));
+  // 10-22 hotfix: published products never stored shopify_variant_id (only a successful full
+  // sync writes it). Fall back to the tool-generated SKU (NS-xxxxxx-NN) when it matches exactly
+  // one remote variant and that variant is not already claimed by an ID match.
+  const claimed = new Set(
+    variants
+      .map((variant) => variant.shopify_variant_id?.trim() || "")
+      .filter((id) => id && byId.has(id))
+  );
+  const bySku = new Map<string, RemoteVariant[]>();
+  for (const variant of remote) {
+    const sku = variant.sku?.trim();
+    if (!sku) continue;
+    bySku.set(sku, [...(bySku.get(sku) ?? []), variant]);
+  }
+  const localSkuCount = new Map<string, number>();
+  for (const variant of variants) {
+    const sku = variant.sku?.trim();
+    if (sku) localSkuCount.set(sku, (localSkuCount.get(sku) ?? 0) + 1);
+  }
+  const resolveRemote = (variant: LocalVariant): RemoteVariant | null => {
+    const id = variant.shopify_variant_id?.trim();
+    if (id) return byId.get(id) ?? null;
+    const sku = variant.sku?.trim();
+    if (!sku || localSkuCount.get(sku) !== 1) return null;
+    const matches = bySku.get(sku) ?? [];
+    return matches.length === 1 && !claimed.has(matches[0].id) ? matches[0] : null;
+  };
 
   for (const variant of variants) {
     const stock = readSourceStock(variant.source_options);
     const mark = readShopifyStockMark(variant.source_options);
     const label = labelFor(variant);
-    const shopifyVariantId = variant.shopify_variant_id?.trim() || null;
-    const remoteVariant = shopifyVariantId ? byId.get(shopifyVariantId) ?? null : null;
+    const remoteVariant = resolveRemote(variant);
+    const shopifyVariantId = remoteVariant?.id ?? (variant.shopify_variant_id?.trim() || null);
 
     if (!shopifyVariantId || !remoteVariant) {
       if (stock?.status === "sold_out" || mark?.applied === "sold_out") {
@@ -185,6 +214,7 @@ function flattenRemote(product: any, locationId: string): RemoteVariant[] {
     const available = quantities.find((item: any) => item?.name === "available")?.quantity;
     return {
       id: String(variant?.id ?? ""),
+      sku: typeof variant?.sku === "string" ? variant.sku : null,
       inventoryPolicy: variant?.inventoryPolicy === "DENY" ? "DENY" : "CONTINUE",
       tracked: variant?.inventoryItem?.tracked === true,
       available: Number.isInteger(available) ? available : null
@@ -309,7 +339,7 @@ export async function runSourceStockSync({
 
   const { data: variantData } = await serviceSupabase
     .from("product_variants")
-    .select("id, shopify_variant_id, option1_value, option2_value, option3_value, source_options")
+    .select("id, shopify_variant_id, sku, option1_value, option2_value, option3_value, source_options")
     .eq("draft_id", draftId);
   const variants = (variantData ?? []) as LocalVariant[];
 

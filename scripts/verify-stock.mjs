@@ -428,6 +428,38 @@ await check("ST18 UI wiring (exact copy, existing classes only)", () => {
   assert.match(controls, /disabled=\{busy \|\| stockLoading\}[\s\S]{0,80}applyStock/);
 });
 
+// 10-22 hotfix: all 66 published drafts have shopify_variant_id = null (only a successful full
+// sync writes it), so STOCK must fall back to the unique tool SKU (NS-xxxxxx-NN).
+await check("ST20 SKU fallback when shopify_variant_id is missing (unique on both sides only)", async () => {
+  const local = (id, sku, shopifyId = null, src = stock("sold_out", 0)) => ({
+    id, draft_id: "d1", shopify_variant_id: shopifyId, sku, option1_value: id, option2_value: null, option3_value: null, source_options: so(src)
+  });
+  const remote = (n, sku) => ({ id: "gid://shopify/ProductVariant/" + n, sku, inventoryPolicy: "CONTINUE", tracked: false, available: 0 });
+  const plan = planSourceStockSync({
+    variants: [
+      local("a", "NS-AAAAAA-01"),                                  // unique → matched by SKU
+      local("b", "NS-AAAAAA-02"),                                  // remote SKU duplicated → skip
+      local("c", "NS-AAAAAA-03"), local("c2", "NS-AAAAAA-03"),     // local SKU duplicated → skip both
+      local("d", "NS-AAAAAA-04"),                                  // remote already claimed by e's ID → skip
+      local("e", null, "gid://shopify/ProductVariant/4", stock("in_stock", 9)),
+      local("f", null)                                             // no ID, no SKU → skip
+    ],
+    remote: [remote(1, "NS-AAAAAA-01"), remote(2, "NS-AAAAAA-02"), remote(22, "NS-AAAAAA-02"), remote(3, "NS-AAAAAA-03"), remote(4, "NS-AAAAAA-04")]
+  });
+  assert.deepEqual(plan.soldOut.map((a) => [a.variantId, a.shopifyVariantId]), [["a", "gid://shopify/ProductVariant/1"]]);
+  assert.deepEqual(Object.fromEntries(plan.skipped.map((a) => [a.variantId, a.reason])), {
+    b: "not_on_shopify", c: "not_on_shopify", c2: "not_on_shopify", d: "not_on_shopify", f: "not_on_shopify"
+  });
+  // An explicit shopify_variant_id that is gone on Shopify is NOT rescued by SKU.
+  const gone = planSourceStockSync({ variants: [local("g", "NS-AAAAAA-01", "gid://shopify/ProductVariant/999")], remote: [remote(1, "NS-AAAAAA-01")] });
+  assert.equal(gone.soldOut.length, 0);
+  assert.equal(gone.skipped[0].reason, "not_on_shopify");
+  // Card summary counts sold-out rows that have a SKU even without a Shopify variant ID.
+  assert.deepEqual(summarizeSourceStockForShopify([{ sku: "NS-AAAAAA-01", shopify_variant_id: null, source_options: so(stock("sold_out", 0)) }]), { soldOut: 1, restorable: 0, low: 0 });
+  assert.match(SOURCE_STOCK_QUERY, /\bid sku inventoryPolicy\b/);
+  assert.match(read("src/lib/shopify/sourceStockSync.ts"), /\.select\("id, shopify_variant_id, sku, option1_value/);
+});
+
 await check("ST19 registered in verify:all and package.json", () => {
   assert.match(read("scripts/verify-all.mjs"), /"scripts\/verify-stock\.mjs"/);
   assert.match(read("package.json"), /"verify:stock": "node scripts\/verify-stock\.mjs"/);

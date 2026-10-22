@@ -16,6 +16,7 @@
 
 import type { ProductVariantRow } from "@/types/domain";
 import { normalizeOptionValueForMerge } from "./variantCrossExpand";
+import { readSourceStock } from "./sourceStock";
 import type { ShopifyProductOptionInput, ShopifyVariantSeed } from "./types";
 
 export type MultiVariantPublishPlan = {
@@ -176,6 +177,7 @@ export function buildVariantPublishPlan(
       row.inventory_policy === "deny" &&
       row.inventory_quantity != null &&
       Number.isInteger(row.inventory_quantity);
+    const sourceSoldOut = readSourceStock(row.source_options)?.status === "sold_out";
 
     return {
       optionValues,
@@ -185,8 +187,8 @@ export function buildVariantPublishPlan(
         draft.price_mode === "single" ? null : row.compare_at_price ?? null,
       cost: estimateVariantCostTwd(row, draft),
       sku: row.sku,
-      inventoryQuantity: hasFinite ? row.inventory_quantity : null,
-      inventoryPolicy: hasFinite ? "DENY" : "CONTINUE",
+      inventoryQuantity: sourceSoldOut ? 0 : hasFinite ? row.inventory_quantity : null,
+      inventoryPolicy: sourceSoldOut || hasFinite ? "DENY" : "CONTINUE",
       imageId: row.image_id
     };
   });

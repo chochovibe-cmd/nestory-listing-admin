@@ -151,6 +151,7 @@ import {
 } from "@/lib/variants";
 import { readPriceRefreshSkuIds } from "@/lib/import/refreshCapture";
 import { readExcludedVariants } from "@/lib/variants/restoreExcludedVariant";
+import { summarizeSourceStockForShopify } from "@/lib/variants/sourceStock";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
   extractMissingCharacterNames,
@@ -201,6 +202,7 @@ type ResultCardVariantRow = {
   sku?: string | null;
   image_id?: string | null;
   source_sku_id?: string | null;
+  shopify_variant_id?: string | null;
   source_options?: VariantSourceOptions | null;
 };
 
@@ -3375,6 +3377,7 @@ export function ResultCard({
                 }}
                 productId={draft.shopify_product_id}
                 syncError={shopifySyncError}
+                sourceStockSummary={summarizeSourceStockForShopify(variantPrices)}
                 syncStatus={shopifySyncStatus}
                 title={draft.title_zh || draft.taobao_title || draft.original_title || "未命名草稿"}
               />

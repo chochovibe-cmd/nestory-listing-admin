@@ -82,7 +82,7 @@ export function isSourceLowStock(sourceOptions: unknown): boolean {
 }
 
 export function summarizeSourceStockForShopify(
-  rows: { shopify_variant_id?: string | null; source_options?: unknown }[]
+  rows: { shopify_variant_id?: string | null; sku?: string | null; source_options?: unknown }[]
 ): { soldOut: number; restorable: number; low: number } {
   let soldOut = 0;
   let restorable = 0;
@@ -91,7 +91,7 @@ export function summarizeSourceStockForShopify(
     const stock = readSourceStock(row.source_options);
     const mark = readShopifyStockMark(row.source_options);
     if (isSourceLowStock(row.source_options)) low += 1;
-    if (stock?.status === "sold_out" && row.shopify_variant_id && mark?.applied !== "sold_out") {
+    if (stock?.status === "sold_out" && (row.shopify_variant_id || row.sku?.trim()) && mark?.applied !== "sold_out") {
       soldOut += 1;
     }
     if (stock?.status === "in_stock" && mark?.applied === "sold_out") {

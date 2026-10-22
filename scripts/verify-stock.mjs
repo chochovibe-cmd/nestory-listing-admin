@@ -413,9 +413,19 @@ await check("ST18 UI wiring (exact copy, existing classes only)", () => {
   assert.match(editor, /isSourceLowStock\(/);
   assert.match(editor, /來源剩/);
   assert.match(editor, /Shopify 已設售完/);
-  for (const file of ["src/components/listing/ShopifySyncControls.tsx", "src/components/listing/VariantEditorRender.tsx"]) {
-    assert.doesNotMatch(read(file), /!important|style=\{\{/, file + ": no inline styles / !important");
+  // 10-22 review fix: VariantEditorRender already had two inline grid styles (computed gridCols);
+  // keep exactly those, add no new ones, and never inject a <style> block.
+  const inlineCount = { "src/components/listing/ShopifySyncControls.tsx": 0, "src/components/listing/VariantEditorRender.tsx": 2 };
+  for (const [file, allowed] of Object.entries(inlineCount)) {
+    const text = read(file);
+    assert.doesNotMatch(text, /!important|<style[\s>]/, file + ": no !important / <style> block");
+    assert.equal((text.match(/style=\{\{/g) ?? []).length, allowed, file + ": inline style count changed");
   }
+  assert.match(editor, /style=\{\{ gridTemplateColumns: gridCols \}\}/);
+  // The card's sold-out count needs shopify_variant_id on every variant select that feeds ResultCard.
+  const page = read("src/app/drafts/new/page.tsx");
+  assert.equal((page.match(/source_options, shopify_variant_id`/g) ?? []).length, 2, "both variant selects load shopify_variant_id");
+  assert.match(controls, /disabled=\{busy \|\| stockLoading\}[\s\S]{0,80}applyStock/);
 });
 
 await check("ST19 registered in verify:all and package.json", () => {

@@ -1030,7 +1030,7 @@ export function ShopifySyncControls({
                   {modal === "stock" ? (
                     <button
                       className="approve-sum-btn"
-                      disabled={busy}
+                      disabled={busy || stockLoading}
                       onClick={() => void previewStock()}
                       type="button"
                     >
@@ -1042,7 +1042,7 @@ export function ShopifySyncControls({
                   stockPlan.soldOut.length + stockPlan.restore.length > 0 ? (
                     <button
                       className="approve-sum-btn primary"
-                      disabled={busy}
+                      disabled={busy || stockLoading}
                       onClick={() => void applyStock()}
                       type="button"
                     >

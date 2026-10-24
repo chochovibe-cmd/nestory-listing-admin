@@ -96,7 +96,8 @@ const scripts = [
   // STAGING 1.6: environment fence (prod/staging identity), banner, staging scripts. No network, no DB.
   "scripts/verify-staging-fence.mjs",
   // STOCK 4b: source stock planning, guarded Shopify inventory sync, UI wiring.
-  "scripts/verify-stock.mjs"
+  "scripts/verify-stock.mjs",
+  "scripts/verify-sync-fix.mjs"
 ];
 
 for (const script of scripts) {

@@ -1,8 +1,16 @@
-# SYNC-ROLLOUT 分批表 — 2026-10-24（Claude 指揮，Claude 自己執行）
+# SYNC-ROLLOUT 分批表 — 2026-10-24（Claude 指揮）
 
-> 不發包給 GPT：沒有程式變更，只是用正式站的比對表把已上架商品逐件同步。每批寫入前問老闆、先備份。
+> **誰做**：這包沒有程式變更，是在正式站工具畫面裡逐件按「比對 → 同步」。GPT 只能在雲端操作、登入不了工具網頁 → 由 Claude 派便宜小弟（subagent）用內建瀏覽器執行，Claude 驗收（看前後比對＋店面）。每批寫入前問老闆、先備份。（第 1 批是 Claude 自己做的，之後照這個分工。）
 > 做法（等同畫面上「比對 → 全選工具版本 → 同步」）：內建瀏覽器登入正式站 → `GET /api/drafts/<id>/shopify-diff` → 每一列選 `tool` → `POST /api/drafts/<id>/shopify-resolve`（`confirmActiveUpdate` 依 Shopify 狀態、`confirmRemovals: false`）→ 一件一件做，遇到任何失敗就停。
 > 備份：批前跑 `全部備份.mjs SYNC-ROLLOUT-第N批前`；該批每件存「工具資料列＋Shopify 商品」到 `Nestory備份/<日期>-SYNC-ROLLOUT-第N批-同步前／同步後`（Shopify 讀取用 client_credentials 換 token，本機 `SHOPIFY_ADMIN_ACCESS_TOKEN` 已失效）。
+> 工具（本機，不在 repo）：`Nestory備份/_工具/商品快照.mjs <資料夾> <完整 draftId...>`、`Nestory備份/_工具/快照比對.js <前> <後> <id前8碼...>`，都只讀不寫。
+
+## 小弟執行步驟（每批照做，遇錯就停）
+1. 專案根目錄：`node C:/Users/s2491/Documents/Nestory備份/_工具/全部備份.mjs SYNC-ROLLOUT-第N批前`
+2. `node …/商品快照.mjs C:/Users/s2491/Documents/Nestory備份/<日期>-SYNC-ROLLOUT-第N批-同步前 <該批完整 draftId>`（完整 UUID 從 `product_drafts` 用前 8 碼查）
+3. 內建瀏覽器開 https://nestory-listing-admin.vercel.app（已登入），對每件依序：`GET /api/drafts/<id>/shopify-diff` → `choices` 每列都填 `"tool"` → `POST /api/drafts/<id>/shopify-resolve`，body `{remoteUpdatedAt, draftUpdatedAt, choices, confirmActiveUpdate: productStatus==="ACTIVE", confirmRemovals: false}`。**任何一件 `ok` 不是 true 就停**，不要重試、不要加 `confirmRemovals: true`。
+4. 同步後快照存 `…-第N批-同步後`，跑 `快照比對.js`，把整段輸出交回 Claude。
+5. 允許變的只有：FAQ、規格、描述（購買提醒段／JSON-LD）、補圖。標題、狀態、tags、SEO、款式、價格、成本、SKU 只要有變就回報。
 
 ## 0. 10-24 唯讀比對結果（正式站比對表，沒寫入）
 - 有 Shopify ID 的 72 件：66 件在 Shopify 上；b45259ef 已被刪（remote_deleted）；29550fc3 0226e28c a35c179d ead131f6 84ef0cba 沒建到 Shopify → 不在範圍。

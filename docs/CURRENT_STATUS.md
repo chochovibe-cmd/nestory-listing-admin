@@ -14,7 +14,7 @@
 ## 2. 進行中
 | 包 | 狀態 | 下一步 |
 |---|---|---|
-| SYNC-ROLLOUT（Claude 指揮自己做，不發 GPT） | 分批表 `docs/SYNC-ROLLOUT-分批-2026-10-24.md`。第 1 批 5 件 10-24 完成（FAQ／規格修好、價格款式圖不變） | 第 2 批（21 件 FAQ／規格）、第 3 批（28 件零差異）各自等老闆同意；第 4 批等老闆決定 SKU `CHO-`→`NS-`；第 5 批 3 件個別處理 |
+| SYNC-ROLLOUT（Claude 派小弟用內建瀏覽器執行＋驗收；GPT 登不進工具網頁） | 分批表 `docs/SYNC-ROLLOUT-分批-2026-10-24.md`。第 1 批 5 件 10-24 完成（FAQ／規格修好、價格款式圖不變） | 第 2 批（21 件 FAQ／規格）、第 3 批（28 件零差異）各自等老闆同意；第 4 批等老闆決定 SKU `CHO-`→`NS-`；第 5 批 3 件個別處理 |
 
 下一包候選（指揮決定）：SYNC-ROLLOUT → 4a 問大家＋評價（外掛線，可並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
 

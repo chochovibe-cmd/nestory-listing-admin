@@ -102,7 +102,8 @@ const SHOPIFY_NOT_NULL_DEFAULTS = {
   shopify_tags: () => [],
   shopify_collections: () => [],
   shopify_payload_preview: () => ({}),
-  shopify_sync_status: () => "never"
+  shopify_sync_status: () => "never",
+  shopify_media_mode: () => "tool"
 };
 
 function hasText(value) {

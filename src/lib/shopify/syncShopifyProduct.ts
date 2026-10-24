@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mergeInternalLinkMap, type InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildShopifyProductPayload, isShopifyProductMediaImage } from "@/lib/shopify/payload";
-import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
+import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";\nimport { describeHtmlDifference, normalizeShopifyHtml } from "@/lib/shopify/htmlNormalize";
 import {
   ADD_PRODUCT_MEDIA_MUTATION,
   CREATE_PRODUCT_VARIANTS_MUTATION,
@@ -353,7 +353,7 @@ function desiredCore(
   };
 }
 
-function verifyReadback(
+export function verifyReadback(
   remote: ShopifySyncSnapshot,
   core: Record<string, any>,
   desiredVariants: DesiredVariant[],
@@ -363,9 +363,12 @@ function verifyReadback(
   toDelete: readonly string[]
 ): string[] {
   const mismatches: string[] = [];
-  const scalarFields = ["title", "descriptionHtml", "vendor", "productType"] as const;
+  const scalarFields = ["title", "vendor", "productType"] as const;
   for (const field of scalarFields) {
     if ((remote[field] ?? "") !== (core[field] ?? "")) mismatches.push(`product.${field}`);
+  }
+  if (normalizeShopifyHtml(remote.descriptionHtml) !== normalizeShopifyHtml(core.descriptionHtml)) {
+    mismatches.push("product.descriptionHtml");
   }
   const localTags = [...(core.tags ?? [])].sort().join("\u0001");
   const remoteTags = [...(remote.tags ?? [])].sort().join("\u0001");
@@ -1142,7 +1145,13 @@ export async function syncShopifyProduct(
       return fail(
         "readback_mismatch",
         `Shopify 回讀與工具不一致：${mismatches.join(", ")}`,
-        { mismatches, remoteUpdatedAt: after.updatedAt }
+        {
+          mismatches,
+          remoteUpdatedAt: after.updatedAt,
+          ...(mismatches.includes("product.descriptionHtml")
+            ? { descriptionDiff: describeHtmlDifference(core.descriptionHtml, after.descriptionHtml) }
+            : {})
+        }
       );
     }
 

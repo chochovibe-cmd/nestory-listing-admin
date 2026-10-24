@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { mergeInternalLinkMap, type InternalLinkMap } from "@/lib/contentGenerator/internalLinks";
 import { buildShopifyProductPayload, isShopifyProductMediaImage } from "@/lib/shopify/payload";
-import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";\nimport { describeHtmlDifference, normalizeShopifyHtml } from "@/lib/shopify/htmlNormalize";
+import { callShopifyAdminGraphQL } from "@/lib/shopify/adminGraphQL";
+import { describeHtmlDifference, normalizeShopifyHtml } from "@/lib/shopify/htmlNormalize";
 import {
   ADD_PRODUCT_MEDIA_MUTATION,
   CREATE_PRODUCT_VARIANTS_MUTATION,

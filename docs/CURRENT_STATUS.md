@@ -15,12 +15,12 @@
 | 包 | 狀態 | 下一步 |
 |---|---|---|
 | SYNC-FIX | 規格＋驗收測試在 `origin/docs/sync-fix-spec`（`docs/SYNC-FIX-施工規格-2026-10-23.md`，`scripts/verify-sync-fix.mjs` SF01–SF22）。**施工：GPT**（`gpt/sync-fix`） | GPT 開 Draft PR → Claude 審查 → 上線後 Claude 重新同步 6232c6b0 驗收（寫入前問老闆）|
-| 4b STOCK 收尾 | 已上線並實測（6232c6b0 設售完、卡片頁標籤正常）。migration 驗證：8b3a323e 沒有款式，重抓不會寫入任何東西，驗不到 → 改用 f2809032（天貓 1030718943524）或 e98bc983（天貓 1039490188231），兩件都是 `never`、7 款都有來源 SKU | 老闆重抓其中一件，Claude 確認仍是 `never` |
 
 下一包候選（指揮決定）：SYNC-ROLLOUT（SYNC-FIX 上線後，66 件分批走比對表同步；分組見 SYNC-FIX 規格 §8）→ 4a 問大家＋評價（外掛線，可並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。
+- **STOCK 已收尾（10-24）**：migration 實測通過——老闆重抓已上架的 f2809032（天貓 1030718943524），7 款來源庫存寫入、價格未動，同步狀態維持 `never`（沒被誤標髒）。
 - **款式連結**：66 件已上架商品的 `product_variants.shopify_variant_id` 全空；STOCK 用 SKU 補位，完整同步成功一次就會寫回。
 - **完整同步（10-23 查證）**：回讀比對用逐字比 `descriptionHtml`，Shopify 存檔時會加換行、拿掉 `<img />` 的斜線 → 每次同步都在最後一步變 partial（6232c6b0，Shopify 端內容其實沒變）。另外查到真正跑過的完整同步只有這 1 次（其餘 17 筆紀錄是 10-19 綁圖批次）→ 66 件沒同步過主要是「沒人跑」，這個 bug 讓「一跑就失敗」。修正＝SYNC-FIX（進行中）。Shopify 上 22 件 FAQ 還是「Q：問題」壞格式、12 件規格有「項目:」，要等 SYNC-ROLLOUT 才會送上店面。
 - 已上架商品身上還有假款式（10-13 那批）。

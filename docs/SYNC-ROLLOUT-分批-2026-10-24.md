@@ -22,9 +22,9 @@
 |---|---|---|---|
 | 第 1 批（試水溫） | 66332e2e 6c970009 27f42c00 5f41b6a2 6acbeb02 | 5 | ✅ 10-24 完成 |
 | 第 2 批 FAQ／規格修正 | 6d2892a1 6be1bbf9 b46b94b2 fa524f0b d39a4057 ec18dfd8 a6fbb8f7 e4ba2299 b99aa408 3ac6ebe5 ea5bd6d2 8af27d57 0d6b7938 cbd2b41e 8c4b315a 89e1d171 46b677b1 56937cba ba05db9b ceb0c1e7 e7524531 | 21 | ✅ 10-24 完成 18 件；b46b94b2 ec18dfd8 8af27d57 移到第 5 批 |
-| 第 3 批 比對表零差異（最多換描述範本） | 1b6d450e b4ac2e78 71672805 3f166233 31701317 b6d57a37 a450198e e98bc983 843a6045 4e44bfb1 32ea56ad fc859e0e 53cd80ee ae9a216a 4c7775b8 862841d8 ec179ebb 4fce5632 3169bffa 845e0303 c17c5f1d 02312886 1b20d978 415d30af 94cd9000 a90326c5 56c4ffea fdef6bd3 | 28 | 待老闆同意 |
+| 第 3 批 比對表零差異（最多換描述範本） | 1b6d450e b4ac2e78 71672805 3f166233 31701317 b6d57a37 a450198e e98bc983 843a6045 4e44bfb1 32ea56ad fc859e0e 53cd80ee ae9a216a 4c7775b8 862841d8 ec179ebb 4fce5632 3169bffa 845e0303 c17c5f1d 02312886 1b20d978 415d30af 94cd9000 a90326c5 56c4ffea fdef6bd3 | 28 | ✅ 10-24 完成 21 件；7 件移到第 5 批 |
 | 第 4 批 SKU `CHO-`→`NS-` | 3c67c42b 329f516c 5feb9b44 8b3a323e b9400278 8d2b744c 8b3a35b9（只差描述）ae962018（工具 SKU 空白，先查） | 8 | 等老闆決定 SKU |
-| 第 5 批 個別處理 | f2809032（標題兩邊不同，老闆選）、6ede08ef（工具多一個「購買須知…拍下不出貨」款式，先在工具排除）、58f00e61（先改成本）、b46b94b2 ec18dfd8 8af27d57（Shopify 封面是後台換的、工具沒有那張 → 老闆定以 Shopify 為準；先把 Shopify 封面收進工具當主圖 1 再同步，不可用 `confirmRemovals: true`） | 6 | 等老闆／先補工具封面 |
+| 第 5 批 個別處理 | f2809032（標題兩邊不同，老闆選）、6ede08ef（工具多一個「購買須知…拍下不出貨」款式，先在工具排除）、58f00e61（先改成本）、b46b94b2 ec18dfd8 8af27d57＋第 3 批 b4ac2e78 3f166233（Shopify 封面是後台換的、工具沒有那張 → 老闆定以 Shopify 為準；先把 Shopify 封面收進工具當主圖 1 再同步）；ec179ebb 4fce5632 3169bffa 845e0303（主圖兩邊同檔，但工具列沒記 shopify_media_id、Shopify alt 被改 → 先補對應）；fc859e0e（工具款式圖 5 重新處理過，同步會換掉 Shopify 舊圖 → 以 Shopify 為準）。全部不可用 `confirmRemovals: true` | 13 | 等老闆／先補工具圖片對應 |
 
 ## 2. 第 1 批結果（10-24 08:37Z）
 - 5 件 `shopify_sync_jobs` 全部 `completed`，工具端全部「已同步」＋有基準點，款式 2/2～6/6 連上。
@@ -41,3 +41,10 @@
 - 3 件被 `removal_confirmation_required`（media: 1）擋下、沒寫入：b46b94b2 ec18dfd8 8af27d57。原因：Shopify 第一張圖（無 alt 的 PNG）是後台手動換的封面，工具裡沒有 → 同步會刪掉它、換回工具舊主圖 1。
 - 店面實看：pok-mon-center-jyol-d39a40 問與答正確、$199 不變；sanrio-hello-kitty-card-holder-keychain-e75245 規格無「項目:」、問與答正確、$229 不變。
 - 腳本加的保險：比對表只要有 faq／specs／description 以外的列、或有工具獨有／Shopify 獨有款式就不送出。備份：`2026-10-24-SYNC-ROLLOUT-第2批前.zip`、`…-第2批-同步前／同步後`。
+
+## 4. 第 3 批結果（10-24 12:58–13:02Z）
+- 先用快照模擬配圖（規則同 `syncShopifyProduct`：先比 shopify_media_id → 再比唯一 alt → 「整件沒有任何已連結圖片」才按順序配；換過來源的圖算「替換」＝也會被刪）。模擬抓到 6 件、實送時再被擋 1 件（fc859e0e，替換類模擬沒算 hash），全部 409 沒寫入。
+- 21 件 `ok`／`completed`：1b6d450e 71672805 31701317 b6d57a37 a450198e e98bc983 843a6045 4e44bfb1 32ea56ad 53cd80ee ae9a216a 4c7775b8 862841d8 c17c5f1d 02312886 1b20d978 415d30af 94cd9000 a90326c5 56c4ffea fdef6bd3。
+- 前後比對：metafield 全部沒變；13 件描述完全沒變；7 件只是「海外代購約 14 天」移到購買提醒；1b6d450e 購買提醒新增「此為台灣現貨商品，約 1–3 個工作天出貨。」（工具 sale_status＝台灣現貨、Shopify tag 銷售_臺灣現貨，符合）。標題／狀態／tags／SEO／款式／價格／成本／SKU／圖片全部沒變。
+- 店面實看 dick-bruna-nijntje-1b6d45：購買提醒正確、$299（原價 $349）不變。
+- 注意：一次送 12 件會超過瀏覽器工具 45 秒上限（腳本仍在頁面跑完）→ 之後一組最多 7 件；逾時就查 `shopify_sync_jobs`，不要重送。

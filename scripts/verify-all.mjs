@@ -97,7 +97,8 @@ const scripts = [
   "scripts/verify-staging-fence.mjs",
   // STOCK 4b: source stock planning, guarded Shopify inventory sync, UI wiring.
   "scripts/verify-stock.mjs",
-  "scripts/verify-sync-fix.mjs"
+  "scripts/verify-sync-fix.mjs",
+  "scripts/verify-sync-keep-media.mjs"
 ];
 
 for (const script of scripts) {

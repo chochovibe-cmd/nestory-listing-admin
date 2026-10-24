@@ -59,6 +59,7 @@
     "verify:capture-fix": "node scripts/verify-capture-fix.mjs",
     "verify:staging-fence": "node scripts/verify-staging-fence.mjs",
     "verify:stock": "node scripts/verify-stock.mjs",
+    "verify:sync-fix": "node scripts/verify-sync-fix.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prod": "next build && next start -p 3019"
   },

@@ -1,28 +1,28 @@
 # Nestory — 現況（CURRENT_STATUS）
 
-> 更新：2026-10-23（Claude）。本檔只放「現在成立」的事，上限約 6KB。
+> 更新：2026-10-24（Claude）。本檔只放「現在成立」的事，上限約 6KB。
 > **寫新進度＝改掉舊句子，不要在最上面再疊一個「最新」區塊。** 包做完就把它從「進行中」刪掉，細節寫進總表那一列。
 > 發包順序與每包內容：`docs/發包總表-2026-10-14.md`（唯一來源）。
 > 10-07～10-18 的舊紀錄原文（含 Codex PUBLISH-RUNTHROUGH R1–R5）：`docs/archive/STATUS-HISTORY-2026-10-21.md`，需要查歷史才讀。
 
 ## 1. 線上狀態
-- 主線：`origin/handoff/20261008-golive-spec` @ `0564735`（10-22：#61 CAPTURE-FIX、#62 STAGING 程式、#63 STOCK、#64 STOCK SKU 對應、#65 卡片頁款式；10-23：#66 文件）。
-- 正式站：`dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）；回退點 `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
+- 主線：`origin/handoff/20261008-golive-spec` @ `ab5db34`（10-22：#61 CAPTURE-FIX、#62 STAGING 程式、#63 STOCK、#64 STOCK SKU 對應、#65 卡片頁款式；10-23：#66 #67 文件；10-24：#68 SYNC-FIX）。
+- 正式站：`dpl_2W3xMYEd1WbEPc1yQfaULVKdYEVn`（ab5db34；Claude 用 Vercel 部署紀錄驗 SHA、`/login` 200、`/api/status` problems=[]）；回退點 `dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）→ `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
 - 外掛：老闆 Chrome 載入的 `C:/Users/s2491/Documents/Nestory外掛-0.2.0` 已換成 0.2.1（＝9167892 的 `extension/`；舊版備份 `Nestory外掛-0.2.0-備份`）。
 - 本機這個資料夾停在舊分支 `codex/nestory-v0.1-safety-skeleton`（GitHub 預設分支也還是它）→ 看程式先 `git fetch`，一律以 origin/handoff 為準。網址、專案代號、環境變數名稱見 `AI_START_HERE.md` §3。
 
 ## 2. 進行中
 | 包 | 狀態 | 下一步 |
 |---|---|---|
-| SYNC-FIX | 規格＋驗收測試在 `origin/docs/sync-fix-spec`（`docs/SYNC-FIX-施工規格-2026-10-23.md`，`scripts/verify-sync-fix.mjs` SF01–SF22）。**施工：GPT**（`gpt/sync-fix`） | GPT 開 Draft PR → Claude 審查 → 上線後 Claude 重新同步 6232c6b0 驗收（寫入前問老闆）|
+| SYNC-ROLLOUT（未發包） | SYNC-FIX 已上線並實測（見 §3）。66 件分批走比對表同步，分組見 `docs/SYNC-FIX-施工規格-2026-10-23.md` §8 | 指揮決定要不要做、怎麼分批；每批寫入真店前問老闆 |
 
-下一包候選（指揮決定）：SYNC-ROLLOUT（SYNC-FIX 上線後，66 件分批走比對表同步；分組見 SYNC-FIX 規格 §8）→ 4a 問大家＋評價（外掛線，可並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
+下一包候選（指揮決定）：SYNC-ROLLOUT → 4a 問大家＋評價（外掛線，可並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。
 - **STOCK 已收尾（10-24）**：migration 實測通過——老闆重抓已上架的 f2809032（天貓 1030718943524），7 款來源庫存寫入、價格未動，同步狀態維持 `never`（沒被誤標髒）。
 - **款式連結**：66 件已上架商品的 `product_variants.shopify_variant_id` 全空；STOCK 用 SKU 補位，完整同步成功一次就會寫回。
-- **完整同步（10-23 查證）**：回讀比對用逐字比 `descriptionHtml`，Shopify 存檔時會加換行、拿掉 `<img />` 的斜線 → 每次同步都在最後一步變 partial（6232c6b0，Shopify 端內容其實沒變）。另外查到真正跑過的完整同步只有這 1 次（其餘 17 筆紀錄是 10-19 綁圖批次）→ 66 件沒同步過主要是「沒人跑」，這個 bug 讓「一跑就失敗」。修正＝SYNC-FIX（進行中）。Shopify 上 22 件 FAQ 還是「Q：問題」壞格式、12 件規格有「項目:」，要等 SYNC-ROLLOUT 才會送上店面。
+- **完整同步**：SYNC-FIX（#68）10-24 上線並實測：老闆同意後 Claude 先備份（`Nestory備份/2026-10-24-SYNC-FIX-6232c6b0-同步前／同步後`），再重新同步 6232c6b0 → 「已同步」、基準點建立、4/4 款式連上、9 張上架圖連上，Shopify 內容與修改時間前後完全相同（貝吉塔仍售完）。其餘 66 件都還沒同步過（全部沒有基準點）；Shopify 上 22 件 FAQ 仍是「Q：問題」壞格式、12 件規格有「項目:」→ SYNC-ROLLOUT。
 - 已上架商品身上還有假款式（10-13 那批）。
 - 本機 `.env.local` 連的是**正式資料庫**（tbgtqwvuohmdxnxisrgr）→ 本機不可跑會寫資料的測試；只能唯讀查。
 
@@ -52,7 +52,7 @@
 - **並行**：檔案不重疊的兩包可以同時做（例如外掛／抓取線＋後台網站線）。
 - GPT 路線：規格先推 `docs/**` 分支（GPT 只看得到 GitHub）→ GPT 在 `gpt/**` 分支逐檔 commit → Draft PR → CI（verify:all → typecheck → build）→ Claude 本機驗收。
 - `gpt/** feat/** docs/** agent/**` 分支不觸發 Vercel 部署（省額度）。
-- 上線：合併到 handoff → 等預覽 READY → 以該部署「Redeploy 成 Production」一次 → 驗 `/login` 200＋SHA。
+- 上線：合併到 handoff → 等預覽 READY → 以該部署「Redeploy 成 Production」一次 → 驗 `/login` 200，SHA 看 Vercel 部署紀錄的 githubCommitSha（`/api/status` 沒有 SHA 欄位）。
 - SQL 只產 migration 檔，由老闆在 Supabase 貼上執行；需要時在合併**前**套。
 
 ## 7. 真店測試規則（10-22 老闆定案：STAGING 暫緩，優先「快又安全」推進）

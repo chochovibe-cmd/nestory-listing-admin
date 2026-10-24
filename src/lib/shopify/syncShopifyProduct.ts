@@ -23,6 +23,7 @@ import {
   toolValuesFromDesired
 } from "@/lib/shopify/reconcileFields";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
+import { videoIdentityKey } from "@/lib/media/videoUrls";
 import {
   isRealShopifyProductId,
   type ShopifyAdminGraphQLCaller
@@ -37,6 +38,9 @@ import {
 import type { ShopifyVariantSeed } from "@/lib/variants/types";
 import type { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ProductImage, ProductVariantRow, ShopifySyncBaseline } from "@/types/domain";
+
+export const KEEP_SHOPIFY_MEDIA_WARNING =
+  "圖片以 Shopify 為準：這次沒有新增、刪除或修改 Shopify 圖片／影片";
 
 type ServiceSupabase = ReturnType<typeof createServiceSupabaseClient>;
 
@@ -415,9 +419,10 @@ export function verifyReadback(
       .filter((media) => media.mediaContentType === "EXTERNAL_VIDEO")
       .map((media) => media.originUrl)
       .filter((value): value is string => Boolean(value))
+      .map(videoIdentityKey)
   );
   for (const url of desiredVideoUrls) {
-    if (!remoteVideos.has(url)) mismatches.push(`media.externalVideo:${url}`);
+    if (!remoteVideos.has(videoIdentityKey(url))) mismatches.push(`media.externalVideo:${url}`);
   }
 
   const remoteMetafields = new Map(
@@ -823,12 +828,16 @@ export async function syncShopifyProduct(
       code: "image_payload_mismatch"
     };
   }
-  const imageMatch = matchImages(
-    images,
-    imageMediaInputs,
-    before.media.nodes,
-    images.some((image) => Boolean(image.shopify_media_id))
-  );
+  const keepShopifyMedia = draft.shopify_media_mode === "shopify";
+  const syncedVideoInputs = keepShopifyMedia ? [] : desiredVideoInputs;
+  const imageMatch = keepShopifyMedia
+    ? { desired: [] as DesiredImage[], identityError: null }
+    : matchImages(
+        images,
+        imageMediaInputs,
+        before.media.nodes,
+        images.some((image) => Boolean(image.shopify_media_id))
+      );
   if (imageMatch.identityError) {
     return { ok: false, status: 409, error: imageMatch.identityError, code: "media_identity_conflict" };
   }
@@ -836,17 +845,24 @@ export async function syncShopifyProduct(
   const matchedMediaIds = new Set(
     desiredImages.flatMap((item) => (item.remote && !item.replace ? [item.remote.id] : []))
   );
-  const desiredVideoUrls = desiredVideoInputs.map((item) => item.originalSource);
+  const desiredVideoUrls = syncedVideoInputs.map((item) => item.originalSource);
+  const desiredVideoKeys = new Set(desiredVideoUrls.map(videoIdentityKey));
   for (const remote of before.media.nodes) {
-    if (remote.mediaContentType === "EXTERNAL_VIDEO" && remote.originUrl && desiredVideoUrls.includes(remote.originUrl)) {
+    if (
+      remote.mediaContentType === "EXTERNAL_VIDEO" &&
+      remote.originUrl &&
+      desiredVideoKeys.has(videoIdentityKey(remote.originUrl))
+    ) {
       matchedMediaIds.add(remote.id);
     }
   }
-  const mediaRemovals = before.media.nodes.filter(
-    (item) =>
-      (item.mediaContentType === "IMAGE" || item.mediaContentType === "EXTERNAL_VIDEO") &&
-      !matchedMediaIds.has(item.id)
-  );
+  const mediaRemovals = keepShopifyMedia
+    ? []
+    : before.media.nodes.filter(
+        (item) =>
+          (item.mediaContentType === "IMAGE" || item.mediaContentType === "EXTERNAL_VIDEO") &&
+          !matchedMediaIds.has(item.id)
+      );
   if (!confirmRemovals && (variantRemovals.length > 0 || mediaRemovals.length > 0)) {
     return {
       ok: false,
@@ -863,7 +879,8 @@ export async function syncShopifyProduct(
     title: core.title,
     variantCount: seeds.length,
     imageCount: imageMediaInputs.length,
-    videoCount: desiredVideoInputs.length,
+    videoCount: syncedVideoInputs.length,
+    mediaMode: keepShopifyMedia ? "shopify" : "tool",
     variantRemovals: variantRemovals.map((item) => item.id),
     mediaRemovals: mediaRemovals.map((item) => item.id),
     forceRemoteOverwrite,
@@ -1045,11 +1062,13 @@ export async function syncShopifyProduct(
     const newImageItems = desiredImages.filter((item) => !item.remote || item.replace);
     const newMedia = [
       ...newImageItems.map((item) => item.media),
-      ...desiredVideoInputs.filter(
+      ...syncedVideoInputs.filter(
         (item) =>
           !before?.media.nodes.some(
             (remote) =>
-              remote.mediaContentType === "EXTERNAL_VIDEO" && remote.originUrl === item.originalSource
+              remote.mediaContentType === "EXTERNAL_VIDEO" &&
+              Boolean(remote.originUrl) &&
+              videoIdentityKey(remote.originUrl as string) === videoIdentityKey(item.originalSource)
           )
       )
     ];
@@ -1132,7 +1151,9 @@ export async function syncShopifyProduct(
     }
 
     const rematchedVariants = matchVariants(rows, seeds, after.variants.nodes);
-    const rematchedImages = matchImages(images, imageMediaInputs, after.media.nodes, false).desired;
+    const rematchedImages = keepShopifyMedia
+      ? []
+      : matchImages(images, imageMediaInputs, after.media.nodes, false).desired;
     const mismatches = verifyReadback(
       after,
       core,
@@ -1209,7 +1230,12 @@ export async function syncShopifyProduct(
       mediaCount: after.media.nodes.length,
       verified: true
     });
-    return { ok: true, productId, remoteUpdatedAt: after.updatedAt, warnings: [] };
+    return {
+      ok: true,
+      productId,
+      remoteUpdatedAt: after.updatedAt,
+      warnings: keepShopifyMedia ? [KEEP_SHOPIFY_MEDIA_WARNING] : []
+    };
   } catch (error) {
     return fail("sync_exception", error);
   }

@@ -181,6 +181,8 @@ export interface ProductDraft {
   shopify_sync_error?: string | null;
   /** 1.5a SHOPIFY-RECONCILE (migration 20261020100000). */
   shopify_sync_baseline?: ShopifySyncBaseline | null;
+  /** SYNC-KEEP-MEDIA (migration 20261025100000): 'shopify' = sync never touches Shopify media. */
+  shopify_media_mode?: "tool" | "shopify";
   error_message: string | null;
   created_by: string | null;
   reviewed_by: string | null;

@@ -87,7 +87,24 @@
         : 0;
     }
 
+    // 4a-2: scroll Taobao/Tmall to the bottom first so lazy description images / reviews render.
+    var autoScroll = null;
+    if (/(^|\.)(taobao\.com|tmall\.com|tmall\.hk)$/i.test(location.hostname) &&
+        typeof NestoryCap.autoScrollForLazyContent === "function") {
+      if (typeof globalThis.__nestoryShowCaptureToast === "function") {
+        globalThis.__nestoryShowCaptureToast("⏳ 捲動頁面載入詳情圖…", "loading");
+      }
+      autoScroll = await NestoryCap.autoScrollForLazyContent(globalThis, document);
+      if (typeof globalThis.__nestoryShowCaptureToast === "function") {
+        globalThis.__nestoryShowCaptureToast("⏳ 擷取中…", "loading");
+      }
+    }
+
     var payload = buildNow();
+    if (autoScroll && payload) {
+      payload.capture_meta = payload.capture_meta || {};
+      payload.capture_meta.auto_scroll = autoScroll;
+    }
     var isTaobaoFamily =
       payload &&
       (payload.source_platform === "taobao" || payload.source_platform === "tmall");
@@ -112,7 +129,7 @@
             ? payload.capture_meta.warnings_from_client.slice()
             : [];
           warnings.push(
-            "detail_image_urls: 等待 lazy-load 後仍偏少，可能需要頁面互動/捲動才會完整載入"
+            "detail_image_urls: 已自動捲到底仍偏少，可能這頁本來就沒有詳情圖，或請手動捲到底再抓一次"
           );
           payload.capture_meta.warnings_from_client = warnings;
         }

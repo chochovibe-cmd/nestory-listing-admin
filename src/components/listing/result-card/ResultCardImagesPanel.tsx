@@ -1,6 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
+import { Button } from "@/components/ui/Button";
 import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
+import type { ExcludedDetailImage } from "@/lib/import/captureSharedImages";
 import {
   imageSlotLabel,
   PROCESS_INTENT_LABELS,
@@ -15,6 +19,10 @@ export function ResultCardImagesPanel({
   fadingImageIds,
   unmarkedImages,
   unmarkedBlockMessage,
+  excludedDetailImages,
+  restoreImageBusyIndex,
+  restoreImageDisabledReason,
+  onRestoreExcludedImage,
   onRemoveImage,
   onSetProcessIntent,
   onToggleSpec
@@ -24,10 +32,16 @@ export function ResultCardImagesPanel({
   fadingImageIds: Set<string>;
   unmarkedImages: ProductImage[];
   unmarkedBlockMessage: string | null;
+  excludedDetailImages: ExcludedDetailImage[];
+  restoreImageBusyIndex: number | null;
+  restoreImageDisabledReason: string | null;
+  onRestoreExcludedImage: (index: number) => void;
   onRemoveImage: (image: ProductImage) => void;
   onSetProcessIntent: (image: ProductImage, intent: ImageProcessIntent) => void;
   onToggleSpec: (image: ProductImage) => void;
 }) {
+  const [excludedOpen, setExcludedOpen] = useState(false);
+
   if (imageMarks.length === 0) {
     return (
       <div className="rc-tabpanel" role="tabpanel">
@@ -138,6 +152,36 @@ export function ResultCardImagesPanel({
                 </div>
               ))}
           </div>
+        ) : null}
+        {excludedDetailImages.length > 0 ? (
+          <CollapsibleSection
+            className="vc-excluded"
+            onToggle={() => setExcludedOpen((open) => !open)}
+            open={excludedOpen}
+            summary="點開看縮圖"
+            title={`已排除 ${excludedDetailImages.length} 張店家共用宣傳圖`}
+          >
+            <p className="vc-note">這些圖也出現在同一家店的其他商品，通常是店家介紹、合作通路或購物須知，匯入時先排除。需要的話可以加回，會排在詳情圖最後。</p>
+            {restoreImageDisabledReason ? <p className="price-soft-warn">{restoreImageDisabledReason}</p> : null}
+            <ul className="vc-list">
+              {excludedDetailImages.map((entry, index) => (
+                <li className="vc-excluded-row" key={entry.key}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt="已排除的宣傳圖" className="imgmark-thumb" referrerPolicy="no-referrer" src={entry.url} />
+                  <span className="vc-excluded-label">出現在另外 {entry.other_items} 件商品</span>
+                  <Button
+                    disabled={Boolean(restoreImageDisabledReason) || restoreImageBusyIndex !== null}
+                    loading={restoreImageBusyIndex === index}
+                    onClick={() => onRestoreExcludedImage(index)}
+                    size="sm"
+                    type="button"
+                  >
+                    加回
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </CollapsibleSection>
         ) : null}
         {unmarkedImages.length > 0 && unmarkedBlockMessage ? (
           <div className="img-mark-warn" role="status">

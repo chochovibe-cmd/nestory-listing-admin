@@ -14,10 +14,10 @@
 ## 2. 進行中
 | 包 | 狀態 | 下一步 |
 |---|---|---|
-| SYNC-ROLLOUT（Claude 執行＋驗收；GPT 登不進工具網頁） | 分批表 `docs/SYNC-ROLLOUT-分批-2026-10-24.md`。10-24 第 1～5 批完成 58 件（FAQ／規格修好、價格款式圖不變），ae962018 測試草稿部分同步 | 第 6 批 6 件等程式：同步保留 Shopify 獨有圖、不補工具獨有圖；外部影片回讀比對修正 → 小修合集；58f00e61 端盒疑似賣錯價等老闆 |
-| SYNC-KEEP-MEDIA（GPT 施工，`gpt/sync-keep-media`） | 規格＋驗收測試＋migration 在 `docs/sync-keep-media-spec`（77212d6）：`product_drafts.shopify_media_mode`=shopify 時同步不動 Shopify 圖片／影片；YouTube 影片網址比對修正 | GPT Draft PR → Claude 審 → 老闆貼 migration → 第 6 批同步 |
+| SYNC-ROLLOUT（Claude 執行＋驗收；GPT 登不進工具網頁） | 分批表 `docs/SYNC-ROLLOUT-分批-2026-10-24.md`。10-24 第 1～5 批完成 58 件；10-25 第 6 批 6 件完成（圖片以 Shopify 為準），ae962018 重送成功 | ✅ 收尾：58f00e61 端盒改 NT$3,680；ae962018 已封存；20261022100000 確認已生效（只是沒登記 ledger） |
+| SYNC-KEEP-MEDIA（GPT 施工，`gpt/sync-keep-media`） | 規格＋驗收測試＋migration 在 `docs/sync-keep-media-spec`（77212d6）：`product_drafts.shopify_media_mode`=shopify 時同步不動 Shopify 圖片／影片；YouTube 影片網址比對修正 | ✅ 10-25 上線 247cdcb `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`；migration 已套（GPT）；第 6 批已同步 |
 
-下一包候選（指揮決定）：SYNC-ROLLOUT → 4a 問大家＋評價（外掛線，可並行）→ 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
+下一包候選（指揮決定）：**4a 問大家＋評價（下一包，10-25 定；照原順序，不跟 PRICING 對調：外掛已修好逐款價格，端盒錯價是 10-13 舊抓取資料）** → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。

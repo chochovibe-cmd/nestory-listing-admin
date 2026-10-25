@@ -25,7 +25,7 @@
 | 第 3 批 比對表零差異（最多換描述範本） | 1b6d450e b4ac2e78 71672805 3f166233 31701317 b6d57a37 a450198e e98bc983 843a6045 4e44bfb1 32ea56ad fc859e0e 53cd80ee ae9a216a 4c7775b8 862841d8 ec179ebb 4fce5632 3169bffa 845e0303 c17c5f1d 02312886 1b20d978 415d30af 94cd9000 a90326c5 56c4ffea fdef6bd3 | 28 | ✅ 10-24 完成 21 件；7 件移到第 5 批 |
 | 第 4 批 SKU `CHO-`→`NS-` | 3c67c42b 329f516c 5feb9b44 8b3a323e b9400278 8d2b744c 8b3a35b9（只差描述）ae962018（工具 SKU 空白，先查） | 8 | ✅ 10-24 老闆定改 NS-：完成 5feb9b44 8d2b744c 8b3a35b9（無 SKU 列，只換描述）；ae962018 部分同步（測試草稿，見 §5）；其餘 4 件＋同類 1 件移第 6 批 |
 | 第 5 批 個別處理 | f2809032（標題兩邊不同，老闆選）、6ede08ef（工具多一個「購買須知…拍下不出貨」款式，先在工具排除）、58f00e61（先改成本）、b46b94b2 ec18dfd8 8af27d57＋第 3 批 b4ac2e78 3f166233（Shopify 封面是後台換的、工具沒有那張 → 老闆定以 Shopify 為準；先把 Shopify 封面收進工具當主圖 1 再同步）；ec179ebb 4fce5632 3169bffa 845e0303（主圖兩邊同檔，但工具列沒記 shopify_media_id、Shopify alt 被改 → 先補對應）；fc859e0e（工具款式圖 5 重新處理過，同步會換掉 Shopify 舊圖 → 以 Shopify 為準）。全部不可用 `confirmRemovals: true` | 13 | ✅ 10-24 完成 12 件；6ede08ef 移第 6 批 |
-| 第 6 批 Shopify 圖庫有工具不送的圖 | 3c67c42b 329f516c 8b3a323e b9400278 8b3a35b9（10-08 前發布，詳情圖也放進 Shopify 圖庫）、6ede08ef（工具多 1 張主圖不在 Shopify） | 6 | 等程式：同步要能「保留 Shopify 獨有圖、不補工具獨有圖」，見 §5 |
+| 第 6 批 Shopify 圖庫有工具不送的圖 | 3c67c42b 329f516c 8b3a323e b9400278 8b3a35b9（10-08 前發布，詳情圖也放進 Shopify 圖庫）、6ede08ef（工具多 1 張主圖不在 Shopify） | 6 | ✅ 10-25 完成（SYNC-KEEP-MEDIA 上線後，`shopify_media_mode='shopify'`），見 §6 |
 
 ## 2. 第 1 批結果（10-24 08:37Z）
 - 5 件 `shopify_sync_jobs` 全部 `completed`，工具端全部「已同步」＋有基準點，款式 2/2～6/6 連上。
@@ -60,3 +60,16 @@
 - **ae962018 部分同步（502 readback_mismatch）**：它是測試草稿（example 圖網址＋YouTube 測試影片），Shopify 上也是草稿、客人看不到。SKU、描述已寫入，另新增一支 YouTube 外部影片；回讀時影片網址跟工具不一致而報錯。→ 程式問題：外部影片回讀比對（Shopify 會改寫 YouTube 網址）要容許正規化，排進小修合集；這件測試商品之後可整件從 Shopify 刪掉（要老闆同意）。
 - **第 6 批（6 件，未寫入）**：3c67c42b 送出時被 409 擋（會刪 20 張），沒有改動。原因：10-08 前發布的商品把詳情圖也放進 Shopify 圖庫，現在同步只送主圖＋款式圖 → 會被當成要刪。6ede08ef 則是工具多 1 張主圖、Shopify 沒有 → 同步會補上去（老闆原則以 Shopify 為準，不補）。需要程式加一個選項：同步時保留 Shopify 獨有圖、不上傳工具獨有圖。這 5 件 SKU 仍是 CHO-。
 - 58f00e61「端盒【6款不重複】」店上 $699、成本 600，跟單個盲盒一樣 → 疑似賣錯價，等老闆確認（同步沒改價格）。
+
+## 6. 第 6 批結果（10-25 04:02–04:03Z，老闆同意）
+- 前置：SYNC-KEEP-MEDIA（PR #74，合併 247cdcb，production `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`）上線；GPT 套 migration `20261025100000_shopify_media_mode`，Claude 唯讀複核：6 件 `shopify`、其他 131 件 `tool`。
+- 備份：`Nestory備份/2026-10-25-SYNC-ROLLOUT-第6批前.zip`（雲端硬碟也有）；每件快照 `2026-10-25-SYNC-ROLLOUT-第6批-同步前／同步後`。
+- 結果：6 件全部 `ok`，都帶警告「圖片以 Shopify 為準：這次沒有新增、刪除或修改 Shopify 圖片／影片」。
+  - 3c67c42b 329f516c 8b3a323e b9400278：SKU `CHO-…`→`NS-…`、描述更新；圖片 32／26／14／11 張，張數與順序不變。
+  - 8b3a35b9：只換描述；10 張不變。6ede08ef：無差異列，12 款、16 張不變。
+  - 價格、成本、款式都沒變。
+- ae962018（測試草稿，`tool` 模式）重送：`ok`、狀態「已同步」；Shopify 2 張圖＋1 支影片，沒有重複加影片（YouTube 比對修正生效）。
+- SYNC-ROLLOUT 累計 64 件完成＋ae962018。
+- 10-25 05:26Z（老闆授權「能改就直接改」）：58f00e61 端盒款原本跟單個一樣賣 NT$699（來源藏價、各款繼承單個價）。改為 6×單個來源價 ¥479.4、售價 NT$3,680（工具公式 `beautify` 後成本 3,600 會高於 3,599，取下一階）、`sell_price_locked`；同步 ok，Shopify 只有這款售價 699→3680、成本 600→3600。備份 `Nestory備份/2026-10-25-58f00e61端盒改價-同步前／同步後`。其他商品唯讀掃過「端盒／整盒／套裝／N 入」款式，沒有同樣問題（只有「禮盒裝」包裝）。
+- 10-25：ae962018 測試商品用工具「封存」（`shopify-lifecycle` archive），Shopify 狀態 ARCHIVED、可恢復；沒有永久刪除。
+- 已查：`20261022100000` 的觸發器內容在正式庫已是新版（含略過 `source_options`），只是當時在 SQL Editor 貼、沒登記 ledger；舊 migration 的 ledger version 也都是套用時間（如 20261021030901 shopify_sync_baseline），不影響功能，不補登。

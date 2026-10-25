@@ -1,6 +1,6 @@
 # Nestory — 現況（CURRENT_STATUS）
 
-> 更新：2026-10-24（Claude）。本檔只放「現在成立」的事，上限約 6KB。
+> 更新：2026-10-25（Claude）。本檔只放「現在成立」的事，上限約 6KB。
 > **寫新進度＝改掉舊句子，不要在最上面再疊一個「最新」區塊。** 包做完就把它從「進行中」刪掉，細節寫進總表那一列。
 > 發包順序與每包內容：`docs/發包總表-2026-10-14.md`（唯一來源）。
 > 10-07～10-18 的舊紀錄原文（含 Codex PUBLISH-RUNTHROUGH R1–R5）：`docs/archive/STATUS-HISTORY-2026-10-21.md`，需要查歷史才讀。
@@ -14,10 +14,9 @@
 ## 2. 進行中
 | 包 | 狀態 | 下一步 |
 |---|---|---|
-| SYNC-ROLLOUT（Claude 執行＋驗收；GPT 登不進工具網頁） | 分批表 `docs/SYNC-ROLLOUT-分批-2026-10-24.md`。10-24 第 1～5 批完成 58 件；10-25 第 6 批 6 件完成（圖片以 Shopify 為準），ae962018 重送成功 | ✅ 收尾：58f00e61 端盒改 NT$3,680；ae962018 已封存；20261022100000 確認已生效（只是沒登記 ledger） |
-| SYNC-KEEP-MEDIA（GPT 施工，`gpt/sync-keep-media`） | 規格＋驗收測試＋migration 在 `docs/sync-keep-media-spec`（77212d6）：`product_drafts.shopify_media_mode`=shopify 時同步不動 Shopify 圖片／影片；YouTube 影片網址比對修正 | ✅ 10-25 上線 247cdcb `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`；migration 已套（GPT）；第 6 批已同步 |
+| 4a CAPTURE-REVIEWS＋FILTER（GPT 施工，`gpt/capture-4a`） | 規格＋驗收測試＋素材在 `docs/capture-4a-spec`：`docs/CAPTURE-4A-施工規格-2026-10-25.md`、`scripts/verify-capture-4a.mjs`（29 項，Claude 參考實作已跑綠）。內容：外掛收頁面已載入的買家評價摘要（存 raw_capture、卡片唯讀顯示，不進 AI 文案）、拿掉每款都一樣的款式軸、排除店家共用宣傳圖（可加回）、詳情圖不收推薦區／載入空白圖、圖片警告亂碼修回、外掛 0.2.2。問大家：新版電腦頁已沒有 → 不做。不需要 migration | GPT 先合併 PR #75 → 施工 → Draft PR → 等 Claude 審 PASS → 合併上線 → Claude 覆蓋外掛＋實機驗收＋唯讀清查舊商品身上的宣傳圖 |
 
-下一包候選（指揮決定）：**4a 問大家＋評價（下一包，10-25 定；照原順序，不跟 PRICING 對調：外掛已修好逐款價格，端盒錯價是 10-13 舊抓取資料）** → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
+下一包候選（指揮決定）：4a 施工中 → **5 PRICING（下一包）** → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。SYNC-ROLLOUT（65 件）與 SYNC-KEEP-MEDIA 10-25 全部完成（細節見總表）。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。

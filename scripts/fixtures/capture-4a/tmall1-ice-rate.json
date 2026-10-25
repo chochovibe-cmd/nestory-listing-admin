@@ -1,0 +1,103 @@
+{
+ "rateVO": {
+  "keywords": [
+   {
+    "labelId": "2081355435-11",
+    "count": "16",
+    "title": "外观设计很可爱",
+    "status": "1"
+   },
+   {
+    "labelId": "2082070713-11",
+    "count": "8",
+    "title": "整体感受好",
+    "status": "1"
+   },
+   {
+    "labelId": "2015409141-11",
+    "count": "3",
+    "title": "包装很好",
+    "status": "1"
+   },
+   {
+    "labelId": "2035387656-11",
+    "count": "1",
+    "title": "透卡没问题",
+    "status": "1"
+   },
+   {
+    "labelId": "2048705674-11",
+    "count": "1",
+    "title": "如图",
+    "status": "1"
+   },
+   {
+    "labelId": "2026640993-11",
+    "count": "1",
+    "title": "评价尚可",
+    "status": "1"
+   },
+   {
+    "labelId": "2091450302-11",
+    "count": "1",
+    "title": "已上架",
+    "status": "1"
+   }
+  ],
+  "totalCount": "200+",
+  "favorableRate": {
+   "rateText": "好评率98.6%"
+  },
+  "group": {
+   "items": [
+    {
+     "dateTime": "2026-09-12",
+     "memberLevel": "6",
+     "createTimeInterval": "1个月前",
+     "userName": "测试用户",
+     "headPic": "//example.invalid/avatar.png",
+     "content": "包装很用心，拆开超有仪式感。",
+     "repurchaseCountText": "本店买过2次",
+     "feedId": "0",
+     "skuInfo": "已购 【纸夹透卡盲袋】整盒24包",
+     "tmallMemberLevel": "0"
+    },
+    {
+     "dateTime": "2026-09-12",
+     "highLightPositions": [],
+     "memberLevel": "6",
+     "createTimeInterval": "1个月前",
+     "userName": "测试用户",
+     "headPic": "//example.invalid/avatar.png",
+     "content": "外形确实好看，我很喜欢",
+     "repurchaseCountText": "本店买过2次",
+     "feedId": "0",
+     "skuInfo": "已购 【纸夹透卡】奈奈生和巴卫B",
+     "tmallMemberLevel": "0"
+    }
+   ]
+  }
+ },
+ "itemEndorseVO": {
+  "endorseList": [
+   {
+    "textList": [
+     "多人评价\"外观设计很可爱\""
+    ],
+    "type": "itemRate"
+   },
+   {
+    "textList": [
+     "回头客135人"
+    ],
+    "type": "itemRepurchase"
+   },
+   {
+    "textList": [
+     "超800人加购"
+    ],
+    "type": "itemAddCart"
+   }
+  ]
+ }
+}

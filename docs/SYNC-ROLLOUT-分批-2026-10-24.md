@@ -70,4 +70,6 @@
   - 價格、成本、款式都沒變。
 - ae962018（測試草稿，`tool` 模式）重送：`ok`、狀態「已同步」；Shopify 2 張圖＋1 支影片，沒有重複加影片（YouTube 比對修正生效）。
 - SYNC-ROLLOUT 累計 64 件完成＋ae962018。
-- 待查：GPT 套 migration 時發現 `20261022100000_stock_source_options_not_dirty` 沒有登記在正式庫的 migration 紀錄 → 需唯讀確認那支觸發器內容是否已是新版。
+- 10-25 05:26Z（老闆授權「能改就直接改」）：58f00e61 端盒款原本跟單個一樣賣 NT$699（來源藏價、各款繼承單個價）。改為 6×單個來源價 ¥479.4、售價 NT$3,680（工具公式 `beautify` 後成本 3,600 會高於 3,599，取下一階）、`sell_price_locked`；同步 ok，Shopify 只有這款售價 699→3680、成本 600→3600。備份 `Nestory備份/2026-10-25-58f00e61端盒改價-同步前／同步後`。其他商品唯讀掃過「端盒／整盒／套裝／N 入」款式，沒有同樣問題（只有「禮盒裝」包裝）。
+- 10-25：ae962018 測試商品用工具「封存」（`shopify-lifecycle` archive），Shopify 狀態 ARCHIVED、可恢復；沒有永久刪除。
+- 已查：`20261022100000` 的觸發器內容在正式庫已是新版（含略過 `source_options`），只是當時在 SQL Editor 貼、沒登記 ledger；舊 migration 的 ledger version 也都是套用時間（如 20261021030901 shopify_sync_baseline），不影響功能，不補登。

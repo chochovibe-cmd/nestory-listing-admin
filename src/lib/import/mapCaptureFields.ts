@@ -25,8 +25,9 @@ import {
 import { keepOrInheritVariantCny } from "@/lib/import/captureVariantPrice";
 import { isFakeVariantRow } from "@/lib/shopify/publishReadiness";
 import { parsePriceRange } from "@/lib/shopify/publishReadiness";
-import { cleanVariantRows } from "@/lib/variants/variantNameRules";
+import { cleanOptionValue, cleanVariantRows, type CleanedVariantFields } from "@/lib/variants/variantNameRules";
 import { parseFlatSourceStock } from "@/lib/variants/sourceStock";
+import { normalizeSourceReviews } from "@/lib/import/sourceReviews";
 import type { VariantSourceStock } from "@/lib/variants/types";
 import {
   WARNING_ALL_SOURCE_SOLD_OUT,
@@ -169,6 +170,10 @@ export function filterCaptureSpecText(specText: string | null | undefined): stri
     kept.push({ key, value });
   }
   return formatSpecRows(kept);
+}
+
+export function formatConstantAxisWarning(name: string, value: string): string {
+  return `款式軸「${name}」每款都是「${value}」，已併入商品規格，不建成款式`;
 }
 
 /** Build spec_text from params: filter promo/SKU-axis noise first, then join. */
@@ -355,6 +360,7 @@ export function mapVariantRows(
   variantImageUrls: string[];
   excluded: ExcludedCaptureVariant[];
   allSourceSoldOut: boolean;
+  droppedAxes: Array<{ name: string; value: string }>;
 } {
   const checkedAt = opts?.stockCheckedAt ?? new Date().toISOString();
   const rows: Array<Record<string, unknown>> = [];
@@ -485,6 +491,53 @@ export function mapVariantRows(
 
   // VARIANT-CLEAN rule layer (no AI at import). The imported text is kept in source_options.
   const cleaned = cleanVariantRows(rows);
+  const droppedAxes: Array<{ name: string; value: string }> = [];
+  const soldOutRows = excluded.filter((e) => e.reason === "source_sold_out").map((e) => e.row);
+  const distinctValues = (axis: number) =>
+    new Set(cleaned.map((entry) => entry.values[axis]).filter((value) => value != null));
+  const dropAxis = [false, false, false];
+
+  if (cleaned.length >= 2) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const values = cleaned.map((entry) => entry.values[axis]);
+      if (values.some((value) => value == null)) continue;
+      const all = new Set<string | null>(values);
+      for (const row of soldOutRows) {
+        all.add(cleanOptionValue(String(row[`option${axis + 1}_value`] ?? "")));
+      }
+      if (all.size !== 1) continue;
+      const hasOtherVaryingAxis = [0, 1, 2].some(
+        (other) => other !== axis && !dropAxis[other] && distinctValues(other).size >= 2
+      );
+      if (!hasOtherVaryingAxis) continue;
+      dropAxis[axis] = true;
+      droppedAxes.push({
+        name: String(cleaned[0].names[axis]),
+        value: String(values[0])
+      });
+    }
+  }
+
+  if (droppedAxes.length > 0) {
+    const compact = <T,>(arr: T[]): T[] => {
+      const kept = arr.filter((_, index) => !dropAxis[index]);
+      while (kept.length < 3) kept.push(null as T);
+      return kept;
+    };
+    for (const entry of cleaned) {
+      entry.names = compact(entry.names) as CleanedVariantFields["names"];
+      entry.values = compact(entry.values) as CleanedVariantFields["values"];
+    }
+    for (const row of soldOutRows) {
+      const names = compact([row.option1_name, row.option2_name, row.option3_name]);
+      const values = compact([row.option1_value, row.option2_value, row.option3_value]);
+      [0, 1, 2].forEach((index) => {
+        row[`option${index + 1}_name`] = names[index] ?? null;
+        row[`option${index + 1}_value`] = values[index] ?? null;
+      });
+    }
+  }
+
   rows.forEach((row, i) => {
     row.source_options = {
       names: [row.option1_name, row.option2_name, row.option3_name].map((n) => n ?? null),
@@ -512,7 +565,7 @@ export function mapVariantRows(
         ? [{ name: "款式" }]
         : [];
 
-  return { rows, dimensions, variantImageUrls: imageUrls, excluded, allSourceSoldOut };
+  return { rows, dimensions, variantImageUrls: imageUrls, excluded, allSourceSoldOut, droppedAxes };
 }
 
 /**
@@ -550,7 +603,7 @@ export function mapCaptureToDraftFields(
   const params = body.params && typeof body.params === "object" ? body.params : null;
   const explicitSpec = asTrimmedString(body.spec_text);
   const fromParams = formatParamsAsSpecText(params ?? undefined);
-  const specText = filterCaptureSpecText(explicitSpec) ?? fromParams;
+  let specText = filterCaptureSpecText(explicitSpec) ?? fromParams;
 
   // Brand from raw params (before spec filter) so 品牌 is not lost if a row is dropped.
   const productBrand = extractBrandFromParams(params ?? undefined);
@@ -573,7 +626,8 @@ export function mapCaptureToDraftFields(
     dimensions: variantDimensions,
     variantImageUrls,
     excluded: excludedVariants,
-    allSourceSoldOut
+    allSourceSoldOut,
+    droppedAxes
   } = mapVariantRows(flats, body.sku_table, price, { stockCheckedAt: receivedAt });
 
   const nonProductExcluded = excludedVariants.filter((e) => e.reason === "non_product_option");
@@ -587,6 +641,13 @@ export function mapCaptureToDraftFields(
     warnings.push(formatSoldOutExcludedWarning(soldOutExcluded.map((e) => e.label)));
   }
   if (allSourceSoldOut) warnings.push(WARNING_ALL_SOURCE_SOLD_OUT);
+  for (const dropped of droppedAxes) {
+    warnings.push(formatConstantAxisWarning(dropped.name, dropped.value));
+  }
+  if (droppedAxes.length > 0) {
+    const droppedSpec = droppedAxes.map((dropped) => `${dropped.name}：${dropped.value}`).join("\n");
+    specText = specText ? `${specText}\n${droppedSpec}` : droppedSpec;
+  }
 
   // PRICE-GUARD: Taobao may hide every per-variant price (hideOtherPrice / no sku2info price).
   // The extension warns, but the server must also demand a per-variant cost check, otherwise
@@ -678,7 +739,7 @@ export function mapCaptureToDraftFields(
   const platform = asTrimmedString(body.source_platform);
 
   // Build payload for strip (body + raw)
-  const payloadSource = {
+  const payloadSource: Record<string, unknown> = {
     ...(body as Record<string, unknown>),
     ...(body.raw && typeof body.raw === "object" && !Array.isArray(body.raw)
       ? { raw_nested: body.raw }
@@ -686,6 +747,9 @@ export function mapCaptureToDraftFields(
         ? { raw_nested: body.raw }
         : {})
   };
+  const sourceReviews = normalizeSourceReviews(body.source_reviews);
+  if (sourceReviews) payloadSource.source_reviews = sourceReviews;
+  else delete payloadSource.source_reviews;
   const stripped = stripOversizedCaptureFields(payloadSource, "payload");
   warnings.push(...stripped.warnings);
 
@@ -706,6 +770,7 @@ export function mapCaptureToDraftFields(
       sku_flat_warning: multiDim,
       /** VARIANT-CLEAN: options the import excluded; the 規格 tab lists them with 恢復. */
       excluded_variants: excludedVariants,
+      dropped_constant_axes: droppedAxes,
       /** CAPTURE-TRUTH-A: downstream/UI may block auto-pricing until operator confirms. */
       price_requires_confirmation: priceRequiresConfirmation,
       price_confidence: priceConfidence,

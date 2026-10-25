@@ -201,3 +201,7 @@ function escapeHtmlAttr(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+/** Identity key for comparing external video URLs (Shopify stores YouTube as https://youtu.be/<id>). */
+export function videoIdentityKey(raw: string): string {
+  return canonicalizeYouTubeUrl(raw) ?? raw.trim();
+}

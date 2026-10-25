@@ -85,6 +85,7 @@ export type CaptureImportBody = {
   detail_image_urls?: string[];
   video_urls?: string[] | string;
   params?: Record<string, string | number | null | undefined>;
+  source_reviews?: unknown;
   /** Prefer when client already formatted; else built from params. */
   spec_text?: string | null;
   captured_at?: string | null;

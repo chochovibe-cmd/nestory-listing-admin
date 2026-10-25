@@ -150,7 +150,9 @@ import {
   type VariantFormRow
 } from "@/lib/variants";
 import { readPriceRefreshSkuIds } from "@/lib/import/refreshCapture";
+import { readSourceReviews } from "@/lib/import/sourceReviews";
 import { readExcludedVariants } from "@/lib/variants/restoreExcludedVariant";
+import { readExcludedDetailImages } from "@/lib/images/restoreExcludedDetailImage";
 import { summarizeSourceStockForShopify } from "@/lib/variants/sourceStock";
 import type { ImageProcessIntent, PriceMode, ProductDraft, ProductImage } from "@/types/domain";
 import {
@@ -500,8 +502,17 @@ export function ResultCard({
 
   // VARIANT-CLEAN: options the capture import kept out of 款式 (restorable on the 規格 tab).
   const excludedVariants = useMemo(() => readExcludedVariants(draft.raw_capture), [draft.raw_capture]);
+  const sourceReviews = useMemo(() => readSourceReviews(draft.raw_capture), [draft.raw_capture]);
+  const excludedDetailImages = useMemo(
+    () => readExcludedDetailImages(draft.raw_capture),
+    [draft.raw_capture]
+  );
   const [restoreBusyIndex, setRestoreBusyIndex] = useState<number | null>(null);
   const [restoreAllBusy, setRestoreAllBusy] = useState(false);
+  const [restoreImageBusyIndex, setRestoreImageBusyIndex] = useState<number | null>(null);
+  const restoreImageDisabledReason = draft.shopify_product_id
+    ? "已上架的商品請到 Shopify 後台加圖"
+    : null;
   // CAPTURE-FIX: a re-capture refreshed these variants' cost and cleared their unlocked selling price.
   const priceRefreshSkuIds = useMemo(() => new Set(readPriceRefreshSkuIds(draft.raw_capture)), [draft.raw_capture]);
   const priceRecalcPending = variantRows.filter(
@@ -534,6 +545,30 @@ export function ResultCard({
       showToast("恢復款式連線失敗", "error");
     } finally {
       setRestoreBusyIndex(null);
+    }
+  }
+
+  async function restoreExcludedImage(index: number) {
+    const entry = excludedDetailImages[index];
+    if (!entry) return;
+    setRestoreImageBusyIndex(index);
+    try {
+      const response = await fetch(`/api/drafts/${draft.id}/excluded-images/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index, url: entry.url })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        showToast(payload?.error ?? "加回圖片失敗", "error");
+        return;
+      }
+      showToast("已加回這張圖片", "success");
+      scheduleRouterRefresh(() => router.refresh());
+    } catch {
+      showToast("加回圖片連線失敗", "error");
+    } finally {
+      setRestoreImageBusyIndex(null);
     }
   }
 
@@ -3173,6 +3208,7 @@ export function ResultCard({
               discardArm={discardArm}
               displayByField={displayByField}
               draft={draft}
+              sourceReviews={sourceReviews}
               faq={faq}
               faqView={faqView}
               historyLoaded={historyLoaded}
@@ -3278,8 +3314,12 @@ export function ResultCard({
             )
           ) : !isCopyStation && activeTab === "images" ? (
             <ResultCardImagesPanel
+              excludedDetailImages={excludedDetailImages}
               fadingImageIds={fadingImageIds}
               imageMarks={imageMarks}
+              onRestoreExcludedImage={(index) => void restoreExcludedImage(index)}
+              restoreImageBusyIndex={restoreImageBusyIndex}
+              restoreImageDisabledReason={restoreImageDisabledReason}
               onRemoveImage={(image) => void removeImage(image)}
               onSetProcessIntent={(image, intent) => void setProcessIntent(image, intent)}
               onToggleSpec={(image) => void toggleSpecOnCard(image)}

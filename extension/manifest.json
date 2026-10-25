@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Nestory 商品擷取",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "在淘寶／天貓／蝦皮／一般官網商品頁按一下，把標題、價格、規格、圖片送進 Nestory 上架草稿。",
   "action": {
     "default_title": "擷取此商品到 Nestory",

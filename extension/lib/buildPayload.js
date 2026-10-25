@@ -117,6 +117,7 @@
       video_urls:
         partial.video_urls && partial.video_urls.length ? partial.video_urls : undefined,
       params: partial.params || undefined,
+      source_reviews: partial.source_reviews || undefined,
       spec_text: undefined,
       captured_at: new Date().toISOString(),
       capture_meta: capture_meta

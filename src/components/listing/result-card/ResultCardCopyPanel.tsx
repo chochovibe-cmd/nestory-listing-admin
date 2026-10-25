@@ -11,10 +11,12 @@ import {
 import { descriptionPreviewHtml } from "@/lib/contentGenerator/htmlFormat";
 import type { CopyVersionField, VersionEntry } from "@/lib/drafts/copyVersionHistory";
 import type { PriceMode, ProductDraft } from "@/types/domain";
+import type { SourceReviews } from "@/lib/import/sourceReviews";
 
 /** S2: 文案分頁 — 從 ResultCard 展開區拆出。 */
 export function ResultCardCopyPanel({
   draft,
+  sourceReviews,
   priceMode,
   characterChipWarned,
   detectTypeLabel,
@@ -55,6 +57,7 @@ export function ResultCardCopyPanel({
   onSaveCombo
 }: {
   draft: ProductDraft;
+  sourceReviews: SourceReviews | null;
   priceMode: PriceMode;
   characterChipWarned: boolean;
   detectTypeLabel: string;
@@ -195,6 +198,26 @@ export function ResultCardCopyPanel({
             </div>
           ) : null}
         </div>
+        {sourceReviews ? (
+          <div className="rc-field rc-span-2">
+            <div className="rc-label">淘寶買家印象（只給你參考，不會上架）</div>
+            <div className="rc-text">
+              {[sourceReviews.good_rate_text, sourceReviews.total_text ? `評價 ${sourceReviews.total_text}` : null, ...sourceReviews.signals]
+                .filter(Boolean)
+                .join("｜") || "—"}
+            </div>
+            {sourceReviews.tags.length > 0 ? (
+              <div className="muted">
+                {sourceReviews.tags.map((t) => (t.count != null ? `${t.text} ${t.count}` : t.text)).join("・")}
+              </div>
+            ) : null}
+            {sourceReviews.samples.slice(0, 2).map((s, i) => (
+              <div className="muted" key={i}>
+                「{s.text}」{s.sku ? `（${s.sku}）` : ""}
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className="row rc-span-2">
           <div className="field">
             <label>商品型態</label>

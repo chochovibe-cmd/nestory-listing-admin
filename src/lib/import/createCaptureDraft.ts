@@ -20,6 +20,13 @@ import {
   fetchAndStoreCaptureImages
 } from "@/lib/import/fetchRemoteImages";
 import { captureOpenPath } from "@/lib/drafts/mapDraftToWorkspaceForm";
+import {
+  formatSharedImagesExcludedWarning,
+  loadDetailImageHistory,
+  pickSharedDetailImages,
+  type ExcludedDetailImage
+} from "@/lib/import/captureSharedImages";
+import { readExcludedDetailImages } from "@/lib/images/restoreExcludedDetailImage";
 
 export type CreateCaptureDraftResult =
   | CaptureImportCreated
@@ -300,6 +307,27 @@ export async function createCaptureDraft(input: {
   const mapped = mapCaptureToDraftFields(input.body, { userId: input.userId });
   const urlKey = extractUrlMatchKey(sourceUrl);
 
+  let excludedDetailImages: ExcludedDetailImage[] = [];
+  let sharedImageCheck: "skipped_too_many" | "history_unavailable" | null = null;
+  if (mapped.detailImageUrls.length > 0) {
+    const history = await loadDetailImageHistory(input.serviceSupabase);
+    if (history === null) {
+      sharedImageCheck = "history_unavailable";
+    } else {
+      const shared = pickSharedDetailImages({
+        detailImageUrls: mapped.detailImageUrls,
+        sourceUrl,
+        history
+      });
+      mapped.detailImageUrls = shared.kept;
+      excludedDetailImages = shared.excluded;
+      if (excludedDetailImages.length > 0) {
+        mapped.warnings.push(formatSharedImagesExcludedWarning(excludedDetailImages.length));
+      }
+      if (shared.skipped === "too_many") sharedImageCheck = "skipped_too_many";
+    }
+  }
+
   // Annotate raw_capture.server with url key before insert
   const imageFetchExpected = captureImageExpectedCount(mapped);
   const rawCapture = {
@@ -307,6 +335,8 @@ export async function createCaptureDraft(input: {
     server: {
       ...(mapped.rawCapture.server as Record<string, unknown>),
       url_match_key: urlKey || null,
+      excluded_detail_images: excludedDetailImages,
+      ...(sharedImageCheck ? { shared_image_check: sharedImageCheck } : {}),
       image_fetch_status:
         imageFetchExpected === 0 ? "complete" : input.deferImages ? "pending" : "running",
       image_fetch_expected: imageFetchExpected,
@@ -491,6 +521,17 @@ export async function completeCaptureDraftImages(input: {
   if (!sourceUrl) return;
 
   const mapped = mapCaptureToDraftFields(input.body, { userId: input.userId });
+  const { data: captureDraft } = await input.serviceSupabase
+    .from("product_drafts")
+    .select("raw_capture")
+    .eq("id", input.draftId)
+    .maybeSingle();
+  const excludedDetailUrls = new Set(
+    readExcludedDetailImages(captureDraft?.raw_capture).map((entry) => entry.url)
+  );
+  if (excludedDetailUrls.size > 0) {
+    mapped.detailImageUrls = mapped.detailImageUrls.filter((url) => !excludedDetailUrls.has(url));
+  }
   let imageFetchLog: unknown[] = [];
   let backgroundWarnings: string[] = [];
   let imageStatus: "complete" | "failed" = "complete";

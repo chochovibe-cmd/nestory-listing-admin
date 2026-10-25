@@ -80,7 +80,10 @@ export function cleanDimensionName(name: string | null | undefined): string {
 /** Rule-layer result of one option value (marketing words dropped). */
 export function cleanOptionValue(value: string | null | undefined): string {
   const normalized = normalizeVariantText(value);
-  return normalized ? stripMarketingWords(normalized) : "";
+  if (!normalized) return "";
+  const stripped = stripMarketingWords(normalized);
+  const trimmed = stripped.replace(/[.。．、,，]+$/, "");
+  return trimmed.length >= 2 ? trimmed : stripped;
 }
 
 function tupleKey(values: Array<string | null | undefined>): string {

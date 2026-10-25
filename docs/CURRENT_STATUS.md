@@ -1,23 +1,23 @@
 # Nestory — 現況（CURRENT_STATUS）
 
-> 更新：2026-10-25（Claude）。本檔只放「現在成立」的事，上限約 6KB。
+> 更新：2026-10-25 晚（Claude）。本檔只放「現在成立」的事，上限約 6KB。
 > **寫新進度＝改掉舊句子，不要在最上面再疊一個「最新」區塊。** 包做完就把它從「進行中」刪掉，細節寫進總表那一列。
 > 發包順序與每包內容：`docs/發包總表-2026-10-14.md`（唯一來源）。
 > 10-07～10-18 的舊紀錄原文（含 Codex PUBLISH-RUNTHROUGH R1–R5）：`docs/archive/STATUS-HISTORY-2026-10-21.md`，需要查歷史才讀。
 
 ## 1. 線上狀態
-- 主線：`origin/handoff/20261008-golive-spec` @ `ab5db34`（10-22：#61 CAPTURE-FIX、#62 STAGING 程式、#63 STOCK、#64 STOCK SKU 對應、#65 卡片頁款式；10-23：#66 #67 文件；10-24：#68 SYNC-FIX）。
-- 正式站：`dpl_2W3xMYEd1WbEPc1yQfaULVKdYEVn`（ab5db34；Claude 用 Vercel 部署紀錄驗 SHA、`/login` 200、`/api/status` problems=[]）；回退點 `dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）→ `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
-- 外掛：老闆 Chrome 載入的 `C:/Users/s2491/Documents/Nestory外掛-0.2.0` 已換成 0.2.1（＝9167892 的 `extension/`；舊版備份 `Nestory外掛-0.2.0-備份`）。
+- 主線：`origin/handoff/20261008-golive-spec` @ `d8e5723`（10-25：#75 文件、#76 4a CAPTURE-REVIEWS＋FILTER、#77 4a-2 CAPTURE-SCROLL；之前 #61–#74 見總表）。
+- 正式站：`dpl_4BxsSapWJbtwpdtUByaTjW7sEsMJ`（d8e5723；GPT 驗 `/login` 200＋githubCommitSha）；回退點 `dpl_4BQKHnrzhbL117Dp93uPq8gcbeXX`（81df9ca，4a）→ `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`（247cdcb）→ `dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）→ `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
+- 外掛：老闆 Chrome 載入的 `C:/Users/s2491/Documents/Nestory外掛-0.2.0` 資料夾＝0.2.3（＝d8e5723 的 `extension/`，build `capture-20261025-scroll`；舊版備份 `Nestory外掛-0.2.2-備份`、`-0.2.1-備份`）。
 - 本機這個資料夾停在舊分支 `codex/nestory-v0.1-safety-skeleton`（GitHub 預設分支也還是它）→ 看程式先 `git fetch`，一律以 origin/handoff 為準。網址、專案代號、環境變數名稱見 `AI_START_HERE.md` §3。
 
 ## 2. 進行中
 | 包 | 狀態 | 下一步 |
 |---|---|---|
-| 4a CAPTURE-REVIEWS＋FILTER（GPT 施工，`gpt/capture-4a`） | 規格＋驗收測試＋素材在 `docs/capture-4a-spec`：`docs/CAPTURE-4A-施工規格-2026-10-25.md`、`scripts/verify-capture-4a.mjs`（29 項，Claude 參考實作已跑綠）。內容：外掛收頁面已載入的買家評價摘要（存 raw_capture、卡片唯讀顯示，不進 AI 文案）、拿掉每款都一樣的款式軸、排除店家共用宣傳圖（可加回）、詳情圖不收推薦區／載入空白圖、圖片警告亂碼修回、外掛 0.2.2。問大家：新版電腦頁已沒有 → 不做。不需要 migration | GPT 先合併 PR #75 → 施工 → Draft PR → 等 Claude 審 PASS → 合併上線 → Claude 覆蓋外掛＋實機驗收＋唯讀清查舊商品身上的宣傳圖 |
-| 4a-2 CAPTURE-SCROLL（GPT，`gpt/capture-scroll`，**等 4a 上線後開工**） | 規格＋測試＋已寫好的 `extension/lib/autoScroll.js` 在 `docs/capture-scroll-spec`：擷取淘寶／天貓前先自動捲到底再捲回（原 4a 誤刪項），外掛 0.2.3 | 4a 上線 → GPT 開工 → Claude 審 → 上線 → 覆蓋外掛＋實機看 auto_scroll |
+| 4a CAPTURE-REVIEWS＋FILTER／4a-2 CAPTURE-SCROLL（GPT） | ✅ 10-25 上線（#76、#77）。實機：天貓新抓 799eaec6 → 自動捲動 24 步 6.5 秒（頁面 2.6 萬像素、推薦區無限長，到 6 秒上限停）、19 張詳情圖、排除 2 張 HOLLY 共用宣傳圖、評價摘要（dom）；卡片兩個新區塊 Claude 實看正常。Shopify 66 件已上架商品唯讀掃描：沒有掛宣傳圖 | 待確認：測試 A（重抓 862841d8，天貓 1063456886739）沒有寫入評價，需老闆說當時外掛訊息或重做一次 |
+| 4a-3 小修合集-1（下一包，規格待寫） | 內容見總表 4a-3 列＋下方 10-25 老闆定案 | 新指揮對話寫規格→GPT |
 
-下一包候選（指揮決定）：4a 等上線 → 4a-2 CAPTURE-SCROLL → 4a-3 小修合集-1（詳情圖一鍵移除等，規格待寫）→ **5 PRICING** → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。SYNC-ROLLOUT（65 件）與 SYNC-KEEP-MEDIA 10-25 全部完成（細節見總表）。小修合集與 10-25 稽核補登的漏項都已在總表指定歸屬（總表第六節）。
+下一包候選（指揮決定）：**4a-3 小修合集-1（下一包）** → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。10-25 老闆定案（4a-3／COPY-A 用）：①詳情圖「一鍵」做成**全部不上架（保留在工具給 AI 讀字）**，不是刪除，單張 ✕ 刪除照舊；②COPY-A「文案參考圖」：AI 先自動挑字最多的圖，老闆可勾選覆蓋（新勾選，不沿用「規格圖」標記＝去簡體字處理）；③舊商品描述內嵌的 Supabase 圖**不搬**，只查容量，快滿或特別佔空間才處理；④可順手評估：自動捲動在推薦區無限長的頁面會跑滿 6 秒，可改成捲過「图文详情／用户评价」區就停。漏項歸屬見總表第六節。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。

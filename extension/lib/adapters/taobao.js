@@ -688,7 +688,7 @@
       if (!u) return false;
       var text = String(u);
       if (/^(?:data|blob):/i.test(text)) return false;
-      if (/transparent|blank|loading|placeholder|spacer|1x1/i.test(text)) return false;
+      if (/transparent|blank|loading|placeholder|spacer|1x1|imglazyload|spaceball/i.test(text)) return false;
       // Taobao platform separators/badges, not seller detail art.
       if (/!!600000000\d+-2-tps-/i.test(text)) return false;
 
@@ -1394,6 +1394,135 @@
     };
   }
 
+  var RECOMMEND_ZONE_RE = /recommend|guessulike|guess-like|guesslike/i;
+  function insideRecommendZone(el) {
+    for (var n = el && el.parentElement; n; n = n.parentElement) {
+      var cls = (n.getAttribute && n.getAttribute("class")) || "";
+      if (RECOMMEND_ZONE_RE.test(cls)) return true;
+    }
+    return false;
+  }
+
+  function reviewText(value, max) {
+    if (value == null) return "";
+    return String(value).replace(/\s+/g, " ").trim().slice(0, max);
+  }
+
+  function reviewCount(value) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    var text = reviewText(value, 40).replace(/,/g, "");
+    var match = text.match(/-?\d+(?:\.\d+)?/);
+    if (!match) return null;
+    var count = Number(match[0]);
+    return Number.isFinite(count) ? count : null;
+  }
+
+  function taobaoSourceReviews(doc, iceRes) {
+    var rate = iceRes && iceRes.rateVO;
+    if (rate && typeof rate === "object") {
+      var tags = (Array.isArray(rate.keywords) ? rate.keywords : [])
+        .map(function (item) {
+          if (!item || typeof item !== "object") return null;
+          var text = reviewText(item.title, 40);
+          if (!text) return null;
+          return { text: text, count: reviewCount(item.count) };
+        })
+        .filter(Boolean)
+        .slice(0, 12);
+
+      var groupItems =
+        rate.group && Array.isArray(rate.group.items) ? rate.group.items : [];
+      var samples = groupItems
+        .map(function (item) {
+          if (!item || typeof item !== "object") return null;
+          var text = reviewText(item.content, 300);
+          if (!text) return null;
+          var sku = reviewText(item.skuInfo, 100).replace(/^已购\s*/, "");
+          sku = reviewText(sku, 80);
+          return {
+            text: text,
+            sku: sku || null,
+            date: reviewText(item.dateTime, 20) || null
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+
+      var signals = [];
+      var endorse =
+        iceRes &&
+        iceRes.itemEndorseVO &&
+        Array.isArray(iceRes.itemEndorseVO.endorseList)
+          ? iceRes.itemEndorseVO.endorseList
+          : [];
+      endorse.forEach(function (item) {
+        var list = item && Array.isArray(item.textList) ? item.textList : [];
+        list.forEach(function (value) {
+          var text = reviewText(value, 40);
+          if (text && signals.length < 6) signals.push(text);
+        });
+      });
+
+      var out = {
+        source: "ice",
+        total_text: reviewText(rate.totalCount, 20) || null,
+        good_rate_text:
+          reviewText(rate.favorableRate && rate.favorableRate.rateText, 40) || null,
+        tags: tags,
+        samples: samples,
+        signals: signals
+      };
+      if (
+        !out.total_text &&
+        !out.good_rate_text &&
+        !out.tags.length &&
+        !out.samples.length &&
+        !out.signals.length
+      ) {
+        return null;
+      }
+      return out;
+    }
+
+    var root =
+      doc && doc.querySelector ? doc.querySelector("[class*='Comments--']") : null;
+    if (!root) return null;
+
+    var rateEl = root.querySelector("[class*='rateTextTitle--']");
+    var domTags = Array.prototype.slice
+      .call(root.querySelectorAll("[class*='imprItem--']"))
+      .map(function (item) {
+        var countEl = item.querySelector("[class*='imprItemCount--']");
+        var countText = countEl ? reviewText(countEl.textContent, 40) : "";
+        var full = reviewText(item.textContent, 100);
+        var text = countText ? reviewText(full.replace(countText, ""), 40) : reviewText(full, 40);
+        if (!text) return null;
+        return { text: text, count: reviewCount(countText) };
+      })
+      .filter(Boolean)
+      .slice(0, 12);
+
+    var domSamples = Array.prototype.slice
+      .call(root.querySelectorAll("[class*='Comment--'] [class*='content--']"))
+      .map(function (item) {
+        var text = reviewText(item.textContent, 300);
+        return text ? { text: text, sku: null, date: null } : null;
+      })
+      .filter(Boolean)
+      .slice(0, 5);
+
+    var domOut = {
+      source: "dom",
+      total_text: null,
+      good_rate_text: rateEl ? reviewText(rateEl.textContent, 40) || null : null,
+      tags: domTags,
+      samples: domSamples,
+      signals: []
+    };
+    if (!domOut.good_rate_text && !domOut.tags.length && !domOut.samples.length) return null;
+    return domOut;
+  }
+
   function captureTaobao(doc, baseHref, host, selectorsOverride) {
     var href = baseHref || "https://item.taobao.com/";
     var h = host || "";
@@ -1656,7 +1785,9 @@
     );
     if (!main_image_urls.length) warnings.push("main_image_urls: 未抓到");
 
-    var detailNodes = allMatchesAcrossSelectors(doc, S.detailImages);
+    var detailNodes = allMatchesAcrossSelectors(doc, S.detailImages).filter(function (el) {
+      return !insideRecommendZone(el);
+    });
     var detailDomUrls = dom.uniqueUrls(
       detailNodes.map(function (el) {
         return detailImageUrlFromEl(el, href, dom);
@@ -1741,6 +1872,7 @@
       variants_flat: variants_flat,
       main_image_urls: main_image_urls,
       detail_image_urls: detail_image_urls,
+      source_reviews: taobaoSourceReviews(doc, iceRes) || undefined,
       detail_debug: detail_debug,
       video_urls: video_urls,
       params: params,
@@ -1752,6 +1884,7 @@
   NestoryCap.adapters = NestoryCap.adapters || {};
   NestoryCap.adapters.taobao = captureTaobao;
   NestoryCap.adapters.taobaoSkuNodes = taobaoSkuNodes;
+  NestoryCap.adapters.taobaoSourceReviews = taobaoSourceReviews;
   NestoryCap.adapters.taobaoReadPrice = taobaoReadPrice;
   NestoryCap.adapters.taobaoIce = { parse: parseIceAppContext, res: iceResFromContext };
   NestoryCap.adapters.pricesClose = pricesClose;
@@ -1762,6 +1895,7 @@
     module.exports = {
       captureTaobao: captureTaobao,
       taobaoSkuNodes: taobaoSkuNodes,
+      taobaoSourceReviews: taobaoSourceReviews,
       taobaoReadPrice: taobaoReadPrice,
       taobaoIce: { parse: parseIceAppContext, res: iceResFromContext },
       pricesClose: pricesClose,

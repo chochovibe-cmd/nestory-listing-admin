@@ -11,6 +11,7 @@
  */
 import type { CaptureImportBody, CaptureImportRefreshed, CaptureVariantFlat } from "@/lib/import/captureTypes";
 import { isPricePlaceholderCny } from "@/lib/import/captureTypes";
+import { normalizeSourceReviews, readSourceReviews, type SourceReviews } from "@/lib/import/sourceReviews";
 import {
   WARNING_HIDDEN_VARIANT_PRICES,
   WARNING_INTERACT_NEEDS_CONFIRMATION
@@ -51,6 +52,7 @@ export type RefreshPlan = {
   variantUpdates: Array<{ id: string; patch: Record<string, unknown> }>;
   prices: number;
   stock: number;
+  reviews: boolean;
   draftPatch: { raw_capture: Record<string, unknown>; warnings?: string[]; updated_at: string } | null;
   /** "" when prices === 0 && stock === 0. */
   message: string;
@@ -79,17 +81,19 @@ export function formatRefreshMessage(input: {
   prices: number;
   stock: number;
   skipped: "published" | "confirmed" | null;
+  reviews?: boolean;
 }): string {
-  const { prices, stock, skipped } = input;
-  if (prices > 0 && stock > 0) return `已更新 ${prices} 款價格、${stock} 款庫存狀態`;
-  if (prices > 0) return `已更新 ${prices} 款價格`;
-  if (stock > 0) {
-    const base = `已更新 ${stock} 款庫存狀態`;
-    if (skipped === "published") return `${base}（已上架，價格沒動）`;
-    if (skipped === "confirmed") return `${base}（成本已確認，價格沒動）`;
-    return base;
+  const { prices, stock, skipped, reviews = false } = input;
+  let base = "";
+  if (prices > 0 && stock > 0) base = `已更新 ${prices} 款價格、${stock} 款庫存狀態`;
+  else if (prices > 0) base = `已更新 ${prices} 款價格`;
+  else if (stock > 0) {
+    base = `已更新 ${stock} 款庫存狀態`;
+    if (skipped === "published") base = `${base}（已上架，價格沒動）`;
+    else if (skipped === "confirmed") base = `${base}（成本已確認，價格沒動）`;
   }
-  return "";
+  if (reviews) return base ? `${base}；買家評價摘要已更新` : "已更新買家評價摘要";
+  return base;
 }
 
 export function readPriceRefreshSkuIds(rawCapture: unknown): string[] {
@@ -106,9 +110,10 @@ export function planCaptureRefresh(input: {
   draft: RefreshDraftInput;
   variants: RefreshVariantInput[];
   flats: CaptureVariantFlat[];
+  sourceReviews?: SourceReviews | null;
   now: string;
 }): RefreshPlan {
-  const { draft, variants, flats, now } = input;
+  const { draft, variants, flats, sourceReviews, now } = input;
   const priceAllowed = !draft.shopify_product_id && !isVariantPriceConfirmed(draft.raw_capture);
 
   const variantBySku = new Map<string, RefreshVariantInput>();
@@ -174,10 +179,13 @@ export function planCaptureRefresh(input: {
 
   const priceSkippedReason: RefreshPlan["priceSkippedReason"] =
     !priceAllowed && wouldUpdate > 0 ? (draft.shopify_product_id ? "published" : "confirmed") : null;
-  const message = formatRefreshMessage({ prices, stock, skipped: priceSkippedReason });
+  const reviews =
+    !!sourceReviews &&
+    JSON.stringify(readSourceReviews(draft.raw_capture)) !== JSON.stringify(sourceReviews);
+  const message = formatRefreshMessage({ prices, stock, skipped: priceSkippedReason, reviews });
 
-  if (prices === 0 && stock === 0) {
-    return { priceAllowed, priceSkippedReason, variantUpdates, prices, stock, draftPatch: null, message };
+  if (prices === 0 && stock === 0 && !reviews) {
+    return { priceAllowed, priceSkippedReason, variantUpdates, prices, stock, reviews, draftPatch: null, message };
   }
 
   const prevRaw = isPlainObject(draft.raw_capture) ? draft.raw_capture : {};
@@ -222,14 +230,20 @@ export function planCaptureRefresh(input: {
     }
   }
 
+  const prevPayload = isPlainObject(prevRaw.payload) ? prevRaw.payload : {};
+  const nextRaw = reviews
+    ? { ...prevRaw, payload: { ...prevPayload, source_reviews: sourceReviews }, server }
+    : { ...prevRaw, server };
+
   return {
     priceAllowed,
     priceSkippedReason,
     variantUpdates,
     prices,
     stock,
+    reviews,
     draftPatch: {
-      raw_capture: { ...prevRaw, server },
+      raw_capture: nextRaw,
       ...(nextWarnings ? { warnings: nextWarnings } : {}),
       updated_at: now
     },
@@ -269,9 +283,10 @@ export async function refreshExistingCaptureDraft(input: {
       draft: draft as RefreshDraftInput,
       variants: variants as RefreshVariantInput[],
       flats: Array.isArray(input.body.variants_flat) ? input.body.variants_flat : [],
+      sourceReviews: normalizeSourceReviews(input.body.source_reviews),
       now: input.now ?? new Date().toISOString()
     });
-    if (plan.prices === 0 && plan.stock === 0) return null;
+    if (plan.prices === 0 && plan.stock === 0 && !plan.reviews) return null;
 
     for (const update of plan.variantUpdates) {
       const { error } = await db.from("product_variants").update(update.patch).eq("id", update.id);

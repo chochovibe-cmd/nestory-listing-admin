@@ -99,7 +99,8 @@ const scripts = [
   "scripts/verify-stock.mjs",
   "scripts/verify-sync-fix.mjs",
   "scripts/verify-sync-keep-media.mjs",
-  "scripts/verify-capture-4a.mjs"
+  "scripts/verify-capture-4a.mjs",
+  "scripts/verify-capture-scroll.mjs"
 ];
 
 for (const script of scripts) {

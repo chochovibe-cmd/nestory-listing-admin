@@ -15,8 +15,9 @@
 | 包 | 狀態 | 下一步 |
 |---|---|---|
 | 4a CAPTURE-REVIEWS＋FILTER（GPT 施工，`gpt/capture-4a`） | 規格＋驗收測試＋素材在 `docs/capture-4a-spec`：`docs/CAPTURE-4A-施工規格-2026-10-25.md`、`scripts/verify-capture-4a.mjs`（29 項，Claude 參考實作已跑綠）。內容：外掛收頁面已載入的買家評價摘要（存 raw_capture、卡片唯讀顯示，不進 AI 文案）、拿掉每款都一樣的款式軸、排除店家共用宣傳圖（可加回）、詳情圖不收推薦區／載入空白圖、圖片警告亂碼修回、外掛 0.2.2。問大家：新版電腦頁已沒有 → 不做。不需要 migration | GPT 先合併 PR #75 → 施工 → Draft PR → 等 Claude 審 PASS → 合併上線 → Claude 覆蓋外掛＋實機驗收＋唯讀清查舊商品身上的宣傳圖 |
+| 4a-2 CAPTURE-SCROLL（GPT，`gpt/capture-scroll`，**等 4a 上線後開工**） | 規格＋測試＋已寫好的 `extension/lib/autoScroll.js` 在 `docs/capture-scroll-spec`：擷取淘寶／天貓前先自動捲到底再捲回（原 4a 誤刪項），外掛 0.2.3 | 4a 上線 → GPT 開工 → Claude 審 → 上線 → 覆蓋外掛＋實機看 auto_scroll |
 
-下一包候選（指揮決定）：4a 施工中 → **5 PRICING（下一包）** → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。SYNC-ROLLOUT（65 件）與 SYNC-KEEP-MEDIA 10-25 全部完成（細節見總表）。小修合集待收：(1) 商品庫搜尋打全形「｜」找不到標題裡的半形「 | 」；(2) 生成失敗訊息是整段英文 → OpenAI 429 `insufficient_quota`／`credit_balance_exhausted` 改顯示「OpenAI 額度用完了，請到 OpenAI 儲值後按重生」，其他 429 顯示「OpenAI 太忙，稍後按重生」（10-22 老闆遇到 3 筆，已請老闆儲值）。
+下一包候選（指揮決定）：4a 等上線 → 4a-2 CAPTURE-SCROLL → 4a-3 小修合集-1（詳情圖一鍵移除等，規格待寫）→ **5 PRICING** → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。SYNC-ROLLOUT（65 件）與 SYNC-KEEP-MEDIA 10-25 全部完成（細節見總表）。小修合集與 10-25 稽核補登的漏項都已在總表指定歸屬（總表第六節）。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。

@@ -156,11 +156,11 @@ await check("A7 整頁擷取：captureTaobao 與 buildCapturePayload 都帶 sour
   assert.equal(body.source_reviews.total_text, "200+");
 });
 
-await check("A8 外掛版本 0.2.2、CAPTURE_BUILD 更新、不新增權限", () => {
+await check("A8 外掛版本（4a-2 起 0.2.3）、CAPTURE_BUILD 更新、不新增權限", () => {
   const manifest = JSON.parse(read("extension/manifest.json"));
-  assert.equal(manifest.version, "0.2.2");
+  assert.equal(manifest.version, "0.2.3");
   assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage"]);
-  assert.equal(Cap.CAPTURE_BUILD, "capture-20261025-4a");
+  assert.equal(Cap.CAPTURE_BUILD, "capture-20261025-scroll");
   const taobao = read("extension/lib/adapters/taobao.js");
   const start = taobao.indexOf("function taobaoSourceReviews");
   assert.ok(start > 0, "taobao.js 要有 function taobaoSourceReviews");

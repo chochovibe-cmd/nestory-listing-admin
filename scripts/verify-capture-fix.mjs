@@ -462,10 +462,10 @@ await check("CF15 background.js / selectors.js / manifest.json", () => {
   assert.ok(bg.includes("json.message"));
   assert.ok(bg.includes("款式全部來源售完"));
   assert.ok(bg.includes("頁面文字對不上"));
-  assert.ok(read("extension/lib/selectors.js").includes('CAPTURE_BUILD = "capture-20261025-4a"'));
+  assert.ok(read("extension/lib/selectors.js").includes('CAPTURE_BUILD = "capture-20261025-scroll"'));
   const manifestText = read("extension/manifest.json");
   const manifest = JSON.parse(manifestText);
-  assert.equal(manifest.version, "0.2.2");
+  assert.equal(manifest.version, "0.2.3");
   assert.deepEqual(manifest.permissions, ["activeTab", "scripting", "storage"]);
   assert.equal(manifest.content_scripts, undefined);
   // No `world` setting anywhere (e.g. "world": "MAIN"). The host pattern *://world.taobao.com/* is

@@ -7,7 +7,7 @@
 
 ## 1. 線上狀態
 - 主線：`origin/handoff/20261008-golive-spec` @ `d8e5723`（10-25：#75 文件、#76 4a CAPTURE-REVIEWS＋FILTER、#77 4a-2 CAPTURE-SCROLL；之前 #61–#74 見總表）。
-- 正式站：`dpl_4BxsSapWJbtwpdtUByaTjW7sEsMJ`（d8e5723；GPT 驗 `/login` 200＋githubCommitSha）；回退點 `dpl_4BQKHnrzhbL117Dp93uPq8gcbeXX`（81df9ca，4a）→ `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`（247cdcb）→ `dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）→ `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
+- 正式站：`dpl_4BxsSapWJbtwpdtUByaTjW7sEsMJ`（d8e5723；GPT 驗 `/login` 200＋githubCommitSha）；回退點 `dpl_4BQKHnrzhbL117Dp93uPq8gcbeXX`（81df9ca，4a）→ `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`（247cdcb）→ `dpl_2W3xMYEd1WbEPc1yQfaULVKdYEVn`（ab5db34）→ `dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）→ `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
 - 外掛：老闆 Chrome 載入的 `C:/Users/s2491/Documents/Nestory外掛-0.2.0` 資料夾＝0.2.3（＝d8e5723 的 `extension/`，build `capture-20261025-scroll`；舊版備份 `Nestory外掛-0.2.2-備份`、`-0.2.1-備份`）。
 - 本機這個資料夾停在舊分支 `codex/nestory-v0.1-safety-skeleton`（GitHub 預設分支也還是它）→ 看程式先 `git fetch`，一律以 origin/handoff 為準。網址、專案代號、環境變數名稱見 `AI_START_HERE.md` §3。
 

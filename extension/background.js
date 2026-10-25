@@ -13,6 +13,7 @@ var CAPTURE_FILES = [
   "lib/adapters/shopee.js",
   "lib/adapters/taobao.js",
   "lib/interactSku.js",
+  "lib/autoScroll.js",
   "lib/buildPayload.js",
   "content/capture.js"
 ];

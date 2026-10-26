@@ -15,10 +15,11 @@
 | 包 | 狀態 | 下一步 |
 |---|---|---|
 | 4a CAPTURE-REVIEWS＋FILTER／4a-2 CAPTURE-SCROLL（GPT） | ✅ 10-25 上線（#76、#77）。實機：天貓新抓 799eaec6 → 自動捲動 24 步 6.5 秒（頁面 2.6 萬像素、推薦區無限長，到 6 秒上限停）、19 張詳情圖、排除 2 張 HOLLY 共用宣傳圖、評價摘要（dom）；卡片兩個新區塊 Claude 實看正常。Shopify 66 件已上架商品唯讀掃描：沒有掛宣傳圖 | 測試 A 原因已查（10-26）：862841d8 那次重抓在 10-25 17:18，4a 新版 17:35 才上線（dpl_4BQKHnrz… ready 09:35 UTC），舊伺服器只更新了 4 款庫存。待老闆用外掛 0.2.3 重抓一次，Claude 查資料庫確認 `source_reviews` 寫入 |
-| 4a-3 小修合集-1（GPT，`gpt/4a3-small-fixes`） | 10-26 規格完成：`docs/4A3-小修合集-1-施工規格-2026-10-26.md`＋`scripts/verify-4a3.mjs`（24 項；10-26 依老闆回覆把「詳情圖開關」改成「商品描述放哪幾張詳情圖（可多選）」；Claude 參考實作 24/24＋verify:all＋tsc 綠，patch 在指揮 session scratchpad `ref-4a3-v2.patch`）。分支 `docs/4a3-spec`（含 docs/commander-20261025） | GPT 先合併 docs/4a3-spec → 施工 → Draft PR → Claude 審 |
-| 4e STORAGE-SLIM（排在 4a-3 後、5 PRICING 前） | Supabase 免費 1GB：已用 450MB，10 月 +330MB，約 12 月上旬滿；放進描述的詳情圖要先搬 Shopify Files 才能清；見總表 4e | 4a-3 上線後 Claude 寫規格 |
+| 4a-3 小修合集-1（GPT，`gpt/4a3-small-fixes`） | 10-26 規格完成：`docs/4A3-小修合集-1-施工規格-2026-10-26.md`＋`scripts/verify-4a3.mjs`（**縮小版 8 項**：只剩搜尋全形＋429 中文；詳情圖移到 4e、文案參考圖移到 4f；Claude 參考實作 8/8＋verify:all＋tsc 綠，patch 在指揮 session scratchpad `ref-4a3-v3.patch`）。分支 `docs/4a3-spec`（含 docs/commander-20261025） | GPT 先合併 docs/4a3-spec → 施工 → Draft PR → Claude 審 |
+| 4e 詳情圖上架＋清空間 | 老闆 10-26 定案：沒刪的詳情圖全部放進描述（一個開關，關＝都不放）、要同時搬 Shopify Files；舊商品不主動同步；Supabase 450MB／1GB；見總表 4e | 新指揮對話寫規格 |
+| 4f 文案參考圖 | 勾圖給 AI 讀字，取代規格圖按鈕；見總表 4f | 4e 之後 |
 
-下一包候選（指揮決定）：**4a-3 小修合集-1（施工中）** → 4e STORAGE-SLIM → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。10-25 老闆定案（4a-3／COPY-A 用）：①詳情圖「一鍵」做成**全部不上架（保留在工具給 AI 讀字）**，不是刪除，單張 ✕ 刪除照舊（**10-26 老闆改：要能挑多張放進描述**，見 4a-3 規格 §2）；②COPY-A「文案參考圖」：AI 先自動挑字最多的圖，老闆可勾選覆蓋（新勾選，不沿用「規格圖」標記＝去簡體字處理）；③舊商品描述內嵌的 Supabase 圖**不搬**，只查容量，快滿或特別佔空間才處理；④可順手評估：自動捲動在推薦區無限長的頁面會跑滿 6 秒，可改成捲過「图文详情／用户评价」區就停。漏項歸屬見總表第六節。
+下一包候選（指揮決定）：**4a-3 小修合集-1（施工中）** → 4e 詳情圖上架＋清空間 → 4f 文案參考圖 → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。10-25 老闆定案（4a-3／COPY-A 用）：①詳情圖「一鍵」做成**全部不上架（保留在工具給 AI 讀字）**，不是刪除，單張 ✕ 刪除照舊（**10-26 老闆改**：沒刪的詳情圖**全部**放進描述，開關關＝都不放 → 4e）；②「文案參考圖」：AI 先自動挑，老闆可勾選覆蓋，**10-26：取代沒作用的「規格圖」按鈕** → 4f；③舊商品描述內嵌的 Supabase 圖**不搬**（10-26：已上架商品不主動同步），只查容量，快滿或特別佔空間才處理；④可順手評估：自動捲動在推薦區無限長的頁面會跑滿 6 秒，可改成捲過「图文详情／用户评价」區就停。漏項歸屬見總表第六節。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。

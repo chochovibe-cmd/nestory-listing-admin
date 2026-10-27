@@ -3,7 +3,7 @@ import {
   formatPlainTextAsHtml,
   htmlFaqToPlainText
 } from "@/lib/contentGenerator/htmlFormat";
-import { appendDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/descriptionEmbed";
+import { appendDescriptionImagesIfEnabled } from "@/lib/contentGenerator/descriptionDetailImages";
 import { saleStatusNoticeHtml } from "@/lib/contentGenerator/saleStatusNotice";
 import { repairSpecText } from "@/lib/contentGenerator/copyFormatRepair";
 import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
@@ -96,7 +96,9 @@ function buildProductMetafields(draft: ShopifyPublishDraft): { namespace: string
 export function buildShopifyProductPayload(
   draft: ShopifyPublishDraft,
   mode: PublishMode,
-  internalLinkMap: InternalLinkMap = {}
+  internalLinkMap: InternalLinkMap = {},
+  /** 4e: sync passes Shopify's current first gallery image for the description's main image. */
+  options: { descriptionMainImageUrl?: string | null } = {}
 ) {
   const sortedImages = (draft.product_images ?? [])
     .filter(isShopifyProductMediaImage)
@@ -166,10 +168,12 @@ export function buildShopifyProductPayload(
   const product = {
     title: draft.title_zh || draft.taobao_title || "Nestory product",
     descriptionHtml:
-      appendDescriptionEmbedIfEnabled(
+      appendDescriptionImagesIfEnabled(
         mainDescriptionHtml,
+        draft.image_flags,
         draft.product_images,
-        draft.title_zh || draft.taobao_title
+        draft.title_zh || draft.taobao_title,
+        { mainImageUrl: options.descriptionMainImageUrl }
       ) +
       buildInternalLinkHtml(draft.ip_name, internalLinkMap) +
       buildFaqJsonLdScriptTag(draft.generated_faq_html),

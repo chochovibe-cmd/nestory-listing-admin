@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
 import { Button } from "@/components/ui/Button";
 import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
+import { pickDescriptionDetailRows } from "@/lib/images/descriptionDetailRows";
 import type { ExcludedDetailImage } from "@/lib/import/captureSharedImages";
 import {
   imageSlotLabel,
@@ -14,6 +15,8 @@ import type { ImageProcessIntent, ProductImage } from "@/types/domain";
 
 /** S2: 站③ 圖片分頁（可檢視／標記）— 從 ResultCard 展開區拆出。站② 仍用 Station2ImagePanel。 */
 export function ResultCardImagesPanel({
+  descriptionImagesBusy,
+  descriptionImagesOn,
   imageMarks,
   pipelineImages,
   fadingImageIds,
@@ -25,8 +28,11 @@ export function ResultCardImagesPanel({
   onRestoreExcludedImage,
   onRemoveImage,
   onSetProcessIntent,
+  onToggleDescriptionImages,
   onToggleSpec
 }: {
+  descriptionImagesBusy: boolean;
+  descriptionImagesOn: boolean;
   imageMarks: ProductImage[];
   pipelineImages: ProductImage[];
   fadingImageIds: Set<string>;
@@ -38,6 +44,7 @@ export function ResultCardImagesPanel({
   onRestoreExcludedImage: (index: number) => void;
   onRemoveImage: (image: ProductImage) => void;
   onSetProcessIntent: (image: ProductImage, intent: ImageProcessIntent) => void;
+  onToggleDescriptionImages: (enabled: boolean) => void;
   onToggleSpec: (image: ProductImage) => void;
 }) {
   const [excludedOpen, setExcludedOpen] = useState(false);
@@ -51,6 +58,8 @@ export function ResultCardImagesPanel({
   }
 
   const shopifyMainId = pickShopifyMainImage(imageMarks)?.id ?? null;
+  // 4e: same order as the description — generated_detail first, then detail.
+  const descriptionDetailImages = pickDescriptionDetailRows(imageMarks);
 
   return (
     <div className="rc-tabpanel" role="tabpanel">
@@ -122,10 +131,31 @@ export function ResultCardImagesPanel({
             })}
           </div>
         ) : null}
-        {imageMarks.some((image) => image.image_type === "detail") ? (
+        {descriptionDetailImages.length > 0 ? (
+          <div className="s2-compose-row rc-desc-images-row" style={{ marginTop: 10, marginBottom: 0 }}>
+            <div className="s2-compose-copy">
+              <span className="s2-compose-title">詳情圖放進商品描述</span>
+              <span className="s2-compose-hint">
+                {descriptionImagesOn
+                  ? `發布／同步時，這 ${descriptionDetailImages.length} 張會放進商品描述（主圖排最前）；不要的按 ✕`
+                  : "已關閉：商品描述不放圖，詳情圖留在工具給 AI 讀字"}
+              </span>
+            </div>
+            <label className="toggle" title={descriptionImagesOn ? "點一下關閉" : "點一下開啟"}>
+              <input
+                aria-label="詳情圖放進商品描述"
+                checked={descriptionImagesOn}
+                disabled={descriptionImagesBusy}
+                onChange={(event) => onToggleDescriptionImages(event.target.checked)}
+                type="checkbox"
+              />
+              <span className="toggle-slider" />
+            </label>
+          </div>
+        ) : null}
+        {descriptionDetailImages.length > 0 ? (
           <div className="thumbs" style={{ marginTop: 10 }}>
-            {imageMarks
-              .filter((image) => image.image_type === "detail")
+            {descriptionDetailImages
               .map((image) => (
                 <div
                   className={`thumb-wrap${fadingImageIds.has(image.id) ? " is-fading" : ""}`}
@@ -133,7 +163,7 @@ export function ResultCardImagesPanel({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    alt={image.alt_text ?? "詳情圖"}
+                    alt={image.alt_text ?? (image.image_type === "generated_detail" ? "繁中合成詳情圖" : "詳情圖")}
                     src={
                       image.processed_file_url ??
                       image.original_file_url ??

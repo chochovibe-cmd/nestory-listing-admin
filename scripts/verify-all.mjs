@@ -101,7 +101,9 @@ const scripts = [
   "scripts/verify-sync-keep-media.mjs",
   "scripts/verify-capture-4a.mjs",
   "scripts/verify-capture-scroll.mjs",
-  "scripts/verify-4a3.mjs"
+  "scripts/verify-4a3.mjs",
+  // 4e DETAIL-LISTING: detail images in the description via Shopify Files.
+  "scripts/verify-4e.mjs"
 ];
 
 for (const script of scripts) {

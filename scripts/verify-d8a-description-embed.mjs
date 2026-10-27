@@ -188,7 +188,8 @@ await check("module files exist", () => {
 
 await check("payload wires append after formatPlainTextAsHtml, before internal link", () => {
   const src = read("src/lib/shopify/payload.ts");
-  assert.ok(src.includes("appendDescriptionEmbedIfEnabled"), "import/call");
+  // 4e: the Shopify payload now uses the detail-images builder (same marker, same slot).
+  assert.ok(src.includes("appendDescriptionImagesIfEnabled"), "import/call");
   assert.ok(src.includes("formatPlainTextAsHtml"), "body html");
   assert.ok(src.includes("buildInternalLinkHtml"), "internal link kept");
   assert.ok(src.includes("buildFaqJsonLdScriptTag"), "faq ld kept");
@@ -196,7 +197,7 @@ await check("payload wires append after formatPlainTextAsHtml, before internal l
   const descBlockStart = src.indexOf("descriptionHtml:");
   assert.ok(descBlockStart > 0, "descriptionHtml field");
   const descBlock = src.slice(descBlockStart, descBlockStart + 600);
-  const embedIdx = descBlock.indexOf("appendDescriptionEmbedIfEnabled");
+  const embedIdx = descBlock.indexOf("appendDescriptionImagesIfEnabled");
   const linkIdx = descBlock.indexOf("buildInternalLinkHtml");
   const faqIdx = descBlock.indexOf("buildFaqJsonLdScriptTag");
   assert.ok(embedIdx >= 0 && linkIdx > embedIdx, "embed before internal link in descriptionHtml");

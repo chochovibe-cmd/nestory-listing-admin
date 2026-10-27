@@ -90,7 +90,7 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
   return fetched.bytes;
 }
 
-function guessMimeAndFilename(
+export function guessMimeAndFilename(
   sourceUrl: string,
   imageId: string
 ): { mimeType: string; filename: string } {

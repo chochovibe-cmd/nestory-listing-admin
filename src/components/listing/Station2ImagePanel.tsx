@@ -12,7 +12,7 @@ import {
 import { UPLOAD_CONCURRENCY, buildUploadBlobs } from "@/lib/images/clientImageResize";
 import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
 import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
-import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
+import { isDescriptionDetailImagesEnabled, isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
 import {
   imageSlotLabel,
   patchForProcessIntentPick,
@@ -493,7 +493,9 @@ export function Station2ImagePanel({
             ? "主圖標記與排序（拖曳縮圖可改順序）"
             : subtab === "spec"
               ? "規格圖（在主圖標「規格圖」後會出現在此）"
-              : "詳情圖（供 AI 參考，不上架）"}
+              : isDescriptionDetailImagesEnabled(imageFlags)
+                ? "詳情圖（會放進商品描述，也給 AI 讀字；開關在審核卡「圖片」分頁）"
+                : "詳情圖（這件設定不放進商品描述，只給 AI 讀字）"}
         </div>
 
         {subtab === "main" && shopifyMainIsSpec ? (

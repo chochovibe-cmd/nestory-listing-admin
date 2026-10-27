@@ -23,6 +23,13 @@ import {
   toolValuesFromDesired
 } from "@/lib/shopify/reconcileFields";
 import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
+import { isDescriptionEmbedEnabled } from "@/lib/contentGenerator/descriptionEmbed";
+import { firstShopifyImageUrl } from "@/lib/contentGenerator/descriptionDetailImages";
+import { isDescriptionDetailImagesEnabled } from "@/lib/images/detailCompose/flags";
+import {
+  applyDescriptionImageCdnUrls,
+  uploadDescriptionImagesToShopifyFiles
+} from "@/lib/images/uploadDescriptionImages";
 import { videoIdentityKey } from "@/lib/media/videoUrls";
 import {
   isRealShopifyProductId,
@@ -60,6 +67,8 @@ const METAFIELD_LABELS: Record<(typeof NESTORY_MANAGED_METAFIELD_KEYS)[number], 
 
 type SyncDeps = {
   callGraphQL?: ShopifyAdminGraphQLCaller;
+  /** 4e: inject for tests. Without it, an injected callGraphQL (test harness) skips Files uploads. */
+  uploadDescriptionImages?: typeof uploadDescriptionImagesToShopifyFiles;
 };
 
 export type SyncShopifyProductInput = {
@@ -602,7 +611,8 @@ export function buildSyncDesiredState(input: {
   const built = buildShopifyProductPayload(
     { ...draft, product_images: draft.product_images ?? [], product_variants: variantRows },
     "draft",
-    internalLinkMap
+    internalLinkMap,
+    { descriptionMainImageUrl: firstShopifyImageUrl(before.media?.nodes) }
   ) as any;
   const core = desiredCore(
     productId,
@@ -727,6 +737,25 @@ export async function syncShopifyProduct(
       error: `G4 live test only permits a remote DRAFT; Shopify returned ${before.status}`,
       code: "unsafe_remote_status"
     };
+  }
+
+  // 4e: detail images go to Shopify Files first so the description embeds CDN URLs only.
+  // Main / variant rows are untouched here: changing their URL would re-upload product media.
+  const uploadDescriptionImages =
+    deps.uploadDescriptionImages ?? (deps.callGraphQL ? null : uploadDescriptionImagesToShopifyFiles);
+  const descriptionImageWarnings: string[] = [];
+  if (
+    uploadDescriptionImages &&
+    isDescriptionEmbedEnabled() &&
+    isDescriptionDetailImagesEnabled(draft.image_flags)
+  ) {
+    const uploaded = await uploadDescriptionImages({
+      serviceSupabase,
+      draftId,
+      images: draft.product_images ?? []
+    });
+    draft.product_images = applyDescriptionImageCdnUrls(draft.product_images, uploaded.cdnById);
+    descriptionImageWarnings.push(...uploaded.warnings);
   }
 
   const desired = buildSyncDesiredState({
@@ -1234,7 +1263,10 @@ export async function syncShopifyProduct(
       ok: true,
       productId,
       remoteUpdatedAt: after.updatedAt,
-      warnings: keepShopifyMedia ? [KEEP_SHOPIFY_MEDIA_WARNING] : []
+      warnings: [
+        ...(keepShopifyMedia ? [KEEP_SHOPIFY_MEDIA_WARNING] : []),
+        ...descriptionImageWarnings
+      ]
     };
   } catch (error) {
     return fail("sync_exception", error);

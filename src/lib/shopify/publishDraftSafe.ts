@@ -1,6 +1,9 @@
 import { notifyMake } from "@/lib/notifications/make";
 import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
 import { prepareImagesForPublish } from "@/lib/images/prepareImagesForPublish";
+import { isDescriptionEmbedEnabled } from "@/lib/contentGenerator/descriptionEmbed";
+import { isDescriptionDetailImagesEnabled } from "@/lib/images/detailCompose/flags";
+import { uploadDescriptionImagesToShopifyFiles } from "@/lib/images/uploadDescriptionImages";
 import {
   hasUnconfirmedPlaceholderCny,
   MISSING_COST_BLOCK_MESSAGE,
@@ -75,6 +78,8 @@ type PublishDraftDeps = {
   /** Inject for tests: clock + sleep used by the variant-image READY wait. */
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /** 4e: inject for tests. Without it, an injected callGraphQL (test harness) skips Files uploads. */
+  uploadDescriptionImages?: typeof uploadDescriptionImagesToShopifyFiles;
 };
 
 /** Variant-image binding gives up waiting this long after the publish request started (60s budget). */
@@ -595,10 +600,26 @@ export async function publishDraft(
   let draftForPayload = draft;
   if (!mockMode) {
     const prep = await prepareImagesForPublish({ serviceSupabase, draftId: id });
-    if (prep.warnings.length) {
+    // 4e: detail images → Shopify Files so the description embeds CDN URLs only.
+    const uploadDescriptionImages =
+      deps.uploadDescriptionImages ?? (deps.callGraphQL ? null : uploadDescriptionImagesToShopifyFiles);
+    const descriptionImageWarnings: string[] = [];
+    if (
+      uploadDescriptionImages &&
+      isDescriptionEmbedEnabled() &&
+      isDescriptionDetailImagesEnabled(draft.image_flags)
+    ) {
+      const uploaded = await uploadDescriptionImages({
+        serviceSupabase,
+        draftId: id,
+        images: draft.product_images ?? []
+      });
+      descriptionImageWarnings.push(...uploaded.warnings);
+    }
+    if (prep.warnings.length || descriptionImageWarnings.length) {
       const merged = [
         ...(Array.isArray(draft.warnings) ? draft.warnings : []),
-        ...prep.warnings.map((warning) => `發布前圖處理：${warning}`)
+        ...[...prep.warnings, ...descriptionImageWarnings].map((warning) => `發布前圖處理：${warning}`)
       ].slice(-30);
       await serviceSupabase.from("product_drafts").update({ warnings: merged }).eq("id", id);
     }

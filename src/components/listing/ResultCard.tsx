@@ -171,6 +171,10 @@ import { ResultCardTagsPanel } from "@/components/listing/result-card/ResultCard
 import { ResultCardSeoPanel } from "@/components/listing/result-card/ResultCardSeoPanel";
 import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCardImagesPanel";
 import {
+  isDescriptionDetailImagesEnabled,
+  mergeDescriptionDetailImagesFlag
+} from "@/lib/images/detailCompose/flags";
+import {
   ShopifySyncControls,
   ShopifySyncStatusChip
 } from "@/components/listing/ShopifySyncControls";
@@ -414,6 +418,8 @@ export function ResultCard({
   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
   /** SYN-1: local image_flags so 生成詳情圖 toggle stays after write without full refresh */
   const [draftImageFlags, setDraftImageFlags] = useState<unknown>(draft.image_flags);
+  /** 4e: 詳情圖放進商品描述 switch write in flight */
+  const [descriptionImagesBusy, setDescriptionImagesBusy] = useState(false);
   /** UX-H T49: soft-remove fade on delete image */
   const [fadingImageIds, setFadingImageIds] = useState<Set<string>>(() => new Set());
   /** IMAGE-INTEGRITY: variant-bound image ✕ needs a second click (arm, auto-disarm ~6s). */
@@ -1106,6 +1112,28 @@ export function ResultCard({
       router.refresh();
     } finally {
       setComboSaving(false);
+    }
+  }
+
+  // 4e: 詳情圖放進商品描述 (image_flags.description_detail_images, default on). Merge-only write.
+  async function setDescriptionImages(enabled: boolean) {
+    if (descriptionImagesBusy) return;
+    setDescriptionImagesBusy(true);
+    try {
+      const next = mergeDescriptionDetailImagesFlag(draftImageFlags, enabled);
+      const { error } = await supabase
+        .from("product_drafts")
+        .update({ image_flags: next })
+        .eq("id", draft.id);
+      if (error) {
+        showToast(`儲存失敗：${error.message}`, "error");
+        return;
+      }
+      setDraftImageFlags(next);
+      showToast(enabled ? "詳情圖會放進商品描述" : "詳情圖不放進商品描述", "success");
+      await markShopifyDirty();
+    } finally {
+      setDescriptionImagesBusy(false);
     }
   }
 
@@ -2092,8 +2120,13 @@ export function ResultCard({
       setFadingImageIds((prev) => new Set(prev).add(image.id));
       // The helper itself refuses a variant-bound image (blockedByVariants) unless armed, and the
       // 250ms fade runs alongside the delete instead of before it. Storage cleanup is left to the background.
+      // 4e: a product already on Shopify keeps its Supabase files — the live description may still embed them.
       const [result] = await Promise.all([
-        deleteProductImages(supabase, [image.id], { unbindVariants: armed, backgroundStorageCleanup: true }),
+        deleteProductImages(supabase, [image.id], {
+          unbindVariants: armed,
+          backgroundStorageCleanup: true,
+          keepStorageFiles: hasRealShopifyProduct
+        }),
         new Promise((r) => window.setTimeout(r, 250))
       ]);
 
@@ -3314,7 +3347,10 @@ export function ResultCard({
             )
           ) : !isCopyStation && activeTab === "images" ? (
             <ResultCardImagesPanel
+              descriptionImagesBusy={descriptionImagesBusy}
+              descriptionImagesOn={isDescriptionDetailImagesEnabled(draftImageFlags)}
               excludedDetailImages={excludedDetailImages}
+              onToggleDescriptionImages={(enabled) => void setDescriptionImages(enabled)}
               fadingImageIds={fadingImageIds}
               imageMarks={imageMarks}
               onRestoreExcludedImage={(index) => void restoreExcludedImage(index)}

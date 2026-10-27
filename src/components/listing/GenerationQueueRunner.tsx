@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import { rememberToneForIp } from "@/lib/drafts/toneMemory";
+import { humanizeAiError } from "@/lib/drafts/aiErrorMessage";
 import {
   GENERATION_PROGRESS_EVENT,
   GENERATION_STEP_LABELS,
@@ -169,9 +170,9 @@ export function GenerationQueueRunner() {
             draftId: job.draftId,
             status: "failed",
             field: job.input.regenField ?? null,
-            error: errorText,
+            error: humanizeAiError(errorText),
           });
-          showToast(`${title}：${errorText}`, "error");
+          showToast(`${title}：${humanizeAiError(errorText)}`, "error");
           router.refresh();
           return;
         }
@@ -273,8 +274,8 @@ export function GenerationQueueRunner() {
           router.refresh();
           return;
         }
-        emitProgress(job.draftId, title, ["done", imageStep, "error", "pending"], errorText);
-        showToast(`${title}：${errorText}（可單件重試）`, "error");
+        emitProgress(job.draftId, title, ["done", imageStep, "error", "pending"], humanizeAiError(errorText));
+        showToast(`${title}：${humanizeAiError(errorText)}（可單件重試）`, "error");
         router.refresh();
         return;
       }

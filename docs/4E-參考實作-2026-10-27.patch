@@ -1,0 +1,793 @@
+diff --git a/package.json b/package.json
+index 90f5341..f57eeff 100644
+--- a/package.json
++++ b/package.json
+@@ -59,6 +59,7 @@
+     "verify:capture-fix": "node scripts/verify-capture-fix.mjs",
+     "verify:capture-4a": "node scripts/verify-capture-4a.mjs",
+     "verify:capture-scroll": "node scripts/verify-capture-scroll.mjs",
++    "verify:4e": "node scripts/verify-4e.mjs",
+     "verify:staging-fence": "node scripts/verify-staging-fence.mjs",
+     "verify:stock": "node scripts/verify-stock.mjs",
+     "verify:sync-fix": "node scripts/verify-sync-fix.mjs",
+diff --git a/scripts/verify-all.mjs b/scripts/verify-all.mjs
+index b6bfe60..ad9df8b 100644
+--- a/scripts/verify-all.mjs
++++ b/scripts/verify-all.mjs
+@@ -100,7 +100,9 @@ const scripts = [
+   "scripts/verify-sync-fix.mjs",
+   "scripts/verify-sync-keep-media.mjs",
+   "scripts/verify-capture-4a.mjs",
+-  "scripts/verify-capture-scroll.mjs"
++  "scripts/verify-capture-scroll.mjs",
++  // 4e DETAIL-LISTING: detail images in the description via Shopify Files.
++  "scripts/verify-4e.mjs"
+ ];
+ 
+ for (const script of scripts) {
+diff --git a/scripts/verify-d8a-description-embed.mjs b/scripts/verify-d8a-description-embed.mjs
+index 44eca5c..5d4a685 100644
+--- a/scripts/verify-d8a-description-embed.mjs
++++ b/scripts/verify-d8a-description-embed.mjs
+@@ -188,7 +188,8 @@ await check("module files exist", () => {
+ 
+ await check("payload wires append after formatPlainTextAsHtml, before internal link", () => {
+   const src = read("src/lib/shopify/payload.ts");
+-  assert.ok(src.includes("appendDescriptionEmbedIfEnabled"), "import/call");
++  // 4e: the Shopify payload now uses the detail-images builder (same marker, same slot).
++  assert.ok(src.includes("appendDescriptionImagesIfEnabled"), "import/call");
+   assert.ok(src.includes("formatPlainTextAsHtml"), "body html");
+   assert.ok(src.includes("buildInternalLinkHtml"), "internal link kept");
+   assert.ok(src.includes("buildFaqJsonLdScriptTag"), "faq ld kept");
+@@ -196,7 +197,7 @@ await check("payload wires append after formatPlainTextAsHtml, before internal l
+   const descBlockStart = src.indexOf("descriptionHtml:");
+   assert.ok(descBlockStart > 0, "descriptionHtml field");
+   const descBlock = src.slice(descBlockStart, descBlockStart + 600);
+-  const embedIdx = descBlock.indexOf("appendDescriptionEmbedIfEnabled");
++  const embedIdx = descBlock.indexOf("appendDescriptionImagesIfEnabled");
+   const linkIdx = descBlock.indexOf("buildInternalLinkHtml");
+   const faqIdx = descBlock.indexOf("buildFaqJsonLdScriptTag");
+   assert.ok(embedIdx >= 0 && linkIdx > embedIdx, "embed before internal link in descriptionHtml");
+diff --git a/src/components/listing/ResultCard.tsx b/src/components/listing/ResultCard.tsx
+index e963b7c..2bf91a7 100644
+--- a/src/components/listing/ResultCard.tsx
++++ b/src/components/listing/ResultCard.tsx
+@@ -170,6 +170,10 @@ import { ResultCardPricingPanel } from "@/components/listing/result-card/ResultC
+ import { ResultCardTagsPanel } from "@/components/listing/result-card/ResultCardTagsPanel";
+ import { ResultCardSeoPanel } from "@/components/listing/result-card/ResultCardSeoPanel";
+ import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCardImagesPanel";
++import {
++  isDescriptionDetailImagesEnabled,
++  mergeDescriptionDetailImagesFlag
++} from "@/lib/images/detailCompose/flags";
+ import {
+   ShopifySyncControls,
+   ShopifySyncStatusChip
+@@ -414,6 +418,8 @@ export function ResultCard({
+   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
+   /** SYN-1: local image_flags so 生成詳情圖 toggle stays after write without full refresh */
+   const [draftImageFlags, setDraftImageFlags] = useState<unknown>(draft.image_flags);
++  /** 4e: 詳情圖放進商品描述 switch write in flight */
++  const [descriptionImagesBusy, setDescriptionImagesBusy] = useState(false);
+   /** UX-H T49: soft-remove fade on delete image */
+   const [fadingImageIds, setFadingImageIds] = useState<Set<string>>(() => new Set());
+   /** IMAGE-INTEGRITY: variant-bound image ✕ needs a second click (arm, auto-disarm ~6s). */
+@@ -1109,6 +1115,28 @@ export function ResultCard({
+     }
+   }
+ 
++  // 4e: 詳情圖放進商品描述 (image_flags.description_detail_images, default on). Merge-only write.
++  async function setDescriptionImages(enabled: boolean) {
++    if (descriptionImagesBusy) return;
++    setDescriptionImagesBusy(true);
++    try {
++      const next = mergeDescriptionDetailImagesFlag(draftImageFlags, enabled);
++      const { error } = await supabase
++        .from("product_drafts")
++        .update({ image_flags: next })
++        .eq("id", draft.id);
++      if (error) {
++        showToast(`儲存失敗：${error.message}`, "error");
++        return;
++      }
++      setDraftImageFlags(next);
++      showToast(enabled ? "詳情圖會放進商品描述" : "詳情圖不放進商品描述", "success");
++      await markShopifyDirty();
++    } finally {
++      setDescriptionImagesBusy(false);
++    }
++  }
++
+   async function markShopifyDirty() {
+     if (!hasRealShopifyProduct) return;
+     setShopifySyncStatus("dirty");
+@@ -2092,8 +2120,13 @@ export function ResultCard({
+       setFadingImageIds((prev) => new Set(prev).add(image.id));
+       // The helper itself refuses a variant-bound image (blockedByVariants) unless armed, and the
+       // 250ms fade runs alongside the delete instead of before it. Storage cleanup is left to the background.
++      // 4e: a product already on Shopify keeps its Supabase files — the live description may still embed them.
+       const [result] = await Promise.all([
+-        deleteProductImages(supabase, [image.id], { unbindVariants: armed, backgroundStorageCleanup: true }),
++        deleteProductImages(supabase, [image.id], {
++          unbindVariants: armed,
++          backgroundStorageCleanup: true,
++          keepStorageFiles: hasRealShopifyProduct
++        }),
+         new Promise((r) => window.setTimeout(r, 250))
+       ]);
+ 
+@@ -3314,7 +3347,10 @@ export function ResultCard({
+             )
+           ) : !isCopyStation && activeTab === "images" ? (
+             <ResultCardImagesPanel
++              descriptionImagesBusy={descriptionImagesBusy}
++              descriptionImagesOn={isDescriptionDetailImagesEnabled(draftImageFlags)}
+               excludedDetailImages={excludedDetailImages}
++              onToggleDescriptionImages={(enabled) => void setDescriptionImages(enabled)}
+               fadingImageIds={fadingImageIds}
+               imageMarks={imageMarks}
+               onRestoreExcludedImage={(index) => void restoreExcludedImage(index)}
+diff --git a/src/components/listing/Station2ImagePanel.tsx b/src/components/listing/Station2ImagePanel.tsx
+index 576b2b6..7b4a703 100644
+--- a/src/components/listing/Station2ImagePanel.tsx
++++ b/src/components/listing/Station2ImagePanel.tsx
+@@ -12,7 +12,7 @@ import {
+ import { UPLOAD_CONCURRENCY, buildUploadBlobs } from "@/lib/images/clientImageResize";
+ import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
+ import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
+-import { isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
++import { isDescriptionDetailImagesEnabled, isGenerateDetailEnabled } from "@/lib/images/detailCompose/flags";
+ import {
+   imageSlotLabel,
+   patchForProcessIntentPick,
+@@ -493,7 +493,9 @@ export function Station2ImagePanel({
+             ? "主圖標記與排序（拖曳縮圖可改順序）"
+             : subtab === "spec"
+               ? "規格圖（在主圖標「規格圖」後會出現在此）"
+-              : "詳情圖（供 AI 參考，不上架）"}
++              : isDescriptionDetailImagesEnabled(imageFlags)
++                ? "詳情圖（會放進商品描述，也給 AI 讀字；開關在審核卡「圖片」分頁）"
++                : "詳情圖（這件設定不放進商品描述，只給 AI 讀字）"}
+         </div>
+ 
+         {subtab === "main" && shopifyMainIsSpec ? (
+diff --git a/src/components/listing/result-card/ResultCardImagesPanel.tsx b/src/components/listing/result-card/ResultCardImagesPanel.tsx
+index c793e68..0d650a6 100644
+--- a/src/components/listing/result-card/ResultCardImagesPanel.tsx
++++ b/src/components/listing/result-card/ResultCardImagesPanel.tsx
+@@ -4,6 +4,7 @@ import { useState } from "react";
+ import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
+ import { Button } from "@/components/ui/Button";
+ import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
++import { pickDescriptionDetailRows } from "@/lib/images/descriptionDetailRows";
+ import type { ExcludedDetailImage } from "@/lib/import/captureSharedImages";
+ import {
+   imageSlotLabel,
+@@ -14,6 +15,8 @@ import type { ImageProcessIntent, ProductImage } from "@/types/domain";
+ 
+ /** S2: 站③ 圖片分頁（可檢視／標記）— 從 ResultCard 展開區拆出。站② 仍用 Station2ImagePanel。 */
+ export function ResultCardImagesPanel({
++  descriptionImagesBusy,
++  descriptionImagesOn,
+   imageMarks,
+   pipelineImages,
+   fadingImageIds,
+@@ -25,8 +28,11 @@ export function ResultCardImagesPanel({
+   onRestoreExcludedImage,
+   onRemoveImage,
+   onSetProcessIntent,
++  onToggleDescriptionImages,
+   onToggleSpec
+ }: {
++  descriptionImagesBusy: boolean;
++  descriptionImagesOn: boolean;
+   imageMarks: ProductImage[];
+   pipelineImages: ProductImage[];
+   fadingImageIds: Set<string>;
+@@ -38,6 +44,7 @@ export function ResultCardImagesPanel({
+   onRestoreExcludedImage: (index: number) => void;
+   onRemoveImage: (image: ProductImage) => void;
+   onSetProcessIntent: (image: ProductImage, intent: ImageProcessIntent) => void;
++  onToggleDescriptionImages: (enabled: boolean) => void;
+   onToggleSpec: (image: ProductImage) => void;
+ }) {
+   const [excludedOpen, setExcludedOpen] = useState(false);
+@@ -51,6 +58,8 @@ export function ResultCardImagesPanel({
+   }
+ 
+   const shopifyMainId = pickShopifyMainImage(imageMarks)?.id ?? null;
++  // 4e: same order as the description — generated_detail first, then detail.
++  const descriptionDetailImages = pickDescriptionDetailRows(imageMarks);
+ 
+   return (
+     <div className="rc-tabpanel" role="tabpanel">
+@@ -122,10 +131,31 @@ export function ResultCardImagesPanel({
+             })}
+           </div>
+         ) : null}
+-        {imageMarks.some((image) => image.image_type === "detail") ? (
++        {descriptionDetailImages.length > 0 ? (
++          <div className="s2-compose-row rc-desc-images-row" style={{ marginTop: 10, marginBottom: 0 }}>
++            <div className="s2-compose-copy">
++              <span className="s2-compose-title">詳情圖放進商品描述</span>
++              <span className="s2-compose-hint">
++                {descriptionImagesOn
++                  ? `發布／同步時，這 ${descriptionDetailImages.length} 張會放進商品描述（主圖排最前）；不要的按 ✕`
++                  : "已關閉：商品描述不放圖，詳情圖留在工具給 AI 讀字"}
++              </span>
++            </div>
++            <label className="toggle" title={descriptionImagesOn ? "點一下關閉" : "點一下開啟"}>
++              <input
++                aria-label="詳情圖放進商品描述"
++                checked={descriptionImagesOn}
++                disabled={descriptionImagesBusy}
++                onChange={(event) => onToggleDescriptionImages(event.target.checked)}
++                type="checkbox"
++              />
++              <span className="toggle-slider" />
++            </label>
++          </div>
++        ) : null}
++        {descriptionDetailImages.length > 0 ? (
+           <div className="thumbs" style={{ marginTop: 10 }}>
+-            {imageMarks
+-              .filter((image) => image.image_type === "detail")
++            {descriptionDetailImages
+               .map((image) => (
+                 <div
+                   className={`thumb-wrap${fadingImageIds.has(image.id) ? " is-fading" : ""}`}
+@@ -133,7 +163,7 @@ export function ResultCardImagesPanel({
+                 >
+                   {/* eslint-disable-next-line @next/next/no-img-element */}
+                   <img
+-                    alt={image.alt_text ?? "詳情圖"}
++                    alt={image.alt_text ?? (image.image_type === "generated_detail" ? "繁中合成詳情圖" : "詳情圖")}
+                     src={
+                       image.processed_file_url ??
+                       image.original_file_url ??
+diff --git a/src/lib/contentGenerator/descriptionDetailImages.ts b/src/lib/contentGenerator/descriptionDetailImages.ts
+new file mode 100644
+index 0000000..284bc2a
+--- /dev/null
++++ b/src/lib/contentGenerator/descriptionDetailImages.ts
+@@ -0,0 +1,122 @@
++/**
++ * 4e DETAIL-LISTING: the product description carries every remaining detail image.
++ *
++ * Order: Shopify main image → generated_detail (sort_order) → detail (sort_order).
++ * Only Shopify CDN URLs are ever embedded (Supabase egress is the free-tier bottleneck);
++ * a picked detail image that is not on Shopify Files yet is simply left out, and
++ * uploadDescriptionImagesToShopifyFiles is what puts it there at publish / sync time.
++ * Pure — no I/O. Keeps the D8a marker so reconcileFields.descriptionCompareText still
++ * ignores the image block.
++ */
++
++import { isDescriptionEmbedEnabled } from "@/lib/contentGenerator/descriptionEmbed";
++import { isDescriptionDetailImagesEnabled } from "@/lib/images/detailCompose/flags";
++import { pickDescriptionDetailRows } from "@/lib/images/descriptionDetailRows";
++import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
++import { isShopifyCdnUrl } from "@/lib/shopify/filesUpload";
++
++export { isDescriptionDetailImageType, pickDescriptionDetailRows } from "@/lib/images/descriptionDetailRows";
++
++export const DESCRIPTION_IMAGES_MARKER = "<!-- nestory-desc-embed -->";
++
++export type DescriptionImageRow = {
++  id: string;
++  image_type: string;
++  sort_order: number;
++  alt_text?: string | null;
++  processed_file_url?: string | null;
++  original_file_url?: string | null;
++  generated_file_url?: string | null;
++};
++
++/** First Shopify CDN URL among processed → original → generated; null when none. */
++export function shopifyCdnUrlOf(image: DescriptionImageRow): string | null {
++  for (const raw of [image.processed_file_url, image.original_file_url, image.generated_file_url]) {
++    const url = typeof raw === "string" ? raw.trim() : "";
++    if (url && isShopifyCdnUrl(url)) return url;
++  }
++  return null;
++}
++
++/** Picked detail rows that still need Shopify Files (no CDN URL yet). */
++export function listDescriptionImagesToUpload<T extends DescriptionImageRow>(images: T[] | null | undefined): T[] {
++  return pickDescriptionDetailRows(images).filter((row) => !shopifyCdnUrlOf(row));
++}
++
++function escapeHtmlAttr(value: string): string {
++  return value
++    .replace(/&/g, "&amp;")
++    .replace(/</g, "&lt;")
++    .replace(/>/g, "&gt;")
++    .replace(/"/g, "&quot;");
++}
++
++function altOf(image: DescriptionImageRow | null, titleFallback: string | null | undefined): string {
++  const alt = image?.alt_text?.trim();
++  if (alt) return alt;
++  const title = (titleFallback || "").trim();
++  return title || "Nestory product image";
++}
++
++/**
++ * Description image block (empty string when nothing is on the CDN).
++ * mainImageUrl: sync passes Shopify's current first gallery image, used only when the
++ * main row itself has no CDN URL (and only if that URL is on the CDN too).
++ */
++export function buildDescriptionImagesHtml(
++  images: DescriptionImageRow[] | null | undefined,
++  titleFallback?: string | null,
++  opts: { mainImageUrl?: string | null } = {}
++): string {
++  const rows = images ?? [];
++  const entries: { url: string; alt: string }[] = [];
++  const seen = new Set<string>();
++  const push = (url: string | null, image: DescriptionImageRow | null) => {
++    if (!url || seen.has(url)) return;
++    seen.add(url);
++    entries.push({ url, alt: altOf(image, titleFallback) });
++  };
++
++  const main = pickShopifyMainImage(rows);
++  const fallbackMain =
++    opts.mainImageUrl && isShopifyCdnUrl(opts.mainImageUrl) ? opts.mainImageUrl.trim() : null;
++  push((main ? shopifyCdnUrlOf(main) : null) ?? fallbackMain, main);
++
++  for (const row of pickDescriptionDetailRows(rows)) push(shopifyCdnUrlOf(row), row);
++
++  if (!entries.length) return "";
++  return (
++    DESCRIPTION_IMAGES_MARKER +
++    entries
++      .map(
++        (e) =>
++          `<p><img src="${escapeHtmlAttr(e.url)}" alt="${escapeHtmlAttr(e.alt)}" loading="lazy" style="max-width:100%;height:auto;" /></p>`
++      )
++      .join("")
++  );
++}
++
++/** Shopify payload boundary: env kill switch (D8a) AND the draft switch must both be on. */
++export function appendDescriptionImagesIfEnabled(
++  bodyHtml: string,
++  imageFlags: unknown,
++  images: DescriptionImageRow[] | null | undefined,
++  titleFallback?: string | null,
++  opts: { mainImageUrl?: string | null; env?: NodeJS.ProcessEnv } = {}
++): string {
++  if (!isDescriptionEmbedEnabled(opts.env ?? process.env)) return bodyHtml;
++  if (!isDescriptionDetailImagesEnabled(imageFlags)) return bodyHtml;
++  return bodyHtml + buildDescriptionImagesHtml(images, titleFallback, { mainImageUrl: opts.mainImageUrl });
++}
++
++/** First IMAGE media URL in a Shopify product snapshot (sync's main-image fallback). */
++export function firstShopifyImageUrl(
++  media: { mediaContentType?: string | null; image?: { url?: string | null } | null }[] | null | undefined
++): string | null {
++  for (const node of media ?? []) {
++    if (node?.mediaContentType !== "IMAGE") continue;
++    const url = node.image?.url?.trim();
++    if (url) return url;
++  }
++  return null;
++}
+diff --git a/src/lib/images/descriptionDetailRows.ts b/src/lib/images/descriptionDetailRows.ts
+new file mode 100644
+index 0000000..0bd1b3f
+--- /dev/null
++++ b/src/lib/images/descriptionDetailRows.ts
+@@ -0,0 +1,19 @@
++/**
++ * 4e DETAIL-LISTING: which detail rows go into the product description, in order
++ * (generated_detail first, then detail; each by sort_order). Client-safe — no server imports;
++ * the card's 圖片 tab and the Shopify payload both use this order.
++ */
++
++export function isDescriptionDetailImageType(imageType: string | null | undefined): boolean {
++  return imageType === "detail" || imageType === "generated_detail";
++}
++
++export function pickDescriptionDetailRows<T extends { image_type: string; sort_order: number }>(
++  images: T[] | null | undefined
++): T[] {
++  const rows = images ?? [];
++  const bySortOrder = (a: T, b: T) => (a.sort_order ?? 0) - (b.sort_order ?? 0);
++  const generated = rows.filter((row) => row.image_type === "generated_detail").sort(bySortOrder);
++  const detail = rows.filter((row) => row.image_type === "detail").sort(bySortOrder);
++  return [...generated, ...detail];
++}
+diff --git a/src/lib/images/detailCompose/flags.ts b/src/lib/images/detailCompose/flags.ts
+index 65ebf2e..c292366 100644
+--- a/src/lib/images/detailCompose/flags.ts
++++ b/src/lib/images/detailCompose/flags.ts
+@@ -35,3 +35,37 @@ export function isDetailRetainedForListingFlags(
+     flags.retain_for_listing === "true"
+   );
+ }
++
++/** 4e: draft image_flags key for「詳情圖放進商品描述」. */
++export const DESCRIPTION_DETAIL_IMAGES_FLAG = "description_detail_images";
++
++/**
++ * 4e: whether this draft's description gets the detail images (default ON).
++ * - missing / null / {} → true
++ * - description_detail_images === false | 0 | "false" | "0" | "no" | "off" → false
++ * - any other value → true
++ */
++export function isDescriptionDetailImagesEnabled(imageFlags: unknown): boolean {
++  if (imageFlags == null) return true;
++  if (typeof imageFlags !== "object" || Array.isArray(imageFlags)) return true;
++  const v = (imageFlags as Record<string, unknown>)[DESCRIPTION_DETAIL_IMAGES_FLAG];
++  if (v === false || v === 0) return false;
++  if (typeof v === "string") {
++    const s = v.trim().toLowerCase();
++    if (s === "false" || s === "0" || s === "no" || s === "off") return false;
++  }
++  return true;
++}
++
++/** 4e: merge-only write; keeps every other image_flags key. Stores "true" / "false". */
++export function mergeDescriptionDetailImagesFlag(
++  existing: unknown,
++  enabled: boolean
++): Record<string, unknown> {
++  const base =
++    existing && typeof existing === "object" && !Array.isArray(existing)
++      ? { ...(existing as Record<string, unknown>) }
++      : {};
++  base[DESCRIPTION_DETAIL_IMAGES_FLAG] = enabled ? "true" : "false";
++  return base;
++}
+diff --git a/src/lib/images/runFinalize.ts b/src/lib/images/runFinalize.ts
+index ca360da..8d6730c 100644
+--- a/src/lib/images/runFinalize.ts
++++ b/src/lib/images/runFinalize.ts
+@@ -90,7 +90,7 @@ async function fetchImageBuffer(url: string): Promise<Buffer> {
+   return fetched.bytes;
+ }
+ 
+-function guessMimeAndFilename(
++export function guessMimeAndFilename(
+   sourceUrl: string,
+   imageId: string
+ ): { mimeType: string; filename: string } {
+diff --git a/src/lib/images/uploadDescriptionImages.ts b/src/lib/images/uploadDescriptionImages.ts
+new file mode 100644
+index 0000000..abc0811
+--- /dev/null
++++ b/src/lib/images/uploadDescriptionImages.ts
+@@ -0,0 +1,166 @@
++/**
++ * 4e DETAIL-LISTING: put the description's detail images on Shopify Files before
++ * publish / sync builds the payload, so the description only embeds Shopify CDN URLs.
++ *
++ * - Only rows from listDescriptionImagesToUpload (detail / generated_detail without a CDN URL).
++ * - Success writes processed_file_url = CDN URL. original_file_url and the Supabase file are
++ *   NEVER touched here (old storefront descriptions may still embed them; cleanup is 4e Part B).
++ * - Never throws. A failed or late image is left out of the description and reported as a
++ *   warning; the next publish / sync retries it (rows already on the CDN are skipped).
++ */
++
++import { fetchServerImage } from "@/lib/images/fetchServerImage";
++import { guessMimeAndFilename } from "@/lib/images/runFinalize";
++import {
++  listDescriptionImagesToUpload,
++  type DescriptionImageRow
++} from "@/lib/contentGenerator/descriptionDetailImages";
++import { uploadProcessedImageToShopifyFilesWithRetry } from "@/lib/shopify/filesUpload";
++
++/** Parallel Shopify Files uploads per draft. */
++export const DESCRIPTION_UPLOAD_CONCURRENCY = 4;
++/** No new upload starts after this much time (publish / sync routes have 300s). */
++export const DESCRIPTION_UPLOAD_BUDGET_MS = 120_000;
++
++export type UploadDescriptionImagesDeps = {
++  upload?: typeof uploadProcessedImageToShopifyFilesWithRetry;
++  fetchBytes?: (url: string) => Promise<Buffer>;
++  now?: () => number;
++};
++
++export type UploadDescriptionImagesResult = {
++  attempted: number;
++  uploaded: number;
++  failed: number;
++  skippedForTime: number;
++  /** image id → new CDN URL, for callers that patch rows in memory instead of re-reading. */
++  cdnById: Record<string, string>;
++  warnings: string[];
++};
++
++type UpdateClient = {
++  from: (table: string) => any;
++};
++
++async function defaultFetchBytes(url: string): Promise<Buffer> {
++  const fetched = await fetchServerImage(url, { maxBytes: 25 * 1024 * 1024 });
++  if (!fetched.ok) throw new Error(fetched.message);
++  return fetched.bytes;
++}
++
++function sourceUrlOf(row: DescriptionImageRow): string | null {
++  for (const raw of [row.processed_file_url, row.original_file_url, row.generated_file_url]) {
++    const url = typeof raw === "string" ? raw.trim() : "";
++    if (url) return url;
++  }
++  return null;
++}
++
++export async function uploadDescriptionImagesToShopifyFiles(input: {
++  serviceSupabase: UpdateClient;
++  draftId: string;
++  images: DescriptionImageRow[] | null | undefined;
++  deps?: UploadDescriptionImagesDeps;
++}): Promise<UploadDescriptionImagesResult> {
++  const upload = input.deps?.upload ?? uploadProcessedImageToShopifyFilesWithRetry;
++  const fetchBytes = input.deps?.fetchBytes ?? defaultFetchBytes;
++  const now = input.deps?.now ?? (() => Date.now());
++  const startedAt = now();
++
++  const todo = listDescriptionImagesToUpload(input.images);
++  const result: UploadDescriptionImagesResult = {
++    attempted: 0,
++    uploaded: 0,
++    failed: 0,
++    skippedForTime: 0,
++    cdnById: {},
++    warnings: []
++  };
++  if (!todo.length) return result;
++
++  const recordError = async (id: string, message: string) => {
++    try {
++      await input.serviceSupabase
++        .from("product_images")
++        .update({ processing_error: message.slice(0, 500) })
++        .eq("id", id);
++    } catch {
++      // the warning below is enough
++    }
++  };
++
++  const uploadOne = async (row: DescriptionImageRow) => {
++    const source = sourceUrlOf(row);
++    if (!source) {
++      result.failed += 1;
++      await recordError(row.id, "missing image URL");
++      return;
++    }
++    try {
++      const bytes = await fetchBytes(source);
++      const { mimeType, filename } = guessMimeAndFilename(source, row.id);
++      const up = await upload({
++        filename,
++        mimeType,
++        fileSize: bytes.byteLength,
++        bytes,
++        alt: row.alt_text ?? null,
++        sourceHint: source
++      });
++      if (!up.ok) {
++        result.failed += 1;
++        await recordError(row.id, up.error);
++        return;
++      }
++      const { error } = await input.serviceSupabase
++        .from("product_images")
++        .update({ processed_file_url: up.cdnUrl, processing_status: "done", processing_error: null })
++        .eq("id", row.id);
++      if (error) {
++        result.failed += 1;
++        return;
++      }
++      result.uploaded += 1;
++      result.cdnById[row.id] = up.cdnUrl;
++    } catch (err) {
++      result.failed += 1;
++      await recordError(row.id, err instanceof Error ? err.message : String(err));
++    }
++  };
++
++  let next = 0;
++  const worker = async () => {
++    while (next < todo.length) {
++      if (now() - startedAt >= DESCRIPTION_UPLOAD_BUDGET_MS) return;
++      const row = todo[next++];
++      result.attempted += 1;
++      await uploadOne(row);
++    }
++  };
++  await Promise.all(
++    Array.from({ length: Math.min(DESCRIPTION_UPLOAD_CONCURRENCY, todo.length) }, worker)
++  );
++  result.skippedForTime = todo.length - result.attempted;
++
++  if (result.failed > 0) {
++    result.warnings.push(
++      `詳情圖上傳 Shopify 失敗 ${result.failed} 張，這次沒放進描述；再同步一次會補上`
++    );
++  }
++  if (result.skippedForTime > 0) {
++    result.warnings.push(
++      `詳情圖還有 ${result.skippedForTime} 張來不及上傳，這次沒放進描述；再同步一次會補上`
++    );
++  }
++  return result;
++}
++
++/** Apply cdnById onto in-memory rows (processed_file_url only). */
++export function applyDescriptionImageCdnUrls<T extends DescriptionImageRow>(
++  images: T[] | null | undefined,
++  cdnById: Record<string, string>
++): T[] {
++  return (images ?? []).map((row) =>
++    cdnById[row.id] ? { ...row, processed_file_url: cdnById[row.id] } : row
++  );
++}
+diff --git a/src/lib/shopify/payload.ts b/src/lib/shopify/payload.ts
+index 64dd151..507f12e 100644
+--- a/src/lib/shopify/payload.ts
++++ b/src/lib/shopify/payload.ts
+@@ -3,7 +3,7 @@ import {
+   formatPlainTextAsHtml,
+   htmlFaqToPlainText
+ } from "@/lib/contentGenerator/htmlFormat";
+-import { appendDescriptionEmbedIfEnabled } from "@/lib/contentGenerator/descriptionEmbed";
++import { appendDescriptionImagesIfEnabled } from "@/lib/contentGenerator/descriptionDetailImages";
+ import { saleStatusNoticeHtml } from "@/lib/contentGenerator/saleStatusNotice";
+ import { repairSpecText } from "@/lib/contentGenerator/copyFormatRepair";
+ import { buildFaqJsonLdScriptTag } from "@/lib/contentGenerator/faqJsonLd";
+@@ -96,7 +96,9 @@ function buildProductMetafields(draft: ShopifyPublishDraft): { namespace: string
+ export function buildShopifyProductPayload(
+   draft: ShopifyPublishDraft,
+   mode: PublishMode,
+-  internalLinkMap: InternalLinkMap = {}
++  internalLinkMap: InternalLinkMap = {},
++  /** 4e: sync passes Shopify's current first gallery image for the description's main image. */
++  options: { descriptionMainImageUrl?: string | null } = {}
+ ) {
+   const sortedImages = (draft.product_images ?? [])
+     .filter(isShopifyProductMediaImage)
+@@ -166,10 +168,12 @@ export function buildShopifyProductPayload(
+   const product = {
+     title: draft.title_zh || draft.taobao_title || "Nestory product",
+     descriptionHtml:
+-      appendDescriptionEmbedIfEnabled(
++      appendDescriptionImagesIfEnabled(
+         mainDescriptionHtml,
++        draft.image_flags,
+         draft.product_images,
+-        draft.title_zh || draft.taobao_title
++        draft.title_zh || draft.taobao_title,
++        { mainImageUrl: options.descriptionMainImageUrl }
+       ) +
+       buildInternalLinkHtml(draft.ip_name, internalLinkMap) +
+       buildFaqJsonLdScriptTag(draft.generated_faq_html),
+diff --git a/src/lib/shopify/publishDraftSafe.ts b/src/lib/shopify/publishDraftSafe.ts
+index 44f9c47..a951499 100644
+--- a/src/lib/shopify/publishDraftSafe.ts
++++ b/src/lib/shopify/publishDraftSafe.ts
+@@ -1,6 +1,9 @@
+ import { notifyMake } from "@/lib/notifications/make";
+ import { mapStatusToPipelineStage } from "@/lib/drafts/pipelineStage";
+ import { prepareImagesForPublish } from "@/lib/images/prepareImagesForPublish";
++import { isDescriptionEmbedEnabled } from "@/lib/contentGenerator/descriptionEmbed";
++import { isDescriptionDetailImagesEnabled } from "@/lib/images/detailCompose/flags";
++import { uploadDescriptionImagesToShopifyFiles } from "@/lib/images/uploadDescriptionImages";
+ import {
+   hasUnconfirmedPlaceholderCny,
+   MISSING_COST_BLOCK_MESSAGE,
+@@ -75,6 +78,8 @@ type PublishDraftDeps = {
+   /** Inject for tests: clock + sleep used by the variant-image READY wait. */
+   now?: () => number;
+   sleep?: (ms: number) => Promise<void>;
++  /** 4e: inject for tests. Without it, an injected callGraphQL (test harness) skips Files uploads. */
++  uploadDescriptionImages?: typeof uploadDescriptionImagesToShopifyFiles;
+ };
+ 
+ /** Variant-image binding gives up waiting this long after the publish request started (60s budget). */
+@@ -595,10 +600,26 @@ export async function publishDraft(
+   let draftForPayload = draft;
+   if (!mockMode) {
+     const prep = await prepareImagesForPublish({ serviceSupabase, draftId: id });
+-    if (prep.warnings.length) {
++    // 4e: detail images → Shopify Files so the description embeds CDN URLs only.
++    const uploadDescriptionImages =
++      deps.uploadDescriptionImages ?? (deps.callGraphQL ? null : uploadDescriptionImagesToShopifyFiles);
++    const descriptionImageWarnings: string[] = [];
++    if (
++      uploadDescriptionImages &&
++      isDescriptionEmbedEnabled() &&
++      isDescriptionDetailImagesEnabled(draft.image_flags)
++    ) {
++      const uploaded = await uploadDescriptionImages({
++        serviceSupabase,
++        draftId: id,
++        images: draft.product_images ?? []
++      });
++      descriptionImageWarnings.push(...uploaded.warnings);
++    }
++    if (prep.warnings.length || descriptionImageWarnings.length) {
+       const merged = [
+         ...(Array.isArray(draft.warnings) ? draft.warnings : []),
+-        ...prep.warnings.map((warning) => `發布前圖處理：${warning}`)
++        ...[...prep.warnings, ...descriptionImageWarnings].map((warning) => `發布前圖處理：${warning}`)
+       ].slice(-30);
+       await serviceSupabase.from("product_drafts").update({ warnings: merged }).eq("id", id);
+     }
+diff --git a/src/lib/shopify/syncShopifyProduct.ts b/src/lib/shopify/syncShopifyProduct.ts
+index 8b5473c..80a9871 100644
+--- a/src/lib/shopify/syncShopifyProduct.ts
++++ b/src/lib/shopify/syncShopifyProduct.ts
+@@ -23,6 +23,13 @@ import {
+   toolValuesFromDesired
+ } from "@/lib/shopify/reconcileFields";
+ import { checkLiveTestGuard } from "@/lib/shopify/liveTestGuard";
++import { isDescriptionEmbedEnabled } from "@/lib/contentGenerator/descriptionEmbed";
++import { firstShopifyImageUrl } from "@/lib/contentGenerator/descriptionDetailImages";
++import { isDescriptionDetailImagesEnabled } from "@/lib/images/detailCompose/flags";
++import {
++  applyDescriptionImageCdnUrls,
++  uploadDescriptionImagesToShopifyFiles
++} from "@/lib/images/uploadDescriptionImages";
+ import { videoIdentityKey } from "@/lib/media/videoUrls";
+ import {
+   isRealShopifyProductId,
+@@ -60,6 +67,8 @@ const METAFIELD_LABELS: Record<(typeof NESTORY_MANAGED_METAFIELD_KEYS)[number],
+ 
+ type SyncDeps = {
+   callGraphQL?: ShopifyAdminGraphQLCaller;
++  /** 4e: inject for tests. Without it, an injected callGraphQL (test harness) skips Files uploads. */
++  uploadDescriptionImages?: typeof uploadDescriptionImagesToShopifyFiles;
+ };
+ 
+ export type SyncShopifyProductInput = {
+@@ -602,7 +611,8 @@ export function buildSyncDesiredState(input: {
+   const built = buildShopifyProductPayload(
+     { ...draft, product_images: draft.product_images ?? [], product_variants: variantRows },
+     "draft",
+-    internalLinkMap
++    internalLinkMap,
++    { descriptionMainImageUrl: firstShopifyImageUrl(before.media?.nodes) }
+   ) as any;
+   const core = desiredCore(
+     productId,
+@@ -729,6 +739,25 @@ export async function syncShopifyProduct(
+     };
+   }
+ 
++  // 4e: detail images go to Shopify Files first so the description embeds CDN URLs only.
++  // Main / variant rows are untouched here: changing their URL would re-upload product media.
++  const uploadDescriptionImages =
++    deps.uploadDescriptionImages ?? (deps.callGraphQL ? null : uploadDescriptionImagesToShopifyFiles);
++  const descriptionImageWarnings: string[] = [];
++  if (
++    uploadDescriptionImages &&
++    isDescriptionEmbedEnabled() &&
++    isDescriptionDetailImagesEnabled(draft.image_flags)
++  ) {
++    const uploaded = await uploadDescriptionImages({
++      serviceSupabase,
++      draftId,
++      images: draft.product_images ?? []
++    });
++    draft.product_images = applyDescriptionImageCdnUrls(draft.product_images, uploaded.cdnById);
++    descriptionImageWarnings.push(...uploaded.warnings);
++  }
++
+   const desired = buildSyncDesiredState({
+     draft,
+     variantRows,
+@@ -1234,7 +1263,10 @@ export async function syncShopifyProduct(
+       ok: true,
+       productId,
+       remoteUpdatedAt: after.updatedAt,
+-      warnings: keepShopifyMedia ? [KEEP_SHOPIFY_MEDIA_WARNING] : []
++      warnings: [
++        ...(keepShopifyMedia ? [KEEP_SHOPIFY_MEDIA_WARNING] : []),
++        ...descriptionImageWarnings
++      ]
+     };
+   } catch (error) {
+     return fail("sync_exception", error);

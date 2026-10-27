@@ -1,0 +1,88 @@
+diff --git a/package.json b/package.json
+index 90f5341..f57eeff 100644
+--- a/package.json
++++ b/package.json
+@@ -59,6 +59,7 @@
+     "verify:capture-fix": "node scripts/verify-capture-fix.mjs",
+     "verify:capture-4a": "node scripts/verify-capture-4a.mjs",
+     "verify:capture-scroll": "node scripts/verify-capture-scroll.mjs",
++    "verify:4e": "node scripts/verify-4e.mjs",
+     "verify:staging-fence": "node scripts/verify-staging-fence.mjs",
+     "verify:stock": "node scripts/verify-stock.mjs",
+     "verify:sync-fix": "node scripts/verify-sync-fix.mjs",
+diff --git a/scripts/verify-all.mjs b/scripts/verify-all.mjs
+index b6bfe60..ad9df8b 100644
+--- a/scripts/verify-all.mjs
++++ b/scripts/verify-all.mjs
+@@ -100,7 +100,9 @@ const scripts = [
+   "scripts/verify-sync-fix.mjs",
+   "scripts/verify-sync-keep-media.mjs",
+   "scripts/verify-capture-4a.mjs",
+-  "scripts/verify-capture-scroll.mjs"
++  "scripts/verify-capture-scroll.mjs",
++  // 4e DETAIL-LISTING: detail images in the description via Shopify Files.
++  "scripts/verify-4e.mjs"
+ ];
+ 
+ for (const script of scripts) {
+diff --git a/scripts/verify-d8a-description-embed.mjs b/scripts/verify-d8a-description-embed.mjs
+index 44eca5c..5d4a685 100644
+--- a/scripts/verify-d8a-description-embed.mjs
++++ b/scripts/verify-d8a-description-embed.mjs
+@@ -188,7 +188,8 @@ await check("module files exist", () => {
+ 
+ await check("payload wires append after formatPlainTextAsHtml, before internal link", () => {
+   const src = read("src/lib/shopify/payload.ts");
+-  assert.ok(src.includes("appendDescriptionEmbedIfEnabled"), "import/call");
++  // 4e: the Shopify payload now uses the detail-images builder (same marker, same slot).
++  assert.ok(src.includes("appendDescriptionImagesIfEnabled"), "import/call");
+   assert.ok(src.includes("formatPlainTextAsHtml"), "body html");
+   assert.ok(src.includes("buildInternalLinkHtml"), "internal link kept");
+   assert.ok(src.includes("buildFaqJsonLdScriptTag"), "faq ld kept");
+@@ -196,7 +197,7 @@ await che...[truncated]opifyProductPayload(
+     { ...draft, product_images: draft.product_images ?? [], product_variants: variantRows },
+     "draft",
+-    internalLinkMap
++    internalLinkMap,
++    { descriptionMainImageUrl: firstShopifyImageUrl(before.media?.nodes) }
+   ) as any;
+   const core = desiredCore(
+     productId,
+@@ -729,6 +739,25 @@ export async function syncShopifyProduct(
+     };
+   }
+ 
++  // 4e: detail images go to Shopify Files first so the description embeds CDN URLs only.
++  // Main / variant rows are untouched here: changing their URL would re-upload product media.
++  const uploadDescriptionImages =
++    deps.uploadDescriptionImages ?? (deps.callGraphQL ? null : uploadDescriptionImagesToShopifyFiles);
++  const descriptionImageWarnings: string[] = [];
++  if (
++    uploadDescriptionImages &&
++    isDescriptionEmbedEnabled() &&
++    isDescriptionDetailImagesEnabled(draft.image_flags)
++  ) {
++    const uploaded = await uploadDescriptionImages({
++      serviceSupabase,
++      draftId,
++      images: draft.product_images ?? []
++    });
++    draft.product_images = applyDescriptionImageCdnUrls(draft.product_images, uploaded.cdnById);
++    descriptionImageWarnings.push(...uploaded.warnings);
++  }
++
+   const desired = buildSyncDesiredState({
+     draft,
+     variantRows,
+@@ -1234,7 +1263,10 @@ export async function syncShopifyProduct(
+       ok: true,
+       productId,
+       remoteUpdatedAt: after.updatedAt,
+-      warnings: keepShopifyMedia ? [KEEP_SHOPIFY_MEDIA_WARNING] : []
++      warnings: [
++        ...(keepShopifyMedia ? [KEEP_SHOPIFY_MEDIA_WARNING] : []),
++        ...descriptionImageWarnings
++      ]
+     };
+   } catch (error) {
+     return fail("sync_exception", error);

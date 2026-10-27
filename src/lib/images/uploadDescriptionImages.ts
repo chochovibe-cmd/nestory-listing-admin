@@ -164,4 +164,3 @@ export function applyDescriptionImageCdnUrls<T extends DescriptionImageRow>(
     cdnById[row.id] ? { ...row, processed_file_url: cdnById[row.id] } : row
   );
 }
-

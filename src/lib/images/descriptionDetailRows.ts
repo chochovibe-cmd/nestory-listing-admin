@@ -17,4 +17,3 @@ export function pickDescriptionDetailRows<T extends { image_type: string; sort_o
   const detail = rows.filter((row) => row.image_type === "detail").sort(bySortOrder);
   return [...generated, ...detail];
 }
-

@@ -52,4 +52,20 @@ export function isDescriptionDetailImagesEnabled(imageFlags: unknown): boolean {
   if (v === false || v === 0) return false;
   if (typeof v === "string") {
     const s = v.trim().toLowerCase();
-    if (s === "false...[truncated]
+    if (s === "false" || s === "0" || s === "no" || s === "off") return false;
+  }
+  return true;
+}
+
+/** 4e: merge-only write; keeps every other image_flags key. Stores "true" / "false". */
+export function mergeDescriptionDetailImagesFlag(
+  existing: unknown,
+  enabled: boolean
+): Record<string, unknown> {
+  const base =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  base[DESCRIPTION_DETAIL_IMAGES_FLAG] = enabled ? "true" : "false";
+  return base;
+}

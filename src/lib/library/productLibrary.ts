@@ -107,13 +107,22 @@ export function libraryCreatorLabel(
   return `成員 · ${createdBy.slice(0, 8)}`;
 }
 
+/**
+ * 4a-3: search text normalize — full-width → half-width (NFKC), lowercase, 「|」「｜」 treated as a
+ * space, whitespace collapsed. Applied to the query and to every searched field.
+ */
+export function normalizeLibrarySearchText(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[|｜]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Q5-A client filter (all tokens must match). */
 export function matchesLibraryQuery(row: LibraryDraftRow, query: string): boolean {
-  const tokens = query
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const tokens = normalizeLibrarySearchText(query).split(" ").filter(Boolean);
   if (tokens.length === 0) return true;
 
   const hay = [
@@ -124,7 +133,7 @@ export function matchesLibraryQuery(row: LibraryDraftRow, query: string): boolea
     row.character_name,
     row.shopify_product_id
   ]
-    .map((s) => (s ?? "").toLowerCase())
+    .map((s) => normalizeLibrarySearchText(s))
     .join("\n");
 
   return tokens.every((t) => hay.includes(t));

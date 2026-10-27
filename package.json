@@ -59,6 +59,7 @@
     "verify:capture-fix": "node scripts/verify-capture-fix.mjs",
     "verify:capture-4a": "node scripts/verify-capture-4a.mjs",
     "verify:capture-scroll": "node scripts/verify-capture-scroll.mjs",
+    "verify:4a3": "node scripts/verify-4a3.mjs",
     "verify:staging-fence": "node scripts/verify-staging-fence.mjs",
     "verify:stock": "node scripts/verify-stock.mjs",
     "verify:sync-fix": "node scripts/verify-sync-fix.mjs",

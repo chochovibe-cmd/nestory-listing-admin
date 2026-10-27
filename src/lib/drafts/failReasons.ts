@@ -3,6 +3,8 @@
  * Does not change generate / publish write paths or fail count formulas.
  */
 
+import { humanizeAiError } from "@/lib/drafts/aiErrorMessage";
+
 export type DraftFailDisplayInput = {
   generation_status?: string | null;
   status?: string | null;
@@ -27,10 +29,10 @@ export function formatDraftFailSummary(input: DraftFailDisplayInput): string | n
   if (!isDraftGenerationFailed(input)) return null;
 
   const gen = input.generation_error?.trim();
-  if (gen) return stripStackish(gen);
+  if (gen) return stripStackish(humanizeAiError(gen));
 
   const err = input.error_message?.trim();
-  if (err) return stripStackish(err);
+  if (err) return stripStackish(humanizeAiError(err));
 
   const warns = Array.isArray(input.warnings) ? input.warnings : [];
   const picked: string[] = [];

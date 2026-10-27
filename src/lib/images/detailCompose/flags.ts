@@ -35,3 +35,21 @@ export function isDetailRetainedForListingFlags(
     flags.retain_for_listing === "true"
   );
 }
+
+/** 4e: draft image_flags key for「詳情圖放進商品描述」. */
+export const DESCRIPTION_DETAIL_IMAGES_FLAG = "description_detail_images";
+
+/**
+ * 4e: whether this draft's description gets the detail images (default ON).
+ * - missing / null / {} → true
+ * - description_detail_images === false | 0 | "false" | "0" | "no" | "off" → false
+ * - any other value → true
+ */
+export function isDescriptionDetailImagesEnabled(imageFlags: unknown): boolean {
+  if (imageFlags == null) return true;
+  if (typeof imageFlags !== "object" || Array.isArray(imageFlags)) return true;
+  const v = (imageFlags as Record<string, unknown>)[DESCRIPTION_DETAIL_IMAGES_FLAG];
+  if (v === false || v === 0) return false;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (s === "false...[truncated]

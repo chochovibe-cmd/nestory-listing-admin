@@ -6,8 +6,8 @@
 > 10-07～10-18 的舊紀錄原文（含 Codex PUBLISH-RUNTHROUGH R1–R5）：`docs/archive/STATUS-HISTORY-2026-10-21.md`，需要查歷史才讀。
 
 ## 1. 線上狀態
-- 主線：`origin/handoff/20261008-golive-spec` @ `d8e5723`（10-25：#75 文件、#76 4a CAPTURE-REVIEWS＋FILTER、#77 4a-2 CAPTURE-SCROLL；之前 #61–#74 見總表）。
-- 正式站：`dpl_4BxsSapWJbtwpdtUByaTjW7sEsMJ`（d8e5723；GPT 驗 `/login` 200＋githubCommitSha）；回退點 `dpl_4BQKHnrzhbL117Dp93uPq8gcbeXX`（81df9ca，4a）→ `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`（247cdcb）→ `dpl_2W3xMYEd1WbEPc1yQfaULVKdYEVn`（ab5db34）→ `dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）→ `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
+- 主線：`origin/handoff/20261008-golive-spec` @ `fb0efea`（10-27：#79 4a-3 小修合集-1、#80 4e-A 詳情圖上架；10-25 #75–#77；之前 #61–#74 見總表）。
+- 正式站：`dpl_5GPdjhKMs6YLjNaHKC4EjXoqzg8A`（fb0efea，4e-A；GPT 驗 `/login` 200＋githubCommitSha）；回退點 `dpl_DYtBQVePoFwypehZ5iypse7E2Rd8`（f81f920，4a-3）→ `dpl_4BxsSapWJbtwpdtUByaTjW7sEsMJ`（d8e5723）→ `dpl_4BQKHnrzhbL117Dp93uPq8gcbeXX`（81df9ca，4a）→ `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`（247cdcb）→ `dpl_2W3xMYEd1WbEPc1yQfaULVKdYEVn`（ab5db34）→ `dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）→ `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
 - 外掛：老闆 Chrome 載入的 `C:/Users/s2491/Documents/Nestory外掛-0.2.0` 資料夾＝0.2.3（＝d8e5723 的 `extension/`，build `capture-20261025-scroll`；舊版備份 `Nestory外掛-0.2.2-備份`、`-0.2.1-備份`）。
 - 本機這個資料夾停在舊分支 `codex/nestory-v0.1-safety-skeleton`（GitHub 預設分支也還是它）→ 看程式先 `git fetch`，一律以 origin/handoff 為準。網址、專案代號、環境變數名稱見 `AI_START_HERE.md` §3。
 
@@ -15,12 +15,12 @@
 | 包 | 狀態 | 下一步 |
 |---|---|---|
 | 4a CAPTURE-REVIEWS＋FILTER／4a-2 CAPTURE-SCROLL（GPT） | ✅ 10-25 上線（#76、#77）。實機：天貓新抓 799eaec6 → 自動捲動 24 步 6.5 秒（頁面 2.6 萬像素、推薦區無限長，到 6 秒上限停）、19 張詳情圖、排除 2 張 HOLLY 共用宣傳圖、評價摘要（dom）；卡片兩個新區塊 Claude 實看正常。Shopify 66 件已上架商品唯讀掃描：沒有掛宣傳圖 | 測試 A 原因已查（10-26）：862841d8 那次重抓在 10-25 17:18，4a 新版 17:35 才上線（dpl_4BQKHnrz… ready 09:35 UTC），舊伺服器只更新了 4 款庫存。待老闆用外掛 0.2.3 重抓一次，Claude 查資料庫確認 `source_reviews` 寫入 |
-| 4a-3 小修合集-1（GPT，`gpt/4a3-small-fixes`） | 10-26 規格完成：`docs/4A3-小修合集-1-施工規格-2026-10-26.md`＋`scripts/verify-4a3.mjs`（**縮小版 8 項**：只剩搜尋全形＋429 中文；詳情圖移到 4e、文案參考圖移到 4f；Claude 參考實作 8/8＋verify:all＋tsc 綠，patch 在指揮 session scratchpad `ref-4a3-v3.patch`）。分支 `docs/4a3-spec`（含 docs/commander-20261025） | GPT 先合併 docs/4a3-spec → 施工 → Draft PR → Claude 審 |
-| 4e-A 詳情圖上架（GPT，`gpt/4e-detail-listing`） | 10-27 規格完成：`docs/4E-詳情圖上架-施工規格-2026-10-27.md`＋`scripts/verify-4e.mjs`（32 項）＋參考實作 `docs/4E-參考實作-2026-10-27.patch`（Claude 套上後 32/32＋verify:all＋tsc 綠）。分支 `docs/4e-spec`（含 docs/4a3-spec）。查證：詳情圖從沒上 Shopify——finalize 只傳主圖＋款式圖、同步不跑上傳、描述只嵌 2 張且是 Supabase 網址 | 4a-3 上線後：GPT 合併 docs/4e-spec → 套 patch → Draft PR → Claude 審 → 上線 → Claude 用【測試勿買】商品實機驗 |
+| 4a-3 小修合集-1（GPT） | ✅ 10-27 上線（#79 f81f920；另一個對話審 PASS，Claude 複查與參考實作只差 import 順序／換行） | 上線後實機：商品庫搜尋全形「七龍珠｜」、10-22 三筆舊 429 草稿顯示中文（有空再看） |
+| 4e-A 詳情圖上架（GPT） | ✅ 10-27 上線（#80 fb0efea，程式與參考實作逐行一致）。**Claude 實機通過**（Miffy 臺燈 8b3a35b9，Shopify 草稿，老闆同意；備份 `Nestory備份/2026-10-27-4e實機-8b3a35b9-同步前／同步後`）：同步後描述＝主圖（取 Shopify 第一張圖）＋3 張詳情圖，全是 cdn.shopify.com、沒有 supabase；再同步不重傳（Files 各 1 份、網址不變）；開關關→描述無圖、打開→恢復；商品圖 10 張、款式 2 個不變。Shopify 會自動轉 WebP（5.4MB PNG → 424KB） | 已上架舊商品照舊不主動同步 |
 | 4e-B 清 Supabase 空間（Claude） | 4e-A 上線後：算清單（主圖／款式圖 Supabase 原檔、已上 CDN 的詳情圖、封存草稿、孤兒檔）＋保護「店面描述還在用」的檔；**待老闆決定**：AI 讀字改讀 Shopify CDN 縮小版（Claude 建議）或 Supabase 留小圖 | 備份＋老闆同意才刪 |
 | 4f 文案參考圖 | 勾圖給 AI 讀字，取代規格圖按鈕；見總表 4f | 4e 之後 |
 
-下一包候選（指揮決定）：**4a-3 小修合集-1（施工中）** → **4e-A 詳情圖上架（規格好了，4a-3 上線後開工）** → 4e-B 清空間 → 4f 文案參考圖 → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。10-25 老闆定案（4a-3／COPY-A 用）：①詳情圖「一鍵」做成**全部不上架（保留在工具給 AI 讀字）**，不是刪除，單張 ✕ 刪除照舊（**10-26 老闆改**：沒刪的詳情圖**全部**放進描述，開關關＝都不放 → 4e）；②「文案參考圖」：AI 先自動挑，老闆可勾選覆蓋，**10-26：取代沒作用的「規格圖」按鈕** → 4f；③舊商品描述內嵌的 Supabase 圖**不搬**（10-26：已上架商品不主動同步），只查容量，快滿或特別佔空間才處理；④可順手評估：自動捲動在推薦區無限長的頁面會跑滿 6 秒，可改成捲過「图文详情／用户评价」區就停。漏項歸屬見總表第六節。
+下一包候選（指揮決定）：**4e-B 清空間（Claude，等老闆選 AI 讀字用圖）** → 4f 文案參考圖 → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。10-25 老闆定案（4a-3／COPY-A 用）：①詳情圖「一鍵」做成**全部不上架（保留在工具給 AI 讀字）**，不是刪除，單張 ✕ 刪除照舊（**10-26 老闆改**：沒刪的詳情圖**全部**放進描述，開關關＝都不放 → 4e）；②「文案參考圖」：AI 先自動挑，老闆可勾選覆蓋，**10-26：取代沒作用的「規格圖」按鈕** → 4f；③舊商品描述內嵌的 Supabase 圖**不搬**（10-26：已上架商品不主動同步），只查容量，快滿或特別佔空間才處理；④可順手評估：自動捲動在推薦區無限長的頁面會跑滿 6 秒，可改成捲過「图文详情／用户评价」區就停。漏項歸屬見總表第六節。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。

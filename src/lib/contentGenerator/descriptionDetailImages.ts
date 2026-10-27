@@ -120,4 +120,3 @@ export function firstShopifyImageUrl(
   }
   return null;
 }
-

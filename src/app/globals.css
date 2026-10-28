@@ -2512,7 +2512,7 @@ textarea {
   border-radius: 999px;
   line-height: 1.2;
 }
-/* UX-B2-P10: 規格圖 corner badge (station② / input / station③) */
+/* UX-B2-P10: corner badge (station② / station③); 4f: now 文案參考 (was 規格圖) */
 .pthumb-spec-badge {
   position: absolute;
   top: 6px;
@@ -2549,6 +2549,22 @@ textarea {
 .pthumb-spec-badge.active:hover:not(:disabled) {
   color: var(--accent-fg);
   filter: brightness(1.05);
+}
+/* 4f: AI 自動挑的文案參考圖 = accent outline (manual pick = .active filled) */
+.pthumb-spec-badge.is-auto {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* 4f: station③ 60px detail thumbs — badge along the bottom edge; ✕ keeps top-right */
+.pthumb-spec-badge.is-compact {
+  top: auto;
+  bottom: 3px;
+  left: 3px;
+  right: 3px;
+  max-width: none;
+  font-size: 9px;
+  padding: 1px 4px;
+  text-align: center;
 }
 /* 觸控：放大 hit 區（padding / pseudo），無 !important */
 @media (max-width: 959px) {

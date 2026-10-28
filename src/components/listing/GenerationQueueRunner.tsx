@@ -71,6 +71,25 @@ function emitRegenStatus(detail: RegenQueueStatusDetail) {
   window.dispatchEvent(new CustomEvent<RegenQueueStatusDetail>(REGEN_QUEUE_STATUS_EVENT, { detail }));
 }
 
+/**
+ * 4f: regen re-reads images first so a changed 文案參考圖 pick is used. Unchanged images hit the
+ * analyze-images fingerprint cache (no AI call). Failure never blocks the regen — the old
+ * image_description stays and the operator gets one info toast.
+ */
+async function refreshImageDescriptionForRegen(draftId: string, title: string): Promise<void> {
+  const failMessage = `${title}：圖片重讀失敗，這次沿用上次的圖片資訊`;
+  try {
+    const response = await fetch("/api/analyze-images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftId }),
+    });
+    if (!response.ok) showToast(failMessage, "info");
+  } catch {
+    showToast(failMessage, "info");
+  }
+}
+
 async function reportNetworkFailure(job: ClaimedJob, message: string): Promise<string> {
   try {
     const response = await fetch("/api/generation-queue", {
@@ -117,6 +136,8 @@ export function GenerationQueueRunner() {
           status: "processing",
           field: job.input.regenField ?? null,
         });
+
+        await refreshImageDescriptionForRegen(job.draftId, title);
 
         let regenResponse: Response;
         try {

@@ -15,7 +15,6 @@ import {
   dualSizeExt
 } from "@/lib/images/clientImageResize";
 import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
-import { intentForSpecToggle } from "@/lib/images/processMarks";
 import { showToast } from "@/components/Toast";
 import {
   deleteProductImages,
@@ -24,8 +23,8 @@ import {
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
 // B1 (Mockup差異備忘 差異2): 只有主圖／詳情圖兩框。規格改表單手填欄位，不再上傳規格圖
-// 做 OCR。詳情圖給 AI 讀資訊用（Vision 會轉錄圖上可見文字），不上架。
-// B5: 主圖區每張縮圖可切「規格圖」＝去簡體字影像處理標記（不是 OCR）。
+// 做 OCR。詳情圖給 AI 讀資訊用（Vision 會轉錄圖上可見文字），4e 起也會放進商品描述。
+// 4f: 「規格圖」角標拿掉（全店幾乎沒用、和卡片「去字」重複）；文案參考圖在審核卡圖片分頁勾。
 // P1-1: never call parent onUploadingChange inside setState updater; no router.refresh on
 // upload/mark (local previews are source of truth; refresh storm wiped the form).
 // P1-2: optimistic blob thumbs, per-file fail/retry, delete ×, optional seed from DB.
@@ -42,7 +41,7 @@ const zones: Array<{
   dropTitle: string;
 }> = [
   { type: "main", icon: "🖼", label: "主圖（3-5張）", badgeClass: "badge-main", badgeText: "1:1 裁切", dropTitle: "點擊或拖曳主圖" },
-  { type: "detail", icon: "📋", label: "詳情圖（供 AI 讀資訊，不上架）", badgeClass: "badge-detail", badgeText: "Vision 參考", dropTitle: "點擊或拖曳詳情圖" }
+  { type: "detail", icon: "📋", label: "詳情圖（會放進商品描述，也給 AI 讀字）", badgeClass: "badge-detail", badgeText: "Vision 參考", dropTitle: "點擊或拖曳詳情圖" }
 ];
 
 type PreviewStatus = "ready" | "uploading" | "failed";
@@ -647,38 +646,6 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
     }
   }
 
-  // B5: 規格圖 toggle on main-zone thumbs. Writes via existing product_images
-  // update RLS (owner of unpublished draft / reviewer) — same path as delete.
-  // P1-1: no router.refresh — local previews updated in place.
-  async function toggleSpecMark(item: PreviewItem) {
-    if (!item.id || item.status !== "ready") return;
-    const next = intentForSpecToggle(!item.is_spec_process);
-    setMarkError("");
-    const { error } = await supabase
-      .from("product_images")
-      .update({
-        is_spec_process: next.is_spec_process,
-        process_intent: next.process_intent
-      })
-      .eq("id", item.id);
-
-    if (error) {
-      const msg = `標記失敗：${error.message}`;
-      setMarkError(msg);
-      showToast(msg, "error");
-      return;
-    }
-
-    setPreviews((current) => {
-      const main = (current.main ?? []).map((row) =>
-        row.clientKey === item.clientKey
-          ? { ...row, is_spec_process: next.is_spec_process, process_intent: next.process_intent }
-          : row
-      );
-      return { ...current, main };
-    });
-  }
-
   /** UX-D T22: reorder list locally, reindex sort_order, persist rows with id. */
   async function applyReorder(type: ImageType, fromKey: string, toKey: string) {
     if (fromKey === toKey) return;
@@ -810,23 +777,6 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img alt={zone.label} className="thumb pthumb-img" src={item.url} />
                         {isFirstMain ? <span className="pthumb-badge">主圖</span> : null}
-                        {/* UX-B2-P10: 規格圖 → corner badge (same language as station②) */}
-                        {isMainZone && item.status === "ready" ? (
-                          <button
-                            type="button"
-                            aria-pressed={item.is_spec_process}
-                            className={`pthumb-spec-badge${item.is_spec_process ? " active" : ""}`}
-                            title={item.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              void toggleSpecMark(item);
-                            }}
-                            onMouseDown={(event) => event.stopPropagation()}
-                          >
-                            {item.is_spec_process ? "📐 規格圖" : "規格圖"}
-                          </button>
-                        ) : null}
                         {item.status === "uploading" ? (
                           <span className="pthumb-status-overlay">上傳中…</span>
                         ) : null}
@@ -870,7 +820,7 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
       {/* UX-D T23: short form-side tip only; process-intent hard gate stays at station ② / B5. */}
       {mainItems.length > 0 ? (
         <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-          主圖右上角可標規格圖
+          AI 會自動挑圖讀字；想指定，生成後到審核卡「圖片」分頁點「文案參考」
         </div>
       ) : null}
       {markError ? (

@@ -170,6 +170,7 @@ import { ResultCardPricingPanel } from "@/components/listing/result-card/ResultC
 import { ResultCardTagsPanel } from "@/components/listing/result-card/ResultCardTagsPanel";
 import { ResultCardSeoPanel } from "@/components/listing/result-card/ResultCardSeoPanel";
 import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCardImagesPanel";
+import { useCopyReference } from "@/components/listing/CopyReferenceControls";
 import {
   isDescriptionDetailImagesEnabled,
   mergeDescriptionDetailImagesFlag
@@ -308,7 +309,7 @@ export function ResultCard({
   const [activeTab, setActiveTab] = useState<ResultCardTabId>(
     sequentialMode && sequentialStation === "image" ? "images" : "copy"
   );
-  /** 站②：外層分頁＝主圖／規格圖／詳情圖（不再多一層「圖片」） */
+  /** 站②：外層分頁＝主圖／詳情圖（不再多一層「圖片」；4f 拿掉規格圖） */
   const [s2ImageSubtab, setS2ImageSubtab] = useState<Station2ImageSubtab>("main");
   const lastApproveSignalRef = useRef<number | undefined>(approveSignal);
   const [title, setTitle] = useState(draft.title_zh ?? "");
@@ -418,6 +419,13 @@ export function ResultCard({
   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
   /** SYN-1: local image_flags so 生成詳情圖 toggle stays after write without full refresh */
   const [draftImageFlags, setDraftImageFlags] = useState<unknown>(draft.image_flags);
+  /** 4f: 文案參考圖 for station③ 圖片 tab (station② panel runs its own hook on the same flags). */
+  const copyReference = useCopyReference({
+    draftId: draft.id,
+    images: imageMarks,
+    imageFlags: draftImageFlags,
+    onImageFlagsChange: setDraftImageFlags,
+  });
   /** 4e: 詳情圖放進商品描述 switch write in flight */
   const [descriptionImagesBusy, setDescriptionImagesBusy] = useState(false);
   /** UX-H T49: soft-remove fade on delete image */
@@ -2193,33 +2201,6 @@ export function ResultCard({
     router.refresh();
   }
 
-  async function toggleSpecOnCard(image: ProductImage) {
-    const nextOn = !image.is_spec_process;
-    const patch = nextOn
-      ? { is_spec_process: true, process_intent: "de_text" as const }
-      : { is_spec_process: false, process_intent: null };
-    setMarkMessage("");
-    const { error } = await supabase
-      .from("product_images")
-      .update(patch)
-      .eq("id", image.id);
-
-    if (error) {
-      setMarkMessage(`規格圖標記失敗：${error.message}`);
-      return;
-    }
-
-    setImageMarks((current) =>
-      current.map((row) =>
-        row.id === image.id
-          ? { ...row, is_spec_process: patch.is_spec_process, process_intent: patch.process_intent }
-          : row
-      )
-    );
-    await markShopifyDirty();
-    router.refresh();
-  }
-
   // B5 裁決 3A: block when unmarked (specific which/how many).
   // B14 1A: single 送圖 also creates a 1-item image batch (no Make webhook yet).
   // B9: always surface markMessage while collapsed (never silent).
@@ -3173,7 +3154,7 @@ export function ResultCard({
 
       {expanded ? (
         <div className="rc-body">
-          {/* R2: station② 分頁＝主圖／規格圖／詳情圖（＋REVIEW-FLOW B3：款式「規格」）；station① 全文案 tabs；station③ full + publish */}
+          {/* R2: station② 分頁＝主圖／詳情圖（4f 拿掉規格圖；＋REVIEW-FLOW B3：款式「規格」）；station① 全文案 tabs；station③ full + publish */}
           {isImageStation ? (
             <div className="rc-tabs" role="tablist" aria-label="圖片類型">
               {STATION2_IMAGE_SUBTABS.map((tab) => {
@@ -3347,6 +3328,7 @@ export function ResultCard({
             )
           ) : !isCopyStation && activeTab === "images" ? (
             <ResultCardImagesPanel
+              copyReference={copyReference}
               descriptionImagesBusy={descriptionImagesBusy}
               descriptionImagesOn={isDescriptionDetailImagesEnabled(draftImageFlags)}
               excludedDetailImages={excludedDetailImages}
@@ -3358,7 +3340,6 @@ export function ResultCard({
               restoreImageDisabledReason={restoreImageDisabledReason}
               onRemoveImage={(image) => void removeImage(image)}
               onSetProcessIntent={(image, intent) => void setProcessIntent(image, intent)}
-              onToggleSpec={(image) => void toggleSpecOnCard(image)}
               pipelineImages={pipelineImages}
               unmarkedBlockMessage={unmarkedBlockMessage}
               unmarkedImages={unmarkedImages}

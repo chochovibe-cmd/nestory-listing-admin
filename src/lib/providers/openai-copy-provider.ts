@@ -1,4 +1,5 @@
 import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
+import { resolveTextAiEndpoint, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
 import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry, makeFieldEmptyCheck } from "./copy";
 import {
   buildCopySystemPrompt,
@@ -15,9 +16,9 @@ export class OpenAICopyProvider implements CopyProvider {
   name = "openai";
 
   async generate(input: CopyProviderInput): Promise<CopyProviderOutput> {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const endpoint = resolveTextAiEndpoint();
 
-    if (!apiKey) {
+    if (!endpoint) {
       throw new Error("OPENAI_API_KEY is not configured on the server.");
     }
 
@@ -46,15 +47,15 @@ export class OpenAICopyProvider implements CopyProvider {
 
       let response: Response;
       try {
-        response = await fetch("https://api.openai.com/v1/chat/completions", {
+        response = await fetch(endpoint.url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${endpoint.apiKey}`,
         },
         signal: externalTimeoutSignal(COPY_TIMEOUT_MS),
         body: JSON.stringify({
-          model: DEFAULT_MODEL,
+          model: textAiModelId(endpoint, DEFAULT_MODEL),
           // A6: cap generous enough for the full 「詳細」copy without truncation.
           max_tokens: 3000,
           // A4: no json_object mode -- the model now returns segmented markers,
@@ -72,7 +73,7 @@ export class OpenAICopyProvider implements CopyProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`OpenAI copy generation failed (${response.status}): ${errorText}`);
+        throw new Error(`OpenAI copy generation failed (${response.status})${textAiErrorTag(endpoint)}: ${errorText}`);
       }
 
       const payload = await response.json();

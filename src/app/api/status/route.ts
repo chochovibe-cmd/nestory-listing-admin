@@ -1,4 +1,5 @@
 import { readNestoryEnvironment } from "@/lib/env/nestoryEnv";
+import { resolveTextAiEndpoint } from "@/lib/providers/textAiEndpoint";
 import { createServiceSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -28,7 +29,7 @@ export async function GET() {
   return Response.json({
     supabase: supabaseOk,
     aiProvider: {
-      openai: Boolean(process.env.OPENAI_API_KEY),
+      openai: resolveTextAiEndpoint() !== null,
       claude: Boolean(process.env.ANTHROPIC_API_KEY)
     },
     // A1 (2026-07-10): Shopify's static Admin API token was replaced by a

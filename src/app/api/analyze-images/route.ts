@@ -4,10 +4,11 @@ import { canOperate } from "@/lib/auth/roles";
 import { parseImageFlags, VISION_STATUS_FLAG_KEY } from "@/lib/images/imageReview";
 import {
   buildVisionSourceFingerprint,
-  describeProductImages,
-  selectRepresentativeVisionImages,
-  type VisionImageCandidate,
-} from "@/lib/providers/visionProvider";
+  copyReferenceCandidates,
+  parseCopyReferenceIds,
+  selectCopyReferenceImages,
+} from "@/lib/images/copyReference";
+import { describeProductImages } from "@/lib/providers/visionProvider";
 import type { ImageType } from "@/types/domain";
 
 // A2 (B1 對齊 Mockup差異備忘 差異2)：standalone sync route so Vision's latency
@@ -20,8 +21,12 @@ import type { ImageType } from "@/types/domain";
 //
 // P1-3 / 回饋 52: Vision MUST NOT write product_drafts.image_status (shared with D3/D5
 // image pipeline). Status lives under image_flags.vision_status only.
+//
+// 4f 文案參考圖：image_flags.copy_reference_image_ids 有指定（且圖還在）就只讀那幾張；
+// 沒指定＝自動挑（1 主圖＋平均分布的詳情圖，共 6 張）。指定改了 → fingerprint 變 → 重讀。
 
 type ImageRow = {
+  id: string;
   image_type: ImageType;
   original_file_url: string | null;
   /** A19: prefer ~1280 mid for Vision when present */
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest) {
   // A19: prefer vision_mid_url (~1280) over original for faster Vision; fall back if 039 not applied.
   const { data: imageRows, error: imagesError } = await authSupabase
     .from("product_images")
-    .select("image_type,original_file_url,vision_mid_url,sort_order")
+    .select("id,image_type,original_file_url,vision_mid_url,sort_order")
     .eq("draft_id", draftId)
     .in("image_type", ["main", "detail"])
     .order("sort_order", { ascending: true });
@@ -111,7 +116,7 @@ export async function POST(request: NextRequest) {
     }
     const fallback = await authSupabase
       .from("product_images")
-      .select("image_type,original_file_url,sort_order")
+      .select("id,image_type,original_file_url,sort_order")
       .eq("draft_id", draftId)
       .in("image_type", ["main", "detail"])
       .order("sort_order", { ascending: true });
@@ -123,25 +128,16 @@ export async function POST(request: NextRequest) {
     rows = (imageRows ?? []) as ImageRow[];
   }
 
-  const candidates = rows
-    .map((row) => {
-      if (row.image_type !== "main" && row.image_type !== "detail") return null;
-      const mid = typeof row.vision_mid_url === "string" ? row.vision_mid_url.trim() : "";
-      const orig = typeof row.original_file_url === "string" ? row.original_file_url.trim() : "";
-      const url = mid || orig;
-      return url
-        ? {
-            imageType: row.image_type,
-            url,
-            sortOrder: Number(row.sort_order ?? 0),
-          } satisfies VisionImageCandidate
-        : null;
-    })
-    .filter((candidate): candidate is VisionImageCandidate => candidate !== null);
-
-  const sourceFingerprint = buildVisionSourceFingerprint(candidates);
+  const candidates = copyReferenceCandidates(rows);
   const existingFlags = parseImageFlags(
     (draftRow as { image_flags?: unknown }).image_flags,
+  );
+  const selection = selectCopyReferenceImages(candidates, parseCopyReferenceIds(existingFlags));
+  const sourceFingerprint = buildVisionSourceFingerprint(
+    candidates,
+    selection.mode === "manual"
+      ? selection.selected.map((candidate) => candidate.id).filter((id): id is string => Boolean(id))
+      : [],
   );
   const existingDescription =
     typeof (draftRow as { image_description?: unknown }).image_description === "string"
@@ -161,7 +157,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const describeUrls = selectRepresentativeVisionImages(candidates).map((candidate) => candidate.url);
+  const describeUrls = selection.selected.map((candidate) => candidate.url);
 
   const serviceSupabase = createServiceSupabaseClient();
 
@@ -187,9 +183,14 @@ export async function POST(request: NextRequest) {
 
   // Only image_description is written -- spec_text is intentionally left alone.
   // image_status intentionally left alone (P1-3).
-  const { error: updateError } = await mergeVisionStatus(serviceSupabase, draftId, visionStatus, {
-    image_description: imageDescription
-  }, sourceFingerprint);
+  // 4f: a failed read keeps the previous image_description (regen must not lose it); status=failed retries next time.
+  const { error: updateError } = await mergeVisionStatus(
+    serviceSupabase,
+    draftId,
+    visionStatus,
+    imageDescription ? { image_description: imageDescription } : {},
+    sourceFingerprint,
+  );
 
   if (updateError) {
     return Response.json({ error: updateError.message }, { status: 500 });

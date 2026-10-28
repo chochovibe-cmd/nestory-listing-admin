@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import { showToast } from "@/components/Toast";
 import {
+  CopyReferenceBadge,
+  CopyReferenceRow,
+  useCopyReference,
+} from "@/components/listing/CopyReferenceControls";
+import {
   deleteProductImages,
   deleteProductImagesFailureMessage
 } from "@/lib/images/deleteProductImages";
@@ -23,7 +28,6 @@ import {
   filterStation2SubtabImages,
   isDetailSubtabImage,
   isMainSubtabImage,
-  isSpecImage,
   STATION2_IMAGE_SUBTABS,
   station2SubtabCount,
   station2UploadImageType,
@@ -52,8 +56,8 @@ function sortByOrder(a: ProductImage, b: ProductImage): number {
 }
 
 /**
- * UX-F T30: station② 主圖｜規格圖｜詳情圖 + marks + DnD sort + 補圖.
- * Spec tab = mark semantics only (no dedicated upload).
+ * UX-F T30: station② 主圖｜詳情圖 + marks + DnD sort + 補圖.
+ * 4f: 規格圖 tab/badge removed; corner badge = 文案參考 (image_flags.copy_reference_image_ids).
  * SYN-1 UI: 生成詳情圖 draft-level switch (image_flags.generate_detail, default on).
  */
 export function Station2ImagePanel({
@@ -77,7 +81,7 @@ export function Station2ImagePanel({
   onImageFlagsChange?: (next: Record<string, unknown>) => void;
   subtab?: Station2ImageSubtab;
   onSubtabChange?: (tab: Station2ImageSubtab) => void;
-  /** true＝外層已有主圖／規格圖／詳情圖 tabs，隱藏內層分層 */
+  /** true＝外層已有主圖／詳情圖 tabs，隱藏內層分層 */
   hideSubtabs?: boolean;
 }) {
   const supabase = createClient();
@@ -112,12 +116,14 @@ export function Station2ImagePanel({
     () => filterStation2SubtabImages(images, subtab),
     [images, subtab]
   );
-  const canUpload = station2UploadImageType(subtab) != null;
-  const showMarks = subtab === "main" || subtab === "spec";
+  const showMarks = subtab === "main";
   const shopifyMainId = pickShopifyMainImage(images)?.id ?? null;
-  const shopifyMainIsSpec =
-    shopifyMainId != null &&
-    images.some((image) => image.id === shopifyMainId && isSpecImage(image));
+  const copyRef = useCopyReference({
+    draftId,
+    images,
+    imageFlags,
+    onImageFlagsChange: (next) => onImageFlagsChange?.(next),
+  });
 
   async function setProcessIntent(image: ProductImage, intent: ImageProcessIntent) {
     const patch = patchForProcessIntentPick(intent, image.is_spec_process);
@@ -140,29 +146,6 @@ export function Station2ImagePanel({
       images.map((row) =>
         row.id === image.id
           ? { ...row, process_intent: patch.process_intent, is_spec_process: patch.is_spec_process }
-          : row
-      )
-    );
-  }
-
-  async function toggleSpec(image: ProductImage) {
-    const nextOn = !image.is_spec_process;
-    const patch = nextOn
-      ? { is_spec_process: true, process_intent: "de_text" as const }
-      : { is_spec_process: false, process_intent: null };
-    setLocalMsg("");
-    setBusyId(image.id);
-    const { error } = await supabase.from("product_images").update(patch).eq("id", image.id);
-    setBusyId(null);
-    if (error) {
-      setLocalMsg(`規格圖標記失敗：${error.message}`);
-      showToast(`規格圖標記失敗：${error.message}`, "error");
-      return;
-    }
-    onImagesChange(
-      images.map((row) =>
-        row.id === image.id
-          ? { ...row, is_spec_process: patch.is_spec_process, process_intent: patch.process_intent }
           : row
       )
     );
@@ -252,7 +235,7 @@ export function Station2ImagePanel({
     const tabQueue = [...nextTab];
 
     /**
-     * Main/spec share image_type=main pool — rebuild full pool so sort_order
+     * Main tab shares the image_type=main/variant/spec pool — rebuild full pool so sort_order
      * stays unique: keep other-group slots, fill this tab’s new order.
      * Detail pool is independent.
      */
@@ -266,7 +249,7 @@ export function Station2ImagePanel({
         .filter((img) => img.image_type === "main" || img.image_type === "variant" || img.image_type === "spec")
         .slice()
         .sort(sortByOrder);
-      inThisTab = subtab === "main" ? isMainSubtabImage : isSpecImage;
+      inThisTab = isMainSubtabImage;
     }
 
     const rebuilt: ProductImage[] = [];
@@ -465,6 +448,9 @@ export function Station2ImagePanel({
         </label>
       </div>
 
+      {/* 4f: 文案參考圖 — AI 先自動挑，老闆可點圖右上角改選 */}
+      <CopyReferenceRow busy={copyRef.busy} onReset={copyRef.reset} selection={copyRef.selection} />
+
       {hideSubtabs ? null : (
         <div className="s2-img-subtabs" role="tablist" aria-label="圖片類型">
           {STATION2_IMAGE_SUBTABS.map((tab) => {
@@ -491,21 +477,13 @@ export function Station2ImagePanel({
         <div className="rc-label">
           {subtab === "main"
             ? "主圖標記與排序（拖曳縮圖可改順序）"
-            : subtab === "spec"
-              ? "規格圖（在主圖標「規格圖」後會出現在此）"
-              : isDescriptionDetailImagesEnabled(imageFlags)
-                ? "詳情圖（會放進商品描述，也給 AI 讀字；開關在審核卡「圖片」分頁）"
-                : "詳情圖（這件設定不放進商品描述，只給 AI 讀字）"}
+            : isDescriptionDetailImagesEnabled(imageFlags)
+              ? "詳情圖（會放進商品描述，也給 AI 讀字；開關在審核卡「圖片」分頁）"
+              : "詳情圖（這件設定不放進商品描述，只給 AI 讀字）"}
         </div>
 
-        {subtab === "main" && shopifyMainIsSpec ? (
-          <div className="price-soft-warn">
-            ⚠ 目前排第一的是規格圖，Shopify 會用它當主圖；想換就在要的那張按「設為主圖」。
-          </div>
-        ) : null}
-
         {list.length > 0 ? (
-          /* UX-B2-P10: horizontal strip + large thumbs; tools under each card; spec = corner badge */
+          /* UX-B2-P10: horizontal strip + large thumbs; tools under each card; 4f 文案參考 = corner badge */
           <div className="imgmark-list imgmark-strip">
             {list.map((image, index) => {
               const src =
@@ -552,7 +530,7 @@ export function Station2ImagePanel({
                   <div className="thumb-wrap s2-img-thumb-wrap" title="拖曳排序">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
-                    {/* ✕ left — avoid clash with top-right spec badge (P10) */}
+                    {/* ✕ left — avoid clash with top-right 文案參考 badge (P10) */}
                     <button
                       className="thumb-remove s2-thumb-remove"
                       disabled={busyId === image.id}
@@ -566,22 +544,11 @@ export function Station2ImagePanel({
                     >
                       ✕
                     </button>
-                    {showMarks ? (
-                      <button
-                        type="button"
-                        className={`pthumb-spec-badge${image.is_spec_process ? " active" : ""}`}
-                        disabled={busyId === image.id}
-                        aria-pressed={!!image.is_spec_process}
-                        title={image.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void toggleSpec(image);
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      >
-                        {image.is_spec_process ? "📐 規格圖" : "規格圖"}
-                      </button>
-                    ) : null}
+                    <CopyReferenceBadge
+                      disabled={copyRef.busy || busyId === image.id}
+                      onToggle={() => copyRef.toggle(image.id)}
+                      state={copyRef.badgeState(image.id)}
+                    />
                   </div>
                   <span className="imgmark-slot-label">
                     {subtab === "main" && image.id === shopifyMainId ? "⭐ Shopify 主圖" : slot}
@@ -624,7 +591,7 @@ export function Station2ImagePanel({
                     </span>
                   ) : (
                     <span className="muted s2-detail-hint">
-                      詳情圖僅供辨識，無需標記
+                      詳情圖不用標處理方式
                     </span>
                   )}
                 </div>
@@ -633,38 +600,32 @@ export function Station2ImagePanel({
           </div>
         ) : (
           <div className="muted s2-img-empty">
-            {subtab === "spec"
-              ? "目前沒有規格圖。請到「主圖」把需要的圖標成「規格圖」。"
-              : subtab === "detail"
-                ? "尚無詳情圖。可用下方補圖上傳（不上架）。"
-                : "尚無主圖。可用下方補圖上傳。"}
+            {subtab === "detail"
+              ? "尚無詳情圖。可用下方補圖上傳。"
+              : "尚無主圖。可用下方補圖上傳。"}
           </div>
         )}
 
-        {canUpload ? (
-          <div className="s2-img-upload">
-            <input
-              accept="image/*"
-              className="sr-only"
-              multiple
-              onChange={(event) => void uploadFiles(event.currentTarget.files)}
-              ref={fileInputRef}
-              type="file"
-            />
-            <Button
-              size="sm"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-              type="button"
-            >
-              {uploading ? "上傳中…" : subtab === "main" ? "＋ 補主圖" : "＋ 補詳情圖"}
-            </Button>
-          </div>
-        ) : (
-          <p className="muted s2-img-spec-hint">規格圖請在主圖分頁標記，不另開上傳。</p>
-        )}
+        <div className="s2-img-upload">
+          <input
+            accept="image/*"
+            className="sr-only"
+            multiple
+            onChange={(event) => void uploadFiles(event.currentTarget.files)}
+            ref={fileInputRef}
+            type="file"
+          />
+          <Button
+            size="sm"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+          >
+            {uploading ? "上傳中…" : subtab === "main" ? "＋ 補主圖" : "＋ 補詳情圖"}
+          </Button>
+        </div>
 
-        {unmarkedBlockMessage && (subtab === "main" || subtab === "spec") ? (
+        {unmarkedBlockMessage && subtab === "main" ? (
           <div className="img-mark-warn" role="status">
             {unmarkedBlockMessage}
           </div>

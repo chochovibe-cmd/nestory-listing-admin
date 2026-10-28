@@ -103,7 +103,9 @@ const scripts = [
   "scripts/verify-capture-scroll.mjs",
   "scripts/verify-4a3.mjs",
   // 4e DETAIL-LISTING: detail images in the description via Shopify Files.
-  "scripts/verify-4e.mjs"
+  "scripts/verify-4e.mjs",
+  // OPENROUTER: text AI calls via OpenRouter when OPENROUTER_API_KEY is set.
+  "scripts/verify-openrouter.mjs"
 ];
 
 for (const script of scripts) {

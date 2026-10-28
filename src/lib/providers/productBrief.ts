@@ -1,4 +1,5 @@
 import { estimateCopyCostUsd, type CopyUsage, type RawUsage } from "./copy";
+import { resolveTextAiEndpoint, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
 import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
 
 export const PRODUCT_BRIEF_VERSION = "pb1.4-20261006";
@@ -224,9 +225,9 @@ JSON schema:
 }`;
 
 export async function buildProductBrief(input: ProductBriefInput): Promise<ProductBriefResult> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const endpoint = resolveTextAiEndpoint();
   const model = process.env.OPENAI_BRIEF_MODEL?.trim() || "gpt-4o-mini";
-  if (!apiKey) {
+  if (!endpoint) {
     const brief = fallbackBrief(input);
     return {
       brief,
@@ -238,15 +239,15 @@ export async function buildProductBrief(input: ProductBriefInput): Promise<Produ
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(endpoint.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${endpoint.apiKey}`,
       },
       signal: externalTimeoutSignal(COPY_TIMEOUT_MS),
       body: JSON.stringify({
-        model,
+        model: textAiModelId(endpoint, model),
         max_tokens: 1200,
         temperature: 0.1,
         response_format: { type: "json_object" },
@@ -258,7 +259,7 @@ export async function buildProductBrief(input: ProductBriefInput): Promise<Produ
     });
 
     if (!response.ok) {
-      throw new Error(`Product Brief failed (${response.status}): ${(await response.text()).slice(0, 240)}`);
+      throw new Error(`Product Brief failed (${response.status})${textAiErrorTag(endpoint)}: ${(await response.text()).slice(0, 240)}`);
     }
 
     const payload = await response.json();

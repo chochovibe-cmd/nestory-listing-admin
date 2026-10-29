@@ -8,6 +8,7 @@
 
 import { MAX_COPY_REFERENCE_IMAGES } from "@/lib/images/copyReference";
 import { externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout, VISION_TIMEOUT_MS } from "./externalTimeout";
+import { resolveTextAiEndpoint, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
 
 const DEFAULT_VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
@@ -58,8 +59,8 @@ type VisionContentBlock =
   | { type: "image_url"; image_url: { url: string } };
 
 async function callVision(systemPrompt: string, userText: string, imageUrls: string[]): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  const endpoint = resolveTextAiEndpoint();
+  if (!endpoint) {
     throw new Error("OPENAI_API_KEY is not configured on the server.");
   }
 
@@ -70,15 +71,15 @@ async function callVision(systemPrompt: string, userText: string, imageUrls: str
 
   let response: Response;
   try {
-    response = await fetch("https://api.openai.com/v1/chat/completions", {
+    response = await fetch(endpoint.url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${endpoint.apiKey}`,
     },
     signal: externalTimeoutSignal(VISION_TIMEOUT_MS),
     body: JSON.stringify({
-      model: DEFAULT_VISION_MODEL,
+      model: textAiModelId(endpoint, DEFAULT_VISION_MODEL),
       max_tokens: 1000,
       messages: [
         { role: "system", content: systemPrompt },
@@ -93,7 +94,7 @@ async function callVision(systemPrompt: string, userText: string, imageUrls: str
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenAI vision call failed (${response.status}): ${errorText}`);
+    throw new Error(`OpenAI vision call failed (${response.status})${textAiErrorTag(endpoint)}: ${errorText}`);
   }
 
   const payload = await response.json();
@@ -184,8 +185,8 @@ export async function recognizeProductScreenshots(
     throw new Error("至少需要一張截圖網址");
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  const endpoint = resolveTextAiEndpoint();
+  if (!endpoint) {
     throw new Error("OPENAI_API_KEY is not configured on the server.");
   }
 
@@ -202,15 +203,15 @@ export async function recognizeProductScreenshots(
 
   let response: Response;
   try {
-    response = await fetch("https://api.openai.com/v1/chat/completions", {
+    response = await fetch(endpoint.url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${endpoint.apiKey}`,
     },
     signal: externalTimeoutSignal(VISION_TIMEOUT_MS),
     body: JSON.stringify({
-      model: DEFAULT_VISION_MODEL,
+      model: textAiModelId(endpoint, DEFAULT_VISION_MODEL),
       max_tokens: 1200,
       temperature: 0.1,
       messages: [
@@ -226,7 +227,7 @@ export async function recognizeProductScreenshots(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenAI vision call failed (${response.status}): ${errorText}`);
+    throw new Error(`OpenAI vision call failed (${response.status})${textAiErrorTag(endpoint)}: ${errorText}`);
   }
 
   const payload = await response.json();

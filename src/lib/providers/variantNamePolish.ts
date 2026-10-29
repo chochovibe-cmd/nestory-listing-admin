@@ -13,6 +13,7 @@ import {
 } from "@/lib/providers/externalTimeout";
 
 import type { VariantPolishFn } from "@/lib/variants/variantNamePreview";
+import { resolveTextAiEndpoint, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
 
 const SYSTEM_PROMPT = `你是台灣電商的商品款式名稱校稿員。我會給你一組款式名稱（二維陣列，每列一個款式，每欄一個選項軸）。
 任務：把每個名稱改成自然的台灣用語，只調整措辭。
@@ -25,18 +26,18 @@ const SYSTEM_PROMPT = `你是台灣電商的商品款式名稱校稿員。我會
 輸出 JSON：{"rows":[[...]]}，列數、欄數必須和輸入完全一致，只輸出 JSON。`;
 
 export const polishVariantNamesWithOpenAI: VariantPolishFn = async (request) => {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const endpoint = resolveTextAiEndpoint();
   const model = process.env.OPENAI_BRIEF_MODEL?.trim() || "gpt-4o-mini";
-  if (!apiKey) {
+  if (!endpoint) {
     return { rows: null, model: "rules-only", warning: "OPENAI_API_KEY 不可用，只套用規則整理，沒有 AI 潤飾。" };
   }
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(endpoint.url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${endpoint.apiKey}` },
       signal: externalTimeoutSignal(COPY_TIMEOUT_MS),
       body: JSON.stringify({
-        model,
+        model: textAiModelId(endpoint, model),
         max_tokens: 1200,
         temperature: 0.1,
         response_format: { type: "json_object" },
@@ -54,7 +55,7 @@ export const polishVariantNamesWithOpenAI: VariantPolishFn = async (request) => 
       })
     });
     if (!response.ok) {
-      throw new Error(`AI 潤飾失敗（${response.status}）：${(await response.text()).slice(0, 160)}`);
+      throw new Error(`AI 潤飾失敗（${response.status}）${textAiErrorTag(endpoint)}：${(await response.text()).slice(0, 160)}`);
     }
     const payload = await response.json();
     const text = payload?.choices?.[0]?.message?.content;

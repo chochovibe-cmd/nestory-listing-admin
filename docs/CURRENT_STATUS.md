@@ -20,6 +20,7 @@
 | 4e-B 清 Supabase 空間（Claude） | ✅ **第一輪 10-28 完成**（450.2 → 281.5 MB，刪 641 張；詳見下方「4e-B 第一輪」）。原待決事項（AI 讀字用圖）已於 10-27 定案＝改讀 Shopify CDN 縮小版。 | 4e-C 詳情圖搬家同步（58 件分批）＋第二輪清空間（約 80 MB） |
 | 4e-C 詳情圖搬家同步＋第二輪清空間（Claude） | ✅ **10-28 完成**（60 件同步、Supabase 281.5 → 197.5 MB；詳見下方「4e-C」） | 4f 文案參考圖 |
 | 4f 文案參考圖（程式 Claude 已寫好；GPT 開 PR／合併／上線） | 10-28 規格 `docs/4F-文案參考圖-施工規格-2026-10-28.md`；程式 `agent/4f-copy-ref`（verify:4f 24 項＋verify:all＋tsc＋build 綠）。卡片圖片右上角「規格圖」→「文案參考」（AI 先自動挑 6 張、可改選，存 image_flags，不會標需同步）；站②「規格圖」分頁拿掉；重生前先重讀圖片（沒變走快取）；上傳區「不上架」字樣改掉 | GPT 照開工單合併上線 → Claude 實機（規格 §5.2） |
+| 4g OPENROUTER 文字 AI 改道（GPT，10-28 插隊） | OpenAI 儲值用完 → 生成全停。規格＋驗收測試在 `docs/openrouter-spec`（見總表 4g）；施工 `gpt/openrouter-text-ai` | 老闆儲值 OpenRouter＋在 Vercel 加 `OPENROUTER_API_KEY` → GPT 施工 → Claude 審 → 合併 Redeploy → 老闆生成 1 件、Claude 查資料庫 |
 
 ### 4e-B 清 Supabase 空間 第一輪（10-28 完成，Claude 指揮直接做，老闆同意）
 - 結果：product-images 2,546 張／450.2 MB → 1,905 張／281.5 MB（刪 641 張、168.7 MB）。

@@ -54,7 +54,7 @@ export function listUnmarkedPipelineImages(images: ProductImage[]): ProductImage
 export function formatUnmarkedBlockMessage(images: ProductImage[]): string | null {
   const pipeline = listPipelineImages(images);
   if (pipeline.length === 0) {
-    return "沒有可送出的商品圖。請先上傳主圖（詳情圖不上架、不用標記），再送圖。";
+    return "沒有可送出的商品圖。請先上傳主圖（詳情圖不用標記），再送圖。";
   }
 
   const unmarked = pipeline.filter((image) => !isImageMarked(image));

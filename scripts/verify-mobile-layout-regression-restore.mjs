@@ -38,7 +38,6 @@ expect(thumb, /\.pthumb-img-wrap\s*>\s*\.thumb-remove\s*\{[^}]*right:\s*-8px;[^}
 expect(globals, /@keyframes\s+uploadSpin/, "upload spinner keyframes must remain");
 expect(globals, /\.pthumb-dragging\s*\{/, "thumbnail drag feedback must remain");
 expect(uploader, /retryUpload\(item\)/, "failed-upload retry must remain");
-expect(uploader, /toggleSpecMark\(item\)/, "spec marking must remain");
 expect(uploader, /draggable/, "thumbnail reorder must remain");
 
 // Runtime-proven results containment stays underneath this visual pass.

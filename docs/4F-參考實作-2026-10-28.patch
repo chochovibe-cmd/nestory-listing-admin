@@ -1,0 +1,1719 @@
+diff --git a/package.json b/package.json
+index 818b74f..25d4ffb 100644
+--- a/package.json
++++ b/package.json
+@@ -61,6 +61,7 @@
+     "verify:capture-scroll": "node scripts/verify-capture-scroll.mjs",
+     "verify:4a3": "node scripts/verify-4a3.mjs",
+     "verify:4e": "node scripts/verify-4e.mjs",
++    "verify:4f": "node scripts/verify-4f.mjs",
+     "verify:staging-fence": "node scripts/verify-staging-fence.mjs",
+     "verify:stock": "node scripts/verify-stock.mjs",
+     "verify:sync-fix": "node scripts/verify-sync-fix.mjs",
+diff --git a/scripts/verify-4f.mjs b/scripts/verify-4f.mjs
+new file mode 100644
+index 0000000..3028716
+--- /dev/null
++++ b/scripts/verify-4f.mjs
+@@ -0,0 +1,325 @@
++/**
++ * 4f COPY-REF verifier (written by Claude before construction).
++ * 文案參考圖：AI 先自動挑（1 主圖＋平均分布詳情圖，共 6 張），老闆可在卡片圖片上點「文案參考」改選（最多 6 張）；
++ * 取代沒作用的「規格圖」角標＋站②「規格圖」分頁；重生前先重讀圖片（沒變＝快取）；ImageUploader 詳情圖字樣改掉「不上架」。
++ * No network, no database. Run from repo root with: npm run verify:4f
++ */
++import assert from "node:assert/strict";
++import fs from "node:fs";
++import path from "node:path";
++import { register } from "node:module";
++import { fileURLToPath, pathToFileURL } from "node:url";
++
++const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
++process.chdir(root);
++const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
++register(pathToFileURL(path.join(root, "scripts/publish-guard-loader.mjs")).href);
++const src = (name) => pathToFileURL(path.join(root, name)).href;
++const ref = await import(src("src/lib/images/copyReference.ts"));
++const tabs = await import(src("src/lib/images/station2ImageTabs.ts"));
++
++let passed = 0;
++const failed = [];
++async function check(name, fn) {
++  try {
++    await fn();
++    passed++;
++    console.log("  ✓ " + name);
++  } catch (err) {
++    failed.push({ name, err });
++    console.error("  ✗ " + name + ": " + (err.stack || err));
++  }
++}
++
++const row = (id, image_type, sort_order, extra = {}) => ({
++  id,
++  image_type,
++  sort_order,
++  original_file_url: `https://cdn.shopify.com/s/files/${id}.jpg`,
++  vision_mid_url: null,
++  ...extra
++});
++const ids = (list) => list.map((c) => c.id);
++// 2 main + 10 detail + 1 variant + 1 generated_detail
++const ROWS = [
++  row("m1", "main", 0),
++  row("m2", "main", 1),
++  ...Array.from({ length: 10 }, (_, i) => row(`d${i}`, "detail", i)),
++  row("v1", "variant", 2),
++  row("g1", "generated_detail", 0)
++];
++
++console.log("\n[A] 候選圖與自動挑（和 4f 之前完全一樣）");
++
++await check("A1 copyReferenceCandidates：只收主圖＋詳情圖，網址優先 vision_mid_url，沒網址的不收", () => {
++  const c = ref.copyReferenceCandidates([
++    ...ROWS,
++    row("d-nourl", "detail", 99, { original_file_url: "  ", vision_mid_url: null }),
++    row("d-mid", "detail", 50, { vision_mid_url: "https://cdn.shopify.com/mid.jpg?width=1280" })
++  ]);
++  assert.deepEqual(ids(c).sort(), ["d-mid", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "m1", "m2"].sort());
++  assert.equal(c.find((x) => x.id === "d-mid").url, "https://cdn.shopify.com/mid.jpg?width=1280");
++});
++
++await check("A2 沒指定＝自動：1 主圖＋平均分布 5 張詳情圖（第一張、最後一張都在）", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  const sel = ref.selectCopyReferenceImages(c, []);
++  assert.equal(sel.mode, "auto");
++  assert.deepEqual(ids(sel.selected), ["m1", "d0", "d2", "d5", "d7", "d9"]);
++});
++
++await check("A3 圖少於 6 張：全部都讀；只有主圖時讀到 6 張主圖為止", () => {
++  const few = ref.copyReferenceCandidates([row("m1", "main", 0), row("d0", "detail", 0), row("d1", "detail", 1)]);
++  assert.deepEqual(ids(ref.selectCopyReferenceImages(few, []).selected), ["m1", "d0", "d1"]);
++  const mains = ref.copyReferenceCandidates(Array.from({ length: 8 }, (_, i) => row(`m${i}`, "main", i)));
++  assert.equal(ref.selectCopyReferenceImages(mains, []).selected.length, 6);
++});
++
++await check("A4 visionProvider 仍匯出 selectRepresentativeVisionImages／buildVisionSourceFingerprint（舊腳本相容）", () => {
++  const s = read("src/lib/providers/visionProvider.ts");
++  assert.match(s, /export \{[\s\S]*buildVisionSourceFingerprint,[\s\S]*selectRepresentativeVisionImages,[\s\S]*\} from "@\/lib\/images\/copyReference";/);
++  assert.ok(!/function evenlySpaced/.test(s), "pure helpers must live in copyReference.ts only");
++  assert.match(s, /const MAX_DESCRIBE_IMAGES = MAX_COPY_REFERENCE_IMAGES;/);
++});
++
++console.log("\n[B] 老闆指定（image_flags.copy_reference_image_ids）");
++
++await check("B1 parseCopyReferenceIds：只收字串、去空白去重、最多 6；壞資料＝[]", () => {
++  assert.deepEqual(ref.parseCopyReferenceIds(null), []);
++  assert.deepEqual(ref.parseCopyReferenceIds([]), []);
++  assert.deepEqual(ref.parseCopyReferenceIds({ copy_reference_image_ids: "m1" }), []);
++  assert.deepEqual(
++    ref.parseCopyReferenceIds({ copy_reference_image_ids: [" a ", "a", 3, null, "", "b", "c", "d", "e", "f", "g"] }),
++    ["a", "b", "c", "d", "e", "f"]
++  );
++  assert.equal(ref.COPY_REFERENCE_FLAG_KEY, "copy_reference_image_ids");
++  assert.equal(ref.MAX_COPY_REFERENCE_IMAGES, 6);
++});
++
++await check("B2 mergeCopyReferenceIds：保留其他 image_flags 鍵；空陣列＝刪掉這個鍵（回到自動）", () => {
++  const flags = { vision_status: "done", vision_source_fingerprint: "v1-x", description_detail_images: "false" };
++  const next = ref.mergeCopyReferenceIds(flags, ["d3", "m1", "d3"]);
++  assert.deepEqual(next, { ...flags, copy_reference_image_ids: ["d3", "m1"] });
++  assert.ok(!("copy_reference_image_ids" in flags), "must not mutate input");
++  assert.deepEqual(ref.mergeCopyReferenceIds(next, []), flags);
++  assert.deepEqual(ref.mergeCopyReferenceIds(null, ["m1"]), { copy_reference_image_ids: ["m1"] });
++});
++
++await check("B3 指定了＝只讀指定的；順序＝主圖在前、再詳情圖，各照 sort_order；不足 6 張不補自動的", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  const sel = ref.selectCopyReferenceImages(c, ["d8", "m2", "d1"]);
++  assert.equal(sel.mode, "manual");
++  assert.deepEqual(ids(sel.selected), ["m2", "d1", "d8"]);
++});
++
++await check("B4 指定的圖被刪光／不是候選（款式圖、合成圖）→ 退回自動", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  assert.equal(ref.selectCopyReferenceImages(c, ["gone1", "gone2"]).mode, "auto");
++  assert.equal(ref.selectCopyReferenceImages(c, ["v1", "g1"]).mode, "auto");
++  const partly = ref.selectCopyReferenceImages(c, ["gone1", "d4"]);
++  assert.equal(partly.mode, "manual");
++  assert.deepEqual(ids(partly.selected), ["d4"]);
++});
++
++console.log("\n[C] 點角標（toggle）");
++
++await check("C1 自動狀態點一張沒被挑的：自動那 6 張＋這張 → 超過 6 張要擋（reason=max）", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  assert.deepEqual(ref.toggleCopyReference(c, [], "d1"), { ok: false, reason: "max" });
++});
++
++await check("C2 自動狀態點一張被挑的：變成指定＝自動那 6 張減掉這張", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  assert.deepEqual(ref.toggleCopyReference(c, [], "d5"), { ok: true, nextIds: ["m1", "d0", "d2", "d7", "d9"] });
++});
++
++await check("C3 指定狀態：加一張、拿一張；拿掉最後一張＝[]（回自動）", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  assert.deepEqual(ref.toggleCopyReference(c, ["d1"], "m2"), { ok: true, nextIds: ["d1", "m2"] });
++  assert.deepEqual(ref.toggleCopyReference(c, ["m2", "d1"], "d1"), { ok: true, nextIds: ["m2"] });
++  assert.deepEqual(ref.toggleCopyReference(c, ["m2"], "m2"), { ok: true, nextIds: [] });
++});
++
++await check("C4 款式圖／合成詳情圖／不存在的 id：not_candidate，不寫", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  for (const id of ["v1", "g1", "nope"]) {
++    assert.deepEqual(ref.toggleCopyReference(c, [], id), { ok: false, reason: "not_candidate" });
++  }
++});
++
++await check("C5 copyReferenceBadgeState：auto／manual／off；非候選＝null（不顯示角標）", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  const auto = ref.selectCopyReferenceImages(c, []);
++  assert.equal(ref.copyReferenceBadgeState(c, auto, "m1"), "auto");
++  assert.equal(ref.copyReferenceBadgeState(c, auto, "d1"), "off");
++  assert.equal(ref.copyReferenceBadgeState(c, auto, "v1"), null);
++  assert.equal(ref.copyReferenceBadgeState(c, auto, "g1"), null);
++  const manual = ref.selectCopyReferenceImages(c, ["d1"]);
++  assert.equal(ref.copyReferenceBadgeState(c, manual, "d1"), "manual");
++  assert.equal(ref.copyReferenceBadgeState(c, manual, "m1"), "off");
++});
++
++await check("C6 copyReferenceHint：自動／指定兩種文案寫死", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  assert.equal(
++    ref.copyReferenceHint(ref.selectCopyReferenceImages(c, [])),
++    "AI 自動挑了 6 張（標「✓ 自動」）讀圖上的字寫文案；想自己指定就點圖上的「文案參考」，最多 6 張"
++  );
++  assert.equal(
++    ref.copyReferenceHint(ref.selectCopyReferenceImages(c, ["m1", "d2", "d3"])),
++    "你指定了 3 張（主圖 1、詳情圖 2）；改完按「↻ 重新生成」或單欄「↻ 重生」才會用新的圖寫文案"
++  );
++});
++
++console.log("\n[D] 快取指紋（fingerprint）");
++
++await check("D1 沒指定：指紋和 4f 之前的算法一字不差（舊商品不會被重讀）", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  // pre-4f algorithm, copied verbatim
++  const legacy = (cands) => {
++    const seen = new Set();
++    const source = cands
++      .filter((x) => x.url.trim())
++      .slice()
++      .sort((a, b) => a.sortOrder - b.sortOrder)
++      .filter((x) => {
++        const u = x.url.trim();
++        if (seen.has(u)) return false;
++        seen.add(u);
++        return true;
++      })
++      .map((x) => `${x.imageType}:${x.sortOrder}:${x.url.trim()}`)
++      .join("\n");
++    let hash = 2166136261;
++    for (let i = 0; i < source.length; i += 1) {
++      hash ^= source.charCodeAt(i);
++      hash = Math.imul(hash, 16777619);
++    }
++    return `v1-${(hash >>> 0).toString(16).padStart(8, "0")}-${source.length}`;
++  };
++  assert.equal(ref.buildVisionSourceFingerprint(c), legacy(c));
++  assert.equal(ref.buildVisionSourceFingerprint(c, []), legacy(c));
++});
++
++await check("D2 指定改了 → 指紋改變；同一組不同順序 → 指紋相同", () => {
++  const c = ref.copyReferenceCandidates(ROWS);
++  const base = ref.buildVisionSourceFingerprint(c);
++  const a = ref.buildVisionSourceFingerprint(c, ["d1", "m1"]);
++  assert.notEqual(a, base);
++  assert.equal(ref.buildVisionSourceFingerprint(c, ["m1", "d1"]), a);
++  assert.notEqual(ref.buildVisionSourceFingerprint(c, ["m1"]), a);
++});
++
++console.log("\n[E] /api/analyze-images 與重生");
++
++await check("E1 analyze-images 用 copyReference：選 id、讀 image_flags 指定、只送選中的網址、指定的 id 進指紋", () => {
++  const s = read("src/app/api/analyze-images/route.ts");
++  assert.match(s, /\.select\("id,image_type,original_file_url,vision_mid_url,sort_order"\)/);
++  assert.match(s, /\.select\("id,image_type,original_file_url,sort_order"\)/);
++  assert.match(s, /const candidates = copyReferenceCandidates\(rows\);/);
++  assert.match(s, /selectCopyReferenceImages\(candidates, parseCopyReferenceIds\(existingFlags\)\)/);
++  assert.match(s, /buildVisionSourceFingerprint\(\s*candidates,\s*selection\.mode === "manual"/);
++  assert.match(s, /const describeUrls = selection\.selected\.map\(\(candidate\) => candidate\.url\);/);
++  assert.ok(!s.includes("selectRepresentativeVisionImages"), "route must not pick images itself");
++});
++
++await check("E2 讀圖失敗不清掉舊的 image_description；仍不碰 spec_text／image_status", () => {
++  const s = read("src/app/api/analyze-images/route.ts");
++  assert.match(s, /imageDescription \? \{ image_description: imageDescription \} : \{\}/);
++  assert.ok(!/\{\s*image_description: imageDescription\s*\}, sourceFingerprint\)/.test(s));
++  assert.ok(!/spec_text:/.test(s));
++  assert.ok(!/image_status:/.test(s));
++});
++
++await check("E3 重生（regen_full／regen_field）先呼叫 analyze-images；失敗只提示、照樣重生", () => {
++  const s = read("src/components/listing/GenerationQueueRunner.tsx");
++  assert.match(s, /async function refreshImageDescriptionForRegen\(draftId: string, title: string\): Promise<void>/);
++  assert.match(s, /圖片重讀失敗，這次沿用上次的圖片資訊/);
++  const regenStart = s.indexOf('if (jobKind !== "full")');
++  const call = s.indexOf("await refreshImageDescriptionForRegen(job.draftId, title);", regenStart);
++  const regenFetch = s.indexOf("regenResponse = await fetch(\"/api/generate\"", regenStart);
++  assert.ok(regenStart > 0 && call > regenStart && call < regenFetch, "must run before the regen /api/generate call");
++  const helper = s.slice(s.indexOf("async function refreshImageDescriptionForRegen"), s.indexOf("async function reportNetworkFailure"));
++  assert.ok(!/return\s+false|throw /.test(helper), "failure must not block regen");
++});
++
++console.log("\n[F] 畫面：規格圖 → 文案參考");
++
++await check("F1 站② 分頁只剩 主圖／詳情圖；舊規格圖列歸主圖；補圖兩頁都能用", () => {
++  assert.deepEqual(tabs.STATION2_IMAGE_SUBTABS, [
++    { id: "main", label: "主圖" },
++    { id: "detail", label: "詳情圖" }
++  ]);
++  assert.equal(tabs.isMainSubtabImage({ image_type: "main", is_spec_process: true }), true);
++  assert.equal(tabs.isMainSubtabImage({ image_type: "spec", is_spec_process: false }), true);
++  assert.equal(tabs.isMainSubtabImage({ image_type: "detail", is_spec_process: false }), false);
++  assert.equal(tabs.station2UploadImageType("main"), "main");
++  assert.equal(tabs.station2UploadImageType("detail"), "detail");
++  assert.equal("isSpecImage" in tabs, false);
++});
++
++await check("F2 「規格圖」按鈕全部拿掉（ImageUploader／站②／站③／ResultCard）", () => {
++  for (const f of [
++    "src/components/listing/ImageUploader.tsx",
++    "src/components/listing/Station2ImagePanel.tsx",
++    "src/components/listing/result-card/ResultCardImagesPanel.tsx",
++    "src/components/listing/ResultCard.tsx"
++  ]) {
++    const s = read(f);
++    assert.ok(!s.includes("標示為規格圖"), f);
++    assert.ok(!s.includes("📐 規格圖"), f);
++    assert.ok(!/toggleSpec(Mark|OnCard)?\(/.test(s), f);
++    assert.ok(!s.includes("規格圖標記失敗"), f);
++  }
++  const s2 = read("src/components/listing/Station2ImagePanel.tsx");
++  assert.ok(!s2.includes("目前排第一的是規格圖"));
++  assert.ok(!s2.includes("s2-img-spec-hint"));
++  assert.ok(!s2.includes('subtab === "spec"'));
++});
++
++await check("F3 文案參考角標：沿用 .pthumb-spec-badge；三種字（文案參考／✓ 自動／✓ 文案參考），站③ 詳情小圖用 compact", () => {
++  const c = read("src/components/listing/CopyReferenceControls.tsx");
++  assert.match(c, /className=\{`pthumb-spec-badge\$\{state === "manual" \? " active" : ""\}\$\{state === "auto" \? " is-auto" : ""\}\$\{compact \? " is-compact" : ""\}`\}/);
++  for (const t of ['"✓ 自動"', '"✓ 文案參考"', '"文案參考"', '"✓ 參考"', '"參考"', "恢復自動挑選", "文案參考圖"]) {
++    assert.ok(c.includes(t), t);
++  }
++  assert.match(c, /\.from\("product_drafts"\)\s*\.select\("image_flags"\)/);
++  assert.ok(!c.includes('from("product_images")'), "must never write product_images (dirty trigger)");
++  assert.ok(!c.includes("router.refresh"), "no refresh storm");
++  assert.ok(!c.includes("markShopifyDirty"), "copy refs never affect Shopify");
++  const s2 = read("src/components/listing/Station2ImagePanel.tsx");
++  assert.match(s2, /<CopyReferenceRow busy=\{copyRef\.busy\} onReset=\{copyRef\.reset\} selection=\{copyRef\.selection\} \/>/);
++  assert.match(s2, /<CopyReferenceBadge[\s\S]*?onToggle=\{\(\) => copyRef\.toggle\(image\.id\)\}/);
++  const s3 = read("src/components/listing/result-card/ResultCardImagesPanel.tsx");
++  assert.equal((s3.match(/<CopyReferenceBadge/g) || []).length, 2);
++  assert.match(s3, /<CopyReferenceBadge\s+compact/);
++  assert.match(s3, /<CopyReferenceRow/);
++  const rc = read("src/components/listing/ResultCard.tsx");
++  assert.match(rc, /const copyReference = useCopyReference\(\{/);
++  assert.match(rc, /copyReference=\{copyReference\}/);
++});
++
++await check("F4 CSS：只加 .is-auto／.is-compact 兩個修飾，沒有 !important", () => {
++  const g = read("src/app/globals.css");
++  const auto = g.match(/\.pthumb-spec-badge\.is-auto \{[^}]*\}/);
++  const compact = g.match(/\.pthumb-spec-badge\.is-compact \{[^}]*\}/);
++  assert.ok(auto && compact);
++  assert.match(auto[0], /border-color: var\(--accent\);[\s\S]*color: var\(--accent\);/);
++  assert.match(compact[0], /top: auto;[\s\S]*bottom: 3px;[\s\S]*font-size: 9px;/);
++  assert.ok(!/!important/.test(auto[0] + compact[0]));
++});
++
++await check("F5 ImageUploader 詳情圖字樣不再寫「不上架」；提示改成文案參考說明", () => {
++  const s = read("src/components/listing/ImageUploader.tsx");
++  assert.ok(s.includes('label: "詳情圖（會放進商品描述，也給 AI 讀字）"'));
++  assert.ok(!s.includes("不上架"));
++  assert.ok(!s.includes("主圖右上角可標規格圖"));
++  assert.ok(s.includes("AI 會自動挑圖讀字；想指定，生成後到審核卡「圖片」分頁點「文案參考」"));
++  const s2 = read("src/components/listing/Station2ImagePanel.tsx");
++  assert.ok(!s2.includes("不上架"));
++  assert.ok(!s2.includes("僅供辨識"));
++  assert.ok(!read("src/lib/images/processMarks.ts").includes("詳情圖不上架"));
++});
++
++console.log(`\n${passed} passed, ${failed.length} failed`);
++if (failed.length > 0) process.exit(1);
+diff --git a/scripts/verify-all.mjs b/scripts/verify-all.mjs
+index bf6088d..2dae0b0 100644
+--- a/scripts/verify-all.mjs
++++ b/scripts/verify-all.mjs
+@@ -103,7 +103,8 @@ const scripts = [
+   "scripts/verify-capture-scroll.mjs",
+   "scripts/verify-4a3.mjs",
+   // 4e DETAIL-LISTING: detail images in the description via Shopify Files.
+-  "scripts/verify-4e.mjs"
++  "scripts/verify-4e.mjs",
++  "scripts/verify-4f.mjs"
+ ];
+ 
+ for (const script of scripts) {
+diff --git a/scripts/verify-mobile-layout-regression-restore.mjs b/scripts/verify-mobile-layout-regression-restore.mjs
+index 6799cb3..1168e7e 100644
+--- a/scripts/verify-mobile-layout-regression-restore.mjs
++++ b/scripts/verify-mobile-layout-regression-restore.mjs
+@@ -38,7 +38,6 @@ expect(thumb, /\.pthumb-img-wrap\s*>\s*\.thumb-remove\s*\{[^}]*right:\s*-8px;[^}
+ expect(globals, /@keyframes\s+uploadSpin/, "upload spinner keyframes must remain");
+ expect(globals, /\.pthumb-dragging\s*\{/, "thumbnail drag feedback must remain");
+ expect(uploader, /retryUpload\(item\)/, "failed-upload retry must remain");
+-expect(uploader, /toggleSpecMark\(item\)/, "spec marking must remain");
+ expect(uploader, /draggable/, "thumbnail reorder must remain");
+ 
+ // Runtime-proven results containment stays underneath this visual pass.
+diff --git a/src/app/api/analyze-images/route.ts b/src/app/api/analyze-images/route.ts
+index cb6b5a4..b0ad1ed 100644
+--- a/src/app/api/analyze-images/route.ts
++++ b/src/app/api/analyze-images/route.ts
+@@ -4,10 +4,11 @@ import { canOperate } from "@/lib/auth/roles";
+ import { parseImageFlags, VISION_STATUS_FLAG_KEY } from "@/lib/images/imageReview";
+ import {
+   buildVisionSourceFingerprint,
+-  describeProductImages,
+-  selectRepresentativeVisionImages,
+-  type VisionImageCandidate,
+-} from "@/lib/providers/visionProvider";
++  copyReferenceCandidates,
++  parseCopyReferenceIds,
++  selectCopyReferenceImages,
++} from "@/lib/images/copyReference";
++import { describeProductImages } from "@/lib/providers/visionProvider";
+ import type { ImageType } from "@/types/domain";
+ 
+ // A2 (B1 對齊 Mockup差異備忘 差異2)：standalone sync route so Vision's latency
+@@ -20,8 +21,12 @@ import type { ImageType } from "@/types/domain";
+ //
+ // P1-3 / 回饋 52: Vision MUST NOT write product_drafts.image_status (shared with D3/D5
+ // image pipeline). Status lives under image_flags.vision_status only.
++//
++// 4f 文案參考圖：image_flags.copy_reference_image_ids 有指定（且圖還在）就只讀那幾張；
++// 沒指定＝自動挑（1 主圖＋平均分布的詳情圖，共 6 張）。指定改了 → fingerprint 變 → 重讀。
+ 
+ type ImageRow = {
++  id: string;
+   image_type: ImageType;
+   original_file_url: string | null;
+   /** A19: prefer ~1280 mid for Vision when present */
+@@ -95,7 +100,7 @@ export async function POST(request: NextRequest) {
+   // A19: prefer vision_mid_url (~1280) over original for faster Vision; fall back if 039 not applied.
+   const { data: imageRows, error: imagesError } = await authSupabase
+     .from("product_images")
+-    .select("image_type,original_file_url,vision_mid_url,sort_order")
++    .select("id,image_type,original_file_url,vision_mid_url,sort_order")
+     .eq("draft_id", draftId)
+     .in("image_type", ["main", "detail"])
+     .order("sort_order", { ascending: true });
+@@ -111,7 +116,7 @@ export async function POST(request: NextRequest) {
+     }
+     const fallback = await authSupabase
+       .from("product_images")
+-      .select("image_type,original_file_url,sort_order")
++      .select("id,image_type,original_file_url,sort_order")
+       .eq("draft_id", draftId)
+       .in("image_type", ["main", "detail"])
+       .order("sort_order", { ascending: true });
+@@ -123,26 +128,17 @@ export async function POST(request: NextRequest) {
+     rows = (imageRows ?? []) as ImageRow[];
+   }
+ 
+-  const candidates = rows
+-    .map((row) => {
+-      if (row.image_type !== "main" && row.image_type !== "detail") return null;
+-      const mid = typeof row.vision_mid_url === "string" ? row.vision_mid_url.trim() : "";
+-      const orig = typeof row.original_file_url === "string" ? row.original_file_url.trim() : "";
+-      const url = mid || orig;
+-      return url
+-        ? {
+-            imageType: row.image_type,
+-            url,
+-            sortOrder: Number(row.sort_order ?? 0),
+-          } satisfies VisionImageCandidate
+-        : null;
+-    })
+-    .filter((candidate): candidate is VisionImageCandidate => candidate !== null);
+-
+-  const sourceFingerprint = buildVisionSourceFingerprint(candidates);
++  const candidates = copyReferenceCandidates(rows);
+   const existingFlags = parseImageFlags(
+     (draftRow as { image_flags?: unknown }).image_flags,
+   );
++  const selection = selectCopyReferenceImages(candidates, parseCopyReferenceIds(existingFlags));
++  const sourceFingerprint = buildVisionSourceFingerprint(
++    candidates,
++    selection.mode === "manual"
++      ? selection.selected.map((candidate) => candidate.id).filter((id): id is string => Boolean(id))
++      : [],
++  );
+   const existingDescription =
+     typeof (draftRow as { image_description?: unknown }).image_description === "string"
+       ? (draftRow as { image_description: string }).image_description.trim()
+@@ -161,7 +157,7 @@ export async function POST(request: NextRequest) {
+     });
+   }
+ 
+-  const describeUrls = selectRepresentativeVisionImages(candidates).map((candidate) => candidate.url);
++  const describeUrls = selection.selected.map((candidate) => candidate.url);
+ 
+   const serviceSupabase = createServiceSupabaseClient();
+ 
+@@ -187,9 +183,14 @@ export async function POST(request: NextRequest) {
+ 
+   // Only image_description is written -- spec_text is intentionally left alone.
+   // image_status intentionally left alone (P1-3).
+-  const { error: updateError } = await mergeVisionStatus(serviceSupabase, draftId, visionStatus, {
+-    image_description: imageDescription
+-  }, sourceFingerprint);
++  // 4f: a failed read keeps the previous image_description (regen must not lose it); status=failed retries next time.
++  const { error: updateError } = await mergeVisionStatus(
++    serviceSupabase,
++    draftId,
++    visionStatus,
++    imageDescription ? { image_description: imageDescription } : {},
++    sourceFingerprint,
++  );
+ 
+   if (updateError) {
+     return Response.json({ error: updateError.message }, { status: 500 });
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 9edf538..85fe8a3 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -2512,7 +2512,7 @@ textarea {
+   border-radius: 999px;
+   line-height: 1.2;
+ }
+-/* UX-B2-P10: 規格圖 corner badge (station② / input / station③) */
++/* UX-B2-P10: corner badge (station② / station③); 4f: now 文案參考 (was 規格圖) */
+ .pthumb-spec-badge {
+   position: absolute;
+   top: 6px;
+@@ -2550,6 +2550,22 @@ textarea {
+   color: var(--accent-fg);
+   filter: brightness(1.05);
+ }
++/* 4f: AI 自動挑的文案參考圖 = accent outline (manual pick = .active filled) */
++.pthumb-spec-badge.is-auto {
++  border-color: var(--accent);
++  color: var(--accent);
++}
++/* 4f: station③ 60px detail thumbs — badge along the bottom edge; ✕ keeps top-right */
++.pthumb-spec-badge.is-compact {
++  top: auto;
++  bottom: 3px;
++  left: 3px;
++  right: 3px;
++  max-width: none;
++  font-size: 9px;
++  padding: 1px 4px;
++  text-align: center;
++}
+ /* 觸控：放大 hit 區（padding / pseudo），無 !important */
+ @media (max-width: 959px) {
+   .pthumb-spec-badge {
+diff --git a/src/components/listing/CopyReferenceControls.tsx b/src/components/listing/CopyReferenceControls.tsx
+new file mode 100644
+index 0000000..9f66086
+--- /dev/null
++++ b/src/components/listing/CopyReferenceControls.tsx
+@@ -0,0 +1,178 @@
++"use client";
++
++import { useMemo, useState } from "react";
++import { Button } from "@/components/ui/Button";
++import { showToast } from "@/components/Toast";
++import { createClient } from "@/lib/supabase/client";
++import {
++  copyReferenceBadgeState,
++  copyReferenceCandidates,
++  copyReferenceHint,
++  MAX_COPY_REFERENCE_IMAGES,
++  mergeCopyReferenceIds,
++  parseCopyReferenceIds,
++  selectCopyReferenceImages,
++  toggleCopyReference,
++  type CopyReferenceBadgeState,
++  type CopyReferenceImageRow,
++  type CopyReferenceSelection,
++} from "@/lib/images/copyReference";
++
++/**
++ * 4f 文案參考圖 state for one draft (station② / station③ share it).
++ * Writes product_drafts.image_flags.copy_reference_image_ids only — read-then-merge so
++ * vision_status / fingerprint written by analyze-images are never clobbered; never touches
++ * product_images (no 「需同步」 dirty mark) and never refreshes the page.
++ */
++export function useCopyReference({
++  draftId,
++  images,
++  imageFlags,
++  onImageFlagsChange,
++}: {
++  draftId: string;
++  images: readonly CopyReferenceImageRow[];
++  imageFlags: unknown;
++  onImageFlagsChange: (next: Record<string, unknown>) => void;
++}) {
++  const supabase = createClient();
++  const [busy, setBusy] = useState(false);
++  const candidates = useMemo(() => copyReferenceCandidates(images), [images]);
++  const storedIds = useMemo(() => parseCopyReferenceIds(imageFlags), [imageFlags]);
++  const selection = useMemo(
++    () => selectCopyReferenceImages(candidates, storedIds),
++    [candidates, storedIds],
++  );
++
++  async function save(nextIds: string[], okMessage: string) {
++    if (busy) return;
++    setBusy(true);
++    try {
++      const { data: row, error: readError } = await supabase
++        .from("product_drafts")
++        .select("image_flags")
++        .eq("id", draftId)
++        .single();
++      if (readError) {
++        showToast(`文案參考圖儲存失敗：${readError.message}`, "error");
++        return;
++      }
++      const next = mergeCopyReferenceIds(row?.image_flags, nextIds);
++      const { error } = await supabase
++        .from("product_drafts")
++        .update({ image_flags: next })
++        .eq("id", draftId);
++      if (error) {
++        showToast(`文案參考圖儲存失敗：${error.message}`, "error");
++        return;
++      }
++      onImageFlagsChange(next);
++      showToast(okMessage, nextIds.length > 0 ? "success" : "info");
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  function toggle(imageId: string) {
++    const result = toggleCopyReference(candidates, storedIds, imageId);
++    if (!result.ok) {
++      if (result.reason === "max") {
++        showToast(`文案參考最多 ${MAX_COPY_REFERENCE_IMAGES} 張，請先取消一張`, "error");
++      }
++      return;
++    }
++    void save(
++      result.nextIds,
++      result.nextIds.length > 0
++        ? `文案參考圖已更新（${result.nextIds.length} 張）`
++        : "沒有指定的圖了，改回 AI 自動挑選",
++    );
++  }
++
++  function reset() {
++    void save([], "已改回 AI 自動挑選");
++  }
++
++  function badgeState(imageId: string): CopyReferenceBadgeState {
++    return copyReferenceBadgeState(candidates, selection, imageId);
++  }
++
++  return { busy, selection, toggle, reset, badgeState };
++}
++
++/** 4f: corner badge on a thumb — reuses .pthumb-spec-badge (位置、樣子沿用舊「規格圖」角標). */
++export function CopyReferenceBadge({
++  state,
++  disabled = false,
++  compact = false,
++  onToggle,
++}: {
++  state: CopyReferenceBadgeState;
++  disabled?: boolean;
++  /** station③ 60px detail thumbs: shorter text along the bottom edge. */
++  compact?: boolean;
++  onToggle: () => void;
++}) {
++  if (state === null) return null;
++  const label =
++    state === "auto"
++      ? "✓ 自動"
++      : state === "manual"
++        ? compact
++          ? "✓ 參考"
++          : "✓ 文案參考"
++        : compact
++          ? "參考"
++          : "文案參考";
++  const title =
++    state === "auto"
++      ? "AI 自動挑的文案參考圖；點一下拿掉這張，改成自己指定"
++      : state === "manual"
++        ? "取消文案參考"
++        : "設為文案參考圖：AI 會讀這張圖上的字寫文案";
++  return (
++    <button
++      aria-pressed={state !== "off"}
++      className={`pthumb-spec-badge${state === "manual" ? " active" : ""}${state === "auto" ? " is-auto" : ""}${compact ? " is-compact" : ""}`}
++      disabled={disabled}
++      onClick={(event) => {
++        event.preventDefault();
++        event.stopPropagation();
++        onToggle();
++      }}
++      onMouseDown={(event) => event.stopPropagation()}
++      title={title}
++      type="button"
++    >
++      {label}
++    </button>
++  );
++}
++
++/** 4f: one row above the thumbs — what AI reads now + 恢復自動挑選 when manual. */
++export function CopyReferenceRow({
++  selection,
++  busy,
++  onReset,
++}: {
++  selection: CopyReferenceSelection;
++  busy: boolean;
++  onReset: () => void;
++}) {
++  if (selection.selected.length === 0) return null;
++  return (
++    <div className="s2-compose-row copyref-row">
++      <div className="s2-compose-copy">
++        <span className="s2-compose-title">文案參考圖</span>
++        <span className="s2-compose-hint">{copyReferenceHint(selection)}</span>
++      </div>
++      {selection.mode === "manual" ? (
++        <Button disabled={busy} onClick={onReset} size="sm" type="button">
++          恢復自動挑選
++        </Button>
++      ) : null}
++    </div>
++  );
++}
++
++export type CopyReferenceController = ReturnType<typeof useCopyReference>;
+diff --git a/src/components/listing/GenerationQueueRunner.tsx b/src/components/listing/GenerationQueueRunner.tsx
+index 9ef4bb6..fb7e476 100644
+--- a/src/components/listing/GenerationQueueRunner.tsx
++++ b/src/components/listing/GenerationQueueRunner.tsx
+@@ -71,6 +71,25 @@ function emitRegenStatus(detail: RegenQueueStatusDetail) {
+   window.dispatchEvent(new CustomEvent<RegenQueueStatusDetail>(REGEN_QUEUE_STATUS_EVENT, { detail }));
+ }
+ 
++/**
++ * 4f: regen re-reads images first so a changed 文案參考圖 pick is used. Unchanged images hit the
++ * analyze-images fingerprint cache (no AI call). Failure never blocks the regen — the old
++ * image_description stays and the operator gets one info toast.
++ */
++async function refreshImageDescriptionForRegen(draftId: string, title: string): Promise<void> {
++  const failMessage = `${title}：圖片重讀失敗，這次沿用上次的圖片資訊`;
++  try {
++    const response = await fetch("/api/analyze-images", {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ draftId }),
++    });
++    if (!response.ok) showToast(failMessage, "info");
++  } catch {
++    showToast(failMessage, "info");
++  }
++}
++
+ async function reportNetworkFailure(job: ClaimedJob, message: string): Promise<string> {
+   try {
+     const response = await fetch("/api/generation-queue", {
+@@ -118,6 +137,8 @@ export function GenerationQueueRunner() {
+           field: job.input.regenField ?? null,
+         });
+ 
++        await refreshImageDescriptionForRegen(job.draftId, title);
++
+         let regenResponse: Response;
+         try {
+           regenResponse = await fetch("/api/generate", {
+diff --git a/src/components/listing/ImageUploader.tsx b/src/components/listing/ImageUploader.tsx
+index 5c0b9a5..8ada8d1 100644
+--- a/src/components/listing/ImageUploader.tsx
++++ b/src/components/listing/ImageUploader.tsx
+@@ -15,7 +15,6 @@ import {
+   dualSizeExt
+ } from "@/lib/images/clientImageResize";
+ import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
+-import { intentForSpecToggle } from "@/lib/images/processMarks";
+ import { showToast } from "@/components/Toast";
+ import {
+   deleteProductImages,
+@@ -24,8 +23,8 @@ import {
+ import type { ImageProcessIntent, ImageType } from "@/types/domain";
+ 
+ // B1 (Mockup差異備忘 差異2): 只有主圖／詳情圖兩框。規格改表單手填欄位，不再上傳規格圖
+-// 做 OCR。詳情圖給 AI 讀資訊用（Vision 會轉錄圖上可見文字），不上架。
+-// B5: 主圖區每張縮圖可切「規格圖」＝去簡體字影像處理標記（不是 OCR）。
++// 做 OCR。詳情圖給 AI 讀資訊用（Vision 會轉錄圖上可見文字），4e 起也會放進商品描述。
++// 4f: 「規格圖」角標拿掉（全店幾乎沒用、和卡片「去字」重複）；文案參考圖在審核卡圖片分頁勾。
+ // P1-1: never call parent onUploadingChange inside setState updater; no router.refresh on
+ // upload/mark (local previews are source of truth; refresh storm wiped the form).
+ // P1-2: optimistic blob thumbs, per-file fail/retry, delete ×, optional seed from DB.
+@@ -42,7 +41,7 @@ const zones: Array<{
+   dropTitle: string;
+ }> = [
+   { type: "main", icon: "🖼", label: "主圖（3-5張）", badgeClass: "badge-main", badgeText: "1:1 裁切", dropTitle: "點擊或拖曳主圖" },
+-  { type: "detail", icon: "📋", label: "詳情圖（供 AI 讀資訊，不上架）", badgeClass: "badge-detail", badgeText: "Vision 參考", dropTitle: "點擊或拖曳詳情圖" }
++  { type: "detail", icon: "📋", label: "詳情圖（會放進商品描述，也給 AI 讀字）", badgeClass: "badge-detail", badgeText: "Vision 參考", dropTitle: "點擊或拖曳詳情圖" }
+ ];
+ 
+ type PreviewStatus = "ready" | "uploading" | "failed";
+@@ -647,38 +646,6 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
+     }
+   }
+ 
+-  // B5: 規格圖 toggle on main-zone thumbs. Writes via existing product_images
+-  // update RLS (owner of unpublished draft / reviewer) — same path as delete.
+-  // P1-1: no router.refresh — local previews updated in place.
+-  async function toggleSpecMark(item: PreviewItem) {
+-    if (!item.id || item.status !== "ready") return;
+-    const next = intentForSpecToggle(!item.is_spec_process);
+-    setMarkError("");
+-    const { error } = await supabase
+-      .from("product_images")
+-      .update({
+-        is_spec_process: next.is_spec_process,
+-        process_intent: next.process_intent
+-      })
+-      .eq("id", item.id);
+-
+-    if (error) {
+-      const msg = `標記失敗：${error.message}`;
+-      setMarkError(msg);
+-      showToast(msg, "error");
+-      return;
+-    }
+-
+-    setPreviews((current) => {
+-      const main = (current.main ?? []).map((row) =>
+-        row.clientKey === item.clientKey
+-          ? { ...row, is_spec_process: next.is_spec_process, process_intent: next.process_intent }
+-          : row
+-      );
+-      return { ...current, main };
+-    });
+-  }
+-
+   /** UX-D T22: reorder list locally, reindex sort_order, persist rows with id. */
+   async function applyReorder(type: ImageType, fromKey: string, toKey: string) {
+     if (fromKey === toKey) return;
+@@ -810,23 +777,6 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
+                         {/* eslint-disable-next-line @next/next/no-img-element */}
+                         <img alt={zone.label} className="thumb pthumb-img" src={item.url} />
+                         {isFirstMain ? <span className="pthumb-badge">主圖</span> : null}
+-                        {/* UX-B2-P10: 規格圖 → corner badge (same language as station②) */}
+-                        {isMainZone && item.status === "ready" ? (
+-                          <button
+-                            type="button"
+-                            aria-pressed={item.is_spec_process}
+-                            className={`pthumb-spec-badge${item.is_spec_process ? " active" : ""}`}
+-                            title={item.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
+-                            onClick={(event) => {
+-                              event.preventDefault();
+-                              event.stopPropagation();
+-                              void toggleSpecMark(item);
+-                            }}
+-                            onMouseDown={(event) => event.stopPropagation()}
+-                          >
+-                            {item.is_spec_process ? "📐 規格圖" : "規格圖"}
+-                          </button>
+-                        ) : null}
+                         {item.status === "uploading" ? (
+                           <span className="pthumb-status-overlay">上傳中…</span>
+                         ) : null}
+@@ -870,7 +820,7 @@ export const ImageUploader = forwardRef<ImageUploaderHandle, ImageUploaderProps>
+       {/* UX-D T23: short form-side tip only; process-intent hard gate stays at station ② / B5. */}
+       {mainItems.length > 0 ? (
+         <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+-          主圖右上角可標規格圖
++          AI 會自動挑圖讀字；想指定，生成後到審核卡「圖片」分頁點「文案參考」
+         </div>
+       ) : null}
+       {markError ? (
+diff --git a/src/components/listing/ResultCard.tsx b/src/components/listing/ResultCard.tsx
+index 2bf91a7..485fe1e 100644
+--- a/src/components/listing/ResultCard.tsx
++++ b/src/components/listing/ResultCard.tsx
+@@ -170,6 +170,7 @@ import { ResultCardPricingPanel } from "@/components/listing/result-card/ResultC
+ import { ResultCardTagsPanel } from "@/components/listing/result-card/ResultCardTagsPanel";
+ import { ResultCardSeoPanel } from "@/components/listing/result-card/ResultCardSeoPanel";
+ import { ResultCardImagesPanel } from "@/components/listing/result-card/ResultCardImagesPanel";
++import { useCopyReference } from "@/components/listing/CopyReferenceControls";
+ import {
+   isDescriptionDetailImagesEnabled,
+   mergeDescriptionDetailImagesFlag
+@@ -308,7 +309,7 @@ export function ResultCard({
+   const [activeTab, setActiveTab] = useState<ResultCardTabId>(
+     sequentialMode && sequentialStation === "image" ? "images" : "copy"
+   );
+-  /** 站②：外層分頁＝主圖／規格圖／詳情圖（不再多一層「圖片」） */
++  /** 站②：外層分頁＝主圖／詳情圖（不再多一層「圖片」；4f 拿掉規格圖） */
+   const [s2ImageSubtab, setS2ImageSubtab] = useState<Station2ImageSubtab>("main");
+   const lastApproveSignalRef = useRef<number | undefined>(approveSignal);
+   const [title, setTitle] = useState(draft.title_zh ?? "");
+@@ -418,6 +419,13 @@ export function ResultCard({
+   const [imageMarks, setImageMarks] = useState<ProductImage[]>(images);
+   /** SYN-1: local image_flags so 生成詳情圖 toggle stays after write without full refresh */
+   const [draftImageFlags, setDraftImageFlags] = useState<unknown>(draft.image_flags);
++  /** 4f: 文案參考圖 for station③ 圖片 tab (station② panel runs its own hook on the same flags). */
++  const copyReference = useCopyReference({
++    draftId: draft.id,
++    images: imageMarks,
++    imageFlags: draftImageFlags,
++    onImageFlagsChange: setDraftImageFlags,
++  });
+   /** 4e: 詳情圖放進商品描述 switch write in flight */
+   const [descriptionImagesBusy, setDescriptionImagesBusy] = useState(false);
+   /** UX-H T49: soft-remove fade on delete image */
+@@ -2193,33 +2201,6 @@ export function ResultCard({
+     router.refresh();
+   }
+ 
+-  async function toggleSpecOnCard(image: ProductImage) {
+-    const nextOn = !image.is_spec_process;
+-    const patch = nextOn
+-      ? { is_spec_process: true, process_intent: "de_text" as const }
+-      : { is_spec_process: false, process_intent: null };
+-    setMarkMessage("");
+-    const { error } = await supabase
+-      .from("product_images")
+-      .update(patch)
+-      .eq("id", image.id);
+-
+-    if (error) {
+-      setMarkMessage(`規格圖標記失敗：${error.message}`);
+-      return;
+-    }
+-
+-    setImageMarks((current) =>
+-      current.map((row) =>
+-        row.id === image.id
+-          ? { ...row, is_spec_process: patch.is_spec_process, process_intent: patch.process_intent }
+-          : row
+-      )
+-    );
+-    await markShopifyDirty();
+-    router.refresh();
+-  }
+-
+   // B5 裁決 3A: block when unmarked (specific which/how many).
+   // B14 1A: single 送圖 also creates a 1-item image batch (no Make webhook yet).
+   // B9: always surface markMessage while collapsed (never silent).
+@@ -3173,7 +3154,7 @@ export function ResultCard({
+ 
+       {expanded ? (
+         <div className="rc-body">
+-          {/* R2: station② 分頁＝主圖／規格圖／詳情圖（＋REVIEW-FLOW B3：款式「規格」）；station① 全文案 tabs；station③ full + publish */}
++          {/* R2: station② 分頁＝主圖／詳情圖（4f 拿掉規格圖；＋REVIEW-FLOW B3：款式「規格」）；station① 全文案 tabs；station③ full + publish */}
+           {isImageStation ? (
+             <div className="rc-tabs" role="tablist" aria-label="圖片類型">
+               {STATION2_IMAGE_SUBTABS.map((tab) => {
+@@ -3347,6 +3328,7 @@ export function ResultCard({
+             )
+           ) : !isCopyStation && activeTab === "images" ? (
+             <ResultCardImagesPanel
++              copyReference={copyReference}
+               descriptionImagesBusy={descriptionImagesBusy}
+               descriptionImagesOn={isDescriptionDetailImagesEnabled(draftImageFlags)}
+               excludedDetailImages={excludedDetailImages}
+@@ -3358,7 +3340,6 @@ export function ResultCard({
+               restoreImageDisabledReason={restoreImageDisabledReason}
+               onRemoveImage={(image) => void removeImage(image)}
+               onSetProcessIntent={(image, intent) => void setProcessIntent(image, intent)}
+-              onToggleSpec={(image) => void toggleSpecOnCard(image)}
+               pipelineImages={pipelineImages}
+               unmarkedBlockMessage={unmarkedBlockMessage}
+               unmarkedImages={unmarkedImages}
+diff --git a/src/components/listing/Station2ImagePanel.tsx b/src/components/listing/Station2ImagePanel.tsx
+index 7b4a703..b314f20 100644
+--- a/src/components/listing/Station2ImagePanel.tsx
++++ b/src/components/listing/Station2ImagePanel.tsx
+@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
+ import { Button } from "@/components/ui/Button";
+ import { createClient } from "@/lib/supabase/client";
+ import { showToast } from "@/components/Toast";
++import {
++  CopyReferenceBadge,
++  CopyReferenceRow,
++  useCopyReference,
++} from "@/components/listing/CopyReferenceControls";
+ import {
+   deleteProductImages,
+   deleteProductImagesFailureMessage
+@@ -23,7 +28,6 @@ import {
+   filterStation2SubtabImages,
+   isDetailSubtabImage,
+   isMainSubtabImage,
+-  isSpecImage,
+   STATION2_IMAGE_SUBTABS,
+   station2SubtabCount,
+   station2UploadImageType,
+@@ -52,8 +56,8 @@ function sortByOrder(a: ProductImage, b: ProductImage): number {
+ }
+ 
+ /**
+- * UX-F T30: station② 主圖｜規格圖｜詳情圖 + marks + DnD sort + 補圖.
+- * Spec tab = mark semantics only (no dedicated upload).
++ * UX-F T30: station② 主圖｜詳情圖 + marks + DnD sort + 補圖.
++ * 4f: 規格圖 tab/badge removed; corner badge = 文案參考 (image_flags.copy_reference_image_ids).
+  * SYN-1 UI: 生成詳情圖 draft-level switch (image_flags.generate_detail, default on).
+  */
+ export function Station2ImagePanel({
+@@ -77,7 +81,7 @@ export function Station2ImagePanel({
+   onImageFlagsChange?: (next: Record<string, unknown>) => void;
+   subtab?: Station2ImageSubtab;
+   onSubtabChange?: (tab: Station2ImageSubtab) => void;
+-  /** true＝外層已有主圖／規格圖／詳情圖 tabs，隱藏內層分層 */
++  /** true＝外層已有主圖／詳情圖 tabs，隱藏內層分層 */
+   hideSubtabs?: boolean;
+ }) {
+   const supabase = createClient();
+@@ -112,12 +116,14 @@ export function Station2ImagePanel({
+     () => filterStation2SubtabImages(images, subtab),
+     [images, subtab]
+   );
+-  const canUpload = station2UploadImageType(subtab) != null;
+-  const showMarks = subtab === "main" || subtab === "spec";
++  const showMarks = subtab === "main";
+   const shopifyMainId = pickShopifyMainImage(images)?.id ?? null;
+-  const shopifyMainIsSpec =
+-    shopifyMainId != null &&
+-    images.some((image) => image.id === shopifyMainId && isSpecImage(image));
++  const copyRef = useCopyReference({
++    draftId,
++    images,
++    imageFlags,
++    onImageFlagsChange: (next) => onImageFlagsChange?.(next),
++  });
+ 
+   async function setProcessIntent(image: ProductImage, intent: ImageProcessIntent) {
+     const patch = patchForProcessIntentPick(intent, image.is_spec_process);
+@@ -145,29 +151,6 @@ export function Station2ImagePanel({
+     );
+   }
+ 
+-  async function toggleSpec(image: ProductImage) {
+-    const nextOn = !image.is_spec_process;
+-    const patch = nextOn
+-      ? { is_spec_process: true, process_intent: "de_text" as const }
+-      : { is_spec_process: false, process_intent: null };
+-    setLocalMsg("");
+-    setBusyId(image.id);
+-    const { error } = await supabase.from("product_images").update(patch).eq("id", image.id);
+-    setBusyId(null);
+-    if (error) {
+-      setLocalMsg(`規格圖標記失敗：${error.message}`);
+-      showToast(`規格圖標記失敗：${error.message}`, "error");
+-      return;
+-    }
+-    onImagesChange(
+-      images.map((row) =>
+-        row.id === image.id
+-          ? { ...row, is_spec_process: patch.is_spec_process, process_intent: patch.process_intent }
+-          : row
+-      )
+-    );
+-  }
+-
+   function clearDeleteArm() {
+     if (deleteArmTimerRef.current != null) {
+       window.clearTimeout(deleteArmTimerRef.current);
+@@ -252,7 +235,7 @@ export function Station2ImagePanel({
+     const tabQueue = [...nextTab];
+ 
+     /**
+-     * Main/spec share image_type=main pool — rebuild full pool so sort_order
++     * Main tab shares the image_type=main/variant/spec pool — rebuild full pool so sort_order
+      * stays unique: keep other-group slots, fill this tab’s new order.
+      * Detail pool is independent.
+      */
+@@ -266,7 +249,7 @@ export function Station2ImagePanel({
+         .filter((img) => img.image_type === "main" || img.image_type === "variant" || img.image_type === "spec")
+         .slice()
+         .sort(sortByOrder);
+-      inThisTab = subtab === "main" ? isMainSubtabImage : isSpecImage;
++      inThisTab = isMainSubtabImage;
+     }
+ 
+     const rebuilt: ProductImage[] = [];
+@@ -465,6 +448,9 @@ export function Station2ImagePanel({
+         </label>
+       </div>
+ 
++      {/* 4f: 文案參考圖 — AI 先自動挑，老闆可點圖右上角改選 */}
++      <CopyReferenceRow busy={copyRef.busy} onReset={copyRef.reset} selection={copyRef.selection} />
++
+       {hideSubtabs ? null : (
+         <div className="s2-img-subtabs" role="tablist" aria-label="圖片類型">
+           {STATION2_IMAGE_SUBTABS.map((tab) => {
+@@ -491,21 +477,13 @@ export function Station2ImagePanel({
+         <div className="rc-label">
+           {subtab === "main"
+             ? "主圖標記與排序（拖曳縮圖可改順序）"
+-            : subtab === "spec"
+-              ? "規格圖（在主圖標「規格圖」後會出現在此）"
+-              : isDescriptionDetailImagesEnabled(imageFlags)
+-                ? "詳情圖（會放進商品描述，也給 AI 讀字；開關在審核卡「圖片」分頁）"
+-                : "詳情圖（這件設定不放進商品描述，只給 AI 讀字）"}
++            : isDescriptionDetailImagesEnabled(imageFlags)
++              ? "詳情圖（會放進商品描述，也給 AI 讀字；開關在審核卡「圖片」分頁）"
++              : "詳情圖（這件設定不放進商品描述，只給 AI 讀字）"}
+         </div>
+ 
+-        {subtab === "main" && shopifyMainIsSpec ? (
+-          <div className="price-soft-warn">
+-            ⚠ 目前排第一的是規格圖，Shopify 會用它當主圖；想換就在要的那張按「設為主圖」。
+-          </div>
+-        ) : null}
+-
+         {list.length > 0 ? (
+-          /* UX-B2-P10: horizontal strip + large thumbs; tools under each card; spec = corner badge */
++          /* UX-B2-P10: horizontal strip + large thumbs; tools under each card; 4f 文案參考 = corner badge */
+           <div className="imgmark-list imgmark-strip">
+             {list.map((image, index) => {
+               const src =
+@@ -552,7 +530,7 @@ export function Station2ImagePanel({
+                   <div className="thumb-wrap s2-img-thumb-wrap" title="拖曳排序">
+                     {/* eslint-disable-next-line @next/next/no-img-element */}
+                     <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
+-                    {/* ✕ left — avoid clash with top-right spec badge (P10) */}
++                    {/* ✕ left — avoid clash with top-right 文案參考 badge (P10) */}
+                     <button
+                       className="thumb-remove s2-thumb-remove"
+                       disabled={busyId === image.id}
+@@ -566,22 +544,11 @@ export function Station2ImagePanel({
+                     >
+                       ✕
+                     </button>
+-                    {showMarks ? (
+-                      <button
+-                        type="button"
+-                        className={`pthumb-spec-badge${image.is_spec_process ? " active" : ""}`}
+-                        disabled={busyId === image.id}
+-                        aria-pressed={!!image.is_spec_process}
+-                        title={image.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
+-                        onClick={(e) => {
+-                          e.stopPropagation();
+-                          void toggleSpec(image);
+-                        }}
+-                        onMouseDown={(e) => e.stopPropagation()}
+-                      >
+-                        {image.is_spec_process ? "📐 規格圖" : "規格圖"}
+-                      </button>
+-                    ) : null}
++                    <CopyReferenceBadge
++                      disabled={copyRef.busy || busyId === image.id}
++                      onToggle={() => copyRef.toggle(image.id)}
++                      state={copyRef.badgeState(image.id)}
++                    />
+                   </div>
+                   <span className="imgmark-slot-label">
+                     {subtab === "main" && image.id === shopifyMainId ? "⭐ Shopify 主圖" : slot}
+@@ -624,7 +591,7 @@ export function Station2ImagePanel({
+                     </span>
+                   ) : (
+                     <span className="muted s2-detail-hint">
+-                      詳情圖僅供辨識，無需標記
++                      詳情圖不用標處理方式
+                     </span>
+                   )}
+                 </div>
+@@ -633,38 +600,32 @@ export function Station2ImagePanel({
+           </div>
+         ) : (
+           <div className="muted s2-img-empty">
+-            {subtab === "spec"
+-              ? "目前沒有規格圖。請到「主圖」把需要的圖標成「規格圖」。"
+-              : subtab === "detail"
+-                ? "尚無詳情圖。可用下方補圖上傳（不上架）。"
+-                : "尚無主圖。可用下方補圖上傳。"}
++            {subtab === "detail"
++              ? "尚無詳情圖。可用下方補圖上傳。"
++              : "尚無主圖。可用下方補圖上傳。"}
+           </div>
+         )}
+ 
+-        {canUpload ? (
+-          <div className="s2-img-upload">
+-            <input
+-              accept="image/*"
+-              className="sr-only"
+-              multiple
+-              onChange={(event) => void uploadFiles(event.currentTarget.files)}
+-              ref={fileInputRef}
+-              type="file"
+-            />
+-            <Button
+-              size="sm"
+-              disabled={uploading}
+-              onClick={() => fileInputRef.current?.click()}
+-              type="button"
+-            >
+-              {uploading ? "上傳中…" : subtab === "main" ? "＋ 補主圖" : "＋ 補詳情圖"}
+-            </Button>
+-          </div>
+-        ) : (
+-          <p className="muted s2-img-spec-hint">規格圖請在主圖分頁標記，不另開上傳。</p>
+-        )}
++        <div className="s2-img-upload">
++          <input
++            accept="image/*"
++            className="sr-only"
++            multiple
++            onChange={(event) => void uploadFiles(event.currentTarget.files)}
++            ref={fileInputRef}
++            type="file"
++          />
++          <Button
++            size="sm"
++            disabled={uploading}
++            onClick={() => fileInputRef.current?.click()}
++            type="button"
++          >
++            {uploading ? "上傳中…" : subtab === "main" ? "＋ 補主圖" : "＋ 補詳情圖"}
++          </Button>
++        </div>
+ 
+-        {unmarkedBlockMessage && (subtab === "main" || subtab === "spec") ? (
++        {unmarkedBlockMessage && subtab === "main" ? (
+           <div className="img-mark-warn" role="status">
+             {unmarkedBlockMessage}
+           </div>
+diff --git a/src/components/listing/result-card/ResultCardImagesPanel.tsx b/src/components/listing/result-card/ResultCardImagesPanel.tsx
+index 0d650a6..09529e4 100644
+--- a/src/components/listing/result-card/ResultCardImagesPanel.tsx
++++ b/src/components/listing/result-card/ResultCardImagesPanel.tsx
+@@ -2,6 +2,11 @@
+ 
+ import { useState } from "react";
+ import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
++import {
++  CopyReferenceBadge,
++  CopyReferenceRow,
++  type CopyReferenceController,
++} from "@/components/listing/CopyReferenceControls";
+ import { Button } from "@/components/ui/Button";
+ import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
+ import { pickDescriptionDetailRows } from "@/lib/images/descriptionDetailRows";
+@@ -15,6 +20,7 @@ import type { ImageProcessIntent, ProductImage } from "@/types/domain";
+ 
+ /** S2: 站③ 圖片分頁（可檢視／標記）— 從 ResultCard 展開區拆出。站② 仍用 Station2ImagePanel。 */
+ export function ResultCardImagesPanel({
++  copyReference,
+   descriptionImagesBusy,
+   descriptionImagesOn,
+   imageMarks,
+@@ -28,9 +34,10 @@ export function ResultCardImagesPanel({
+   onRestoreExcludedImage,
+   onRemoveImage,
+   onSetProcessIntent,
+-  onToggleDescriptionImages,
+-  onToggleSpec
++  onToggleDescriptionImages
+ }: {
++  /** 4f 文案參考圖 (state lives in ResultCard via useCopyReference). */
++  copyReference: CopyReferenceController;
+   descriptionImagesBusy: boolean;
+   descriptionImagesOn: boolean;
+   imageMarks: ProductImage[];
+@@ -45,7 +52,6 @@ export function ResultCardImagesPanel({
+   onRemoveImage: (image: ProductImage) => void;
+   onSetProcessIntent: (image: ProductImage, intent: ImageProcessIntent) => void;
+   onToggleDescriptionImages: (enabled: boolean) => void;
+-  onToggleSpec: (image: ProductImage) => void;
+ }) {
+   const [excludedOpen, setExcludedOpen] = useState(false);
+ 
+@@ -65,6 +71,12 @@ export function ResultCardImagesPanel({
+     <div className="rc-tabpanel" role="tabpanel">
+       <div className="rc-field">
+         <div className="rc-label">圖片（站③ 可檢視；改標記請回標圖站）</div>
++        {/* 4f: 文案參考圖 — AI 先自動挑，可點圖上的「文案參考」改選 */}
++        <CopyReferenceRow
++          busy={copyReference.busy}
++          onReset={copyReference.reset}
++          selection={copyReference.selection}
++        />
+         {pipelineImages.length > 0 ? (
+           <div className="imgmark-list">
+             {pipelineImages.map((image, index) => {
+@@ -80,19 +92,12 @@ export function ResultCardImagesPanel({
+                   <div className="thumb-wrap rc-img-thumb-wrap">
+                     {/* eslint-disable-next-line @next/next/no-img-element */}
+                     <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
+-                    {/* UX-B2-P10: 規格圖 bottom btn → corner badge (align station② language) */}
+-                    <button
+-                      type="button"
+-                      className={`pthumb-spec-badge${image.is_spec_process ? " active" : ""}`}
+-                      aria-pressed={!!image.is_spec_process}
+-                      title={image.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
+-                      onClick={(e) => {
+-                        e.stopPropagation();
+-                        onToggleSpec(image);
+-                      }}
+-                    >
+-                      {image.is_spec_process ? "📐 規格圖" : "規格圖"}
+-                    </button>
++                    {/* 4f: 文案參考 corner badge (was 規格圖; same .pthumb-spec-badge slot) */}
++                    <CopyReferenceBadge
++                      disabled={copyReference.busy}
++                      onToggle={() => copyReference.toggle(image.id)}
++                      state={copyReference.badgeState(image.id)}
++                    />
+                     {/* ✕ left — free top-right for .pthumb-spec-badge */}
+                     <button
+                       className="thumb-remove rc-img-thumb-remove"
+@@ -171,6 +176,13 @@ export function ResultCardImagesPanel({
+                       ""
+                     }
+                   />
++                  {/* 4f: 60px thumb → compact 文案參考 badge along the bottom (✕ stays top-right) */}
++                  <CopyReferenceBadge
++                    compact
++                    disabled={copyReference.busy}
++                    onToggle={() => copyReference.toggle(image.id)}
++                    state={copyReference.badgeState(image.id)}
++                  />
+                   <button
+                     className="thumb-remove"
+                     onClick={() => onRemoveImage(image)}
+diff --git a/src/lib/images/copyReference.ts b/src/lib/images/copyReference.ts
+new file mode 100644
+index 0000000..f20fc58
+--- /dev/null
++++ b/src/lib/images/copyReference.ts
+@@ -0,0 +1,230 @@
++/**
++ * 4f COPY-REF 文案參考圖：AI 讀哪幾張圖上的字當文案證據。
++ * - 沒指定＝自動挑（1 張主圖＋平均分布的詳情圖，共最多 6 張）。
++ * - 指定了＝只讀指定的那幾張（主圖或詳情圖，最多 6 張）。
++ * 指定存在 product_drafts.image_flags.copy_reference_image_ids，不寫 product_images
++ * （product_images 任何更新都會觸發 mark_linked_product_image_dirty，把已上架商品標成「需同步」）。
++ * Pure module: shared by /api/analyze-images (server) and the card UI (client) so both pick the same images.
++ */
++
++export const COPY_REFERENCE_FLAG_KEY = "copy_reference_image_ids";
++export const MAX_COPY_REFERENCE_IMAGES = 6;
++
++export type VisionImageCandidate = {
++  /** product_images.id — needed to match a manual pick; optional for legacy callers. */
++  id?: string;
++  imageType: "main" | "detail";
++  url: string;
++  sortOrder: number;
++};
++
++export type CopyReferenceImageRow = {
++  id?: string | null;
++  image_type: string;
++  original_file_url?: string | null;
++  /** A19: ~1280 mid copy, preferred by Vision when present. */
++  vision_mid_url?: string | null;
++  sort_order?: number | null;
++};
++
++export type CopyReferenceMode = "auto" | "manual";
++
++export type CopyReferenceSelection = {
++  mode: CopyReferenceMode;
++  selected: VisionImageCandidate[];
++};
++
++/** Badge state per image; null = not a candidate (款式圖、合成詳情圖、沒網址) → no badge. */
++export type CopyReferenceBadgeState = "manual" | "auto" | "off" | null;
++
++export type CopyReferenceToggleResult =
++  | { ok: true; nextIds: string[] }
++  | { ok: false; reason: "max" | "not_candidate" };
++
++/** Main + detail rows only; URL = vision_mid_url, else original_file_url (same rule as analyze-images). */
++export function copyReferenceCandidates(
++  rows: readonly CopyReferenceImageRow[],
++): VisionImageCandidate[] {
++  const candidates: VisionImageCandidate[] = [];
++  for (const row of rows) {
++    if (row.image_type !== "main" && row.image_type !== "detail") continue;
++    const mid = typeof row.vision_mid_url === "string" ? row.vision_mid_url.trim() : "";
++    const original = typeof row.original_file_url === "string" ? row.original_file_url.trim() : "";
++    const url = mid || original;
++    if (!url) continue;
++    candidates.push({
++      ...(row.id ? { id: row.id } : {}),
++      imageType: row.image_type,
++      url,
++      sortOrder: Number(row.sort_order ?? 0),
++    });
++  }
++  return candidates;
++}
++
++function uniqueVisionCandidates(
++  candidates: readonly VisionImageCandidate[],
++): VisionImageCandidate[] {
++  const seen = new Set<string>();
++  return candidates
++    .filter((candidate) => candidate.url.trim())
++    .slice()
++    // Stable sort, no id tie-break: keeps the pre-4f fingerprint byte-identical (old drafts stay cached).
++    .sort((a, b) => a.sortOrder - b.sortOrder)
++    .filter((candidate) => {
++      const url = candidate.url.trim();
++      if (seen.has(url)) return false;
++      seen.add(url);
++      return true;
++    });
++}
++
++function evenlySpaced<T>(items: readonly T[], count: number): T[] {
++  if (count <= 0 || items.length === 0) return [];
++  if (items.length <= count) return [...items];
++  if (count === 1) return [items[0]!];
++  return Array.from({ length: count }, (_, index) => {
++    const sourceIndex = Math.round((index * (items.length - 1)) / (count - 1));
++    return items[sourceIndex]!;
++  });
++}
++
++/** One hero image, then detail images spread across the full ordered set. */
++export function selectRepresentativeVisionImages(
++  candidates: readonly VisionImageCandidate[],
++  cap = MAX_COPY_REFERENCE_IMAGES,
++): VisionImageCandidate[] {
++  const safeCap = Math.max(0, Math.min(MAX_COPY_REFERENCE_IMAGES, Math.floor(cap)));
++  if (safeCap === 0) return [];
++  const unique = uniqueVisionCandidates(candidates);
++  const mains = unique.filter((candidate) => candidate.imageType === "main");
++  const details = unique.filter((candidate) => candidate.imageType === "detail");
++  const selected: VisionImageCandidate[] = [];
++  if (mains[0]) selected.push(mains[0]);
++  selected.push(...evenlySpaced(details, safeCap - selected.length));
++  for (const main of mains.slice(1)) {
++    if (selected.length >= safeCap) break;
++    selected.push(main);
++  }
++  return selected.slice(0, safeCap);
++}
++
++/**
++ * Changes when the ordered image set (or the manual pick) changes, so unchanged images can skip Vision.
++ * No manual pick → identical to the pre-4f fingerprint (old drafts are not re-read).
++ */
++export function buildVisionSourceFingerprint(
++  candidates: readonly VisionImageCandidate[],
++  manualIds: readonly string[] = [],
++): string {
++  let source = uniqueVisionCandidates(candidates)
++    .map((candidate) => `${candidate.imageType}:${candidate.sortOrder}:${candidate.url.trim()}`)
++    .join("\n");
++  const refs = [...manualIds].sort();
++  if (refs.length > 0) source += `\nref:${refs.join(",")}`;
++  let hash = 2166136261;
++  for (let index = 0; index < source.length; index += 1) {
++    hash ^= source.charCodeAt(index);
++    hash = Math.imul(hash, 16777619);
++  }
++  return `v1-${(hash >>> 0).toString(16).padStart(8, "0")}-${source.length}`;
++}
++
++/** Stored manual pick: strings only, trimmed, de-duplicated, at most 6. */
++export function parseCopyReferenceIds(flags: unknown): string[] {
++  if (!flags || typeof flags !== "object" || Array.isArray(flags)) return [];
++  const raw = (flags as Record<string, unknown>)[COPY_REFERENCE_FLAG_KEY];
++  if (!Array.isArray(raw)) return [];
++  const ids: string[] = [];
++  for (const value of raw) {
++    if (typeof value !== "string") continue;
++    const id = value.trim();
++    if (!id || ids.includes(id)) continue;
++    ids.push(id);
++    if (ids.length >= MAX_COPY_REFERENCE_IMAGES) break;
++  }
++  return ids;
++}
++
++/** Merge-only write: keeps every other image_flags key; empty pick removes the key (＝自動挑). */
++export function mergeCopyReferenceIds(
++  flags: unknown,
++  ids: readonly string[],
++): Record<string, unknown> {
++  const base =
++    flags && typeof flags === "object" && !Array.isArray(flags)
++      ? { ...(flags as Record<string, unknown>) }
++      : {};
++  const clean = parseCopyReferenceIds({ [COPY_REFERENCE_FLAG_KEY]: ids });
++  if (clean.length === 0) delete base[COPY_REFERENCE_FLAG_KEY];
++  else base[COPY_REFERENCE_FLAG_KEY] = clean;
++  return base;
++}
++
++/**
++ * Manual pick wins when at least one picked image still exists (deleted ones are ignored);
++ * order = picked main images, then picked detail images, each by sort_order. Otherwise auto.
++ */
++export function selectCopyReferenceImages(
++  candidates: readonly VisionImageCandidate[],
++  manualIds: readonly string[],
++): CopyReferenceSelection {
++  const wanted = new Set(manualIds);
++  if (wanted.size > 0) {
++    const picked = uniqueVisionCandidates(
++      candidates.filter((candidate) => candidate.id && wanted.has(candidate.id)),
++    );
++    if (picked.length > 0) {
++      return {
++        mode: "manual",
++        selected: [
++          ...picked.filter((candidate) => candidate.imageType === "main"),
++          ...picked.filter((candidate) => candidate.imageType === "detail"),
++        ].slice(0, MAX_COPY_REFERENCE_IMAGES),
++      };
++    }
++  }
++  return { mode: "auto", selected: selectRepresentativeVisionImages(candidates) };
++}
++
++export function copyReferenceBadgeState(
++  candidates: readonly VisionImageCandidate[],
++  selection: CopyReferenceSelection,
++  imageId: string,
++): CopyReferenceBadgeState {
++  if (!candidates.some((candidate) => candidate.id === imageId)) return null;
++  if (!selection.selected.some((candidate) => candidate.id === imageId)) return "off";
++  return selection.mode === "manual" ? "manual" : "auto";
++}
++
++/**
++ * Click on a badge. In auto mode the current auto pick becomes the starting manual pick,
++ * then the clicked image is added / removed. Empty result (nextIds = []) means back to auto.
++ */
++export function toggleCopyReference(
++  candidates: readonly VisionImageCandidate[],
++  storedIds: readonly string[],
++  imageId: string,
++): CopyReferenceToggleResult {
++  if (!candidates.some((candidate) => candidate.id === imageId)) {
++    return { ok: false, reason: "not_candidate" };
++  }
++  const current = selectCopyReferenceImages(candidates, storedIds).selected
++    .map((candidate) => candidate.id)
++    .filter((id): id is string => Boolean(id));
++  if (current.includes(imageId)) {
++    return { ok: true, nextIds: current.filter((id) => id !== imageId) };
++  }
++  if (current.length >= MAX_COPY_REFERENCE_IMAGES) return { ok: false, reason: "max" };
++  return { ok: true, nextIds: [...current, imageId] };
++}
++
++/** One-line hint for the 文案參考圖 row (station② / station③). */
++export function copyReferenceHint(selection: CopyReferenceSelection): string {
++  const total = selection.selected.length;
++  if (selection.mode === "auto") {
++    return `AI 自動挑了 ${total} 張（標「✓ 自動」）讀圖上的字寫文案；想自己指定就點圖上的「文案參考」，最多 ${MAX_COPY_REFERENCE_IMAGES} 張`;
++  }
++  const mains = selection.selected.filter((candidate) => candidate.imageType === "main").length;
++  return `你指定了 ${total} 張（主圖 ${mains}、詳情圖 ${total - mains}）；改完按「↻ 重新生成」或單欄「↻ 重生」才會用新的圖寫文案`;
++}
+diff --git a/src/lib/images/processMarks.ts b/src/lib/images/processMarks.ts
+index d3b1a53..ff3c2fd 100644
+--- a/src/lib/images/processMarks.ts
++++ b/src/lib/images/processMarks.ts
+@@ -54,7 +54,7 @@ export function listUnmarkedPipelineImages(images: ProductImage[]): ProductImage
+ export function formatUnmarkedBlockMessage(images: ProductImage[]): string | null {
+   const pipeline = listPipelineImages(images);
+   if (pipeline.length === 0) {
+-    return "沒有可送出的商品圖。請先上傳主圖（詳情圖不上架、不用標記），再送圖。";
++    return "沒有可送出的商品圖。請先上傳主圖（詳情圖不用標記），再送圖。";
+   }
+ 
+   const unmarked = pipeline.filter((image) => !isImageMarked(image));
+diff --git a/src/lib/images/station2ImageTabs.ts b/src/lib/images/station2ImageTabs.ts
+index 0752d99..7d2f49f 100644
+--- a/src/lib/images/station2ImageTabs.ts
++++ b/src/lib/images/station2ImageTabs.ts
+@@ -1,33 +1,26 @@
+ /**
+- * UX-F T30: station② image subtab filters (main | spec | detail).
+- * Spec = mark semantics (is_spec_process / image_type=spec), not OCR upload.
++ * UX-F T30: station② image subtab filters (main | detail).
++ * 4f: the 規格圖 tab is gone (its badge became 文案參考). Rows still marked is_spec_process /
++ * image_type=spec show under 主圖 so nothing disappears.
+  */
+ 
+ import type { ProductImage } from "@/types/domain";
+ 
+-export type Station2ImageSubtab = "main" | "spec" | "detail";
++export type Station2ImageSubtab = "main" | "detail";
+ 
+ export const STATION2_IMAGE_SUBTABS: {
+   id: Station2ImageSubtab;
+   label: string;
+ }[] = [
+   { id: "main", label: "主圖" },
+-  { id: "spec", label: "規格圖" },
+   { id: "detail", label: "詳情圖" },
+ ];
+ 
+-export function isSpecImage(
+-  image: Pick<ProductImage, "image_type" | "is_spec_process">
+-): boolean {
+-  return Boolean(image.is_spec_process) || image.image_type === "spec";
+-}
+-
+-/** Main / variant product shots that are not marked as 規格圖. */
++/** Main / variant product shots (incl. legacy 規格圖-marked rows and image_type=spec). */
+ export function isMainSubtabImage(
+   image: Pick<ProductImage, "image_type" | "is_spec_process">
+ ): boolean {
+-  if (isSpecImage(image)) return false;
+-  return image.image_type === "main" || image.image_type === "variant";
++  return image.image_type === "main" || image.image_type === "variant" || image.image_type === "spec";
+ }
+ 
+ export function isDetailSubtabImage(image: Pick<ProductImage, "image_type">): boolean {
+@@ -37,11 +30,9 @@ export function isDetailSubtabImage(image: Pick<ProductImage, "image_type">): bo
+ export function filterStation2SubtabImages<
+   T extends Pick<ProductImage, "image_type" | "is_spec_process" | "sort_order" | "created_at">
+ >(images: T[], tab: Station2ImageSubtab): T[] {
+-  const filtered = images.filter((img) => {
+-    if (tab === "main") return isMainSubtabImage(img);
+-    if (tab === "spec") return isSpecImage(img);
+-    return isDetailSubtabImage(img);
+-  });
++  const filtered = images.filter((img) =>
++    tab === "main" ? isMainSubtabImage(img) : isDetailSubtabImage(img)
++  );
+   return filtered.slice().sort((a, b) => {
+     const orderA = a.sort_order ?? 0;
+     const orderB = b.sort_order ?? 0;
+@@ -54,18 +45,12 @@ export function station2SubtabCount(
+   images: Array<Pick<ProductImage, "image_type" | "is_spec_process">>,
+   tab: Station2ImageSubtab
+ ): number {
+-  return images.filter((img) => {
+-    if (tab === "main") return isMainSubtabImage(img);
+-    if (tab === "spec") return isSpecImage(img);
+-    return isDetailSubtabImage(img);
+-  }).length;
++  return images.filter((img) =>
++    tab === "main" ? isMainSubtabImage(img) : isDetailSubtabImage(img)
++  ).length;
+ }
+ 
+-/** Insert image_type for 補圖 on this subtab (spec has no upload). */
+-export function station2UploadImageType(
+-  tab: Station2ImageSubtab
+-): "main" | "detail" | null {
+-  if (tab === "main") return "main";
+-  if (tab === "detail") return "detail";
+-  return null;
++/** Insert image_type for 補圖 on this subtab. */
++export function station2UploadImageType(tab: Station2ImageSubtab): "main" | "detail" {
++  return tab === "main" ? "main" : "detail";
+ }
+diff --git a/src/lib/providers/visionProvider.ts b/src/lib/providers/visionProvider.ts
+index 942c116..cf365a4 100644
+--- a/src/lib/providers/visionProvider.ts
++++ b/src/lib/providers/visionProvider.ts
+@@ -6,81 +6,22 @@
+ // (not the CopyProvider abstraction -- this is a different concern: raw visual
+ // facts in, not brand-voice copy out).
+ 
++import { MAX_COPY_REFERENCE_IMAGES } from "@/lib/images/copyReference";
+ import { externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout, VISION_TIMEOUT_MS } from "./externalTimeout";
+ 
+ const DEFAULT_VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
+ 
+ // Guards against a draft with an unreasonable number of uploaded images
+ // blowing up one request's payload/latency/cost.
+-const MAX_DESCRIBE_IMAGES = 6;
++const MAX_DESCRIBE_IMAGES = MAX_COPY_REFERENCE_IMAGES;
+ const MAX_OCR_IMAGES = 4;
+ 
+-export type VisionImageCandidate = {
+-  imageType: "main" | "detail";
+-  url: string;
+-  sortOrder: number;
+-};
+-
+-function uniqueVisionCandidates(
+-  candidates: readonly VisionImageCandidate[],
+-): VisionImageCandidate[] {
+-  const seen = new Set<string>();
+-  return candidates
+-    .filter((candidate) => candidate.url.trim())
+-    .slice()
+-    .sort((a, b) => a.sortOrder - b.sortOrder)
+-    .filter((candidate) => {
+-      const url = candidate.url.trim();
+-      if (seen.has(url)) return false;
+-      seen.add(url);
+-      return true;
+-    });
+-}
+-
+-function evenlySpaced<T>(items: readonly T[], count: number): T[] {
+-  if (count <= 0 || items.length === 0) return [];
+-  if (items.length <= count) return [...items];
+-  if (count === 1) return [items[0]!];
+-  return Array.from({ length: count }, (_, index) => {
+-    const sourceIndex = Math.round((index * (items.length - 1)) / (count - 1));
+-    return items[sourceIndex]!;
+-  });
+-}
+-
+-/** One hero image, then detail images spread across the full ordered set. */
+-export function selectRepresentativeVisionImages(
+-  candidates: readonly VisionImageCandidate[],
+-  cap = MAX_DESCRIBE_IMAGES,
+-): VisionImageCandidate[] {
+-  const safeCap = Math.max(0, Math.min(MAX_DESCRIBE_IMAGES, Math.floor(cap)));
+-  if (safeCap === 0) return [];
+-  const unique = uniqueVisionCandidates(candidates);
+-  const mains = unique.filter((candidate) => candidate.imageType === "main");
+-  const details = unique.filter((candidate) => candidate.imageType === "detail");
+-  const selected: VisionImageCandidate[] = [];
+-  if (mains[0]) selected.push(mains[0]);
+-  selected.push(...evenlySpaced(details, safeCap - selected.length));
+-  for (const main of mains.slice(1)) {
+-    if (selected.length >= safeCap) break;
+-    selected.push(main);
+-  }
+-  return selected.slice(0, safeCap);
+-}
+-
+-/** Changes when the ordered image set changes, so unchanged images can skip Vision. */
+-export function buildVisionSourceFingerprint(
+-  candidates: readonly VisionImageCandidate[],
+-): string {
+-  const source = uniqueVisionCandidates(candidates)
+-    .map((candidate) => `${candidate.imageType}:${candidate.sortOrder}:${candidate.url.trim()}`)
+-    .join("\n");
+-  let hash = 2166136261;
+-  for (let index = 0; index < source.length; index += 1) {
+-    hash ^= source.charCodeAt(index);
+-    hash = Math.imul(hash, 16777619);
+-  }
+-  return `v1-${(hash >>> 0).toString(16).padStart(8, "0")}-${source.length}`;
+-}
++// 4f: image picking (auto / 文案參考圖) lives in a pure module shared with the card UI.
++export {
++  buildVisionSourceFingerprint,
++  selectRepresentativeVisionImages,
++  type VisionImageCandidate,
++} from "@/lib/images/copyReference";
+ 
+ // B1 (Mockup差異備忘 差異2): 規格圖 OCR 廢棄後，詳情圖是圖上文字的主要來源。除了外觀
+ // 描述，這支 prompt 現在還要「轉錄詳情圖上實際印出來、看得到的文字」（廣告文案／賣點／

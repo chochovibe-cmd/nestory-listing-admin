@@ -17,11 +17,29 @@
 | 4a CAPTURE-REVIEWS＋FILTER／4a-2 CAPTURE-SCROLL（GPT） | ✅ 10-25 上線（#76、#77）。實機：天貓新抓 799eaec6 → 自動捲動 24 步 6.5 秒（頁面 2.6 萬像素、推薦區無限長，到 6 秒上限停）、19 張詳情圖、排除 2 張 HOLLY 共用宣傳圖、評價摘要（dom）；卡片兩個新區塊 Claude 實看正常。Shopify 66 件已上架商品唯讀掃描：沒有掛宣傳圖 | 測試 A 原因已查（10-26）：862841d8 那次重抓在 10-25 17:18，4a 新版 17:35 才上線（dpl_4BQKHnrz… ready 09:35 UTC），舊伺服器只更新了 4 款庫存。待老闆用外掛 0.2.3 重抓一次，Claude 查資料庫確認 `source_reviews` 寫入 |
 | 4a-3 小修合集-1（GPT） | ✅ 10-27 上線（#79 f81f920；另一個對話審 PASS，Claude 複查與參考實作只差 import 順序／換行） | 上線後實機：商品庫搜尋全形「七龍珠｜」、10-22 三筆舊 429 草稿顯示中文（有空再看） |
 | 4e-A 詳情圖上架（GPT） | ✅ 10-27 上線（#80 fb0efea，程式與參考實作逐行一致）。**Claude 實機通過**（Miffy 臺燈 8b3a35b9，Shopify 草稿，老闆同意；備份 `Nestory備份/2026-10-27-4e實機-8b3a35b9-同步前／同步後`）：同步後描述＝主圖（取 Shopify 第一張圖）＋3 張詳情圖，全是 cdn.shopify.com、沒有 supabase；再同步不重傳（Files 各 1 份、網址不變）；開關關→描述無圖、打開→恢復；商品圖 10 張、款式 2 個不變。Shopify 會自動轉 WebP（5.4MB PNG → 424KB） | 已上架舊商品照舊不主動同步 |
-| 4e-B 清 Supabase 空間（Claude） | 4e-A 上線後：算清單（主圖／款式圖 Supabase 原檔、已上 CDN 的詳情圖、封存草稿、孤兒檔）＋保護「店面描述還在用」的檔；**待老闆決定**：AI 讀字改讀 Shopify CDN 縮小版（Claude 建議）或 Supabase 留小圖 | 備份＋老闆同意才刪 |
-| 4f 文案參考圖 | 勾圖給 AI 讀字，取代規格圖按鈕；見總表 4f | 4e 之後 |
+| 4e-B 清 Supabase 空間（Claude） | ✅ **第一輪 10-28 完成**（450.2 → 281.5 MB，刪 641 張；詳見下方「4e-B 第一輪」）。原待決事項（AI 讀字用圖）已於 10-27 定案＝改讀 Shopify CDN 縮小版。 | 4e-C 詳情圖搬家同步（58 件分批）＋第二輪清空間（約 80 MB） |
+| 4e-C 詳情圖搬家同步＋第二輪清空間（Claude） | ✅ **10-28 完成**（60 件同步、Supabase 281.5 → 197.5 MB；詳見下方「4e-C」） | 4f 文案參考圖 |
+| 4f 文案參考圖（程式 Claude 已寫好；GPT 開 PR／合併／上線） | 10-28 規格 `docs/4F-文案參考圖-施工規格-2026-10-28.md`；程式 `agent/4f-copy-ref`（verify:4f 24 項＋verify:all＋tsc＋build 綠）。卡片圖片右上角「規格圖」→「文案參考」（AI 先自動挑 6 張、可改選，存 image_flags，不會標需同步）；站②「規格圖」分頁拿掉；重生前先重讀圖片（沒變走快取）；上傳區「不上架」字樣改掉 | GPT 照開工單合併上線 → Claude 實機（規格 §5.2） |
 | 4g OPENROUTER 文字 AI 改道（GPT，10-28 插隊） | OpenAI 儲值用完 → 生成全停。規格＋驗收測試在 `docs/openrouter-spec`（見總表 4g）；施工 `gpt/openrouter-text-ai` | 老闆儲值 OpenRouter＋在 Vercel 加 `OPENROUTER_API_KEY` → GPT 施工 → Claude 審 → 合併 Redeploy → 老闆生成 1 件、Claude 查資料庫 |
 
-下一包候選（指揮決定）：**4g OPENROUTER（插隊，進行中）** → **4e-B 清空間（Claude，等老闆選 AI 讀字用圖）** → 4f 文案參考圖 → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。10-25 老闆定案（4a-3／COPY-A 用）：①詳情圖「一鍵」做成**全部不上架（保留在工具給 AI 讀字）**，不是刪除，單張 ✕ 刪除照舊（**10-26 老闆改**：沒刪的詳情圖**全部**放進描述，開關關＝都不放 → 4e）；②「文案參考圖」：AI 先自動挑，老闆可勾選覆蓋，**10-26：取代沒作用的「規格圖」按鈕** → 4f；③舊商品描述內嵌的 Supabase 圖**不搬**（10-26：已上架商品不主動同步），只查容量，快滿或特別佔空間才處理；④可順手評估：自動捲動在推薦區無限長的頁面會跑滿 6 秒，可改成捲過「图文详情／用户评价」區就停。漏項歸屬見總表第六節。
+### 4e-B 清 Supabase 空間 第一輪（10-28 完成，Claude 指揮直接做，老闆同意）
+- 結果：product-images 2,546 張／450.2 MB → 1,905 張／281.5 MB（刪 641 張、168.7 MB）。
+- 刪的：⑥ 已上架商品主圖／款式圖 Supabase 原檔 633 張（155.1 MB）＋⑦ 已上 Shopify 的詳情圖 3 張（8b3a35b9）＋孤兒檔 5 張。⑧ 封存草稿 254 張（22.1 MB）照老闆意思先留。
+- 刪前資料庫 587 列改網址（一個 transaction，跳過 mark_linked_product_image_dirty，同步狀態未被弄髒）：original_file_url／generated_file_url → Shopify CDN（processed_file_url）；list_thumb_url → CDN&width=320；vision_mid_url → CDN&width=1280（老闆 10-27 定案：AI 讀字改讀 Shopify 縮小版，不用改程式）。635 條新網址全數 200。
+- 保護名單：Shopify 描述裡還嵌著的 Supabase 網址 74 張（61 件商品）＋草稿資料裡寫到的 6 張，全部沒動。
+- 備份：Nestory備份/2026-10-27-4e-清空間前（.zip 也在 G 槽）：資料庫全表、刪掉的 641 張原檔（storage-files/，逐檔核對大小）、改網址前快照（product_images／product_drafts）、全盤點、保護名單、每件商品清單 csv、4e-B-刪除紀錄.json。
+- 還剩：已上架商品詳情圖 814 張／89.8 MB（58 件）仍在 Supabase，那 61 件商品描述每次被看都從 Supabase 下載（吃流量）→ 下一步「58 件分批重新同步，讓 4e-A 把詳情圖搬上 Shopify」，之後再清第二輪（約 80 MB）。
+
+### 4e-C 詳情圖搬家同步＋第二輪清空間（10-28 完成，Claude 指揮直接做，老闆同意）
+- 同步：60 件已上架商品逐件 shopify-diff → shopify-resolve（tags 列選 Shopify、confirmRemovals 一律 false），9 批全部成功；每批前後快照比對：圖庫、款式、價格、SKU 不變；描述只剩 Shopify CDN 圖（主圖＋全部詳情圖）；工具詳情列全部換成 CDN。Shopify 描述裡的 Supabase 網址從 74 個（61 件）降到 2 個（只剩封存測試商品 ae962018）。
+- 同步前小修正：9 件 HOLLY BOX（46b677b1 4e44bfb1 53cd80ee 56937cba 6acbeb02 ae9a216a ba05db9b e98bc983 f2809032）最後 2 張是淘寶店家公告（合作品牌、出貨／聯繫客服），刪掉 18 筆詳情圖列；a450198e、c17c5f1d 圖片排序同分（會害同步重傳圖庫圖）→ 17 列 sort_order 依原同步順序重編。
+- 跳過 3 件：84ef0cba、b45259ef（Shopify 上商品已不存在，草稿仍帶 shopify_product_id；10 張 3.3 MB 留著）；ae962018（封存測試商品）。
+- 標籤：10-28 主題專案把全店「送禮對象_*」標籤改成另一種做法（Shopify 上已移除）；4e-C 同步時曾把舊標籤拉進工具，已從 44 筆草稿移除，比對表回到 0 差異。
+- 第二輪清空間：785 筆詳情列改網址（一個 transaction、跳過 dirty 觸發器；original/generated → CDN、list_thumb → CDN&width=320、vision_mid → CDN&width=1280，785 條全數 200），刪 803 張（84.0 MB，含 18 張公告圖；72 張只被 shopify_payload_preview 舊紀錄提到，該欄只寫不讀）。bucket 1,905 張／281.5 MB → 1,102 張／197.5 MB。
+- 備份：Nestory備份/2026-10-28-4e-C-同步前（.zip，全表＋每批前/後快照＋刪掉的 18 筆公告列）、Nestory備份/2026-10-28-4e-C-第二輪清空間（.zip，G 槽也有：803 張原檔、改網址前快照、刪除紀錄）。
+- 還留在 Supabase（之後再說）：未上架草稿 613 張 152.8 MB（正常）；封存草稿 ⑧ 256 張 22.6 MB（老闆先留）；19 件已上架商品的主圖／款式圖 216 張 15.9 MB（改網址會讓下次同步重傳圖庫，要另想做法 → 總表 4e-D）；上面 2 件已刪商品 10 張 3.3 MB。
+
+下一包候選（指揮決定）：4f 上線驗收後 → 5 PRICING → 6 STATUS-SEMANTICS＋OBS-QUEUE → 7 COPY-A → 8 COPY-B → 9–11 UIUX → 12 THEME-SHIP → 13 COPY-C → 14 PERF。10-25 老闆定案（4a-3／COPY-A 用）：①詳情圖「一鍵」做成**全部不上架（保留在工具給 AI 讀字）**，不是刪除，單張 ✕ 刪除照舊（**10-26 老闆改**：沒刪的詳情圖**全部**放進描述，開關關＝都不放 → 4e）；②「文案參考圖」：AI 先自動挑，老闆可勾選覆蓋，**10-26：取代沒作用的「規格圖」按鈕** → 4f；③舊商品描述內嵌的 Supabase 圖**不搬**（10-26：已上架商品不主動同步），只查容量，快滿或特別佔空間才處理；④可順手評估：自動捲動在推薦區無限長的頁面會跑滿 6 秒，可改成捲過「图文详情／用户评价」區就停。漏項歸屬見總表第六節。
 
 ## 3. 現役風險
 - **抓取**：CAPTURE-FIX 10-22 上線、實機驗收通過（天貓 1c89667a 重抓補齊 15 款成本＋3 款來源售完；淘寶 6232c6b0 已上架只更新庫存）。剩 7 筆舊草稿等老闆有空重抓：1b42068e 5a48fe8a 42279f35 b677bf2d a9f82c5f 2cb43ea3 f1e97850。

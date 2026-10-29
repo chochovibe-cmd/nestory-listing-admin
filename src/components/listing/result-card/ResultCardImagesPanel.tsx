@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
+import {
+  CopyReferenceBadge,
+  CopyReferenceRow,
+  type CopyReferenceController,
+} from "@/components/listing/CopyReferenceControls";
 import { Button } from "@/components/ui/Button";
 import { pickShopifyMainImage } from "@/lib/images/shopifyMainImage";
 import { pickDescriptionDetailRows } from "@/lib/images/descriptionDetailRows";
@@ -15,6 +20,7 @@ import type { ImageProcessIntent, ProductImage } from "@/types/domain";
 
 /** S2: 站③ 圖片分頁（可檢視／標記）— 從 ResultCard 展開區拆出。站② 仍用 Station2ImagePanel。 */
 export function ResultCardImagesPanel({
+  copyReference,
   descriptionImagesBusy,
   descriptionImagesOn,
   imageMarks,
@@ -28,9 +34,10 @@ export function ResultCardImagesPanel({
   onRestoreExcludedImage,
   onRemoveImage,
   onSetProcessIntent,
-  onToggleDescriptionImages,
-  onToggleSpec
+  onToggleDescriptionImages
 }: {
+  /** 4f 文案參考圖 (state lives in ResultCard via useCopyReference). */
+  copyReference: CopyReferenceController;
   descriptionImagesBusy: boolean;
   descriptionImagesOn: boolean;
   imageMarks: ProductImage[];
@@ -45,7 +52,6 @@ export function ResultCardImagesPanel({
   onRemoveImage: (image: ProductImage) => void;
   onSetProcessIntent: (image: ProductImage, intent: ImageProcessIntent) => void;
   onToggleDescriptionImages: (enabled: boolean) => void;
-  onToggleSpec: (image: ProductImage) => void;
 }) {
   const [excludedOpen, setExcludedOpen] = useState(false);
 
@@ -65,6 +71,12 @@ export function ResultCardImagesPanel({
     <div className="rc-tabpanel" role="tabpanel">
       <div className="rc-field">
         <div className="rc-label">圖片（站③ 可檢視；改標記請回標圖站）</div>
+        {/* 4f: 文案參考圖 — AI 先自動挑，可點圖上的「文案參考」改選 */}
+        <CopyReferenceRow
+          busy={copyReference.busy}
+          onReset={copyReference.reset}
+          selection={copyReference.selection}
+        />
         {pipelineImages.length > 0 ? (
           <div className="imgmark-list">
             {pipelineImages.map((image, index) => {
@@ -80,19 +92,12 @@ export function ResultCardImagesPanel({
                   <div className="thumb-wrap rc-img-thumb-wrap">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img alt={image.alt_text ?? slot} className="imgmark-thumb" src={src} />
-                    {/* UX-B2-P10: 規格圖 bottom btn → corner badge (align station② language) */}
-                    <button
-                      type="button"
-                      className={`pthumb-spec-badge${image.is_spec_process ? " active" : ""}`}
-                      aria-pressed={!!image.is_spec_process}
-                      title={image.is_spec_process ? "取消規格圖標記" : "標示為規格圖"}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleSpec(image);
-                      }}
-                    >
-                      {image.is_spec_process ? "📐 規格圖" : "規格圖"}
-                    </button>
+                    {/* 4f: 文案參考 corner badge (was 規格圖; same .pthumb-spec-badge slot) */}
+                    <CopyReferenceBadge
+                      disabled={copyReference.busy}
+                      onToggle={() => copyReference.toggle(image.id)}
+                      state={copyReference.badgeState(image.id)}
+                    />
                     {/* ✕ left — free top-right for .pthumb-spec-badge */}
                     <button
                       className="thumb-remove rc-img-thumb-remove"
@@ -170,6 +175,13 @@ export function ResultCardImagesPanel({
                       image.generated_file_url ??
                       ""
                     }
+                  />
+                  {/* 4f: 60px thumb → compact 文案參考 badge along the bottom (✕ stays top-right) */}
+                  <CopyReferenceBadge
+                    compact
+                    disabled={copyReference.busy}
+                    onToggle={() => copyReference.toggle(image.id)}
+                    state={copyReference.badgeState(image.id)}
                   />
                   <button
                     className="thumb-remove"

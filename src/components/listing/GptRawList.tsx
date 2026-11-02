@@ -120,7 +120,7 @@ export function GptRawList({ products }: { products: GptRawListItem[] }) {
         variants.map((v) => v.cny_price)
       );
       return <div className="lib-row" key={p.id}>
-        <input type="checkbox" aria-label={`選取 ${title}`} checked={selected.has(p.id)} disabled={Boolean(busy)} onChange={() => setSelected((prev) => { const next = new Set(prev); if (next.has(p.id)) next.delete(p.id); else next.add(p.id); return next; })} />
+        <input className="rc-checkbox" type="checkbox" aria-label={`選取 ${title}`} checked={selected.has(p.id)} disabled={Boolean(busy)} onChange={() => setSelected((prev) => { const next = new Set(prev); if (next.has(p.id)) next.delete(p.id); else next.add(p.id); return next; })} />
         {imageUrl ? <img className="lib-thumb" style={{ width: 48, height: 48 }} src={imageUrl} alt="" /> : <span className="lib-thumb lib-thumb--empty" style={{ width: 48, height: 48 }}>—</span>}
         <div className="lib-body">
           <div className="lib-title" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.source_url ? <a href={p.source_url} target="_blank" rel="noopener noreferrer">{title}</a> : title}</div>

@@ -7,7 +7,7 @@
 
 ## 1. 線上狀態
 - 主線：`origin/handoff/20261008-golive-spec` @ `084c21e`（11-02：#84 GPT-HANDOFF、#85 清單勾選框修正；10-29 #82 4g OPENROUTER；10-28 #83 4f；之前見總表）。
-- 正式站：Vercel「Production rebuild of C518PY77p」＝`aa5bcc8`（11-02 16:37，含 #84 GPT-HANDOFF＋#82 4g；Claude 用內建瀏覽器 Promote，正式站實測通過）。#85（`084c21e`）只有 Preview，**待升級**。回退點：10-29「Redeploy of BXzjyx32E」（d459ede，4f）。查正式站版本：`gh api repos/chochovibe-cmd/nestory-listing-admin/deployments`（environment=Production 的 sha）；Vercel MCP 對 chocho-nestory 仍 403。
+- 正式站：Vercel「Production rebuild of ri9x3q6gc」＝`084c21e`（11-02 20:02，老闆 Promote；含 #85 清單勾選框修正）。前一版「Production rebuild of C518PY77p」＝`aa5bcc8`（11-02 16:37，#84 GPT-HANDOFF＋#82 4g，正式站實測通過）。回退點：10-29「Redeploy of BXzjyx32E」（d459ede，4f）。查正式站版本：`gh api repos/chochovibe-cmd/nestory-listing-admin/deployments`（environment=Production 的 sha）；Vercel MCP 對 chocho-nestory 仍 403。
 - 外掛：老闆 Chrome 載入的 `C:/Users/s2491/Documents/Nestory外掛-0.2.0` 資料夾＝0.2.3（＝d8e5723 的 `extension/`，build `capture-20261025-scroll`；舊版備份 `Nestory外掛-0.2.2-備份`、`-0.2.1-備份`）。
 - 本機這個資料夾停在舊分支 `codex/nestory-v0.1-safety-skeleton`（GitHub 預設分支也還是它）→ 看程式先 `git fetch`，一律以 origin/handoff 為準。網址、專案代號、環境變數名稱見 `AI_START_HERE.md` §3。
 
@@ -21,7 +21,7 @@
 | 4e-C 詳情圖搬家同步＋第二輪清空間（Claude） | ✅ **10-28 完成**（60 件同步、Supabase 281.5 → 197.5 MB；詳見下方「4e-C」） | 4f 文案參考圖 |
 | 4f 文案參考圖 | ✅ 10-28 上線（#83 d459ede），Claude 實機通過 | 小尾巴見總表 4f 列 |
 | 4g OPENROUTER 文字 AI 改道 | ✅ 11-02 隨 aa5bcc8 上正式站（#82 10-29 已合併但當時沒上線）。Vercel Production 有 `OPENROUTER_API_KEY`（10-29 加）→ 文字 AI 走 OpenRouter；沒金鑰時自動走 OpenAI | 老闆下次用「AI 生成」生成 1 件，Claude 查資料庫確認走 OpenRouter |
-| GPT-HANDOFF 交給 GPT 原始匯出（過渡上架方式；Claude 規格＋Codex 施工） | ✅ 11-02 上線（#84 aa5bcc8；migration `20261102100000_gpt_handoff` 已套正式庫，套前全備份 `Nestory備份/2026-11-02-GPT-HANDOFF加欄位前`）。輸入區「AI 生成／交給 GPT」→ 卡片區「交給 GPT」分頁（待匯出／已匯出）→ 匯出原始 CSV／封存。正式站實測送出、匯出（含 BOM）、封存通過；測試草稿 40b61664 已封存。規格 `docs/GPT-HANDOFF-交給GPT原始匯出-施工規格-2026-11-02.md` | #85 清單勾選框修正待升級正式站。用 GPT 匯入 Shopify 的商品工具不認得（庫存不同步）→ 請 GPT 保留工具 SKU，日後可靠 SKU 接回 |
+| GPT-HANDOFF 交給 GPT 原始匯出（過渡上架方式；Claude 規格＋Codex 施工） | ✅ 11-02 上線（#84 aa5bcc8；migration `20261102100000_gpt_handoff` 已套正式庫，套前全備份 `Nestory備份/2026-11-02-GPT-HANDOFF加欄位前`）。輸入區「AI 生成／交給 GPT」→ 卡片區「交給 GPT」分頁（待匯出／已匯出）→ 匯出原始 CSV／封存。正式站實測送出、匯出（含 BOM）、封存通過；測試草稿 40b61664 已封存。規格 `docs/GPT-HANDOFF-交給GPT原始匯出-施工規格-2026-11-02.md` | #85 清單勾選框修正 11-02 20:02 已上正式站。用 GPT 匯入 Shopify 的商品工具不認得（庫存不同步）→ 請 GPT 保留工具 SKU，日後可靠 SKU 接回 |
 
 ### 4e-B 清 Supabase 空間 第一輪（10-28 完成，Claude 指揮直接做，老闆同意）
 - 結果：product-images 2,546 張／450.2 MB → 1,905 張／281.5 MB（刪 641 張、168.7 MB）。

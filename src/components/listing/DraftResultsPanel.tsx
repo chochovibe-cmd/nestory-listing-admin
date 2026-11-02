@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GptRawList } from "@/components/listing/GptRawList";
+import type { GptRawListItem } from "@/lib/csv/gptRawExport";
 import { ResultCard } from "@/components/listing/ResultCard";
 import { ExportPreflightModal } from "@/components/listing/ExportPreflightModal";
 import { ReviewConfirmModal } from "@/components/listing/ReviewConfirmModal";
@@ -169,11 +171,13 @@ export type VariantPriceRow = Pick<
 const EMPTY_VARIANT_PRICES: VariantPriceRow[] = [];
 
 export function DraftResultsPanel({
+  gptProducts = [],
   drafts,
   images,
   variants = [],
   userId = null
 }: {
+  gptProducts?: GptRawListItem[];
   drafts: ProductDraft[];
   images: ProductImage[];
   /** P1-5: multi-variant sell prices for card range display */
@@ -182,6 +186,11 @@ export function DraftResultsPanel({
   userId?: string | null;
 }) {
   const router = useRouter();
+  useEffect(() => {
+    const refresh = () => router.refresh();
+    window.addEventListener("nestory:gpt-handoff-changed", refresh);
+    return () => window.removeEventListener("nestory:gpt-handoff-changed", refresh);
+  }, [router]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   /** UX-B3-P04: only one card may keep swipe-open actions */
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
@@ -613,6 +622,9 @@ export function DraftResultsPanel({
     return drafts;
   }, [admin, drafts, scope, userId]);
 
+  const scopedGptProducts = useMemo(() => gptProducts.filter((d) =>
+    (admin && scope === "all") || !userId || d.created_by === userId
+  ), [gptProducts, admin, scope, userId]);
   const showOwnerChip = admin && scope === "all";
 
   // R2: work queue excludes input / published / archived
@@ -1724,7 +1736,7 @@ export function DraftResultsPanel({
     router.push("/drafts/new");
   }
 
-  const showToolbar = workQueueDrafts.length > 0 || scopedDrafts.length > 0;
+  const showToolbar = stage !== "gpt" && (workQueueDrafts.length > 0 || scopedDrafts.length > 0);
   const isCopyStation = stage === "copy_review";
   const isImageStation = stage === "image_review";
   const isReadyStation = stage === "ready";
@@ -1854,12 +1866,14 @@ export function DraftResultsPanel({
             </label>
           ) : null}
           <StageFilterPills
+            gptTotalCount={scopedGptProducts.length}
+            gptPendingCount={scopedGptProducts.filter((d) => !d.gpt_exported_at).length}
             counts={stageCounts}
             onChange={onStageChange}
             stage={stage}
             factoryPendingCount={factoryBridgeSummary.pendingReview}
           />
-          <div className="stage-filter-end">
+          {stage !== "gpt" ? <div className="stage-filter-end">
             <label className="results-sort-label">
               <span aria-hidden="true" className="results-sort-icon">⇅</span>
               <span className="sr-only">排序</span>
@@ -1874,7 +1888,7 @@ export function DraftResultsPanel({
                 ))}
               </select>
             </label>
-          </div>
+          </div> : null}
         </div>
 
         {showToolbar ? (
@@ -1900,7 +1914,7 @@ export function DraftResultsPanel({
         ) : null}
 
         {/* UX-B3-P02: 有選取才出批次動作條；未選取不渲染空 toolbar */}
-        {selectedIds.size > 0 ? (
+        {stage !== "gpt" && selectedIds.size > 0 ? (
           <div
             className={`rc-batch-strip${
               isCopyStation
@@ -2085,7 +2099,7 @@ export function DraftResultsPanel({
           </div>
         ) : null}
 
-        {scopedDrafts.length === 0 && !progress ? (
+        {stage === "gpt" ? <GptRawList products={scopedGptProducts} /> : scopedDrafts.length === 0 && !progress ? (
           /* UX-AB T85 + UX-AD T129: full-empty + CTA */
           <div className="empty-state">
             <div className="empty-icon" aria-hidden>

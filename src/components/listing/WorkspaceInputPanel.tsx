@@ -343,6 +343,7 @@ export function WorkspaceInputPanel({
     null | "saving" | "uploading" | "analyzing" | "generating"
   >(null);
   const [submitting, setSubmitting] = useState(false);
+  const [handoffMode, setHandoffMode] = useState<"ai" | "gpt">("ai");
   /**
    * UX-X T92: high-level add-product flow (not the 4-step gen card).
    * fill → generate (pressed 生成) → review (AI done) → done (publish; optional).
@@ -502,9 +503,18 @@ export function WorkspaceInputPanel({
       TONE_OPTIONS.map((option) => option.value),
     );
     setPriceMode(prefs.priceMode);
+    setHandoffMode(prefs.handoffMode);
     setTone(prefs.tone as (typeof TONE_OPTIONS)[number]["value"]);
     setPreferredTone(prefs.tone);
   }, [initialFromServer]);
+
+  useEffect(() => {
+    const prefs = readWorkspacePrefs(
+      typeof window !== "undefined" ? window.localStorage : null,
+      TONE_OPTIONS.map((option) => option.value),
+    );
+    setHandoffMode(prefs.handoffMode);
+  }, []);
 
   // CAP-2.5: apply server seed once (URL ?draft= wins over localStorage restore).
   // Does not clear autosave key (Fable E); only skips auto-showing restore bar.
@@ -1302,7 +1312,7 @@ export function WorkspaceInputPanel({
 
   // Write the full form fields onto the draft: UPDATE the lazily-created row, or
   // INSERT a fresh one when no image was ever added. Returns the draft id.
-  async function persistDraft(): Promise<string | null> {
+  async function persistDraft(mode: "ai" | "gpt" = "ai"): Promise<string | null> {
     const filledVariants = variants.filter(
       (row) => row.optionValues.some((v) => v.trim().length > 0)
     );
@@ -1324,10 +1334,13 @@ export function WorkspaceInputPanel({
       original_title: title.trim(),
       source_url: taobaoUrl.trim() || null,
       taobao_url: taobaoUrl.trim() || null,
-      cny_price: parsedPrice,
-      twd_cost: pricing?.costTwd ?? null,
-      twd_price: pricing?.sellPrice ?? null,
-      compare_at_price: compareAtForSave,
+      // The existing schema requires a positive cost; raw export treats this placeholder as blank.
+      cny_price: mode === "gpt" && parsedPrice <= 0.01 ? 0.01 : parsedPrice,
+      ...(mode === "ai" ? {
+        twd_cost: pricing?.costTwd ?? null,
+        twd_price: pricing?.sellPrice ?? null,
+        compare_at_price: compareAtForSave,
+      } : {}),
       price_mode: priceMode,
       pricing_formula: pricing?.pricingFormula ?? {},
       note: note.trim() || null,
@@ -1348,9 +1361,12 @@ export function WorkspaceInputPanel({
       variant_dimensions: variantDimensions,
       status: "pending_copy",
       pipeline_stage: mapStatusToPipelineStage("pending_copy"),
+      ...(mode === "gpt" ? { status: "pending_input", pipeline_stage: "input" } : {}),
       generation_mode: "api_llm" as const,
       generation_provider: "codex" as const,
-      generation_status: "pending" as const,
+      ...(mode === "ai" ? { generation_status: "pending" as const } : {}),
+      gpt_handoff_at: mode === "gpt" ? new Date().toISOString() : null,
+      gpt_exported_at: null,
       publish_mode: "active" as const,
       publish_method: "shopify_api" as const,
       publish_status: "pending" as const
@@ -1360,7 +1376,7 @@ export function WorkspaceInputPanel({
     if (draftIdRef.current) {
       const { error } = await supabase.from("product_drafts").update(fields).eq("id", draftIdRef.current);
       if (error) {
-        showToast(error.message, "error");
+        showToast(mode === "gpt" ? `送出失敗：${error.message}` : error.message, "error");
         return null;
       }
       id = draftIdRef.current;
@@ -1371,7 +1387,8 @@ export function WorkspaceInputPanel({
         .select("id")
         .single();
       if (error || !data) {
-        showToast(error?.message ?? "建立失敗", "error");
+        const reason = error?.message ?? "建立失敗";
+        showToast(mode === "gpt" ? `送出失敗：${reason}` : reason, "error");
         return null;
       }
       id = data.id;
@@ -1388,7 +1405,7 @@ export function WorkspaceInputPanel({
       inserts.map((row) => ({ ...row, draft_id: id }))
     );
     if (!persistResult.ok) {
-      showToast(persistResult.error, "error");
+      showToast(mode === "gpt" ? `送出失敗：${persistResult.error}` : persistResult.error, "error");
       return null;
     }
 
@@ -1782,7 +1799,7 @@ export function WorkspaceInputPanel({
     const errors: { title?: boolean; price?: boolean } = {};
     if (!title.trim()) errors.title = true;
     // P1-5 / 回饋 49: 上方成本 或 每一有填選項的款式列成本齊全，擇一即可
-    const costError = validateCostRequirement({
+    const costError = handoffMode === "gpt" ? null : validateCostRequirement({
       productCost: parsedPrice,
       variants
     });
@@ -1799,7 +1816,7 @@ export function WorkspaceInputPanel({
       showToast("請選二手等級", "warn");
     }
 
-    if (readStoredRunMode() === "test") {
+    if (handoffMode === "ai" && readStoredRunMode() === "test") {
       showToast("目前是測試模式：不呼叫 AI", "warn");
     }
 
@@ -1810,13 +1827,38 @@ export function WorkspaceInputPanel({
     const cardTitle = title.trim().slice(0, 18);
 
     const saveStarted = Date.now();
-    const id = await persistDraft();
+    let id: string | null;
+    try {
+      id = await persistDraft(handoffMode);
+    } catch {
+      setSubmitting(false);
+      setSubmitPhase(null);
+      setFlowPhase("fill");
+      emitProgress({ draftId: null, visible: false, title: "", steps: [] });
+      showToast(
+        handoffMode === "gpt"
+          ? "送出失敗：儲存草稿時發生錯誤，請稍後重試。"
+          : "儲存草稿時發生錯誤，請稍後重試。",
+        "error"
+      );
+      return;
+    }
     const saveMs = Date.now() - saveStarted;
     if (!id) {
       setSubmitting(false);
       setSubmitPhase(null);
       setFlowPhase("fill");
       emitProgress({ draftId: null, visible: false, title: "", steps: [] });
+      return;
+    }
+
+    if (handoffMode === "gpt") {
+      setSubmitting(false);
+      setSubmitPhase(null);
+      setFlowPhase("fill");
+      resetForNextItem();
+      showToast(`已送到「交給 GPT」：${title.trim().slice(0, 20)}`, "success");
+      window.dispatchEvent(new CustomEvent("nestory:gpt-handoff-changed", { detail: { draftId: id } }));
       return;
     }
 
@@ -2813,7 +2855,7 @@ export function WorkspaceInputPanel({
             const genActions = (
               <div className="gen-actions">
                 {/* UX-R T71: mode chip above CTA — visible before press; updates live via RUN_MODE_CHANGE_EVENT */}
-                <div className="gen-mode-row" aria-live="polite">
+                {handoffMode === "ai" ? <div className="gen-mode-row" aria-live="polite">
                   <span
                     className={`schip${runMode === "test" ? " schip--warn" : " schip--ok"}`}
                     title={
@@ -2824,12 +2866,32 @@ export function WorkspaceInputPanel({
                   >
                     {runMode === "test" ? "測試模式" : "正式生成"}
                   </span>
+                </div> : null}
+                <div className="pill-group" role="group" aria-label="生成方式">
+                  <button
+                    aria-pressed={handoffMode === "ai"}
+                    className={`pill-btn${handoffMode === "ai" ? " active" : ""}`}
+                    onClick={() => {
+                      setHandoffMode("ai");
+                      writeWorkspacePref(typeof window !== "undefined" ? window.localStorage : null, { handoffMode: "ai" });
+                    }}
+                    type="button"
+                  >AI 生成</button>
+                  <button
+                    aria-pressed={handoffMode === "gpt"}
+                    className={`pill-btn${handoffMode === "gpt" ? " active" : ""}`}
+                    onClick={() => {
+                      setHandoffMode("gpt");
+                      writeWorkspacePref(typeof window !== "undefined" ? window.localStorage : null, { handoffMode: "gpt" });
+                    }}
+                    type="button"
+                  >交給 GPT</button>
                 </div>
                 <button
                   className="button primary btn-add btn-gen"
                   disabled={submitting}
                   type="submit"
-                  title="✦ 生成（規則引擎 → Vision → 文案串流 → 定價）"
+                  title={handoffMode === "gpt" ? "送出原始資料給 GPT" : "✦ 生成（規則引擎 → Vision → 文案串流 → 定價）"}
                 >
                   {submitting ? (
                     <>
@@ -2844,24 +2906,28 @@ export function WorkspaceInputPanel({
                               ? "生成文案中…"
                               : "處理中…"}
                     </>
-                  ) : imagesUploading ? (
+                  ) : imagesUploading && handoffMode === "ai" ? (
                     <>
                       <span aria-hidden className="spinner" />
                       圖片背景上傳中，可直接排隊
                     </>
                   ) : (
                     <>
-                      <span className="btn-gen-full">
-                        ✦ 生成（規則引擎 → Vision → 文案串流 → 定價）
-                      </span>
-                      <span className="btn-gen-short">✦ 生成</span>
+                      {handoffMode === "gpt" ? (
+                        <><span className="btn-gen-full">📤 送出給 GPT</span><span className="btn-gen-short">📤 送出給 GPT</span></>
+                      ) : (
+                        <><span className="btn-gen-full">✦ 生成（規則引擎 → Vision → 文案串流 → 定價）</span><span className="btn-gen-short">✦ 生成</span></>
+                      )}
                     </>
                   )}
                 </button>
+                {handoffMode === "gpt" ? (
+                  <p className="gen-cost-hint">不會呼叫 AI，也不用填售價；送出後到右邊「交給 GPT」分頁匯出 CSV。</p>
+                ) : null}
                 {/* BX7: soft estimate — not an invoice */}
-                <p className="gen-cost-hint" title={costHint.title}>
+                {handoffMode === "ai" ? <p className="gen-cost-hint" title={costHint.title}>
                   {costHint.label}
-                </p>
+                </p> : null}
               </div>
             );
             return !isNarrow ? (

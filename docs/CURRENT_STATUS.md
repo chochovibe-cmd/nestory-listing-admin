@@ -1,13 +1,13 @@
 # Nestory — 現況（CURRENT_STATUS）
 
-> 更新：2026-10-28（Claude）。本檔只放「現在成立」的事，上限約 6KB。
+> 更新：2026-11-02（Claude）。本檔只放「現在成立」的事，上限約 6KB。
 > **寫新進度＝改掉舊句子，不要在最上面再疊一個「最新」區塊。** 包做完就把它從「進行中」刪掉，細節寫進總表那一列。
 > 發包順序與每包內容：`docs/發包總表-2026-10-14.md`（唯一來源）。
 > 10-07～10-18 的舊紀錄原文（含 Codex PUBLISH-RUNTHROUGH R1–R5）：`docs/archive/STATUS-HISTORY-2026-10-21.md`，需要查歷史才讀。
 
 ## 1. 線上狀態
-- 主線：`origin/handoff/20261008-golive-spec` @ `fb0efea`（10-27：#79 4a-3 小修合集-1、#80 4e-A 詳情圖上架；10-25 #75–#77；之前 #61–#74 見總表）。
-- 正式站：`dpl_5GPdjhKMs6YLjNaHKC4EjXoqzg8A`（fb0efea，4e-A；GPT 驗 `/login` 200＋githubCommitSha）；回退點 `dpl_DYtBQVePoFwypehZ5iypse7E2Rd8`（f81f920，4a-3）→ `dpl_4BxsSapWJbtwpdtUByaTjW7sEsMJ`（d8e5723）→ `dpl_4BQKHnrzhbL117Dp93uPq8gcbeXX`（81df9ca，4a）→ `dpl_6SQ4EZBRd2WDu2dDZv95HqGcy3BX`（247cdcb）→ `dpl_2W3xMYEd1WbEPc1yQfaULVKdYEVn`（ab5db34）→ `dpl_9N1U7ZGqFBsmsewJ72jNCpvrVpna`（bd8a594）→ `dpl_2PQ67RPqAX5w83YBGhz4MMbohhxz`（eb1520e）→ `dpl_2iwmmT2kWjYVapqGB4HbhvDsYTky`（041ea68）→ `dpl_EGT4Pvjt5GdABetHkoYYmc3tmaa9`（9167892）。Vercel Production 已設 `SHOPIFY_LOCATION_ID`＝`gid://shopify/Location/87881679033`（忠義路61號3樓，唯一出貨地點）；Shopify App 已有 read_inventory／write_inventory／read_locations。
+- 主線：`origin/handoff/20261008-golive-spec` @ `084c21e`（11-02：#84 GPT-HANDOFF、#85 清單勾選框修正；10-29 #82 4g OPENROUTER；10-28 #83 4f；之前見總表）。
+- 正式站：Vercel「Production rebuild of C518PY77p」＝`aa5bcc8`（11-02 16:37，含 #84 GPT-HANDOFF＋#82 4g；Claude 用內建瀏覽器 Promote，正式站實測通過）。#85（`084c21e`）只有 Preview，**待升級**。回退點：10-29「Redeploy of BXzjyx32E」（d459ede，4f）。查正式站版本：`gh api repos/chochovibe-cmd/nestory-listing-admin/deployments`（environment=Production 的 sha）；Vercel MCP 對 chocho-nestory 仍 403。
 - 外掛：老闆 Chrome 載入的 `C:/Users/s2491/Documents/Nestory外掛-0.2.0` 資料夾＝0.2.3（＝d8e5723 的 `extension/`，build `capture-20261025-scroll`；舊版備份 `Nestory外掛-0.2.2-備份`、`-0.2.1-備份`）。
 - 本機這個資料夾停在舊分支 `codex/nestory-v0.1-safety-skeleton`（GitHub 預設分支也還是它）→ 看程式先 `git fetch`，一律以 origin/handoff 為準。網址、專案代號、環境變數名稱見 `AI_START_HERE.md` §3。
 
@@ -19,8 +19,9 @@
 | 4e-A 詳情圖上架（GPT） | ✅ 10-27 上線（#80 fb0efea，程式與參考實作逐行一致）。**Claude 實機通過**（Miffy 臺燈 8b3a35b9，Shopify 草稿，老闆同意；備份 `Nestory備份/2026-10-27-4e實機-8b3a35b9-同步前／同步後`）：同步後描述＝主圖（取 Shopify 第一張圖）＋3 張詳情圖，全是 cdn.shopify.com、沒有 supabase；再同步不重傳（Files 各 1 份、網址不變）；開關關→描述無圖、打開→恢復；商品圖 10 張、款式 2 個不變。Shopify 會自動轉 WebP（5.4MB PNG → 424KB） | 已上架舊商品照舊不主動同步 |
 | 4e-B 清 Supabase 空間（Claude） | ✅ **第一輪 10-28 完成**（450.2 → 281.5 MB，刪 641 張；詳見下方「4e-B 第一輪」）。原待決事項（AI 讀字用圖）已於 10-27 定案＝改讀 Shopify CDN 縮小版。 | 4e-C 詳情圖搬家同步（58 件分批）＋第二輪清空間（約 80 MB） |
 | 4e-C 詳情圖搬家同步＋第二輪清空間（Claude） | ✅ **10-28 完成**（60 件同步、Supabase 281.5 → 197.5 MB；詳見下方「4e-C」） | 4f 文案參考圖 |
-| 4f 文案參考圖（程式 Claude 已寫好；GPT 開 PR／合併／上線） | 10-28 規格 `docs/4F-文案參考圖-施工規格-2026-10-28.md`；程式 `agent/4f-copy-ref`（verify:4f 24 項＋verify:all＋tsc＋build 綠）。卡片圖片右上角「規格圖」→「文案參考」（AI 先自動挑 6 張、可改選，存 image_flags，不會標需同步）；站②「規格圖」分頁拿掉；重生前先重讀圖片（沒變走快取）；上傳區「不上架」字樣改掉 | GPT 照開工單合併上線 → Claude 實機（規格 §5.2） |
-| 4g OPENROUTER 文字 AI 改道（GPT，10-28 插隊） | OpenAI 儲值用完 → 生成全停。規格＋驗收測試在 `docs/openrouter-spec`（見總表 4g）；施工 `gpt/openrouter-text-ai` | 老闆儲值 OpenRouter＋在 Vercel 加 `OPENROUTER_API_KEY` → GPT 施工 → Claude 審 → 合併 Redeploy → 老闆生成 1 件、Claude 查資料庫 |
+| 4f 文案參考圖 | ✅ 10-28 上線（#83 d459ede），Claude 實機通過 | 小尾巴見總表 4f 列 |
+| 4g OPENROUTER 文字 AI 改道 | ✅ 11-02 隨 aa5bcc8 上正式站（#82 10-29 已合併但當時沒上線）。Vercel Production 有 `OPENROUTER_API_KEY`（10-29 加）→ 文字 AI 走 OpenRouter；沒金鑰時自動走 OpenAI | 老闆下次用「AI 生成」生成 1 件，Claude 查資料庫確認走 OpenRouter |
+| GPT-HANDOFF 交給 GPT 原始匯出（過渡上架方式；Claude 規格＋Codex 施工） | ✅ 11-02 上線（#84 aa5bcc8；migration `20261102100000_gpt_handoff` 已套正式庫，套前全備份 `Nestory備份/2026-11-02-GPT-HANDOFF加欄位前`）。輸入區「AI 生成／交給 GPT」→ 卡片區「交給 GPT」分頁（待匯出／已匯出）→ 匯出原始 CSV／封存。正式站實測送出、匯出（含 BOM）、封存通過；測試草稿 40b61664 已封存。規格 `docs/GPT-HANDOFF-交給GPT原始匯出-施工規格-2026-11-02.md` | #85 清單勾選框修正待升級正式站。用 GPT 匯入 Shopify 的商品工具不認得（庫存不同步）→ 請 GPT 保留工具 SKU，日後可靠 SKU 接回 |
 
 ### 4e-B 清 Supabase 空間 第一輪（10-28 完成，Claude 指揮直接做，老闆同意）
 - 結果：product-images 2,546 張／450.2 MB → 1,905 張／281.5 MB（刪 641 張、168.7 MB）。

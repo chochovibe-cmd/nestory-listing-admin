@@ -251,6 +251,9 @@ export interface ProductDraft {
    * Undefined until SQL applied; generation must not overwrite this column.
    */
   raw_capture?: unknown;
+  /** GPT raw-export handoff markers (migration 20261102100000). */
+  gpt_handoff_at?: string | null;
+  gpt_exported_at?: string | null;
 }
 
 /** D7: publish_batches.status — always terminal after runPublishBatch (Q2-A). */

@@ -21,6 +21,8 @@ export function StageFilterPills({
   onChange,
   ariaLabel = "依站篩選",
   factoryPendingCount,
+  gptPendingCount = 0,
+  gptTotalCount = 0,
 }: {
   stage: ResultsFilterKey;
   counts: PipelineStationCounts;
@@ -28,6 +30,8 @@ export function StageFilterPills({
   ariaLabel?: string;
   /** Optional — Results only; Queue list omits. Factory bridge pending review count. */
   factoryPendingCount?: number;
+  gptPendingCount?: number;
+  gptTotalCount?: number;
 }) {
   const failTotal = totalPipelineFailCount(counts);
 
@@ -62,6 +66,9 @@ export function StageFilterPills({
         >
           {FAIL_FILTER_LABEL} {failTotal}
         </button>
+      ) : null}
+      {gptTotalCount > 0 ? (
+        <button className={`pill-btn${stage === "gpt" ? " active" : ""}`} onClick={() => onChange("gpt")} type="button">交給 GPT {gptPendingCount}</button>
       ) : null}
     </div>
   );

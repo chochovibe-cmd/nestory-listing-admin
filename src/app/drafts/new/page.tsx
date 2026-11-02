@@ -14,6 +14,7 @@ import {
 import { createServerSupabaseClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/fetchAllRows";
 import type { ProductDraft, ProductImage } from "@/types/domain";
+import type { GptRawListItem } from "@/lib/csv/gptRawExport";
 
 export const dynamic = "force-dynamic";
 
@@ -132,12 +133,33 @@ export default async function NewDraftPage({
     }
   }
 
+  // GPT handoffs have their own bounded list, outside the 40-item work queue.
+  const { data: gptDraftRows } = await supabase.from("product_drafts")
+    .select("id, created_by, source_platform, source_url, original_title, taobao_title, cny_price, gpt_handoff_at, gpt_exported_at, server_price_confidence:raw_capture->server->>price_confidence, client_price_confidence:raw_capture->client_meta->>price_confidence")
+    .not("gpt_handoff_at", "is", null).neq("status", "archived")
+    .order("gpt_handoff_at", { ascending: false }).limit(200);
+  const gptDrafts = (gptDraftRows ?? []) as Omit<GptRawListItem, "product_images" | "product_variants">[];
+  const gptIds = gptDrafts.map((d) => d.id);
+  const [gptImageResult, gptVariantResult] = gptIds.length ? await Promise.all([
+    fetchAllRows((from, to) => supabase.from("product_images")
+      .select("id, draft_id, image_type, sort_order, processed_file_url, original_file_url")
+      .eq("image_type", "main").in("draft_id", gptIds).order("sort_order").order("id").range(from, to)),
+    fetchAllRows((from, to) => supabase.from("product_variants")
+      .select("id, draft_id, sort_order, cny_price")
+      .in("draft_id", gptIds).order("sort_order").order("id").range(from, to))
+  ]) : [{ data: [] }, { data: [] }];
+  const gptProducts: GptRawListItem[] = gptDrafts.map((draft) => ({ ...draft,
+    product_images: ((gptImageResult.data ?? []) as GptRawListItem["product_images"]).filter((i) => i.draft_id === draft.id),
+    product_variants: ((gptVariantResult.data ?? []) as GptRawListItem["product_variants"]).filter((v) => v.draft_id === draft.id)
+  }));
+
   // B12 D7-A: load active workbench + recent archived so stage pills can switch without empty 已封存.
   const [{ data: activeDrafts }, { data: archivedDrafts }] = await Promise.all([
     supabase
       .from("product_drafts")
       .select("*")
       .neq("status", "archived")
+      .is("gpt_handoff_at", null)
       .order("created_at", { ascending: false })
       .limit(40),
     supabase
@@ -213,6 +235,7 @@ export default async function NewDraftPage({
     <main className="container">
       <Suspense fallback={<p className="muted">載入工作檯…</p>}>
         <WorkbenchPageClient
+          gptProducts={gptProducts}
           userId={user.id}
           drafts={typedDrafts}
           images={typedImages}

@@ -23,7 +23,7 @@ import {
 export type StationFilterKey = PipelineStationKey;
 
 /** Results/queue pill selection: three stations + optional independent fail filter. */
-export type ResultsFilterKey = StationFilterKey | "fail";
+export type ResultsFilterKey = StationFilterKey | "fail" | "gpt";
 
 export const STATION_FILTER_STORAGE_KEY_RESULTS = "nestory:results-station";
 export const STATION_FILTER_STORAGE_KEY_QUEUE = "nestory:queue-station";
@@ -50,7 +50,7 @@ export function isStationFilterKey(value: unknown): value is StationFilterKey {
 }
 
 export function isResultsFilterKey(value: unknown): value is ResultsFilterKey {
-  return isStationFilterKey(value) || value === "fail";
+  return isStationFilterKey(value) || value === "fail" || value === "gpt";
 }
 
 export function readStoredStation(
@@ -146,6 +146,7 @@ export function filterDraftsByResultsFilter<T extends PipelineStationDraft>(
   drafts: T[],
   filter: ResultsFilterKey
 ): T[] {
+  if (filter === "gpt") return [];
   if (filter === "fail") return filterFailDrafts(drafts);
   return filterNonFailByStation(drafts, filter);
 }
@@ -154,7 +155,7 @@ export function filterDraftsByResultsFilter<T extends PipelineStationDraft>(
 export function filterWorkQueueDrafts<T extends PipelineStationDraft>(
   drafts: T[]
 ): T[] {
-  return drafts.filter((d) => isWorkQueueStation(resolveDraftStation(d)));
+  return drafts.filter((d) => !(d as PipelineStationDraft & { gpt_handoff_at?: string | null }).gpt_handoff_at && isWorkQueueStation(resolveDraftStation(d)));
 }
 
 export function countStations(
@@ -186,7 +187,7 @@ export function pickDefaultResultsFilter(
   preferred?: ResultsFilterKey | null
 ): ResultsFilterKey {
   if (preferred === "fail" && totalPipelineFailCount(counts) > 0) return "fail";
-  if (preferred && preferred !== "fail" && stationNonFailCount(counts, preferred) > 0) {
+  if (preferred && preferred !== "fail" && preferred !== "gpt" && stationNonFailCount(counts, preferred) > 0) {
     return preferred;
   }
   for (const key of PIPELINE_STATION_KEYS) {

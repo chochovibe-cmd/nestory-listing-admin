@@ -7,6 +7,7 @@ import { WorkbenchMobileShell } from "@/components/listing/WorkbenchMobileShell"
 import { WorkspaceInputPanel } from "@/components/listing/WorkspaceInputPanel";
 import type { WorkspaceFormSeed } from "@/lib/drafts/mapDraftToWorkspaceForm";
 import type { JumpStripDraft } from "@/lib/drafts/stationJumpStrip";
+import type { GptRawListItem } from "@/lib/csv/gptRawExport";
 import type { ProductDraft, ProductImage } from "@/types/domain";
 
 /**
@@ -15,6 +16,7 @@ import type { ProductDraft, ProductImage } from "@/types/domain";
  * CAP-2.5: optional server seed for ?draft= pending_input.
  */
 export function WorkbenchPageClient({
+  gptProducts,
   userId,
   drafts,
   images,
@@ -22,6 +24,7 @@ export function WorkbenchPageClient({
   initialFromServer = null,
   loadNotice = null
 }: {
+  gptProducts: GptRawListItem[];
   userId: string;
   drafts: ProductDraft[];
   images: ProductImage[];
@@ -74,6 +77,7 @@ export function WorkbenchPageClient({
       }
       results={
         <DraftResultsPanel
+          gptProducts={gptProducts}
           drafts={drafts}
           images={images}
           userId={userId}

@@ -16,7 +16,8 @@ const expectedActive = [
   "20261019100000_publish_item_attempts.sql",
   "20261020100000_shopify_sync_baseline.sql",
   "20261022100000_stock_source_options_not_dirty.sql",
-  "20261025100000_shopify_media_mode.sql"
+  "20261025100000_shopify_media_mode.sql",
+  "20261102100000_gpt_handoff.sql"
 ];
 
 function fail(message) {

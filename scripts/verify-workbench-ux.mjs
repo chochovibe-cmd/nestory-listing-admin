@@ -300,6 +300,7 @@ await check("workspace prefs default to single + 潮巢導購版 and persist man
   assert.deepEqual(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES), {
     priceMode: "single",
     tone: "潮巢導購版",
+    handoffMode: "ai",
   });
   storage.setItem(
     workspacePrefs.WORKSPACE_PREFS_KEY,
@@ -308,6 +309,7 @@ await check("workspace prefs default to single + 潮巢導購版 and persist man
   assert.deepEqual(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES), {
     priceMode: "sale",
     tone: "小編聊天口吻",
+    handoffMode: "ai",
   });
   storage.setItem(
     workspacePrefs.WORKSPACE_PREFS_KEY,
@@ -316,6 +318,7 @@ await check("workspace prefs default to single + 潮巢導購版 and persist man
   assert.deepEqual(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES), {
     priceMode: "sale",
     tone: "潮巢導購版",
+    handoffMode: "ai",
   });
   workspacePrefs.writeWorkspacePref(storage, { priceMode: "single" });
   assert.equal(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES).priceMode, "single");
@@ -323,6 +326,7 @@ await check("workspace prefs default to single + 潮巢導購版 and persist man
   assert.deepEqual(workspacePrefs.readWorkspacePrefs(storage, VALID_TONES), {
     priceMode: "single",
     tone: "潮巢導購版",
+    handoffMode: "ai",
   });
 });
 

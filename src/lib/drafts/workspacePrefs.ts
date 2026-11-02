@@ -2,7 +2,7 @@ export const WORKSPACE_PREFS_KEY = "nestory_workspace_prefs_v1";
 export const FACTORY_DEFAULT_PRICE_MODE = "single" as const;
 export const FACTORY_DEFAULT_TONE = "潮巢導購版";
 
-export type WorkspacePrefs = { priceMode: "sale" | "single"; tone: string };
+export type WorkspacePrefs = { priceMode: "sale" | "single"; tone: string; handoffMode: "ai" | "gpt" };
 
 export function readWorkspacePrefs(
   storage: Storage | null | undefined,
@@ -11,6 +11,7 @@ export function readWorkspacePrefs(
   const fallback: WorkspacePrefs = {
     priceMode: FACTORY_DEFAULT_PRICE_MODE,
     tone: FACTORY_DEFAULT_TONE,
+    handoffMode: "ai",
   };
   if (!storage) return fallback;
   try {
@@ -24,7 +25,8 @@ export function readWorkspacePrefs(
       typeof parsed?.tone === "string" && validTones.includes(parsed.tone)
         ? parsed.tone
         : FACTORY_DEFAULT_TONE;
-    return { priceMode, tone };
+    const handoffMode = parsed?.handoffMode === "gpt" ? "gpt" : "ai";
+    return { priceMode, tone, handoffMode };
   } catch {
     return fallback;
   }

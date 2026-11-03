@@ -1,0 +1,16 @@
+{
+  "version": "copy-a-golden-draft-20261103",
+  "note": "COPY-A 寫手盲測 Golden set（草稿）。11-03 Claude 唯讀查正式庫挑的 10 件；expected 只先填確定的，其餘在跑盲測前補齊（規格 §4.2），補齊後不再改。",
+  "items": [
+    { "id": "09547e53", "slot": "角色收藏", "label": "銀魂 × BOOMCOMIC 徽章 12 款（4g 實測那件，現版文案偏空泛）", "expected": { "archetype": "角色收藏", "brandEnglish": "BOOMCOMIC", "ip": "銀魂", "requiresVoltage": false } },
+    { "id": "58f00e61", "slot": "角色收藏", "label": "Miffy × 萌圓歡 絨毛吊飾盲盒 冬日系列（隨機旗標）", "expected": { "archetype": "角色收藏", "ip": "Miffy", "flags": ["隨機盲盒"], "requiresVoltage": false } },
+    { "id": "6647e20c", "slot": "證據薄", "label": "mofusand × 三麗鷗 毛絨掛件盲盒（沒有圖片辨識、有評價）", "expected": { "archetype": "角色收藏", "flags": ["隨機盲盒"], "requiresVoltage": false, "evidenceLevel": "thin" } },
+    { "id": "71672805", "slot": "機能用品", "label": "VICTOR × 七龍珠 羽毛球拍握把保護套", "expected": { "archetype": "機能用品", "brandEnglish": "VICTOR", "ip": "七龍珠", "requiresVoltage": false } },
+    { "id": "e4ba2299", "slot": "機能用品", "label": "Pingu × MARtube 藍牙耳機（3C）", "expected": { "archetype": "機能用品", "brandEnglish": "MARtube", "ip": "Pingu" } },
+    { "id": "31701317", "slot": "機能用品", "label": "三麗鷗 × emie M3 翻轉相機（規格多）", "expected": { "archetype": "機能用品", "ip": "三麗鷗" } },
+    { "id": "3f166233", "slot": "生活日用", "label": "Miffy 雙噴加濕器 USB（測電壓判斷不誤報）", "expected": { "archetype": "生活日用", "ip": "Miffy" } },
+    { "id": "27f42c00", "slot": "生活日用", "label": "小王子 × MARtube 玫瑰星球燈", "expected": { "archetype": "生活日用", "brandEnglish": "MARtube" } },
+    { "id": "02312886", "slot": "生活日用", "label": "三麗鷗 × Tide color 大容量文具袋", "expected": { "archetype": "生活日用", "ip": "三麗鷗" } },
+    { "id": "845e0303", "slot": "穿搭配件", "label": "Hello Kitty 水晶手鍊", "expected": { "archetype": "穿搭配件", "ip": "三麗鷗", "requiresVoltage": false } }
+  ]
+}

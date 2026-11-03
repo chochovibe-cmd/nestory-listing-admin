@@ -20,7 +20,7 @@
 | 4e-B 清 Supabase 空間（Claude） | ✅ **第一輪 10-28 完成**（450.2 → 281.5 MB，刪 641 張；詳見下方「4e-B 第一輪」）。原待決事項（AI 讀字用圖）已於 10-27 定案＝改讀 Shopify CDN 縮小版。 | 4e-C 詳情圖搬家同步（58 件分批）＋第二輪清空間（約 80 MB） |
 | 4e-C 詳情圖搬家同步＋第二輪清空間（Claude） | ✅ **10-28 完成**（60 件同步、Supabase 281.5 → 197.5 MB；詳見下方「4e-C」） | 4f 文案參考圖 |
 | 4f 文案參考圖 | ✅ 10-28 上線（#83 d459ede），Claude 實機通過 | 小尾巴見總表 4f 列 |
-| 4g OPENROUTER 文字 AI 改道 | ✅ 11-02 隨 aa5bcc8 上正式站（#82 10-29 已合併但當時沒上線）。Vercel Production 有 `OPENROUTER_API_KEY`（10-29 加）→ 文字 AI 走 OpenRouter；沒金鑰時自動走 OpenAI | 老闆下次用「AI 生成」生成 1 件，Claude 查資料庫確認走 OpenRouter |
+| 4g OPENROUTER 文字 AI 改道 | ✅ 11-02 隨 aa5bcc8 上正式站（#82 10-29 已合併但當時沒上線）。Vercel Production 有 `OPENROUTER_API_KEY`（10-29 加）→ 文字 AI 走 OpenRouter；沒金鑰時自動走 OpenAI | ✅ 11-03 實機通過：Claude 在正式站重生 09547e53（銀魂徽章，10-22 因 OpenAI 沒錢失敗）→ 19 秒完成，gpt-4o、5,863／1,023 tokens、generation_error 空、狀態轉待審核。OpenAI 直連仍無額度，所以這次一定是走 OpenRouter（老闆可在 OpenRouter 後台 Activity 再看一眼） |
 | GPT-HANDOFF 交給 GPT 原始匯出（過渡上架方式；Claude 規格＋Codex 施工） | ✅ 11-02 上線（#84 aa5bcc8；migration `20261102100000_gpt_handoff` 已套正式庫，套前全備份 `Nestory備份/2026-11-02-GPT-HANDOFF加欄位前`）。輸入區「AI 生成／交給 GPT」→ 卡片區「交給 GPT」分頁（待匯出／已匯出）→ 匯出原始 CSV／封存。正式站實測送出、匯出（含 BOM）、封存通過；測試草稿 40b61664 已封存。規格 `docs/GPT-HANDOFF-交給GPT原始匯出-施工規格-2026-11-02.md` | #85 清單勾選框修正 11-02 20:02 已上正式站。用 GPT 匯入 Shopify 的商品工具不認得（庫存不同步）→ 請 GPT 保留工具 SKU，日後可靠 SKU 接回 |
 
 ### 4e-B 清 Supabase 空間 第一輪（10-28 完成，Claude 指揮直接做，老闆同意）

@@ -39,7 +39,7 @@ export class OpenAICopyProvider implements CopyProvider {
       ? { grade: input.secondhandGrade, condition: input.secondhandCondition, notes: input.secondhandNotes }
       : null;
     const system = regenField
-      ? buildFieldRegenSystemPrompt(regenField, resolvedTone, input.copyLength, secondhandInfo)
+      ? buildFieldRegenSystemPrompt(regenField, resolvedTone, input.copyLength, secondhandInfo, Boolean(input.productBrief?.trim()))
       : buildCopySystemPrompt(resolvedTone, input.copyLength, secondhandInfo, {
           productBriefMode: Boolean(input.productBrief?.trim()),
         });
@@ -48,7 +48,11 @@ export class OpenAICopyProvider implements CopyProvider {
     // A8: parse-failure retry runs the request at most twice; the second pass
     // appends a format reminder to the user message. On regen the emptiness
     // check is scoped to the single field being rewritten.
-    const isEmpty = regenField ? makeFieldEmptyCheck(regenField) : undefined;
+    const isEmpty = regenField
+      ? makeFieldEmptyCheck(regenField)
+      : resolvedTone === "潮巢導購版" && input.productBrief?.trim()
+        ? (output: CopyProviderOutput) => !output.generatedDescriptionHtml.trim()
+        : undefined;
     return generateWithParseRetry(async (formatReminder) => {
       const userContent = formatReminder ? `${user}\n\n${formatReminder}` : user;
 

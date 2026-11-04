@@ -55,7 +55,7 @@ export function checkCopy(input: CopyCheckInput): CopyIssue[] {
   if (/似乎|建議查看實物|資料未提及|未提到|不確定/.test(stripTags(input.faqHtml))) {
     add("faq_unknown", "generated_faq_html", "FAQ 在回答「我們不知道」：答不出來的題目拿掉，改補資料");
   }
-  const numeric = /(\d+(?:\.\d+)?)\s*(cm|mm|公分|ml|毫升|kg|公斤|mAh|W|V|g|克|吋|寸|款|入|個|張|小時|分鐘)\b?/gi;
+  const numeric = /(\d+(?:\.\d+)?)\s*(cm|mm|公分|ml|毫升|kg|公斤|mAh|W|V|g|克|吋|寸|款|入|個|張|小時|分鐘)/gi;
   for (const item of FIELDS) {
     const matches = [...item.text(input).matchAll(numeric)];
     const missing = matches.find((m) => !exactNumberInEvidence(m[1]!, input.evidenceText));

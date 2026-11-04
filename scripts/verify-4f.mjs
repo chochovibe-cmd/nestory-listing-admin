@@ -233,7 +233,7 @@ await check("E2 讀圖失敗不清掉舊的 image_description；仍不碰 spec_t
 
 await check("E3 重生（regen_full／regen_field）先呼叫 analyze-images；失敗只提示、照樣重生", () => {
   const s = read("src/components/listing/GenerationQueueRunner.tsx");
-  assert.match(s, /async function refreshImageDescriptionForRegen\(draftId: string, title: string\): Promise<void>/);
+  assert.match(s, /async function refreshImageDescriptionForRegen\(draftId: string, title: string\): Promise<AiStageCost \| null>/);
   assert.match(s, /圖片重讀失敗，這次沿用上次的圖片資訊/);
   const regenStart = s.indexOf('if (jobKind !== "full")');
   const call = s.indexOf("await refreshImageDescriptionForRegen(job.draftId, title);", regenStart);

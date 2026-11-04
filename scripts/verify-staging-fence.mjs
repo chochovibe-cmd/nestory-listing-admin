@@ -893,14 +893,14 @@ await check("seed-from-prod.mjs source guards: prod source is read-only, target 
 // ===========================================================================
 console.log("7. static guards (banner, CSS, /api/status, env template, wiring)");
 // ===========================================================================
-await check("layout.tsx: <EnvironmentBanner /> is the sibling right before <header className=\"topbar\">", () => {
+await check("layout.tsx: EnvironmentBanner then AiHealthBanner precede the topbar (COPY-A1)", () => {
   const layout = read("src/app/layout.tsx");
   const bannerAt = layout.indexOf("<EnvironmentBanner />");
   const headerAt = layout.indexOf('<header className="topbar">');
   assert.ok(bannerAt > 0, "<EnvironmentBanner /> missing");
   assert.ok(headerAt > 0, "topbar header missing");
   assert.ok(bannerAt < headerAt, "banner must come before the header");
-  assert.match(layout.slice(bannerAt, headerAt), /^<EnvironmentBanner \/>\s*$/, "nothing between banner and header");
+  assert.match(layout.slice(bannerAt, headerAt), /^<EnvironmentBanner \/>\s*<AiHealthBanner \/>\s*$/, "only the COPY-A1 AI health banner belongs between environment banner and header");
   assert.match(layout.slice(0, bannerAt), /<div className="app-root">\s*$/, "banner is the first child of .app-root");
   assert.equal((layout.match(/<EnvironmentBanner/g) ?? []).length, 1);
   assert.match(layout, /import \{ EnvironmentBanner \} from "@\/components\/EnvironmentBanner";/);

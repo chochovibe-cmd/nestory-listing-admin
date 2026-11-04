@@ -180,8 +180,8 @@ const chaochaoPrompt = read("src/lib/providers/chaochaoPrompt.ts");
 
 // Shared title contract lives in titlePrompt.ts and is used by every tone.
 assert.match(titlePrompt, /商品標題契約｜所有語氣共用/, "shared title contract missing");
-assert.match(titlePrompt, /IP中文＋英文 × 品牌/, "IP-first brand-second title order missing");
-assert.match(titlePrompt, /三麗鷗 Sanrio × Bandai \| 家族米粒公仔吊飾盲盒 \| 隨機單盒/, "owner title example missing");
+assert.match(titlePrompt, /品牌官方英文 × IP中文＋英文/, "brand-first title order missing");
+assert.match(titlePrompt, /Bandai × 三麗鷗 Sanrio \| 家族米粒公仔吊飾盲盒 \| 隨機單盒/, "owner title example missing");
 assert.match(titlePrompt, /不要填「標準款」/, "filler 標準款 rule missing");
 assert.match(promptBase, /SHARED_PRODUCT_TITLE_PROMPT/, "base prompt no longer injects the shared title contract");
 assert.doesNotMatch(prompt, /COPY C5A 潮巢導購版 Title Writer/, "Chaochao-only title overlay returned");

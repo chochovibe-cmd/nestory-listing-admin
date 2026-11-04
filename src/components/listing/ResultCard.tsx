@@ -349,7 +349,7 @@ export function ResultCard({
   const [regenQueueStatus, setRegenQueueStatus] = useState<RegenQueueStatusDetail | null>(null);
   const [comboSaving, setComboSaving] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
-  const [regenTone, setRegenTone] = useState<CopyTone>(COPY_TONES[0]);
+  const [regenTone, setRegenTone] = useState<CopyTone>("潮巢導購版");
   const [regenNotes, setRegenNotes] = useState("");
   const [lockedPreviewOpen, setLockedPreviewOpen] = useState(false);
   // R3 station③ multi-select
@@ -2568,9 +2568,14 @@ export function ResultCard({
       typeof window !== "undefined" ? window.localStorage : null,
       draft.ip_name
     );
-    if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
-      setRegenTone(remembered as CopyTone);
-    }
+    const draftTone = draft.generation_tone;
+    setRegenTone(
+      typeof draftTone === "string" && (COPY_TONES as readonly string[]).includes(draftTone)
+        ? draftTone as CopyTone
+        : remembered && (COPY_TONES as readonly string[]).includes(remembered)
+          ? remembered as CopyTone
+          : "潮巢導購版"
+    );
     setRegenOpen(true);
   }
 
@@ -3457,16 +3462,7 @@ export function ResultCard({
                     size="sm"
                     disabled={regeneratingField != null || comboSaving}
                     loading={regenerating}
-                    onClick={() => {
-                      const remembered = recalledToneForIp(
-                        typeof window !== "undefined" ? window.localStorage : null,
-                        draft.ip_name
-                      );
-                      if (remembered && (COPY_TONES as readonly string[]).includes(remembered)) {
-                        setRegenTone(remembered as CopyTone);
-                      }
-                      setRegenOpen(true);
-                    }}
+                    onClick={openRegenModal}
                     type="button"
                   >
                     ↻ 重新生成

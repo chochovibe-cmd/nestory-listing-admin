@@ -52,10 +52,10 @@ export function buildFieldRegenSystemPrompt(
   secondhandInfo?: Parameters<typeof buildProductionFieldRegenSystemPrompt>[3],
   productBriefMode = false,
 ): string {
-  const base = tone === "潮巢導購版" && productBriefMode
-    ? buildChaochaoFieldRegenSystemPrompt(field, copyLength, "", true)
-    : buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo);
-  return `${base}\n\n${TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT}`;
+  if (tone === "潮巢導購版" && productBriefMode) {
+    return `${buildChaochaoFieldRegenSystemPrompt(field, copyLength, "", true)}\n\n${TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT}`;
+  }
+  return `${buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo)}\n\n${TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT}`;
 }
 
 export function buildFieldRegenUserMessage(input: CopyProviderInput): string {

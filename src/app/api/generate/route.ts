@@ -1180,7 +1180,7 @@ export async function POST(request: NextRequest) {
       maxLen: ENRICHED_TITLE_MAX_LENGTH,
     }),
   );
-  let officialTitleZh = enrichedTitleFull;
+  const officialTitleZh = enrichedTitleFull;
 
   if (providerOutput.outputTruncated) extraWarnings.push(COPY_OUTPUT_TRUNCATED_WARNING);
 
@@ -1268,8 +1268,7 @@ export async function POST(request: NextRequest) {
             maxLen: ENRICHED_TITLE_MAX_LENGTH,
           });
           enrichedTitleFull = finalizeCustomerText(fixedTitle);
-          officialTitleZh = enrichedTitleFull;
-          localizedOutput.display_title = officialTitleZh;
+          localizedOutput.display_title = enrichedTitleFull;
         } else if (pick.field === "generated_description_html") {
           localizedOutput.generated_description_html = finalizeCustomerText(fix.generatedDescriptionHtml);
         } else if (pick.field === "generated_faq_html") {

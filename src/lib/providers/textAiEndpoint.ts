@@ -15,6 +15,44 @@ export type TextAiEndpoint = {
   via: "openrouter" | "openai";
 };
 
+const REASONING_EFFORTS = ["minimal", "low", "medium", "high"] as const;
+
+/**
+ * COPY-A1: extra request-body fields per route. OpenRouter: always ask for usage.cost
+ * (real charge in USD); add reasoning effort only when TEXT_AI_REASONING_EFFORT is set
+ * (reasoning tokens bill as output). OpenAI direct: nothing extra (unchanged behaviour).
+ */
+export function textAiExtraBody(endpoint: TextAiEndpoint): Record<string, unknown> {
+  if (endpoint.via !== "openrouter") return {};
+  const extra: Record<string, unknown> = { usage: { include: true } };
+  const effort = process.env.TEXT_AI_REASONING_EFFORT?.trim().toLowerCase();
+  if (effort && (REASONING_EFFORTS as readonly string[]).includes(effort)) {
+    extra.reasoning = { effort };
+  }
+  return extra;
+}
+
+/** Normalised usage from a chat/completions payload; reportedCostUsd only when the route reported it. */
+export function readChatUsage(payload: unknown): {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationTokens: number;
+  reportedCostUsd: number | null;
+} {
+  const u = (payload as { usage?: Record<string, unknown> } | null)?.usage ?? {};
+  const details = (u.prompt_tokens_details ?? {}) as Record<string, unknown>;
+  const cached = Number(details.cached_tokens) || 0;
+  const cost = Number(u.cost);
+  return {
+    inputTokens: Math.max((Number(u.prompt_tokens) || 0) - cached, 0),
+    outputTokens: Number(u.completion_tokens) || 0,
+    cachedInputTokens: cached,
+    cacheCreationTokens: 0,
+    reportedCostUsd: u.cost !== undefined && u.cost !== null && Number.isFinite(cost) && cost >= 0 ? cost : null,
+  };
+}
+
 /** OpenRouter wins when both keys are set; null when neither is. */
 export function resolveTextAiEndpoint(): TextAiEndpoint | null {
   const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();

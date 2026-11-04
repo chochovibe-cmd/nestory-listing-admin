@@ -8,7 +8,9 @@
 
 import { MAX_COPY_REFERENCE_IMAGES } from "@/lib/images/copyReference";
 import { externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout, VISION_TIMEOUT_MS } from "./externalTimeout";
-import { resolveTextAiEndpoint, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
+import { stageCost, type AiStageCost } from "@/lib/ai/aiCost";
+import { readChatUsage, resolveTextAiEndpoint, textAiExtraBody, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
+import type { RawUsage } from "./copy";
 
 const DEFAULT_VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
@@ -58,7 +60,7 @@ type VisionContentBlock =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
-async function callVision(systemPrompt: string, userText: string, imageUrls: string[]): Promise<string> {
+async function callVision(systemPrompt: string, userText: string, imageUrls: string[]): Promise<{ text: string; usage: RawUsage }> {
   const endpoint = resolveTextAiEndpoint();
   if (!endpoint) {
     throw new Error("OPENAI_API_KEY is not configured on the server.");
@@ -81,6 +83,7 @@ async function callVision(systemPrompt: string, userText: string, imageUrls: str
     body: JSON.stringify({
       model: textAiModelId(endpoint, DEFAULT_VISION_MODEL),
       max_tokens: 1000,
+      ...textAiExtraBody(endpoint),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content },
@@ -104,25 +107,36 @@ async function callVision(systemPrompt: string, userText: string, imageUrls: str
     throw new Error("OpenAI vision response did not include message content.");
   }
 
-  return text.trim();
+  return { text: text.trim(), usage: readChatUsage(payload) };
 }
 
 export async function describeProductImages(imageUrls: string[]): Promise<string> {
-  return callVision(
+  const result = await describeProductImagesWithCost(imageUrls);
+  return result.text;
+}
+
+export async function describeProductImagesWithCost(imageUrls: string[]): Promise<{ text: string; cost: AiStageCost }> {
+  const endpoint = resolveTextAiEndpoint();
+  if (!endpoint) throw new Error("OPENAI_API_KEY is not configured on the server.");
+  const result = await callVision(
     DESCRIBE_SYSTEM_PROMPT,
     "請描述以下商品圖片：",
     imageUrls.slice(0, MAX_DESCRIBE_IMAGES),
   );
+  return {
+    text: result.text,
+    cost: stageCost({ stage: "vision", model: DEFAULT_VISION_MODEL, via: endpoint.via, usage: result.usage, reportedCostUsd: result.usage.reportedCostUsd }),
+  };
 }
 
 // Reserved for B3 (截圖／網址自動辨識). Not called by /api/analyze-images anymore
 // -- 規格圖 OCR 路徑已廢棄 (Mockup差異備忘 差異2)，但辨識引擎保留給 B3 沿用。
 export async function ocrSpecImages(imageUrls: string[]): Promise<string> {
-  return callVision(
+  return (await callVision(
     OCR_SYSTEM_PROMPT,
     "請辨識以下規格圖中的文字：",
     imageUrls.slice(0, MAX_OCR_IMAGES),
-  );
+  )).text;
 }
 
 // B3: 商品頁／規格表截圖 → 結構化欄位（標題／¥成本／特色／規格／款式列）。
@@ -213,6 +227,7 @@ export async function recognizeProductScreenshots(
     body: JSON.stringify({
       model: textAiModelId(endpoint, DEFAULT_VISION_MODEL),
       max_tokens: 1200,
+      ...textAiExtraBody(endpoint),
       temperature: 0.1,
       messages: [
         { role: "system", content: systemPrompt },

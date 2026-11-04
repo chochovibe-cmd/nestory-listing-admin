@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import { rememberToneForIp } from "@/lib/drafts/toneMemory";
 import { humanizeAiError } from "@/lib/drafts/aiErrorMessage";
+import type { AiStageCost } from "@/lib/ai/aiCost";
 import {
   GENERATION_PROGRESS_EVENT,
   GENERATION_STEP_LABELS,
@@ -76,7 +77,7 @@ function emitRegenStatus(detail: RegenQueueStatusDetail) {
  * analyze-images fingerprint cache (no AI call). Failure never blocks the regen — the old
  * image_description stays and the operator gets one info toast.
  */
-async function refreshImageDescriptionForRegen(draftId: string, title: string): Promise<void> {
+async function refreshImageDescriptionForRegen(draftId: string, title: string): Promise<AiStageCost | null> {
   const failMessage = `${title}：圖片重讀失敗，這次沿用上次的圖片資訊`;
   try {
     const response = await fetch("/api/analyze-images", {
@@ -84,9 +85,14 @@ async function refreshImageDescriptionForRegen(draftId: string, title: string): 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ draftId }),
     });
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) showToast(failMessage, "info");
+    return response.ok && payload.visionCost && typeof payload.visionCost === "object"
+      ? payload.visionCost as AiStageCost
+      : null;
   } catch {
     showToast(failMessage, "info");
+    return null;
   }
 }
 
@@ -137,7 +143,7 @@ export function GenerationQueueRunner() {
           field: job.input.regenField ?? null,
         });
 
-        await refreshImageDescriptionForRegen(job.draftId, title);
+        const visionCost = await refreshImageDescriptionForRegen(job.draftId, title);
 
         let regenResponse: Response;
         try {
@@ -155,6 +161,7 @@ export function GenerationQueueRunner() {
               regenNotes: job.input.regenNotes,
               field: job.input.regenField,
               currentValues: job.input.currentValues,
+              visionCost,
             }),
           });
         } catch {
@@ -216,6 +223,7 @@ export function GenerationQueueRunner() {
 
       let imageStep: StepStatus = job.input.hasImages ? "active" : "done";
       const imageWarnings: string[] = [];
+      let visionCost: AiStageCost | null = null;
 
       emitProgress(job.draftId, title, ["done", imageStep, "pending", "pending"]);
 
@@ -227,6 +235,9 @@ export function GenerationQueueRunner() {
             body: JSON.stringify({ draftId: job.draftId }),
           });
           const payload = await response.json().catch(() => ({}));
+          if (response.ok && payload.visionCost && typeof payload.visionCost === "object") {
+            visionCost = payload.visionCost as AiStageCost;
+          }
           if (!response.ok) {
             imageStep = "warn";
             imageWarnings.push(
@@ -266,6 +277,7 @@ export function GenerationQueueRunner() {
             tone: job.input.tone,
             copyLength: job.input.copyLength,
             imageWarnings,
+            visionCost,
           }),
         });
       } catch {

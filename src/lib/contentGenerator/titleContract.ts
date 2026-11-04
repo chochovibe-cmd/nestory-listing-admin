@@ -97,7 +97,7 @@ export function assembleIpBrandSegment(ip: string, brand: string): string {
     const ipKey = ipText.toLocaleLowerCase();
     const brandKey = brandText.toLocaleLowerCase();
     if (ipKey.includes(brandKey) || brandKey.includes(ipKey)) return ipText;
-    return `${ipText} × ${brandText}`;
+    return `${brandText} × ${ipText}`;
   }
   return ipText || brandText;
 }

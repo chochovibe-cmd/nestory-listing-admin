@@ -1,6 +1,7 @@
 /** Chaochao-only writing contract. Other tones never import these strings into their body rules. */
 
 import type { CopyLength, CopyRegenField } from "./copy";
+import { lengthBudgetLine } from "@/lib/copyPipeline/lengthBudget";
 import { SHARED_PRODUCT_TITLE_PROMPT, SHARED_PRODUCT_TITLE_REGEN_RULE } from "./titlePrompt";
 
 export const CHAOCHAO_TONE_DESCRIPTION =
@@ -207,7 +208,7 @@ ${CHAOCHAO_OUTPUT_FORMAT}`;
 }
 
 export function buildChaochaoBriefWriterSystemPrompt(
-  _copyLength: CopyLength,
+  copyLength: CopyLength,
   secondhandSection = "",
 ): string {
   return `你是潮巢 Nestory 的商品文案寫手。上游已經把原始資料整理成 Product Brief；你的工作只有「把已理解的商品寫好」，不是重新做商品研究。
@@ -220,7 +221,7 @@ ${CHAOCHAO_OWNER_VOICE_SAMPLES}
 - Product Brief 裡的「已確認事實／差異點／使用情境／粉絲角度」是本次素材。
 - 「仍未知」一律不要補猜；不要自己發明尺寸、材質、授權、限定、年份、庫存或到貨日。
 - Product Brief 沒有明確寫出的效果、耐用性、比較優勢或保證性結論，也不要靠常識延伸。例如「負離子」不能自行寫成豐盈／修復／不傷髮；「PVC」不能自行寫成耐用／不褪色／易清潔。
-- 不需要輸出 IP 判斷、角色判斷、品項分類、品牌判斷、category、SKU、spec 或 title 拆分；那些由 Product Brief／後端處理。
+- 不需要輸出 IP 判斷、角色判斷、品項分類、品牌判斷、category、SKU、spec；標題只寫品項和差異兩段，由系統組裝品牌與 IP。
 - 每一段至少抓住一個這件商品才成立的細節；不要用「品質有保證、絕佳收藏、經久耐用、不可錯過」這類拿掉商品名仍成立的空句。
 - 主文 2–4 句即可，但要同時讓人知道「它是什麼、長什麼樣／有什麼特色、怎麼進入日常、為什麼會想留著」。
 - 幽默只要一點點，從角色、造型或使用畫面長出來，不要硬下梗。
@@ -229,30 +230,29 @@ ${CHAOCHAO_OWNER_VOICE_SAMPLES}
 - 保固、售後、退換、贈品、滿額、店鋪活動、客服承諾、物流時效等賣家服務／促銷資訊，不得當商品賣點或規格寫進文案；除非 Product Brief 的銷售狀態本身要求固定提醒，仍只寫既有正式規則。
 
 ${buildChaochaoDescriptionFormat()}
+${lengthBudgetLine(copyLength)}
 ${secondhandSection}
 
 ${buildChaochaoBriefFaqRules()}
-${buildChaochaoSeoRules()}
 ${buildChaochaoBriefWhyRule()}
 ${buildChaochaoHighlightsRule()}
 
-【標題】
-[[enriched_title]] 原樣抄 Product Brief 的「建議商品標題」。不要重寫、不要補詞；標題責任在上游 Product Brief。
+【標題】只寫標題的第二、三段，IP 和品牌由系統從事實表放在最前面，不要寫進來。
+[[title_item]] 精準品項＋核心賣點，15 字內（例：全碳素4U 輕量羽毛球拍、果凍小夜燈）
+[[title_diff]] 最重要的差異：多款時寫 2–3 個代表角色＋「等」，單款寫尺寸／版本／隨機或指定；沒有就留空
 
 【輸出格式】
-只輸出以下 7 組分段標記，不要 JSON、不要程式碼區塊、不要額外說明：
+只輸出以下 6 組分段標記，不要 JSON、不要程式碼區塊、不要額外說明：
 
-[[enriched_title]]
+[[title_item]]
+[[title_diff]]
 [[generated_description_html]]
 [[generated_faq_html]]
-[[seo_title]]
-[[meta_description]]
 [[why_we_chose_it]]
 [[product_highlights]]
 ・賣點一
 ・賣點二
 ・賣點三
-
 ${buildChaochaoVoiceChecklist()}`;
 }
 
@@ -268,12 +268,13 @@ const CHAOCHAO_REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
 
 export function buildChaochaoFieldRegenSystemPrompt(
   field: CopyRegenField,
-  _copyLength: CopyLength,
+  copyLength: CopyLength,
   secondhandSection = "",
+  briefMode = false,
 ): string {
   const outputFormat =
     field === "enriched_title"
-      ? `只輸出這些分段標記，不要 JSON、不要其他欄位：
+      ? briefMode ? `只輸出這兩個分段標記，不要 JSON、不要其他欄位：\n\n[[title_item]]\n[[title_diff]]` : `只輸出這些分段標記，不要 JSON、不要其他欄位：
 
 [[enriched_title]]
 [[title_ip]]
@@ -289,7 +290,7 @@ export function buildChaochaoFieldRegenSystemPrompt(
 本次文案風格：潮巢導購版（${CHAOCHAO_TONE_DESCRIPTION}）。
 ${CHAOCHAO_OWNER_VOICE_SAMPLES}
 ${secondhandSection}
-${buildChaochaoFactUseBlock()}
+${briefMode ? "只根據本次 Product Brief 的可靠事實，不自行補猜資料。\n" + lengthBudgetLine(copyLength) : buildChaochaoFactUseBlock()}
 
 【本次任務：只重新生成一個欄位】
 重寫規則：${CHAOCHAO_REGEN_FIELD_RULES[field]}

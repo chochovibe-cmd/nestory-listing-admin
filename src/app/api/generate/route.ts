@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { buildCostRecord, costOverCapWarning, sanitizeRelayedStageCost, stageCost, type AiStageCost } from "@/lib/ai/aiCost";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
 import {
@@ -298,6 +299,7 @@ async function handleFieldRegen(params: {
   scenarioKeywordMap: Record<string, string[]>;
   ipToneMap: ReturnType<typeof mergeIpToneMap>;
   clientCurrentValues?: unknown;
+  relayedVisionCost: AiStageCost | null;
 }): Promise<Response> {
   const {
     regenField,
@@ -313,6 +315,7 @@ async function handleFieldRegen(params: {
     scenarioKeywordMap,
     ipToneMap,
     clientCurrentValues,
+    relayedVisionCost,
   } = params;
   const currentValues = mergeRegenCurrentValues(draft, clientCurrentValues);
   const scenarioTerms = pickScenarioKeywords(
@@ -423,16 +426,35 @@ async function handleFieldRegen(params: {
   }
 
   // COPY C1.1 safety: this single-field path has no spec_text mapping/write.
+  const costStages: AiStageCost[] = [];
+  if (relayedVisionCost) costStages.push(relayedVisionCost);
   if (raw.usage) {
-    update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd;
+    costStages.push(stageCost({
+      stage: "writer",
+      model: raw.model,
+      via: raw.via ?? "none",
+      usage: raw.usage,
+      reportedCostUsd: raw.usage.reportedCostUsd ?? null,
+    }));
+  }
+  const costRecord = buildCostRecord(costStages);
+  if (raw.usage) {
+    update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd + (relayedVisionCost?.costUsd ?? 0);
     update.generation_input_tokens = Number(draft.generation_input_tokens ?? 0) + raw.usage.inputTokens;
     update.generation_output_tokens = Number(draft.generation_output_tokens ?? 0) + raw.usage.outputTokens;
+  } else if (relayedVisionCost) {
+    update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + relayedVisionCost.costUsd;
   }
-  if (raw.outputTruncated) {
+  const overCap = costOverCapWarning(costRecord);
+  if (raw.outputTruncated || overCap) {
     const warnings = Array.isArray(draft.warnings)
       ? draft.warnings.filter((item): item is string => typeof item === "string")
       : [];
-    update.warnings = uniqueMessages([...warnings, COPY_OUTPUT_TRUNCATED_WARNING]);
+    update.warnings = uniqueMessages([
+      ...warnings,
+      ...(raw.outputTruncated ? [COPY_OUTPUT_TRUNCATED_WARNING] : []),
+      ...(overCap ? [overCap] : []),
+    ]);
   }
 
   if (draft.shopify_product_id) {
@@ -463,6 +485,7 @@ async function handleFieldRegen(params: {
   return Response.json({
     ok: true,
     regeneratedField: regenField,
+    cost: costRecord,
     result: {
       field: regenField,
       value: regenField === "product_highlights" ? responseHighlights : historyContent,
@@ -518,6 +541,7 @@ async function writeImageAltTexts(
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
+  const relayedVisionCost = sanitizeRelayedStageCost(body.visionCost);
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
   const queueRunId = typeof body.queueRunId === "string" ? body.queueRunId : null;
   const providerKey: "openai" | "claude" = effectiveQueueProvider(body.provider, hasClaudeKey());
@@ -527,7 +551,7 @@ export async function POST(request: NextRequest) {
   const requestVariantSummary = typeof body.variantSummary === "string" ? body.variantSummary : undefined;
   const tone: CopyTone = (COPY_TONES as readonly string[]).includes(body.tone)
     ? body.tone
-    : "黑膠文藝收藏感";
+    : "潮巢導購版";
   const copyLength: CopyLength = ["精簡", "標準", "詳細"].includes(body.copyLength) ? body.copyLength : "標準";
   const regenNotes =
     typeof body.regenNotes === "string" && body.regenNotes.trim()
@@ -618,7 +642,7 @@ export async function POST(request: NextRequest) {
 
   const updateQueueRun = async (
     status: "completed" | "failed",
-    options?: { error?: string | null; output?: Record<string, unknown> }
+    options?: { error?: string | null; output?: Record<string, unknown>; costUsd?: number }
   ) => {
     if (!queueRunId) return;
     await serviceSupabase
@@ -627,6 +651,7 @@ export async function POST(request: NextRequest) {
         status,
         error_message: options?.error ?? null,
         output_payload: options?.output ?? {},
+        ...(options?.costUsd !== undefined ? { cost_estimate: options.costUsd } : {}),
         completed_at: new Date().toISOString(),
       })
       .eq("id", queueRunId)
@@ -686,15 +711,18 @@ export async function POST(request: NextRequest) {
       scenarioKeywordMap,
       ipToneMap,
       clientCurrentValues: body.currentValues,
+      relayedVisionCost,
     });
 
     if (queueRunId && queueJobKind === "regen_field") {
       const payload = await response.clone().json().catch(() => ({}));
       if (response.ok) {
         await updateQueueRun("completed", {
+          costUsd: payload?.cost?.totalUsd,
           output: {
             regeneratedField: regenField,
             result: payload?.result ?? null,
+            cost: payload?.cost ?? null,
           },
         });
       } else {
@@ -912,6 +940,7 @@ export async function POST(request: NextRequest) {
   });
 
   let providerOutput: CopyProviderOutput | null = null;
+  let costRecord = buildCostRecord([]);
   let productBriefApplied = false;
   let detected: DetectedClassification = {
     ip: draft.ip_name ?? "",
@@ -980,6 +1009,21 @@ export async function POST(request: NextRequest) {
         detectedIpName: draft.ip_name ?? candidateIpForPack,
         ipToneMap,
       });
+      const costStages: AiStageCost[] = [];
+      if (relayedVisionCost) costStages.push(relayedVisionCost);
+      if (productBriefResult?.cost) costStages.push(productBriefResult.cost);
+      if (writerOutput.usage) {
+        costStages.push(stageCost({
+          stage: "writer",
+          model: writerOutput.model,
+          via: writerOutput.via ?? "none",
+          usage: writerOutput.usage,
+          reportedCostUsd: writerOutput.usage.reportedCostUsd ?? null,
+        }));
+      }
+      costRecord = buildCostRecord(costStages);
+      const overCap = costOverCapWarning(costRecord);
+      if (overCap) extraWarnings.push(overCap);
       const raw =
         productBriefResult && !productBriefResult.fallback
           ? applyProductBriefToCopyOutput(writerOutput, productBriefResult)
@@ -1251,7 +1295,7 @@ export async function POST(request: NextRequest) {
     generation_status: successStatus.generation_status,
     generation_model: providerOutput.model,
     generation_rule_version: productBriefApplied ? `chaochao-${PRODUCT_BRIEF_VERSION}` : draft.generation_rule_version,
-    generation_cost_estimate: providerOutput.usage?.costUsd ?? null,
+    ...(runMode !== "test" ? { generation_cost_estimate: costRecord.totalUsd } : { generation_cost_estimate: providerOutput.usage?.costUsd ?? null }),
     generation_input_tokens: providerOutput.usage?.inputTokens ?? null,
     generation_output_tokens: providerOutput.usage?.outputTokens ?? null,
     copy_generated_at: new Date().toISOString(),
@@ -1399,7 +1443,9 @@ export async function POST(request: NextRequest) {
     successStatus.generation_status === "failed" ? "failed" : "completed",
     {
       error: successStatus.generation_error,
+      costUsd: runMode !== "test" ? costRecord.totalUsd : undefined,
       output: {
+        ...(runMode !== "test" ? { cost: costRecord } : {}),
         draftState: localizedOutput.draft_state,
         provider: providerOutput.provider,
         model: providerOutput.model,

@@ -64,6 +64,8 @@
     "verify:4f": "node scripts/verify-4f.mjs",
     "verify:gpt-handoff": "node scripts/verify-gpt-handoff.mjs",
     "verify:openrouter": "node scripts/verify-openrouter.mjs",
+    "verify:copy-a": "node scripts/verify-copy-a.mjs",
+    "verify:copy-a1": "node scripts/verify-copy-a.mjs --part=a1",
     "verify:staging-fence": "node scripts/verify-staging-fence.mjs",
     "verify:stock": "node scripts/verify-stock.mjs",
     "verify:sync-fix": "node scripts/verify-sync-fix.mjs",

@@ -1,5 +1,5 @@
 import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
-import { resolveTextAiEndpoint, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
+import { readChatUsage, resolveTextAiEndpoint, textAiExtraBody, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
 import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry, makeFieldEmptyCheck } from "./copy";
 import {
   buildCopySystemPrompt,
@@ -11,6 +11,13 @@ import {
 } from "./systemPrompt";
 
 const DEFAULT_MODEL = process.env.OPENAI_COPY_MODEL || "gpt-4o";
+
+function writerTemperature(): number | undefined {
+  const raw = process.env.OPENAI_COPY_TEMPERATURE?.trim();
+  if (!raw) return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 && value <= 2 ? value : undefined;
+}
 
 export class OpenAICopyProvider implements CopyProvider {
   name = "openai";
@@ -58,6 +65,8 @@ export class OpenAICopyProvider implements CopyProvider {
           model: textAiModelId(endpoint, DEFAULT_MODEL),
           // A6: cap generous enough for the full 「詳細」copy without truncation.
           max_tokens: 3000,
+          ...(writerTemperature() !== undefined ? { temperature: writerTemperature() } : {}),
+          ...textAiExtraBody(endpoint),
           // A4: no json_object mode -- the model now returns segmented markers,
           // not JSON. json_object would force a `{...}` reply and break parsing.
           messages: [
@@ -83,20 +92,11 @@ export class OpenAICopyProvider implements CopyProvider {
         throw new Error("OpenAI response did not include message content.");
       }
 
-      // A13: prompt_tokens includes auto-cached tokens; split them out so the
-      // full-rate input isn't double-counted against the cached portion.
-      const u = payload?.usage ?? {};
-      const cached = Number(u?.prompt_tokens_details?.cached_tokens) || 0;
       return {
         text,
-        usage: {
-          inputTokens: Math.max((Number(u.prompt_tokens) || 0) - cached, 0),
-          outputTokens: Number(u.completion_tokens) || 0,
-          cachedInputTokens: cached,
-          cacheCreationTokens: 0,
-        },
+        usage: readChatUsage(payload),
         truncated: payload?.choices?.[0]?.finish_reason === "length",
       };
-    }, "openai", DEFAULT_MODEL, isEmpty);
+    }, "openai", DEFAULT_MODEL, isEmpty).then((output) => ({ ...output, via: endpoint.via }));
   }
 }

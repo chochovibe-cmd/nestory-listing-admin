@@ -8,7 +8,8 @@ import {
   parseCopyReferenceIds,
   selectCopyReferenceImages,
 } from "@/lib/images/copyReference";
-import { describeProductImages } from "@/lib/providers/visionProvider";
+import { describeProductImagesWithCost } from "@/lib/providers/visionProvider";
+import type { AiStageCost } from "@/lib/ai/aiCost";
 import type { ImageType } from "@/types/domain";
 
 // A2 (B1 對齊 Mockup差異備忘 差異2)：standalone sync route so Vision's latency
@@ -153,6 +154,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       cached: true,
       imageDescription: existingDescription,
+      visionCost: null,
       warnings: [],
     });
   }
@@ -165,16 +167,19 @@ export async function POST(request: NextRequest) {
     // Never touch spec_text here (it may hold a hand-filled value).
     // Never touch image_status (pipeline field).
     await mergeVisionStatus(serviceSupabase, draftId, "skipped", {}, sourceFingerprint);
-    return Response.json({ ok: true, skipped: true, imageDescription: null, warnings: [] });
+    return Response.json({ ok: true, skipped: true, imageDescription: null, visionCost: null, warnings: [] });
   }
 
   await mergeVisionStatus(serviceSupabase, draftId, "processing", {}, sourceFingerprint);
 
   const warnings: string[] = [];
   let imageDescription: string | null = null;
+  let visionCost: AiStageCost | null = null;
 
   try {
-    imageDescription = await describeProductImages(describeUrls);
+    const result = await describeProductImagesWithCost(describeUrls);
+    imageDescription = result.text;
+    visionCost = result.cost;
   } catch (error) {
     warnings.push(`主圖／詳情圖辨識失敗：${error instanceof Error ? error.message : String(error)}`);
   }
@@ -200,5 +205,5 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: warnings.join("; ") || "圖片辨識失敗", warnings }, { status: 502 });
   }
 
-  return Response.json({ ok: true, imageDescription, warnings });
+  return Response.json({ ok: true, imageDescription, visionCost, warnings });
 }

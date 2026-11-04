@@ -121,6 +121,8 @@ export interface RawUsage {
   cachedInputTokens?: number;
   /** Cache writes (Anthropic cache_creation); 0 for OpenAI. */
   cacheCreationTokens?: number;
+  /** OpenRouter-reported total charge for this call, when available. */
+  reportedCostUsd?: number | null;
 }
 
 export interface CopyUsage extends RawUsage {
@@ -162,6 +164,7 @@ export interface CopyProviderOutput {
   model: string;
   /** A13: present when the model reported token usage (absent in test mode). */
   usage?: CopyUsage;
+  via?: "openrouter" | "openai";
   /** True when the model stopped because the output token cap was hit. */
   outputTruncated?: boolean;
 }
@@ -403,6 +406,8 @@ export async function generateWithParseRetry(
   // reports the true total spend, not just the successful call's.
   const total: RawUsage = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationTokens: 0 };
   let sawUsage = false;
+  let allAttemptsReportedCost = true;
+  let reportedCostTotal = 0;
   let truncated = false;
 
   const attempt = async (reminder: string | null): Promise<CopyProviderOutput | null> => {
@@ -414,6 +419,13 @@ export async function generateWithParseRetry(
       total.outputTokens += usage.outputTokens;
       total.cachedInputTokens = (total.cachedInputTokens ?? 0) + (usage.cachedInputTokens ?? 0);
       total.cacheCreationTokens = (total.cacheCreationTokens ?? 0) + (usage.cacheCreationTokens ?? 0);
+      if (typeof usage.reportedCostUsd === "number" && Number.isFinite(usage.reportedCostUsd) && usage.reportedCostUsd >= 0) {
+        reportedCostTotal += usage.reportedCostUsd;
+      } else {
+        allAttemptsReportedCost = false;
+      }
+    } else {
+      allAttemptsReportedCost = false;
     }
     try {
       const parsed = parseCopyProviderOutput(text, provider, model);
@@ -424,7 +436,8 @@ export async function generateWithParseRetry(
   };
 
   const withUsage = (output: CopyProviderOutput): CopyProviderOutput => {
-    const next = sawUsage ? { ...output, usage: { ...total, costUsd: estimateCopyCostUsd(model, total) } } : output;
+    const reportedCostUsd = sawUsage && allAttemptsReportedCost ? Math.round(reportedCostTotal * 1_000_000) / 1_000_000 : null;
+    const next = sawUsage ? { ...output, usage: { ...total, reportedCostUsd, costUsd: reportedCostUsd ?? estimateCopyCostUsd(model, total) } } : output;
     return truncated ? { ...next, outputTruncated: true } : next;
   };
 

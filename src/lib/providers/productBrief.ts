@@ -1,5 +1,6 @@
 import { estimateCopyCostUsd, type CopyUsage, type RawUsage } from "./copy";
-import { resolveTextAiEndpoint, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
+import { stageCost, type AiStageCost } from "@/lib/ai/aiCost";
+import { readChatUsage, resolveTextAiEndpoint, textAiExtraBody, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
 import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
 
 export const PRODUCT_BRIEF_VERSION = "pb1.4-20261006";
@@ -53,6 +54,7 @@ export type ProductBriefResult = {
   writerText: string;
   model: string;
   usage?: CopyUsage;
+  cost?: AiStageCost;
   fallback: boolean;
   warning?: string;
 };
@@ -224,6 +226,18 @@ JSON schema:
   "rejectedEvidence":[""]
 }`;
 
+export function parseBriefJson(text: string): unknown {
+  const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/, "");
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+    throw new Error("Product Brief JSON parse failed.");
+  }
+}
+
 export async function buildProductBrief(input: ProductBriefInput): Promise<ProductBriefResult> {
   const endpoint = resolveTextAiEndpoint();
   const model = process.env.OPENAI_BRIEF_MODEL?.trim() || "gpt-4o-mini";
@@ -251,6 +265,7 @@ export async function buildProductBrief(input: ProductBriefInput): Promise<Produ
         max_tokens: 1200,
         temperature: 0.1,
         response_format: { type: "json_object" },
+        ...textAiExtraBody(endpoint),
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: evidenceMessage(input) },
@@ -266,22 +281,17 @@ export async function buildProductBrief(input: ProductBriefInput): Promise<Produ
     const text = payload?.choices?.[0]?.message?.content;
     if (typeof text !== "string" || !text.trim()) throw new Error("Product Brief response was empty.");
 
-    const brief = normalizeBrief(JSON.parse(text), input);
-    const u = payload?.usage ?? {};
-    const cached = Number(u?.prompt_tokens_details?.cached_tokens) || 0;
-    const rawUsage: RawUsage = {
-      inputTokens: Math.max((Number(u.prompt_tokens) || 0) - cached, 0),
-      outputTokens: Number(u.completion_tokens) || 0,
-      cachedInputTokens: cached,
-      cacheCreationTokens: 0,
-    };
+    const brief = normalizeBrief(parseBriefJson(text), input);
+    const rawUsage: RawUsage = readChatUsage(payload);
+    const usage = { ...rawUsage, costUsd: estimateCopyCostUsd(model, rawUsage) };
 
     return {
       brief,
       writerText: serializeProductBriefForWriter(brief),
       model,
       fallback: false,
-      usage: { ...rawUsage, costUsd: estimateCopyCostUsd(model, rawUsage) },
+      usage,
+      cost: stageCost({ stage: "understand", model, via: endpoint.via, usage: rawUsage, reportedCostUsd: rawUsage.reportedCostUsd }),
     };
   } catch (error) {
     if (isExternalTimeout(error)) {

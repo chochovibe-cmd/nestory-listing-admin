@@ -47,7 +47,7 @@ await check("titleGeneratorBase: unified 80-char product title, IP × brand, lad
   assert.match(src, /款式可選/);
   assert.match(src, /台灯/);
   assert.doesNotMatch(src, /const TITLE_MAX_LENGTH = 80/);
-  assert.match(src, /ipDisplayName \+ ' × ' \+ productBrand/);
+  assert.match(src, /productBrand \+ ' × ' \+ ipDisplayName/);
 });
 
 await check("titleGenerator wrapper + C5A titleFinalizer composition", () => {

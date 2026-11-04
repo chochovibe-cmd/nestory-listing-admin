@@ -12,7 +12,7 @@ import { register } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const scriptPath = fileURLToPath(import.meta.url).pathname;
+const scriptPath = fileURLToPath(import.meta.url);
 const flags = Object.fromEntries(process.argv.slice(2).filter((s) => s.startsWith("--")).map((s) => {
   const index = s.indexOf("=");
   return index === -1 ? [s.slice(2), "true"] : [s.slice(2, index), s.slice(index + 1)];
@@ -49,7 +49,8 @@ async function childMode() {
   ]);
   const start = Date.now();
   const output = await new OpenAICopyProvider().generate(request);
-  const title = [request.brand, request.ip, output.titleItem, output.titleDiff].filter(Boolean).join(" | ");
+  const titleHead = request.brand && request.ip ? `${request.brand} × ${request.ip}` : (request.brand || request.ip || "");
+  const title = [titleHead, output.titleItem, output.titleDiff].filter(Boolean).join(" | ");
   const seo = buildTemplateSeo({ title, descriptionText: output.generatedDescriptionHtml });
   const checks = checkCopy({
     title, descriptionText: output.generatedDescriptionHtml, highlights: output.productHighlights,

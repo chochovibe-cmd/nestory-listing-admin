@@ -44,7 +44,8 @@ const writer = chaochao.slice(writerStart, writerEnd);
 for (const forbidden of ["[[detected_ip_name]]", "[[detected_character_name]]", "[[detected_product_type]]", "[[detected_category]]", "[[sku]]", "[[spec]]"]) {
   assert.ok(!writer.includes(forbidden), `Writer regained upstream operation: ${forbidden}`);
 }
-for (const required of ["[[enriched_title]]", "[[generated_description_html]]", "[[generated_faq_html]]", "[[seo_title]]", "[[meta_description]]", "[[why_we_chose_it]]", "[[product_highlights]]"]) {
+// COPY-A2: Writer writes title_item/title_diff (brand/IP from the fact sheet); SEO comes from a program template.
+for (const required of ["[[title_item]]", "[[title_diff]]", "[[generated_description_html]]", "[[generated_faq_html]]", "[[why_we_chose_it]]", "[[product_highlights]]"]) {
   assert.ok(writer.includes(required), `Writer output missing: ${required}`);
 }
 assert.match(writer, /不要用「品質有保證、絕佳收藏、經久耐用、不可錯過」/u,

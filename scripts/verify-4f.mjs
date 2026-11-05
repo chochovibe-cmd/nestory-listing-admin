@@ -79,7 +79,7 @@ await check("A4 visionProvider 仍匯出 selectRepresentativeVisionImages／buil
   const s = read("src/lib/providers/visionProvider.ts");
   assert.match(s, /export \{[\s\S]*buildVisionSourceFingerprint,[\s\S]*selectRepresentativeVisionImages,[\s\S]*\} from "@\/lib\/images\/copyReference";/);
   assert.ok(!/function evenlySpaced/.test(s), "pure helpers must live in copyReference.ts only");
-  assert.match(s, /const MAX_DESCRIBE_IMAGES = MAX_COPY_REFERENCE_IMAGES;/);
+  assert.match(s, /const MAX_DESCRIBE_IMAGES = MAX_AUTO_VISION_IMAGES;/); // COPY-A2 §3.7: auto pick up to NEXT_PUBLIC_VISION_MAX_IMAGES
 });
 
 console.log("\n[B] 老闆指定（image_flags.copy_reference_image_ids）");

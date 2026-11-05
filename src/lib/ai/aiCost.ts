@@ -11,7 +11,7 @@ export const AI_COST_CAP_TWD = 2;
 /** 每件平均目標（只顯示，不擋）。 */
 export const AI_COST_TARGET_TWD = 1;
 
-export type AiStage = "vision" | "understand" | "writer";
+export type AiStage = "vision" | "understand" | "writer" | "fix";
 export type AiVia = "openrouter" | "openai" | "none";
 
 export type AiStageCost = {
@@ -34,7 +34,7 @@ export type AiCostRecord = {
   overCap: boolean;
 };
 
-const STAGE_LABEL: Record<AiStage, string> = { vision: "看圖", understand: "看懂商品", writer: "寫文案" };
+const STAGE_LABEL: Record<AiStage, string> = { vision: "看圖", understand: "看懂商品", writer: "寫文案", fix: "自動補寫" };
 
 function finiteNonNeg(value: unknown): number {
   const n = Number(value);

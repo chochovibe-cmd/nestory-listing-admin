@@ -739,6 +739,73 @@ if (runA2) {
     assert.match(regen, /productBrief/);
   });
 
+  console.log("\n[M] A2 自動補寫一欄（老闆 11-03 同意）、標題品牌在前（老闆 11-03 定 A）");
+  await check("M1 pickAutoFixField：照優先順序挑一欄、帶上那一欄全部問題；電壓／簡體不自動補", () => {
+    const pick = need(cc, "pickAutoFixField");
+    assert.deepEqual(cc.AUTO_FIX_PRIORITY, ["empty_field", "number_not_in_evidence", "faq_unknown", "faq_format", "ai_tone"]);
+    assert.equal(cc.AI_AUTO_FIX_BUDGET_TWD, 1.5);
+    const issues = [
+      { code: "ai_tone", field: "generated_description_html", message: "【文案檢查】a" },
+      { code: "faq_format", field: "generated_faq_html", message: "【文案檢查】b" },
+      { code: "faq_unknown", field: "generated_faq_html", message: "【文案檢查】c" },
+      { code: "voltage_missing", field: "facts", message: "【文案檢查】d" },
+    ];
+    const got = pick(issues);
+    assert.equal(got.field, "generated_faq_html");
+    assert.deepEqual(got.issues.map((i) => i.code), ["faq_format", "faq_unknown"]);
+    assert.equal(pick([issues[3], { code: "simplified", field: "generated_description_html", message: "x" }]), null);
+    assert.equal(pick([]), null);
+    assert.equal(pick([{ code: "empty_field", field: "why_we_chose_it", message: "x" }, ...issues]).field, "why_we_chose_it");
+  });
+  await check("M2 checkCopy 的 field 都是固定值（可重生欄位或 facts）", () => {
+    const allowed = ["enriched_title", "generated_description_html", "generated_faq_html", "why_we_chose_it", "product_highlights", "facts"];
+    const issues = need(cc, "checkCopy")({
+      ...clean,
+      title: "",
+      descriptionText: "这是神器，視頻共 35 款。",
+      highlights: [],
+      whyWeChoseIt: "",
+      faqHtml: "",
+      facts: { requiresVoltage: true, voltage: "", taiwanRisks: [] },
+    });
+    for (const issue of issues) assert.ok(allowed.includes(issue.field), `${issue.code} 的 field「${issue.field}」不在清單`);
+    assert.equal(issues.find((i) => i.code === "voltage_missing").field, "facts");
+  });
+  await check("M3 aiCost 多一段「自動補寫」", () => {
+    const record = need(cost, "buildCostRecord")([
+      { stage: "writer", model: "m", via: "openrouter", inputTokens: 1, outputTokens: 1, costUsd: 0.06, reported: true },
+      { stage: "fix", model: "m", via: "openrouter", inputTokens: 1, outputTokens: 1, costUsd: 0.01, reported: true },
+    ]);
+    assert.match(need(cost, "costOverCapWarning")(record), /自動補寫 NT\$0\.32/);
+  });
+  await check("M4 /api/generate 自動補寫接線：預算、只一次、補寫提醒照抄", () => {
+    const route = read("src/app/api/generate/route.ts");
+    assert.match(route, /pickAutoFixField\(/);
+    assert.match(route, /AI_AUTO_FIX_BUDGET_TWD/);
+    assert.match(route, /stage:\s*"fix"/);
+    const promptSrc = route + read("src/lib/providers/systemPrompt.ts");
+    assert.ok(promptSrc.includes("【上一版這一欄的問題，重寫時一定要避開】"), "補寫提示要照抄（route 或 systemPrompt 皆可）");
+    assert.ok(route.includes("🔁 已自動重寫「"));
+  });
+  const tc = await load("src/lib/contentGenerator/titleContract.ts");
+  await check("M5 assembleIpBrandSegment：品牌在前、同名只寫一次", () => {
+    const fn = need(tc, "assembleIpBrandSegment");
+    assert.equal(fn("三麗鷗 Sanrio", "Bandai"), "Bandai × 三麗鷗 Sanrio");
+    assert.equal(fn("銀魂 Gintama", "BOOMCOMIC"), "BOOMCOMIC × 銀魂 Gintama");
+    assert.equal(fn("三麗鷗 Sanrio", "Sanrio"), "三麗鷗 Sanrio");
+    assert.equal(fn("", "VICTOR"), "VICTOR");
+    assert.equal(fn("七龍珠Z", ""), "七龍珠Z");
+    const title = need(tc, "finalizeProductTitle")({ rawTitle: "x", titleIp: "銀魂 Gintama", titleBrand: "BOOMCOMIC", titleItem: "徽章", titleDiff: "銀時・神樂等" });
+    assert.match(title, /^BOOMCOMIC × 銀魂 Gintama \| 徽章/);
+  });
+  await check("M6 標題規則文字都改成品牌在前；IP 英文由事實表補", () => {
+    assert.ok(read("src/lib/providers/titlePrompt.ts").includes("品牌官方英文 × IP中文＋英文"));
+    assert.ok(read("src/lib/providers/titlePrompt.ts").includes("Bandai × 三麗鷗 Sanrio | 家族米粒公仔吊飾盲盒 | 隨機單盒"));
+    assert.ok(read("src/lib/providers/productBrief.ts").includes("12. title.enrichedTitle 依「品牌官方英文 × IP中文＋英文 | 精準品項 | 重要差異」整理"));
+    assert.match(read("src/lib/contentGenerator/titleGeneratorBase.ts"), /productBrand \+ ' × ' \+ ipDisplayName/);
+    assert.match(read("src/app/api/generate/route.ts"), /ipEnglish/);
+  });
+
   console.log("\n[L] A2 看圖張數、盲測腳本");
   const cref = await load("src/lib/images/copyReference.ts");
   await check("L1 NEXT_PUBLIC_VISION_MAX_IMAGES：1–10 才算，否則 6；自動挑照這個數", () => {
@@ -762,7 +829,9 @@ if (runA2) {
   });
   await check("L2 盲測腳本存在、只讀資料庫、不打 /api/generate、字母對照另存", () => {
     const script = read("scripts/copy-a-blindtest.mjs");
-    assert.doesNotMatch(script, /\.(insert|update|upsert|delete|rpc)\(/);
+    // Supabase 寫入一律從 .from(...) 開始；一般 Map/Set 的 .delete() 不算。
+    assert.doesNotMatch(script, /\.from\([^)]*\)[\s\S]{0,120}?\.(insert|update|upsert|delete)\(/);
+    assert.doesNotMatch(script, /\.rpc\(/);
     assert.doesNotMatch(script, /method:\s*["'](PATCH|PUT|DELETE)["']/);
     assert.doesNotMatch(script, /\/api\/generate/);
     assert.doesNotMatch(script, /\/rest\/v1[^"'`]*["'`][^)]*method:\s*["']POST/);

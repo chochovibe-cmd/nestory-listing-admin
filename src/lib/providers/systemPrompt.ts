@@ -1,5 +1,5 @@
 import type { CopyLength, CopyProviderInput, CopyRegenField, CopyTone } from "./copy";
-import { buildChaochaoBriefWriterSystemPrompt } from "./chaochaoPrompt";
+import { buildChaochaoBriefWriterSystemPrompt, buildChaochaoFieldRegenSystemPrompt } from "./chaochaoPrompt";
 import {
   EMOJI_TONES,
   buildCopySystemPrompt as buildProductionCopySystemPrompt,
@@ -50,10 +50,24 @@ export function buildFieldRegenSystemPrompt(
   tone: CopyTone,
   copyLength: CopyLength,
   secondhandInfo?: Parameters<typeof buildProductionFieldRegenSystemPrompt>[3],
+  productBriefMode = false,
 ): string {
+  if (tone === "潮巢導購版" && productBriefMode) {
+    return `${buildChaochaoFieldRegenSystemPrompt(field, copyLength, "", true)}\n\n${TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT}`;
+  }
   return `${buildProductionFieldRegenSystemPrompt(field, tone, copyLength, secondhandInfo)}\n\n${TAIWAN_TRADITIONAL_CUSTOMER_OUTPUT}`;
 }
 
 export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
+  if (input.productBrief?.trim() && input.tone === "潮巢導購版") {
+    return [
+      `原始品名：${input.rawTitle}`,
+      `銷售狀態：${input.saleStatus}`,
+      `款式結構：${input.variantSummary ?? ""}`,
+      "【唯一可信事實表】", input.productBrief,
+      "【既有文案供保持一致】", JSON.stringify(input.currentValues ?? {}),
+      input.regenIssueMessages?.length ? "【上一版這一欄的問題，重寫時一定要避開】\n" + input.regenIssueMessages.map((line) => "- " + line.replace(/^【文案檢查】/, "")).join("\n") : "",
+    ].filter(Boolean).join("\n\n");
+  }
   return buildProductionFieldRegenUserMessage(input);
 }

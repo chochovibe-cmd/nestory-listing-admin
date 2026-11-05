@@ -9,6 +9,13 @@
 
 export const COPY_REFERENCE_FLAG_KEY = "copy_reference_image_ids";
 export const MAX_COPY_REFERENCE_IMAGES = 6;
+export const MAX_AUTO_VISION_IMAGES = 10;
+/** Only automatic Vision picks use the configurable limit; manual references remain at six. */
+export function autoVisionImageCap(): number {
+  const raw = process.env.NEXT_PUBLIC_VISION_MAX_IMAGES?.trim();
+  if (!raw || !/^(?:[1-9]|10)$/.test(raw)) return MAX_COPY_REFERENCE_IMAGES;
+  return Number(raw);
+}
 
 export type VisionImageCandidate = {
   /** product_images.id — needed to match a manual pick; optional for legacy callers. */
@@ -92,9 +99,9 @@ function evenlySpaced<T>(items: readonly T[], count: number): T[] {
 /** One hero image, then detail images spread across the full ordered set. */
 export function selectRepresentativeVisionImages(
   candidates: readonly VisionImageCandidate[],
-  cap = MAX_COPY_REFERENCE_IMAGES,
+  cap = autoVisionImageCap(),
 ): VisionImageCandidate[] {
-  const safeCap = Math.max(0, Math.min(MAX_COPY_REFERENCE_IMAGES, Math.floor(cap)));
+  const safeCap = Math.max(0, Math.min(MAX_AUTO_VISION_IMAGES, Math.floor(cap)));
   if (safeCap === 0) return [];
   const unique = uniqueVisionCandidates(candidates);
   const mains = unique.filter((candidate) => candidate.imageType === "main");

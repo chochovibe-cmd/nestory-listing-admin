@@ -1,4 +1,10 @@
 import { NextRequest } from "next/server";
+import { buildVariantStructure, buildReviewEvidence, scoreEvidence } from "@/lib/copyPipeline/evidence";
+import { resolveArchetype } from "@/lib/copyPipeline/archetype";
+import { resolveCopyLength } from "@/lib/copyPipeline/lengthBudget";
+import { buildTemplateSeo } from "@/lib/copyPipeline/seoTemplate";
+import { checkCopy, pickAutoFixField, AI_AUTO_FIX_BUDGET_TWD, type CopyIssue } from "@/lib/copyPipeline/copyChecks";
+import { readSourceReviews } from "@/lib/import/sourceReviews";
 import { buildCostRecord, costOverCapWarning, sanitizeRelayedStageCost, stageCost, type AiStageCost } from "@/lib/ai/aiCost";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
@@ -46,6 +52,9 @@ import {
   applyProductBriefToCopyOutput,
   buildProductBrief,
   PRODUCT_BRIEF_VERSION,
+  normalizeBrief,
+  serializeProductBriefForWriter,
+  type ProductBrief,
 } from "@/lib/providers/productBrief";
 import { buildForbiddenTermWarning } from "@/lib/providers/forbiddenTerms";
 import {
@@ -337,6 +346,20 @@ async function handleFieldRegen(params: {
     regenPackBlock?.block ??
     (draft.ip_name ? IP_BACKGROUND_NEUTRAL_INSTRUCTION : undefined);
 
+  // COPY-A2: reuse the newest persisted, successfully-understood fact sheet; never write while looking it up.
+  const { data: recentRuns } = tone === "潮巢導購版"
+    ? await serviceSupabase.from("generation_runs").select("output_payload,completed_at")
+        .eq("draft_id", draftId).eq("status", "completed").order("completed_at", { ascending: false }).limit(100)
+    : { data: null };
+  const recentFactSheet = (recentRuns ?? []).map((run) => {
+    const payload = run.output_payload as Record<string, unknown> | null;
+    return payload?.factSheet;
+  }).find((value) => value && typeof value === "object") ?? null;
+  const factSheet = recentFactSheet && tone === "潮巢導購版"
+    ? normalizeBrief(recentFactSheet, { rawTitle: draft.taobao_title ?? draft.original_title ?? "", saleStatus: draft.sale_status })
+    : null;
+  const regeneratedBrief = factSheet ? serializeProductBriefForWriter(factSheet) : undefined;
+
   let raw: CopyProviderOutput;
   try {
     raw = await COPY_PROVIDERS[providerKey].generate({
@@ -350,6 +373,7 @@ async function handleFieldRegen(params: {
       imageDescription: draft.image_description ?? undefined,
       specText: draft.spec_text ?? undefined,
       webSearchSummary: parseCachedWebSearchSummary(draft.web_search_cache),
+      productBrief: regeneratedBrief,
       ipKnowledgePromptBlock: regenIpKnowledgePromptBlock,
       tone,
       copyLength,
@@ -396,8 +420,8 @@ async function handleFieldRegen(params: {
         .filter((row) => row.ip_name);
       const finalTitle = finalizeProductTitle({
         rawTitle: value.split("包包吊飾").join("包包掛件"),
-        titleIp: raw.titleIp,
-        titleBrand: raw.titleBrand,
+        titleIp: factSheet ? (factSheet.identity.ip + (factSheet.identity.ipEnglish && !factSheet.identity.ip.includes(factSheet.identity.ipEnglish) ? " " + factSheet.identity.ipEnglish : "")) : raw.titleIp,
+        titleBrand: factSheet ? (factSheet.identity.brandEnglish || factSheet.identity.brand) : raw.titleBrand,
         titleItem: raw.titleItem,
         titleDiff: raw.titleDiff,
         detectedIpDisplay: formatListingIpDisplayNameFromContext(ipName, { ipCatalog: catalogRows }),
@@ -661,15 +685,20 @@ export async function POST(request: NextRequest) {
   // COPY C5A: ResultCard whole regen / single-field regen do not send form variants.
   // Reuse existing normalized product_variants as the same variantSummary evidence when absent.
   let variantSummary = requestVariantSummary;
-  if (!variantSummary) {
+  let storedVariants: StoredVariantEvidenceRow[] = [];
+  if (!variantSummary || tone === "潮巢導購版") {
     const { data: storedVariantRows, error: storedVariantError } = await serviceSupabase
       .from("product_variants")
       .select("option1_value,option2_value,option3_value,sort_order")
       .eq("draft_id", draftId)
       .order("sort_order", { ascending: true });
     if (!storedVariantError && storedVariantRows) {
-      variantSummary = buildStoredVariantSummary(storedVariantRows as StoredVariantEvidenceRow[]);
+      storedVariants = storedVariantRows as StoredVariantEvidenceRow[];
+      if (!variantSummary) variantSummary = buildStoredVariantSummary(storedVariants);
     }
+  }
+  if (tone === "潮巢導購版" && storedVariants.length) {
+    variantSummary = buildVariantStructure(storedVariants).text;
   }
 
   const [scenarioSettingsResult, ipToneSettingsResult] = await Promise.all([
@@ -942,6 +971,9 @@ export async function POST(request: NextRequest) {
   let providerOutput: CopyProviderOutput | null = null;
   let costRecord = buildCostRecord([]);
   let productBriefApplied = false;
+  let activeFactSheet = null as ProductBrief | null;
+  let evidenceLevel = "normal" as "thin" | "normal" | "rich";
+  let evidenceFactsCount = 0 as number;
   let detected: DetectedClassification = {
     ip: draft.ip_name ?? "",
     character: draft.character_name ?? "",
@@ -965,6 +997,8 @@ export async function POST(request: NextRequest) {
                 saleStatus: draft.sale_status,
                 source,
                 variantSummary,
+                variantRows: storedVariants,
+                reviews: readSourceReviews((draftRow as { raw_capture?: unknown }).raw_capture),
                 note: noteForRun,
                 imageDescription: draft.image_description,
                 specText: trustedSpecTextForRun,
@@ -977,6 +1011,18 @@ export async function POST(request: NextRequest) {
                 existingBrand: trustedBrandForBrief,
                 existingSku: draft.sku,
               });
+              result.brief.archetype = resolveArchetype(result.brief.archetype, result.brief.identity.productType);
+              result.writerText = serializeProductBriefForWriter(result.brief);
+              activeFactSheet = result.fallback ? null : result.brief;
+              evidenceFactsCount = result.fallback ? 0 : result.brief.confirmedFacts.length + result.brief.specLines.length;
+              const imageText = (draft.image_description ?? "").split("【圖上文字】")[1]?.split("【")[0]?.trim() ?? "";
+              evidenceLevel = result.fallback ? "thin" : scoreEvidence({
+                factCount: result.brief.confirmedFacts.length,
+                specCount: result.brief.specLines.length,
+                visionTextChars: imageText === "（無）" ? 0 : imageText.length,
+                hasReviews: Boolean(readSourceReviews((draftRow as { raw_capture?: unknown }).raw_capture)),
+                noteChars: noteForRun?.length ?? 0,
+              }).level;
               stageMs.productBrief = Date.now() - briefStarted;
               return result;
             })()
@@ -1001,7 +1047,7 @@ export async function POST(request: NextRequest) {
         ipKnowledgePromptBlock,
         knownIpNames,
         tone,
-        copyLength,
+        copyLength: tone === "潮巢導購版" ? resolveCopyLength(copyLength, evidenceLevel) : copyLength,
         isSecondhand: draft.is_secondhand,
         secondhandGrade: draft.secondhand_grade,
         secondhandCondition: draft.secondhand_condition,
@@ -1029,6 +1075,14 @@ export async function POST(request: NextRequest) {
           ? applyProductBriefToCopyOutput(writerOutput, productBriefResult)
           : writerOutput;
       productBriefApplied = Boolean(productBriefResult && !productBriefResult.fallback);
+      if (activeFactSheet) {
+        const ip = activeFactSheet.identity.ip;
+        const ipEnglish = activeFactSheet.identity.ipEnglish;
+        raw.titleIp = ipEnglish && !ip.toLocaleLowerCase().includes(ipEnglish.toLocaleLowerCase()) ? [ip, ipEnglish].filter(Boolean).join(" ") : ip;
+        raw.titleBrand = activeFactSheet.identity.brandEnglish || activeFactSheet.identity.brand;
+        raw.titleItem = writerOutput.titleItem || activeFactSheet.title.item;
+        raw.titleDiff = writerOutput.titleDiff || activeFactSheet.title.diff;
+      }
       stageMs.copy = Date.now() - copyStarted;
       afterCopyAt = Date.now();
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
@@ -1109,7 +1163,7 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("測試模式：未呼叫 AI、未自動偵測 IP；文案為規則引擎產出，tags 依草稿現有資料。");
   }
 
-  const enrichedTitleFull = finalizeCustomerText(
+  let enrichedTitleFull = finalizeCustomerText(
     finalizeProductTitle({
       rawTitle: localizeToTaiwanTraditionalText(
         (providerOutput.enrichedTitle || ruleOutput.display_title || "")
@@ -1158,8 +1212,94 @@ export async function POST(request: NextRequest) {
   localizedOutput.meta_description = finalizeCustomerText(
     localizedOutput.meta_description,
   );
-  const cleanedWhyWeChoseIt = finalizeCustomerText(providerOutput.whyWeChoseIt);
-  const cleanedProductHighlights = finalizeCustomerTextList(providerOutput.productHighlights);
+  let cleanedWhyWeChoseIt = finalizeCustomerText(providerOutput.whyWeChoseIt);
+  let cleanedProductHighlights = finalizeCustomerTextList(providerOutput.productHighlights);
+
+  // COPY-A2 only: build SEO deterministically from localized customer text, then check all five fields.
+  if (activeFactSheet) {
+    const seo = buildTemplateSeo({ title: localizedOutput.display_title ?? "",
+      descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? "") });
+    localizedOutput.seo_title = seo.seoTitle;
+    localizedOutput.meta_description = seo.metaDescription;
+    if (evidenceLevel === "thin") extraWarnings.push(`📉 資料偏少：這件只找到 ${evidenceFactsCount} 條可用事實，文案已自動寫短。想寫完整，先在備註補尺寸／材質／玩法，或在圖片區勾「文案參考」再重新生成。`);
+
+    const evidenceText = [rawTitleForSearch, variantSummary, draft.note, draft.image_description,
+      trustedSpecTextForRun, serializeProductBriefForWriter(activeFactSheet), buildReviewEvidence(readSourceReviews((draftRow as { raw_capture?: unknown }).raw_capture))]
+      .filter(Boolean).join("\n");
+    const collectIssues = (): CopyIssue[] => checkCopy({
+      title: localizedOutput.display_title ?? "",
+      descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? ""),
+      highlights: cleanedProductHighlights,
+      whyWeChoseIt: cleanedWhyWeChoseIt,
+      faqHtml: localizedOutput.generated_faq_html ?? "",
+      evidenceText,
+      facts: { requiresVoltage: activeFactSheet!.requiresVoltage, voltage: activeFactSheet!.voltage, taiwanRisks: activeFactSheet!.taiwanRisks },
+    });
+    let issues = collectIssues();
+    const pick = pickAutoFixField(issues);
+    if (pick && buildCostRecord(costRecord.stages).totalTwd <= AI_AUTO_FIX_BUDGET_TWD) {
+      try {
+        const fix = await COPY_PROVIDERS[providerKey].generate({
+          rawTitle: rawTitleForSearch, saleStatus: draft.sale_status, source,
+          variantSummary, tone: "潮巢導購版", copyLength: resolveCopyLength(copyLength, evidenceLevel),
+          productBrief: serializeProductBriefForWriter(activeFactSheet),
+          regenerateField: pick.field, regenIssueMessages: pick.issues.map((issue) => issue.message),
+          currentValues: {
+            enrichedTitle: localizedOutput.display_title ?? "",
+            generatedDescriptionHtml: localizedOutput.generated_description_html ?? "",
+            generatedFaqHtml: localizedOutput.generated_faq_html ?? "",
+            whyWeChoseIt: cleanedWhyWeChoseIt, productHighlights: cleanedProductHighlights,
+          },
+          detectedIpName: activeFactSheet.identity.ip,
+        });
+        const fixed = getCopyFieldValue(fix, pick.field);
+        if (!fixed.trim()) throw new Error("Auto-fix returned an empty field.");
+        const fixFieldLabels: Record<string, string> = { enriched_title: "標題", generated_description_html: "正文",
+          generated_faq_html: "FAQ", why_we_chose_it: "為什麼選它", product_highlights: "亮點" };
+        if (pick.field === "enriched_title") {
+          const fixedTitle = finalizeProductTitle({
+            rawTitle: fixed,
+            titleIp: providerOutput.titleIp,
+            titleBrand: providerOutput.titleBrand,
+            titleItem: fix.titleItem || providerOutput.titleItem,
+            titleDiff: fix.titleDiff || providerOutput.titleDiff,
+            detectedIpDisplay: activeFactSheet.identity.ip,
+            detectedBrand: activeFactSheet.identity.brandEnglish || activeFactSheet.identity.brand,
+            maxLen: ENRICHED_TITLE_MAX_LENGTH,
+          });
+          enrichedTitleFull = finalizeCustomerText(fixedTitle);
+          localizedOutput.display_title = enrichedTitleFull;
+        } else if (pick.field === "generated_description_html") {
+          localizedOutput.generated_description_html = finalizeCustomerText(fix.generatedDescriptionHtml);
+        } else if (pick.field === "generated_faq_html") {
+          localizedOutput.generated_faq_html = finalizeCustomerText(fix.generatedFaqHtml);
+        } else if (pick.field === "why_we_chose_it") {
+          cleanedWhyWeChoseIt = finalizeCustomerText(fix.whyWeChoseIt);
+        } else if (pick.field === "product_highlights") {
+          cleanedProductHighlights = finalizeCustomerTextList(fix.productHighlights);
+        }
+        if (fix.usage) {
+          costRecord = buildCostRecord([...costRecord.stages, stageCost({ stage: "fix", model: fix.model, via: fix.via ?? "none",
+            usage: fix.usage, reportedCostUsd: fix.usage.reportedCostUsd ?? null })]);
+          if (providerOutput.usage) {
+            providerOutput.usage.inputTokens += fix.usage.inputTokens;
+            providerOutput.usage.outputTokens += fix.usage.outputTokens;
+          }
+        }
+        const correctedSeo = buildTemplateSeo({ title: localizedOutput.display_title ?? "",
+          descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? "") });
+        localizedOutput.seo_title = correctedSeo.seoTitle;
+        localizedOutput.meta_description = correctedSeo.metaDescription;
+        issues = collectIssues();
+        extraWarnings.push(`🔁 已自動重寫「${fixFieldLabels[pick.field]}」一次（原因：${pick.issues[0]!.message.replace(/^【文案檢查】/, "")}）`);
+        const fixOverCap = costOverCapWarning(costRecord);
+        if (fixOverCap) extraWarnings.push(fixOverCap);
+      } catch {
+        // A failed optional fix must preserve the first successful whole-product generation.
+      }
+    }
+    extraWarnings.push(...issues.map((issue) => issue.message));
+  }
 
   const forbiddenWarning = buildForbiddenTermWarning([
     localizedOutput.display_title,
@@ -1446,6 +1586,7 @@ export async function POST(request: NextRequest) {
       costUsd: runMode !== "test" ? costRecord.totalUsd : undefined,
       output: {
         ...(runMode !== "test" ? { cost: costRecord } : {}),
+        ...(activeFactSheet ? { factSheet: activeFactSheet } : {}),
         draftState: localizedOutput.draft_state,
         provider: providerOutput.provider,
         model: providerOutput.model,

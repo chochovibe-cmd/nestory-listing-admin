@@ -80,6 +80,8 @@ export interface CopyProviderInput {
    * Identity/spec/title ops are produced upstream and merged back after writing.
    */
   productBrief?: string;
+  /** COPY-A2: fixable checks for one optional targeted rewrite. */
+  regenIssueMessages?: string[];
   /**
    * P5 層2／3：已組好的 IP 背景區塊（含誠實邊界文案），直接進 user 事實區。
    * 來源為 knowledge_pack 或冷門 IP 網搜／中性指示；規格事實仍走 webSearchSummary／spec。

@@ -971,9 +971,9 @@ export async function POST(request: NextRequest) {
   let providerOutput: CopyProviderOutput | null = null;
   let costRecord = buildCostRecord([]);
   let productBriefApplied = false;
-  let activeFactSheet: ProductBrief | null = null;
-  let evidenceLevel: "thin" | "normal" | "rich" = "normal";
-  let evidenceFactsCount = 0;
+  let activeFactSheet = null as ProductBrief | null;
+  let evidenceLevel = "normal" as "thin" | "normal" | "rich";
+  let evidenceFactsCount = 0 as number;
   let detected: DetectedClassification = {
     ip: draft.ip_name ?? "",
     character: draft.character_name ?? "",
@@ -1217,8 +1217,8 @@ export async function POST(request: NextRequest) {
 
   // COPY-A2 only: build SEO deterministically from localized customer text, then check all five fields.
   if (activeFactSheet) {
-    const seo = buildTemplateSeo({ title: localizedOutput.display_title,
-      descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html) });
+    const seo = buildTemplateSeo({ title: localizedOutput.display_title ?? "",
+      descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? "") });
     localizedOutput.seo_title = seo.seoTitle;
     localizedOutput.meta_description = seo.metaDescription;
     if (evidenceLevel === "thin") extraWarnings.push(`📉 資料偏少：這件只找到 ${evidenceFactsCount} 條可用事實，文案已自動寫短。想寫完整，先在備註補尺寸／材質／玩法，或在圖片區勾「文案參考」再重新生成。`);
@@ -1227,11 +1227,11 @@ export async function POST(request: NextRequest) {
       trustedSpecTextForRun, serializeProductBriefForWriter(activeFactSheet), buildReviewEvidence(readSourceReviews((draftRow as { raw_capture?: unknown }).raw_capture))]
       .filter(Boolean).join("\n");
     const collectIssues = (): CopyIssue[] => checkCopy({
-      title: localizedOutput.display_title,
-      descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html),
+      title: localizedOutput.display_title ?? "",
+      descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? ""),
       highlights: cleanedProductHighlights,
       whyWeChoseIt: cleanedWhyWeChoseIt,
-      faqHtml: localizedOutput.generated_faq_html,
+      faqHtml: localizedOutput.generated_faq_html ?? "",
       evidenceText,
       facts: { requiresVoltage: activeFactSheet!.requiresVoltage, voltage: activeFactSheet!.voltage, taiwanRisks: activeFactSheet!.taiwanRisks },
     });
@@ -1245,9 +1245,9 @@ export async function POST(request: NextRequest) {
           productBrief: serializeProductBriefForWriter(activeFactSheet),
           regenerateField: pick.field, regenIssueMessages: pick.issues.map((issue) => issue.message),
           currentValues: {
-            enrichedTitle: localizedOutput.display_title,
-            generatedDescriptionHtml: localizedOutput.generated_description_html,
-            generatedFaqHtml: localizedOutput.generated_faq_html,
+            enrichedTitle: localizedOutput.display_title ?? "",
+            generatedDescriptionHtml: localizedOutput.generated_description_html ?? "",
+            generatedFaqHtml: localizedOutput.generated_faq_html ?? "",
             whyWeChoseIt: cleanedWhyWeChoseIt, productHighlights: cleanedProductHighlights,
           },
           detectedIpName: activeFactSheet.identity.ip,
@@ -1286,8 +1286,8 @@ export async function POST(request: NextRequest) {
             providerOutput.usage.outputTokens += fix.usage.outputTokens;
           }
         }
-        const correctedSeo = buildTemplateSeo({ title: localizedOutput.display_title,
-          descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html) });
+        const correctedSeo = buildTemplateSeo({ title: localizedOutput.display_title ?? "",
+          descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? "") });
         localizedOutput.seo_title = correctedSeo.seoTitle;
         localizedOutput.meta_description = correctedSeo.metaDescription;
         issues = collectIssues();

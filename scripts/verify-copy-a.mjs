@@ -783,7 +783,8 @@ if (runA2) {
     assert.match(route, /pickAutoFixField\(/);
     assert.match(route, /AI_AUTO_FIX_BUDGET_TWD/);
     assert.match(route, /stage:\s*"fix"/);
-    assert.ok(route.includes("【上一版這一欄的問題，重寫時一定要避開】"));
+    const promptSrc = route + read("src/lib/providers/systemPrompt.ts");
+    assert.ok(promptSrc.includes("【上一版這一欄的問題，重寫時一定要避開】"), "補寫提示要照抄（route 或 systemPrompt 皆可）");
     assert.ok(route.includes("🔁 已自動重寫「"));
   });
   const tc = await load("src/lib/contentGenerator/titleContract.ts");
@@ -828,7 +829,9 @@ if (runA2) {
   });
   await check("L2 盲測腳本存在、只讀資料庫、不打 /api/generate、字母對照另存", () => {
     const script = read("scripts/copy-a-blindtest.mjs");
-    assert.doesNotMatch(script, /\.(insert|update|upsert|delete|rpc)\(/);
+    // Supabase 寫入一律從 .from(...) 開始；一般 Map/Set 的 .delete() 不算。
+    assert.doesNotMatch(script, /\.from\([^)]*\)[\s\S]{0,120}?\.(insert|update|upsert|delete)\(/);
+    assert.doesNotMatch(script, /\.rpc\(/);
     assert.doesNotMatch(script, /method:\s*["'](PATCH|PUT|DELETE)["']/);
     assert.doesNotMatch(script, /\/api\/generate/);
     assert.doesNotMatch(script, /\/rest\/v1[^"'`]*["'`][^)]*method:\s*["']POST/);

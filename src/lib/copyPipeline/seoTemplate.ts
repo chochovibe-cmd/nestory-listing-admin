@@ -39,7 +39,8 @@ export function finalizeBriefSeo(input: { seoTitle: string; metaDescription: str
   const trimBase = (candidate: string) => {
     if (Array.from(candidate).length <= allowedBaseLength) return candidate;
     const prefix = Array.from(candidate).slice(0, allowedBaseLength).join("");
-    const boundary = Math.max(prefix.lastIndexOf(" | "), prefix.lastIndexOf("、"));
+    // Cut at a separator, else at the last space, so an AI title is shortened rather than replaced.
+    const boundary = Math.max(prefix.lastIndexOf(" | "), prefix.lastIndexOf("、"), prefix.lastIndexOf(" "));
     return boundary > 0 ? prefix.slice(0, boundary).trim() : "";
   };
   let boundedBase = trimBase(base);

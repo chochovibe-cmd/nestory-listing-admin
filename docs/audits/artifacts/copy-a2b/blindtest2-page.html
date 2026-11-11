@@ -1,0 +1,157 @@
+<title>文案寫手盲測 第二輪</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600&display=swap">
+<style>
+/* Layout: one reading column; each product is a block of version cards; scoring row locked until the reader has gone through all versions once; fixed bottom bar shows progress. */
+:root{--bg:#f3f4f1;--card:#ffffff;--fg:#1f2421;--muted:#5f6862;--line:#d8ddd8;--accent:#2d6a5a;--accent-fg:#ffffff;--warn:#9a4f22;--chip:#e6ece8;
+--display:"Noto Serif TC","Songti TC",serif;--body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171a18;--card:#212623;--fg:#e8ece9;--muted:#9ea8a1;--line:#38403b;--accent:#74c3ad;--accent-fg:#0f201b;--warn:#e3a173;--chip:#2c3530;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#171a18;--card:#212623;--fg:#e8ece9;--muted:#9ea8a1;--line:#38403b;--accent:#74c3ad;--accent-fg:#0f201b;--warn:#e3a173;--chip:#2c3530;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.75 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 110px}
+main{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+h1{font:600 1.7rem/1.3 var(--display);margin:0;text-wrap:balance}
+h2{font:600 1.25rem/1.4 var(--display);margin:0;text-wrap:balance}
+.intro{display:flex;flex-direction:column;gap:10px}
+.intro p{margin:0;color:var(--muted)}
+.scale{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:.92rem;margin:0}
+.scale dt{font-weight:700;font-variant-numeric:tabular-nums}
+.scale dd{margin:0;color:var(--muted)}
+.product{display:flex;flex-direction:column;gap:16px}
+.product .tag{font-size:.8rem;letter-spacing:.06em;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.letter{font:700 1.1rem var(--display);color:var(--accent)}
+.field{display:flex;flex-direction:column;gap:2px;min-width:0}
+.label{font-size:.75rem;letter-spacing:.08em;color:var(--muted)}
+.title{font-weight:700;font-size:1.05rem}
+.seo{background:var(--chip);border-radius:6px;padding:10px 12px;font-size:.92rem}
+.seo .st{color:var(--accent);font-weight:500}
+.body p,.body ul{margin:0}
+.body ul{padding-left:1.2em}
+.body h3{font-size:.85rem;margin:6px 0 0;color:var(--muted);font-weight:700}
+.faq p{margin:0}
+.faq .q{font-weight:700;margin-top:6px}
+.empty{color:var(--muted);font-style:italic}
+.failed{color:var(--warn)}
+.rate{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line);padding-top:12px}
+.rate button{width:44px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:700 1rem var(--body);cursor:pointer}
+.rate button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.rate button:disabled{opacity:.4;cursor:not-allowed}
+.rate button:focus-visible,textarea:focus-visible,.go:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+textarea{width:100%;box-sizing:border-box;min-height:52px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:15px/1.6 var(--body);padding:8px 10px}
+.lockmsg{font-size:.85rem;color:var(--muted)}
+.go{align-self:center;background:var(--accent);color:var(--accent-fg);border:0;border-radius:999px;padding:12px 24px;font:700 1rem var(--body);cursor:pointer}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;justify-content:center;gap:16px;font-size:.92rem;font-variant-numeric:tabular-nums}
+.bar span{color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<main>
+  <section class="intro">
+    <h1>文案寫手盲測 第二輪</h1>
+    <p>新提示詞版。6 件商品，每件 A、B 兩版，看不出是哪個 AI 寫的，字母每件重洗。這次是「上架後真的會長這樣」的最終文案（含 SEO）。</p>
+    <p><strong>先從頭到尾看完一輪，</strong>看到最下面按「開始打分」，分數格才會打開，避免前幾件評得比較嚴。分數和評語會自動存起來。</p>
+    <dl class="scale"><dt>5</dt><dd>直接能上架</dd><dt>4</dt><dd>改一兩個字</dd><dt>3</dt><dd>要改幾句</dd><dt>2</dt><dd>要大改</dd><dt>1</dt><dd>要重寫</dd></dl>
+  </section>
+  <div id="list"></div>
+  <button class="go" id="go" type="button">我看完一輪了，開始打分</button>
+</main>
+<div class="bar"><b id="done">已打 0 / 0</b><span id="save">分數存在雲端</span></div>
+<script>
+const ITEMS = [{"slot":"角色收藏","label":"Miffy × 萌圓歡 絨毛吊飾盲盒 冬日系列","versions":[{"letter":"A","title":"VIPO × 米菲 Miffy | Miffy 米菲冬日系列絨毛吊飾 盲盒 吊飾 收藏 | 共 9 款角色含隱藏版","seoTitle":"Miffy 米菲 × VIPO 冬日絨毛吊飾盲盒 吊飾 周邊禮物 | 潮巢 Nestory","meta":"VIPO 推出米菲 Miffy 冬日系列絨毛吊飾，20 公分大尺寸搭配 PVC 材質細節，收錄花圈米菲、Boris 等 9 款節日造型。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>想像一下，把戴著聖誕花圈或躲在聖誕襪裡的米菲掛在厚厚的羽絨外套拉鍊上，整個人都跟著暖了起來。這次 VIPO 讓 Miffy 換上冬裝，大約 20 公分的尺寸比一般吊飾更有份量，PVC 材質的細節搭配毛茸茸的觸感，不管是拿著小樹的造型，還是穿上冬裝的 Dan 和 Boris，每一款都像剛從雪地裡走出來一樣生動。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>想幫深色後背包換個冬日表情的米菲粉絲\u003c/li>\u003cli>準備參加聖誕交換禮物，想送一份軟萌驚喜給好姊妹的人\u003c/li>\u003c/ul>\u003ch2>購買前提醒\u003c/h2>\u003cul>\u003cli>盲盒為隨機出貨，無法指定款式。\u003c/li>\u003c/ul>","highlights":["約 20 公分的大尺寸設計，掛在包包上辨識度極高。","採用 PVC 材質打造角色細節，耐用且不易變形。","包含花圈、聖誕襪與小樹等豐富的冬日限定配件造型。"],"why":"少見的 20 公分大尺寸絨毛吊飾，讓米菲與朋友們穿上冬裝的模樣變得更有存在感。","faq":"\u003ch3>\u003cstrong>一次買多個盲盒會拿到重複的嗎？\u003c/strong>\u003c/h3>\n\u003cp>購買多個盲盒保證不重複，若想一次收集整套 6 款基本款，建議選擇端盒。\u003c/p>"},{"letter":"B","title":"VIPO × 米菲 Miffy | 米菲 Miffy 絨毛吊飾 冬日盲盒 吊飾 | 9 款角色，含隱藏款","seoTitle":"VIPO × Miffy 米菲冬日絨毛吊飾盲盒 交換禮物 | 潮巢 Nestory","meta":"VIPO 與 Miffy 聯名的冬日系列絨毛吊飾盲盒，共 9 款角色，還藏了一款隱藏款。約 20 公分掛在背包或鑰匙上都好認，聖誕節送給喜歡米菲的朋友很剛好。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>拆開盒子的那一刻，會先看到米菲圍著花圈站在裡面。VIPO 和 Miffy 合作的冬日系列，把聖誕樹、聖誕襪這些節慶小道具一起做進吊飾造型裡，PVC 材質、大約 20 公分，掛在後背包上走一段路也很難被忽略。九款角色裡有 Dan、Melanie、Boris 這些熟悉的朋友，運氣好的話還會遇到隱藏款。把它掛在書桌前的層架上，或跟著鑰匙一起出門，整個冬天就多了一個小小同伴。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>想自己收的人：掛在通勤後背包或鑰匙圈上，每天出門都會看到。\u003c/li>\u003cli>想送人的人：送給喜歡米菲的朋友，聖誕節前後送這種小東西剛剛好。\u003c/li>\u003c/ul>\u003ch2>購買前提醒\u003c/h2>\u003cul>\u003cli>盲盒為隨機出貨，無法指定款式。\u003c/li>\u003c/ul>","highlights":["PVC 材質，約 20 公分，掛在包上很顯眼","共 9 款角色，其中藏了一款隱藏款","端盒 6 款不重複，想收齊不用賭運氣"],"why":"冬日節慶的小道具直接做進吊飾造型裡，不是單純換色的米菲。","faq":"\u003ch3>\u003cstrong>單個盲盒買多個會重複嗎？\u003c/strong>\u003c/h3>\n\u003cp>不會，單個買多個不重複；想一次收齊可以選端盒 6 款。\u003c/p>\n\n\u003ch3>\u003cstrong>可以挑自己喜歡的款式嗎？\u003c/strong>\u003c/h3>\n\u003cp>可以，Wreath、Stocking、Tree、Dan、Melanie、Boris 有拆盒確認款可指定。\u003c/p>"}]},{"slot":"機能用品","label":"VICTOR × 七龍珠 羽毛球拍握把保護套","versions":[{"letter":"A","title":"VICTOR × 七龍珠 Dragon Ball | VICTOR 七龍珠羽球拍握把保護套 拍柄套 運動配件 | 水仙黃、布偶粉 2 款","seoTitle":"VICTOR 七龍珠羽球拍握把保護套 Dragon Ball 羽球周邊禮物 | 潮巢 Nestory","meta":"VICTOR 與七龍珠聯名推出拍柄保護套，29 x 8 cm 軟 Q 絨毛材質完美包覆拍柄。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>當你從球袋抽出拍子，第一眼看到的不是冷冰冰的握把，而是這隻毛茸茸的七龍珠保護套。VICTOR 這次把《七龍珠 Z》的熱血帶到球場，29 x 8 cm 的尺寸剛好包覆住拍柄，100% 聚酯纖維的填充讓它摸起來厚實又軟 Q。水仙黃款上面那顆標誌性的五星七龍珠，讓你在場邊休息、轉動球拍找手感時，都像在集滿戰鬥力。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>想保護昂貴球拍不互撞，又想在球友堆中一眼認出自己拍子的你\u003c/li>\u003cli>送給剛換新球拍、又是看《七龍珠》長大的熱血羽球搭檔\u003c/li>\u003c/ul>","highlights":["29 x 8 cm 尺寸，能完整包覆羽球拍柄部","100% 聚酯纖維填充，手感厚實且耐磨損","細緻絨毛面料結合經典五星七龍珠刺繡設計"],"why":"少見的絨毛材質拍柄套，將《七龍珠 Z》經典元素結合專業羽球品牌 VICTOR。","faq":"\u003ch3>\u003cstrong>這款保護套的尺寸大約多大？\u003c/strong>\u003c/h3>\n\u003cp>長 29 公分、寬 8 公分，適用於大多數標準尺寸的羽毛球拍柄。\u003c/p>\n\n\u003ch3>\u003cstrong>這兩款可以指定顏色嗎？\u003c/strong>\u003c/h3>\n\u003cp>可以，有水仙黃與布偶粉兩款可選，看你喜歡經典色還是粉嫩感。\u003c/p>"},{"letter":"B","title":"VICTOR × 七龍珠 Dragon Ball | 七龍珠 Z 羽毛球拍握把保護套 VICTOR 威克多 | 水仙黃、布偶粉 2 款可選","seoTitle":"七龍珠 Z × VICTOR 球拍握把保護套 羽球周邊禮物 | 潮巢 Nestory","meta":"VICTOR 威克多與《七龍珠 Z》聯名的球拍握把保護套，限量紀念款，水仙黃與布偶粉兩色。套上球拍握把，球袋一打開就知道是誰的拍子，送給打羽球的七龍珠迷正好。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>球拍從球袋裡抽出來，握把上的五顆星星先露了面。這是 VICTOR 威克多與《七龍珠 Z》合作的握把保護套，水仙黃的底色壓上動感字體，握在手裡像替球拍換了一套出場服。套上握把再纏握把布，掌心貼著的是一整片聚酯纖維的柔軟；約 29 x 8 公分的長條順著握把走，揮拍、扣殺、場邊撿球，它都跟著。下場休息把球拍擱在長椅上，遠遠看過去也知道那是誰的拍子。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>每週固定上羽球館、球拍握把布總被汗水浸軟的人，換一套自己看了開心的\u003c/li>\u003cli>送給打羽球的七龍珠迷同事，生日或交換禮物都合用\u003c/li>\u003c/ul>","highlights":["握把上印著標誌性的五顆星星","約 29 x 8 cm，順著球拍握把的長度","面料與填充物皆為 100% 聚酯纖維"],"why":"市面握把套多半素面，這款把七龍珠 Z 的動感字體直接印上握把。","faq":"\u003ch3>\u003cstrong>兩款要怎麼選？\u003c/strong>\u003c/h3>\n\u003cp>差在顏色，水仙黃亮眼、布偶粉柔和，挑順眼的那款就好。\u003c/p>\n\n\u003ch3>\u003cstrong>材質是什麼？\u003c/strong>\u003c/h3>\n\u003cp>面料與填充物都是 100% 聚酯纖維。\u003c/p>"}]},{"slot":"機能用品","label":"三麗鷗 × emie M3 翻轉相機","versions":[{"letter":"A","title":"emie × Hello Kitty | Hello Kitty 翻轉相機｜自拍、6400萬像素 | 2 款可選，一款附廣角鏡頭組","seoTitle":"Hello Kitty 翻轉相機 | emie 聯名自拍禮物 | 潮巢 Nestory","meta":"emie 與 Hello Kitty 聯名的 M3 翻轉相機，180° 翻轉螢幕讓自拍變得順手，6400 萬像素隨手拍都清楚，機身還掛著 Hello Kitty 小吊飾。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>螢幕往上一翻，鏡頭就轉向自己，按下快門前還能先確認笑容有沒有歪。emie 與 Hello Kitty 聯名的 M3 翻轉相機，180° 翻轉螢幕讓自拍不用再瞇著眼猜角度，6400 萬像素把日常拍得清清楚楚。機身約 260g，放進小包帶著走不算負擔，身上的 Hello Kitty 小吊飾跟著步伐輕輕晃。附 32G 記憶卡，週末和姐妹出門、逛市集隨手拍，回家再慢慢挑照片。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>想隨手記錄生活的人：聚餐、出遊時把相機從包裡撈出來，翻個螢幕就能自拍。\u003c/li>\u003cli>送給喜歡 Hello Kitty 的女孩：生日或交換禮物，打開盒子先看到那隻小吊飾。\u003c/li>\u003c/ul>\u003ch2>購買前提醒\u003c/h2>\u003cul>\u003cli>電壓：5V，台灣使用前請確認插頭與電壓。\u003c/li>\u003c/ul>","highlights":["180° 翻轉螢幕，自拍不用猜角度","6400 萬像素，畫面細節留得住","機身附 Hello Kitty 小吊飾"],"why":"螢幕能 180° 翻過來自拍，是這臺和一般小相機最不一樣的地方。","faq":"\u003ch3>\u003cstrong>兩款差在哪裡？\u003c/strong>\u003c/h3>\n\u003cp>一款附 32G 卡，另一款多了廣角鏡頭和二合一讀卡器，想拍合照選後者。\u003c/p>\n\n\u003ch3>\u003cstrong>盒子裡有什麼？\u003c/strong>\u003c/h3>\n\u003cp>M3 相機、32G 記憶卡和 Hello Kitty 小吊飾；廣角款另附鏡頭與讀卡器。\u003c/p>"},{"letter":"B","title":"emie × 三麗鷗 Hello Kitty | Hello Kitty 翻轉相機 6400萬像素 自拍相機 三麗鷗 | 2 款組合可選","seoTitle":"Hello Kitty 三麗鷗 × emie 翻轉相機 自拍相機 聖誕禮物 | 潮巢 Nestory","meta":"這款 Hello Kitty 翻轉相機具備 6400 萬像素與 180 度翻轉螢幕，讓自拍變得輕鬆又清晰。260g 輕量化設計搭配專屬小吊飾，是送給三麗鷗迷最實用的禮物選擇。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>在咖啡廳跟姊妹聚餐時，把這臺 emie 聯名的相機從包包拿出來，繫在旁邊的 Hello Kitty 小吊飾會先晃進視線。不用再辛苦對著鏡子找角度，直接把螢幕向上翻轉 180 度，看著畫面就能拍出 6400 萬像素的清晰自拍。機身採用鋁合金與 ABS 材質製作，拿在手上只有 260g 的重量，就算裝上廣角鏡頭拍團照，手痠感也幾乎不存在，隨手一按都是高清的大片等級。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>想在旅行時記錄風景，又想隨時翻轉螢幕確認妝容的女孩。\u003c/li>\u003cli>送給剛開始學攝影、對 Hello Kitty 毫無抵抗力的國高中生妹妹。\u003c/li>\u003c/ul>\u003ch2>購買前提醒\u003c/h2>\u003cul>\u003cli>電壓：5V---1A，台灣使用前請確認插頭與電壓。\u003c/li>\u003c/ul>","highlights":["6400 萬像素高畫質成像清晰捕捉細節","180° 翻轉螢幕讓自拍預覽完全不求人","機身僅約 260g 搭配 1500mAh 電池續航"],"why":"在可愛外殼下具備 6400 萬像素與翻轉螢幕，是真正能拍出高清畫質的實力派周邊。","faq":"\u003ch3>\u003cstrong>兩款組合該怎麼挑選？\u003c/strong>\u003c/h3>\n\u003cp>常拍多人團照或大風景選「廣角鏡頭版」；一般生活紀錄選「標準版」即可。\u003c/p>"}]},{"slot":"角色收藏","label":"咒術迴戰 × Nullset 毛絨抱抱公仔","versions":[{"letter":"A","title":"Nullset × 咒術迴戰 Jujutsu Kaisen | 咒術迴戰抱抱公仔 虎杖悠仁 掌心玩偶 | 4 款角色可選","seoTitle":"咒術迴戰抱抱公仔 虎杖悠仁 周邊玩偶 | 潮巢 Nestory","meta":"咒術迴戰抱抱公仔，虎杖悠仁等四款角色可選，圓圓眼睛配微笑嘴巴，手裡還握著自己的道具。約掌心大小，擺書桌或送給追番的朋友都適合。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>把公仔從盒子裡拿出來的那一刻，先看到的是圓圓的眼睛和微笑的嘴巴，接著才發現手裡還握著自己的道具。100% 聚酯纖維的布料摸起來是軟的，約 8.4 x 6.7 x 11.9 公分的尺寸剛好貼在掌心，放在電腦螢幕旁邊，或塞進包包側袋跟著出門都不佔位。四款角色排成一列，柔和的顏色搭配擺在一起很順眼，虎杖悠仁就站在最左邊那個位置。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>想在自己書桌或床頭擺一隻的人，打字打到一半抬頭就能看到\u003c/li>\u003cli>要送給追咒術迴戰的同事或同學，尤其對方已經在收同系列角色的\u003c/li>\u003c/ul>","highlights":["100% 聚酯纖維材質，抱起來是軟的","約 8.4 x 6.7 x 11.9 公分，掌心大小","每款角色握著的道具都不一樣"],"why":"四款公仔各自握著不同道具，一字排開時一眼就能認出誰是誰。","faq":"\u003ch3>\u003cstrong>公仔尺寸多大？\u003c/strong>\u003c/h3>\n\u003cp>約 8.4 x 6.7 x 11.9 公分，掌心大小，放書桌或包包側袋都剛好。\u003c/p>\n\n\u003ch3>\u003cstrong>四款可以指定嗎？\u003c/strong>\u003c/h3>\n\u003cp>可以，下單時直接選角色，虎杖悠仁、釘崎野薔薇、伏黒恵、五條悟都有。\u003c/p>"},{"letter":"B","title":"Nullset × 咒術迴戰 Jujutsu Kaisen | Nullset 咒術迴戰 抱抱公仔 虎杖悠仁 五條悟 玩偶 收藏 | 虎杖悠仁、五條悟等 4 款","seoTitle":"Nullset × 咒術迴戰 Jujutsu Kaisen | 潮巢 Nestory","meta":"Nullset 推出《咒術迴戰》抱抱公仔，包含虎杖、五條悟等四款角色。100% 聚酯纖維打造柔和觸感，搭配圓眼微笑設計，是放在辦公桌陪伴日常或送給動漫迷好友的禮物首選。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>想像一下虎杖悠仁睜著圓滾滾的大眼睛，坐在你的電腦螢幕前對你微笑。這系列抱抱公仔採用 100% 聚酯纖維製作，摸起來有種紮實的柔軟感。每位角色都握著專屬的小道具，約 11.9 公分的高度剛好可以單手掌握。柔和的色調少了點戰鬥的肅殺，多了份想讓人揉揉臉頰的親近感，放在辦公桌旁陪你處理公事，感覺咒力都跟著變溫柔了。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>想把咒術高專一年級生整齊排在書架上的收藏家\u003c/li>\u003cli>送給在補習班拼命、需要五條老師精神應援的高中生好友\u003c/li>\u003c/ul>","highlights":["每位角色手握不同專屬道具，細節充滿角色個性","圓滾滾大眼睛搭配微笑設計，呈現溫和視覺感","約 11.9 公分高的小巧尺寸，適合擺在桌案陪伴"],"why":"捨棄銳利的戰鬥神情，用柔和色調與圓眼微笑重新詮釋咒術角色。","faq":"\u003ch3>\u003cstrong>尺寸大約多大？\u003c/strong>\u003c/h3>\n\u003cp>高約 11.9 公分，大概比罐裝咖啡再小一點，放在桌上完全不佔位。\u003c/p>"}]},{"slot":"穿搭配件","label":"三麗鷗 玉桂狗 筆電包 14／16 吋","versions":[{"letter":"A","title":"三麗鷗 | 三麗鷗大耳狗電腦包 14吋16吋 手提斜背 | 小號14吋、大號16吋兩款","seoTitle":"三麗鷗大耳狗電腦包 | 14吋16吋手提斜背 | 潮巢 Nestory","meta":"這是 Sanrio 三麗鷗大耳狗圖案的電腦包，外層 PVC 材質，小號可放 14 吋筆電、大號到 16 吋。柔和藍色配大耳狗，通勤或上課背著走都好看。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>早上出門前把筆電塞進包裡，拉鍊拉上，藍色包身上那隻大耳狗正對著你笑。小號約可放進 14 吋筆電，大號到 16 吋，通勤時手提或斜背都能走。到了教室，課本、文具和充電線一起收進去，放學後直接背去咖啡廳也沒問題。柔和的藍配大耳狗圖案，放在桌上就是一眼認得出來的那一個。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>每天搭捷運通勤、要帶筆電上下班的自己\u003c/li>\u003cli>想送給喜歡大耳狗的學生，開學或生日都合用\u003c/li>\u003c/ul>","highlights":["小號約可放 14 吋筆電","大號 16 吋，裝得下課本和講義"],"why":"大耳狗圖案配柔和藍色，還做成 14 吋與 16 吋兩種尺寸的 Sanrio 電腦包。","faq":"\u003ch3>\u003cstrong>兩款除了尺寸還有差別嗎？\u003c/strong>\u003c/h3>\n\u003cp>外觀都是大耳狗圖案配藍色主色，只差在 14 吋和 16 吋。\u003c/p>"},{"letter":"B","title":"三麗鷗 | Sanrio 三麗鷗大耳狗手提斜背電腦包 筆電包 | 14 吋與 16 吋可選","seoTitle":"Sanrio 三麗鷗大耳狗電腦包 Cinnamoroll 筆電包 周邊禮物 | 潮巢 Nestory","meta":"找三麗鷗大耳狗電腦包嗎？這款柔和藍色的 Cinnamoroll 筆電包採用 PVC 材質，提供 14 吋與 16 吋兩種規格。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>走進圖書館或咖啡廳，從這咖柔和藍色的包包裡取出筆電，大耳狗那對大耳朵就像在幫你加油。這款電腦包採用耐看的 Cinnamoroll 圖案設計，外層使用 PVC 材質，就算通勤路上遇到一點小狀況也比較好照顧。除了放筆電，裡面塞進幾本課外書或文具袋也沒問題，手提或是側背都能隨意切換，讓你在移動的路上手忙腳亂的感覺少一點，可愛的氛圍多一點。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>每天帶著筆電在教學大樓間奔波，想給電腦一個可愛家的學生。\u003c/li>\u003cli>想送一份實用禮物給剛換新筆電、又特別喜歡大耳狗的軟萌系朋友。\u003c/li>\u003c/ul>","highlights":["防潑耐用的 PVC 材質，保護筆電更有感。","提供手提與斜背兩種模式，通勤移動更靈活。","專為大尺寸需求設計，最大可容納 16 吋筆電。"],"why":"少見的柔和藍色調配上大耳狗，讓原本冰冷的 3C 配件變得像軟綿綿的雲朵一樣親切。","faq":"\u003ch3>\u003cstrong>內容物除了包包本身，還有附背帶嗎？\u003c/strong>\u003c/h3>\n\u003cp>有的，這款設計可以手提也可以斜背，方便你空出雙手拿大杯冰美式。\u003c/p>"}]},{"slot":"機能用品","label":"Pingu × 奇悅 眼部按摩儀","versions":[{"letter":"A","title":"CHIELYUAL × Pingu | Pingu 企鵝眼部按摩儀｜恆溫熱敷舒壓小物 | 紅藍 2 色，多款限定禮盒包裝","seoTitle":"CHIELYUAL Pingu 企鵝眼部按摩儀 | 恆溫熱敷交換禮物 | 潮巢 Nestory","meta":"CHIELYUAL 聯名 Pingu 推出眼部按摩儀，具備 38-42°C 恆溫熱敷與 5 大按摩模式。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>睡前戴上這隻有著扁扁嘴的 Pingu，感覺疲勞的雙眼瞬間被溫柔包圍。這款按摩儀提供 38-42°C 的恆溫熱敷，溫暖的觸感就像剛敷上熱毛巾一樣舒服，搭配微頻震動按摩，能幫你鬆開緊繃的眼周肌肉。內建 5 大按摩模式可以隨心切換，無論是想單純熱敷還是深層放鬆都行。PVC 材質親膚且適合長時間佩戴，讓你在企鵝的陪伴下徹底斷開螢幕的幹擾。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>每天盯螢幕超過 8 小時、眼壓爆表的上班族\u003c/li>\u003cli>想給喜歡 Pingu 的另一半一個實用生日驚喜的人\u003c/li>\u003c/ul>","highlights":["38-42°C 恆溫熱敷，模擬毛巾敷眼的溫感","內建 5 大按摩模式，可切換微頻震動強度","約 20cm 寬度配合 PVC 材質，適合長時佩戴"],"why":"將專業機能與 Pingu 造型結合，還有多種對應不同情境的精緻禮盒包裝。","faq":"\u003ch3>\u003cstrong>紅色跟藍色款式的功能有差別嗎？\u003c/strong>\u003c/h3>\n\u003cp>功能完全相同，主要差在機身顏色與搭配的禮盒包裝風格。\u003c/p>"},{"letter":"B","title":"CHIELYUAL × Pingu | CHIELYUAL × Pingu 眼部按摩儀 熱敷震動 | 12 款包裝可選，紅藍雙色","seoTitle":"Pingu 眼部按摩儀 | CHIELYUAL 聯名 熱敷按摩 送禮 | 潮巢 Nestory","meta":"CHIELYUAL × Pingu 聯名眼部按摩儀，企鵝臉直接變成貼在眼周的罩面。恆溫熱敷加五種按摩模式，下班追劇後戴著讓眼睛歇一會；附禮袋包裝，當生日禮物送 Pingu 迷剛好。","desc":"\u003ch2>商品介紹\u003c/h2>\u003cp>下班回到家，把 Pingu 護眼儀往臉上一戴，約 20cm 的罩面剛好蓋住眼周。按下開關，五種按摩模式輪著換，微頻震動輕輕地敲，撐了一整天的眼睛慢慢鬆開。紅色款的企鵝臉貼在臉上，看起來有點呆，自己照鏡子會想笑。週末追劇追到眼睛痠，或是搭車想補個眠，戴著都不覺得卡。原裝禮盒、生日包裝、童趣包裝都附禮袋，可以先收在抽屜裡，等一個適合送出去的時機。\u003c/p>\u003ch2>適合誰\u003c/h2>\u003cul>\u003cli>每天盯螢幕超過八小時的人，午休趴在桌上讓眼睛歇一下\u003c/li>\u003cli>要送給喜歡 Pingu 的朋友當生日禮物，包裝本身就已經準備好了\u003c/li>\u003c/ul>","highlights":["恆溫熱敷維持在 38～42°C","微頻震動搭配五種按摩模式","罩面約 20cm，貼閤眼周"],"why":"多半眼部按摩儀長得像醫療器材，這臺直接把 Pingu 的臉放上眼周。","faq":"\u003ch3>\u003cstrong>顏色和包裝要怎麼選？\u003c/strong>\u003c/h3>\n\u003cp>紅、藍兩色共 12 款，差別在包裝；想直接送人就挑附禮袋的。\u003c/p>"}]}];
+const list = document.getElementById("list");
+const state = { unlocked: false, scores: {} };
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function field(label, node) { const f = el("div", "field"); f.append(el("div", "label", label), node); return f; }
+function renderBody(html) {
+  const box = el("div", "body");
+  const doc = new DOMParser().parseFromString(html || "", "text/html");
+  for (const n of doc.body.children) {
+    if (n.tagName === "H2") box.append(el("h3", null, n.textContent));
+    else if (n.tagName === "UL") { const ul = el("ul"); for (const li of n.querySelectorAll("li")) ul.append(el("li", null, li.textContent)); box.append(ul); }
+    else if (n.textContent.trim()) box.append(el("p", null, n.textContent));
+  }
+  if (!box.childElementCount) box.append(el("p", "empty", "（空）"));
+  return box;
+}
+function renderFaq(text) {
+  const box = el("div", "faq");
+  const doc = new DOMParser().parseFromString(text || "", "text/html");
+  for (const n of doc.body.querySelectorAll("h3,h4,p,li")) {
+    const t = n.textContent.trim(); if (!t) continue;
+    const isQ = /^H[34]$/.test(n.tagName) || /^Q[：:]/.test(t);
+    box.append(el("p", isQ ? "q" : null, isQ ? "Q：" + t.replace(/^Q[：:]\s*/, "") : t));
+  }
+  if (!box.childElementCount) box.append(el("p", "empty", "（0 題）"));
+  return box;
+}
+const buttons = [];
+ITEMS.forEach((item, i) => {
+  const sec = el("section", "product");
+  const head = el("div");
+  head.append(el("div", "tag", (i + 1) + " / " + ITEMS.length + "　" + item.slot), el("h2", null, item.label));
+  sec.append(head);
+  for (const v of item.versions) {
+    const key = (i + 1) + v.letter;
+    const card = el("article", "card");
+    card.append(el("div", "letter", v.letter));
+    if (v.failed) { card.append(el("p", "failed", "這版生成失敗，沒有產出文案。")); }
+    else {
+      card.append(field("商品標題", el("div", "title", v.title)));
+      const seo = el("div", "seo"); seo.append(el("div", "st", v.seoTitle || "（空）"), el("div", null, v.meta || "（空）"));
+      card.append(field("Google 搜尋結果（SEO 標題＋描述）", seo));
+      card.append(field("商品描述", renderBody(v.desc)));
+      const hl = el("ul"); for (const h of v.highlights) hl.append(el("li", null, h));
+      card.append(field("商品亮點", v.highlights.length ? hl : el("p", "empty", "（空）")));
+      card.append(field("為什麼潮巢選它", v.why ? el("p", null, v.why) : el("p", "empty", "（留空，頁面不顯示）")));
+      card.append(field("問與答 FAQ", renderFaq(v.faq)));
+    }
+    const rate = el("div", "rate");
+    for (let s = 1; s <= 5; s++) {
+      const b = el("button", null, String(s)); b.type = "button"; b.disabled = true; b.setAttribute("aria-pressed", "false");
+      b.setAttribute("aria-label", key + " 給 " + s + " 分");
+      b.addEventListener("click", () => setScore(key, s));
+      b.dataset.key = key; b.dataset.s = s; buttons.push(b); rate.append(b);
+    }
+    const note = el("textarea"); note.id = "note-" + key; note.placeholder = "想說的話（選填）"; note.disabled = true;
+    note.addEventListener("input", () => { (state.scores[key] ??= {}).note = note.value; queueSave(); });
+    card.append(rate, note, el("div", "lockmsg", "看完一輪後才能打分"));
+    sec.append(card);
+  }
+  list.append(sec);
+});
+const total = ITEMS.reduce((n, it) => n + it.versions.filter(v => !v.failed).length, 0);
+function paint() {
+  for (const b of buttons) { b.disabled = !state.unlocked; b.setAttribute("aria-pressed", String(state.scores[b.dataset.key]?.score === Number(b.dataset.s))); }
+  document.querySelectorAll("textarea").forEach(t => { t.disabled = !state.unlocked; const k = t.id.slice(5); if (document.activeElement !== t) t.value = state.scores[k]?.note || ""; });
+  document.querySelectorAll(".lockmsg").forEach(m => m.hidden = state.unlocked);
+  document.getElementById("go").hidden = state.unlocked;
+  const n = Object.values(state.scores).filter(s => s && s.score).length;
+  document.getElementById("done").textContent = "已打 " + n + " / " + total;
+}
+function setScore(key, s) { (state.scores[key] ??= {}).score = s; paint(); queueSave(); }
+document.getElementById("go").addEventListener("click", () => { state.unlocked = true; paint(); queueSave(); });
+let db = null, ref = null, timer = null, saving = false, again = false;
+const saveMsg = document.getElementById("save");
+function queueSave() { clearTimeout(timer); timer = setTimeout(save, 600); saveMsg.textContent = "儲存中…"; }
+async function save() {
+  if (!ref) { saveMsg.textContent = "目前無法儲存，請重新整理"; return; }
+  if (saving) { again = true; return; }
+  saving = true;
+  try { await ref.set({ scores: state.scores, unlocked: state.unlocked }); saveMsg.textContent = "已存到雲端"; }
+  catch (e) { saveMsg.textContent = "儲存失敗，請稍後再點一次分數"; }
+  saving = false; if (again) { again = false; save(); }
+}
+paint();
+(async () => {
+  try {
+    db = await window.claude?.use?.("db");
+    if (!db) { saveMsg.textContent = "要登入才能存分數"; return; }
+    ref = db.doc("blindtest2/scores");
+    const snap = await ref.get();
+    const data = snap && snap.exists ? snap.data() : null;
+    // Snapshots are frozen; copy before editing.
+    if (data && data.scores) { state.scores = JSON.parse(JSON.stringify(data.scores)); state.unlocked = !!data.unlocked; }
+    saveMsg.textContent = "分數存在雲端";
+    paint();
+  } catch (e) { saveMsg.textContent = "讀取分數失敗，請重新整理"; }
+})();
+</script>

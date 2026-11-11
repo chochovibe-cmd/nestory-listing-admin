@@ -1,0 +1,871 @@
+[
+  {
+    "id": "58f00e61-cfa4-45b3-bb62-2168f1587108",
+    "slot": "角色收藏",
+    "label": "Miffy × 萌圓歡 絨毛吊飾盲盒 冬日系列（隨機旗標，上次測過）",
+    "image": "https://cdn.shopify.com/s/files/1/0787/8600/3129/files/90e4ea63-12cb-4666-92f3-6ea54381931c.webp?v=1792143185",
+    "candidates": {
+      "A": {
+        "finalTitle": "VIPO × 米菲 Miffy | Miffy 米菲冬日系列絨毛吊飾 盲盒 吊飾 收藏 | 共 9 款角色含隱藏版",
+        "seoTitle": "Miffy 米菲 × VIPO 冬日絨毛吊飾盲盒 吊飾 周邊禮物 | 潮巢 Nestory",
+        "metaDescription": "VIPO 推出米菲 Miffy 冬日系列絨毛吊飾，20 公分大尺寸搭配 PVC 材質細節，收錄花圈米菲、Boris 等 9 款節日造型。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>想像一下，把戴著聖誕花圈或躲在聖誕襪裡的米菲掛在厚厚的羽絨外套拉鍊上，整個人都跟著暖了起來。這次 VIPO 讓 Miffy 換上冬裝，大約 20 公分的尺寸比一般吊飾更有份量，PVC 材質的細節搭配毛茸茸的觸感，不管是拿著小樹的造型，還是穿上冬裝的 Dan 和 Boris，每一款都像剛從雪地裡走出來一樣生動。</p><h2>適合誰</h2><ul><li>想幫深色後背包換個冬日表情的米菲粉絲</li><li>準備參加聖誕交換禮物，想送一份軟萌驚喜給好姊妹的人</li></ul><h2>購買前提醒</h2><ul><li>盲盒為隨機出貨，無法指定款式。</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              2
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：吊飾的尺寸大約是多少？\nA：全長約 20 公分，比常見的小吊飾大一些，非常適合掛在大包包上當視覺重點。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 5,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1613,
+            "outputTokens": 154,
+            "costUsd": 0.000334,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 2072,
+            "outputTokens": 421,
+            "costUsd": 0.00041,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "google/gemini-3-flash-preview",
+            "via": "openrouter",
+            "inputTokens": 1455,
+            "outputTokens": 1300,
+            "costUsd": 0.004628,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1613,
+            "outputTokens": 154,
+            "costUsd": 0.000334,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "VIPO × 米菲 Miffy | Miffy 米菲冬日系列絨毛吊飾 盲盒 吊飾 收藏 | 共 9 款角色含隱藏版",
+        "description": "<h2>商品介紹</h2><p>想像一下，把戴著聖誕花圈或躲在聖誕襪裡的米菲掛在厚厚的羽絨外套拉鍊上，整個人都跟著暖了起來。這次 VIPO 讓 Miffy 換上冬裝，大約 20 公分的尺寸比一般吊飾更有份量，PVC 材質的細節搭配毛茸茸的觸感，不管是拿著小樹的造型，還是穿上冬裝的 Dan 和 Boris，每一款都像剛從雪地裡走出來一樣生動。</p><h2>適合誰</h2><ul><li>想幫深色後背包換個冬日表情的米菲粉絲</li><li>準備參加聖誕交換禮物，想送一份軟萌驚喜給好姊妹的人</li></ul><h2>購買前提醒</h2><ul><li>盲盒為隨機出貨，無法指定款式。</li></ul>",
+        "faq": "<h3><strong>一次買多個盲盒會拿到重複的嗎？</strong></h3>\n<p>購買多個盲盒保證不重複，若想一次收集整套 6 款基本款，建議選擇端盒。</p>",
+        "highlights": [
+          "約 20 公分的大尺寸設計，掛在包包上辨識度極高。",
+          "採用 PVC 材質打造角色細節，耐用且不易變形。",
+          "包含花圈、聖誕襪與小樹等豐富的冬日限定配件造型。"
+        ],
+        "why": "少見的 20 公分大尺寸絨毛吊飾，讓米菲與朋友們穿上冬裝的模樣變得更有存在感。",
+        "seo": {
+          "seoTitle": "Miffy 米菲 × VIPO 冬日絨毛吊飾盲盒 吊飾 周邊禮物 | 潮巢 Nestory",
+          "metaDescription": "VIPO 推出米菲 Miffy 冬日系列絨毛吊飾，20 公分大尺寸搭配 PVC 材質細節，收錄花圈米菲、Boris 等 9 款節日造型。"
+        },
+        "checks": [],
+        "costUsd": 0.0046275,
+        "elapsedMs": 13632
+      },
+      "B": {
+        "finalTitle": "VIPO × 米菲 Miffy | 米菲 Miffy 絨毛吊飾 冬日盲盒 吊飾 | 9 款角色，含隱藏款",
+        "seoTitle": "VIPO × Miffy 米菲冬日絨毛吊飾盲盒 交換禮物 | 潮巢 Nestory",
+        "metaDescription": "VIPO 與 Miffy 聯名的冬日系列絨毛吊飾盲盒，共 9 款角色，還藏了一款隱藏款。約 20 公分掛在背包或鑰匙上都好認，聖誕節送給喜歡米菲的朋友很剛好。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>拆開盒子的那一刻，會先看到米菲圍著花圈站在裡面。VIPO 和 Miffy 合作的冬日系列，把聖誕樹、聖誕襪這些節慶小道具一起做進吊飾造型裡，PVC 材質、大約 20 公分，掛在後背包上走一段路也很難被忽略。九款角色裡有 Dan、Melanie、Boris 這些熟悉的朋友，運氣好的話還會遇到隱藏款。把它掛在書桌前的層架上，或跟著鑰匙一起出門，整個冬天就多了一個小小同伴。</p><h2>適合誰</h2><ul><li>想自己收的人：掛在通勤後背包或鑰匙圈上，每天出門都會看到。</li><li>想送人的人：送給喜歡米菲的朋友，聖誕節前後送這種小東西剛剛好。</li></ul><h2>購買前提醒</h2><ul><li>盲盒為隨機出貨，無法指定款式。</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              3
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：吊飾多大？\nA：約 20 公分，掛在背包或鑰匙上都好認。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 1,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1650,
+            "outputTokens": 67,
+            "costUsd": 0.000288,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 2072,
+            "outputTokens": 421,
+            "costUsd": 0.00041,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "via": "openrouter",
+            "inputTokens": 1456,
+            "outputTokens": 1875,
+            "costUsd": 0.001408,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1650,
+            "outputTokens": 67,
+            "costUsd": 0.000288,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "VIPO × 米菲 Miffy | 米菲 Miffy 絨毛吊飾 冬日盲盒 吊飾 | 9 款角色，含隱藏款",
+        "description": "<h2>商品介紹</h2><p>拆開盒子的那一刻，會先看到米菲圍著花圈站在裡面。VIPO 和 Miffy 合作的冬日系列，把聖誕樹、聖誕襪這些節慶小道具一起做進吊飾造型裡，PVC 材質、大約 20 公分，掛在後背包上走一段路也很難被忽略。九款角色裡有 Dan、Melanie、Boris 這些熟悉的朋友，運氣好的話還會遇到隱藏款。把它掛在書桌前的層架上，或跟著鑰匙一起出門，整個冬天就多了一個小小同伴。</p><h2>適合誰</h2><ul><li>想自己收的人：掛在通勤後背包或鑰匙圈上，每天出門都會看到。</li><li>想送人的人：送給喜歡米菲的朋友，聖誕節前後送這種小東西剛剛好。</li></ul><h2>購買前提醒</h2><ul><li>盲盒為隨機出貨，無法指定款式。</li></ul>",
+        "faq": "<h3><strong>單個盲盒買多個會重複嗎？</strong></h3>\n<p>不會，單個買多個不重複；想一次收齊可以選端盒 6 款。</p>\n\n<h3><strong>可以挑自己喜歡的款式嗎？</strong></h3>\n<p>可以，Wreath、Stocking、Tree、Dan、Melanie、Boris 有拆盒確認款可指定。</p>",
+        "highlights": [
+          "PVC 材質，約 20 公分，掛在包上很顯眼",
+          "共 9 款角色，其中藏了一款隱藏款",
+          "端盒 6 款不重複，想收齊不用賭運氣"
+        ],
+        "why": "冬日節慶的小道具直接做進吊飾造型裡，不是單純換色的米菲。",
+        "seo": {
+          "seoTitle": "VIPO × Miffy 米菲冬日絨毛吊飾盲盒 交換禮物 | 潮巢 Nestory",
+          "metaDescription": "VIPO 與 Miffy 聯名的冬日系列絨毛吊飾盲盒，共 9 款角色，還藏了一款隱藏款。約 20 公分掛在背包或鑰匙上都好認，聖誕節送給喜歡米菲的朋友很剛好。"
+        },
+        "checks": [],
+        "costUsd": 0.00140803,
+        "elapsedMs": 18513
+      }
+    }
+  },
+  {
+    "id": "71672805-47c4-405c-af69-ab967ff13b4d",
+    "slot": "機能用品",
+    "label": "VICTOR × 七龍珠 羽毛球拍握把保護套（上次測過）",
+    "image": "https://tbgtqwvuohmdxnxisrgr.supabase.co/storage/v1/object/public/product-images/ecb033e3-5230-498a-9800-6198eb3dbc85/71672805-47c4-405c-af69-ab967ff13b4d/main/f19423df-772c-49b9-8689-e01ade92bccd.webp",
+    "candidates": {
+      "A": {
+        "finalTitle": "VICTOR × 七龍珠 Dragon Ball | VICTOR 七龍珠羽球拍握把保護套 拍柄套 運動配件 | 水仙黃、布偶粉 2 款",
+        "seoTitle": "VICTOR 七龍珠羽球拍握把保護套 Dragon Ball 羽球周邊禮物 | 潮巢 Nestory",
+        "metaDescription": "VICTOR 與七龍珠聯名推出拍柄保護套，29 x 8 cm 軟 Q 絨毛材質完美包覆拍柄。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>當你從球袋抽出拍子，第一眼看到的不是冷冰冰的握把，而是這隻毛茸茸的七龍珠保護套。VICTOR 這次把《七龍珠 Z》的熱血帶到球場，29 x 8 cm 的尺寸剛好包覆住拍柄，100% 聚酯纖維的填充讓它摸起來厚實又軟 Q。水仙黃款上面那顆標誌性的五星七龍珠，讓你在場邊休息、轉動球拍找手感時，都像在集滿戰鬥力。</p><h2>適合誰</h2><ul><li>想保護昂貴球拍不互撞，又想在球友堆中一眼認出自己拍子的你</li><li>送給剛換新球拍、又是看《七龍珠》長大的熱血羽球搭檔</li></ul>",
+        "review": {
+          "failed": true,
+          "deleted": {
+            "sentences": [],
+            "faq": [],
+            "terms": []
+          },
+          "deletedTexts": [],
+          "rejected": 0,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1593,
+            "outputTokens": 81,
+            "costUsd": 0.000288,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1896,
+            "outputTokens": 497,
+            "costUsd": 0.000448,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "google/gemini-3-flash-preview",
+            "via": "openrouter",
+            "inputTokens": 1468,
+            "outputTokens": 1605,
+            "costUsd": 0.005549,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1593,
+            "outputTokens": 81,
+            "costUsd": 0.000288,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "VICTOR × 七龍珠 Dragon Ball | VICTOR 七龍珠羽球拍握把保護套 拍柄套 運動配件 | 水仙黃、布偶粉 2 款",
+        "description": "<h2>商品介紹</h2><p>當你從球袋抽出拍子，第一眼看到的不是冷冰冰的握把，而是這隻毛茸茸的七龍珠保護套。VICTOR 這次把《七龍珠 Z》的熱血帶到球場，29 x 8 cm 的尺寸剛好包覆住拍柄，100% 聚酯纖維的填充讓它摸起來厚實又軟 Q。水仙黃款上面那顆標誌性的五星七龍珠，讓你在場邊休息、轉動球拍找手感時，都像在集滿戰鬥力。</p><h2>適合誰</h2><ul><li>想保護昂貴球拍不互撞，又想在球友堆中一眼認出自己拍子的你</li><li>送給剛換新球拍、又是看《七龍珠》長大的熱血羽球搭檔</li></ul>",
+        "faq": "<h3><strong>這款保護套的尺寸大約多大？</strong></h3>\n<p>長 29 公分、寬 8 公分，適用於大多數標準尺寸的羽毛球拍柄。</p>\n\n<h3><strong>這兩款可以指定顏色嗎？</strong></h3>\n<p>可以，有水仙黃與布偶粉兩款可選，看你喜歡經典色還是粉嫩感。</p>",
+        "highlights": [
+          "29 x 8 cm 尺寸，能完整包覆羽球拍柄部",
+          "100% 聚酯纖維填充，手感厚實且耐磨損",
+          "細緻絨毛面料結合經典五星七龍珠刺繡設計"
+        ],
+        "why": "少見的絨毛材質拍柄套，將《七龍珠 Z》經典元素結合專業羽球品牌 VICTOR。",
+        "seo": {
+          "seoTitle": "VICTOR 七龍珠羽球拍握把保護套 Dragon Ball 羽球周邊禮物 | 潮巢 Nestory",
+          "metaDescription": "VICTOR 與七龍珠聯名推出拍柄保護套，29 x 8 cm 軟 Q 絨毛材質完美包覆拍柄。"
+        },
+        "checks": [
+          {
+            "code": "review_failed",
+            "field": "review",
+            "message": "review_failed"
+          }
+        ],
+        "costUsd": 0.005549,
+        "elapsedMs": 14687
+      },
+      "B": {
+        "title": "（這個寫手這次沒有產出文案）",
+        "description": "",
+        "faq": "",
+        "highlights": [],
+        "why": "",
+        "seo": null,
+        "checks": [],
+        "costUsd": null,
+        "elapsedMs": null,
+        "failed": true,
+        "error": "Error: 文案解析失敗：模型連續兩次未回傳可解析的內容，請稍後重試或改用其他模型。\n    at generateWithParseRetry (file:///C:/Users/s2491/Documents/nestory-copy-a1/src/lib/providers/copy.ts:235:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async OpenAICopyProvider.generate (file:///C:/Users/"
+      }
+    }
+  },
+  {
+    "id": "31701317-f664-4fab-9c05-b35d26075c3c",
+    "slot": "機能用品",
+    "label": "三麗鷗 × emie M3 翻轉相機（規格多，上次測過）",
+    "image": "https://tbgtqwvuohmdxnxisrgr.supabase.co/storage/v1/object/public/product-images/ecb033e3-5230-498a-9800-6198eb3dbc85/31701317-f664-4fab-9c05-b35d26075c3c/main/679b1325-b47f-42fb-a3da-57042c2f3eb0.webp",
+    "candidates": {
+      "A": {
+        "title": "（這個寫手這次沒有產出文案）",
+        "description": "",
+        "faq": "",
+        "highlights": [],
+        "why": "",
+        "seo": null,
+        "checks": [],
+        "costUsd": null,
+        "elapsedMs": null,
+        "failed": true,
+        "error": "Error: 文案解析失敗：模型連續兩次未回傳可解析的內容，請稍後重試或改用其他模型。\n    at generateWithParseRetry (file:///C:/Users/s2491/Documents/nestory-copy-a1/src/lib/providers/copy.ts:235:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async OpenAICopyProvider.generate (file:///C:/Users/"
+      },
+      "B": {
+        "finalTitle": "emie × 三麗鷗 Hello Kitty | Hello Kitty 翻轉相機 6400萬像素 自拍相機 三麗鷗 | 2 款組合可選",
+        "seoTitle": "Hello Kitty 三麗鷗 × emie 翻轉相機 自拍相機 聖誕禮物 | 潮巢 Nestory",
+        "metaDescription": "這款 Hello Kitty 翻轉相機具備 6400 萬像素與 180 度翻轉螢幕，讓自拍變得輕鬆又清晰。260g 輕量化設計搭配專屬小吊飾，是送給三麗鷗迷最實用的禮物選擇。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>在咖啡廳跟姊妹聚餐時，把這臺 emie 聯名的相機從包包拿出來，繫在旁邊的 Hello Kitty 小吊飾會先晃進視線。不用再辛苦對著鏡子找角度，直接把螢幕向上翻轉 180 度，看著畫面就能拍出 6400 萬像素的清晰自拍。機身採用鋁合金與 ABS 材質製作，拿在手上只有 260g 的重量，就算裝上廣角鏡頭拍團照，手痠感也幾乎不存在，隨手一按都是高清的大片等級。</p><h2>適合誰</h2><ul><li>想在旅行時記錄風景，又想隨時翻轉螢幕確認妝容的女孩。</li><li>送給剛開始學攝影、對 Hello Kitty 毫無抵抗力的國高中生妹妹。</li></ul><h2>購買前提醒</h2><ul><li>電壓：5V---1A，台灣使用前請確認插頭與電壓。</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              2
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：這款相機在臺灣可以充電使用嗎？\nA：可以。使用一般 5V/1A 電源供應器即可充電，不需擔心電壓問題。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 5,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1787,
+            "outputTokens": 156,
+            "costUsd": 0.000362,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 2154,
+            "outputTokens": 625,
+            "costUsd": 0.000545,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "google/gemini-3-flash-preview",
+            "via": "openrouter",
+            "inputTokens": 1624,
+            "outputTokens": 1777,
+            "costUsd": 0.006143,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1787,
+            "outputTokens": 156,
+            "costUsd": 0.000362,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "emie × 三麗鷗 Hello Kitty | Hello Kitty 翻轉相機 6400萬像素 自拍相機 三麗鷗 | 2 款組合可選",
+        "description": "<h2>商品介紹</h2><p>在咖啡廳跟姊妹聚餐時，把這臺 emie 聯名的相機從包包拿出來，繫在旁邊的 Hello Kitty 小吊飾會先晃進視線。不用再辛苦對著鏡子找角度，直接把螢幕向上翻轉 180 度，看著畫面就能拍出 6400 萬像素的清晰自拍。機身採用鋁合金與 ABS 材質製作，拿在手上只有 260g 的重量，就算裝上廣角鏡頭拍團照，手痠感也幾乎不存在，隨手一按都是高清的大片等級。</p><h2>適合誰</h2><ul><li>想在旅行時記錄風景，又想隨時翻轉螢幕確認妝容的女孩。</li><li>送給剛開始學攝影、對 Hello Kitty 毫無抵抗力的國高中生妹妹。</li></ul><h2>購買前提醒</h2><ul><li>電壓：5V---1A，台灣使用前請確認插頭與電壓。</li></ul>",
+        "faq": "<h3><strong>兩款組合該怎麼挑選？</strong></h3>\n<p>常拍多人團照或大風景選「廣角鏡頭版」；一般生活紀錄選「標準版」即可。</p>",
+        "highlights": [
+          "6400 萬像素高畫質成像清晰捕捉細節",
+          "180° 翻轉螢幕讓自拍預覽完全不求人",
+          "機身僅約 260g 搭配 1500mAh 電池續航"
+        ],
+        "why": "在可愛外殼下具備 6400 萬像素與翻轉螢幕，是真正能拍出高清畫質的實力派周邊。",
+        "seo": {
+          "seoTitle": "Hello Kitty 三麗鷗 × emie 翻轉相機 自拍相機 聖誕禮物 | 潮巢 Nestory",
+          "metaDescription": "這款 Hello Kitty 翻轉相機具備 6400 萬像素與 180 度翻轉螢幕，讓自拍變得輕鬆又清晰。260g 輕量化設計搭配專屬小吊飾，是送給三麗鷗迷最實用的禮物選擇。"
+        },
+        "checks": [],
+        "costUsd": 0.006143,
+        "elapsedMs": 16799
+      }
+    }
+  },
+  {
+    "id": "a9f82c5f-1ed7-44ec-9e49-700280f34f23",
+    "slot": "角色收藏",
+    "label": "咒術迴戰 × Nullset 毛絨抱抱公仔（多角色，新）",
+    "image": "https://tbgtqwvuohmdxnxisrgr.supabase.co/storage/v1/object/public/product-images/ecb033e3-5230-498a-9800-6198eb3dbc85/a9f82c5f-1ed7-44ec-9e49-700280f34f23/main/f9d5f23d-0186-4b55-8dcb-0379d43790a1-orig.png",
+    "candidates": {
+      "A": {
+        "finalTitle": "Nullset × 咒術迴戰 Jujutsu Kaisen | Nullset 咒術迴戰 抱抱公仔 虎杖悠仁 五條悟 玩偶 收藏 | 虎杖悠仁、五條悟等 4 款",
+        "seoTitle": "Nullset × 咒術迴戰 Jujutsu Kaisen | 潮巢 Nestory",
+        "metaDescription": "Nullset 推出《咒術迴戰》抱抱公仔，包含虎杖、五條悟等四款角色。100% 聚酯纖維打造柔和觸感，搭配圓眼微笑設計，是放在辦公桌陪伴日常或送給動漫迷好友的禮物首選。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>想像一下虎杖悠仁睜著圓滾滾的大眼睛，坐在你的電腦螢幕前對你微笑。這系列抱抱公仔採用 100% 聚酯纖維製作，摸起來有種紮實的柔軟感。每位角色都握著專屬的小道具，約 11.9 公分的高度剛好可以單手掌握。柔和的色調少了點戰鬥的肅殺，多了份想讓人揉揉臉頰的親近感，放在辦公桌旁陪你處理公事，感覺咒力都跟著變溫柔了。</p><h2>適合誰</h2><ul><li>想把咒術高專一年級生整齊排在書架上的收藏家</li><li>送給在補習班拼命、需要五條老師精神應援的高中生好友</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              2
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：這是什麼材質做的？\nA：採用 100% 聚酯纖維，觸感穩定且顯色柔和。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 2,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1686,
+            "outputTokens": 100,
+            "costUsd": 0.000313,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 2118,
+            "outputTokens": 470,
+            "costUsd": 0.000446,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "google/gemini-3-flash-preview",
+            "via": "openrouter",
+            "inputTokens": 1512,
+            "outputTokens": 1848,
+            "costUsd": 0.0063,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1686,
+            "outputTokens": 100,
+            "costUsd": 0.000313,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "Nullset × 咒術迴戰 Jujutsu Kaisen | Nullset 咒術迴戰 抱抱公仔 虎杖悠仁 五條悟 玩偶 收藏 | 虎杖悠仁、五條悟等 4 款",
+        "description": "<h2>商品介紹</h2><p>想像一下虎杖悠仁睜著圓滾滾的大眼睛，坐在你的電腦螢幕前對你微笑。這系列抱抱公仔採用 100% 聚酯纖維製作，摸起來有種紮實的柔軟感。每位角色都握著專屬的小道具，約 11.9 公分的高度剛好可以單手掌握。柔和的色調少了點戰鬥的肅殺，多了份想讓人揉揉臉頰的親近感，放在辦公桌旁陪你處理公事，感覺咒力都跟著變溫柔了。</p><h2>適合誰</h2><ul><li>想把咒術高專一年級生整齊排在書架上的收藏家</li><li>送給在補習班拼命、需要五條老師精神應援的高中生好友</li></ul>",
+        "faq": "<h3><strong>尺寸大約多大？</strong></h3>\n<p>高約 11.9 公分，大概比罐裝咖啡再小一點，放在桌上完全不佔位。</p>",
+        "highlights": [
+          "每位角色手握不同專屬道具，細節充滿角色個性",
+          "圓滾滾大眼睛搭配微笑設計，呈現溫和視覺感",
+          "約 11.9 公分高的小巧尺寸，適合擺在桌案陪伴"
+        ],
+        "why": "捨棄銳利的戰鬥神情，用柔和色調與圓眼微笑重新詮釋咒術角色。",
+        "seo": {
+          "seoTitle": "Nullset × 咒術迴戰 Jujutsu Kaisen | 潮巢 Nestory",
+          "metaDescription": "Nullset 推出《咒術迴戰》抱抱公仔，包含虎杖、五條悟等四款角色。100% 聚酯纖維打造柔和觸感，搭配圓眼微笑設計，是放在辦公桌陪伴日常或送給動漫迷好友的禮物首選。"
+        },
+        "checks": [],
+        "costUsd": 0.0063,
+        "elapsedMs": 26801
+      },
+      "B": {
+        "finalTitle": "Nullset × 咒術迴戰 Jujutsu Kaisen | 咒術迴戰抱抱公仔 虎杖悠仁 掌心玩偶 | 4 款角色可選",
+        "seoTitle": "咒術迴戰抱抱公仔 虎杖悠仁 周邊玩偶 | 潮巢 Nestory",
+        "metaDescription": "咒術迴戰抱抱公仔，虎杖悠仁等四款角色可選，圓圓眼睛配微笑嘴巴，手裡還握著自己的道具。約掌心大小，擺書桌或送給追番的朋友都適合。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>把公仔從盒子裡拿出來的那一刻，先看到的是圓圓的眼睛和微笑的嘴巴，接著才發現手裡還握著自己的道具。100% 聚酯纖維的布料摸起來是軟的，約 8.4 x 6.7 x 11.9 公分的尺寸剛好貼在掌心，放在電腦螢幕旁邊，或塞進包包側袋跟著出門都不佔位。四款角色排成一列，柔和的顏色搭配擺在一起很順眼，虎杖悠仁就站在最左邊那個位置。</p><h2>適合誰</h2><ul><li>想在自己書桌或床頭擺一隻的人，打字打到一半抬頭就能看到</li><li>要送給追咒術迴戰的同事或同學，尤其對方已經在收同系列角色的</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [],
+            "terms": []
+          },
+          "deletedTexts": [],
+          "rejected": 3,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1630,
+            "outputTokens": 113,
+            "costUsd": 0.000312,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 2118,
+            "outputTokens": 470,
+            "costUsd": 0.000446,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "via": "openrouter",
+            "inputTokens": 1492,
+            "outputTokens": 3000,
+            "costUsd": 0.002074,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "via": "openrouter",
+            "inputTokens": 1513,
+            "outputTokens": 1320,
+            "costUsd": 0.000963,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1630,
+            "outputTokens": 113,
+            "costUsd": 0.000312,
+            "reported": true
+          }
+        ],
+        "retries": 1,
+        "title": "Nullset × 咒術迴戰 Jujutsu Kaisen | 咒術迴戰抱抱公仔 虎杖悠仁 掌心玩偶 | 4 款角色可選",
+        "description": "<h2>商品介紹</h2><p>把公仔從盒子裡拿出來的那一刻，先看到的是圓圓的眼睛和微笑的嘴巴，接著才發現手裡還握著自己的道具。100% 聚酯纖維的布料摸起來是軟的，約 8.4 x 6.7 x 11.9 公分的尺寸剛好貼在掌心，放在電腦螢幕旁邊，或塞進包包側袋跟著出門都不佔位。四款角色排成一列，柔和的顏色搭配擺在一起很順眼，虎杖悠仁就站在最左邊那個位置。</p><h2>適合誰</h2><ul><li>想在自己書桌或床頭擺一隻的人，打字打到一半抬頭就能看到</li><li>要送給追咒術迴戰的同事或同學，尤其對方已經在收同系列角色的</li></ul>",
+        "faq": "<h3><strong>公仔尺寸多大？</strong></h3>\n<p>約 8.4 x 6.7 x 11.9 公分，掌心大小，放書桌或包包側袋都剛好。</p>\n\n<h3><strong>四款可以指定嗎？</strong></h3>\n<p>可以，下單時直接選角色，虎杖悠仁、釘崎野薔薇、伏黒恵、五條悟都有。</p>",
+        "highlights": [
+          "100% 聚酯纖維材質，抱起來是軟的",
+          "約 8.4 x 6.7 x 11.9 公分，掌心大小",
+          "每款角色握著的道具都不一樣"
+        ],
+        "why": "四款公仔各自握著不同道具，一字排開時一眼就能認出誰是誰。",
+        "seo": {
+          "seoTitle": "咒術迴戰抱抱公仔 虎杖悠仁 周邊玩偶 | 潮巢 Nestory",
+          "metaDescription": "咒術迴戰抱抱公仔，虎杖悠仁等四款角色可選，圓圓眼睛配微笑嘴巴，手裡還握著自己的道具。約掌心大小，擺書桌或送給追番的朋友都適合。"
+        },
+        "checks": [],
+        "costUsd": 0.00303753,
+        "elapsedMs": 31026
+      }
+    }
+  },
+  {
+    "id": "3169bffa-86cf-4a01-b3b6-d4649084de05",
+    "slot": "穿搭配件",
+    "label": "三麗鷗 玉桂狗 筆電包 14／16 吋（尺寸數字，新）",
+    "image": "https://cdn.shopify.com/s/files/1/0787/8600/3129/files/d2c6df9d-fbb8-4eff-9702-6983827727ab.webp?v=1792247123",
+    "candidates": {
+      "A": {
+        "finalTitle": "三麗鷗 | Sanrio 三麗鷗大耳狗手提斜背電腦包 筆電包 | 14 吋與 16 吋可選",
+        "seoTitle": "Sanrio 三麗鷗大耳狗電腦包 Cinnamoroll 筆電包 周邊禮物 | 潮巢 Nestory",
+        "metaDescription": "找三麗鷗大耳狗電腦包嗎？這款柔和藍色的 Cinnamoroll 筆電包採用 PVC 材質，提供 14 吋與 16 吋兩種規格。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>走進圖書館或咖啡廳，從這咖柔和藍色的包包裡取出筆電，大耳狗那對大耳朵就像在幫你加油。這款電腦包採用耐看的 Cinnamoroll 圖案設計，外層使用 PVC 材質，就算通勤路上遇到一點小狀況也比較好照顧。除了放筆電，裡面塞進幾本課外書或文具袋也沒問題，手提或是側背都能隨意切換，讓你在移動的路上手忙腳亂的感覺少一點，可愛的氛圍多一點。</p><h2>適合誰</h2><ul><li>每天帶著筆電在教學大樓間奔波，想給電腦一個可愛家的學生。</li><li>想送一份實用禮物給剛換新筆電、又特別喜歡大耳狗的軟萌系朋友。</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              1
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：這款包包可以裝得下我的電腦嗎？\nA：請根據筆電螢幕選，14 吋選小號，若筆電較大或有保護殼建議選 16 吋大號。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 2,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1719,
+            "outputTokens": 96,
+            "costUsd": 0.000315,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1899,
+            "outputTokens": 478,
+            "costUsd": 0.000437,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "google/gemini-3-flash-preview",
+            "via": "openrouter",
+            "inputTokens": 1440,
+            "outputTokens": 1211,
+            "costUsd": 0.004353,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1719,
+            "outputTokens": 96,
+            "costUsd": 0.000315,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "三麗鷗 | Sanrio 三麗鷗大耳狗手提斜背電腦包 筆電包 | 14 吋與 16 吋可選",
+        "description": "<h2>商品介紹</h2><p>走進圖書館或咖啡廳，從這咖柔和藍色的包包裡取出筆電，大耳狗那對大耳朵就像在幫你加油。這款電腦包採用耐看的 Cinnamoroll 圖案設計，外層使用 PVC 材質，就算通勤路上遇到一點小狀況也比較好照顧。除了放筆電，裡面塞進幾本課外書或文具袋也沒問題，手提或是側背都能隨意切換，讓你在移動的路上手忙腳亂的感覺少一點，可愛的氛圍多一點。</p><h2>適合誰</h2><ul><li>每天帶著筆電在教學大樓間奔波，想給電腦一個可愛家的學生。</li><li>想送一份實用禮物給剛換新筆電、又特別喜歡大耳狗的軟萌系朋友。</li></ul>",
+        "faq": "<h3><strong>內容物除了包包本身，還有附背帶嗎？</strong></h3>\n<p>有的，這款設計可以手提也可以斜背，方便你空出雙手拿大杯冰美式。</p>",
+        "highlights": [
+          "防潑耐用的 PVC 材質，保護筆電更有感。",
+          "提供手提與斜背兩種模式，通勤移動更靈活。",
+          "專為大尺寸需求設計，最大可容納 16 吋筆電。"
+        ],
+        "why": "少見的柔和藍色調配上大耳狗，讓原本冰冷的 3C 配件變得像軟綿綿的雲朵一樣親切。",
+        "seo": {
+          "seoTitle": "Sanrio 三麗鷗大耳狗電腦包 Cinnamoroll 筆電包 周邊禮物 | 潮巢 Nestory",
+          "metaDescription": "找三麗鷗大耳狗電腦包嗎？這款柔和藍色的 Cinnamoroll 筆電包採用 PVC 材質，提供 14 吋與 16 吋兩種規格。"
+        },
+        "checks": [],
+        "costUsd": 0.004353,
+        "elapsedMs": 15218
+      },
+      "B": {
+        "finalTitle": "三麗鷗 | 三麗鷗大耳狗電腦包 14吋16吋 手提斜背 | 小號14吋、大號16吋兩款",
+        "seoTitle": "三麗鷗大耳狗電腦包 | 14吋16吋手提斜背 | 潮巢 Nestory",
+        "metaDescription": "這是 Sanrio 三麗鷗大耳狗圖案的電腦包，外層 PVC 材質，小號可放 14 吋筆電、大號到 16 吋。柔和藍色配大耳狗，通勤或上課背著走都好看。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>早上出門前把筆電塞進包裡，拉鍊拉上，藍色包身上那隻大耳狗正對著你笑。小號約可放進 14 吋筆電，大號到 16 吋，通勤時手提或斜背都能走。到了教室，課本、文具和充電線一起收進去，放學後直接背去咖啡廳也沒問題。柔和的藍配大耳狗圖案，放在桌上就是一眼認得出來的那一個。</p><h2>適合誰</h2><ul><li>每天搭捷運通勤、要帶筆電上下班的自己</li><li>想送給喜歡大耳狗的學生，開學或生日都合用</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [
+              7
+            ],
+            "faq": [
+              1
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "highlight",
+              "text": "外層 PVC 材質，大小兩款相同",
+              "term": "外層 PVC 材質"
+            },
+            {
+              "field": "faq",
+              "text": "Q：小號和大號差在哪，怎麼挑？\nA：先量筆電尺寸，14 吋選小號、16 吋選大號，兩款外層都是 PVC。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 15,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1560,
+            "outputTokens": 416,
+            "costUsd": 0.000484,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1899,
+            "outputTokens": 478,
+            "costUsd": 0.000437,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "via": "openrouter",
+            "inputTokens": 1429,
+            "outputTokens": 2634,
+            "costUsd": 0.001533,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1560,
+            "outputTokens": 416,
+            "costUsd": 0.000484,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "三麗鷗 | 三麗鷗大耳狗電腦包 14吋16吋 手提斜背 | 小號14吋、大號16吋兩款",
+        "description": "<h2>商品介紹</h2><p>早上出門前把筆電塞進包裡，拉鍊拉上，藍色包身上那隻大耳狗正對著你笑。小號約可放進 14 吋筆電，大號到 16 吋，通勤時手提或斜背都能走。到了教室，課本、文具和充電線一起收進去，放學後直接背去咖啡廳也沒問題。柔和的藍配大耳狗圖案，放在桌上就是一眼認得出來的那一個。</p><h2>適合誰</h2><ul><li>每天搭捷運通勤、要帶筆電上下班的自己</li><li>想送給喜歡大耳狗的學生，開學或生日都合用</li></ul>",
+        "faq": "<h3><strong>兩款除了尺寸還有差別嗎？</strong></h3>\n<p>外觀都是大耳狗圖案配藍色主色，只差在 14 吋和 16 吋。</p>",
+        "highlights": [
+          "小號約可放 14 吋筆電",
+          "大號 16 吋，裝得下課本和講義"
+        ],
+        "why": "大耳狗圖案配柔和藍色，還做成 14 吋與 16 吋兩種尺寸的 Sanrio 電腦包。",
+        "seo": {
+          "seoTitle": "三麗鷗大耳狗電腦包 | 14吋16吋手提斜背 | 潮巢 Nestory",
+          "metaDescription": "這是 Sanrio 三麗鷗大耳狗圖案的電腦包，外層 PVC 材質，小號可放 14 吋筆電、大號到 16 吋。柔和藍色配大耳狗，通勤或上課背著走都好看。"
+        },
+        "checks": [],
+        "costUsd": 0.001532565,
+        "elapsedMs": 19327
+      }
+    }
+  },
+  {
+    "id": "b46b94b2-18da-48f4-872d-606aba12adeb",
+    "slot": "機能用品",
+    "label": "Pingu × 奇悅 眼部按摩儀（3C、效果宣稱風險，新）",
+    "image": "https://tbgtqwvuohmdxnxisrgr.supabase.co/storage/v1/object/public/product-images/ecb033e3-5230-498a-9800-6198eb3dbc85/b46b94b2-18da-48f4-872d-606aba12adeb/main/1b46b4ec-7138-4fc7-8569-bc6c5c168dc7.webp",
+    "candidates": {
+      "A": {
+        "finalTitle": "CHIELYUAL × Pingu | Pingu 企鵝眼部按摩儀｜恆溫熱敷舒壓小物 | 紅藍 2 色，多款限定禮盒包裝",
+        "seoTitle": "CHIELYUAL Pingu 企鵝眼部按摩儀 | 恆溫熱敷交換禮物 | 潮巢 Nestory",
+        "metaDescription": "CHIELYUAL 聯名 Pingu 推出眼部按摩儀，具備 38-42°C 恆溫熱敷與 5 大按摩模式。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>睡前戴上這隻有著扁扁嘴的 Pingu，感覺疲勞的雙眼瞬間被溫柔包圍。這款按摩儀提供 38-42°C 的恆溫熱敷，溫暖的觸感就像剛敷上熱毛巾一樣舒服，搭配微頻震動按摩，能幫你鬆開緊繃的眼周肌肉。內建 5 大按摩模式可以隨心切換，無論是想單純熱敷還是深層放鬆都行。PVC 材質親膚且適合長時間佩戴，讓你在企鵝的陪伴下徹底斷開螢幕的幹擾。</p><h2>適合誰</h2><ul><li>每天盯螢幕超過 8 小時、眼壓爆表的上班族</li><li>想給喜歡 Pingu 的另一半一個實用生日驚喜的人</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              2
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：這款按摩儀的尺寸戴起來會太小嗎？\nA：機身寬度約 20cm，大小適中且適合長時間佩戴。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 4,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1938,
+            "outputTokens": 146,
+            "costUsd": 0.000378,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 2642,
+            "outputTokens": 464,
+            "costUsd": 0.000483,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "google/gemini-3-flash-preview",
+            "via": "openrouter",
+            "inputTokens": 1676,
+            "outputTokens": 1472,
+            "costUsd": 0.005254,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1938,
+            "outputTokens": 146,
+            "costUsd": 0.000378,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "CHIELYUAL × Pingu | Pingu 企鵝眼部按摩儀｜恆溫熱敷舒壓小物 | 紅藍 2 色，多款限定禮盒包裝",
+        "description": "<h2>商品介紹</h2><p>睡前戴上這隻有著扁扁嘴的 Pingu，感覺疲勞的雙眼瞬間被溫柔包圍。這款按摩儀提供 38-42°C 的恆溫熱敷，溫暖的觸感就像剛敷上熱毛巾一樣舒服，搭配微頻震動按摩，能幫你鬆開緊繃的眼周肌肉。內建 5 大按摩模式可以隨心切換，無論是想單純熱敷還是深層放鬆都行。PVC 材質親膚且適合長時間佩戴，讓你在企鵝的陪伴下徹底斷開螢幕的幹擾。</p><h2>適合誰</h2><ul><li>每天盯螢幕超過 8 小時、眼壓爆表的上班族</li><li>想給喜歡 Pingu 的另一半一個實用生日驚喜的人</li></ul>",
+        "faq": "<h3><strong>紅色跟藍色款式的功能有差別嗎？</strong></h3>\n<p>功能完全相同，主要差在機身顏色與搭配的禮盒包裝風格。</p>",
+        "highlights": [
+          "38-42°C 恆溫熱敷，模擬毛巾敷眼的溫感",
+          "內建 5 大按摩模式，可切換微頻震動強度",
+          "約 20cm 寬度配合 PVC 材質，適合長時佩戴"
+        ],
+        "why": "將專業機能與 Pingu 造型結合，還有多種對應不同情境的精緻禮盒包裝。",
+        "seo": {
+          "seoTitle": "CHIELYUAL Pingu 企鵝眼部按摩儀 | 恆溫熱敷交換禮物 | 潮巢 Nestory",
+          "metaDescription": "CHIELYUAL 聯名 Pingu 推出眼部按摩儀，具備 38-42°C 恆溫熱敷與 5 大按摩模式。"
+        },
+        "checks": [],
+        "costUsd": 0.005254,
+        "elapsedMs": 10503
+      },
+      "B": {
+        "finalTitle": "CHIELYUAL × Pingu | CHIELYUAL × Pingu 眼部按摩儀 熱敷震動 | 12 款包裝可選，紅藍雙色",
+        "seoTitle": "Pingu 眼部按摩儀 | CHIELYUAL 聯名 熱敷按摩 送禮 | 潮巢 Nestory",
+        "metaDescription": "CHIELYUAL × Pingu 聯名眼部按摩儀，企鵝臉直接變成貼在眼周的罩面。恆溫熱敷加五種按摩模式，下班追劇後戴著讓眼睛歇一會；附禮袋包裝，當生日禮物送 Pingu 迷剛好。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>下班回到家，把 Pingu 護眼儀往臉上一戴，約 20cm 的罩面剛好蓋住眼周。按下開關，五種按摩模式輪著換，微頻震動輕輕地敲，撐了一整天的眼睛慢慢鬆開。紅色款的企鵝臉貼在臉上，看起來有點呆，自己照鏡子會想笑。週末追劇追到眼睛痠，或是搭車想補個眠，戴著都不覺得卡。原裝禮盒、生日包裝、童趣包裝都附禮袋，可以先收在抽屜裡，等一個適合送出去的時機。</p><h2>適合誰</h2><ul><li>每天盯螢幕超過八小時的人，午休趴在桌上讓眼睛歇一下</li><li>要送給喜歡 Pingu 的朋友當生日禮物，包裝本身就已經準備好了</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              1
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：這款眼部按摩儀的尺寸是多大？\nA：罩面約 20cm，戴上大約覆蓋整個眼周，一般臉型都夠用。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 2,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1928,
+            "outputTokens": 82,
+            "costUsd": 0.000262,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 2642,
+            "outputTokens": 464,
+            "costUsd": 0.000483,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "via": "openrouter",
+            "inputTokens": 1660,
+            "outputTokens": 1998,
+            "costUsd": 0.002172,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1928,
+            "outputTokens": 82,
+            "costUsd": 0.000262,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "CHIELYUAL × Pingu | CHIELYUAL × Pingu 眼部按摩儀 熱敷震動 | 12 款包裝可選，紅藍雙色",
+        "description": "<h2>商品介紹</h2><p>下班回到家，把 Pingu 護眼儀往臉上一戴，約 20cm 的罩面剛好蓋住眼周。按下開關，五種按摩模式輪著換，微頻震動輕輕地敲，撐了一整天的眼睛慢慢鬆開。紅色款的企鵝臉貼在臉上，看起來有點呆，自己照鏡子會想笑。週末追劇追到眼睛痠，或是搭車想補個眠，戴著都不覺得卡。原裝禮盒、生日包裝、童趣包裝都附禮袋，可以先收在抽屜裡，等一個適合送出去的時機。</p><h2>適合誰</h2><ul><li>每天盯螢幕超過八小時的人，午休趴在桌上讓眼睛歇一下</li><li>要送給喜歡 Pingu 的朋友當生日禮物，包裝本身就已經準備好了</li></ul>",
+        "faq": "<h3><strong>顏色和包裝要怎麼選？</strong></h3>\n<p>紅、藍兩色共 12 款，差別在包裝；想直接送人就挑附禮袋的。</p>",
+        "highlights": [
+          "恆溫熱敷維持在 38～42°C",
+          "微頻震動搭配五種按摩模式",
+          "罩面約 20cm，貼閤眼周"
+        ],
+        "why": "多半眼部按摩儀長得像醫療器材，這臺直接把 Pingu 的臉放上眼周。",
+        "seo": {
+          "seoTitle": "Pingu 眼部按摩儀 | CHIELYUAL 聯名 熱敷按摩 送禮 | 潮巢 Nestory",
+          "metaDescription": "CHIELYUAL × Pingu 聯名眼部按摩儀，企鵝臉直接變成貼在眼周的罩面。恆溫熱敷加五種按摩模式，下班追劇後戴著讓眼睛歇一會；附禮袋包裝，當生日禮物送 Pingu 迷剛好。"
+        },
+        "checks": [],
+        "costUsd": 0.0021717,
+        "elapsedMs": 13055
+      }
+    }
+  }
+]

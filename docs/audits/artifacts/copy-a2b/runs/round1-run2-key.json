@@ -1,0 +1,92 @@
+[
+  {
+    "id": "09547e53-1e91-4da8-a9b8-d36c768ceb47",
+    "letters": {
+      "A": "deepseek/deepseek-v4.1-flash",
+      "B": "anthropic/claude-sonnet-5.5",
+      "C": "openai/gpt-5.4",
+      "D": "google/gemini-3-flash-preview"
+    }
+  },
+  {
+    "id": "58f00e61-cfa4-45b3-bb62-2168f1587108",
+    "letters": {
+      "A": "deepseek/deepseek-v4.1-flash",
+      "B": "anthropic/claude-sonnet-5.5",
+      "C": "google/gemini-3-flash-preview",
+      "D": "openai/gpt-5.4"
+    }
+  },
+  {
+    "id": "6647e20c-3266-4438-b86c-adc0c64dfdef",
+    "letters": {
+      "A": "google/gemini-3-flash-preview",
+      "B": "openai/gpt-5.4",
+      "C": "anthropic/claude-sonnet-5.5",
+      "D": "deepseek/deepseek-v4.1-flash"
+    }
+  },
+  {
+    "id": "71672805-47c4-405c-af69-ab967ff13b4d",
+    "letters": {
+      "A": "anthropic/claude-sonnet-5.5",
+      "B": "openai/gpt-5.4",
+      "C": "deepseek/deepseek-v4.1-flash",
+      "D": "google/gemini-3-flash-preview"
+    }
+  },
+  {
+    "id": "e4ba2299-87b9-4f4f-a514-0ea6f3bdd92d",
+    "letters": {
+      "A": "google/gemini-3-flash-preview",
+      "B": "anthropic/claude-sonnet-5.5",
+      "C": "deepseek/deepseek-v4.1-flash",
+      "D": "openai/gpt-5.4"
+    }
+  },
+  {
+    "id": "31701317-f664-4fab-9c05-b35d26075c3c",
+    "letters": {
+      "A": "google/gemini-3-flash-preview",
+      "B": "deepseek/deepseek-v4.1-flash",
+      "C": "anthropic/claude-sonnet-5.5",
+      "D": "openai/gpt-5.4"
+    }
+  },
+  {
+    "id": "3f166233-ec19-4c0a-aed9-b82e97088925",
+    "letters": {
+      "A": "deepseek/deepseek-v4.1-flash",
+      "B": "openai/gpt-5.4",
+      "C": "google/gemini-3-flash-preview",
+      "D": "anthropic/claude-sonnet-5.5"
+    }
+  },
+  {
+    "id": "27f42c00-dba5-4013-b55d-6b059cdac9df",
+    "letters": {
+      "A": "deepseek/deepseek-v4.1-flash",
+      "B": "google/gemini-3-flash-preview",
+      "C": "anthropic/claude-sonnet-5.5",
+      "D": "openai/gpt-5.4"
+    }
+  },
+  {
+    "id": "02312886-05d7-4c5d-be62-a2edfe0df74e",
+    "letters": {
+      "A": "google/gemini-3-flash-preview",
+      "B": "openai/gpt-5.4",
+      "C": "deepseek/deepseek-v4.1-flash",
+      "D": "anthropic/claude-sonnet-5.5"
+    }
+  },
+  {
+    "id": "845e0303-8349-4221-bf3e-fd376bc61451",
+    "letters": {
+      "A": "google/gemini-3-flash-preview",
+      "B": "openai/gpt-5.4",
+      "C": "anthropic/claude-sonnet-5.5",
+      "D": "deepseek/deepseek-v4.1-flash"
+    }
+  }
+]

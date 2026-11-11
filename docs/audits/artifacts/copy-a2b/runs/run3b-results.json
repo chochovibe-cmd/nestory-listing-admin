@@ -1,0 +1,176 @@
+[
+  {
+    "id": "71672805-47c4-405c-af69-ab967ff13b4d",
+    "slot": "機能用品",
+    "label": "VICTOR × 七龍珠 羽毛球拍握把保護套（上次測過）",
+    "image": "https://tbgtqwvuohmdxnxisrgr.supabase.co/storage/v1/object/public/product-images/ecb033e3-5230-498a-9800-6198eb3dbc85/71672805-47c4-405c-af69-ab967ff13b4d/main/f19423df-772c-49b9-8689-e01ade92bccd.webp",
+    "candidates": {
+      "A": {
+        "finalTitle": "VICTOR × 七龍珠 Dragon Ball | 七龍珠 Z 羽毛球拍握把保護套 VICTOR 威克多 | 水仙黃、布偶粉 2 款可選",
+        "seoTitle": "七龍珠 Z × VICTOR 球拍握把保護套 羽球周邊禮物 | 潮巢 Nestory",
+        "metaDescription": "VICTOR 威克多與《七龍珠 Z》聯名的球拍握把保護套，限量紀念款，水仙黃與布偶粉兩色。套上球拍握把，球袋一打開就知道是誰的拍子，送給打羽球的七龍珠迷正好。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>球拍從球袋裡抽出來，握把上的五顆星星先露了面。這是 VICTOR 威克多與《七龍珠 Z》合作的握把保護套，水仙黃的底色壓上動感字體，握在手裡像替球拍換了一套出場服。套上握把再纏握把布，掌心貼著的是一整片聚酯纖維的柔軟；約 29 x 8 公分的長條順著握把走，揮拍、扣殺、場邊撿球，它都跟著。下場休息把球拍擱在長椅上，遠遠看過去也知道那是誰的拍子。</p><h2>適合誰</h2><ul><li>每週固定上羽球館、球拍握把布總被汗水浸軟的人，換一套自己看了開心的</li><li>送給打羽球的七龍珠迷同事，生日或交換禮物都合用</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              2
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：尺寸合我的球拍嗎？\nA：約 29 x 8 cm，是為球拍握把設計的長條尺寸，購買前量一下握把長度更保險。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 1,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1637,
+            "outputTokens": 65,
+            "costUsd": 0.000285,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1896,
+            "outputTokens": 501,
+            "costUsd": 0.00046,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "via": "openrouter",
+            "inputTokens": 1445,
+            "outputTokens": 2256,
+            "costUsd": 0.001315,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1637,
+            "outputTokens": 65,
+            "costUsd": 0.000285,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "VICTOR × 七龍珠 Dragon Ball | 七龍珠 Z 羽毛球拍握把保護套 VICTOR 威克多 | 水仙黃、布偶粉 2 款可選",
+        "description": "<h2>商品介紹</h2><p>球拍從球袋裡抽出來，握把上的五顆星星先露了面。這是 VICTOR 威克多與《七龍珠 Z》合作的握把保護套，水仙黃的底色壓上動感字體，握在手裡像替球拍換了一套出場服。套上握把再纏握把布，掌心貼著的是一整片聚酯纖維的柔軟；約 29 x 8 公分的長條順著握把走，揮拍、扣殺、場邊撿球，它都跟著。下場休息把球拍擱在長椅上，遠遠看過去也知道那是誰的拍子。</p><h2>適合誰</h2><ul><li>每週固定上羽球館、球拍握把布總被汗水浸軟的人，換一套自己看了開心的</li><li>送給打羽球的七龍珠迷同事，生日或交換禮物都合用</li></ul>",
+        "faq": "<h3><strong>兩款要怎麼選？</strong></h3>\n<p>差在顏色，水仙黃亮眼、布偶粉柔和，挑順眼的那款就好。</p>\n\n<h3><strong>材質是什麼？</strong></h3>\n<p>面料與填充物都是 100% 聚酯纖維。</p>",
+        "highlights": [
+          "握把上印著標誌性的五顆星星",
+          "約 29 x 8 cm，順著球拍握把的長度",
+          "面料與填充物皆為 100% 聚酯纖維"
+        ],
+        "why": "市面握把套多半素面，這款把七龍珠 Z 的動感字體直接印上握把。",
+        "seo": {
+          "seoTitle": "七龍珠 Z × VICTOR 球拍握把保護套 羽球周邊禮物 | 潮巢 Nestory",
+          "metaDescription": "VICTOR 威克多與《七龍珠 Z》聯名的球拍握把保護套，限量紀念款，水仙黃與布偶粉兩色。套上球拍握把，球袋一打開就知道是誰的拍子，送給打羽球的七龍珠迷正好。"
+        },
+        "checks": [],
+        "costUsd": 0.001314831,
+        "elapsedMs": 23709
+      }
+    }
+  },
+  {
+    "id": "31701317-f664-4fab-9c05-b35d26075c3c",
+    "slot": "機能用品",
+    "label": "三麗鷗 × emie M3 翻轉相機（規格多，上次測過）",
+    "image": "https://tbgtqwvuohmdxnxisrgr.supabase.co/storage/v1/object/public/product-images/ecb033e3-5230-498a-9800-6198eb3dbc85/31701317-f664-4fab-9c05-b35d26075c3c/main/679b1325-b47f-42fb-a3da-57042c2f3eb0.webp",
+    "candidates": {
+      "A": {
+        "finalTitle": "emie × Hello Kitty | Hello Kitty 翻轉相機｜自拍、6400萬像素 | 2 款可選，一款附廣角鏡頭組",
+        "seoTitle": "Hello Kitty 翻轉相機 | emie 聯名自拍禮物 | 潮巢 Nestory",
+        "metaDescription": "emie 與 Hello Kitty 聯名的 M3 翻轉相機，180° 翻轉螢幕讓自拍變得順手，6400 萬像素隨手拍都清楚，機身還掛著 Hello Kitty 小吊飾。",
+        "descriptionHtml": "<h2>商品介紹</h2><p>螢幕往上一翻，鏡頭就轉向自己，按下快門前還能先確認笑容有沒有歪。emie 與 Hello Kitty 聯名的 M3 翻轉相機，180° 翻轉螢幕讓自拍不用再瞇著眼猜角度，6400 萬像素把日常拍得清清楚楚。機身約 260g，放進小包帶著走不算負擔，身上的 Hello Kitty 小吊飾跟著步伐輕輕晃。附 32G 記憶卡，週末和姐妹出門、逛市集隨手拍，回家再慢慢挑照片。</p><h2>適合誰</h2><ul><li>想隨手記錄生活的人：聚餐、出遊時把相機從包裡撈出來，翻個螢幕就能自拍。</li><li>送給喜歡 Hello Kitty 的女孩：生日或交換禮物，打開盒子先看到那隻小吊飾。</li></ul><h2>購買前提醒</h2><ul><li>電壓：5V，台灣使用前請確認插頭與電壓。</li></ul>",
+        "review": {
+          "failed": false,
+          "deleted": {
+            "sentences": [],
+            "faq": [
+              2
+            ],
+            "terms": []
+          },
+          "deletedTexts": [
+            {
+              "field": "faq",
+              "text": "Q：在臺灣怎麼充電？\nA：額定輸入 5V／1A，用一般 USB 充電器接線就能充。",
+              "reason": "dup"
+            }
+          ],
+          "rejected": 2,
+          "cost": {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1842,
+            "outputTokens": 93,
+            "costUsd": 0.000332,
+            "reported": true
+          }
+        },
+        "stages": [
+          {
+            "stage": "understand",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 2154,
+            "outputTokens": 649,
+            "costUsd": 0.000559,
+            "reported": true
+          },
+          {
+            "stage": "writer",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "via": "openrouter",
+            "inputTokens": 1614,
+            "outputTokens": 2396,
+            "costUsd": 0.001407,
+            "reported": true
+          },
+          {
+            "stage": "review",
+            "model": "gpt-4o-mini",
+            "via": "openrouter",
+            "inputTokens": 1842,
+            "outputTokens": 93,
+            "costUsd": 0.000332,
+            "reported": true
+          }
+        ],
+        "retries": 0,
+        "title": "emie × Hello Kitty | Hello Kitty 翻轉相機｜自拍、6400萬像素 | 2 款可選，一款附廣角鏡頭組",
+        "description": "<h2>商品介紹</h2><p>螢幕往上一翻，鏡頭就轉向自己，按下快門前還能先確認笑容有沒有歪。emie 與 Hello Kitty 聯名的 M3 翻轉相機，180° 翻轉螢幕讓自拍不用再瞇著眼猜角度，6400 萬像素把日常拍得清清楚楚。機身約 260g，放進小包帶著走不算負擔，身上的 Hello Kitty 小吊飾跟著步伐輕輕晃。附 32G 記憶卡，週末和姐妹出門、逛市集隨手拍，回家再慢慢挑照片。</p><h2>適合誰</h2><ul><li>想隨手記錄生活的人：聚餐、出遊時把相機從包裡撈出來，翻個螢幕就能自拍。</li><li>送給喜歡 Hello Kitty 的女孩：生日或交換禮物，打開盒子先看到那隻小吊飾。</li></ul><h2>購買前提醒</h2><ul><li>電壓：5V，台灣使用前請確認插頭與電壓。</li></ul>",
+        "faq": "<h3><strong>兩款差在哪裡？</strong></h3>\n<p>一款附 32G 卡，另一款多了廣角鏡頭和二合一讀卡器，想拍合照選後者。</p>\n\n<h3><strong>盒子裡有什麼？</strong></h3>\n<p>M3 相機、32G 記憶卡和 Hello Kitty 小吊飾；廣角款另附鏡頭與讀卡器。</p>",
+        "highlights": [
+          "180° 翻轉螢幕，自拍不用猜角度",
+          "6400 萬像素，畫面細節留得住",
+          "機身附 Hello Kitty 小吊飾"
+        ],
+        "why": "螢幕能 180° 翻過來自拍，是這臺和一般小相機最不一樣的地方。",
+        "seo": {
+          "seoTitle": "Hello Kitty 翻轉相機 | emie 聯名自拍禮物 | 潮巢 Nestory",
+          "metaDescription": "emie 與 Hello Kitty 聯名的 M3 翻轉相機，180° 翻轉螢幕讓自拍變得順手，6400 萬像素隨手拍都清楚，機身還掛著 Hello Kitty 小吊飾。"
+        },
+        "checks": [],
+        "costUsd": 0.001407054,
+        "elapsedMs": 20864
+      }
+    }
+  }
+]

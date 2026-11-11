@@ -142,7 +142,9 @@ async function main() {
       existingBrand: draft.product_brand, existingSku: draft.sku,
     };
     const understandCandidates = understand.map((model) => {
-      const result = executeCandidate("understand", model, base);
+      let result;
+      try { result = executeCandidate("understand", model, base); }
+      catch (error) { return { model, correct: 0, total: 0, checks: [], failed: true, error: String(error?.message || error).slice(0, 300) }; }
       const score = understandScore(result.brief, item.expected || {});
       return { model, ...score, fallback: result.fallback, cost: result.cost?.costUsd ?? result.usage?.costUsd ?? null };
     });
@@ -153,11 +155,17 @@ async function main() {
     keys.push({ id: draft.id, letters });
     const writerCandidates = {};
     for (const [letter, model] of Object.entries(letters)) {
-      const response = executeCandidate("writer", model, {
+      let response;
+      try { response = executeCandidate("writer", model, {
         ...base, tone: "潮巢導購版", copyLength: "標準", productBrief: shared.writerText,
         brand: shared.brief.identity?.brandEnglish || shared.brief.identity?.brand,
         ip: shared.brief.identity?.ip, facts: shared.brief, reviewText,
-      });
+      }); } catch (error) {
+        // A writer that returns no usable copy counts as a parse failure (gate 1), not a crash.
+        writerCandidates[letter] = { title: "（這個寫手這次沒有產出文案）", description: "", faq: "", highlights: [], why: "",
+          seo: null, checks: [], costUsd: null, elapsedMs: null, failed: true, error: String(error?.message || error).slice(0, 300) };
+        continue;
+      }
       writerCandidates[letter] = {
         title: response.title,
         description: response.output.generatedDescriptionHtml,

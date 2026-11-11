@@ -133,7 +133,8 @@ export function formatBriefDescriptionHtml(input: BriefDescriptionInput): string
   html += `<h2>適合誰</h2>${renderList(people)}`;
   const reminders: string[] = [];
   if ((input.archetypeFlags ?? []).some((flag) => /盲盒|隨機/.test(flag))) reminders.push("盲盒為隨機出貨，無法指定款式。");
-  if (input.requiresVoltage || input.voltage?.trim()) reminders.push(`電壓：${input.voltage?.trim() || ""}，台灣使用前請確認插頭與電壓。`);
+  // Only mains-powered goods need a plug/voltage warning; USB / battery items (e.g. 5V) do not.
+  if (input.requiresVoltage) reminders.push(`電壓：${input.voltage?.trim() || "請見規格"}，台灣使用前請確認插頭與電壓。`);
   reminders.push(...(input.taiwanRisks ?? []).slice(0, 2).map((risk) => risk.trim()).filter(Boolean));
   if (reminders.length) html += `<h2>購買前提醒</h2>${renderList(reminders)}`;
   if (input.saleStatus === "台灣現貨") html += "\n" + saleStatusNoticeHtml(input.saleStatus, CHAOCHAO_SALES_TONE);

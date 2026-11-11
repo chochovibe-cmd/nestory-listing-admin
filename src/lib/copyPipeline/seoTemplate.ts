@@ -44,7 +44,7 @@ export function finalizeBriefSeo(input: { seoTitle: string; metaDescription: str
   };
   let boundedBase = trimBase(base);
   if (!boundedBase) boundedBase = trimBase(stripStoreName(input.title)) || Array.from(stripStoreName(input.title)).slice(0, allowedBaseLength).join("");
-  let seoTitle = `${boundedBase} ${storeSuffix}`.trim();
+  let seoTitle = `${boundedBase}${storeSuffix}`.trim();
   if (Array.from(seoTitle).length > 60) seoTitle = Array.from(seoTitle).slice(-60).join("");
   const meta = clampAtSentence(input.metaDescription, 90);
   return { seoTitle, metaDescription: Array.from(meta).length >= 30 ? meta : fallback.metaDescription };

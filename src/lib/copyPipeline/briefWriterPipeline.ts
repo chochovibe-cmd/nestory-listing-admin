@@ -58,7 +58,11 @@ export function applyBriefReview(output: CopyProviderOutput, raw: unknown, factT
     if ([...value.sentences, ...value.faq, ...value.terms].some((v) => !v || typeof v !== "object" || Array.isArray(v))) throw new Error("bad review");
     const normalize = (s: string) => s.normalize("NFKC").replace(/\s/gu, "").toLowerCase();
     const facts = normalize(factText);
-    const validTerm = (term: unknown, text: string): term is string => typeof term === "string" && !!normalize(term) && text.includes(term) && !facts.includes(normalize(term));
+    // Numbers carry the fact: "約 20 公分" is supported when the facts say "20cm" — units and spacing differ.
+    const numbers = (s: string) => s.normalize("NFKC").match(/\d+(?:\.\d+)?/g) ?? [];
+    const factNumbers = new Set(numbers(factText));
+    const numbersSupported = (term: string) => numbers(term).length > 0 && numbers(term).every((n) => factNumbers.has(n));
+    const validTerm = (term: unknown, text: string): term is string => typeof term === "string" && !!normalize(term) && text.includes(term) && !facts.includes(normalize(term)) && !numbersSupported(term);
     const decision = emptyDecision();
     const deletedTexts: ReviewResult["deletedTexts"] = [];
     let rejected = 0;
@@ -166,5 +170,5 @@ export async function runBriefWriterPipeline(args: { input: CopyProviderInput; b
 export function assembleBriefTitle(output: CopyProviderOutput, brief: ProductBrief): string {
   const head = dedupeTitleHead(brief.identity.brand, brief.identity.ip, brief.identity.brandEnglish, brief.identity.ipEnglish);
   const diff = (output.titleDiff ?? "").replace(/[【】]/g, "").replace(/正版授權/g, "").replace(/\+/g, "＋").trim();
-  return cleanupBriefCopyText(localizeToTaiwanTraditionalText([head, output.titleItem, diff].filter(Boolean).join(" | ")));
+  return cleanupBriefCopyText(localizeToTaiwanTraditionalText([head, output.titleItem, diff].filter(Boolean).join(" | "))).replace(/\s*×\s*/gu, " × ");
 }

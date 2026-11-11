@@ -11,10 +11,21 @@ import { finalizeBriefSeo } from "./seoTemplate";
 import { AI_AUTO_FIX_BUDGET_TWD, cleanupBriefCopyText, type CopyIssue } from "./copyChecks";
 
 // Exact prompt copied from COPY-A2b §4; no model may rewrite customer prose here.
-export const BRIEF_REVIEW_SYSTEM_PROMPT = "你是潮巢的文案審稿員。輸入有「事實表」（含款式清單）和一份文案（每句前面有編號）。你只負責找出要刪的句子，不改寫、不新增。\n\n只有符合下列任一條才刪：\n1. 寫了事實表沒有的「可查證事實」：數字、尺寸、容量、材質、內容物、贈品、角色名、品牌名、功能或效果（如降噪、續航、防水、零延遲、穩定、耐用）。\n2. 提到出貨、到貨、代購、現貨、預購、價格、退換、保固。\n3. 出現「未提供」「無法確認」「以實物為準」「商品資料」「標示」這類說明資料不足的句子。\n4. FAQ：整題只是複述規格，或答案和其他欄位講同一件事 → 刪整題。\n5. 標題或 SEO 裡出現事實表與款式清單都沒有的角色名或商品名 → 只列出那個詞。\n\n絕對不要刪：畫面、情境、氣氛、比喻、情緒、使用感受、送禮想像、可愛的誇飾。這些是行銷，允許。拿不準就不刪。\n\n只輸出 JSON：{\"sentences\":[要刪的句子編號],\"faq\":[要刪的 FAQ 題號],\"terms\":[{\"field\":\"title|seo_title|seo_description\",\"term\":\"要拿掉的詞\"}]}";
+export const BRIEF_REVIEW_SYSTEM_PROMPT = `你是潮巢的文案審稿員。輸入有「事實表」（含款式清單）和一份文案（每句前面有編號）。你只負責找出要刪的句子，不改寫、不新增。
+
+只有符合下列任一條才刪：
+1. 寫了事實表沒有的「可查證事實」：數字、尺寸、容量、材質、內容物、贈品、角色名、品牌名、功能或效果（如降噪、續航、防水、零延遲、穩定、耐用）。
+2. FAQ 的答案和其他欄位講的是同一件事，或只是把規格再念一次。
+3. 標題或 SEO 裡出現事實表與款式清單都沒有的角色名或商品名。
+
+每一筆都要附上證據：第 1、3 條附「term」＝句子裡那個沒根據的詞，必須從句子原樣抄出來；第 2 條附「reason」＝"dup"。
+
+絕對不要刪：畫面、情境、氣氛、比喻、情緒、使用感受、送禮想像、可愛的誇飾。角色或品牌的中英文、別名（例如 Cinnamoroll／大耳狗）不算編造。拿不準就不刪。
+
+只輸出 JSON：{"sentences":[{"id":3,"term":"14 個工作天"}],"faq":[{"id":1,"term":"防水"},{"id":2,"reason":"dup"}],"terms":[{"field":"title|seo_title|seo_description","term":"要拿掉的詞"}]}`;
 export type ReviewDecision = { sentences: number[]; faq: number[]; terms: { field: string; term: string }[] };
 export type ReviewUnit = { id: number; field: "intro" | "audience" | "highlight" | "why" | "seo_description"; text: string };
-export type ReviewResult = { failed: boolean; deleted: ReviewDecision; cost?: AiStageCost };
+export type ReviewResult = { failed: boolean; deleted: ReviewDecision; deletedTexts: { field: string; text: string; term?: string; reason?: string }[]; rejected: number; cost?: AiStageCost };
 const emptyDecision = (): ReviewDecision => ({ sentences: [], faq: [], terms: [] });
 const badSentence = /出貨|到貨|代購|工作天|預購|退換|保固|未提供|無法確認|未確認|以實物為準|商品資料|標示為/;
 const sentences = (text: string): string[] => text.match(/[^。！？]+[。！？]?/gu)?.map((x) => x.trim()).filter(Boolean) ?? [];
@@ -38,30 +49,50 @@ export function numberBriefCopy(output: CopyProviderOutput): ReviewUnit[] {
   ];
   return units.map((unit, index) => ({ ...unit, id: index + 1 }));
 }
-export function applyBriefReview(output: CopyProviderOutput, raw: unknown): { output: CopyProviderOutput; review: ReviewResult } {
+export function applyBriefReview(output: CopyProviderOutput, raw: unknown, factText: string): { output: CopyProviderOutput; review: ReviewResult } {
   try {
     const value = typeof raw === "string" ? JSON.parse(raw.replace(/^```json\s*|```\s*$/g, "")) : raw;
     if (!value || !Array.isArray(value.sentences) || !Array.isArray(value.faq) || !Array.isArray(value.terms)) throw new Error("bad review");
     const units = numberBriefCopy(output);
     const faq = extractFaqPairs(output.generatedFaqHtml);
-    const decision: ReviewDecision = {
-      sentences: value.sentences.filter((id: unknown) => Number.isInteger(id) && units.some((u) => u.id === id)),
-      faq: value.faq.filter((id: unknown) => Number.isInteger(id) && Number(id) > 0 && Number(id) <= faq.length),
-      terms: value.terms.filter((v: { field?: unknown; term?: unknown }) => v && typeof v.term === "string" && v.term.length && ["title", "seo_title", "seo_description"].includes(String(v.field))),
-    };
+    if ([...value.sentences, ...value.faq, ...value.terms].some((v) => !v || typeof v !== "object" || Array.isArray(v))) throw new Error("bad review");
+    const normalize = (s: string) => s.normalize("NFKC").replace(/\s/gu, "").toLowerCase();
+    const facts = normalize(factText);
+    const validTerm = (term: unknown, text: string): term is string => typeof term === "string" && !!normalize(term) && text.includes(term) && !facts.includes(normalize(term));
+    const decision = emptyDecision();
+    const deletedTexts: ReviewResult["deletedTexts"] = [];
+    let rejected = 0;
+    for (const suggestion of value.sentences) {
+      const unit = units.find((u) => u.id === suggestion.id);
+      if (!unit || !validTerm(suggestion.term, unit.text) || decision.sentences.includes(unit.id)) { rejected++; continue; }
+      decision.sentences.push(unit.id); deletedTexts.push({ field: unit.field, text: unit.text, term: suggestion.term });
+    }
+    let usedDup = false;
+    for (const suggestion of value.faq) {
+      const item = Number.isInteger(suggestion.id) && suggestion.id > 0 ? faq[suggestion.id - 1] : undefined;
+      const text = item ? `Q：${item.question}\nA：${item.answer}` : "";
+      if (!item || decision.faq.includes(suggestion.id)) { rejected++; continue; }
+      if (suggestion.reason === "dup" && !usedDup && suggestion.term === undefined) {
+        usedDup = true; decision.faq.push(suggestion.id); deletedTexts.push({ field: "faq", text, reason: "dup" });
+      } else if (suggestion.reason === undefined && validTerm(suggestion.term, text)) {
+        decision.faq.push(suggestion.id); deletedTexts.push({ field: "faq", text, term: suggestion.term });
+      } else rejected++;
+    }
     const kept = units.filter((u) => !decision.sentences.includes(u.id));
     const texts = (field: ReviewUnit["field"]) => kept.filter((u) => u.field === field).map((u) => u.text);
     const next = { ...output, generatedDescriptionHtml: description(texts("intro").join(""), texts("audience")), productHighlights: texts("highlight"), whyWeChoseIt: texts("why").join(""), metaDescription: texts("seo_description").join(""), generatedFaqHtml: normalizeFaqOutput(faq.filter((_, i) => !decision.faq.includes(i + 1)).map((q) => `Q：${q.question}\nA：${q.answer}`).join("\n\n")) };
     const applied: ReviewDecision["terms"] = [];
-    for (const term of decision.terms) {
+    for (const term of value.terms) {
+      if (!term || !["title", "seo_title", "seo_description"].includes(term.field) || typeof term.term !== "string") { rejected++; continue; }
       const keys = term.field === "title" ? ["titleItem", "titleDiff", "enrichedTitle"] as const : term.field === "seo_title" ? ["seoTitle"] as const : ["metaDescription"] as const;
       let found = false;
-      for (const key of keys) if (next[key]?.includes(term.term)) { next[key] = cleanSeparators(next[key]!.split(term.term).join("")); found = true; }
+      for (const key of keys) if (validTerm(term.term, next[key] ?? "")) { const text = next[key]!; next[key] = cleanSeparators(text.split(term.term).join("")); deletedTexts.push({ field: key, text, term: term.term }); found = true; }
       if (found) applied.push(term);
+      else rejected++;
     }
     decision.terms = applied;
-    return { output: next, review: { failed: false, deleted: decision } };
-  } catch { return { output, review: { failed: true, deleted: emptyDecision() } }; }
+    return { output: next, review: { failed: false, deleted: decision, deletedTexts, rejected } };
+  } catch { return { output, review: { failed: true, deleted: emptyDecision(), deletedTexts: [], rejected: 0 } }; }
 }
 
 export async function reviewBriefCopy(input: CopyProviderInput, brief: ProductBrief, output: CopyProviderOutput): Promise<{ output: CopyProviderOutput; review: ReviewResult }> {
@@ -73,9 +104,10 @@ export async function reviewBriefCopy(input: CopyProviderInput, brief: ProductBr
     if (!response.ok) throw new Error("review failed");
     const payload = await response.json(); const usage = readChatUsage(payload);
     cost = stageCost({ stage: "review", model, via: endpoint.via, usage, reportedCostUsd: usage.reportedCostUsd });
-    const result = applyBriefReview(output, payload?.choices?.[0]?.message?.content);
+    const factText = [serializeProductBriefForWriter(brief), input.rawTitle, ...(brief.variantNames ?? []), input.variantSummary ?? ""].join("\n");
+    const result = applyBriefReview(output, payload?.choices?.[0]?.message?.content, factText);
     return { ...result, review: { ...result.review, cost } };
-  } catch { return { output, review: { failed: true, deleted: emptyDecision(), ...(cost ? { cost } : {}) } }; }
+  } catch { return { output, review: { failed: true, deleted: emptyDecision(), deletedTexts: [], rejected: 0, ...(cost ? { cost } : {}) } }; }
 }
 
 export function briefAutoFixCandidates(output: CopyProviderOutput): CopyIssue[] {

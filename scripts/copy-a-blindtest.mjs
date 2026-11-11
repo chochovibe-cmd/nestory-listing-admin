@@ -158,7 +158,7 @@ async function main() {
       }
       writerCandidates[letter] = {
         finalTitle: response.finalTitle, seoTitle: response.seo.seoTitle, metaDescription: response.seo.metaDescription,
-        descriptionHtml: response.descriptionHtml, review: response.review, stages: response.stages, retries: response.retries,
+        descriptionHtml: response.descriptionHtml, review: { ...response.review, deletedTexts: response.review.deletedTexts, rejected: response.review.rejected }, stages: response.stages, retries: response.retries,
         title: response.title,
         description: response.output.generatedDescriptionHtml,
         faq: response.output.generatedFaqHtml,

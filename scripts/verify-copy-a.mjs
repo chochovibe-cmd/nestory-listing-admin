@@ -891,11 +891,11 @@ if (runA2) {
   });
   await check("A2b-7 審稿可刪有效句／FAQ／詞，壞 JSON 原文保留並標記 review_failed", async () => {
     const apply = need(bp, "applyBriefReview");
-    const reviewed = apply(a2Output, { sentences: [2, 999], faq: [1, 999], terms: [{ field: "title", term: "佐助" }, { field: "seo_title", term: "不存在" }] });
+    const reviewed = apply(a2Output, { sentences: [{ id: 2, term: "火影" }], faq: [{ id: 1, reason: "dup" }], terms: [{ field: "title", term: "佐助" }, { field: "seo_title", term: "不存在" }] }, "徽章");
     assert.equal(reviewed.review.failed, false); assert.match(reviewed.output.generatedDescriptionHtml, /佐助戴著斗笠/); assert.doesNotMatch(reviewed.output.generatedDescriptionHtml, /這款徽章讓日常多一點火影氣氛/);
     assert.equal(reviewed.output.generatedFaqHtml.includes("有多大"), false);
     assert.doesNotMatch(reviewed.output.titleDiff, /佐助/);
-    const failedReview = apply(a2Output, "not-json"); assert.equal(failedReview.review.failed, true); assert.equal(failedReview.output, a2Output);
+    const failedReview = apply(a2Output, "not-json", ""); assert.equal(failedReview.review.failed, true); assert.equal(failedReview.output, a2Output);
     const pipeline = need(bp, "runBriefWriterPipeline"); let calls = 0; const regenFields = [];
     const result = await pipeline({
       input: { rawTitle: "火影徽章", saleStatus: "預購中", tone: "潮巢導購版", copyLength: "標準" }, brief: a2Brief,
@@ -905,6 +905,32 @@ if (runA2) {
     assert.equal(result.checks.some((x) => x.code === "review_failed"), true);
     assert.equal(result.retries, 1); assert.equal(calls, 2, "自動補寫只呼叫一次，不能循環");
     assert.deepEqual(regenFields, [undefined, "product_highlights"], "只補寫審稿後不足的亮點欄位");
+  });
+  await check("A2b-7b review evidence validation and duplicate cap", () => {
+    const apply = need(bp, "applyBriefReview");
+    const source = { ...a2Output, generatedDescriptionHtml: "商品介紹\n這款有防水功能。14 個工作天到貨。穩定的陪伴感。\n\n適合誰\n・喜歡可愛風格", generatedFaqHtml: "<h3><strong>商品有防水嗎？</strong></h3><p>有防水功能。</p><h3><strong>商品耐用嗎？</strong></h3><p>耐用。</p>", seoTitle: "雲朵貓 耳機", titleItem: "耳機" };
+    const factText = "商品名稱：耳機。事實：防水。款式：雲朵貓。";
+    const accepted = apply(source, { sentences: [{ id: 2, term: "14 個工作天" }, { id: 3, term: "不存在" }], faq: [{ id: 1, term: "防水" }, { id: 1, reason: "dup" }, { id: 2, reason: "dup" }], terms: [{ field: "seo_title", term: "雲朵貓" }] }, factText);
+    assert.equal(accepted.review.failed, false);
+    assert.equal(accepted.review.deleted.sentences.length, 1, "fact-backed and non-evidence substrings must not be deleted");
+    assert.equal(accepted.review.deletedTexts[0].term, "14 個工作天");
+    assert.equal(accepted.review.deleted.faq.length, 1, "a duplicate FAQ decision is applied once at most");
+    assert.ok(accepted.review.deletedTexts.some((x) => x.reason === "dup"));
+    assert.equal(accepted.review.deleted.terms.length, 0, "fact-backed SEO name must be rejected");
+    assert.equal(accepted.review.rejected, 4);
+    assert.match(accepted.output.generatedDescriptionHtml, /穩定的陪伴感/);
+    assert.match(accepted.output.generatedFaqHtml, /耐用嗎/);
+    assert.match(accepted.output.seoTitle, /雲朵貓/);
+    const factCheck = apply(source, { sentences: [{ id: 1, term: "防水" }], faq: [], terms: [] }, "防 水");
+    assert.equal(factCheck.review.rejected, 1);
+    assert.match(factCheck.output.generatedDescriptionHtml, /防水功能/);
+    const threeFaq = { ...source, generatedFaqHtml: source.generatedFaqHtml + "<h3><strong>適合收藏嗎？</strong></h3><p>適合收藏。</p>" };
+    const dup = apply(threeFaq, { sentences: [], faq: [{ id: 1, reason: "dup" }, { id: 2, reason: "dup" }, { id: 3, reason: "dup" }], terms: [] }, factText);
+    assert.deepEqual(dup.review.deleted.faq, [1]);
+    assert.equal(dup.review.rejected, 2);
+    const legacy = apply(source, { sentences: [2], faq: [1], terms: [{ field: "seo_title", term: "雲朵貓" }] }, factText);
+    assert.equal(legacy.review.failed, true, "legacy evidence-free shape must fail closed");
+    assert.equal(legacy.output, source, "failed legacy review preserves the original output object");
   });
   await check("A2b-8 審稿後亮點不足會產生 product_highlights 補寫候選", () => {
     const candidates = need(bp, "briefAutoFixCandidates")({ ...a2Output, productHighlights: ["・只剩一行"] });
@@ -972,9 +998,10 @@ if (runA2) {
     const spec = read("docs/COPY-A2b-瘦身施工規格-2026-11-11.md");
     const exact = (section) => spec.split(section)[1].split("\x60\x60\x60")[1].trim().replace(/\r\n/g, "\n");
     const prompt = await load("src/lib/providers/chaochaoPrompt.ts");
+    const expectedReviewPrompt = "你是潮巢的文案審稿員。輸入有「事實表」（含款式清單）和一份文案（每句前面有編號）。你只負責找出要刪的句子，不改寫、不新增。\n\n只有符合下列任一條才刪：\n1. 寫了事實表沒有的「可查證事實」：數字、尺寸、容量、材質、內容物、贈品、角色名、品牌名、功能或效果（如降噪、續航、防水、零延遲、穩定、耐用）。\n2. FAQ 的答案和其他欄位講的是同一件事，或只是把規格再念一次。\n3. 標題或 SEO 裡出現事實表與款式清單都沒有的角色名或商品名。\n\n每一筆都要附上證據：第 1、3 條附「term」＝句子裡那個沒根據的詞，必須從句子原樣抄出來；第 2 條附「reason」＝\"dup\"。\n\n絕對不要刪：畫面、情境、氣氛、比喻、情緒、使用感受、送禮想像、可愛的誇飾。角色或品牌的中英文、別名（例如 Cinnamoroll／大耳狗）不算編造。拿不準就不刪。\n\n只輸出 JSON：{\"sentences\":[{\"id\":3,\"term\":\"14 個工作天\"}],\"faq\":[{\"id\":1,\"term\":\"防水\"},{\"id\":2,\"reason\":\"dup\"}],\"terms\":[{\"field\":\"title|seo_title|seo_description\",\"term\":\"要拿掉的詞\"}]}";
+    assert.equal(bp.BRIEF_REVIEW_SYSTEM_PROMPT.replace(/\r\n/g, "\n"), expectedReviewPrompt);
     assert.equal(prompt.buildChaochaoBriefWriterSystemPrompt("標準").replace(/\r\n/g, "\n"), exact("## 1."));
-    assert.equal(bp.BRIEF_REVIEW_SYSTEM_PROMPT.replace(/\r\n/g, "\n"), exact("## 4."));
-  });
+ });
 
 }
 

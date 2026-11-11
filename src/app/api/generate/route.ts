@@ -2,8 +2,8 @@ import { NextRequest } from "next/server";
 import { buildVariantStructure, buildReviewEvidence, scoreEvidence } from "@/lib/copyPipeline/evidence";
 import { resolveArchetype } from "@/lib/copyPipeline/archetype";
 import { resolveCopyLength } from "@/lib/copyPipeline/lengthBudget";
-import { buildTemplateSeo } from "@/lib/copyPipeline/seoTemplate";
-import { checkCopy, pickAutoFixField, AI_AUTO_FIX_BUDGET_TWD, type CopyIssue } from "@/lib/copyPipeline/copyChecks";
+import { finalizeBriefSeo } from "@/lib/copyPipeline/seoTemplate";
+import { runBriefWriterPipeline, cleanBriefCopy, assembleBriefTitle, reviewBriefCopy, splitBriefDescription } from "@/lib/copyPipeline/briefWriterPipeline";
 import { readSourceReviews } from "@/lib/import/sourceReviews";
 import { buildCostRecord, costOverCapWarning, sanitizeRelayedStageCost, stageCost, type AiStageCost } from "@/lib/ai/aiCost";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
@@ -13,7 +13,7 @@ import {
   MISSING_COST_BLOCK_MESSAGE,
 } from "@/lib/import/captureTypes";
 import { generateListingContent } from "@/lib/contentGenerator/generateListingContent";
-import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
+import { normalizeDescriptionToPlainText, formatBriefDescriptionHtml } from "@/lib/contentGenerator/htmlFormat";
 import {
   finalizeMetaDescriptionForTone,
   finalizeSeoTitleForTone,
@@ -361,6 +361,8 @@ async function handleFieldRegen(params: {
   const regeneratedBrief = factSheet ? serializeProductBriefForWriter(factSheet) : undefined;
 
   let raw: CopyProviderOutput;
+  let regenReviewCost: AiStageCost | undefined;
+  let regenReviewFailed = false;
   try {
     raw = await COPY_PROVIDERS[providerKey].generate({
       rawTitle: draft.taobao_title ?? draft.original_title ?? "",
@@ -386,6 +388,15 @@ async function handleFieldRegen(params: {
       regenerateField: regenField,
       currentValues,
     });
+    if (factSheet) {
+      raw = cleanBriefCopy(raw);
+      const review = await reviewBriefCopy({ rawTitle: draft.taobao_title ?? draft.original_title ?? "", saleStatus: draft.sale_status, tone, copyLength }, factSheet, raw);
+      raw = review.output; regenReviewCost = review.review.cost; regenReviewFailed = review.review.failed;
+      if (regenField === "generated_description_html") {
+        const body = splitBriefDescription(raw.generatedDescriptionHtml);
+        raw.generatedDescriptionHtml = formatBriefDescriptionHtml({ intro: body.intro, suitableFor: body.audience, saleStatus: draft.sale_status, archetypeFlags: factSheet.archetypeFlags, voltage: factSheet.voltage, requiresVoltage: factSheet.requiresVoltage, taiwanRisks: factSheet.taiwanRisks });
+      }
+    }
   } catch (providerError) {
     await serviceSupabase
       .from("product_drafts")
@@ -428,7 +439,7 @@ async function handleFieldRegen(params: {
         detectedBrand: raw.titleBrand || draft.product_brand,
         maxLen: ENRICHED_TITLE_MAX_LENGTH,
       });
-      historyContent = finalizeCustomerText(finalTitle);
+      historyContent = factSheet ? assembleBriefTitle(raw, factSheet) : finalizeCustomerText(finalTitle);
       value = historyContent;
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
     } else {
@@ -443,6 +454,10 @@ async function handleFieldRegen(params: {
           ? normalizeDescriptionToPlainText(value)
           : normalizeDescriptionToPlainText(appendScenarioBulletToDescription(value, scenarioTerms));
       }
+      if (factSheet && (regenField === "seo_title" || regenField === "meta_description")) {
+        const seo = finalizeBriefSeo({ seoTitle: raw.seoTitle, metaDescription: raw.metaDescription, title: draft.title_zh ?? draft.taobao_title ?? "", descriptionText: draft.description_html ?? "" });
+        value = regenField === "seo_title" ? seo.seoTitle : seo.metaDescription;
+      }
       value = finalizeCustomerText(value);
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
       historyContent = value;
@@ -451,6 +466,7 @@ async function handleFieldRegen(params: {
 
   // COPY C1.1 safety: this single-field path has no spec_text mapping/write.
   const costStages: AiStageCost[] = [];
+  if (regenReviewCost) costStages.push(regenReviewCost);
   if (relayedVisionCost) costStages.push(relayedVisionCost);
   if (raw.usage) {
     costStages.push(stageCost({
@@ -463,14 +479,14 @@ async function handleFieldRegen(params: {
   }
   const costRecord = buildCostRecord(costStages);
   if (raw.usage) {
-    update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd + (relayedVisionCost?.costUsd ?? 0);
+    update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd + (relayedVisionCost?.costUsd ?? 0) + (regenReviewCost?.costUsd ?? 0);
     update.generation_input_tokens = Number(draft.generation_input_tokens ?? 0) + raw.usage.inputTokens;
     update.generation_output_tokens = Number(draft.generation_output_tokens ?? 0) + raw.usage.outputTokens;
   } else if (relayedVisionCost) {
     update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + relayedVisionCost.costUsd;
   }
   const overCap = costOverCapWarning(costRecord);
-  if (raw.outputTruncated || overCap) {
+  if (raw.outputTruncated || overCap || regenReviewFailed) {
     const warnings = Array.isArray(draft.warnings)
       ? draft.warnings.filter((item): item is string => typeof item === "string")
       : [];
@@ -478,6 +494,7 @@ async function handleFieldRegen(params: {
       ...warnings,
       ...(raw.outputTruncated ? [COPY_OUTPUT_TRUNCATED_WARNING] : []),
       ...(overCap ? [overCap] : []),
+      ...(regenReviewFailed ? ["review_failed"] : []),
     ]);
   }
 
@@ -509,6 +526,7 @@ async function handleFieldRegen(params: {
   return Response.json({
     ok: true,
     regeneratedField: regenField,
+    ...(factSheet ? { checks: regenReviewFailed ? [{ code: "review_failed", field: "review", message: "review_failed" }] : [] } : {}),
     cost: costRecord,
     result: {
       field: regenField,
@@ -972,6 +990,7 @@ export async function POST(request: NextRequest) {
   let costRecord = buildCostRecord([]);
   let productBriefApplied = false;
   let activeFactSheet = null as ProductBrief | null;
+  let briefPipelineResult: Awaited<ReturnType<typeof runBriefWriterPipeline>> | null = null;
   let evidenceLevel = "normal" as "thin" | "normal" | "rich";
   let evidenceFactsCount = 0 as number;
   let detected: DetectedClassification = {
@@ -1032,7 +1051,7 @@ export async function POST(request: NextRequest) {
         extraWarnings.push(productBriefResult.warning);
       }
 
-      const writerOutput = await COPY_PROVIDERS[providerKey].generate({
+      const writerInput = {
         rawTitle: rawTitleForSearch,
         saleStatus: draft.sale_status,
         source,
@@ -1054,11 +1073,14 @@ export async function POST(request: NextRequest) {
         secondhandNotes: draft.secondhand_notes,
         detectedIpName: draft.ip_name ?? candidateIpForPack,
         ipToneMap,
-      });
+      } satisfies import("@/lib/providers/copy").CopyProviderInput;
+      if (activeFactSheet) briefPipelineResult = await runBriefWriterPipeline({ input: writerInput, brief: activeFactSheet, provider: COPY_PROVIDERS[providerKey], initialStages: [relayedVisionCost, productBriefResult?.cost].filter((x): x is AiStageCost => Boolean(x)) });
+      const writerOutput = briefPipelineResult?.output ?? await COPY_PROVIDERS[providerKey].generate(writerInput);
       const costStages: AiStageCost[] = [];
       if (relayedVisionCost) costStages.push(relayedVisionCost);
       if (productBriefResult?.cost) costStages.push(productBriefResult.cost);
-      if (writerOutput.usage) {
+      if (briefPipelineResult) costStages.push(...briefPipelineResult.stages.filter((x) => x.stage !== "vision" && x.stage !== "understand"));
+      else if (writerOutput.usage) {
         costStages.push(stageCost({
           stage: "writer",
           model: writerOutput.model,
@@ -1075,7 +1097,7 @@ export async function POST(request: NextRequest) {
           ? applyProductBriefToCopyOutput(writerOutput, productBriefResult)
           : writerOutput;
       productBriefApplied = Boolean(productBriefResult && !productBriefResult.fallback);
-      if (activeFactSheet) {
+      if (activeFactSheet && !briefPipelineResult) {
         const ip = activeFactSheet.identity.ip;
         const ipEnglish = activeFactSheet.identity.ipEnglish;
         raw.titleIp = ipEnglish && !ip.toLocaleLowerCase().includes(ipEnglish.toLocaleLowerCase()) ? [ip, ipEnglish].filter(Boolean).join(" ") : ip;
@@ -1180,6 +1202,7 @@ export async function POST(request: NextRequest) {
       maxLen: ENRICHED_TITLE_MAX_LENGTH,
     }),
   );
+  if (briefPipelineResult) enrichedTitleFull = briefPipelineResult.finalTitle;
   const officialTitleZh = enrichedTitleFull;
 
   if (providerOutput.outputTruncated) extraWarnings.push(COPY_OUTPUT_TRUNCATED_WARNING);
@@ -1215,90 +1238,16 @@ export async function POST(request: NextRequest) {
   let cleanedWhyWeChoseIt = finalizeCustomerText(providerOutput.whyWeChoseIt);
   let cleanedProductHighlights = finalizeCustomerTextList(providerOutput.productHighlights);
 
-  // COPY-A2 only: build SEO deterministically from localized customer text, then check all five fields.
-  if (activeFactSheet) {
-    const seo = buildTemplateSeo({ title: localizedOutput.display_title ?? "",
-      descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? "") });
-    localizedOutput.seo_title = seo.seoTitle;
-    localizedOutput.meta_description = seo.metaDescription;
-    if (evidenceLevel === "thin") extraWarnings.push(`📉 資料偏少：這件只找到 ${evidenceFactsCount} 條可用事實，文案已自動寫短。想寫完整，先在備註補尺寸／材質／玩法，或在圖片區勾「文案參考」再重新生成。`);
-
-    const evidenceText = [rawTitleForSearch, variantSummary, draft.note, draft.image_description,
-      trustedSpecTextForRun, serializeProductBriefForWriter(activeFactSheet), buildReviewEvidence(readSourceReviews((draftRow as { raw_capture?: unknown }).raw_capture))]
-      .filter(Boolean).join("\n");
-    const collectIssues = (): CopyIssue[] => checkCopy({
-      title: localizedOutput.display_title ?? "",
-      descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? ""),
-      highlights: cleanedProductHighlights,
-      whyWeChoseIt: cleanedWhyWeChoseIt,
-      faqHtml: localizedOutput.generated_faq_html ?? "",
-      evidenceText,
-      facts: { requiresVoltage: activeFactSheet!.requiresVoltage, voltage: activeFactSheet!.voltage, taiwanRisks: activeFactSheet!.taiwanRisks },
-    });
-    let issues = collectIssues();
-    const pick = pickAutoFixField(issues);
-    if (pick && buildCostRecord(costRecord.stages).totalTwd <= AI_AUTO_FIX_BUDGET_TWD) {
-      try {
-        const fix = await COPY_PROVIDERS[providerKey].generate({
-          rawTitle: rawTitleForSearch, saleStatus: draft.sale_status, source,
-          variantSummary, tone: "潮巢導購版", copyLength: resolveCopyLength(copyLength, evidenceLevel),
-          productBrief: serializeProductBriefForWriter(activeFactSheet),
-          regenerateField: pick.field, regenIssueMessages: pick.issues.map((issue) => issue.message),
-          currentValues: {
-            enrichedTitle: localizedOutput.display_title ?? "",
-            generatedDescriptionHtml: localizedOutput.generated_description_html ?? "",
-            generatedFaqHtml: localizedOutput.generated_faq_html ?? "",
-            whyWeChoseIt: cleanedWhyWeChoseIt, productHighlights: cleanedProductHighlights,
-          },
-          detectedIpName: activeFactSheet.identity.ip,
-        });
-        const fixed = getCopyFieldValue(fix, pick.field);
-        if (!fixed.trim()) throw new Error("Auto-fix returned an empty field.");
-        const fixFieldLabels: Record<string, string> = { enriched_title: "標題", generated_description_html: "正文",
-          generated_faq_html: "FAQ", why_we_chose_it: "為什麼選它", product_highlights: "亮點" };
-        if (pick.field === "enriched_title") {
-          const fixedTitle = finalizeProductTitle({
-            rawTitle: fixed,
-            titleIp: providerOutput.titleIp,
-            titleBrand: providerOutput.titleBrand,
-            titleItem: fix.titleItem || providerOutput.titleItem,
-            titleDiff: fix.titleDiff || providerOutput.titleDiff,
-            detectedIpDisplay: activeFactSheet.identity.ip,
-            detectedBrand: activeFactSheet.identity.brandEnglish || activeFactSheet.identity.brand,
-            maxLen: ENRICHED_TITLE_MAX_LENGTH,
-          });
-          enrichedTitleFull = finalizeCustomerText(fixedTitle);
-          localizedOutput.display_title = enrichedTitleFull;
-        } else if (pick.field === "generated_description_html") {
-          localizedOutput.generated_description_html = finalizeCustomerText(fix.generatedDescriptionHtml);
-        } else if (pick.field === "generated_faq_html") {
-          localizedOutput.generated_faq_html = finalizeCustomerText(fix.generatedFaqHtml);
-        } else if (pick.field === "why_we_chose_it") {
-          cleanedWhyWeChoseIt = finalizeCustomerText(fix.whyWeChoseIt);
-        } else if (pick.field === "product_highlights") {
-          cleanedProductHighlights = finalizeCustomerTextList(fix.productHighlights);
-        }
-        if (fix.usage) {
-          costRecord = buildCostRecord([...costRecord.stages, stageCost({ stage: "fix", model: fix.model, via: fix.via ?? "none",
-            usage: fix.usage, reportedCostUsd: fix.usage.reportedCostUsd ?? null })]);
-          if (providerOutput.usage) {
-            providerOutput.usage.inputTokens += fix.usage.inputTokens;
-            providerOutput.usage.outputTokens += fix.usage.outputTokens;
-          }
-        }
-        const correctedSeo = buildTemplateSeo({ title: localizedOutput.display_title ?? "",
-          descriptionText: normalizeDescriptionToPlainText(localizedOutput.generated_description_html ?? "") });
-        localizedOutput.seo_title = correctedSeo.seoTitle;
-        localizedOutput.meta_description = correctedSeo.metaDescription;
-        issues = collectIssues();
-        extraWarnings.push(`🔁 已自動重寫「${fixFieldLabels[pick.field]}」一次（原因：${pick.issues[0]!.message.replace(/^【文案檢查】/, "")}）`);
-        const fixOverCap = costOverCapWarning(costRecord);
-        if (fixOverCap) extraWarnings.push(fixOverCap);
-      } catch {
-        // A failed optional fix must preserve the first successful whole-product generation.
-      }
-    }
-    extraWarnings.push(...issues.map((issue) => issue.message));
+  // COPY-A2b: successful Brief generation is finalized once by the shared pipeline.
+  if (briefPipelineResult) {
+    localizedOutput.display_title = briefPipelineResult.finalTitle;
+    localizedOutput.generated_description_html = briefPipelineResult.descriptionHtml;
+    localizedOutput.generated_faq_html = briefPipelineResult.output.generatedFaqHtml;
+    localizedOutput.seo_title = briefPipelineResult.seo.seoTitle;
+    localizedOutput.meta_description = briefPipelineResult.seo.metaDescription;
+    cleanedWhyWeChoseIt = briefPipelineResult.output.whyWeChoseIt;
+    cleanedProductHighlights = briefPipelineResult.output.productHighlights;
+    extraWarnings.push(...briefPipelineResult.checks.map((issue) => issue.message));
   }
 
   const forbiddenWarning = buildForbiddenTermWarning([
@@ -1587,6 +1536,7 @@ export async function POST(request: NextRequest) {
       output: {
         ...(runMode !== "test" ? { cost: costRecord } : {}),
         ...(activeFactSheet ? { factSheet: activeFactSheet } : {}),
+        ...(briefPipelineResult ? { review: briefPipelineResult.review, retries: briefPipelineResult.retries, checks: briefPipelineResult.checks } : {}),
         draftState: localizedOutput.draft_state,
         provider: providerOutput.provider,
         model: providerOutput.model,

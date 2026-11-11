@@ -116,6 +116,34 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
     .join("");
 }
 
+export type BriefDescriptionInput = {
+  intro: string;
+  suitableFor: string[];
+  saleStatus?: string | null;
+  archetypeFlags?: string[];
+  requiresVoltage?: boolean;
+  voltage?: string;
+  taiwanRisks?: string[];
+};
+/** Dedicated COPY-A2b Brief renderer. Existing formatter behavior stays unchanged. */
+export function formatBriefDescriptionHtml(input: BriefDescriptionInput): string {
+  const intro = normalizeDescriptionToPlainText(input.intro).trim();
+  const people = input.suitableFor.map((item) => item.trim()).filter(Boolean);
+  let html = `<h2>商品介紹</h2>${intro ? `<p>${escapeHtml(intro).replace(/\n/g, "<br>")}</p>` : ""}`;
+  html += `<h2>適合誰</h2>${renderList(people)}`;
+  const reminders: string[] = [];
+  if ((input.archetypeFlags ?? []).some((flag) => /盲盒|隨機/.test(flag))) reminders.push("盲盒為隨機出貨，無法指定款式。");
+  if (input.requiresVoltage || input.voltage?.trim()) reminders.push(`電壓：${input.voltage?.trim() || ""}，台灣使用前請確認插頭與電壓。`);
+  reminders.push(...(input.taiwanRisks ?? []).slice(0, 2).map((risk) => risk.trim()).filter(Boolean));
+  if (reminders.length) html += `<h2>購買前提醒</h2>${renderList(reminders)}`;
+  if (input.saleStatus === "台灣現貨") html += "\n" + saleStatusNoticeHtml(input.saleStatus, CHAOCHAO_SALES_TONE);
+  return html;
+}
+
+export function isBriefDescriptionHtml(value: string | null | undefined): boolean {
+  return Boolean(value && !/<h2>(?:收藏亮點|商品資訊)<\/h2>/.test(value) && /<h2>商品介紹<\/h2>[\s\S]*?<h2>適合誰<\/h2>/.test(value));
+}
+
 type ChaochaoSection = "intro" | "highlights" | "audience" | "info" | "care";
 
 const CHAOCHAO_KNOWN_SECTION_HEADING =
@@ -145,6 +173,7 @@ function looksLikeChaochaoSalesBody(line: string | undefined): boolean {
 
 function looksLikeChaochaoSalesSource(text: string): boolean {
   const normalized = normalizeDescriptionToPlainText(text).replace(/◈/g, "");
+  if (looksLikeBriefPlainSource(normalized)) return true;
   return (
     /^商品介紹\s*$/mu.test(normalized) &&
     /^收藏亮點\s*$/mu.test(normalized) &&
@@ -154,6 +183,37 @@ function looksLikeChaochaoSalesSource(text: string): boolean {
       /^商品資訊\s*$/mu.test(normalized)
     )
   );
+}
+
+function looksLikeBriefPlainSource(text: string): boolean {
+  return /^商品介紹\s*$/mu.test(text) && /^適合誰\s*$/mu.test(text) &&
+    !/^(?:收藏亮點|商品資訊)\s*$/mu.test(text);
+}
+
+function renderBriefPlainSource(plain: string, saleStatus?: string | null): string {
+  const sections: Record<"intro" | "audience" | "reminder", string[]> = { intro: [], audience: [], reminder: [] };
+  let section: "intro" | "audience" | "reminder" = "intro";
+  for (const raw of plain.split(/\r?\n/u)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line === "商品介紹") { section = "intro"; continue; }
+    if (line === "適合誰") { section = "audience"; continue; }
+    if (line === "購買前提醒" || line === "購買提醒") { section = "reminder"; continue; }
+    if (/^此為台灣現貨商品/.test(line)) { section = "reminder"; }
+    sections[section].push(line.replace(BULLET_PREFIX, "").trim());
+  }
+  let html = `<h2>商品介紹</h2>${renderParagraphs(sections.intro.map((line) => line.replace(/\s+/g, " ")))}`;
+  html += `<h2>適合誰</h2>${renderList(sections.audience)}`;
+  const hasTaiwanStockNotice = sections.reminder.some((line) => /台灣現貨.*(?:出貨|到貨)|此為台灣現貨商品/.test(line));
+  const notice = /台灣現貨/.test(saleStatus ?? "") && !hasTaiwanStockNotice
+    ? saleStatusNoticeHtml(saleStatus, CHAOCHAO_SALES_TONE)
+    : "";
+  if (sections.reminder.length || notice) {
+    html += "<h2>購買前提醒</h2>";
+    html += sections.reminder.length ? renderList(sections.reminder) : "";
+    html += notice;
+  }
+  return html;
 }
 
 function renderParagraphs(values: string[]): string {
@@ -177,6 +237,8 @@ export function formatChaochaoSalesDescriptionHtml(
   const plain = normalizeDescriptionToPlainText(text)
     .replace(/◈/g, "")
     .trim();
+
+  if (looksLikeBriefPlainSource(plain)) return renderBriefPlainSource(plain, saleStatus);
 
   const introParagraphs: string[] = [];
   const highlightItems: string[] = [];
@@ -352,6 +414,7 @@ export function descriptionPreviewHtml(
   saleStatus?: string | null,
 ): string {
   if (!text) return "<p>尚無內容</p>";
+  if (isBriefDescriptionHtml(text)) return text;
   const isChaochao = tone === CHAOCHAO_SALES_TONE || looksLikeChaochaoSalesSource(text);
   const html = isChaochao
     ? formatChaochaoSalesDescriptionHtml(

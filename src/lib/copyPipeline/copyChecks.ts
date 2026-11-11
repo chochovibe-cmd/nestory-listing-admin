@@ -6,12 +6,39 @@ export type CopyCheckInput = {
   evidenceText: string;
   facts: { requiresVoltage: boolean; voltage: string; taiwanRisks: string[] };
 };
-export const SIMPLIFIED_ONLY_CHARS = "这们说时会对发为产品质经国过长东买卖电网体软点规务关与亚乐样风车书动开实应该还边见没无问爱觉话选内习处产";
+export const SIMPLIFIED_ONLY_CHARS = "这们说时会对发为产质经国过长东买卖电网体软点规务关与亚乐样风车书动开实应该还边见没无问爱觉话选内习处";
 export const MAINLAND_TERMS: Readonly<Record<string, string>> = {
   視頻: "影片", 信息: "資訊", 軟件: "軟體", 屏幕: "螢幕", 充電寶: "行動電源",
   鼠標: "滑鼠", 內存: "記憶體", 默認: "預設", 質量: "品質", 網絡: "網路",
   數據線: "傳輸線", U盤: "隨身碟", 激光: "雷射", 寶貝: "商品", 爆款: "熱門款",
+  塑料: "塑膠", 翻轉屏: "翻轉螢幕", 觸屏: "觸控螢幕", 概率: "機率", 拉鏈: "拉鍊", 開黑: "連線開局",
 };
+const MAINLAND_TERMS_ORDERED = Object.entries(MAINLAND_TERMS).sort(([a], [b]) => b.length - a.length);
+const SCRIPT_CJK = "\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\u31f0-\u31ff\uac00-\ud7af";
+/** Replace CJK-adjacent half-width punctuation without touching URLs, English, or numeric grouping. */
+export function normalizeCustomerPunctuation(value: string): string {
+  const urls: string[] = [];
+  const protectedText = value.replace(/https?:\/\/[^\s<>]+/gi, (url) => {
+    const token = `\uE000URL${urls.length}\uE001`;
+    urls.push(url);
+    return token;
+  });
+  const punctuation = new RegExp(`(?<=[${SCRIPT_CJK}])([,:;!?()]+)|([,:;!?()]+)(?=[${SCRIPT_CJK}])`, "gu");
+  const punctuationMap: Record<string, string> = { ",": "，", ":": "：", ";": "；", "!": "！", "?": "？", "(": "（", ")": "）" };
+  const normalized = protectedText.replace(punctuation, (marks) => [...marks].map((mark) => punctuationMap[mark] ?? mark).join(""));
+  return normalized.replace(/\uE000URL(\d+)\uE001/g, (_token, index: string) => urls[Number(index)] ?? "");
+}
+export function cleanupBriefCopyText(value: string): string {
+  let result = normalizeCustomerPunctuation(value);
+  for (const [term, replacement] of MAINLAND_TERMS_ORDERED) result = result.replaceAll(term, replacement);
+  return result;
+}
+const REMOVE_SENTENCE = /出貨|到貨|代購|工作天|預購|退換|保固|未提供|無法確認|未確認|以實物為準|商品資料|標示為/;
+/** Drop disallowed operational/unknown statements, preserving unrelated sentences in the same paragraph. */
+export function removeDisallowedBriefSentences(value: string, faq = false): string {
+  if (faq) return REMOVE_SENTENCE.test(value) ? "" : value;
+  return value.split(/(?<=[。！？.!?])\s*/u).filter((part) => part && !REMOVE_SENTENCE.test(part)).join("").trim();
+}
 export const FORBIDDEN_COPY_TERMS = [
   "完美", "神器", "不容錯過", "高品質", "獨特魅力", "SPA 般", "必入手", "絕佳收藏",
   "品質有保證", "經久耐用", "夢幻逸品", "完美良伴", "最佳選擇", "療癒指數爆表",

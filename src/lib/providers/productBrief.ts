@@ -27,6 +27,7 @@ export type ProductBrief = {
     item: string;
     diff: string;
   };
+  variantNames: string[];
   archetype: Archetype | "";
   archetypeFlags: string[];
   variantGuide: string[];
@@ -115,7 +116,7 @@ export function normalizeBrief(raw: unknown, input: ProductBriefInput): ProductB
   const titleBrand = read(titleRaw, "brand", brand);
   const titleItem = read(titleRaw, "item", clamp(input.rawTitle, 120));
   const titleDiff = read(titleRaw, "diff", clamp(input.variantSummary, 100));
-  const fallbackTitleHead = [titleBrand, titleIp].filter(Boolean).join(" × ");
+  const fallbackTitleHead = [dedupeTitleHead(titleBrand, titleIp, read(identityRaw, "brandEnglish"), read(identityRaw, "ipEnglish"))].filter(Boolean).join(" × ");
   const fallbackTitle = [fallbackTitleHead, titleItem, titleDiff].filter(Boolean).join(" | ");
 
   return {
@@ -137,6 +138,7 @@ export function normalizeBrief(raw: unknown, input: ProductBriefInput): ProductB
       item: titleItem,
       diff: titleDiff,
     },
+    variantNames: (input.variantRows?.length ? input.variantRows : strings(obj.variantNames, 40, 120).map((name) => ({ option1_value: name, option2_value: null, option3_value: null }))).flatMap((row) => [row.option1_value, row.option2_value, row.option3_value]).filter((v): v is string => typeof v === "string").map(cleanVariantName).filter(Boolean).filter((v, i, all) => all.indexOf(v) === i).slice(0, 40),
     confirmedFacts: strings(obj.confirmedFacts, 10, 220),
     differentiators: strings(obj.differentiators, 6, 180),
     useCases: strings(obj.useCases, 5, 160),
@@ -145,6 +147,19 @@ export function normalizeBrief(raw: unknown, input: ProductBriefInput): ProductB
     unknowns: strings(obj.unknowns, 8, 180),
     rejectedEvidence: strings(obj.rejectedEvidence, 6, 180),
   };
+}
+
+function normalizeTitlePart(value: string): string {
+  return value.replace(/\s+/g, "").toLocaleLowerCase();
+}
+
+export function dedupeTitleHead(brand: string, ip: string, brandEnglish: string, ipEnglish: string): string {
+  const b = normalizeTitlePart(brand), i = normalizeTitlePart(ip), be = normalizeTitlePart(brandEnglish), ie = normalizeTitlePart(ipEnglish);
+  return (b && i && b === i) || (be && ie && be === ie) || (be && i && be === i) || (b && ie && b === ie) ? ip : [brandEnglish || brand, ipEnglish && !ip.toLocaleLowerCase().includes(ipEnglish.toLocaleLowerCase()) ? [ip, ipEnglish].filter(Boolean).join(" ") : ip].filter(Boolean).join(" × ");
+}
+
+function cleanVariantName(value: string): string {
+  return value.replace(/[【】\[\]]/g, "").replace(/\+/g, "＋").replace(/正版授權|官方正版|淘寶\s*/g, "").trim();
 }
 
 function fallbackBrief(input: ProductBriefInput): ProductBrief {
@@ -188,15 +203,16 @@ export function serializeProductBriefForWriter(brief: ProductBrief): string {
     values.length ? `${label}\n${values.map((value) => `- ${value}`).join("\n")}` : "";
 
   return [
-    `【Product Brief｜${brief.version}｜內部商品理解，不是顧客文案】`,
-    `商品身份\n- IP：${brief.identity.ip || "未確認"}\n- 角色：${brief.identity.character || "未確認"}\n- 品項：${brief.identity.productType || "未確認"}\n- 品牌／聯名方：${brief.identity.brand || "未確認"}`,
-    `建議商品標題\n- ${brief.title.enrichedTitle || brief.title.item || "未整理"}`,
+    `【事實表｜內部資料，不是顧客文案】`,
+    [`商品身份`, brief.identity.ip && `- IP：${brief.identity.ip}`, brief.identity.character && `- 角色：${brief.identity.character}`, brief.identity.productType && `- 品項：${brief.identity.productType}`, brief.identity.brand && `- 品牌／聯名方：${brief.identity.brand}`].filter(Boolean).join("\n"),
+    brief.title.enrichedTitle || brief.title.item ? `建議商品標題\n- ${brief.title.enrichedTitle || brief.title.item}` : "",
     brief.identity.brandEnglish ? `品牌官方英文\n- ${brief.identity.brandEnglish}` : "",
     brief.identity.ipEnglish ? `IP 官方英文\n- ${brief.identity.ipEnglish}` : "",
     brief.archetype ? `商品原型\n- ${brief.archetype}${brief.archetypeFlags.length ? "（" + brief.archetypeFlags.join("、") + "）" : ""}` : "",
+    section("款式清單", brief.variantNames ?? []),
     section("款式怎麼選", brief.variantGuide),
-    section("買前會猶豫（正文或 FAQ 至少解掉 1 個）", brief.buyerHesitations),
-    section("台灣使用注意", [...brief.taiwanRisks, ...(brief.voltage ? ["電壓：" + brief.voltage] : [])]),
+    section("可當 FAQ 題材（有才寫）", brief.buyerHesitations),
+    section("可當 FAQ 題材：台灣使用", [...brief.taiwanRisks, ...(brief.voltage ? ["電壓：" + brief.voltage] : [])]),
     section("買家評價重點（只當理解，不可寫成買家說）", brief.reviewInsights),
     brief.taiwanNaming ? `台灣常見叫法\n- ${brief.taiwanNaming}` : "",
     section("已確認事實", brief.confirmedFacts),
@@ -204,7 +220,6 @@ export function serializeProductBriefForWriter(brief: ProductBrief): string {
     section("生活／使用情境", brief.useCases),
     section("粉絲角度", brief.fanHooks),
     section("可安全寫入的規格", brief.specLines),
-    section("仍未知，Writer 不可補猜", brief.unknowns),
   ].filter(Boolean).join("\n\n");
 }
 

@@ -26,7 +26,7 @@ function parseJsonFromStdout(child) {
 function executeCandidate(kind, model, payload) {
   return parseJsonFromStdout(spawnSync(process.execPath, [scriptPath, "--child=" + kind], {
     cwd: root,
-    env: { ...process.env, OPENAI_COPY_MODEL: model, OPENAI_BRIEF_MODEL: model },
+    env: { ...process.env, OPENAI_COPY_MODEL: model, OPENAI_BRIEF_MODEL: model, OPENAI_REVIEW_MODEL: flags.review || "gpt-4o-mini" },
     input: JSON.stringify(payload), encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 180000,
   }));
 }
@@ -42,23 +42,13 @@ async function childMode() {
     process.stdout.write(JSON.stringify(output));
     return;
   }
-  const [{ OpenAICopyProvider }, { buildTemplateSeo }, { checkCopy }] = await Promise.all([
+  const [{ OpenAICopyProvider }, { runBriefWriterPipeline }] = await Promise.all([
     import(pathToFileURL(path.join(root, "src/lib/providers/openai-copy-provider.ts")).href),
-    import(pathToFileURL(path.join(root, "src/lib/copyPipeline/seoTemplate.ts")).href),
-    import(pathToFileURL(path.join(root, "src/lib/copyPipeline/copyChecks.ts")).href),
+    import(pathToFileURL(path.join(root, "src/lib/copyPipeline/briefWriterPipeline.ts")).href),
   ]);
   const start = Date.now();
-  const output = await new OpenAICopyProvider().generate(request);
-  const titleHead = request.brand && request.ip ? `${request.brand} × ${request.ip}` : (request.brand || request.ip || "");
-  const title = [titleHead, output.titleItem, output.titleDiff].filter(Boolean).join(" | ");
-  const seo = buildTemplateSeo({ title, descriptionText: output.generatedDescriptionHtml });
-  const checks = checkCopy({
-    title, descriptionText: output.generatedDescriptionHtml, highlights: output.productHighlights,
-    whyWeChoseIt: output.whyWeChoseIt, faqHtml: output.generatedFaqHtml,
-    evidenceText: request.productBrief + " " + request.variantSummary,
-    facts: request.facts || { requiresVoltage: false, voltage: "", taiwanRisks: [] },
-  });
-  process.stdout.write(JSON.stringify({ title, output, seo, checks, elapsedMs: Date.now() - start }));
+  const result = await runBriefWriterPipeline({ input: request, brief: request.facts, provider: new OpenAICopyProvider(), initialStages: request.understandCost ? [request.understandCost] : [] });
+  process.stdout.write(JSON.stringify({ ...result, title: result.finalTitle, elapsedMs: Date.now() - start }));
 }
 function apiHeaders() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -116,7 +106,7 @@ function understandScore(brief, expected) {
 async function main() {
   const writers = (flags.writers || "").split(",").map((m) => m.trim()).filter(Boolean);
   const understand = (flags.understand || "").split(",").map((m) => m.trim()).filter(Boolean);
-  if (!writers.length || !understand.length || writers.length > 26) throw new Error("Specify --writers=... and --understand=... model IDs");
+  if (!writers.length || writers.length > 26) throw new Error("Specify --writers=... model IDs; --understand=... is optional");
   if (!process.env.OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY missing; no model guesses or fallback");
   const file = path.resolve(root, flags.items || "scripts/fixtures/copy-a-golden.json");
   const golden = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -159,7 +149,7 @@ async function main() {
       try { response = executeCandidate("writer", model, {
         ...base, tone: "潮巢導購版", copyLength: "標準", productBrief: shared.writerText,
         brand: shared.brief.identity?.brandEnglish || shared.brief.identity?.brand,
-        ip: shared.brief.identity?.ip, facts: shared.brief, reviewText,
+        ip: shared.brief.identity?.ip, facts: shared.brief, reviewText, understandCost: shared.cost,
       }); } catch (error) {
         // A writer that returns no usable copy counts as a parse failure (gate 1), not a crash.
         writerCandidates[letter] = { title: "（這個寫手這次沒有產出文案）", description: "", faq: "", highlights: [], why: "",
@@ -167,6 +157,8 @@ async function main() {
         continue;
       }
       writerCandidates[letter] = {
+        finalTitle: response.finalTitle, seoTitle: response.seo.seoTitle, metaDescription: response.seo.metaDescription,
+        descriptionHtml: response.descriptionHtml, review: response.review, stages: response.stages, retries: response.retries,
         title: response.title,
         description: response.output.generatedDescriptionHtml,
         faq: response.output.generatedFaqHtml,

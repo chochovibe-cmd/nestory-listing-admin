@@ -62,7 +62,6 @@ export function buildFieldRegenUserMessage(input: CopyProviderInput): string {
   if (input.productBrief?.trim() && input.tone === "潮巢導購版") {
     return [
       `原始品名：${input.rawTitle}`,
-      `銷售狀態：${input.saleStatus}`,
       `款式結構：${input.variantSummary ?? ""}`,
       "【唯一可信事實表】", input.productBrief,
       "【既有文案供保持一致】", JSON.stringify(input.currentValues ?? {}),

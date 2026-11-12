@@ -942,6 +942,83 @@ if (runA2) {
     const candidates = need(bp, "briefAutoFixCandidates")({ ...a2Output, productHighlights: ["・只剩一行"] });
     assert.ok(candidates.some((x) => x.field === "product_highlights"));
   });
+  await check("A2c-fix1 F1 所有 Brief 欄位與商品資訊修正繁體用字", async () => {
+    const clean = need(bp, "cleanBriefCopy");
+    const text = "這臺相機在臺灣的社群平臺。大小適中且能貼閤眼周。小傢夥閤眼。";
+    const expected = "這台相機在台灣的社群平台。大小適中且能貼合眼周。小傢伙合眼。";
+    const got = clean({ ...a2Output, titleItem: text, titleDiff: text, enrichedTitle: text, seoTitle: text, metaDescription: text, whyWeChoseIt: text, productHighlights: [text], generatedDescriptionHtml: `商品介紹\n${text}\n\n適合誰\n・${text}`, generatedFaqHtml: `<h3><strong>如何拍照？</strong></h3><p>${text}</p>` }, a2Brief);
+    for (const key of ["titleItem", "titleDiff", "enrichedTitle", "seoTitle", "metaDescription", "whyWeChoseIt"]) assert.equal(got[key], expected, key);
+    assert.deepEqual(got.productHighlights, [expected]);
+    assert.ok(got.generatedDescriptionHtml.includes(expected)); assert.ok(got.generatedFaqHtml.includes(expected));
+    const rendered = html.formatBriefDescriptionHtml({ intro: "介紹", highlights: [], suitableFor: [], info: { ip: "臺灣", character: "小傢夥", brand: "平臺", productType: "貼閤眼周", specLines: ["說明：" + text] } });
+    assert.doesNotMatch(rendered, /臺|貼閤|閤眼|傢夥/);
+    const regenRoute = read("src/app/api/generate/route.ts");
+    assert.match(regenRoute, /if \(factSheet\) value = normalizeBriefTraditionalText\(value\)/);
+    assert.match(regenRoute, /factSheet \? normalizeBriefTraditionalText\(text\) : text/);
+  });
+  await check("A2c-fix1 F2 套話整句刪除並保留其他句與段落", () => {
+    const clean = need(bp, "cleanBriefCopy");
+    const line = "水仙黃很亮眼。這不只是保護裝備，更是球袋裡最亮眼的戰鬥力指標。";
+    const got = clean({ ...a2Output, generatedDescriptionHtml: `商品介紹\n${line}\n\n第二段依然保留。\n\n適合誰\n・${line}`, productHighlights: [line], whyWeChoseIt: "很少見到聯名相機做得這麼專業！翻轉螢幕真的太實用了！", metaDescription: line, generatedFaqHtml: `<h3><strong>怎麼收納？</strong></h3><p>${line}</p>` });
+    assert.equal(got.whyWeChoseIt, "翻轉螢幕真的太實用了！");
+    assert.deepEqual(got.productHighlights, ["水仙黃很亮眼。"]); assert.equal(got.metaDescription, "水仙黃很亮眼。");
+    assert.equal(bp.splitBriefDescription(got.generatedDescriptionHtml).intro, "水仙黃很亮眼。\n\n第二段依然保留。");
+    assert.deepEqual(bp.splitBriefDescription(got.generatedDescriptionHtml).audience, ["水仙黃很亮眼。"]);
+    assert.doesNotMatch(got.generatedFaqHtml, /不只是|更是/); assert.match(got.generatedFaqHtml, /水仙黃很亮眼/);
+  });
+  await check("A2c-fix1 F3 USB 與低電壓不算插電電器", async () => {
+    const { isMainsPowered } = await load("src/lib/copyPipeline/copyChecks.ts");
+    const question = "這款相機在台灣充電方便嗎？";
+    for (const [voltage, expected] of [["5V", false], ["5V---1A", false], ["DC 12V", false], ["12V / 24V", false], ["USB 220V", false], ["type-c", false], ["TypeC", false], ["220V", true], ["AC 110-240V", true], ["12V / 220V", true], ["", true]]) {
+      const brief = { ...a2Brief, voltage, requiresVoltage: true };
+      assert.equal(isMainsPowered(brief), expected, voltage);
+      const rendered = html.formatBriefDescriptionHtml({ intro: "介紹", highlights: [], suitableFor: [], info: {}, ...brief });
+      assert.equal(rendered.includes("台灣使用前請確認插頭與電壓"), expected, voltage);
+      const got = bp.cleanBriefCopy({ ...a2Output, generatedFaqHtml: `<h3><strong>${question}</strong></h3><p>可使用。</p>` }, brief);
+      assert.equal(got.generatedFaqHtml.includes(question), expected, voltage);
+    }
+    assert.equal(isMainsPowered({ requiresVoltage: false, voltage: "220V" }), false);
+  });
+  await check("A2c-fix1 F4 商品資訊規格整理且僅換第一個冒號", () => {
+    const pairs = [
+      ["材質:ABS+PC+電子元器件+鋁合金", "材質：ABS＋PC＋電子元件＋鋁合金"],
+      ["尺寸:112*46*65mm", "尺寸：112 × 46 × 65mm"],
+      ["尺寸 : 112 x 46 X 65 × 20mm", "尺寸：112 × 46 × 65 × 20mm"],
+      ["額定輸入/輸出:5V---1A", "額定輸入/輸出：5V／1A"],
+      ["翻轉屏:180°", "翻轉螢幕：180°"],
+      ["材質:面料:100% 聚酯纖維,填充物:100% 聚酯纖維", "材質：面料:100% 聚酯纖維，填充物:100% 聚酯纖維"],
+      ["描述 : 小傢夥在臺灣,貼閤眼周", "描述：小傢伙在台灣，貼合眼周"],
+    ];
+    for (const [raw, expected] of pairs) {
+      const rendered = html.formatBriefDescriptionHtml({ intro: "介紹", highlights: [], suitableFor: [], info: { specLines: [raw, "空值:  "] } });
+      assert.ok(rendered.includes(`<li>${expected}</li>`), rendered); assert.doesNotMatch(rendered, /空值/);
+    }
+  });
+  await check("A2c-fix1 F5 審稿刪分隔詞不可黏英文，單行欄位換行變空白", async () => {
+    const copy = await load("src/lib/providers/copy.ts");
+    for (const separator of [" ", "\n", "×", "|", "｜", "、"]) {
+      const parsed = copy.parseCopySegments(`[[seo_title]]\nemie${separator}Hello Kitty\n[[title_item]]\nHello Kitty\nM3 翻轉相機\n[[title_diff]]\nHello Kitty\nM3`, "offline", "fixture");
+      const cleaned = bp.cleanBriefCopy({ ...a2Output, ...parsed });
+      const reviewed = bp.applyBriefReview(cleaned, { sentences: [], faq: [], terms: separator.trim() ? [{ field: "seo_title", term: separator }] : [] }, "");
+      assert.equal(reviewed.review.failed, false);
+      assert.equal(reviewed.output.seoTitle, "emie Hello Kitty");
+      assert.equal(cleaned.titleItem, "Hello Kitty M3 翻轉相機"); assert.equal(cleaned.titleDiff, "Hello Kitty M3");
+    }
+    const got = bp.cleanBriefCopy({ ...a2Output, seoTitle: "Hello Kitty\nM3 翻轉相機" });
+    assert.equal(seo2.finalizeBriefSeo({ ...got, title: "相機", descriptionText: "介紹" }).seoTitle, "Hello Kitty M3 翻轉相機 | 潮巢 Nestory");
+    const reviewed = bp.applyBriefReview({ ...a2Output, titleItem: "emie×Hello Kitty" }, { sentences: [], faq: [], terms: [{ field: "title", term: "×" }] }, "");
+    assert.equal(reviewed.output.titleItem, "emie Hello Kitty");
+    const chinese = bp.applyBriefReview({ ...a2Output, titleItem: "翻轉假詞相機" }, { sentences: [], faq: [], terms: [{ field: "title", term: "假詞" }] }, "");
+    assert.equal(chinese.output.titleItem, "翻轉相機", "中文刪詞維持原有行為");
+  });
+  await check("A2c-fix1 F6 標題中段上限 15 字含空白", () => {
+    const source = { ...a2Output, titleItem: "五條悟 虎杖悠仁 抱抱公仔 絨毛玩偶", titleDiff: "" };
+    assert.equal(bp.assembleBriefTitle(source, a2Brief).split("|")[1].trim(), "五條悟 虎杖悠仁 抱抱公仔");
+    const long = { ...source, titleItem: "長".repeat(16) };
+    assert.equal(bp.assembleBriefTitle(long, a2Brief).split("|")[1].trim(), long.titleItem);
+    assert.ok(bp.briefAutoFixCandidates(long, a2Brief).some((issue) => issue.field === "enriched_title" && issue.message.endsWith("標題商品名太長")));
+    assert.ok(!bp.briefAutoFixCandidates({ ...source, titleItem: "長".repeat(15) }, a2Brief).some((issue) => issue.field === "enriched_title"));
+  });
   await check("A2c spec coverage: prompt and HTML formatter", async () => {
     const promptText = EXPECTED_A2C_WRITER;
     const prompt = await load("src/lib/providers/chaochaoPrompt.ts");
@@ -991,7 +1068,7 @@ if (runA2) {
     const noVoltage = clean({ ...a2Output, generatedFaqHtml: faqHtml(questions) }, { ...a2Brief, requiresVoltage: false });
     const withVoltage = clean({ ...a2Output, generatedFaqHtml: faqHtml(questions) }, { ...a2Brief, requiresVoltage: true });
     assert.match(noVoltage.generatedFaqHtml, /尺寸大約多大/); assert.doesNotMatch(noVoltage.generatedFaqHtml, /指定顏色|怎麼選|多久會到|觸感|[台臺]灣可以用/);
-    assert.match(withVoltage.generatedFaqHtml, /臺灣可以用/);
+    assert.match(withVoltage.generatedFaqHtml, /台灣可以用/);
     const medical = clean({ ...a2Output, generatedDescriptionHtml: "商品介紹\n長時間使用可改善視力。熱敷時眼睛暖暖的。\n\n適合誰\n・送給朋友" });
     assert.doesNotMatch(medical.generatedDescriptionHtml, /改善視力/); assert.match(medical.generatedDescriptionHtml, /熱敷時眼睛暖暖的/);
   });

@@ -1,4 +1,5 @@
 import { COPY_REGEN_FIELDS, type CopyRegenField } from "@/lib/providers/copy";
+import { localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
 
 export type CopyIssue = { code: string; field: string; message: string };
 export type CopyCheckInput = {
@@ -12,6 +13,7 @@ export const MAINLAND_TERMS: Readonly<Record<string, string>> = {
   鼠標: "滑鼠", 內存: "記憶體", 默認: "預設", 質量: "品質", 網絡: "網路",
   數據線: "傳輸線", U盤: "隨身碟", 激光: "雷射", 寶貝: "商品", 爆款: "熱門款",
   塑料: "塑膠", 翻轉屏: "翻轉螢幕", 觸屏: "觸控螢幕", 概率: "機率", 拉鏈: "拉鍊", 開黑: "連線開局",
+  電子元器件: "電子元件",
 };
 const MAINLAND_TERMS_ORDERED = Object.entries(MAINLAND_TERMS).sort(([a], [b]) => b.length - a.length);
 const SCRIPT_CJK = "\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\u31f0-\u31ff\uac00-\ud7af";
@@ -31,7 +33,21 @@ export function normalizeCustomerPunctuation(value: string): string {
 export function cleanupBriefCopyText(value: string): string {
   let result = normalizeCustomerPunctuation(value);
   for (const [term, replacement] of MAINLAND_TERMS_ORDERED) result = result.replaceAll(term, replacement);
-  return result;
+  return normalizeBriefTraditionalText(result);
+}
+export function normalizeBriefTraditionalText(value: string): string {
+  return value.replaceAll("臺", "台").replaceAll("貼閤", "貼合").replaceAll("閤眼", "合眼").replaceAll("傢夥", "傢伙");
+}
+/** Brief-only localization, including corrections after OpenCC conversion. */
+export function localizeBriefCopyText(value: string): string {
+  return cleanupBriefCopyText(localizeToTaiwanTraditionalText(value));
+}
+export function isMainsPowered(brief?: { requiresVoltage?: boolean; voltage?: string }): boolean {
+  if (brief?.requiresVoltage !== true) return false;
+  const voltage = brief.voltage ?? "";
+  if (/USB|Type-?C/i.test(voltage)) return false;
+  const volts = [...voltage.matchAll(/(\d+(?:\.\d+)?)\s*V/gi)].map((match) => Number(match[1]));
+  return !volts.length || !volts.every((value) => value <= 24);
 }
 const REMOVE_SENTENCE = /出貨|到貨|代購|工作天|預購|退換|保固|未提供|無法確認|未確認|以實物為準|商品資料|標示為/;
 /** Drop disallowed operational/unknown statements, preserving unrelated sentences in the same paragraph. */

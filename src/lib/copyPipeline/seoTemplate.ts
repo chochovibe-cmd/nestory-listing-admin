@@ -1,4 +1,5 @@
 import { appendNestoryBrandSuffix } from "@/lib/contentGenerator/seoGenerator";
+import { localizeBriefCopyText } from "./copyChecks";
 
 const SECTION_TITLES = new Set(["商品介紹", "收藏亮點", "適合誰", "商品資訊", "購買前提醒", "購買提醒", "導購小標"]);
 /** Deterministic SEO for Product Brief mode only. */
@@ -56,7 +57,7 @@ export function finalizeBriefSeo(input: { seoTitle: string; metaDescription: str
   const fallback = buildTemplateSeo({ title: input.title, descriptionText: input.descriptionText });
   // Same separator as the live store titles: " | ".
   const storeSuffix = " | 潮巢 Nestory";
-  const stripStoreName = (value: string) => value
+  const stripStoreName = (value: string) => localizeBriefCopyText(value)
     .replace(/潮巢\s*Nestory/giu, "")
     .replace(/Nestory/giu, "")
     .replace(/潮巢/gu, "")
@@ -80,6 +81,6 @@ export function finalizeBriefSeo(input: { seoTitle: string; metaDescription: str
   if (!boundedBase) boundedBase = trimBase(stripStoreName(input.title)) || Array.from(stripStoreName(input.title)).slice(0, allowedBaseLength).join("");
   let seoTitle = `${boundedBase}${storeSuffix}`.trim();
   if (Array.from(seoTitle).length > 60) seoTitle = Array.from(seoTitle).slice(-60).join("");
-  const meta = clampAtSentence(input.metaDescription, 110);
-  return { seoTitle, metaDescription: Array.from(meta).length >= 50 ? meta : fallback.metaDescription };
+  const meta = clampAtSentence(localizeBriefCopyText(input.metaDescription), 110);
+  return { seoTitle, metaDescription: Array.from(meta).length >= 50 ? meta : localizeBriefCopyText(fallback.metaDescription) };
 }

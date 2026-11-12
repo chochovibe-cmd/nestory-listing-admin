@@ -4,6 +4,7 @@ import { resolveArchetype } from "@/lib/copyPipeline/archetype";
 import { resolveCopyLength } from "@/lib/copyPipeline/lengthBudget";
 import { finalizeBriefSeo } from "@/lib/copyPipeline/seoTemplate";
 import { runBriefWriterPipeline, cleanBriefCopy, assembleBriefTitle, reviewBriefCopy, splitBriefDescription } from "@/lib/copyPipeline/briefWriterPipeline";
+import { normalizeBriefTraditionalText } from "@/lib/copyPipeline/copyChecks";
 import { readSourceReviews } from "@/lib/import/sourceReviews";
 import { buildCostRecord, costOverCapWarning, sanitizeRelayedStageCost, stageCost, type AiStageCost } from "@/lib/ai/aiCost";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
@@ -413,7 +414,7 @@ async function handleFieldRegen(params: {
   let historyContent: string;
 
   if (regenField === "product_highlights") {
-    const localized = finalizeCustomerTextList(raw.productHighlights);
+    const localized = finalizeCustomerTextList(raw.productHighlights).map((text) => factSheet ? normalizeBriefTraditionalText(text) : text);
     update.product_highlights = localized;
     responseHighlights = localized;
     historyContent = localized.join("\n");
@@ -459,6 +460,7 @@ async function handleFieldRegen(params: {
         value = regenField === "seo_title" ? seo.seoTitle : seo.metaDescription;
       }
       value = finalizeCustomerText(value);
+      if (factSheet) value = normalizeBriefTraditionalText(value);
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
       historyContent = value;
     }

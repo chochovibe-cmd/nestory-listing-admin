@@ -3,8 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
+import { register } from "node:module";
+import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
+register(pathToFileURL(path.join(root, "scripts/publish-guard-loader.mjs")).href);
+const briefChecks = await import(pathToFileURL(path.join(root, "src/lib/copyPipeline/copyChecks.ts")).href);
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const exists = (file) => fs.existsSync(path.join(root, file));
 
@@ -30,6 +34,7 @@ function loadHtmlFormatModule() {
   }).outputText;
   const module = { exports: {} };
   const localRequire = (specifier) => {
+    if (specifier === "@/lib/copyPipeline/copyChecks") return briefChecks;
     if (specifier === "./sectionHeaders") {
       return {
         matchSectionHeader(line) {

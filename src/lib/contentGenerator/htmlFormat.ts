@@ -2,6 +2,7 @@
 import { matchSectionHeader } from "./sectionHeaders";
 import { saleStatusNoticeHtml } from "./saleStatusNotice";
 import { repairFaqHtml } from "./copyFormatRepair";
+import { isMainsPowered, localizeBriefCopyText } from "@/lib/copyPipeline/copyChecks";
 
 const CHAOCHAO_SALES_TONE = "潮巢導購版";
 
@@ -141,23 +142,35 @@ export type BriefInfoInput = {
 const normalizeIdentity = (value: string) => value.replace(/\s+/gu, "").toLocaleLowerCase();
 const BAD_BRIEF_INFO = /出貨|到貨|代購|工作天|預購|退換|保固|未提供|無法確認|未確認|以實物為準|商品資料|標示為|價格|售價/u;
 const INFO_LABELS = new Set(["IP", "角色", "品牌", "品項", "款式"]);
+function cleanBriefSpecLine(raw: string): string {
+  const match = raw.trim().match(/^([^：:]+)[：:]\s*([\s\S]*)$/u);
+  if (!match) return localizeBriefCopyText(raw).trim();
+  const label = localizeBriefCopyText(match[1]).trim();
+  // Only the first colon is normalized; preserve nested labels in the value.
+  const value = localizeBriefCopyText(match[2].replace(/:/g, "\uE100").replace(/：/g, "\uE101"))
+    .replace(/\uE100/g, ":").replace(/\uE101/g, "：")
+    .replace(/(?<=\d)\s*[*xX×]\s*(?=\d)/g, " × ")
+    .replace(/-{2,}/g, "／").replace(/(?<=[\p{Script=Han}%]),/gu, "，")
+    .replace(/\+/g, "＋").trim();
+  return value ? `${label}：${value}` : "";
+}
 function buildBriefInfoLines(info?: BriefInfoInput): string[] {
   if (!info) return [];
   const lines: string[] = [];
-  const ip = info.ip?.trim() ?? "";
-  const ipEnglish = info.ipEnglish?.trim() ?? "";
-  const character = info.character?.trim() ?? "";
-  const brand = (info.brandEnglish || info.brand || "").trim();
+  const ip = localizeBriefCopyText(info.ip?.trim() ?? "");
+  const ipEnglish = localizeBriefCopyText(info.ipEnglish?.trim() ?? "");
+  const character = localizeBriefCopyText(info.character?.trim() ?? "");
+  const brand = localizeBriefCopyText((info.brandEnglish || info.brand || "").trim());
   if (ip) lines.push(`IP：${ip}${ipEnglish && !normalizeIdentity(ip).includes(normalizeIdentity(ipEnglish)) ? ` ${ipEnglish}` : ""}`);
   if (character && normalizeIdentity(character) !== normalizeIdentity(ip) && normalizeIdentity(character) !== normalizeIdentity(ipEnglish)) lines.push(`角色：${character}`);
-  const brandAliases = [info.brand, info.brandEnglish].filter((value): value is string => Boolean(value?.trim())).map(normalizeIdentity);
+  const brandAliases = [info.brand, info.brandEnglish].filter((value): value is string => Boolean(value?.trim())).map(localizeBriefCopyText).map(normalizeIdentity);
   const ipAliases = [ip, ipEnglish].filter(Boolean).map(normalizeIdentity);
   if (brand && !brandAliases.some((alias) => ipAliases.includes(alias))) lines.push(`品牌：${brand}`);
-  const productType = info.productType?.trim();
+  const productType = localizeBriefCopyText(info.productType?.trim() ?? "");
   if (productType) lines.push(`品項：${productType}`);
   if ((info.variantCount ?? 0) >= 2) lines.push(`款式：共 ${info.variantCount} 款`);
   for (const raw of (info.specLines ?? []).slice(0, 8)) {
-    const line = raw.trim();
+    const line = cleanBriefSpecLine(raw);
     const label = line.match(/^([^：:]+)[：:]/u)?.[1]?.trim();
     if (!line || BAD_BRIEF_INFO.test(line) || (label && INFO_LABELS.has(label))) continue;
     lines.push(line);
@@ -181,7 +194,7 @@ export function formatBriefDescriptionHtml(input: BriefDescriptionInput): string
   const reminders: string[] = [];
   if ((input.archetypeFlags ?? []).some((flag) => /盲盒|隨機/.test(flag))) reminders.push("盲盒為隨機出貨，無法指定款式。");
   // Only mains-powered goods need a plug/voltage warning; USB / battery items (e.g. 5V) do not.
-  if (input.requiresVoltage) reminders.push(`電壓：${input.voltage?.trim() || "請見規格"}，台灣使用前請確認插頭與電壓。`);
+  if (isMainsPowered(input)) reminders.push(`電壓：${input.voltage?.trim() || "請見規格"}，台灣使用前請確認插頭與電壓。`);
   reminders.push(...(input.taiwanRisks ?? []).slice(0, 2).map((risk) => risk.trim()).filter(Boolean));
   if (reminders.length) html += `<h2>購買前提醒</h2>${renderList(reminders)}`;
   if (input.saleStatus === "台灣現貨") html += "\n" + saleStatusNoticeHtml(input.saleStatus, CHAOCHAO_SALES_TONE);

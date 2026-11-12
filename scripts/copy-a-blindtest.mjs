@@ -139,8 +139,10 @@ async function main() {
       return { model, ...score, fallback: result.fallback, cost: result.cost?.costUsd ?? result.usage?.costUsd ?? null };
     });
     understandScores.push({ id: draft.id, slot: item.slot, candidates: understandCandidates });
-    const shared = executeCandidate("understand", "gpt-4o-mini", base);
-    if (shared.fallback) throw new Error("Brief fallback during test for draft " + draft.id);
+    // gpt-4o-mini occasionally returns an unusable Brief; one retry keeps a whole run from dying on it.
+    let shared = executeCandidate("understand", "gpt-4o-mini", base);
+    if (shared.fallback) shared = executeCandidate("understand", "gpt-4o-mini", base);
+    if (shared.fallback) throw new Error("Brief fallback during test for draft " + draft.id + ": " + (shared.warning || "no warning"));
     const letters = randomizedLetters(writers);
     keys.push({ id: draft.id, letters });
     const writerCandidates = {};

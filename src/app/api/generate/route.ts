@@ -389,12 +389,12 @@ async function handleFieldRegen(params: {
       currentValues,
     });
     if (factSheet) {
-      raw = cleanBriefCopy(raw);
+      raw = cleanBriefCopy(raw, factSheet);
       const review = await reviewBriefCopy({ rawTitle: draft.taobao_title ?? draft.original_title ?? "", saleStatus: draft.sale_status, tone, copyLength }, factSheet, raw);
       raw = review.output; regenReviewCost = review.review.cost; regenReviewFailed = review.review.failed;
       if (regenField === "generated_description_html") {
         const body = splitBriefDescription(raw.generatedDescriptionHtml);
-        raw.generatedDescriptionHtml = formatBriefDescriptionHtml({ intro: body.intro, suitableFor: body.audience, saleStatus: draft.sale_status, archetypeFlags: factSheet.archetypeFlags, voltage: factSheet.voltage, requiresVoltage: factSheet.requiresVoltage, taiwanRisks: factSheet.taiwanRisks });
+        raw.generatedDescriptionHtml = formatBriefDescriptionHtml({ intro: body.intro, suitableFor: body.audience, highlights: currentValues.productHighlights ?? raw.productHighlights, info: { ...factSheet.identity, variantCount: factSheet.variantCount ?? factSheet.variantNames.length, specLines: factSheet.specLines }, saleStatus: draft.sale_status, archetypeFlags: factSheet.archetypeFlags, voltage: factSheet.voltage, requiresVoltage: factSheet.requiresVoltage, taiwanRisks: factSheet.taiwanRisks });
       }
     }
   } catch (providerError) {
@@ -449,7 +449,7 @@ async function handleFieldRegen(params: {
       if (regenField === "meta_description") {
         value = finalizeMetaDescriptionForTone(value, scenarioTerms, tone);
       }
-      if (regenField === "generated_description_html") {
+      if (regenField === "generated_description_html" && !factSheet) {
         value = tone === "潮巢導購版"
           ? normalizeDescriptionToPlainText(value)
           : normalizeDescriptionToPlainText(appendScenarioBulletToDescription(value, scenarioTerms));

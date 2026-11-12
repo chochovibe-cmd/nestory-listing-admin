@@ -118,19 +118,66 @@ export function formatPlainTextAsHtml(text: string | null | undefined): string {
 
 export type BriefDescriptionInput = {
   intro: string;
+  highlights: string[];
   suitableFor: string[];
+  info: BriefInfoInput;
   saleStatus?: string | null;
   archetypeFlags?: string[];
   requiresVoltage?: boolean;
   voltage?: string;
   taiwanRisks?: string[];
 };
-/** Dedicated COPY-A2b Brief renderer. Existing formatter behavior stays unchanged. */
+export type BriefInfoInput = {
+  ip?: string | null;
+  ipEnglish?: string | null;
+  character?: string | null;
+  brand?: string | null;
+  brandEnglish?: string | null;
+  productType?: string | null;
+  variantCount?: number | null;
+  specLines?: string[] | null;
+};
+
+const normalizeIdentity = (value: string) => value.replace(/\s+/gu, "").toLocaleLowerCase();
+const BAD_BRIEF_INFO = /出貨|到貨|代購|工作天|預購|退換|保固|未提供|無法確認|未確認|以實物為準|商品資料|標示為|價格|售價/u;
+const INFO_LABELS = new Set(["IP", "角色", "品牌", "品項", "款式"]);
+function buildBriefInfoLines(info?: BriefInfoInput): string[] {
+  if (!info) return [];
+  const lines: string[] = [];
+  const ip = info.ip?.trim() ?? "";
+  const ipEnglish = info.ipEnglish?.trim() ?? "";
+  const character = info.character?.trim() ?? "";
+  const brand = (info.brandEnglish || info.brand || "").trim();
+  if (ip) lines.push(`IP：${ip}${ipEnglish && !normalizeIdentity(ip).includes(normalizeIdentity(ipEnglish)) ? ` ${ipEnglish}` : ""}`);
+  if (character && normalizeIdentity(character) !== normalizeIdentity(ip) && normalizeIdentity(character) !== normalizeIdentity(ipEnglish)) lines.push(`角色：${character}`);
+  const brandAliases = [info.brand, info.brandEnglish].filter((value): value is string => Boolean(value?.trim())).map(normalizeIdentity);
+  const ipAliases = [ip, ipEnglish].filter(Boolean).map(normalizeIdentity);
+  if (brand && !brandAliases.some((alias) => ipAliases.includes(alias))) lines.push(`品牌：${brand}`);
+  const productType = info.productType?.trim();
+  if (productType) lines.push(`品項：${productType}`);
+  if ((info.variantCount ?? 0) >= 2) lines.push(`款式：共 ${info.variantCount} 款`);
+  for (const raw of (info.specLines ?? []).slice(0, 8)) {
+    const line = raw.trim();
+    const label = line.match(/^([^：:]+)[：:]/u)?.[1]?.trim();
+    if (!line || BAD_BRIEF_INFO.test(line) || (label && INFO_LABELS.has(label))) continue;
+    lines.push(line);
+  }
+  return lines;
+}
+/** Dedicated COPY-A2c Brief renderer. Existing formatter behavior stays unchanged. */
 export function formatBriefDescriptionHtml(input: BriefDescriptionInput): string {
   const intro = normalizeDescriptionToPlainText(input.intro).trim();
   const people = input.suitableFor.map((item) => item.trim()).filter(Boolean);
-  let html = `<h2>商品介紹</h2>${intro ? `<p>${escapeHtml(intro).replace(/\n/g, "<br>")}</p>` : ""}`;
+  const paragraphs = intro.split(/\n\s*\n/u).map((part) => part.trim()).filter(Boolean);
+  let html = `<h2>商品介紹</h2>${paragraphs.map((part) => `<p>${escapeHtml(part).replace(/\n/g, "<br>")}</p>`).join("")}`;
+  const highlights = input.highlights.map((line) => line.trim().replace(/^[・•-]\s*/u, "")).filter(Boolean);
+  if (highlights.length) html += `<h2>收藏亮點</h2><ul>${highlights.map((line) => {
+    const match = line.match(/^(.+?)[：:](.*)$/u);
+    return match ? `<li><strong>${escapeHtml(match[1].trim())}</strong>：${escapeHtml(match[2].trim())}</li>` : `<li>${escapeHtml(line)}</li>`;
+  }).join("")}</ul>`;
   html += `<h2>適合誰</h2>${renderList(people)}`;
+  const infoLines = buildBriefInfoLines(input.info);
+  if (infoLines.length) html += `<h2>商品資訊</h2>${renderList(infoLines)}`;
   const reminders: string[] = [];
   if ((input.archetypeFlags ?? []).some((flag) => /盲盒|隨機/.test(flag))) reminders.push("盲盒為隨機出貨，無法指定款式。");
   // Only mains-powered goods need a plug/voltage warning; USB / battery items (e.g. 5V) do not.
@@ -142,7 +189,7 @@ export function formatBriefDescriptionHtml(input: BriefDescriptionInput): string
 }
 
 export function isBriefDescriptionHtml(value: string | null | undefined): boolean {
-  return Boolean(value && !/<h2>(?:收藏亮點|商品資訊)<\/h2>/.test(value) && /<h2>商品介紹<\/h2>[\s\S]*?<h2>適合誰<\/h2>/.test(value));
+  return Boolean(value && !/<h2>(?:購買提醒|導購小標|導購標題)<\/h2>/u.test(value) && /<h2>商品介紹<\/h2>[\s\S]*?<h2>適合誰<\/h2>/u.test(value));
 }
 
 type ChaochaoSection = "intro" | "highlights" | "audience" | "info" | "care";

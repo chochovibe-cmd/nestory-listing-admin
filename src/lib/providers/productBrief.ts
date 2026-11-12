@@ -28,6 +28,7 @@ export type ProductBrief = {
     diff: string;
   };
   variantNames: string[];
+  variantCount?: number;
   archetype: Archetype | "";
   archetypeFlags: string[];
   variantGuide: string[];
@@ -138,6 +139,7 @@ export function normalizeBrief(raw: unknown, input: ProductBriefInput): ProductB
       item: titleItem,
       diff: titleDiff,
     },
+    variantCount: input.variantRows?.length ?? (typeof obj.variantCount === "number" && Number.isInteger(obj.variantCount) && obj.variantCount >= 0 ? obj.variantCount : strings(obj.variantNames, 40, 120).length),
     variantNames: (input.variantRows?.length ? input.variantRows : strings(obj.variantNames, 40, 120).map((name) => ({ option1_value: name, option2_value: null, option3_value: null }))).flatMap((row) => [row.option1_value, row.option2_value, row.option3_value]).filter((v): v is string => typeof v === "string").map(cleanVariantName).filter(Boolean).filter((v, i, all) => all.indexOf(v) === i).slice(0, 40),
     confirmedFacts: strings(obj.confirmedFacts, 10, 220),
     differentiators: strings(obj.differentiators, 6, 180),

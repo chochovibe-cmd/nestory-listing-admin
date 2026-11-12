@@ -1,11 +1,45 @@
 import { appendNestoryBrandSuffix } from "@/lib/contentGenerator/seoGenerator";
 
-const SECTION_TITLES = new Set(["商品介紹", "收藏亮點", "適合誰", "商品資訊", "購買提醒", "導購小標"]);
+const SECTION_TITLES = new Set(["商品介紹", "收藏亮點", "適合誰", "商品資訊", "購買前提醒", "購買提醒", "導購小標"]);
 /** Deterministic SEO for Product Brief mode only. */
 export function buildTemplateSeo(input: { title: string; descriptionText: string }): { seoTitle: string; metaDescription: string } {
-  const paragraphs = input.descriptionText.split(/\n\s*\n/).map((p) => p.split(/\n/).map((line) => line.trim()).filter(Boolean));
-  const first = paragraphs.map((lines) => lines.filter((line) => !SECTION_TITLES.has(line)).join(" ").trim()).find(Boolean) ?? "";
-  const completeSentence = clampAtSentence(first, 90);
+  const source = input.descriptionText
+    .replace(/<h[1-6]\b[^>]*>/giu, "\n")
+    .replace(/<\/h[1-6]\s*>/giu, "\n")
+    .replace(/<br\s*\/?>/giu, "\n")
+    .replace(/<\/p\s*>/giu, "\n\n")
+    .replace(/<[^>]+>/gu, "")
+    .replace(/&nbsp;/giu, " ")
+    .replace(/&amp;/giu, "&")
+    .replace(/&lt;/giu, "<")
+    .replace(/&gt;/giu, ">");
+  const lines = source.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+  const introParagraphs: string[] = [];
+  let inIntro = false;
+  for (const line of lines) {
+    const heading = line.replace(/^#+\s*/u, "").replace(/[：:]$/u, "").trim();
+    if (SECTION_TITLES.has(heading)) {
+      if (inIntro) break;
+      inIntro = heading === "商品介紹";
+      continue;
+    }
+    if (!inIntro && /<h[1-6]\b/iu.test(line)) continue;
+    if (inIntro || !lines.some((candidate) => SECTION_TITLES.has(candidate.replace(/^#+\s*/u, "").replace(/[：:]$/u, "").trim()))) {
+      introParagraphs.push(line);
+    }
+  }
+  let accumulated = "";
+  for (const paragraph of introParagraphs) {
+    const sentences = paragraph.match(/[^。！？!?]+[。！？!?]?/gu) ?? [];
+    for (const sentence of sentences) {
+      const complete = sentence.trim();
+      if (!/[。！？!?]$/u.test(complete)) continue;
+      accumulated += complete;
+      if (Array.from(accumulated).length >= 80) break;
+    }
+    if (Array.from(accumulated).length >= 80) break;
+  }
+  const completeSentence = clampAtSentence(accumulated, 110);
   const safeTitleFallback = `${input.title.trim().replace(/[。！？.!?]+$/u, "")}。`;
   return { seoTitle: appendNestoryBrandSuffix(input.title), metaDescription: completeSentence || safeTitleFallback };
 }
@@ -13,9 +47,8 @@ export function buildTemplateSeo(input: { title: string; descriptionText: string
 /** Clamp at a complete sentence when possible; never return a dangling fragment. */
 export function clampAtSentence(value: string, maxLength: number): string {
   const text = value.trim();
-  if (Array.from(text).length <= maxLength) return text;
   const prefix = Array.from(text).slice(0, maxLength).join("");
-  const boundary = Math.max(prefix.lastIndexOf("。"), prefix.lastIndexOf("！"), prefix.lastIndexOf("？"));
+  const boundary = Math.max(prefix.lastIndexOf("。"), prefix.lastIndexOf("！"), prefix.lastIndexOf("？"), prefix.lastIndexOf("!"), prefix.lastIndexOf("?"));
   return boundary >= 0 ? prefix.slice(0, boundary + 1).trim() : "";
 }
 
@@ -47,6 +80,6 @@ export function finalizeBriefSeo(input: { seoTitle: string; metaDescription: str
   if (!boundedBase) boundedBase = trimBase(stripStoreName(input.title)) || Array.from(stripStoreName(input.title)).slice(0, allowedBaseLength).join("");
   let seoTitle = `${boundedBase}${storeSuffix}`.trim();
   if (Array.from(seoTitle).length > 60) seoTitle = Array.from(seoTitle).slice(-60).join("");
-  const meta = clampAtSentence(input.metaDescription, 90);
-  return { seoTitle, metaDescription: Array.from(meta).length >= 30 ? meta : fallback.metaDescription };
+  const meta = clampAtSentence(input.metaDescription, 110);
+  return { seoTitle, metaDescription: Array.from(meta).length >= 50 ? meta : fallback.metaDescription };
 }

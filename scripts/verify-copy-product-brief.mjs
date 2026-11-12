@@ -44,13 +44,16 @@ const writer = chaochao.slice(writerStart, writerEnd);
 for (const forbidden of ["[[detected_ip_name]]", "[[detected_character_name]]", "[[detected_product_type]]", "[[detected_category]]", "[[sku]]", "[[spec]]"]) {
   assert.ok(!writer.includes(forbidden), `Writer regained upstream operation: ${forbidden}`);
 }
-// COPY-A2b: the successful Brief path emits eight writer sections, including both SEO fields.
+// COPY-A2c keeps eight writer sections and restores highlights and voice examples.
 for (const required of ["[[title_item]]", "[[title_diff]]", "[[generated_description_html]]", "[[generated_faq_html]]", "[[why_we_chose_it]]", "[[product_highlights]]", "[[seo_title]]", "[[seo_description]]"]) {
   assert.ok(writer.includes(required), `Writer output missing: ${required}`);
 }
 assert.match(writer, /兩條線/u, "A2b Writer lost its marketing-vs-facts boundary");
-assert.match(writer, /純文字兩段/u, "A2b Writer lost the two-section body format");
-for (const forbidden of ["收藏亮點", "3–5 題", "商品資料標示為", "CHAOCHAO_OWNER_VOICE_SAMPLES"]) {
+assert.match(writer, /純文字，段名照寫/u, "A2c Writer lost the plain-text description contract");
+assert.match(writer, /1～2 段/u, "A2c Writer lost the introduction paragraph rule");
+assert.match(writer, /小標：說明/u, "A2c Writer lost the shared highlights rule");
+assert.match(writer, /語氣範本/u, "A2c Writer lost its voice examples");
+for (const forbidden of ["3–5 題", "商品資料標示為", "CHAOCHAO_OWNER_VOICE_SAMPLES"]) {
   assert.ok(!writer.includes(forbidden), `A2b Writer retained retired prompt block: ${forbidden}`);
 }
 

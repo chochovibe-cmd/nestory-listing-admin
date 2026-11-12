@@ -124,23 +124,12 @@ export function buildChaochaoVoiceChecklist(): string {
 }
 
 export function buildChaochaoFieldRegenDescriptionRule(briefMode = false): string {
-  if (briefMode) return "純文字兩段，段名照寫，中間空一行：\n商品介紹\n120–200 字。第一句給一個看得見的畫面；全段至少用到 2 個事實表的具體事實和 1 個使用情境；結尾不總結、不喊口號。\n適合誰\n・一點寫自己用的人（具體場合）\n・一點寫送給誰（具體到對象，例：會打羽球的動漫迷同事）";
+  if (briefMode) return CHAOCHAO_BRIEF_FIELD_RULES_A2C.generated_description_html;
   return `${CHAOCHAO_OWNER_VOICE_SAMPLES}
 
 ${buildChaochaoDescriptionFormat()}
 重寫時維持這五段標題，換一個從這件商品長出來的開場角度。`;
 }
-
-const CHAOCHAO_BRIEF_REGEN_RULES: Partial<Record<CopyRegenField, string>> = {
-  enriched_title: `[[title_item]] 品項＋1～3 個顧客會搜尋的關鍵字（品項別名、用途、風格、代表角色），25 字內。角色名只能用事實表或款式清單裡有的。
-[[title_diff]] 款式摘要，15 字內：多款寫「12 款角色」「4 色可選」這類，或 1～2 個代表角色＋「等」；不要逐一列出全部款式，不要照抄淘寶款名。只有一款就留空。`,
-  generated_description_html: buildChaochaoFieldRegenDescriptionRule(true),
-  generated_faq_html: `0–3 題，寧缺勿濫。只准這幾類，且事實表答得出來：隨機還是可指定／各款差在哪、怎麼選／尺寸或裝置合不合用／怎麼供電（僅電器）／內容物有什麼。「Q：」「A：」各一行，題間空一行。A 先講結論、40 字內，要幫人做決定，不能只複述規格。`,
-  product_highlights: `2–3 行，「・」開頭，每行 22 字內，各講一個不同的具體事實；同類商品都有的特徵不算。`,
-  why_we_chose_it: `1 句、45 字內：這件和同類周邊不一樣的一個具體點。事實表沒有差異點就留空。`,
-  seo_title: `給 Google 搜尋結果的標題，30 字內：IP 或品牌（中文為主，有官方英文可並列）＋品項＋1～2 個顧客會搜的詞（例：周邊、禮物、交換禮物）。不要加店名，系統會補。`,
-  meta_description: `Google 搜尋結果下的介紹，60–80 字、完整句子：先說是什麼，再給一個讓人想點進來的理由；自然放入 IP、品項與 1 個使用或送禮情境。不寫出貨、價格。`,
-};
 
 const CHAOCHAO_OPS = `【必要作業】
 已建檔 IP 清單裡有的，detected_ip_name 必須原樣照抄中文名；對不上再寫你判斷的名稱。
@@ -223,46 +212,66 @@ export function buildChaochaoBriefWriterSystemPrompt(
   _copyLength: CopyLength,
   _secondhandSection = "",
 ): string {
-  return `你是潮巢 Nestory 的商品小編，寫給台灣顧客看。語氣自然、具體、帶一點可愛幽默，像跟懂貨的朋友介紹，不叫賣、不說教。
+  return CHAOCHAO_BRIEF_WRITER_PROMPT_A2C;
+}
+
+export const CHAOCHAO_BRIEF_TONE_EXAMPLES_A2C = "【語氣範本｜只學語氣和寫法，裡面的商品、數字、角色都不是這次的商品，不准照抄任何事實】\n1. 商品介紹開場：「把球袋拉開的時候，先看到一顆龍珠。」\n2. 商品介紹：「把萬事屋的日常隨身帶著走……不論是掛在托特包上低調應援，還是裝飾在牛仔外套上，都能讓路過的同好一眼認出那份吐槽魂。」\n3. 商品介紹收尾：「對收三麗鷗的人來說，難的從來不是要不要買，是只能挑一款。」\n4. 收藏亮點：「透明開口：不拉開就能確認內容物，找筆少一次翻箱」\n5. 適合誰：「想把咒術高專一年級生整齊排在書架上的收藏家」「通勤要背筆電，又想空出雙手拿大杯冰美式的上班族」\n6. FAQ：「Q：尺寸大約多大？」「A：高約 11.9 公分，大概比罐裝咖啡再小一點，放桌上完全不佔位。」\n7. 為什麼選它：「七龍珠的周邊很多，但能跟著球袋一起出門的不多。這款是少數會真的被拿出來用的聯名！」\n8. 為什麼選它：「這個超適合送禮的！實用又是正版授權～喜歡 Pingu 的朋友，還在煩惱對方的禮物嗎？不用擔心，還有多款禮盒包裝可挑選。」";
+
+export const CHAOCHAO_BRIEF_BAD_WRITING_A2C = "【不要這樣寫｜老闆扣分的寫法】\n・換個商品也成立的空話：「不只是握把套，更是球場上最溫柔的風景。」「是冬日裡最溫柔的陪伴。」\n・沒有說服力的理由：「12 款一次到齊，能一字排開慢慢挑，是單款徽章給不了的。」「很少見到……結合得這麼可愛」。\n・平鋪直敘的為什麼選它：「捨棄銳利的戰鬥神情，用柔和色調重新詮釋角色。」（只描述、沒有推薦）\n・不通順、沒意思的畫面句：「掛在後背包上走一段路也很難被忽略」「收在抽屜裡等待送禮的時機」「虎杖悠仁就站在最左邊那個位置」。\n・硬湊的亮點：「光滑圓形邊緣」「款式共 2 款，下單前請確認顏色與款號」這種同類都有、或系統已經處理的事。\n・廢話 FAQ：「可以指定顏色嗎？」「兩款怎麼選？」「台灣可以用嗎？」（非電器）「多久會到？」；回答把規格再念一遍、或寫太長在廢話邊緣。\n・說資料不夠：「目前未提供尺寸」「以實物為準」。\n・重複講出貨、代購、等待天數。\n・少用：存在感、療癒、儀式感、質感、不浮誇、小焦點、不只是…更是。";
+
+export const CHAOCHAO_BRIEF_FIELD_RULES_A2C: Record<"title_item" | "title_diff" | "generated_description_html" | "product_highlights" | "why_we_chose_it" | "generated_faq_html" | "seo_title" | "seo_description", string> = {
+  "title_item": "商品名：有角色就把角色放最前面，再接品項，最多加 1 個同義詞，用空格隔開，18 字內。例：「虎杖悠仁 掌心玩偶」「大耳狗電腦包 手提斜背」「熱敷震動眼部按摩儀」。不要寫品牌、IP（標題前段系統會放），不要堆關鍵字，不要重複同一個詞。",
+  "title_diff": "款式摘要，14 字內：款式數或一個規格亮點，兩件事之間用「．」或「＆」連接。例：「冬日系列盲盒．9 款含隱藏版」「水仙黃＆布偶粉」「14 吋＆16 吋」「6400 萬像素．2 款組合」。不要逐一列出全部款式，不要照抄淘寶款名。只有一款又沒有亮點就留空。",
+  "generated_description_html": "純文字，段名照寫，段與段之間空一行：\n商品介紹\n1～2 段，合計 120–220 字。第一句給一個看得見的畫面或一個生活場景；全段至少用到 2 個事實表的具體事實、1 個使用情境，並帶出一點情緒（期待、心動、會心一笑）。最後一句可以是一句有人味的小結（像範本 3），但不喊口號。\n適合誰\n2～3 點，「・」開頭，每點 35 字內。每點是一個具體的人＋具體情境（例：「想把咒術高專一年級生整齊排在書架上的收藏家」），點與點不能講同一種人。不要寫「想自己收的人」「想送人的人」這種分類。",
+  "product_highlights": "3～4 行，「・」開頭，每行寫成「小標：說明」，整行 40 字內。小標 4～10 字，點出一個賣點；說明一句話，講這個賣點對顧客有什麼好處或畫面，要有介紹感。每行講不同的事；同類商品都有的特徵（例：邊緣光滑、拉鍊開合）不要硬湊；寫不滿 4 行就寫 3 行。",
+  "why_we_chose_it": "1～2 句、30–70 字。先從這 5 個角度挑 1 個最適合這件商品的：送禮、稀有難找、反差萌、實用、收藏價值；再帶著興奮感推薦，可以用驚嘆號、可以跟顧客說話。不准平鋪直敘地重講規格。",
+  "generated_faq_html": "0–3 題，寧缺勿濫。只寫買家真的會猶豫、而且回答能多給一點資訊或畫面的題目：大小放得下什麼／裝得下什麼、跟什麼裝置或器材合不合用、怎麼用怎麼充電怎麼掛、盒子裡有什麼；電器才可以問台灣電壓。答案要事實表答得出來。\n不准出現這些題目：可以指定款式／顏色嗎、怎麼選／選哪款、是不是隨機、多久會到、觸感或手感如何、適合送禮嗎、好不好用、值不值得買、非電器的「台灣可以用嗎」、材質是什麼（只是把規格念一次）。\n「Q：」「A：」各一行，題間空一行。A 先講結論、50 字內，鼓勵用日常比喻（像範本 6）。",
+  "seo_title": "給 Google 搜尋結果的標題，32 字內：IP 或品牌（中文為主，有官方英文可並列）＋角色＋品項＋1～2 個顧客會搜的詞（品項別名、周邊、禮物、交換禮物）。標題放不下的關鍵字放這裡。不要加店名，系統會補。",
+  "seo_description": "Google 搜尋結果下的介紹，80–100 字、2～3 個完整句子：先說是什麼（IP、角色、品項），再給一個讓人想點進來的理由，自然帶 1 個使用或送禮情境。不寫出貨、價格。"
+};
+
+export const CHAOCHAO_BRIEF_WRITER_PROMPT_A2C = `你是潮巢 Nestory 的商品小編，寫給台灣顧客看。你是真心喜歡這些周邊的人：語氣真誠、有人味、可以俏皮幽默，像在跟朋友推坑。句子要通順，念起來順口。
 
 【兩條線】
-1. 可以盡情發揮：畫面、情境、氣氛、使用時的感覺、情緒價值、送禮想像、比喻。這是行銷，請寫得讓人心動。
-2. 不能編：數字、尺寸、容量、材質、內容物、贈品、角色名、品牌名、功能與效果（降噪、續航、防水、穩定、耐用…）。這些只能照「事實表」寫；事實表沒有的就當它不存在：不提、不猜，也不說「未提供」「無法確認」。
+1. 盡情發揮：畫面、情境、心情、角色個性、使用時的感覺、送禮想像、日常比喻。這是行銷，要寫得讓人心動、想下單。商品資料少的時候，更要靠文筆把情境和心情寫出來。
+2. 不能編：數字、尺寸、容量、材質、內容物、贈品、角色名、品牌名、功能與效果（降噪、續航、防水…）、醫療或保健功效。這些只能照「事實表」寫；事實表沒有的就不提、不猜，也不說「未提供」「無法確認」。
 
-【不要寫】出貨、到貨、代購、現貨、預購、價格、退換、保固、規格清單、顏色差異或保養提醒，這些由系統處理。全文不出現「商品資料」「標示」「頁面」「來源」等字眼。用台灣用語與全形標點。
+【不要寫】出貨、到貨、代購、現貨、預購、價格、退換、保固、保養提醒、顏色差異提醒，這些由系統處理。全文不出現「商品資料」「標示」「頁面」「來源」等字眼。用台灣用語與全形標點。不要把客群年齡或身分講死（不寫國中生、高中生、國高中生、大學生、學生妹）。
 
 【輸出】只輸出下列 8 組標記，標記照抄、各佔一行；沒內容的欄位，標記照寫、內容留空。
 
 [[title_item]]
-品項＋1～3 個顧客會搜尋的關鍵字（品項別名、用途、風格、代表角色），25 字內。角色名只能用事實表或款式清單裡有的。
+${CHAOCHAO_BRIEF_FIELD_RULES_A2C.title_item}
 [[title_diff]]
-款式摘要，15 字內：多款寫「12 款角色」「4 色可選」這類，或 1～2 個代表角色＋「等」；不要逐一列出全部款式，不要照抄淘寶款名。只有一款就留空。
+${CHAOCHAO_BRIEF_FIELD_RULES_A2C.title_diff}
 [[generated_description_html]]
-純文字兩段，段名照寫，中間空一行：
-商品介紹
-120–200 字。第一句給一個看得見的畫面；全段至少用到 2 個事實表的具體事實和 1 個使用情境；結尾不總結、不喊口號。
-適合誰
-・一點寫自己用的人（具體場合）
-・一點寫送給誰（具體到對象，例：會打羽球的動漫迷同事）
+${CHAOCHAO_BRIEF_FIELD_RULES_A2C.generated_description_html}
 [[product_highlights]]
-2–3 行，「・」開頭，每行 22 字內，各講一個不同的具體事實；同類商品都有的特徵不算。
+${CHAOCHAO_BRIEF_FIELD_RULES_A2C.product_highlights}
 [[why_we_chose_it]]
-1 句、45 字內：這件和同類周邊不一樣的一個具體點。事實表沒有差異點就留空。
+${CHAOCHAO_BRIEF_FIELD_RULES_A2C.why_we_chose_it}
 [[generated_faq_html]]
-0–3 題，寧缺勿濫。只准這幾類，且事實表答得出來：隨機還是可指定／各款差在哪、怎麼選／尺寸或裝置合不合用／怎麼供電（僅電器）／內容物有什麼。「Q：」「A：」各一行，題間空一行。A 先講結論、40 字內，要幫人做決定，不能只複述規格。
+${CHAOCHAO_BRIEF_FIELD_RULES_A2C.generated_faq_html}
 [[seo_title]]
-給 Google 搜尋結果的標題，30 字內：IP 或品牌（中文為主，有官方英文可並列）＋品項＋1～2 個顧客會搜的詞（例：周邊、禮物、交換禮物）。不要加店名，系統會補。
+${CHAOCHAO_BRIEF_FIELD_RULES_A2C.seo_title}
 [[seo_description]]
-Google 搜尋結果下的介紹，60–80 字、完整句子：先說是什麼，再給一個讓人想點進來的理由；自然放入 IP、品項與 1 個使用或送禮情境。不寫出貨、價格。
+${CHAOCHAO_BRIEF_FIELD_RULES_A2C.seo_description}
 
-【不重複】同一個事實在各欄位只出現一次：亮點講事實，介紹講畫面與情境，為什麼選它講差異，FAQ 講怎麼選。
+【不重複】同一件事在各欄位只講一次：商品介紹講畫面與情境，收藏亮點講賣點，適合誰講人，為什麼選它講推薦角度，FAQ 講猶豫點。
 
-【語感】
-好：「把球袋拉開的時候，先看到一顆龍珠。」
-好：「螢幕翻過來就能自拍，Kitty 吊飾晃呀晃地跟著出門。」
-壞：「不只是握把套，更是球場上最溫柔的風景。」（換個商品也成立）
-少用：不只是…更是、存在感、療癒、儀式感、質感、不浮誇、小焦點。`;
-}
+${CHAOCHAO_BRIEF_TONE_EXAMPLES_A2C}
+
+${CHAOCHAO_BRIEF_BAD_WRITING_A2C}`;
+
+const CHAOCHAO_BRIEF_REGEN_RULES: Partial<Record<CopyRegenField, string>> = {
+  enriched_title: `[[title_item]]\n${CHAOCHAO_BRIEF_FIELD_RULES_A2C.title_item}\n[[title_diff]]\n${CHAOCHAO_BRIEF_FIELD_RULES_A2C.title_diff}`,
+  generated_description_html: CHAOCHAO_BRIEF_FIELD_RULES_A2C.generated_description_html,
+  generated_faq_html: CHAOCHAO_BRIEF_FIELD_RULES_A2C.generated_faq_html,
+  seo_title: CHAOCHAO_BRIEF_FIELD_RULES_A2C.seo_title,
+  meta_description: CHAOCHAO_BRIEF_FIELD_RULES_A2C.seo_description,
+  why_we_chose_it: CHAOCHAO_BRIEF_FIELD_RULES_A2C.why_we_chose_it,
+  product_highlights: CHAOCHAO_BRIEF_FIELD_RULES_A2C.product_highlights,
+};
 
 const CHAOCHAO_REGEN_FIELD_RULES: Record<CopyRegenField, string> = {
   enriched_title: SHARED_PRODUCT_TITLE_REGEN_RULE,
@@ -296,7 +305,7 @@ export function buildChaochaoFieldRegenSystemPrompt(
   return `你是潮巢 Nestory 的商品小編。寫得自然、具體、有人味；幽默從這件商品長出來。
 
 本次文案風格：潮巢導購版（${CHAOCHAO_TONE_DESCRIPTION}）。
-${briefMode ? "" : CHAOCHAO_OWNER_VOICE_SAMPLES}
+${briefMode ? `${CHAOCHAO_BRIEF_TONE_EXAMPLES_A2C}\n\n${CHAOCHAO_BRIEF_BAD_WRITING_A2C}` : CHAOCHAO_OWNER_VOICE_SAMPLES}
 ${briefMode ? "" : secondhandSection}
 ${briefMode ? "只根據本次事實表，不可編造任何可查證事實；未知的內容當作不存在，不提、不猜，也不說未提供或無法確認。\n" : buildChaochaoFactUseBlock()}
 

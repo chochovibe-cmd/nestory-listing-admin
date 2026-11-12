@@ -1,4 +1,11 @@
 import { NextRequest } from "next/server";
+import { buildVariantStructure, buildReviewEvidence, scoreEvidence } from "@/lib/copyPipeline/evidence";
+import { resolveArchetype } from "@/lib/copyPipeline/archetype";
+import { resolveCopyLength } from "@/lib/copyPipeline/lengthBudget";
+import { finalizeBriefSeo } from "@/lib/copyPipeline/seoTemplate";
+import { runBriefWriterPipeline, cleanBriefCopy, assembleBriefTitle, reviewBriefCopy, splitBriefDescription } from "@/lib/copyPipeline/briefWriterPipeline";
+import { normalizeBriefTraditionalText } from "@/lib/copyPipeline/copyChecks";
+import { readSourceReviews } from "@/lib/import/sourceReviews";
 import { buildCostRecord, costOverCapWarning, sanitizeRelayedStageCost, stageCost, type AiStageCost } from "@/lib/ai/aiCost";
 import { createServerSupabaseClient, createServiceSupabaseClient } from "@/lib/supabase/server";
 import { canOperate } from "@/lib/auth/roles";
@@ -7,7 +14,7 @@ import {
   MISSING_COST_BLOCK_MESSAGE,
 } from "@/lib/import/captureTypes";
 import { generateListingContent } from "@/lib/contentGenerator/generateListingContent";
-import { normalizeDescriptionToPlainText } from "@/lib/contentGenerator/htmlFormat";
+import { normalizeDescriptionToPlainText, formatBriefDescriptionHtml } from "@/lib/contentGenerator/htmlFormat";
 import {
   finalizeMetaDescriptionForTone,
   finalizeSeoTitleForTone,
@@ -46,6 +53,9 @@ import {
   applyProductBriefToCopyOutput,
   buildProductBrief,
   PRODUCT_BRIEF_VERSION,
+  normalizeBrief,
+  serializeProductBriefForWriter,
+  type ProductBrief,
 } from "@/lib/providers/productBrief";
 import { buildForbiddenTermWarning } from "@/lib/providers/forbiddenTerms";
 import {
@@ -337,7 +347,23 @@ async function handleFieldRegen(params: {
     regenPackBlock?.block ??
     (draft.ip_name ? IP_BACKGROUND_NEUTRAL_INSTRUCTION : undefined);
 
+  // COPY-A2: reuse the newest persisted, successfully-understood fact sheet; never write while looking it up.
+  const { data: recentRuns } = tone === "潮巢導購版"
+    ? await serviceSupabase.from("generation_runs").select("output_payload,completed_at")
+        .eq("draft_id", draftId).eq("status", "completed").order("completed_at", { ascending: false }).limit(100)
+    : { data: null };
+  const recentFactSheet = (recentRuns ?? []).map((run) => {
+    const payload = run.output_payload as Record<string, unknown> | null;
+    return payload?.factSheet;
+  }).find((value) => value && typeof value === "object") ?? null;
+  const factSheet = recentFactSheet && tone === "潮巢導購版"
+    ? normalizeBrief(recentFactSheet, { rawTitle: draft.taobao_title ?? draft.original_title ?? "", saleStatus: draft.sale_status })
+    : null;
+  const regeneratedBrief = factSheet ? serializeProductBriefForWriter(factSheet) : undefined;
+
   let raw: CopyProviderOutput;
+  let regenReviewCost: AiStageCost | undefined;
+  let regenReviewFailed = false;
   try {
     raw = await COPY_PROVIDERS[providerKey].generate({
       rawTitle: draft.taobao_title ?? draft.original_title ?? "",
@@ -350,6 +376,7 @@ async function handleFieldRegen(params: {
       imageDescription: draft.image_description ?? undefined,
       specText: draft.spec_text ?? undefined,
       webSearchSummary: parseCachedWebSearchSummary(draft.web_search_cache),
+      productBrief: regeneratedBrief,
       ipKnowledgePromptBlock: regenIpKnowledgePromptBlock,
       tone,
       copyLength,
@@ -362,6 +389,15 @@ async function handleFieldRegen(params: {
       regenerateField: regenField,
       currentValues,
     });
+    if (factSheet) {
+      raw = cleanBriefCopy(raw, factSheet);
+      const review = await reviewBriefCopy({ rawTitle: draft.taobao_title ?? draft.original_title ?? "", saleStatus: draft.sale_status, tone, copyLength }, factSheet, raw);
+      raw = review.output; regenReviewCost = review.review.cost; regenReviewFailed = review.review.failed;
+      if (regenField === "generated_description_html") {
+        const body = splitBriefDescription(raw.generatedDescriptionHtml);
+        raw.generatedDescriptionHtml = formatBriefDescriptionHtml({ intro: body.intro, suitableFor: body.audience, highlights: currentValues.productHighlights ?? raw.productHighlights, info: { ...factSheet.identity, variantCount: factSheet.variantCount ?? factSheet.variantNames.length, specLines: factSheet.specLines }, saleStatus: draft.sale_status, archetypeFlags: factSheet.archetypeFlags, voltage: factSheet.voltage, requiresVoltage: factSheet.requiresVoltage, taiwanRisks: factSheet.taiwanRisks });
+      }
+    }
   } catch (providerError) {
     await serviceSupabase
       .from("product_drafts")
@@ -378,7 +414,7 @@ async function handleFieldRegen(params: {
   let historyContent: string;
 
   if (regenField === "product_highlights") {
-    const localized = finalizeCustomerTextList(raw.productHighlights);
+    const localized = finalizeCustomerTextList(raw.productHighlights).map((text) => factSheet ? normalizeBriefTraditionalText(text) : text);
     update.product_highlights = localized;
     responseHighlights = localized;
     historyContent = localized.join("\n");
@@ -396,15 +432,15 @@ async function handleFieldRegen(params: {
         .filter((row) => row.ip_name);
       const finalTitle = finalizeProductTitle({
         rawTitle: value.split("包包吊飾").join("包包掛件"),
-        titleIp: raw.titleIp,
-        titleBrand: raw.titleBrand,
+        titleIp: factSheet ? (factSheet.identity.ip + (factSheet.identity.ipEnglish && !factSheet.identity.ip.includes(factSheet.identity.ipEnglish) ? " " + factSheet.identity.ipEnglish : "")) : raw.titleIp,
+        titleBrand: factSheet ? (factSheet.identity.brandEnglish || factSheet.identity.brand) : raw.titleBrand,
         titleItem: raw.titleItem,
         titleDiff: raw.titleDiff,
         detectedIpDisplay: formatListingIpDisplayNameFromContext(ipName, { ipCatalog: catalogRows }),
         detectedBrand: raw.titleBrand || draft.product_brand,
         maxLen: ENRICHED_TITLE_MAX_LENGTH,
       });
-      historyContent = finalizeCustomerText(finalTitle);
+      historyContent = factSheet ? assembleBriefTitle(raw, factSheet) : finalizeCustomerText(finalTitle);
       value = historyContent;
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
     } else {
@@ -414,12 +450,17 @@ async function handleFieldRegen(params: {
       if (regenField === "meta_description") {
         value = finalizeMetaDescriptionForTone(value, scenarioTerms, tone);
       }
-      if (regenField === "generated_description_html") {
+      if (regenField === "generated_description_html" && !factSheet) {
         value = tone === "潮巢導購版"
           ? normalizeDescriptionToPlainText(value)
           : normalizeDescriptionToPlainText(appendScenarioBulletToDescription(value, scenarioTerms));
       }
+      if (factSheet && (regenField === "seo_title" || regenField === "meta_description")) {
+        const seo = finalizeBriefSeo({ seoTitle: raw.seoTitle, metaDescription: raw.metaDescription, title: draft.title_zh ?? draft.taobao_title ?? "", descriptionText: draft.description_html ?? "" });
+        value = regenField === "seo_title" ? seo.seoTitle : seo.metaDescription;
+      }
       value = finalizeCustomerText(value);
+      if (factSheet) value = normalizeBriefTraditionalText(value);
       update[REGEN_FIELD_TO_COLUMN[regenField]] = value;
       historyContent = value;
     }
@@ -427,6 +468,7 @@ async function handleFieldRegen(params: {
 
   // COPY C1.1 safety: this single-field path has no spec_text mapping/write.
   const costStages: AiStageCost[] = [];
+  if (regenReviewCost) costStages.push(regenReviewCost);
   if (relayedVisionCost) costStages.push(relayedVisionCost);
   if (raw.usage) {
     costStages.push(stageCost({
@@ -439,14 +481,14 @@ async function handleFieldRegen(params: {
   }
   const costRecord = buildCostRecord(costStages);
   if (raw.usage) {
-    update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd + (relayedVisionCost?.costUsd ?? 0);
+    update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + raw.usage.costUsd + (relayedVisionCost?.costUsd ?? 0) + (regenReviewCost?.costUsd ?? 0);
     update.generation_input_tokens = Number(draft.generation_input_tokens ?? 0) + raw.usage.inputTokens;
     update.generation_output_tokens = Number(draft.generation_output_tokens ?? 0) + raw.usage.outputTokens;
   } else if (relayedVisionCost) {
     update.generation_cost_estimate = Number(draft.generation_cost_estimate ?? 0) + relayedVisionCost.costUsd;
   }
   const overCap = costOverCapWarning(costRecord);
-  if (raw.outputTruncated || overCap) {
+  if (raw.outputTruncated || overCap || regenReviewFailed) {
     const warnings = Array.isArray(draft.warnings)
       ? draft.warnings.filter((item): item is string => typeof item === "string")
       : [];
@@ -454,6 +496,7 @@ async function handleFieldRegen(params: {
       ...warnings,
       ...(raw.outputTruncated ? [COPY_OUTPUT_TRUNCATED_WARNING] : []),
       ...(overCap ? [overCap] : []),
+      ...(regenReviewFailed ? ["review_failed"] : []),
     ]);
   }
 
@@ -485,6 +528,7 @@ async function handleFieldRegen(params: {
   return Response.json({
     ok: true,
     regeneratedField: regenField,
+    ...(factSheet ? { checks: regenReviewFailed ? [{ code: "review_failed", field: "review", message: "review_failed" }] : [] } : {}),
     cost: costRecord,
     result: {
       field: regenField,
@@ -661,15 +705,20 @@ export async function POST(request: NextRequest) {
   // COPY C5A: ResultCard whole regen / single-field regen do not send form variants.
   // Reuse existing normalized product_variants as the same variantSummary evidence when absent.
   let variantSummary = requestVariantSummary;
-  if (!variantSummary) {
+  let storedVariants: StoredVariantEvidenceRow[] = [];
+  if (!variantSummary || tone === "潮巢導購版") {
     const { data: storedVariantRows, error: storedVariantError } = await serviceSupabase
       .from("product_variants")
       .select("option1_value,option2_value,option3_value,sort_order")
       .eq("draft_id", draftId)
       .order("sort_order", { ascending: true });
     if (!storedVariantError && storedVariantRows) {
-      variantSummary = buildStoredVariantSummary(storedVariantRows as StoredVariantEvidenceRow[]);
+      storedVariants = storedVariantRows as StoredVariantEvidenceRow[];
+      if (!variantSummary) variantSummary = buildStoredVariantSummary(storedVariants);
     }
+  }
+  if (tone === "潮巢導購版" && storedVariants.length) {
+    variantSummary = buildVariantStructure(storedVariants).text;
   }
 
   const [scenarioSettingsResult, ipToneSettingsResult] = await Promise.all([
@@ -942,6 +991,10 @@ export async function POST(request: NextRequest) {
   let providerOutput: CopyProviderOutput | null = null;
   let costRecord = buildCostRecord([]);
   let productBriefApplied = false;
+  let activeFactSheet = null as ProductBrief | null;
+  let briefPipelineResult: Awaited<ReturnType<typeof runBriefWriterPipeline>> | null = null;
+  let evidenceLevel = "normal" as "thin" | "normal" | "rich";
+  let evidenceFactsCount = 0 as number;
   let detected: DetectedClassification = {
     ip: draft.ip_name ?? "",
     character: draft.character_name ?? "",
@@ -965,6 +1018,8 @@ export async function POST(request: NextRequest) {
                 saleStatus: draft.sale_status,
                 source,
                 variantSummary,
+                variantRows: storedVariants,
+                reviews: readSourceReviews((draftRow as { raw_capture?: unknown }).raw_capture),
                 note: noteForRun,
                 imageDescription: draft.image_description,
                 specText: trustedSpecTextForRun,
@@ -977,6 +1032,18 @@ export async function POST(request: NextRequest) {
                 existingBrand: trustedBrandForBrief,
                 existingSku: draft.sku,
               });
+              result.brief.archetype = resolveArchetype(result.brief.archetype, result.brief.identity.productType);
+              result.writerText = serializeProductBriefForWriter(result.brief);
+              activeFactSheet = result.fallback ? null : result.brief;
+              evidenceFactsCount = result.fallback ? 0 : result.brief.confirmedFacts.length + result.brief.specLines.length;
+              const imageText = (draft.image_description ?? "").split("【圖上文字】")[1]?.split("【")[0]?.trim() ?? "";
+              evidenceLevel = result.fallback ? "thin" : scoreEvidence({
+                factCount: result.brief.confirmedFacts.length,
+                specCount: result.brief.specLines.length,
+                visionTextChars: imageText === "（無）" ? 0 : imageText.length,
+                hasReviews: Boolean(readSourceReviews((draftRow as { raw_capture?: unknown }).raw_capture)),
+                noteChars: noteForRun?.length ?? 0,
+              }).level;
               stageMs.productBrief = Date.now() - briefStarted;
               return result;
             })()
@@ -986,7 +1053,7 @@ export async function POST(request: NextRequest) {
         extraWarnings.push(productBriefResult.warning);
       }
 
-      const writerOutput = await COPY_PROVIDERS[providerKey].generate({
+      const writerInput = {
         rawTitle: rawTitleForSearch,
         saleStatus: draft.sale_status,
         source,
@@ -1001,18 +1068,21 @@ export async function POST(request: NextRequest) {
         ipKnowledgePromptBlock,
         knownIpNames,
         tone,
-        copyLength,
+        copyLength: tone === "潮巢導購版" ? resolveCopyLength(copyLength, evidenceLevel) : copyLength,
         isSecondhand: draft.is_secondhand,
         secondhandGrade: draft.secondhand_grade,
         secondhandCondition: draft.secondhand_condition,
         secondhandNotes: draft.secondhand_notes,
         detectedIpName: draft.ip_name ?? candidateIpForPack,
         ipToneMap,
-      });
+      } satisfies import("@/lib/providers/copy").CopyProviderInput;
+      if (activeFactSheet) briefPipelineResult = await runBriefWriterPipeline({ input: writerInput, brief: activeFactSheet, provider: COPY_PROVIDERS[providerKey], initialStages: [relayedVisionCost, productBriefResult?.cost].filter((x): x is AiStageCost => Boolean(x)) });
+      const writerOutput = briefPipelineResult?.output ?? await COPY_PROVIDERS[providerKey].generate(writerInput);
       const costStages: AiStageCost[] = [];
       if (relayedVisionCost) costStages.push(relayedVisionCost);
       if (productBriefResult?.cost) costStages.push(productBriefResult.cost);
-      if (writerOutput.usage) {
+      if (briefPipelineResult) costStages.push(...briefPipelineResult.stages.filter((x) => x.stage !== "vision" && x.stage !== "understand"));
+      else if (writerOutput.usage) {
         costStages.push(stageCost({
           stage: "writer",
           model: writerOutput.model,
@@ -1029,6 +1099,14 @@ export async function POST(request: NextRequest) {
           ? applyProductBriefToCopyOutput(writerOutput, productBriefResult)
           : writerOutput;
       productBriefApplied = Boolean(productBriefResult && !productBriefResult.fallback);
+      if (activeFactSheet && !briefPipelineResult) {
+        const ip = activeFactSheet.identity.ip;
+        const ipEnglish = activeFactSheet.identity.ipEnglish;
+        raw.titleIp = ipEnglish && !ip.toLocaleLowerCase().includes(ipEnglish.toLocaleLowerCase()) ? [ip, ipEnglish].filter(Boolean).join(" ") : ip;
+        raw.titleBrand = activeFactSheet.identity.brandEnglish || activeFactSheet.identity.brand;
+        raw.titleItem = writerOutput.titleItem || activeFactSheet.title.item;
+        raw.titleDiff = writerOutput.titleDiff || activeFactSheet.title.diff;
+      }
       stageMs.copy = Date.now() - copyStarted;
       afterCopyAt = Date.now();
       const resolvedIp = resolveIpName(raw.detectedIpName, ipCatalogEntries);
@@ -1109,7 +1187,7 @@ export async function POST(request: NextRequest) {
     extraWarnings.push("測試模式：未呼叫 AI、未自動偵測 IP；文案為規則引擎產出，tags 依草稿現有資料。");
   }
 
-  const enrichedTitleFull = finalizeCustomerText(
+  let enrichedTitleFull = finalizeCustomerText(
     finalizeProductTitle({
       rawTitle: localizeToTaiwanTraditionalText(
         (providerOutput.enrichedTitle || ruleOutput.display_title || "")
@@ -1126,6 +1204,7 @@ export async function POST(request: NextRequest) {
       maxLen: ENRICHED_TITLE_MAX_LENGTH,
     }),
   );
+  if (briefPipelineResult) enrichedTitleFull = briefPipelineResult.finalTitle;
   const officialTitleZh = enrichedTitleFull;
 
   if (providerOutput.outputTruncated) extraWarnings.push(COPY_OUTPUT_TRUNCATED_WARNING);
@@ -1158,8 +1237,20 @@ export async function POST(request: NextRequest) {
   localizedOutput.meta_description = finalizeCustomerText(
     localizedOutput.meta_description,
   );
-  const cleanedWhyWeChoseIt = finalizeCustomerText(providerOutput.whyWeChoseIt);
-  const cleanedProductHighlights = finalizeCustomerTextList(providerOutput.productHighlights);
+  let cleanedWhyWeChoseIt = finalizeCustomerText(providerOutput.whyWeChoseIt);
+  let cleanedProductHighlights = finalizeCustomerTextList(providerOutput.productHighlights);
+
+  // COPY-A2b: successful Brief generation is finalized once by the shared pipeline.
+  if (briefPipelineResult) {
+    localizedOutput.display_title = briefPipelineResult.finalTitle;
+    localizedOutput.generated_description_html = briefPipelineResult.descriptionHtml;
+    localizedOutput.generated_faq_html = briefPipelineResult.output.generatedFaqHtml;
+    localizedOutput.seo_title = briefPipelineResult.seo.seoTitle;
+    localizedOutput.meta_description = briefPipelineResult.seo.metaDescription;
+    cleanedWhyWeChoseIt = briefPipelineResult.output.whyWeChoseIt;
+    cleanedProductHighlights = briefPipelineResult.output.productHighlights;
+    extraWarnings.push(...briefPipelineResult.checks.map((issue) => issue.message));
+  }
 
   const forbiddenWarning = buildForbiddenTermWarning([
     localizedOutput.display_title,
@@ -1446,6 +1537,8 @@ export async function POST(request: NextRequest) {
       costUsd: runMode !== "test" ? costRecord.totalUsd : undefined,
       output: {
         ...(runMode !== "test" ? { cost: costRecord } : {}),
+        ...(activeFactSheet ? { factSheet: activeFactSheet } : {}),
+        ...(briefPipelineResult ? { review: briefPipelineResult.review, retries: briefPipelineResult.retries, checks: briefPipelineResult.checks } : {}),
         draftState: localizedOutput.draft_state,
         provider: providerOutput.provider,
         model: providerOutput.model,

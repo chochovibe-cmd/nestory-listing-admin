@@ -16,6 +16,10 @@ import path from "node:path";
 import { register } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+// Exact COPY-A2c §1 and §6 text, kept here so CI needs no untracked .tmp files.
+const EXPECTED_A2C_WRITER = "你是潮巢 Nestory 的商品小編，寫給台灣顧客看。你是真心喜歡這些周邊的人：語氣真誠、有人味、可以俏皮幽默，像在跟朋友推坑。句子要通順，念起來順口。\n\n【兩條線】\n1. 盡情發揮：畫面、情境、心情、角色個性、使用時的感覺、送禮想像、日常比喻。這是行銷，要寫得讓人心動、想下單。商品資料少的時候，更要靠文筆把情境和心情寫出來。\n2. 不能編：數字、尺寸、容量、材質、內容物、贈品、角色名、品牌名、功能與效果（降噪、續航、防水…）、醫療或保健功效。這些只能照「事實表」寫；事實表沒有的就不提、不猜，也不說「未提供」「無法確認」。\n\n【不要寫】出貨、到貨、代購、現貨、預購、價格、退換、保固、保養提醒、顏色差異提醒，這些由系統處理。全文不出現「商品資料」「標示」「頁面」「來源」等字眼。用台灣用語與全形標點。不要把客群年齡或身分講死（不寫國中生、高中生、國高中生、大學生、學生妹）。\n\n【輸出】只輸出下列 8 組標記，標記照抄、各佔一行；沒內容的欄位，標記照寫、內容留空。\n\n[[title_item]]\n商品名：有角色就把角色放最前面，再接品項，最多加 1 個同義詞，用空格隔開，18 字內。例：「虎杖悠仁 掌心玩偶」「大耳狗電腦包 手提斜背」「熱敷震動眼部按摩儀」。不要寫品牌、IP（標題前段系統會放），不要堆關鍵字，不要重複同一個詞。\n[[title_diff]]\n款式摘要，14 字內：款式數或一個規格亮點，兩件事之間用「．」或「＆」連接。例：「冬日系列盲盒．9 款含隱藏版」「水仙黃＆布偶粉」「14 吋＆16 吋」「6400 萬像素．2 款組合」。不要逐一列出全部款式，不要照抄淘寶款名。只有一款又沒有亮點就留空。\n[[generated_description_html]]\n純文字，段名照寫，段與段之間空一行：\n商品介紹\n1～2 段，合計 120–220 字。第一句給一個看得見的畫面或一個生活場景；全段至少用到 2 個事實表的具體事實、1 個使用情境，並帶出一點情緒（期待、心動、會心一笑）。最後一句可以是一句有人味的小結（像範本 3），但不喊口號。\n適合誰\n2～3 點，「・」開頭，每點 35 字內。每點是一個具體的人＋具體情境（例：「想把咒術高專一年級生整齊排在書架上的收藏家」），點與點不能講同一種人。不要寫「想自己收的人」「想送人的人」這種分類。\n[[product_highlights]]\n3～4 行，「・」開頭，每行寫成「小標：說明」，整行 40 字內。小標 4～10 字，點出一個賣點；說明一句話，講這個賣點對顧客有什麼好處或畫面，要有介紹感。每行講不同的事；同類商品都有的特徵（例：邊緣光滑、拉鍊開合）不要硬湊；寫不滿 4 行就寫 3 行。\n[[why_we_chose_it]]\n1～2 句、30–70 字。先從這 5 個角度挑 1 個最適合這件商品的：送禮、稀有難找、反差萌、實用、收藏價值；再帶著興奮感推薦，可以用驚嘆號、可以跟顧客說話。不准平鋪直敘地重講規格。\n[[generated_faq_html]]\n0–3 題，寧缺勿濫。只寫買家真的會猶豫、而且回答能多給一點資訊或畫面的題目：大小放得下什麼／裝得下什麼、跟什麼裝置或器材合不合用、怎麼用怎麼充電怎麼掛、盒子裡有什麼；電器才可以問台灣電壓。答案要事實表答得出來。\n不准出現這些題目：可以指定款式／顏色嗎、怎麼選／選哪款、是不是隨機、多久會到、觸感或手感如何、適合送禮嗎、好不好用、值不值得買、非電器的「台灣可以用嗎」、材質是什麼（只是把規格念一次）。\n「Q：」「A：」各一行，題間空一行。A 先講結論、50 字內，鼓勵用日常比喻（像範本 6）。\n[[seo_title]]\n給 Google 搜尋結果的標題，32 字內：IP 或品牌（中文為主，有官方英文可並列）＋角色＋品項＋1～2 個顧客會搜的詞（品項別名、周邊、禮物、交換禮物）。標題放不下的關鍵字放這裡。不要加店名，系統會補。\n[[seo_description]]\nGoogle 搜尋結果下的介紹，80–100 字、2～3 個完整句子：先說是什麼（IP、角色、品項），再給一個讓人想點進來的理由，自然帶 1 個使用或送禮情境。不寫出貨、價格。\n\n【不重複】同一件事在各欄位只講一次：商品介紹講畫面與情境，收藏亮點講賣點，適合誰講人，為什麼選它講推薦角度，FAQ 講猶豫點。\n\n【語氣範本｜只學語氣和寫法，裡面的商品、數字、角色都不是這次的商品，不准照抄任何事實】\n1. 商品介紹開場：「把球袋拉開的時候，先看到一顆龍珠。」\n2. 商品介紹：「把萬事屋的日常隨身帶著走……不論是掛在托特包上低調應援，還是裝飾在牛仔外套上，都能讓路過的同好一眼認出那份吐槽魂。」\n3. 商品介紹收尾：「對收三麗鷗的人來說，難的從來不是要不要買，是只能挑一款。」\n4. 收藏亮點：「透明開口：不拉開就能確認內容物，找筆少一次翻箱」\n5. 適合誰：「想把咒術高專一年級生整齊排在書架上的收藏家」「通勤要背筆電，又想空出雙手拿大杯冰美式的上班族」\n6. FAQ：「Q：尺寸大約多大？」「A：高約 11.9 公分，大概比罐裝咖啡再小一點，放桌上完全不佔位。」\n7. 為什麼選它：「七龍珠的周邊很多，但能跟著球袋一起出門的不多。這款是少數會真的被拿出來用的聯名！」\n8. 為什麼選它：「這個超適合送禮的！實用又是正版授權～喜歡 Pingu 的朋友，還在煩惱對方的禮物嗎？不用擔心，還有多款禮盒包裝可挑選。」\n\n【不要這樣寫｜老闆扣分的寫法】\n・換個商品也成立的空話：「不只是握把套，更是球場上最溫柔的風景。」「是冬日裡最溫柔的陪伴。」\n・沒有說服力的理由：「12 款一次到齊，能一字排開慢慢挑，是單款徽章給不了的。」「很少見到……結合得這麼可愛」。\n・平鋪直敘的為什麼選它：「捨棄銳利的戰鬥神情，用柔和色調重新詮釋角色。」（只描述、沒有推薦）\n・不通順、沒意思的畫面句：「掛在後背包上走一段路也很難被忽略」「收在抽屜裡等待送禮的時機」「虎杖悠仁就站在最左邊那個位置」。\n・硬湊的亮點：「光滑圓形邊緣」「款式共 2 款，下單前請確認顏色與款號」這種同類都有、或系統已經處理的事。\n・廢話 FAQ：「可以指定顏色嗎？」「兩款怎麼選？」「台灣可以用嗎？」（非電器）「多久會到？」；回答把規格再念一遍、或寫太長在廢話邊緣。\n・說資料不夠：「目前未提供尺寸」「以實物為準」。\n・重複講出貨、代購、等待天數。\n・少用：存在感、療癒、儀式感、質感、不浮誇、小焦點、不只是…更是。";
+const EXPECTED_A2C_REVIEW = "你是潮巢的文案審稿員。輸入有「事實表」（含款式清單）和一份文案（每句前面有編號）。你只負責找出寫了假事實的句子，不改寫、不新增。\n\n只有這種才刪：句子寫了事實表和款式清單都沒有的「硬事實」——\n1. 角色名、品牌名、商品名；\n2. 數字、尺寸、容量、重量、材質、內容物、贈品、款式數；\n3. 事實表沒有的功能或規格（例如降噪、防水、續航時間、藍牙版本）。\n\n每一筆都要附上證據「term」＝句子裡那個沒根據的詞，必須從句子原樣抄出來。\n\n絕對不要刪：形容、畫面、情境、心情、比喻、使用感受、送禮想像、可愛的誇飾、推薦語氣、驚嘆號。角色或品牌的中英文、別名（例如 Cinnamoroll／大耳狗）不算編造。FAQ 跟其他欄位講到同一件事也不要刪。拿不準就不刪。\n\n只輸出 JSON：{\"sentences\":[{\"id\":3,\"term\":\"64GB\"}],\"faq\":[{\"id\":1,\"term\":\"防水\"}],\"terms\":[{\"field\":\"title|seo_title|seo_description\",\"term\":\"要拿掉的詞\"}]}";
+
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(root);
 const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
@@ -568,16 +572,12 @@ if (runA2) {
     assert.equal(fn("", "羽毛球拍"), "");
     assert.equal(fn(null, null), "");
   });
-  const lb = await load("src/lib/copyPipeline/lengthBudget.ts");
-  await check("I3 證據偏少一律寫精簡；三種字數提示", () => {
-    const resolve = need(lb, "resolveCopyLength");
-    assert.equal(resolve("詳細", "thin"), "精簡");
-    assert.equal(resolve("詳細", "rich"), "詳細");
-    assert.equal(resolve("標準", "normal"), "標準");
-    const line = need(lb, "lengthBudgetLine");
-    assert.match(line("精簡"), /120–200 字/);
-    assert.match(line("標準"), /250–400 字/);
-    assert.match(line("詳細"), /450–600 字/);
+  await check("I3 A2b 寫手模式不再使用字數預算提示", () => {
+    const prompt = read("src/lib/providers/chaochaoPrompt.ts");
+    const start = prompt.indexOf("export function buildChaochaoBriefWriterSystemPrompt");
+    const end = prompt.indexOf("const CHAOCHAO_REGEN_FIELD_RULES", start);
+    assert.ok(start >= 0 && end > start);
+    assert.doesNotMatch(prompt.slice(start, end), /lengthBudgetLine|CHAOCHAO_OWNER_VOICE_SAMPLES/);
   });
   const seo = await load("src/lib/copyPipeline/seoTemplate.ts");
   await check("I4 SEO 套模板：標題＋店名尾巴；描述取正文第一段（去掉段落標題）", () => {
@@ -694,7 +694,7 @@ if (runA2) {
       { rawTitle: "x", saleStatus: "預購中" },
     );
     const text = need(briefMod, "serializeProductBriefForWriter")(brief);
-    for (const label of ["品牌官方英文", "商品原型", "款式怎麼選", "買前會猶豫", "台灣使用注意", "買家評價重點", "台灣常見叫法"]) {
+    for (const label of ["品牌官方英文", "商品原型", "款式怎麼選", "可當 FAQ 題材", "台灣使用", "買家評價重點", "台灣常見叫法"]) {
       assert.ok(text.includes(label), `少了「${label}」`);
     }
     assert.match(text, /MINISO/);
@@ -709,26 +709,23 @@ if (runA2) {
     assert.match(s, /clamp\(input\.variantSummary, 2500\)/);
   });
   const chaochao = await load("src/lib/providers/chaochaoPrompt.ts");
-  await check("K4 寫手 prompt：只寫 6 個標記（標題兩段＋4 樣），不再寫 SEO；字數真的有用", () => {
+  await check("K4 A2b 寫手 prompt：8 組標記、兩段正文、SEO 描述由寫手產生且不帶舊樣板", () => {
     const build = need(chaochao, "buildChaochaoBriefWriterSystemPrompt");
     const p = build("精簡");
-    for (const k of ["title_item", "title_diff", "generated_description_html", "generated_faq_html", "why_we_chose_it", "product_highlights"]) {
+    for (const k of ["title_item", "title_diff", "generated_description_html", "generated_faq_html", "why_we_chose_it", "product_highlights", "seo_title", "seo_description"]) {
       assert.ok(p.includes(`[[${k}]]`), k);
     }
-    for (const k of ["seo_title", "meta_description", "enriched_title"]) assert.ok(!p.includes(`[[${k}]]`), `不該有 ${k}`);
-    assert.match(p, /120–200 字/);
-    assert.match(build("詳細"), /450–600 字/);
-    assert.ok(!/_copyLength/.test(read("src/lib/providers/chaochaoPrompt.ts").match(/export function buildChaochaoBriefWriterSystemPrompt\([\s\S]*?\)/)[0]), "copyLength 要真的用");
+    assert.match(p, /語氣範本/); assert.match(p, /不要這樣寫/);
+    assert.match(p, /適合誰/);
   });
-  await check("K5 /api/generate 接線：證據、事實表、檢查、SEO 模板、偏少提醒", () => {
+  await check("K5 /api/generate 接線：Brief 成功走共用 pipeline，其他路徑保留舊流程", () => {
     const route = read("src/app/api/generate/route.ts");
-    for (const name of ["buildVariantStructure", "buildReviewEvidence", "scoreEvidence", "resolveCopyLength", "buildTemplateSeo", "checkCopy", "resolveArchetype", "readSourceReviews"]) {
+    for (const name of ["buildVariantStructure", "buildReviewEvidence", "scoreEvidence", "resolveArchetype", "readSourceReviews", "runBriefWriterPipeline"]) {
       assert.ok(route.includes(name), name);
     }
     assert.match(route, /raw_capture/);
     assert.match(route, /factSheet/);
-    assert.ok(route.includes("📉 資料偏少：這件只找到"), "偏少提醒照抄");
-    assert.ok(route.includes("文案已自動寫短。想寫完整，先在備註補尺寸／材質／玩法，或在圖片區勾「文案參考」再重新生成。"));
+    assert.ok(read("src/lib/copyPipeline/briefWriterPipeline.ts").includes("runBriefWriterPipeline"));
     assert.match(route, /brandEnglish/);
   });
   await check("K6 單欄重生讀最新一筆事實表", () => {
@@ -737,6 +734,72 @@ if (runA2) {
     assert.match(regen, /generation_runs/);
     assert.match(regen, /factSheet/);
     assert.match(regen, /productBrief/);
+  });
+
+  console.log("\n[M] A2 自動補寫一欄（老闆 11-03 同意）、標題品牌在前（老闆 11-03 定 A）");
+  await check("M1 pickAutoFixField：照優先順序挑一欄、帶上那一欄全部問題；電壓／簡體不自動補", () => {
+    const pick = need(cc, "pickAutoFixField");
+    assert.deepEqual(cc.AUTO_FIX_PRIORITY, ["empty_field", "number_not_in_evidence", "faq_unknown", "faq_format", "ai_tone"]);
+    assert.equal(cc.AI_AUTO_FIX_BUDGET_TWD, 1.5);
+    const issues = [
+      { code: "ai_tone", field: "generated_description_html", message: "【文案檢查】a" },
+      { code: "faq_format", field: "generated_faq_html", message: "【文案檢查】b" },
+      { code: "faq_unknown", field: "generated_faq_html", message: "【文案檢查】c" },
+      { code: "voltage_missing", field: "facts", message: "【文案檢查】d" },
+    ];
+    const got = pick(issues);
+    assert.equal(got.field, "generated_faq_html");
+    assert.deepEqual(got.issues.map((i) => i.code), ["faq_format", "faq_unknown"]);
+    assert.equal(pick([issues[3], { code: "simplified", field: "generated_description_html", message: "x" }]), null);
+    assert.equal(pick([]), null);
+    assert.equal(pick([{ code: "empty_field", field: "why_we_chose_it", message: "x" }, ...issues]).field, "why_we_chose_it");
+  });
+  await check("M2 checkCopy 的 field 都是固定值（可重生欄位或 facts）", () => {
+    const allowed = ["enriched_title", "generated_description_html", "generated_faq_html", "why_we_chose_it", "product_highlights", "facts"];
+    const issues = need(cc, "checkCopy")({
+      ...clean,
+      title: "",
+      descriptionText: "这是神器，視頻共 35 款。",
+      highlights: [],
+      whyWeChoseIt: "",
+      faqHtml: "",
+      facts: { requiresVoltage: true, voltage: "", taiwanRisks: [] },
+    });
+    for (const issue of issues) assert.ok(allowed.includes(issue.field), `${issue.code} 的 field「${issue.field}」不在清單`);
+    assert.equal(issues.find((i) => i.code === "voltage_missing").field, "facts");
+  });
+  await check("M3 aiCost 多一段「自動補寫」", () => {
+    const record = need(cost, "buildCostRecord")([
+      { stage: "writer", model: "m", via: "openrouter", inputTokens: 1, outputTokens: 1, costUsd: 0.06, reported: true },
+      { stage: "fix", model: "m", via: "openrouter", inputTokens: 1, outputTokens: 1, costUsd: 0.01, reported: true },
+    ]);
+    assert.match(need(cost, "costOverCapWarning")(record), /自動補寫 NT\$0\.32/);
+  });
+  await check("M4 Brief pipeline 自動補寫接線：預算與只一次", () => {
+    const route = read("src/app/api/generate/route.ts");
+    const pipeline = read("src/lib/copyPipeline/briefWriterPipeline.ts");
+    assert.match(pipeline, /AI_AUTO_FIX_BUDGET_TWD/);
+    assert.match(pipeline, /retries \+= 1/);
+    assert.match(pipeline, /stageCost\(\{ stage, model: call\.model/);
+    assert.match(route, /runBriefWriterPipeline/);
+  });
+  const tc = await load("src/lib/contentGenerator/titleContract.ts");
+  await check("M5 assembleIpBrandSegment：品牌在前、同名只寫一次", () => {
+    const fn = need(tc, "assembleIpBrandSegment");
+    assert.equal(fn("三麗鷗 Sanrio", "Bandai"), "Bandai × 三麗鷗 Sanrio");
+    assert.equal(fn("銀魂 Gintama", "BOOMCOMIC"), "BOOMCOMIC × 銀魂 Gintama");
+    assert.equal(fn("三麗鷗 Sanrio", "Sanrio"), "三麗鷗 Sanrio");
+    assert.equal(fn("", "VICTOR"), "VICTOR");
+    assert.equal(fn("七龍珠Z", ""), "七龍珠Z");
+    const title = need(tc, "finalizeProductTitle")({ rawTitle: "x", titleIp: "銀魂 Gintama", titleBrand: "BOOMCOMIC", titleItem: "徽章", titleDiff: "銀時・神樂等" });
+    assert.match(title, /^BOOMCOMIC × 銀魂 Gintama \| 徽章/);
+  });
+  await check("M6 標題規則文字都改成品牌在前；IP 英文由事實表補", () => {
+    assert.ok(read("src/lib/providers/titlePrompt.ts").includes("品牌官方英文 × IP中文＋英文"));
+    assert.ok(read("src/lib/providers/titlePrompt.ts").includes("Bandai × 三麗鷗 Sanrio | 家族米粒公仔吊飾盲盒 | 隨機單盒"));
+    assert.ok(read("src/lib/providers/productBrief.ts").includes("12. title.enrichedTitle 依「品牌官方英文 × IP中文＋英文 | 精準品項 | 重要差異」整理"));
+    assert.match(read("src/lib/contentGenerator/titleGeneratorBase.ts"), /productBrand \+ ' × ' \+ ipDisplayName/);
+    assert.match(read("src/app/api/generate/route.ts"), /ipEnglish/);
   });
 
   console.log("\n[L] A2 看圖張數、盲測腳本");
@@ -762,7 +825,9 @@ if (runA2) {
   });
   await check("L2 盲測腳本存在、只讀資料庫、不打 /api/generate、字母對照另存", () => {
     const script = read("scripts/copy-a-blindtest.mjs");
-    assert.doesNotMatch(script, /\.(insert|update|upsert|delete|rpc)\(/);
+    // Supabase 寫入一律從 .from(...) 開始；一般 Map/Set 的 .delete() 不算。
+    assert.doesNotMatch(script, /\.from\([^)]*\)[\s\S]{0,120}?\.(insert|update|upsert|delete)\(/);
+    assert.doesNotMatch(script, /\.rpc\(/);
     assert.doesNotMatch(script, /method:\s*["'](PATCH|PUT|DELETE)["']/);
     assert.doesNotMatch(script, /\/api\/generate/);
     assert.doesNotMatch(script, /\/rest\/v1[^"'`]*["'`][^)]*method:\s*["']POST/);
@@ -771,6 +836,346 @@ if (runA2) {
     assert.match(script, /results\.json/);
     assert.match(script, /understand-scores\.json/);
   });
+
+  console.log("\n[N] COPY-A2b 離線驗收（純函式＋假 provider）");
+  const bp = await load("src/lib/copyPipeline/briefWriterPipeline.ts");
+  const cc2 = await load("src/lib/copyPipeline/copyChecks.ts");
+  const seo2 = await load("src/lib/copyPipeline/seoTemplate.ts");
+  const html = await load("src/lib/contentGenerator/htmlFormat.ts");
+  const a2Output = {
+    enrichedTitle: "徽章", titleItem: "徽章", titleDiff: "佐助等角色", titleIp: "", titleBrand: "",
+    generatedDescriptionHtml: "商品介紹\n佐助戴著斗笠的畫面很有趣，放在桌上陪你工作。這款徽章讓日常多一點火影氣氛。讓熟悉的角色走出展示櫃，在每次工作空檔抬頭時，都能遇到喜歡的表情與顏色。\n\n適合誰\n・想收藏火影周邊的人\n・送給喜歡佐助的朋友",
+    generatedFaqHtml: "<h3><strong>有多大？</strong></h3><p>直徑 5 公分。</p><h3><strong>款式能指定嗎？</strong></h3><p>不能指定。</p>",
+    seoTitle: "火影忍者佐助徽章｜潮巢 Nestory", metaDescription: "佐助徽章，放在桌上陪你工作，送給火影迷也很適合。",
+    whyWeChoseIt: "佐助的斗笠造型很有辨識度。", productHighlights: ["・佐助斗笠造型", "・適合桌面收藏"],
+    detectedIpName: "火影忍者", detectedCharacterName: "佐助", detectedProductType: "徽章", detectedProductBrand: "",
+    detectedCategory: "", sku: "", provider: "test", model: "test",
+  };
+  const a2Brief = { identity: { brand: "", ip: "火影忍者", brandEnglish: "", ipEnglish: "", character: "佐助", productType: "徽章" }, variantNames: [], specLines: [], archetypeFlags: [], voltage: "", requiresVoltage: false, taiwanRisks: [] };
+  await check("A2b-1 清理不確定／出貨句：只移除整句", () => {
+    const clean = need(bp, "cleanBriefCopy")({ ...a2Output, generatedDescriptionHtml: "商品介紹\n畫面很可愛。預購約需 14 個工作天。\n\n適合誰\n・送給朋友。" });
+    assert.match(clean.generatedDescriptionHtml, /畫面很可愛。/);
+    for (const char of "商品品質") assert.ok(!cc2.SIMPLIFIED_ONLY_CHARS.includes(char), char + " 繁簡共用字不可誤報簡體");
+    const quality = need(bp, "cleanBriefCopy")({ ...a2Output, generatedDescriptionHtml: "商品介紹\n品質有保證，絕佳收藏。\n\n適合誰\n・送給朋友。" });
+    assert.match(quality.generatedDescriptionHtml, /品質有保證，絕佳收藏/ , "一般商品品質行銷句不得當成物流／未知句刪除");
+    assert.doesNotMatch(clean.generatedDescriptionHtml, /預購|工作天/);
+  });
+  await check("A2b-2 全形標點：轉標點但保留數字、尺寸、網址", () => {
+    const fn = need(cc2, "normalizeCustomerPunctuation");
+    const got = fn("好看,可愛! 1,000 29×8 cm https://a.b/c?d=1");
+    assert.match(got, /好看，可愛！/); assert.match(got, /1,000/); assert.match(got, /29×8 cm/); assert.match(got, /https:\/\/a\.b\/c\?d=1/);
+  });
+  await check("A2b-3 大陸詞替換成台灣用語", () => {
+    const clean = need(bp, "cleanBriefCopy")({ ...a2Output, generatedDescriptionHtml: "商品介紹\n塑料材質的翻轉屏很好看。\n\n適合誰\n・送朋友。" });
+    assert.match(clean.generatedDescriptionHtml, /塑膠材質的翻轉螢幕/);
+  });
+  await check("A2b-4 禁止句移除且保留同段其他內容", () => {
+    const fn = need(cc2, "removeDisallowedBriefSentences");
+    assert.equal(fn("畫面很可愛。資料未提供，約需 14 個工作天。放在桌上也很適合。"), "畫面很可愛。放在桌上也很適合。");
+  });
+  await check("A2b-5 標題品牌/IP 頭去重，並由 assembler 排序", () => {
+    const title = need(bp, "assembleBriefTitle");
+    assert.equal(title({ ...a2Output, titleItem: "徽章", titleDiff: "佐助等角色" }, { ...a2Brief, identity: { brand: "三麗鷗", ip: "三麗鷗", brandEnglish: "Sanrio", ipEnglish: "Sanrio" } }), "三麗鷗 | 徽章 | 佐助等角色");
+    assert.equal(title({ ...a2Output, titleDiff: "" }, { ...a2Brief, identity: { brand: "VICTOR", ip: "七龍珠", brandEnglish: "", ipEnglish: "" } }), "VICTOR × 七龍珠 | 徽章");
+  });
+  await check("A2c-3 描述組裝：商品介紹、亮點、適合誰、商品資訊與提醒順序", async () => {
+    const format = need(html, "formatBriefDescriptionHtml");
+    const base = { intro: "畫面很可愛。", suitableFor: ["自己收藏", "送給朋友"], highlights: ["亮點甲：說明", "沒有小標", "亮點乙：說明"], info: { ip: "米菲", ipEnglish: "Miffy", character: "米菲", brand: "VIPO", productType: "絨毛吊飾", variantCount: 9, specLines: ["尺寸：約 20cm", "品牌：VIPO"] } };
+    assert.deepEqual([...format({ ...base, archetypeFlags: ["盲盒"] }).matchAll(/<h2>(.*?)<\/h2>/g)].map((m) => m[1]), ["商品介紹", "收藏亮點", "適合誰", "商品資訊", "購買前提醒"]);
+    const empty = format({ ...base, highlights: [], info: {} }); assert.doesNotMatch(empty, /<h2>收藏亮點<\/h2>|<h2>商品資訊<\/h2>/);
+    assert.equal((format(base).match(/<strong>/g) ?? []).length, 2); assert.match(format(base), /<li>沒有小標<\/li>/);
+    const stockDescription = format({ ...base, saleStatus: "台灣現貨" });
+    const stockHtml = need(html, "descriptionPreviewHtml")(stockDescription, "潮巢導購版", "台灣現貨");
+    assert.equal((stockHtml.match(/工作天出貨/g) ?? []).length, 1, "Brief HTML 預覽不得重複加現貨提示");
+    assert.match(stockHtml, /<h2>收藏亮點<\/h2>/); assert.match(stockHtml, /<h2>商品資訊<\/h2>/);
+    const boxed = format({ ...base, archetypeFlags: ["隨機盲盒"] });
+    assert.equal((boxed.match(/<h2>/g) ?? []).length, 5);
+    assert.match(boxed, /商品介紹|適合誰|購買前提醒/); assert.match(boxed, /盲盒為隨機出貨/);
+    assert.doesNotMatch(format({ ...base, saleStatus: "非台灣現貨" }), /出貨|到貨/);
+    assert.match(format({ ...base, saleStatus: "台灣現貨" }), /台灣現貨/);
+  });
+  await check("A2b-7 審稿可刪有效句／FAQ／詞，壞 JSON 原文保留並標記 review_failed", async () => {
+    const apply = need(bp, "applyBriefReview");
+    const reviewed = apply(a2Output, { sentences: [{ id: 2, term: "火影" }], faq: [{ id: 1, reason: "dup" }], terms: [{ field: "title", term: "佐助" }, { field: "seo_title", term: "不存在" }] }, "徽章");
+    assert.equal(reviewed.review.failed, false); assert.match(reviewed.output.generatedDescriptionHtml, /佐助戴著斗笠/); assert.doesNotMatch(reviewed.output.generatedDescriptionHtml, /這款徽章讓日常多一點火影氣氛/);
+    assert.equal(need(html, "extractFaqPairs")(reviewed.output.generatedFaqHtml).length, 2);
+    assert.equal(reviewed.review.rejected, 2, "dup 與不在文案中的 term 都必須拒絕");
+    assert.doesNotMatch(reviewed.output.titleDiff, /佐助/);
+    const failedReview = apply(a2Output, "not-json", ""); assert.equal(failedReview.review.failed, true); assert.equal(failedReview.output, a2Output);
+    const pipeline = need(bp, "runBriefWriterPipeline"); let calls = 0; const regenFields = [];
+    const result = await pipeline({
+      input: { rawTitle: "火影徽章", saleStatus: "預購中", tone: "潮巢導購版", copyLength: "標準" }, brief: a2Brief,
+      provider: { generate: async (input) => { calls++; regenFields.push(input.regenerateField); return { ...a2Output, generatedDescriptionHtml: "商品介紹\n" + "長".repeat(90) + "\n\n適合誰\n・收藏的人\n・送禮的人", productHighlights: ["佐助斗笠造型", "適合桌面收藏"] }; } },
+      review: async (_input, _brief, output) => ({ output, review: { failed: true, deleted: { sentences: [], faq: [], terms: [] } } }),
+    });
+    assert.equal(result.checks.some((x) => x.code === "review_failed"), true);
+    assert.equal(result.retries, 1); assert.equal(calls, 2, "自動補寫只呼叫一次，不能循環");
+    assert.deepEqual(regenFields, [undefined, "product_highlights"], "只補寫審稿後不足的亮點欄位");
+  });
+  await check("A2b-7b review evidence validation and duplicate cap", () => {
+    const apply = need(bp, "applyBriefReview");
+    const source = { ...a2Output, generatedDescriptionHtml: "商品介紹\n這款有防水功能。14 個工作天到貨。穩定的陪伴感。\n\n適合誰\n・喜歡可愛風格", generatedFaqHtml: "<h3><strong>商品有防水嗎？</strong></h3><p>有防水功能。</p><h3><strong>商品耐用嗎？</strong></h3><p>耐用。</p>", seoTitle: "雲朵貓 耳機", titleItem: "耳機" };
+    const factText = "商品名稱：耳機。事實：防水。款式：雲朵貓。";
+    const accepted = apply(source, { sentences: [{ id: 2, term: "14 個工作天" }, { id: 3, term: "不存在" }], faq: [{ id: 1, term: "防水" }, { id: 1, reason: "dup" }, { id: 2, reason: "dup" }], terms: [{ field: "seo_title", term: "雲朵貓" }] }, factText);
+    assert.equal(accepted.review.failed, false);
+    assert.equal(accepted.review.deleted.sentences.length, 1, "fact-backed and non-evidence substrings must not be deleted");
+    assert.equal(accepted.review.deletedTexts[0].term, "14 個工作天");
+    assert.equal(accepted.review.deleted.faq.length, 0, "A2c rejects reason dup instead of deleting FAQ");
+    assert.equal(accepted.review.deletedTexts.some((x) => x.reason === "dup"), false);
+    assert.equal(accepted.review.deleted.terms.length, 0, "fact-backed SEO name must be rejected");
+    assert.equal(accepted.review.rejected, 5);
+    assert.match(accepted.output.generatedDescriptionHtml, /穩定的陪伴感/);
+    assert.match(accepted.output.generatedFaqHtml, /耐用嗎/);
+    assert.match(accepted.output.seoTitle, /雲朵貓/);
+    const factCheck = apply(source, { sentences: [{ id: 1, term: "防水" }], faq: [], terms: [] }, "防 水");
+    assert.equal(factCheck.review.rejected, 1);
+    assert.match(factCheck.output.generatedDescriptionHtml, /防水功能/);
+    const threeFaq = { ...source, generatedFaqHtml: source.generatedFaqHtml + "<h3><strong>適合收藏嗎？</strong></h3><p>適合收藏。</p>" };
+    const dup = apply(threeFaq, { sentences: [], faq: [{ id: 1, reason: "dup" }, { id: 2, reason: "dup" }, { id: 3, reason: "dup" }], terms: [] }, factText);
+    assert.deepEqual(dup.review.deleted.faq, []);
+    assert.equal(dup.review.rejected, 3);
+    const legacy = apply(source, { sentences: [2], faq: [1], terms: [{ field: "seo_title", term: "雲朵貓" }] }, factText);
+    assert.equal(legacy.review.failed, true, "legacy evidence-free shape must fail closed");
+    assert.equal(legacy.output, source, "failed legacy review preserves the original output object");
+  });
+  await check("A2b-8 審稿後亮點不足會產生 product_highlights 補寫候選", () => {
+    const candidates = need(bp, "briefAutoFixCandidates")({ ...a2Output, productHighlights: ["・只剩一行"] });
+    assert.ok(candidates.some((x) => x.field === "product_highlights"));
+  });
+  await check("A2c-fix1 F1 所有 Brief 欄位與商品資訊修正繁體用字", async () => {
+    const clean = need(bp, "cleanBriefCopy");
+    const text = "這臺相機在臺灣的社群平臺。大小適中且能貼閤眼周。小傢夥閤眼。";
+    const expected = "這台相機在台灣的社群平台。大小適中且能貼合眼周。小傢伙合眼。";
+    const got = clean({ ...a2Output, titleItem: text, titleDiff: text, enrichedTitle: text, seoTitle: text, metaDescription: text, whyWeChoseIt: text, productHighlights: [text], generatedDescriptionHtml: `商品介紹\n${text}\n\n適合誰\n・${text}`, generatedFaqHtml: `<h3><strong>如何拍照？</strong></h3><p>${text}</p>` }, a2Brief);
+    for (const key of ["titleItem", "titleDiff", "enrichedTitle", "seoTitle", "metaDescription", "whyWeChoseIt"]) assert.equal(got[key], expected, key);
+    assert.deepEqual(got.productHighlights, [expected]);
+    assert.ok(got.generatedDescriptionHtml.includes(expected)); assert.ok(got.generatedFaqHtml.includes(expected));
+    const rendered = html.formatBriefDescriptionHtml({ intro: "介紹", highlights: [], suitableFor: [], info: { ip: "臺灣", character: "小傢夥", brand: "平臺", productType: "貼閤眼周", specLines: ["說明：" + text] } });
+    assert.doesNotMatch(rendered, /臺|貼閤|閤眼|傢夥/);
+    const regenRoute = read("src/app/api/generate/route.ts");
+    assert.match(regenRoute, /if \(factSheet\) value = normalizeBriefTraditionalText\(value\)/);
+    assert.match(regenRoute, /factSheet \? normalizeBriefTraditionalText\(text\) : text/);
+  });
+  await check("A2c-fix1 F2 套話整句刪除並保留其他句與段落", () => {
+    const clean = need(bp, "cleanBriefCopy");
+    const line = "水仙黃很亮眼。這不只是保護裝備，更是球袋裡最亮眼的戰鬥力指標。";
+    const got = clean({ ...a2Output, generatedDescriptionHtml: `商品介紹\n${line}\n\n第二段依然保留。\n\n適合誰\n・${line}`, productHighlights: [line], whyWeChoseIt: "很少見到聯名相機做得這麼專業！翻轉螢幕真的太實用了！", metaDescription: line, generatedFaqHtml: `<h3><strong>怎麼收納？</strong></h3><p>${line}</p>` });
+    assert.equal(got.whyWeChoseIt, "翻轉螢幕真的太實用了！");
+    assert.deepEqual(got.productHighlights, ["水仙黃很亮眼。"]); assert.equal(got.metaDescription, "水仙黃很亮眼。");
+    assert.equal(bp.splitBriefDescription(got.generatedDescriptionHtml).intro, "水仙黃很亮眼。\n\n第二段依然保留。");
+    assert.deepEqual(bp.splitBriefDescription(got.generatedDescriptionHtml).audience, ["水仙黃很亮眼。"]);
+    assert.doesNotMatch(got.generatedFaqHtml, /不只是|更是/); assert.match(got.generatedFaqHtml, /水仙黃很亮眼/);
+  });
+  await check("A2c-fix1 F3 USB 與低電壓不算插電電器", async () => {
+    const { isMainsPowered } = await load("src/lib/copyPipeline/copyChecks.ts");
+    const question = "這款相機在台灣充電方便嗎？";
+    for (const [voltage, expected] of [["5V", false], ["5V---1A", false], ["DC 12V", false], ["12V / 24V", false], ["USB 220V", false], ["type-c", false], ["TypeC", false], ["220V", true], ["AC 110-240V", true], ["12V / 220V", true], ["", true]]) {
+      const brief = { ...a2Brief, voltage, requiresVoltage: true };
+      assert.equal(isMainsPowered(brief), expected, voltage);
+      const rendered = html.formatBriefDescriptionHtml({ intro: "介紹", highlights: [], suitableFor: [], info: {}, ...brief });
+      assert.equal(rendered.includes("台灣使用前請確認插頭與電壓"), expected, voltage);
+      const got = bp.cleanBriefCopy({ ...a2Output, generatedFaqHtml: `<h3><strong>${question}</strong></h3><p>可使用。</p>` }, brief);
+      assert.equal(got.generatedFaqHtml.includes(question), expected, voltage);
+    }
+    assert.equal(isMainsPowered({ requiresVoltage: false, voltage: "220V" }), false);
+  });
+  await check("A2c-fix1 F4 商品資訊規格整理且僅換第一個冒號", () => {
+    const pairs = [
+      ["材質:ABS+PC+電子元器件+鋁合金", "材質：ABS＋PC＋電子元件＋鋁合金"],
+      ["尺寸:112*46*65mm", "尺寸：112 × 46 × 65mm"],
+      ["尺寸 : 112 x 46 X 65 × 20mm", "尺寸：112 × 46 × 65 × 20mm"],
+      ["額定輸入/輸出:5V---1A", "額定輸入/輸出：5V／1A"],
+      ["翻轉屏:180°", "翻轉螢幕：180°"],
+      ["材質:面料:100% 聚酯纖維,填充物:100% 聚酯纖維", "材質：面料:100% 聚酯纖維，填充物:100% 聚酯纖維"],
+      ["描述 : 小傢夥在臺灣,貼閤眼周", "描述：小傢伙在台灣，貼合眼周"],
+    ];
+    for (const [raw, expected] of pairs) {
+      const rendered = html.formatBriefDescriptionHtml({ intro: "介紹", highlights: [], suitableFor: [], info: { specLines: [raw, "空值:  "] } });
+      assert.ok(rendered.includes(`<li>${expected}</li>`), rendered); assert.doesNotMatch(rendered, /空值/);
+    }
+  });
+  await check("A2c-fix1 F5 審稿刪分隔詞不可黏英文，單行欄位換行變空白", async () => {
+    const copy = await load("src/lib/providers/copy.ts");
+    for (const separator of [" ", "\n", "×", "|", "｜", "、"]) {
+      const parsed = copy.parseCopySegments(`[[seo_title]]\nemie${separator}Hello Kitty\n[[title_item]]\nHello Kitty\nM3 翻轉相機\n[[title_diff]]\nHello Kitty\nM3`, "offline", "fixture");
+      const cleaned = bp.cleanBriefCopy({ ...a2Output, ...parsed });
+      const reviewed = bp.applyBriefReview(cleaned, { sentences: [], faq: [], terms: separator.trim() ? [{ field: "seo_title", term: separator }] : [] }, "");
+      assert.equal(reviewed.review.failed, false);
+      assert.equal(reviewed.output.seoTitle, "emie Hello Kitty");
+      assert.equal(cleaned.titleItem, "Hello Kitty M3 翻轉相機"); assert.equal(cleaned.titleDiff, "Hello Kitty M3");
+    }
+    const got = bp.cleanBriefCopy({ ...a2Output, seoTitle: "Hello Kitty\nM3 翻轉相機" });
+    assert.equal(seo2.finalizeBriefSeo({ ...got, title: "相機", descriptionText: "介紹" }).seoTitle, "Hello Kitty M3 翻轉相機 | 潮巢 Nestory");
+    const reviewed = bp.applyBriefReview({ ...a2Output, titleItem: "emie×Hello Kitty" }, { sentences: [], faq: [], terms: [{ field: "title", term: "×" }] }, "");
+    assert.equal(reviewed.output.titleItem, "emie Hello Kitty");
+    const chinese = bp.applyBriefReview({ ...a2Output, titleItem: "翻轉假詞相機" }, { sentences: [], faq: [], terms: [{ field: "title", term: "假詞" }] }, "");
+    assert.equal(chinese.output.titleItem, "翻轉相機", "中文刪詞維持原有行為");
+  });
+  await check("A2c-fix1 F6 標題中段上限 15 字含空白", () => {
+    const source = { ...a2Output, titleItem: "五條悟 虎杖悠仁 抱抱公仔 絨毛玩偶", titleDiff: "" };
+    assert.equal(bp.assembleBriefTitle(source, a2Brief).split("|")[1].trim(), "五條悟 虎杖悠仁 抱抱公仔");
+    const long = { ...source, titleItem: "長".repeat(16) };
+    assert.equal(bp.assembleBriefTitle(long, a2Brief).split("|")[1].trim(), long.titleItem);
+    assert.ok(bp.briefAutoFixCandidates(long, a2Brief).some((issue) => issue.field === "enriched_title" && issue.message.endsWith("標題商品名太長")));
+    assert.ok(!bp.briefAutoFixCandidates({ ...source, titleItem: "長".repeat(15) }, a2Brief).some((issue) => issue.field === "enriched_title"));
+  });
+  await check("A2c spec coverage: prompt and HTML formatter", async () => {
+    const promptText = EXPECTED_A2C_WRITER;
+    const prompt = await load("src/lib/providers/chaochaoPrompt.ts");
+    assert.equal(prompt.buildChaochaoBriefWriterSystemPrompt("任意長度").replace(/\r\n/g, "\n"), promptText);
+    for (const term of ["語氣範本", "不要這樣寫", "小標：說明", "送禮、稀有難找、反差萌、實用、收藏價值", "大概比罐裝咖啡再小一點"]) assert.ok(promptText.includes(term));
+    for (const term of [/1 句、45 字內/, /每行 22 字內/, /品項＋1～3 個顧客會搜尋的關鍵字/]) assert.doesNotMatch(promptText, term);
+    const format = need(html, "formatBriefDescriptionHtml");
+    const info = { ip: "米菲", ipEnglish: "Miffy", character: "米菲", brand: "VIPO", brandEnglish: "", productType: "絨毛吊飾", variantCount: 9, specLines: ["尺寸：約 20cm", "品牌：VIPO"] };
+    const rendered = format({ intro: "第一段。\n\n第二段。", highlights: ["材質：摸起來柔軟", "收納方便", "造型：米菲微笑"], suitableFor: ["送給朋友", "放在書桌"], info, archetypeFlags: [], saleStatus: "預購" });
+    assert.deepEqual([...rendered.matchAll(/<h2>(.*?)<\/h2>/g)].map((m) => m[1]), ["商品介紹", "收藏亮點", "適合誰", "商品資訊"]);
+    assert.equal((rendered.match(/<p>/g) ?? []).length, 2);
+    assert.equal((rendered.match(/<strong>/g) ?? []).length, 2);
+    for (const text of ["IP：米菲 Miffy", "品牌：VIPO", "款式：共 9 款", "尺寸：約 20cm"]) assert.ok(rendered.includes(text), text);
+    assert.doesNotMatch(rendered, /角色：/);
+  });
+  await check("A2c spec coverage: html recognition and split", () => {
+    const isBrief = need(html, "isBriefDescriptionHtml"); const split = need(bp, "splitBriefDescription");
+    const newer = "<h2>商品介紹</h2><p>第一段</p><p>第二段</p><h2>收藏亮點</h2><ul><li>亮點</li></ul><h2>適合誰</h2><ul><li>送禮</li><li>收藏</li></ul><h2>商品資訊</h2><ul><li>IP：米菲</li></ul>";
+    assert.equal(isBrief(newer), true);
+    assert.equal(isBrief("<h2>商品介紹</h2><p>介紹</p><h2>適合誰</h2><ul><li>收藏</li></ul>"), true);
+    assert.equal(isBrief("<h2>商品介紹</h2><p>x</p><h2>購買提醒</h2><ul></ul>"), false);
+    assert.equal(isBrief("<h2>商品介紹</h2><p>x</p><h2>適合誰</h2><ul></ul><h2>購買提醒</h2>"), false);
+    assert.equal(isBrief("<h2>商品介紹</h2><p>x</p><h2>導購小標</h2><h2>適合誰</h2><ul></ul>"), false);
+    assert.equal(isBrief("導購小標"), false);
+    for (const value of [newer, "商品介紹\n第一段\n\n第二段\n\n收藏亮點\n亮點\n\n適合誰\n・送禮\n・收藏\n\n商品資訊\nIP：米菲"]) {
+      const got = split(value); assert.match(got.intro, /第一段/); assert.match(got.intro, /第二段/); assert.doesNotMatch(got.intro, /收藏亮點|IP：/); assert.deepEqual(got.audience, ["送禮", "收藏"]);
+    }
+  });
+  await check("A2c-7 標題清理、候選與長度限制", () => {
+    const title = need(bp, "assembleBriefTitle"); const candidates = need(bp, "briefAutoFixCandidates");
+    const brief = { ...a2Brief, identity: { brand: "VIPO", ip: "米菲", brandEnglish: "", ipEnglish: "Miffy", productType: "絨毛吊飾" } };
+    const base = { ...a2Output, titleItem: "Miffy 米菲冬日系列絨毛吊飾 盲盒 吊飾 收藏", titleDiff: "共 9 款角色含隱藏版" };
+    const result = title(base, brief); const mid = result.split("|")[1] ?? "";
+    assert.doesNotMatch(mid, /Miffy|米菲|收藏/); assert.equal((result.match(/吊飾/g) ?? []).length, 1);
+    const pingu = title({ ...base, titleItem: "Pingu 熱敷震動眼部按摩儀", titleDiff: "" }, { ...brief, identity: { ...brief.identity, brand: "CHIELYUAL", ip: "Pingu", ipEnglish: "" } });
+    assert.equal((pingu.match(/Pingu/g) ?? []).length, 1);
+    assert.match(title({ ...base, titleDiff: "紅藍雙色·12款包裝 & 禮盒" }, brief), /紅藍雙色．12款包裝＆禮盒/);
+    assert.ok(candidates({ ...base, titleItem: "無空白標題".repeat(6) }, brief).some((x) => x.field === "enriched_title"));
+    assert.ok(candidates({ ...base, titleItem: "米菲" }, brief).some((x) => x.field === "enriched_title"));
+    const longTail = title({ ...base, titleDiff: "這個規格摘要有非常多超過限制的字元需要裁切" }, brief).split("|").at(-1).trim();
+    assert.ok(Array.from(longTail).length <= 16);
+  });
+  await check("A2c-8/9 FAQ 與醫療句過濾", () => {
+    const clean = need(bp, "cleanBriefCopy");
+    const faqHtml = (items) => items.map((q) => `<h3><strong>${q}</strong></h3><p>尺寸約 20 公分。</p>`).join("\n\n");
+    const questions = ["可以指定顏色嗎？", "兩款怎麼選？", "多久會到？", "觸感如何？", "臺灣可以用嗎？", "尺寸大約多大？"];
+    const noVoltage = clean({ ...a2Output, generatedFaqHtml: faqHtml(questions) }, { ...a2Brief, requiresVoltage: false });
+    const withVoltage = clean({ ...a2Output, generatedFaqHtml: faqHtml(questions) }, { ...a2Brief, requiresVoltage: true });
+    assert.match(noVoltage.generatedFaqHtml, /尺寸大約多大/); assert.doesNotMatch(noVoltage.generatedFaqHtml, /指定顏色|怎麼選|多久會到|觸感|[台臺]灣可以用/);
+    assert.match(withVoltage.generatedFaqHtml, /台灣可以用/);
+    const medical = clean({ ...a2Output, generatedDescriptionHtml: "商品介紹\n長時間使用可改善視力。熱敷時眼睛暖暖的。\n\n適合誰\n・送給朋友" });
+    assert.doesNotMatch(medical.generatedDescriptionHtml, /改善視力/); assert.match(medical.generatedDescriptionHtml, /熱敷時眼睛暖暖的/);
+  });
+  await check("A2c-10/11/12 審稿保留段落、亮點行、補寫優先序與 age_label", () => {
+    const apply = need(bp, "applyBriefReview"); const candidates = need(bp, "briefAutoFixCandidates");
+    const source = { ...a2Output, generatedDescriptionHtml: "商品介紹\n第一句。第二句。\n\n第三句。\n\n收藏亮點\n小標甲：保留說明\n小標乙：刪除說明\n\n適合誰\n・高中生好友", productHighlights: ["小標甲：保留說明", "小標乙：刪除說明"], generatedFaqHtml: "Q：尺寸？\nA：直徑 5 公分。" };
+    const applied = apply({ ...source, generatedFaqHtml: "<h3><strong>尺寸？</strong></h3><p>直徑 5 公分。</p>" }, { sentences: [{ id: 2, term: "第二句" }, { id: 6, term: "刪除說明" }], faq: [{ id: 1, reason: "dup" }], terms: [] }, "商品款式");
+    assert.equal(applied.review.rejected, 1); assert.equal(applied.review.deleted.faq.length, 0);
+    assert.deepEqual(applied.output.productHighlights, ["小標甲：保留說明"]);
+    const introOnly = need(bp, "splitBriefDescription")(applied.output.generatedDescriptionHtml).intro;
+    assert.match(introOnly, /第一句/); assert.match(introOnly, /第三句/); assert.match(introOnly, /\n\n/);
+    assert.doesNotMatch(introOnly, /第二句/);
+    assert.match(applied.output.generatedFaqHtml, /尺寸/);
+    assert.ok(candidates({ ...a2Output, productHighlights: ["一：短", "二：短"] }).some((x) => x.field === "product_highlights"));
+    assert.ok(candidates({ ...a2Output, productHighlights: ["小標：" + "長".repeat(41)] }).some((x) => x.field === "product_highlights"));
+    assert.ok(candidates({ ...a2Output, generatedDescriptionHtml: `商品介紹\n${"介".repeat(70)}\n\n適合誰\n・收藏者\n・送禮者` }).some((x) => x.field === "generated_description_html"));
+    const both = candidates({ ...a2Output, generatedDescriptionHtml: "商品介紹\n短\n\n適合誰\n・收藏者\n・送禮者", productHighlights: ["一：短", "二：短"] });
+    assert.equal(both[0]?.field, "generated_description_html");
+    const age = candidates({ ...a2Output, generatedDescriptionHtml: "商品介紹\n" + "場景".repeat(50) + "\n\n適合誰\n・高中生好友\n・收藏者" });
+    assert.ok(age.some((x) => x.code === "age_label"));
+    assert.ok(!age.some((x) => x.message.includes("刪除")));
+  });
+  await check("A2c-2 單欄重生規則逐欄引用 A2c field rules", async () => {
+    const prompt = await load("src/lib/providers/chaochaoPrompt.ts");
+    const build = need(prompt, "buildChaochaoFieldRegenSystemPrompt"); const rules = prompt.CHAOCHAO_BRIEF_FIELD_RULES_A2C;
+    for (const [field, key] of [["enriched_title", "title_item"], ["generated_description_html", "generated_description_html"], ["product_highlights", "product_highlights"], ["why_we_chose_it", "why_we_chose_it"], ["generated_faq_html", "generated_faq_html"], ["seo_title", "seo_title"], ["meta_description", "seo_description"]]) {
+      const text = build(field, "標準", "", true);
+      assert.match(text, /語氣範本/); assert.ok(text.includes(rules[key]), field);
+    }
+    assert.equal(prompt.buildChaochaoFieldRegenDescriptionRule(true), rules.generated_description_html);
+  });
+  await check("A2c-13 SEO 截斷與 template fallback", () => {
+    const finalize = need(seo2, "finalizeBriefSeo");
+    const sentence = "介".repeat(43) + "。";
+    const boundedMeta = finalize({ seoTitle: "米菲吊飾", metaDescription: sentence.repeat(3), title: "米菲吊飾", descriptionText: "商品介紹\n備用介紹。" });
+    assert.equal(boundedMeta.metaDescription, sentence.repeat(2), "132 字的三句 meta 應在 110 字內保留兩個完整句子");
+    const long = "第一句完整描述。第二句完整描述。第三句完整描述。" + "額外文字".repeat(20);
+    const clipped = finalize({ seoTitle: "米菲絨毛吊飾", metaDescription: long, title: "米菲絨毛吊飾", descriptionText: "商品介紹\n" + "這是一段足夠長的商品介紹內容，包含日常使用情境與收藏畫面。".repeat(3) });
+    assert.ok(Array.from(clipped.metaDescription).length <= 110); assert.match(clipped.metaDescription, /[。！？]$/); assert.doesNotMatch(clipped.metaDescription, /額外文字/);
+    const fallback = finalize({ seoTitle: "米菲絨毛吊飾", metaDescription: "短描述只有四十字元內。", title: "米菲絨毛吊飾", descriptionText: "商品介紹\n" + "這是一段足夠長的商品介紹內容，包含日常使用情境與收藏畫面。".repeat(5) });
+    assert.ok(Array.from(fallback.metaDescription).length >= 80); assert.match(fallback.metaDescription, /[。！？]$/);
+  });  await check("A2b-9 SEO 去重品牌、在句界截斷並用完整句 fallback", () => {
+    const finalize = need(seo2, "finalizeBriefSeo");
+    const longTitle = "火影忍者徽章｜" + "更多款式｜其他內容｜再加一段｜額外尾巴｜".repeat(8);
+    const out = finalize({ seoTitle: "火影忍者徽章｜潮巢 Nestory", metaDescription: "超長內容。".repeat(30), title: longTitle, descriptionText: "商品介紹\n這是一段完整描述。" });
+    assert.equal((out.seoTitle.match(/潮巢 Nestory/g) ?? []).length, 1); assert.ok(Array.from(out.seoTitle).length <= 60);
+    assert.ok(out.metaDescription.length <= 110); assert.match(out.metaDescription, /[。！？]$/);
+    assert.equal(need(seo2, "clampAtSentence")("沒有句號".repeat(20), 10), "");
+    const bounded = finalize({ seoTitle: longTitle, metaDescription: "", title: "火影徽章", descriptionText: "介紹" });
+    assert.ok(Array.from(bounded.seoTitle).length <= 60); assert.ok(bounded.seoTitle.endsWith(" | 潮巢 Nestory")); assert.ok(!bounded.seoTitle.includes("額外尾巴｜".repeat(8)));
+  });
+  await check("A2b-10 Brief 寫手 prompt 有兩條線與 SEO description，沒有舊 FAQ/亮點樣板", () => {
+    const prompt = read("src/lib/providers/chaochaoPrompt.ts");
+    const start = prompt.indexOf("export function buildChaochaoBriefWriterSystemPrompt"); const end = prompt.indexOf("const CHAOCHAO_REGEN_FIELD_RULES", start); const block = prompt.slice(start, end);
+    assert.match(prompt, /CHAOCHAO_BRIEF_WRITER_PROMPT_A2C/); assert.match(prompt, /\[\[seo_description\]\]/);
+    const envExample = read(".env.example");
+    assert.match(envExample, /^OPENAI_REVIEW_MODEL=gpt-4o-mini$/m);
+    assert.match(envExample, /^OPENAI_COPY_FALLBACK_MODEL=$/m);
+  });
+  await check("A2b-11 Brief 序列化不暴露未知／銷售狀態，保留款式清單", async () => {
+    const briefModule = await load("src/lib/providers/productBrief.ts");
+    const brief = need(briefModule, "normalizeBrief")({ variantNames: ["佐助", "鳴人"], unknowns: ["仍未知"], saleStatus: "預購中" }, { rawTitle: "火影徽章", variantRows: [{ option1_value: "【正版授權】佐助+鳴人" }], saleStatus: "預購中" });
+    const serialized = need(briefModule, "serializeProductBriefForWriter")(brief);
+    assert.match(serialized, /款式清單/); assert.doesNotMatch(serialized, /仍未知|未確認|銷售狀態|預購中/);
+  });
+  await check("A2b-12 OpenAI Writer 空內容會重試一次（fetch 全 stub）", async () => {
+    setKeys({ openai: "oa-test" });
+    const mod = await load("src/lib/providers/openai-copy-provider.ts"); const Provider = mod.OpenAICopyProvider;
+    const calls = []; const realFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, init = {}) => {
+      calls.push(JSON.parse(init.body));
+      const content = calls.length === 1 ? null : "[[title_item]]\n徽章\n[[title_diff]]\n\n[[generated_description_html]]\n商品介紹\n" + "佐助徽章讓桌面多一點角色陪伴，打開包裹時看見熟悉的表情，工作空檔也能得到一點輕鬆感。掛在包包上出門，讓喜歡的作品自然加入日常。細節造型讓收藏不只待在盒子裡，也能成為每天看得到的小風景。\n\n適合誰\n・想收藏火影周邊的人\n・送給喜歡火影的朋友\n[[product_highlights]]\n・角色徽章\n・桌面收藏\n[[why_we_chose_it]]\n斗笠造型辨識度高\n[[generated_faq_html]]\n\n[[seo_title]]\n火影徽章\n[[seo_description]]\n火影徽章，適合收藏也適合送禮。";
+      return new Response(JSON.stringify({ choices: [{ message: { content }, finish_reason: "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1 } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+    try {
+      const provider = new Provider(); await provider.generate({ rawTitle: "火影徽章", saleStatus: "預購中", tone: "潮巢導購版", copyLength: "標準", productBrief: "款式清單：佐助" });
+      assert.equal(calls.length, 2, "空內容後必須重試一次");
+    } finally { globalThis.fetch = realFetch; setKeys({}); }
+  });
+  await check("A2b-13 截斷只重試一次、fallback 一次，所有已付呼叫都記帳", async () => {
+    setKeys({ openai: "oa-test" });
+    const mod = await load("src/lib/providers/openai-copy-provider.ts");
+    const valid = [["title_item", "徽章"], ["title_diff", ""], ["generated_description_html", a2Output.generatedDescriptionHtml], ["product_highlights", "・角色造型\n・指定款式"], ["why_we_chose_it", ""], ["generated_faq_html", ""], ["seo_title", "火影徽章"], ["seo_description", "火影徽章，帶著熟悉的角色進入每天的工作與生活。"]].map(([key, value]) => "[[" + key + "]]\n" + value).join("\n");
+    const original = globalThis.fetch; const fallback = process.env.OPENAI_COPY_FALLBACK_MODEL;
+    const requests = [];
+    globalThis.fetch = async (_url, init) => {
+      requests.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ choices: [{ message: { content: requests.length <= 2 ? "[[title_item]]\n徽章" : valid } }], usage: { prompt_tokens: 10, completion_tokens: 20, cost: 0.01 } }), { status: 200 });
+    };
+    try {
+      process.env.OPENAI_COPY_FALLBACK_MODEL = "fallback-model";
+      const output = await new mod.OpenAICopyProvider().generate({ rawTitle: "徽章", saleStatus: "預購中", tone: "潮巢導購版", copyLength: "標準", productBrief: "事實表" });
+      assert.equal(requests.length, 3); assert.equal(requests[2].model, "fallback-model");
+      assert.equal(output.writerRetries, 2); assert.equal(output.callCosts.length, 3); assert.equal(output.usage.costUsd, 0.03);
+      requests.length = 0; delete process.env.OPENAI_COPY_FALLBACK_MODEL;
+      await assert.rejects(() => new mod.OpenAICopyProvider().generate({ rawTitle: "徽章", saleStatus: "預購中", tone: "潮巢導購版", copyLength: "標準", productBrief: "事實表" }), /文案解析失敗/);
+      assert.equal(requests.length, 2);
+    } finally { globalThis.fetch = original; if (fallback === undefined) delete process.env.OPENAI_COPY_FALLBACK_MODEL; else process.env.OPENAI_COPY_FALLBACK_MODEL = fallback; setKeys({}); }
+  });
+  await check("A2b-14 寫手與審稿 prompt 逐字等於規格原文", async () => {
+    assert.equal(bp.BRIEF_REVIEW_SYSTEM_PROMPT, EXPECTED_A2C_REVIEW);
+    const prompt = await load("src/lib/providers/chaochaoPrompt.ts");
+    assert.match(bp.BRIEF_REVIEW_SYSTEM_PROMPT, /只有這種才刪/);
+    assert.doesNotMatch(bp.BRIEF_REVIEW_SYSTEM_PROMPT, /reason.*dup/);
+    assert.equal(prompt.buildChaochaoBriefWriterSystemPrompt("標準").replace(/\r\n/g, "\n"), prompt.CHAOCHAO_BRIEF_WRITER_PROMPT_A2C);
+ });
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

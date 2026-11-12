@@ -1,6 +1,6 @@
 import { COPY_TIMEOUT_MS, externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout } from "./externalTimeout";
 import { readChatUsage, resolveTextAiEndpoint, textAiExtraBody, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
-import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry, makeFieldEmptyCheck } from "./copy";
+import { CopyProvider, CopyProviderInput, CopyProviderOutput, generateWithParseRetry, makeFieldEmptyCheck, estimateCopyCostUsd, type RawUsage } from "./copy";
 import {
   buildCopySystemPrompt,
   buildCopyUserMessage,
@@ -39,7 +39,7 @@ export class OpenAICopyProvider implements CopyProvider {
       ? { grade: input.secondhandGrade, condition: input.secondhandCondition, notes: input.secondhandNotes }
       : null;
     const system = regenField
-      ? buildFieldRegenSystemPrompt(regenField, resolvedTone, input.copyLength, secondhandInfo)
+      ? buildFieldRegenSystemPrompt(regenField, resolvedTone, input.copyLength, secondhandInfo, Boolean(input.productBrief?.trim()))
       : buildCopySystemPrompt(resolvedTone, input.copyLength, secondhandInfo, {
           productBriefMode: Boolean(input.productBrief?.trim()),
         });
@@ -48,8 +48,14 @@ export class OpenAICopyProvider implements CopyProvider {
     // A8: parse-failure retry runs the request at most twice; the second pass
     // appends a format reminder to the user message. On regen the emptiness
     // check is scoped to the single field being rewritten.
-    const isEmpty = regenField ? makeFieldEmptyCheck(regenField) : undefined;
-    return generateWithParseRetry(async (formatReminder) => {
+    const isEmpty = regenField
+      ? resolvedTone === "潮巢導購版" && input.productBrief?.trim() && ["why_we_chose_it", "generated_faq_html"].includes(regenField) ? () => false : makeFieldEmptyCheck(regenField)
+      : resolvedTone === "潮巢導購版" && input.productBrief?.trim()
+        ? (output: CopyProviderOutput) => !output.generatedDescriptionHtml.trim()
+        : undefined;
+    const briefMode = resolvedTone === "潮巢導購版" && Boolean(input.productBrief?.trim());
+    const callCosts: Array<{ model: string; usage: RawUsage }> = [];
+    const run = (model: string, attempts: number) => generateWithParseRetry(async (formatReminder) => {
       const userContent = formatReminder ? `${user}\n\n${formatReminder}` : user;
 
       let response: Response;
@@ -62,7 +68,7 @@ export class OpenAICopyProvider implements CopyProvider {
         },
         signal: externalTimeoutSignal(COPY_TIMEOUT_MS),
         body: JSON.stringify({
-          model: textAiModelId(endpoint, DEFAULT_MODEL),
+          model: textAiModelId(endpoint, model),
           // A6: cap generous enough for the full 「詳細」copy without truncation.
           max_tokens: 3000,
           ...(writerTemperature() !== undefined ? { temperature: writerTemperature() } : {}),
@@ -87,16 +93,35 @@ export class OpenAICopyProvider implements CopyProvider {
 
       const payload = await response.json();
       const text = payload?.choices?.[0]?.message?.content;
+      if (briefMode) callCosts.push({ model, usage: readChatUsage(payload) });
 
-      if (typeof text !== "string") {
+      if (typeof text !== "string" && !briefMode) {
         throw new Error("OpenAI response did not include message content.");
       }
 
       return {
-        text,
+        text: typeof text === "string" ? text : "",
         usage: readChatUsage(payload),
         truncated: payload?.choices?.[0]?.finish_reason === "length",
       };
-    }, "openai", DEFAULT_MODEL, isEmpty).then((output) => ({ ...output, via: endpoint.via }));
+
+    }, "openai", model, isEmpty, briefMode && !regenField ? {
+      attempts,
+      validateText: (text) => ["title_item", "title_diff", "generated_description_html", "product_highlights", "why_we_chose_it", "generated_faq_html", "seo_title", "seo_description"].filter((key) => text.split(/\r?\n/).some((line) => line.trim() === "[[" + key + "]]")).length >= 7,
+      reminder: "請完整輸出 system 規定的 8 組標記，每組標記獨立一行。",
+    } : undefined).then((output) => ({ ...output, via: endpoint.via }));
+    const finish = (output: CopyProviderOutput): CopyProviderOutput => {
+      if (!briefMode) return output;
+      const inputTokens = callCosts.reduce((n, c) => n + c.usage.inputTokens, 0);
+      const outputTokens = callCosts.reduce((n, c) => n + c.usage.outputTokens, 0);
+      const costUsd = callCosts.reduce((n,c) => n + (c.usage.reportedCostUsd ?? estimateCopyCostUsd(c.model,c.usage)),0);
+      return { ...output, callCosts, writerRetries: Math.max(0, callCosts.length - 1), usage: { inputTokens, outputTokens, costUsd, cachedInputTokens: callCosts.reduce((n,c) => n + (c.usage.cachedInputTokens ?? 0),0), cacheCreationTokens: callCosts.reduce((n,c) => n + (c.usage.cacheCreationTokens ?? 0),0), reportedCostUsd: callCosts.every((c) => typeof c.usage.reportedCostUsd === "number") ? costUsd : null } };
+    };
+    try { return finish(await run(DEFAULT_MODEL, 2)); }
+    catch (error) {
+      const fallback = process.env.OPENAI_COPY_FALLBACK_MODEL?.trim();
+      if (!briefMode || regenField || !fallback || !(error instanceof Error) || !error.message.startsWith("文案解析失敗")) throw error;
+      return finish(await run(fallback, 1));
+    }
   }
 }

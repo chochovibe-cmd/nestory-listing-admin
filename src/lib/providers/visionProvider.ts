@@ -6,7 +6,7 @@
 // (not the CopyProvider abstraction -- this is a different concern: raw visual
 // facts in, not brand-voice copy out).
 
-import { MAX_COPY_REFERENCE_IMAGES } from "@/lib/images/copyReference";
+import { MAX_AUTO_VISION_IMAGES } from "@/lib/images/copyReference";
 import { externalTimeoutMessage, externalTimeoutSignal, isExternalTimeout, VISION_TIMEOUT_MS } from "./externalTimeout";
 import { stageCost, type AiStageCost } from "@/lib/ai/aiCost";
 import { readChatUsage, resolveTextAiEndpoint, textAiExtraBody, textAiModelId, textAiErrorTag } from "./textAiEndpoint";
@@ -16,7 +16,7 @@ const DEFAULT_VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
 // Guards against a draft with an unreasonable number of uploaded images
 // blowing up one request's payload/latency/cost.
-const MAX_DESCRIBE_IMAGES = MAX_COPY_REFERENCE_IMAGES;
+const MAX_DESCRIBE_IMAGES = MAX_AUTO_VISION_IMAGES;
 const MAX_OCR_IMAGES = 4;
 
 // 4f: image picking (auto / 文案參考圖) lives in a pure module shared with the card UI.

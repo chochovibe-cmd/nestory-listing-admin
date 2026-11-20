@@ -109,7 +109,9 @@ const scripts = [
   // OPENROUTER: text AI calls via OpenRouter when OPENROUTER_API_KEY is set.
   "scripts/verify-openrouter.mjs",
   // COPY-A: AI cost bookkeeping, AI health banner, three-stage copy.
-  "scripts/verify-copy-a.mjs"
+  "scripts/verify-copy-a.mjs",
+  // 5 PRICING-RULES＋PRICING-DB＋抓取健康提醒（11-20）
+  "scripts/verify-pricing.mjs"
 ];
 
 for (const script of scripts) {

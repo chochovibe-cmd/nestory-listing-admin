@@ -63,6 +63,7 @@
     "verify:4e": "node scripts/verify-4e.mjs",
     "verify:4f": "node scripts/verify-4f.mjs",
     "verify:gpt-handoff": "node scripts/verify-gpt-handoff.mjs",
+    "verify:pricing": "node scripts/verify-pricing.mjs",
     "verify:openrouter": "node scripts/verify-openrouter.mjs",
     "verify:copy-a": "node scripts/verify-copy-a.mjs",
     "verify:copy-a1": "node scripts/verify-copy-a.mjs --part=a1",

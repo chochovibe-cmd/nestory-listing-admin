@@ -74,6 +74,8 @@
     "prod": "next build && next start -p 3019"
   },
   "dependencies": {
+    "@fontsource-variable/noto-sans-tc": "^5.3.1",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "next": "^15.0.3",

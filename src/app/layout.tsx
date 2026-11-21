@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_TC, Space_Grotesk } from "next/font/google";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { EnvironmentBanner } from "@/components/EnvironmentBanner";
@@ -9,6 +8,10 @@ import { ToastHost } from "@/components/Toast";
 import { FailBatchRemoveBridge } from "@/components/listing/FailBatchRemoveBridge";
 import { GenerationQueueRunner } from "@/components/listing/GenerationQueueRunner";
 import { VariantCharacterViewportBridge } from "@/components/listing/VariantCharacterViewportBridge";
+/* FONT-SELFHOST: fonts ship with the app; the build no longer fetches Google Fonts. */
+import "@fontsource-variable/noto-sans-tc";
+import "@fontsource-variable/space-grotesk";
+import "./fonts.css";
 import "./globals.css";
 import "./stabilization.css";
 import "./resultcard-mobile-release.css";
@@ -23,21 +26,6 @@ import "./d310c-mobile-variant-dialog.css";
 import "./d310d-mobile-variant-dialog.css";
 import "./d310d1-mobile-character-picker.css";
 import "./d311-desktop-results-toolbar.css";
-
-/* UX-K T50: self-host via next/font (replaces Google Fonts @import in globals.css). */
-const notoSansTC = Noto_Sans_TC({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "700"],
-  variable: "--font-noto-sans-tc",
-  display: "swap"
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-space-grotesk",
-  display: "swap"
-});
 
 export const metadata: Metadata = {
   title: "Nestory Listing Admin",
@@ -83,11 +71,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       {/* suppressHydrationWarning: themeInitScript below mutates
           body[data-theme] from localStorage before React hydrates, so the
           server's "dark" attribute intentionally differs from the client's. */}
-      <body
-        className={`${notoSansTC.variable} ${spaceGrotesk.variable}`}
-        data-theme="dark"
-        suppressHydrationWarning
-      >
+      <body data-theme="dark" suppressHydrationWarning>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <VariantCharacterViewportBridge />
         <div className="app-root">

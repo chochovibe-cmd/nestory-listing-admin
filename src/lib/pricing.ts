@@ -23,6 +23,7 @@ export interface PricingSettings {
    * Applied at CSV export time (body.showmoreMarkupPercent), then 尾數美化.
    */
   showmoreMarkupPercent: number;
+  version?: string | null;
 }
 
 export interface CalculatePriceOptions {

@@ -123,6 +123,7 @@ import {
 import { Station3PublishModal } from "@/components/listing/Station3PublishModal";
 import { PublishPriceConfirmModal } from "@/components/listing/PublishPriceConfirmModal";
 import { isPricePlaceholderCny } from "@/lib/import/captureTypes";
+import { assessCaptureHealth, CAPTURE_HEALTH_TITLE } from "@/lib/import/captureHealth";
 import { isVariantPriceUnconfirmedCapture, type PublishBlocker } from "@/lib/shopify/publishReadiness";
 import { formatMockPublishResponseMessage } from "@/lib/drafts/publishBatch";
 import {
@@ -536,6 +537,19 @@ export function ResultCard({
       priceRefreshSkuIds.has(row.sourceSkuId) &&
       !row.sellPrice.trim()
   ).length;
+  const captureHealth = useMemo(
+    () => assessCaptureHealth({
+      rawCapture: draft.raw_capture,
+      productCny: draft.cny_price,
+      variants: variantPrices.map((variant) => ({
+        cny_price: variant.cny_price,
+        cost_is_inherited: variant.cost_is_inherited
+      })),
+      detailImageCount: imageMarks.filter((image) => image.image_type === "detail").length,
+      shopifyProductId: draft.shopify_product_id
+    }),
+    [draft.raw_capture, draft.cny_price, draft.shopify_product_id, variantPrices, imageMarks]
+  );
 
   async function restoreExcludedVariant(index: number) {
     setRestoreBusyIndex(index);
@@ -2722,8 +2736,17 @@ export function ResultCard({
     ) : null;
 
   const detectWarnsEl =
-    copyLocked || blockWarnCount > 0 || confirmWarnCount > 0 || suggestWarnCount > 0 ? (
+    captureHealth.incomplete || copyLocked || blockWarnCount > 0 || confirmWarnCount > 0 || suggestWarnCount > 0 ? (
       <span className="rc-detect-chips rc-detect-chips--warns">
+        {captureHealth.incomplete ? (
+          <span
+            className="rc-detect-warn is-block"
+            data-testid="capture-health-chip"
+            title={`${CAPTURE_HEALTH_TITLE}：\n${captureHealth.issues.map((issue) => issue.label).join("\n")}`}
+          >
+            ⚠ 抓取可能不完整，建議重抓
+          </span>
+        ) : null}
         {copyLocked ? (
           <span className="rc-detect-chip" title="文案已鎖定">
             🔒 文案已鎖定
@@ -3287,6 +3310,7 @@ export function ResultCard({
                 imageIds.forEach((id) => pendingVariantImageDeletionIdsRef.current.add(id));
               }}
               onWarning={setVariantWarning}
+              captureHealthIssues={captureHealth.issues}
               priceMode={priceMode}
               priceUnconfirmed={isVariantPriceUnconfirmedCapture(draft.raw_capture)}
               productCost={

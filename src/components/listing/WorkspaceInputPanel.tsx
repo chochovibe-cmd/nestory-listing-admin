@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { PricingFormulaPreview, PricingLowMarginWarning, PricingSyncNote } from "@/components/settings/PricingSyncNote";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -11,7 +12,7 @@ import {
   type PriceMode,
   type PricingSettings
 } from "@/lib/pricing";
-import { getStoredPricingSettings, setStoredPricingSettings } from "@/lib/pricingSettingsStore";
+import { getPricingSyncStatus, getStoredPricingSettings, PRICING_SYNC_STATUS_EVENT, setStoredPricingSettings, type PricingSyncStatus } from "@/lib/pricingSettingsStore";
 import { SALE_STATUS_OPTIONS } from "@/lib/saleStatus";
 import { readStoredAiProvider } from "@/components/ProviderSwitcher";
 import {
@@ -338,6 +339,8 @@ export function WorkspaceInputPanel({
   const [dedupeDismissed, setDedupeDismissed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pricingSettings, setPricingSettings] = useState<PricingSettings>(defaultPricingSettings);
+  const [pricingSyncStatus, setPricingSyncStatus] = useState<PricingSyncStatus>(() => getPricingSyncStatus());
+  const pricingSyncLocked = pricingSyncStatus.state === "loading" || pricingSyncStatus.state === "load_error";
   /** T109: generation steps drive the CTA label (no inline notice under the button). */
   const [submitPhase, setSubmitPhase] = useState<
     null | "saving" | "uploading" | "analyzing" | "generating"
@@ -466,8 +469,24 @@ export function WorkspaceInputPanel({
         setPricingSettings(detail);
       }
     }
+    function onSyncStatus(event: Event) {
+      const detail = (event as CustomEvent<PricingSyncStatus>).detail;
+      if (detail) {
+        setPricingSyncStatus(detail);
+        if (detail.state === "cloud" || detail.state === "saved") {
+          // A version-only cloud load must reach formula snapshots without
+          // emitting a settings change that disables profit-driven pricing.
+          setPricingSettings(getStoredPricingSettings());
+        }
+      }
+    }
     window.addEventListener("nestory:pricing-settings-changed", onChange);
-    return () => window.removeEventListener("nestory:pricing-settings-changed", onChange);
+    window.addEventListener(PRICING_SYNC_STATUS_EVENT, onSyncStatus);
+    setPricingSyncStatus(getPricingSyncStatus());
+    return () => {
+      window.removeEventListener("nestory:pricing-settings-changed", onChange);
+      window.removeEventListener(PRICING_SYNC_STATUS_EVENT, onSyncStatus);
+    };
   }, []);
 
   // B8: label for「預設 X」next to the one-shot model button (D3-A).
@@ -2947,6 +2966,7 @@ export function WorkspaceInputPanel({
               <div className="field">
                 <label>CNY 匯率</label>
                 <input
+                  disabled={pricingSyncLocked}
                   onChange={(e) => updatePricingSetting("rate", Number(e.target.value))}
                   step="0.01"
                   type="number"
@@ -2956,6 +2976,7 @@ export function WorkspaceInputPanel({
               <div className="field">
                 <label>成本係數</label>
                 <input
+                  disabled={pricingSyncLocked}
                   onChange={(e) => updatePricingSetting("costMultiplier", Number(e.target.value))}
                   step="0.01"
                   type="number"
@@ -2965,6 +2986,7 @@ export function WorkspaceInputPanel({
               <div className="field">
                 <label>利潤加成</label>
                 <input
+                  disabled={pricingSyncLocked}
                   onChange={(e) => updatePricingSetting("marginMultiplier", Number(e.target.value))}
                   step="0.01"
                   type="number"
@@ -2974,6 +2996,7 @@ export function WorkspaceInputPanel({
               <div className="field">
                 <label>定價加成（原價）</label>
                 <input
+                  disabled={pricingSyncLocked}
                   onChange={(e) => updatePricingSetting("compareAtMultiplier", Number(e.target.value))}
                   step="0.01"
                   type="number"
@@ -2983,6 +3006,7 @@ export function WorkspaceInputPanel({
               <div className="field">
                 <label>最低售價 TWD</label>
                 <input
+                  disabled={pricingSyncLocked}
                   onChange={(e) => updatePricingSetting("minPrice", Number(e.target.value))}
                   step="1"
                   type="number"
@@ -2992,6 +3016,7 @@ export function WorkspaceInputPanel({
               <div className="field">
                 <label>Showmore 加價 %</label>
                 <input
+                  disabled={pricingSyncLocked}
                   onChange={(e) =>
                     updatePricingSetting("showmoreMarkupPercent", Number(e.target.value))
                   }
@@ -3001,15 +3026,11 @@ export function WorkspaceInputPanel({
                 />
               </div>
             </div>
-            <div className="formula-preview">
-              售價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.marginMultiplier.toFixed(2)}
-              <br />
-              定價 ＝ 成本 × {pricingSettings.rate.toFixed(2)} × {pricingSettings.costMultiplier.toFixed(2)} × {pricingSettings.compareAtMultiplier.toFixed(2)}
-              <br />
-              Showmore +{pricingSettings.showmoreMarkupPercent}%（匯出時已套用）
-            </div>
+            <PricingFormulaPreview settings={pricingSettings} />
+            <PricingLowMarginWarning settings={pricingSettings} />
             <div className="settings-note">
-              成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝。與「設定 → 定價」共用本機儲存。
+              成本係數 {pricingSettings.costMultiplier.toFixed(2)} 含運費手續費緩衝。
+              <PricingSyncNote variant="workspace" />
               <br />
               ✨ 算出的售價會自動「尾數美化」到順眼的價格帶（如 199／299／399／599／990…）。
               <br />

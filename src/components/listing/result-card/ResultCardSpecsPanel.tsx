@@ -15,6 +15,7 @@ import {
 } from "@/lib/variants";
 import type { ExcludedVariantEntry } from "@/lib/variants/restoreExcludedVariant";
 import type { PriceMode } from "@/types/domain";
+import { captureHealthHowTo, type CaptureHealthIssue } from "@/lib/import/captureHealth";
 
 /** S2: 規格（款式）分頁 — 從 ResultCard 展開區拆出。 */
 export function ResultCardSpecsPanel({
@@ -33,6 +34,7 @@ export function ResultCardSpecsPanel({
   onRestoreAllSoldOut,
   priceRecalcPending = 0,
   priceUnconfirmed = false,
+  captureHealthIssues = [],
   onDimensionsChange,
   onRowsChange,
   onQueueImageDeletion,
@@ -58,6 +60,7 @@ export function ResultCardSpecsPanel({
   priceRecalcPending?: number;
   /** PRICE-GUARD: capture hid/flagged per-variant prices and nobody confirmed them yet. */
   priceUnconfirmed?: boolean;
+  captureHealthIssues?: CaptureHealthIssue[];
   onDimensionsChange: (dims: VariantDimension[]) => void;
   onRowsChange: (rows: VariantFormRow[]) => void;
   onQueueImageDeletion?: (imageIds: string[]) => void;
@@ -87,6 +90,11 @@ export function ResultCardSpecsPanel({
     <div className="rc-tabpanel" role="tabpanel">
       <div className="rc-field rc-span-2">
         <div className="rc-label">規格（款式）</div>
+        {captureHealthIssues.length > 0 ? (
+          <p className="capture-health-note" role="alert" data-testid="capture-health-note">
+            ⚠ 抓取可能不完整，建議重抓：{captureHealthIssues.map((issue) => issue.label).join("、")}。{captureHealthHowTo(captureHealthIssues)}
+          </p>
+        ) : null}
         {costMissing ? (
           <p className="price-soft-warn" style={{ margin: "0 0 8px" }}>
             ⚠ 成本未取得

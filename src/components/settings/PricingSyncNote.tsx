@@ -6,6 +6,7 @@ import { defaultPricingSettings, type PricingSettings } from "@/lib/pricing";
 import {
   getPricingSyncStatus,
   getStoredPricingSettings,
+  hasOwnPricingSettingsOnThisDevice,
   PRICING_SYNC_STATUS_EVENT,
   seedCloudPricingFromThisDevice,
   type PricingSyncStatus
@@ -45,6 +46,7 @@ export function PricingFormulaPreview({ settings }: { settings: PricingSettings 
 export function PricingSyncNote({ variant }: { variant: "settings" | "workspace" }) {
   const [status, setStatus] = useState<PricingSyncStatus>(() => getPricingSyncStatus());
   const [settings, setSettings] = useState<PricingSettings>(defaultPricingSettings);
+  const [hasOwn, setHasOwn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [seedError, setSeedError] = useState<string | null>(null);
 
@@ -56,11 +58,13 @@ export function PricingSyncNote({ variant }: { variant: "settings" | "workspace"
     const onPricing = (event: Event) => {
       const next = (event as CustomEvent<PricingSettings>).detail;
       setSettings(next ? { ...defaultPricingSettings, ...next } : getStoredPricingSettings());
+      setHasOwn(hasOwnPricingSettingsOnThisDevice());
     };
     window.addEventListener(PRICING_SYNC_STATUS_EVENT, onStatus);
     window.addEventListener("nestory:pricing-settings-changed", onPricing);
     setStatus(getPricingSyncStatus());
     setSettings(getStoredPricingSettings());
+    setHasOwn(hasOwnPricingSettingsOnThisDevice());
     return () => {
       window.removeEventListener(PRICING_SYNC_STATUS_EVENT, onStatus);
       window.removeEventListener("nestory:pricing-settings-changed", onPricing);
@@ -83,7 +87,15 @@ export function PricingSyncNote({ variant }: { variant: "settings" | "workspace"
   if (status.state === "save_error") return <p className="price-soft-warn">⚠ 沒有存到雲端：{status.message || "連線失敗"}。數字已改回雲端上的設定。</p>;
   if (status.state === "invalid") return <p className="price-soft-warn">⚠ {status.message || "定價設定不正確"}，這個數字還沒有存。</p>;
   if (status.state === "load_error") return <p className="price-soft-warn">⚠ 讀不到雲端定價設定，暫時用這台裝置上次的設定。請重新整理頁面再試；讀到之前不能修改。</p>;
+  if (variant === "workspace" && !hasOwn) return <p className="settings-note">雲端還沒有全店共用的定價設定，這台裝置目前用系統預設值。請到平常定價的那台電腦，在「設定 → 💰 定價規則」設為全店共用。</p>;
   if (variant === "workspace") return <p className="settings-note">雲端還沒有全店共用的定價設定，目前用這台裝置的設定。到「設定 → 💰 定價規則」可以設為全店共用。</p>;
+  if (!hasOwn) return (
+    <div className="notice" role="status">
+      <p>雲端還沒有全店共用的定價設定，現在每台電腦／手機各用各的，算出的售價可能不一樣。</p>
+      <p>這台裝置沒有自己的定價設定，目前顯示的是系統預設值：匯率 {settings.rate}、成本係數 {settings.costMultiplier}、利潤係數 {settings.marginMultiplier}、定價係數 {settings.compareAtMultiplier}、最低售價 NT${settings.minPrice}、Showmore +{settings.showmoreMarkupPercent}%</p>
+      <p>請到平常定價的那台電腦，打開這一頁按「把這台的設定設為全店共用」。</p>
+    </div>
+  );
 
   return (
     <div className="notice" role="status">

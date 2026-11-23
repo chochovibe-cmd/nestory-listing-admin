@@ -105,6 +105,18 @@ export function getStoredPricingSettings(): PricingSettings {
   return cloudSettings ?? readLocal();
 }
 
+/** True only when this browser really holds its own pricing values (not just the code defaults). */
+export function hasOwnPricingSettingsOnThisDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    return Object.keys(pickEditablePricing(JSON.parse(raw))).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function mergedCurrent(): PricingSettings {
   return cloudSettings ?? readLocal();
 }
@@ -208,6 +220,9 @@ export function setStoredPricingSettings(patch: Partial<PricingSettings>): void 
 }
 
 export async function seedCloudPricingFromThisDevice(): Promise<{ ok: boolean; message?: string }> {
+  if (!hasOwnPricingSettingsOnThisDevice()) {
+    return { ok: false, message: "這台裝置沒有自己的定價設定，請到平常定價的那台電腦操作" };
+  }
   if (status.state !== "cloud_empty" || seedInFlight) return { ok: false, message: "目前不能設定全店共用" };
   const local = readLocal();
   const parsed = validatePricingSettings(local);

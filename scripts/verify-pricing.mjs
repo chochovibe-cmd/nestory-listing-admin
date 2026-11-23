@@ -400,6 +400,89 @@ await check("禁區：文案線檔案沒有引用本包新檔", () => {
   }
 });
 
+// ── 沒有自己設定的裝置不能設為全店共用（11-23 預覽驗收發現）────────
+await check("裝置設定判斷：無值／壞 JSON／無可編輯欄位／不能用 → false，有值 → true；沒有就不送 PUT", async () => {
+  const KEY = "nestory_pricing_settings";
+  const NO_OWN = "這台裝置沒有自己的定價設定，請到平常定價的那台電腦操作";
+  const data = new Map();
+  let storageBroken = false;
+  const guard = () => { if (storageBroken) throw new Error("storage unavailable"); };
+  const win = new EventTarget();
+  win.localStorage = {
+    getItem: (key) => { guard(); return data.has(key) ? data.get(key) : null; },
+    setItem: (key, value) => { guard(); data.set(key, value); },
+    removeItem: (key) => { guard(); data.delete(key); }
+  };
+  const calls = [];
+  const savedGlobals = { window: globalThis.window, fetch: globalThis.fetch, url: process.env.NEXT_PUBLIC_SUPABASE_URL, anon: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY };
+  globalThis.window = win;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.test";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon";
+  globalThis.fetch = async (url, init = {}) => {
+    const method = init.method ?? "GET";
+    calls.push({ url: String(url), method, body: init.body ?? null });
+    const payload = method === "PUT"
+      ? { ok: true, settings: { ...JSON.parse(init.body).settings, version: "2026-11-23T00:00:00Z" }, updatedAt: "2026-11-23T00:00:00Z" }
+      : { ok: true, settings: null, updatedAt: null };
+    return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const store = await load(STORE);
+    const puts = () => calls.filter((call) => call.method === "PUT").length;
+    assert.equal(store.hasOwnPricingSettingsOnThisDevice(), false, "無值");
+    store.getStoredPricingSettings();
+    for (let i = 0; i < 50 && store.getPricingSyncStatus().state !== "cloud_empty"; i++) await new Promise((r) => setTimeout(r, 5));
+    assert.equal(store.getPricingSyncStatus().state, "cloud_empty");
+
+    const rejected = async (label) => {
+      assert.equal(store.hasOwnPricingSettingsOnThisDevice(), false, label);
+      assert.deepEqual(await store.seedCloudPricingFromThisDevice(), { ok: false, message: NO_OWN }, label);
+      assert.equal(puts(), 0, `${label} 不可送 PUT`);
+    };
+    await rejected("無值");
+    data.set(KEY, "{broken");
+    await rejected("壞 JSON");
+    data.set(KEY, "[1,2]");
+    await rejected("不是物件");
+    data.set(KEY, JSON.stringify({ foo: 1, version: "x" }));
+    await rejected("沒有可編輯欄位");
+    storageBroken = true;
+    await rejected("localStorage 不能用");
+    storageBroken = false;
+
+    data.set(KEY, JSON.stringify({ ...DEFAULTS, rate: 4.62 }));
+    assert.equal(store.hasOwnPricingSettingsOnThisDevice(), true, "有值");
+    assert.deepEqual(await store.seedCloudPricingFromThisDevice(), { ok: true });
+    assert.equal(puts(), 1, "有自己的設定才送一次 PUT");
+    assert.equal(JSON.parse(calls.find((call) => call.method === "PUT").body).settings.rate, 4.62);
+  } finally {
+    if (savedGlobals.window === undefined) delete globalThis.window; else globalThis.window = savedGlobals.window;
+    globalThis.fetch = savedGlobals.fetch;
+    if (savedGlobals.url === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL; else process.env.NEXT_PUBLIC_SUPABASE_URL = savedGlobals.url;
+    if (savedGlobals.anon === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = savedGlobals.anon;
+  }
+});
+
+await check("沒有自己的設定：畫面不顯示按鈕、文案固定；改過數字後才重新判斷", () => {
+  const src = read(NOTE);
+  const start = src.indexOf("if (!hasOwn) return (");
+  assert.ok(start > 0, "缺 !hasOwn 區塊");
+  const end = src.indexOf("</div>", start);
+  const block = src.slice(start, end);
+  assert.ok(!block.includes("<Button"), "沒有自己的設定時不可有按鈕");
+  for (const line of [
+    "雲端還沒有全店共用的定價設定，現在每台電腦／手機各用各的，算出的售價可能不一樣。",
+    "這台裝置沒有自己的定價設定，目前顯示的是系統預設值：匯率 ",
+    "請到平常定價的那台電腦，打開這一頁按「把這台的設定設為全店共用」。"
+  ]) assert.ok(block.includes(line), `缺「${line}」`);
+  assert.equal((block.match(/<p>/g) ?? []).length, 3, "固定三行");
+  assert.equal((src.match(/<Button\b/g) ?? []).length, 1, "只有一顆按鈕");
+  assert.ok(src.indexOf("<Button") > end, "按鈕只在有自己設定的分支");
+  assert.ok(src.includes("雲端還沒有全店共用的定價設定，這台裝置目前用系統預設值。請到平常定價的那台電腦，在「設定 → 💰 定價規則」設為全店共用。"), "工作台文案");
+  assert.match(src, /variant === "workspace" && !hasOwn/);
+  assert.equal((src.match(/setHasOwn\(hasOwnPricingSettingsOnThisDevice\(\)\)/g) ?? []).length, 2, "useEffect 與 onPricing 都要更新");
+});
+
 console.log(`\nverify-pricing: ${passed} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log(failures.map((f) => `  - ${f}`).join("\n"));

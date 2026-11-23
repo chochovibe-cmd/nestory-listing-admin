@@ -135,7 +135,7 @@ export default async function NewDraftPage({
 
   // GPT handoffs have their own bounded list, outside the 40-item work queue.
   const { data: gptDraftRows } = await supabase.from("product_drafts")
-    .select("id, created_by, source_platform, source_url, original_title, taobao_title, cny_price, gpt_handoff_at, gpt_exported_at, server_price_confidence:raw_capture->server->>price_confidence, client_price_confidence:raw_capture->client_meta->>price_confidence")
+    .select("id, created_by, source_platform, source_url, original_title, taobao_title, cny_price, gpt_handoff_at, gpt_exported_at, server_price_confidence:raw_capture->server->>price_confidence, client_price_confidence:raw_capture->client_meta->>price_confidence, capture_client_meta:raw_capture->client_meta, capture_server:raw_capture->server")
     .not("gpt_handoff_at", "is", null).neq("status", "archived")
     .order("gpt_handoff_at", { ascending: false }).limit(200);
   const gptDrafts = (gptDraftRows ?? []) as Omit<GptRawListItem, "product_images" | "product_variants">[];
@@ -143,9 +143,9 @@ export default async function NewDraftPage({
   const [gptImageResult, gptVariantResult] = gptIds.length ? await Promise.all([
     fetchAllRows((from, to) => supabase.from("product_images")
       .select("id, draft_id, image_type, sort_order, processed_file_url, original_file_url")
-      .eq("image_type", "main").in("draft_id", gptIds).order("sort_order").order("id").range(from, to)),
+      .in("image_type", ["main", "detail"]).in("draft_id", gptIds).order("sort_order").order("id").range(from, to)),
     fetchAllRows((from, to) => supabase.from("product_variants")
-      .select("id, draft_id, sort_order, cny_price")
+      .select("id, draft_id, sort_order, cny_price, cost_is_inherited")
       .in("draft_id", gptIds).order("sort_order").order("id").range(from, to))
   ]) : [{ data: [] }, { data: [] }];
   const gptProducts: GptRawListItem[] = gptDrafts.map((draft) => ({ ...draft,

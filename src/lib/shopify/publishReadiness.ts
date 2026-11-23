@@ -261,7 +261,7 @@ function clientMetaOf(rawCapture: unknown): unknown {
 }
 
 /** Every variant ends up with the same cost (NULL cost = the product cost it inherits). */
-function allVariantCostsIdentical(rows: ReadinessVariantRow[], productCny: number | null): boolean {
+export function allVariantCostsIdentical(rows: ReadinessVariantRow[], productCny: number | null): boolean {
   if (rows.length < 2) return false;
   const costs = rows.map((row) => toFiniteNumber(row.cny_price) ?? productCny);
   return costs.every(

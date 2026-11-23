@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CollapsibleSection } from "@/components/listing/CollapsibleSection";
 import { Button } from "@/components/ui/Button";
+import { PricingFormulaPreview, PricingLowMarginWarning, PricingSyncNote } from "@/components/settings/PricingSyncNote";
 import {
   AI_PROVIDER_STORAGE_KEY,
   readStoredAiProvider
@@ -22,6 +23,7 @@ import {
   getStoredPricingSettings,
   setStoredPricingSettings
 } from "@/lib/pricingSettingsStore";
+import { getPricingSyncStatus, PRICING_SYNC_STATUS_EVENT, type PricingSyncStatus } from "@/lib/pricingSettingsStore";
 import {
   FX_REFERENCE_CHANGED_EVENT,
   getStoredFxReference,
@@ -79,6 +81,8 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
 
   const [provider, setProvider] = useState<AiProvider>("openai");
   const [pricing, setPricing] = useState<PricingSettings>(defaultPricingSettings);
+  const [pricingSyncStatus, setPricingSyncStatus] = useState<PricingSyncStatus>(() => getPricingSyncStatus());
+  const pricingSyncLocked = pricingSyncStatus.state === "loading" || pricingSyncStatus.state === "load_error";
   const [liveRate, setLiveRate] = useState<number | null>(null);
   const [liveRateLoading, setLiveRateLoading] = useState(false);
   const [liveRateError, setLiveRateError] = useState<string | null>(null);
@@ -267,11 +271,18 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
         setLiveRate(detail.rate);
       }
     }
+    function onPricingSyncStatus(event: Event) {
+      const detail = (event as CustomEvent<PricingSyncStatus>).detail;
+      if (detail) setPricingSyncStatus(detail);
+    }
     window.addEventListener("nestory:pricing-settings-changed", onPricing);
+    window.addEventListener(PRICING_SYNC_STATUS_EVENT, onPricingSyncStatus);
+    setPricingSyncStatus(getPricingSyncStatus());
     window.addEventListener("nestory:automation-prefs-changed", onAuto);
     window.addEventListener(FX_REFERENCE_CHANGED_EVENT, onFxRef);
     return () => {
       window.removeEventListener("nestory:pricing-settings-changed", onPricing);
+      window.removeEventListener(PRICING_SYNC_STATUS_EVENT, onPricingSyncStatus);
       window.removeEventListener("nestory:automation-prefs-changed", onAuto);
       window.removeEventListener(FX_REFERENCE_CHANGED_EVENT, onFxRef);
     };
@@ -513,6 +524,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
           summary={`匯率 ${pricing.rate.toFixed(2)} · Showmore +${pricing.showmoreMarkupPercent}%`}
           title="💰 定價規則"
         >
+          <PricingSyncNote variant="settings" />
           <div className="settings-row">
             <span>
               套用中匯率{" "}
@@ -534,7 +546,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             >
               抓取今日匯率
             </Button>
-            <Button size="sm" disabled={liveRate == null} onClick={applyLiveRate} type="button">
+            <Button size="sm" disabled={liveRate == null || pricingSyncLocked} onClick={applyLiveRate} type="button">
               套用今日匯率
             </Button>
           </div>
@@ -548,6 +560,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             <div className="field">
               <label>CNY 匯率</label>
               <input
+                disabled={pricingSyncLocked}
                 onChange={(e) => updatePricing("rate", Number(e.target.value))}
                 step="0.01"
                 type="number"
@@ -557,6 +570,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             <div className="field">
               <label>成本係數</label>
               <input
+                disabled={pricingSyncLocked}
                 onChange={(e) => updatePricing("costMultiplier", Number(e.target.value))}
                 step="0.01"
                 type="number"
@@ -566,6 +580,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             <div className="field">
               <label>利潤加成</label>
               <input
+                disabled={pricingSyncLocked}
                 onChange={(e) => updatePricing("marginMultiplier", Number(e.target.value))}
                 step="0.01"
                 type="number"
@@ -575,6 +590,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             <div className="field">
               <label>定價加成（原價）</label>
               <input
+                disabled={pricingSyncLocked}
                 onChange={(e) => updatePricing("compareAtMultiplier", Number(e.target.value))}
                 step="0.01"
                 type="number"
@@ -584,6 +600,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             <div className="field">
               <label>最低售價 TWD</label>
               <input
+                disabled={pricingSyncLocked}
                 onChange={(e) => updatePricing("minPrice", Number(e.target.value))}
                 step="1"
                 type="number"
@@ -593,6 +610,7 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
             <div className="field">
               <label>Showmore 加價 %</label>
               <input
+                disabled={pricingSyncLocked}
                 onChange={(e) => updatePricing("showmoreMarkupPercent", Number(e.target.value))}
                 step="0.5"
                 type="number"
@@ -600,21 +618,10 @@ export function SettingsPanel({ embedded = false }: { embedded?: boolean } = {})
               />
             </div>
           </div>
-          <div className="formula-preview">
-            售價 ＝ 成本 × {pricing.rate.toFixed(2)} × {pricing.costMultiplier.toFixed(2)} ×{" "}
-            {pricing.marginMultiplier.toFixed(2)}
-            <br />
-            定價 ＝ 成本 × {pricing.rate.toFixed(2)} × {pricing.costMultiplier.toFixed(2)} ×{" "}
-            {pricing.compareAtMultiplier.toFixed(2)}
-            <br />
-            Showmore 匯出時另加 {pricing.showmoreMarkupPercent}% 後再尾數美化（匯出時已套用）
-          </div>
+          <PricingFormulaPreview settings={pricing} />
+          <PricingLowMarginWarning settings={pricing} />
           <div className="settings-note">
-            與工作檯底部「定價規則設定」共用本機儲存，雙向同步。
-            <br />
             ✨ 尾數美化：低／中／高價帶順眼數字；手填利潤時跳最近美化價。
-            <br />
-            Showmore +% 暫存本機（Q9-A），匯出 CSV 時帶入；日後可轉 team_settings。
           </div>
         </CollapsibleSection>
 

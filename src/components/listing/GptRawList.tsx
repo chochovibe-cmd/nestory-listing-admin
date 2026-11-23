@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { showToast } from "@/components/Toast";
 import { gptPriceWarningsFromCosts, type GptRawListItem } from "@/lib/csv/gptRawExport";
+import { assessCaptureHealth } from "@/lib/import/captureHealth";
 import { undoArchiveDrafts, UNDO_TOAST_MS } from "@/lib/drafts/quickUndo";
 
 function timestamp(value?: string | null) {
@@ -119,6 +120,16 @@ export function GptRawList({ products }: { products: GptRawListItem[] }) {
         p.cny_price,
         variants.map((v) => v.cny_price)
       );
+      const captureHealth = assessCaptureHealth({
+        rawCapture: { client_meta: p.capture_client_meta, server: p.capture_server },
+        productCny: p.cny_price,
+        variants: variants.map((variant) => ({
+          cny_price: variant.cny_price,
+          cost_is_inherited: variant.cost_is_inherited
+        })),
+        detailImageCount: (p.product_images ?? []).filter((item) => item.image_type === "detail").length,
+        shopifyProductId: null
+      });
       return <div className="lib-row" key={p.id}>
         <input className="rc-checkbox" type="checkbox" aria-label={`選取 ${title}`} checked={selected.has(p.id)} disabled={Boolean(busy)} onChange={() => setSelected((prev) => { const next = new Set(prev); if (next.has(p.id)) next.delete(p.id); else next.add(p.id); return next; })} />
         {imageUrl ? <img className="lib-thumb" style={{ width: 48, height: 48 }} src={imageUrl} alt="" /> : <span className="lib-thumb lib-thumb--empty" style={{ width: 48, height: 48 }}>—</span>}
@@ -126,6 +137,9 @@ export function GptRawList({ products }: { products: GptRawListItem[] }) {
           <div className="lib-title" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.source_url ? <a href={p.source_url} target="_blank" rel="noopener noreferrer">{title}</a> : title}</div>
           <div className="lib-meta"><span className="lib-meta-text">{p.source_platform} · {variants.length} 款 · {costs.length ? `成本 ¥${min}${min === max ? "" : `–¥${max}`}` : "成本未抓到"} · 送出 {timestamp(p.gpt_handoff_at)}{p.gpt_exported_at ? ` · 已匯出 ${timestamp(p.gpt_exported_at)}` : ""}</span>
             {warnings ? <span className="schip schip--warn" style={{ maxWidth: "100%", whiteSpace: "normal", overflowWrap: "anywhere" }}>{warnings}</span> : null}
+            {captureHealth.incomplete ? <span className="schip schip--error" data-testid="capture-health-chip" style={{ maxWidth: "100%", whiteSpace: "normal", overflowWrap: "anywhere" }}>
+              ⚠ 抓取可能不完整，建議重抓：{captureHealth.issues.map((issue) => issue.label).join("、")}
+            </span> : null}
           </div>
         </div>
         <div className="lib-actions"><a className="mini-btn" href={`/drafts/new?draft=${p.id}`}>回輸入區</a></div>

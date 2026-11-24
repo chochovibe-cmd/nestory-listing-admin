@@ -12,6 +12,8 @@ import {
   type SharpBatchServiceClient
 } from "@/lib/images/runSharpBatch";
 
+export const PUBLISH_IMAGE_CONCURRENCY = 4;
+
 export type PrepareImagesForPublishResult = {
   ok: boolean;
   sharp: "done" | "failed" | "skipped" | "not_run";
@@ -21,6 +23,7 @@ export type PrepareImagesForPublishResult = {
   finalizeUploaded: number;
   finalizeFailed: number;
   warnings: string[];
+  timingsMs: { sharp: number; finalize: number };
   error?: string;
 };
 
@@ -39,6 +42,7 @@ const PREP_IMAGE_COLUMNS =
 
 /** Same eligibility the whole-draft (non-explicit) sharp path uses; minus rows already reusable. */
 function isSharpEligible(img: PrepImageRow): boolean {
+  if (img.image_type === "spec") return false;
   const decision = decideSharpAction({
     imageType: img.image_type ?? "",
     processIntent: img.process_intent as any,
@@ -85,6 +89,7 @@ export function chunkImageIds(ids: string[], size = SHARP_BATCH_MAX_IMAGES): str
 export type PrepareImagesDeps = {
   runSharp?: typeof runSharpBatchForDraft;
   runFinalize?: typeof runFinalizeForDraft;
+  now?: () => number;
 };
 
 async function loadImageRows(
@@ -129,6 +134,9 @@ export async function prepareImagesForPublish(input: {
 }): Promise<PrepareImagesForPublishResult> {
   const runSharp = input.deps?.runSharp ?? runSharpBatchForDraft;
   const runFinalize = input.deps?.runFinalize ?? runFinalizeForDraft;
+  const now = input.deps?.now ?? Date.now;
+  let sharpDuration = 0;
+  let finalizeDuration = 0;
   const warnings: string[] = [];
   let sharp: PrepareImagesForPublishResult["sharp"] = "not_run";
   let finalize: PrepareImagesForPublishResult["finalize"] = "not_run";
@@ -152,12 +160,14 @@ export async function prepareImagesForPublish(input: {
     shouldRunFinalize = finalizeIds.length > 0;
   }
 
+  const sharpStart = now();
   if (!preflightKnown) {
     // Preflight unavailable: legacy whole-draft call (may hit the 12-row cap and warn once).
     try {
       const sharpResult = await runSharp({
         serviceSupabase: input.serviceSupabase,
-        draftId: input.draftId
+        draftId: input.draftId,
+        concurrency: PUBLISH_IMAGE_CONCURRENCY
       });
       if (sharpResult.ok) {
         sharp = sharpResult.failed > 0 && sharpResult.processed === 0 ? "failed" : "done";
@@ -180,7 +190,8 @@ export async function prepareImagesForPublish(input: {
         const r = await runSharp({
           serviceSupabase: input.serviceSupabase,
           draftId: input.draftId,
-          imageIds: ids
+          imageIds: ids,
+          concurrency: PUBLISH_IMAGE_CONCURRENCY
         });
         if (r.ok) {
           okChunks += 1;
@@ -201,6 +212,8 @@ export async function prepareImagesForPublish(input: {
   } else {
     sharp = "skipped";
   }
+
+  if (sharp !== "skipped") sharpDuration = Math.max(0, now() - sharpStart);
 
   // Finalize after sharp: re-read rows so freshly written processed_file_url is respected.
   if (preflightKnown && shouldRunSharp) {
@@ -227,10 +240,11 @@ export async function prepareImagesForPublish(input: {
     return null;
   };
 
+  const finalizeStart = now();
   if (!preflightKnown) {
     try {
       const err = applyFinalize(
-        await runFinalize({ serviceSupabase: input.serviceSupabase, draftId: input.draftId })
+        await runFinalize({ serviceSupabase: input.serviceSupabase, draftId: input.draftId, concurrency: PUBLISH_IMAGE_CONCURRENCY })
       );
       if (err) {
         finalize = "failed";
@@ -252,7 +266,8 @@ export async function prepareImagesForPublish(input: {
           await runFinalize({
             serviceSupabase: input.serviceSupabase,
             draftId: input.draftId,
-            imageIds: ids
+            imageIds: ids,
+            concurrency: PUBLISH_IMAGE_CONCURRENCY
           })
         );
         if (err) chunkError ??= err;
@@ -270,6 +285,8 @@ export async function prepareImagesForPublish(input: {
     finalize = "skipped";
   }
 
+  if (finalize !== "skipped" || (!preflightKnown || (needsFinalizeNow && finalizeIds.length > 0))) finalizeDuration = Math.max(0, now() - finalizeStart);
+
   // Soft fail: still allow publish with original URLs when mock / partial CDN.
   // Hard block only when both sharp and finalize fully failed with zero progress
   // and we have no usable prior state — leave that to payload/media layer.
@@ -281,6 +298,7 @@ export async function prepareImagesForPublish(input: {
     sharpFailed,
     finalizeUploaded,
     finalizeFailed,
-    warnings
+    warnings,
+    timingsMs: { sharp: sharpDuration, finalize: finalizeDuration }
   };
 }

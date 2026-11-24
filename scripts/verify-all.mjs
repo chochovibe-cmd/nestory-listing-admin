@@ -77,6 +77,8 @@ const scripts = [
   "scripts/verify-review-flow.mjs",
   // Pre-publish image prep: >12 image rows are chunked, detail rows untouched.
   "scripts/verify-prepare-images.mjs",
+  // 14 PERF: publish image parallelization, timing, and safety (mock only).
+  "scripts/verify-publish-speed.mjs",
   // Per-variant selling price: each variant priced from its own cost (fine ladder), locks kept.
   "scripts/verify-variant-pricing.mjs",
   // MOBILE-VARIANT-LAYOUT: Workspace accordion grid must not blow out the variant table.

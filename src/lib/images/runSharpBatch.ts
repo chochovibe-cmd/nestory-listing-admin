@@ -14,7 +14,7 @@ import {
 } from "@/lib/images/imagePipeline";
 import { fetchServerImage } from "@/lib/images/fetchServerImage";
 import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
-import { processImageBuffer, SHARP_BATCH_MAX_IMAGES } from "@/lib/images/sharpProcess";
+import { processImageBuffer as defaultProcessImageBuffer, SHARP_BATCH_MAX_IMAGES } from "@/lib/images/sharpProcess";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
@@ -61,7 +61,7 @@ export type RunSharpBatchForDraftInput = {
   concurrency?: number;
   deps?: {
     fetchBytes?: (url: string) => Promise<Buffer>;
-    processImage?: typeof processImageBuffer;
+    processImage?: typeof defaultProcessImageBuffer;
   };
 };
 
@@ -108,7 +108,7 @@ export async function runSharpBatchForDraft(
 ): Promise<RunSharpBatchForDraftResult> {
   const { serviceSupabase } = input;
   const fetchBytes = input.deps?.fetchBytes ?? fetchOriginalBuffer;
-  const processImage = input.deps?.processImage ?? processImageBuffer;
+  const processImageBuffer = input.deps?.processImage ?? defaultProcessImageBuffer;
   const draftId = input.draftId.trim();
   if (!draftId) {
     return { ok: false, draftId: "", error: "draftId is required", httpStatus: 400 };
@@ -256,7 +256,7 @@ export async function runSharpBatchForDraft(
         throw new Error(afterAi ? "missing generated_file_url" : "missing original_file_url");
       }
       const buffer = await fetchBytes(sourceUrl);
-      const out = await processImage(buffer, {
+      const out = await processImageBuffer(buffer, {
         squareMode: img.image_type === "main" || img.image_type === "variant" ? "blur-extend" : "none"
       });
 

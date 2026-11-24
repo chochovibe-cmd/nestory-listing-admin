@@ -17,7 +17,7 @@ import { register } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Exact COPY-A2c §1 and §6 text, kept here so CI needs no untracked .tmp files.
-const EXPECTED_A2C_WRITER = "你是潮巢 Nestory 的商品小編，寫給台灣顧客看。你是真心喜歡這些周邊的人：語氣真誠、有人味、可以俏皮幽默，像在跟朋友推坑。句子要通順，念起來順口。\n\n【兩條線】\n1. 盡情發揮：畫面、情境、心情、角色個性、使用時的感覺、送禮想像、日常比喻。這是行銷，要寫得讓人心動、想下單。商品資料少的時候，更要靠文筆把情境和心情寫出來。\n2. 不能編：數字、尺寸、容量、材質、內容物、贈品、角色名、品牌名、功能與效果（降噪、續航、防水…）、醫療或保健功效。這些只能照「事實表」寫；事實表沒有的就不提、不猜，也不說「未提供」「無法確認」。\n\n【不要寫】出貨、到貨、代購、現貨、預購、價格、退換、保固、保養提醒、顏色差異提醒，這些由系統處理。全文不出現「商品資料」「標示」「頁面」「來源」等字眼。用台灣用語與全形標點。不要把客群年齡或身分講死（不寫國中生、高中生、國高中生、大學生、學生妹）。\n\n【輸出】只輸出下列 8 組標記，標記照抄、各佔一行；沒內容的欄位，標記照寫、內容留空。\n\n[[title_item]]\n商品名：有角色就把角色放最前面，再接品項，最多加 1 個同義詞，用空格隔開，18 字內。例：「虎杖悠仁 掌心玩偶」「大耳狗電腦包 手提斜背」「熱敷震動眼部按摩儀」。不要寫品牌、IP（標題前段系統會放），不要堆關鍵字，不要重複同一個詞。\n[[title_diff]]\n款式摘要，14 字內：款式數或一個規格亮點，兩件事之間用「．」或「＆」連接。例：「冬日系列盲盒．9 款含隱藏版」「水仙黃＆布偶粉」「14 吋＆16 吋」「6400 萬像素．2 款組合」。不要逐一列出全部款式，不要照抄淘寶款名。只有一款又沒有亮點就留空。\n[[generated_description_html]]\n純文字，段名照寫，段與段之間空一行：\n商品介紹\n1～2 段，合計 120–220 字。第一句給一個看得見的畫面或一個生活場景；全段至少用到 2 個事實表的具體事實、1 個使用情境，並帶出一點情緒（期待、心動、會心一笑）。最後一句可以是一句有人味的小結（像範本 3），但不喊口號。\n適合誰\n2～3 點，「・」開頭，每點 35 字內。每點是一個具體的人＋具體情境（例：「想把咒術高專一年級生整齊排在書架上的收藏家」），點與點不能講同一種人。不要寫「想自己收的人」「想送人的人」這種分類。\n[[product_highlights]]\n3～4 行，「・」開頭，每行寫成「小標：說明」，整行 40 字內。小標 4～10 字，點出一個賣點；說明一句話，講這個賣點對顧客有什麼好處或畫面，要有介紹感。每行講不同的事；同類商品都有的特徵（例：邊緣光滑、拉鍊開合）不要硬湊；寫不滿 4 行就寫 3 行。\n[[why_we_chose_it]]\n1～2 句、30–70 字。先從這 5 個角度挑 1 個最適合這件商品的：送禮、稀有難找、反差萌、實用、收藏價值；再帶著興奮感推薦，可以用驚嘆號、可以跟顧客說話。不准平鋪直敘地重講規格。\n[[generated_faq_html]]\n0–3 題，寧缺勿濫。只寫買家真的會猶豫、而且回答能多給一點資訊或畫面的題目：大小放得下什麼／裝得下什麼、跟什麼裝置或器材合不合用、怎麼用怎麼充電怎麼掛、盒子裡有什麼；電器才可以問台灣電壓。答案要事實表答得出來。\n不准出現這些題目：可以指定款式／顏色嗎、怎麼選／選哪款、是不是隨機、多久會到、觸感或手感如何、適合送禮嗎、好不好用、值不值得買、非電器的「台灣可以用嗎」、材質是什麼（只是把規格念一次）。\n「Q：」「A：」各一行，題間空一行。A 先講結論、50 字內，鼓勵用日常比喻（像範本 6）。\n[[seo_title]]\n給 Google 搜尋結果的標題，32 字內：IP 或品牌（中文為主，有官方英文可並列）＋角色＋品項＋1～2 個顧客會搜的詞（品項別名、周邊、禮物、交換禮物）。標題放不下的關鍵字放這裡。不要加店名，系統會補。\n[[seo_description]]\nGoogle 搜尋結果下的介紹，80–100 字、2～3 個完整句子：先說是什麼（IP、角色、品項），再給一個讓人想點進來的理由，自然帶 1 個使用或送禮情境。不寫出貨、價格。\n\n【不重複】同一件事在各欄位只講一次：商品介紹講畫面與情境，收藏亮點講賣點，適合誰講人，為什麼選它講推薦角度，FAQ 講猶豫點。\n\n【語氣範本｜只學語氣和寫法，裡面的商品、數字、角色都不是這次的商品，不准照抄任何事實】\n1. 商品介紹開場：「把球袋拉開的時候，先看到一顆龍珠。」\n2. 商品介紹：「把萬事屋的日常隨身帶著走……不論是掛在托特包上低調應援，還是裝飾在牛仔外套上，都能讓路過的同好一眼認出那份吐槽魂。」\n3. 商品介紹收尾：「對收三麗鷗的人來說，難的從來不是要不要買，是只能挑一款。」\n4. 收藏亮點：「透明開口：不拉開就能確認內容物，找筆少一次翻箱」\n5. 適合誰：「想把咒術高專一年級生整齊排在書架上的收藏家」「通勤要背筆電，又想空出雙手拿大杯冰美式的上班族」\n6. FAQ：「Q：尺寸大約多大？」「A：高約 11.9 公分，大概比罐裝咖啡再小一點，放桌上完全不佔位。」\n7. 為什麼選它：「七龍珠的周邊很多，但能跟著球袋一起出門的不多。這款是少數會真的被拿出來用的聯名！」\n8. 為什麼選它：「這個超適合送禮的！實用又是正版授權～喜歡 Pingu 的朋友，還在煩惱對方的禮物嗎？不用擔心，還有多款禮盒包裝可挑選。」\n\n【不要這樣寫｜老闆扣分的寫法】\n・換個商品也成立的空話：「不只是握把套，更是球場上最溫柔的風景。」「是冬日裡最溫柔的陪伴。」\n・沒有說服力的理由：「12 款一次到齊，能一字排開慢慢挑，是單款徽章給不了的。」「很少見到……結合得這麼可愛」。\n・平鋪直敘的為什麼選它：「捨棄銳利的戰鬥神情，用柔和色調重新詮釋角色。」（只描述、沒有推薦）\n・不通順、沒意思的畫面句：「掛在後背包上走一段路也很難被忽略」「收在抽屜裡等待送禮的時機」「虎杖悠仁就站在最左邊那個位置」。\n・硬湊的亮點：「光滑圓形邊緣」「款式共 2 款，下單前請確認顏色與款號」這種同類都有、或系統已經處理的事。\n・廢話 FAQ：「可以指定顏色嗎？」「兩款怎麼選？」「台灣可以用嗎？」（非電器）「多久會到？」；回答把規格再念一遍、或寫太長在廢話邊緣。\n・說資料不夠：「目前未提供尺寸」「以實物為準」。\n・重複講出貨、代購、等待天數。\n・少用：存在感、療癒、儀式感、質感、不浮誇、小焦點、不只是…更是。";
+const EXPECTED_A2C_WRITER = "你是潮巢 Nestory 的商品小編，寫給台灣顧客看。你是真心喜歡這些周邊的人：語氣真誠、有人味、可以俏皮幽默，像在跟朋友推坑。句子要通順，念起來順口。\n\n【兩條線】\n1. 盡情發揮：畫面、情境、心情、角色個性、使用時的感覺、送禮想像、日常比喻。這是行銷，要寫得讓人心動、想下單。商品資料少的時候，更要靠文筆把情境和心情寫出來。\n2. 不能編：數字、尺寸、容量、材質、內容物、贈品、角色名、品牌名、功能與效果（降噪、續航、防水…）、醫療或保健功效。這些只能照「事實表」寫；事實表沒有的就不提、不猜，也不說「未提供」「無法確認」。\n\n【不要寫】出貨、到貨、代購、現貨、預購、價格、退換、保固、保養提醒、顏色差異提醒，這些由系統處理。全文不出現「商品資料」「標示」「頁面」「來源」等字眼。用台灣用語與全形標點。角色用台灣常用的中文名（例如大耳狗、酷洛米、美樂蒂），不要只寫英文名。不要把客群年齡或身分講死（不寫國中生、高中生、國高中生、大學生、學生妹）。\n\n【輸出】只輸出下列 8 組標記，標記照抄、各佔一行；沒內容的欄位，標記照寫、內容留空。\n\n[[title_item]]\n商品名：有角色就把角色放最前面，再接品項，最多加 1 個同義詞，用空格隔開，18 字內。例：「虎杖悠仁 掌心玩偶」「大耳狗電腦包 手提斜背」「熱敷震動眼部按摩儀」。不要寫品牌、IP（標題前段系統會放），不要堆關鍵字，不要重複同一個詞。\n[[title_diff]]\n款式摘要，14 字內：款式數或一個規格亮點，兩件事之間用「．」或「＆」連接。例：「冬日系列盲盒．9 款含隱藏版」「水仙黃＆布偶粉」「14 吋＆16 吋」「6400 萬像素．2 款組合」。不要逐一列出全部款式，不要照抄淘寶款名。只有一款又沒有亮點就留空。\n[[generated_description_html]]\n純文字，段名照寫，段與段之間空一行：\n商品介紹\n1～2 段，字數照使用者訊息裡【篇幅】那一行。第一句給一個看得見的畫面或一個生活場景；全段至少用到 2 個事實表的具體事實、1 個使用情境，並帶出一點情緒（期待、心動、會心一笑）。最後一句可以是一句有人味的小結（像範本 3），但不喊口號。資料少的商品就寫短：幾句有重點、有資訊、有文筆就好，不要為了湊字數寫空話。超過 120 字請分成 2 段，每段 2–3 句。\n適合誰\n2～3 點，「・」開頭，每點 35 字內。每點是一個具體的人＋具體情境（例：「想把咒術高專一年級生整齊排在書架上的收藏家」），點與點不能講同一種人。不要寫「想自己收的人」「想送人的人」這種分類。\n[[product_highlights]]\n3～4 行，「・」開頭，每行寫成「小標：說明」，整行 40 字內。小標 4～10 字，點出一個賣點；說明一句話，講這個賣點對顧客有什麼好處或畫面，要有介紹感。每行講不同的事；同類商品都有的特徵（例：邊緣光滑、拉鍊開合）不要硬湊；寫不滿 4 行就寫 3 行。\n[[why_we_chose_it]]\n1～2 句、30–70 字。先從這 5 個角度挑 1 個最適合這件商品的：送禮、稀有難找、反差萌、實用、收藏價值；再帶著興奮感推薦，可以用驚嘆號、可以跟顧客說話。不准平鋪直敘地重講規格。\n[[generated_faq_html]]\n0–3 題，寧缺勿濫。只寫買家真的會猶豫、而且回答能多給一點資訊或畫面的題目：大小放得下什麼／裝得下什麼、跟什麼裝置或器材合不合用、怎麼用怎麼充電怎麼掛、盒子裡有什麼；電器才可以問台灣電壓。答案要事實表答得出來。\n不准出現這些題目：可以指定款式／顏色嗎、怎麼選／選哪款、是不是隨機、多久會到、觸感或手感如何、適合送禮嗎、好不好用、值不值得買、非電器的「台灣可以用嗎」、材質是什麼（只是把規格念一次）。\n「Q：」「A：」各一行，題間空一行。A 先講結論、50 字內，鼓勵用日常比喻（像範本 6）。不要問款式清單已經寫過的事（例如「有哪些款」），不是插電的商品不要問「台灣能不能用」。\n[[seo_title]]\n給 Google 搜尋結果的標題，32 字內：IP 或品牌（中文為主，有官方英文可並列）＋角色＋品項＋1～2 個顧客會搜的詞（品項別名、周邊、禮物、交換禮物）。標題放不下的關鍵字放這裡。不要加店名，系統會補。\n[[seo_description]]\nGoogle 搜尋結果下的介紹，80–100 字、2～3 個完整句子：先說是什麼（IP、角色、品項），再給一個讓人想點進來的理由，自然帶 1 個使用或送禮情境。不寫出貨、價格。\n\n【不重複】同一件事在各欄位只講一次：商品介紹講畫面與情境，收藏亮點講賣點，適合誰講人，為什麼選它講推薦角度，FAQ 講猶豫點。\n\n【語氣範本｜只學語氣和寫法，裡面的商品、數字、角色都不是這次的商品，不准照抄任何事實】\n1. 商品介紹開場：「把球袋拉開的時候，先看到一顆龍珠。」\n2. 商品介紹：「把萬事屋的日常隨身帶著走……不論是掛在托特包上低調應援，還是裝飾在牛仔外套上，都能讓路過的同好一眼認出那份吐槽魂。」\n3. 商品介紹收尾：「對收三麗鷗的人來說，難的從來不是要不要買，是只能挑一款。」\n4. 收藏亮點：「透明開口：不拉開就能確認內容物，找筆少一次翻箱」\n5. 適合誰：「想把咒術高專一年級生整齊排在書架上的收藏家」「通勤要背筆電，又想空出雙手拿大杯冰美式的上班族」\n6. FAQ：「Q：尺寸大約多大？」「A：高約 11.9 公分，大概比罐裝咖啡再小一點，放桌上完全不佔位。」\n7. 為什麼選它：「七龍珠的周邊很多，但能跟著球袋一起出門的不多。這款是少數會真的被拿出來用的聯名！」\n8. 為什麼選它：「這個超適合送禮的！實用又是正版授權～喜歡 Pingu 的朋友，還在煩惱對方的禮物嗎？不用擔心，還有多款禮盒包裝可挑選。」\n\n【不要這樣寫｜老闆扣分的寫法】\n・換個商品也成立的空話：「不只是握把套，更是球場上最溫柔的風景。」「是冬日裡最溫柔的陪伴。」\n・沒有說服力的理由：「12 款一次到齊，能一字排開慢慢挑，是單款徽章給不了的。」「很少見到……結合得這麼可愛」。\n・平鋪直敘的為什麼選它：「捨棄銳利的戰鬥神情，用柔和色調重新詮釋角色。」（只描述、沒有推薦）\n・不通順、沒意思的畫面句：「掛在後背包上走一段路也很難被忽略」「收在抽屜裡等待送禮的時機」「虎杖悠仁就站在最左邊那個位置」。\n・硬湊的亮點：「光滑圓形邊緣」「款式共 2 款，下單前請確認顏色與款號」這種同類都有、或系統已經處理的事。\n・廢話 FAQ：「可以指定顏色嗎？」「兩款怎麼選？」「台灣可以用嗎？」（非電器）「多久會到？」；回答把規格再念一遍、或寫太長在廢話邊緣。\n・說資料不夠：「目前未提供尺寸」「以實物為準」。\n・重複講出貨、代購、等待天數。\n・少用：存在感、療癒、儀式感、質感、不浮誇、小焦點、不只是…更是。";
 const EXPECTED_A2C_REVIEW = "你是潮巢的文案審稿員。輸入有「事實表」（含款式清單）和一份文案（每句前面有編號）。你只負責找出寫了假事實的句子，不改寫、不新增。\n\n只有這種才刪：句子寫了事實表和款式清單都沒有的「硬事實」——\n1. 角色名、品牌名、商品名；\n2. 數字、尺寸、容量、重量、材質、內容物、贈品、款式數；\n3. 事實表沒有的功能或規格（例如降噪、防水、續航時間、藍牙版本）。\n\n每一筆都要附上證據「term」＝句子裡那個沒根據的詞，必須從句子原樣抄出來。\n\n絕對不要刪：形容、畫面、情境、心情、比喻、使用感受、送禮想像、可愛的誇飾、推薦語氣、驚嘆號。角色或品牌的中英文、別名（例如 Cinnamoroll／大耳狗）不算編造。FAQ 跟其他欄位講到同一件事也不要刪。拿不準就不刪。\n\n只輸出 JSON：{\"sentences\":[{\"id\":3,\"term\":\"64GB\"}],\"faq\":[{\"id\":1,\"term\":\"防水\"}],\"terms\":[{\"field\":\"title|seo_title|seo_description\",\"term\":\"要拿掉的詞\"}]}";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -851,7 +851,7 @@ if (runA2) {
     detectedIpName: "火影忍者", detectedCharacterName: "佐助", detectedProductType: "徽章", detectedProductBrand: "",
     detectedCategory: "", sku: "", provider: "test", model: "test",
   };
-  const a2Brief = { identity: { brand: "", ip: "火影忍者", brandEnglish: "", ipEnglish: "", character: "佐助", productType: "徽章" }, variantNames: [], specLines: [], archetypeFlags: [], voltage: "", requiresVoltage: false, taiwanRisks: [] };
+  const a2Brief = { title: {}, variantGuide: [], buyerHesitations: [], reviewInsights: [], confirmedFacts: [], differentiators: [], useCases: [], fanHooks: [], identity: { brand: "", ip: "火影忍者", brandEnglish: "", ipEnglish: "", character: "佐助", productType: "徽章" }, variantNames: [], specLines: [], archetypeFlags: [], voltage: "", requiresVoltage: false, taiwanRisks: [] };
   await check("A2b-1 清理不確定／出貨句：只移除整句", () => {
     const clean = need(bp, "cleanBriefCopy")({ ...a2Output, generatedDescriptionHtml: "商品介紹\n畫面很可愛。預購約需 14 個工作天。\n\n適合誰\n・送給朋友。" });
     assert.match(clean.generatedDescriptionHtml, /畫面很可愛。/);
@@ -942,6 +942,74 @@ if (runA2) {
     const candidates = need(bp, "briefAutoFixCandidates")({ ...a2Output, productHighlights: ["・只剩一行"] });
     assert.ok(candidates.some((x) => x.field === "product_highlights"));
   });
+  await check("A2c-fix2 F1 資料量與篇幅、分段邊界", () => {
+    const richness = need(bp, "briefFactRichness");
+    const facts = "商品身份\n- IP：三麗鷗\n- 品牌：測試\n- 品項：吊飾\n款式清單\n- 大耳狗\n- 酷洛米\n可安全寫入的規格\n";
+    assert.equal(richness(facts + "- 尺寸：5cm\n- 材質：布\n- 特色：刺繡"), "thin");
+    assert.equal(richness(facts + "- 尺寸：5cm\n- 材質：布\n- 特色：刺繡\n- 重量：10g"), "rich");
+    const rich = { ...a2Brief, specLines: ["尺寸：5cm", "材質：布", "重量：10g", "特色：刺繡"] };
+    const issues = (intro, brief) => bp.briefAutoFixCandidates({ ...a2Output, generatedDescriptionHtml: `商品介紹\n${intro}\n\n適合誰\n・收藏者\n・送禮者` }, brief).filter((x) => x.field === "generated_description_html");
+    for (const [brief, min, max] of [[a2Brief, 60, 160], [rich, 80, 260]]) {
+      assert.equal(issues("介".repeat(min), brief).length, 0);
+      assert.match(issues("介".repeat(min - 1), brief)[0].message, new RegExp(`${min}–${max}`));
+      assert.match(issues("介".repeat(121), brief)[0].message, /分 2 段/);
+      assert.equal(issues("介".repeat(60) + "\n\n" + "介".repeat(max - 60), brief).length, 0);
+      assert.equal(issues("介".repeat(60) + "\n\n" + "介".repeat(max - 59), brief).length, 1);
+    }
+  });
+  await check("A2c-fix2 F1/F5 writer 篇幅、單次修正與審稿前清理", async () => {
+    for (const rich of [false, true]) {
+      const brief = { ...a2Brief, specLines: rich ? ["甲：1", "乙：2", "丙：3", "丁：4"] : [] };
+      const calls = []; let reviewed;
+      const got = await bp.runBriefWriterPipeline({ input: { rawTitle: "吊飾", tone: "潮巢導購版", saleStatus: "現貨" }, brief,
+        provider: { generate: async (input) => { calls.push(input); return { ...a2Output, titleItem: "Cinnamoroll 吊飾", productHighlights: ["亮點甲", "亮點乙", "亮點丙"], generatedDescriptionHtml: `商品介紹\n${calls.length === 1 ? "短文" : "介".repeat(80)}\n\n適合誰\n・收藏者\n・送禮者` }; } },
+        review: async (_input, _brief, output) => { reviewed = output; return { output, review: { failed: false } }; }
+      });
+      assert.equal(calls.length, 2); assert.equal(got.retries, 1);
+      assert.ok(calls.every((call) => call.productBrief.includes(rich ? "【篇幅】商品介紹寫 80–260 字。" : "【篇幅】這件商品資料不多，商品介紹寫 60–160 字。")));
+      assert.match(calls[1].regenIssueMessages.join(""), rich ? /80–260/ : /60–160/);
+      assert.match(calls[1].regenIssueMessages.join(""), /分 2 段/);
+      assert.equal(reviewed.titleItem, "大耳狗 吊飾");
+    }
+  });
+  await check("A2c-fix2 F2 未知資訊不顯示，有值保留", () => {
+    for (const value of ["未知", "不明", "不詳", "無", "暫無", "未提供", "未標示", "待確認", "未確認", "N/A", "NA", "---", "——"]) {
+      const rendered = html.formatBriefDescriptionHtml({ intro: "介紹", highlights: [], suitableFor: [], info: { ip: value, ipEnglish: value, character: value, brand: value, brandEnglish: value, productType: value, specLines: [`尺寸：${value}`, "尺寸：29 × 8 cm"] } });
+      assert.doesNotMatch(rendered, /<li>(?:IP|角色|品牌|品項)：/);
+      assert.ok(!rendered.includes(`<li>尺寸：${value}</li>`)); assert.match(rendered, /尺寸：29 × 8 cm/);
+    }
+    const rendered = html.formatBriefDescriptionHtml({ intro: "介紹", highlights: [], suitableFor: [], info: { ip: "火影忍者", character: "佐助", brand: "品牌甲", productType: "徽章" } });
+    for (const text of ["IP：火影忍者", "角色：佐助", "品牌：品牌甲", "品項：徽章"]) assert.ok(rendered.includes(text));
+  });
+  await check("A2c-fix2 F3 FAQ 款式與台灣使用問題", () => {
+    const questions = ["有哪些款式？", "哪幾種角色？", "系列有哪些？", "款式有哪些？", "台灣能用嗎？", "插頭要轉接嗎？", "電壓是多少？", "怎麼收納？", "台灣的收藏迷適合怎麼擺？"];
+    const source = { ...a2Output, generatedFaqHtml: questions.map((q) => `<h3><strong>${q}</strong></h3><p>可放桌上。</p>`).join("\n\n") };
+    for (const mains of [false, true]) {
+      const got = bp.cleanBriefCopy(source, { ...a2Brief, requiresVoltage: mains, voltage: mains ? "220V" : "5V" }).generatedFaqHtml;
+      assert.doesNotMatch(got, /有哪些|哪幾/); assert.match(got, /怎麼收納/); assert.match(got, /台灣的收藏迷/);
+      assert.equal(got.includes("台灣能用嗎"), mains); assert.equal(got.includes("插頭"), mains); assert.equal(got.includes("電壓"), mains);
+    }
+    assert.equal(bp.cleanBriefCopy({ ...source, generatedFaqHtml: "<h3><strong>有哪些款式？</strong></h3><p>兩款。</p>" }, a2Brief).generatedFaqHtml, "");
+  });
+  await check("A2c-fix2 F4 已列款式去掉重複總數", () => {
+    for (const [titleDiff, expected] of [["水仙黃＆布偶粉．共 2 款", "水仙黃＆布偶粉"], ["水仙黃、布偶粉・共 2 款", "水仙黃、布偶粉"], ["冬日系列盲盒．9 款含隱藏版", "冬日系列盲盒．9 款含隱藏版"], ["4 款角色可選", "4 款角色可選"], ["共 2 款", "共 2 款"], ["水仙黃 布偶粉 共 2 款", "水仙黃 布偶粉"]]) {
+      const got = bp.assembleBriefTitle({ ...a2Output, titleDiff }, { ...a2Brief, variantNames: ["水仙黃", "布偶粉"] });
+      assert.equal(got.split(" | ").at(-1), expected);
+    }
+  });
+  await check("A2c-fix2 F5 台灣角色名稱、去重與 SEO 保留英文", async () => {
+    const names = await load("src/lib/copyPipeline/taiwanNames.ts"); const apply = need(names, "applyTaiwanCharacterNames");
+    for (const [source, expected] of [["Cinnamoroll 的大耳朵", "大耳狗的大耳朵"], ["大耳狗 Cinnamoroll", "大耳狗"], ["Cinnamoroll（大耳狗）", "大耳狗"], ["大耳狗（Cinnamoroll）", "大耳狗"], ["玉桂狗", "大耳狗"], ["库洛米和美乐蒂", "酷洛米和美樂蒂"], ["Hello Kitty", "Hello Kitty"]]) assert.equal(apply(source, "text"), expected);
+    for (const field of ["seoTitle", "metaDescription"]) {
+      assert.equal(apply("大耳狗 Cinnamoroll", field), "大耳狗 Cinnamoroll"); assert.equal(apply("玉桂狗 Cinnamoroll", field), "大耳狗 Cinnamoroll");
+    }
+    for (const [english, taiwan] of Object.entries(names.TAIWAN_CHARACTER_NAMES)) assert.equal(apply(english, "text"), taiwan);
+    const text = "Cinnamoroll 的大耳朵";
+    const got = bp.cleanBriefCopy({ ...a2Output, titleItem: text, generatedDescriptionHtml: `商品介紹\n${text}\n\n適合誰\n・收藏者`, whyWeChoseIt: text, productHighlights: [text], generatedFaqHtml: `<h3><strong>${text}怎麼收納？</strong></h3><p>${text}。</p>`, seoTitle: "大耳狗 Cinnamoroll", metaDescription: "玉桂狗 Cinnamoroll。" }, a2Brief);
+    for (const field of ["titleItem", "whyWeChoseIt"]) assert.equal(got[field], "大耳狗的大耳朵");
+    assert.deepEqual(got.productHighlights, ["大耳狗的大耳朵"]); assert.match(got.generatedDescriptionHtml, /大耳狗的大耳朵/); assert.match(got.generatedFaqHtml, /大耳狗的大耳朵/);
+    assert.equal(got.seoTitle, "大耳狗 Cinnamoroll"); assert.equal(got.metaDescription, "大耳狗 Cinnamoroll。");
+  });
   await check("A2c-fix1 F1 所有 Brief 欄位與商品資訊修正繁體用字", async () => {
     const clean = need(bp, "cleanBriefCopy");
     const text = "這臺相機在臺灣的社群平臺。大小適中且能貼閤眼周。小傢夥閤眼。";
@@ -968,7 +1036,7 @@ if (runA2) {
   });
   await check("A2c-fix1 F3 USB 與低電壓不算插電電器", async () => {
     const { isMainsPowered } = await load("src/lib/copyPipeline/copyChecks.ts");
-    const question = "這款相機在台灣充電方便嗎？";
+    const question = "這款相機在台灣可以用嗎？";
     for (const [voltage, expected] of [["5V", false], ["5V---1A", false], ["DC 12V", false], ["12V / 24V", false], ["USB 220V", false], ["type-c", false], ["TypeC", false], ["220V", true], ["AC 110-240V", true], ["12V / 220V", true], ["", true]]) {
       const brief = { ...a2Brief, voltage, requiresVoltage: true };
       assert.equal(isMainsPowered(brief), expected, voltage);
@@ -1084,7 +1152,7 @@ if (runA2) {
     assert.match(applied.output.generatedFaqHtml, /尺寸/);
     assert.ok(candidates({ ...a2Output, productHighlights: ["一：短", "二：短"] }).some((x) => x.field === "product_highlights"));
     assert.ok(candidates({ ...a2Output, productHighlights: ["小標：" + "長".repeat(41)] }).some((x) => x.field === "product_highlights"));
-    assert.ok(candidates({ ...a2Output, generatedDescriptionHtml: `商品介紹\n${"介".repeat(70)}\n\n適合誰\n・收藏者\n・送禮者` }).some((x) => x.field === "generated_description_html"));
+    assert.ok(candidates({ ...a2Output, generatedDescriptionHtml: `商品介紹\n${"介".repeat(59)}\n\n適合誰\n・收藏者\n・送禮者` }).some((x) => x.field === "generated_description_html"));
     const both = candidates({ ...a2Output, generatedDescriptionHtml: "商品介紹\n短\n\n適合誰\n・收藏者\n・送禮者", productHighlights: ["一：短", "二：短"] });
     assert.equal(both[0]?.field, "generated_description_html");
     const age = candidates({ ...a2Output, generatedDescriptionHtml: "商品介紹\n" + "場景".repeat(50) + "\n\n適合誰\n・高中生好友\n・收藏者" });

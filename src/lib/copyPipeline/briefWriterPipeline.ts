@@ -8,6 +8,7 @@ import { extractFaqPairs, normalizeDescriptionToPlainText, formatBriefDescriptio
 import { normalizeFaqOutput } from "@/lib/contentGenerator/copyFormatRepair";
 import { localizeToTaiwanTraditionalText } from "@/lib/zhTwLocalizer";
 import { finalizeBriefSeo } from "./seoTemplate";
+import { applyTaiwanCharacterNames } from "./taiwanNames";
 import { AI_AUTO_FIX_BUDGET_TWD, cleanupBriefCopyText, isMainsPowered, type CopyIssue } from "./copyChecks";
 
 // Exact prompt copied from COPY-A2c §6.
@@ -120,10 +121,29 @@ export async function reviewBriefCopy(input: CopyProviderInput, brief: ProductBr
   } catch { return { output, review: { failed: true, deleted: emptyDecision(), deletedTexts: [], rejected: 0, ...(cost ? { cost } : {}) } }; }
 }
 
+export function briefFactRichness(factText: string): "thin" | "rich" {
+  let relevant = false;
+  let count = 0;
+  for (const raw of factText.split(/\r?\n/u)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (!/^[-・•]/u.test(line)) {
+      relevant = /^(?:已確認事實|這件商品真正有差異的地方|可安全寫入的規格|規格|特色)$/u.test(line);
+      continue;
+    }
+    const value = line.replace(/^[-・•]\s*/u, "");
+    if (relevant && value && !/^(?:IP|角色|品牌(?:／聯名方)?|品項|款式(?:數)?)[：:]/u.test(value)) count++;
+  }
+  return count >= 4 ? "rich" : "thin";
+}
+
 export function briefAutoFixCandidates(output: CopyProviderOutput, brief?: ProductBrief): CopyIssue[] {
   const body = splitBriefDescription(output.generatedDescriptionHtml); const issues: CopyIssue[] = [];
   const add = (field: CopyRegenField, message: string) => issues.push({ code: "empty_field", field, message: "【文案檢查】" + message });
-  if (body.intro.length < 80 || body.intro.length > 280 || body.audience.length < 2) add("generated_description_html", "商品介紹需 80–280 字，適合誰需 2 點");
+  const richness = briefFactRichness(brief ? serializeProductBriefForWriter(brief) : "");
+  const [min, max] = richness === "rich" ? [80, 260] : [60, 160];
+  const length = body.intro.replace(/\s/gu, "").length;
+  if (length < min || length > max || body.audience.length < 2 || (length > 120 && body.intro.split(/\n\s*\n/u).filter((part) => part.trim()).length < 2)) add("generated_description_html", `商品介紹需 ${min}–${max} 字，超過 120 字請分 2 段（中間空一行），適合誰需 2 點`);
   if (output.productHighlights.length < 3 || output.productHighlights.some((x) => x.length > 40)) add("product_highlights", "亮點需至少 3 行、每行不超過 40 字");
   const mid = brief ? cleanTitleMid(output.titleItem ?? "", brief) : (output.titleItem ?? "").trim();
   if (!mid) add("enriched_title", "品項標題是空的");
@@ -135,17 +155,20 @@ export function briefAutoFixCandidates(output: CopyProviderOutput, brief?: Produ
 
 // The cleaner is deliberately local to successful Brief writing, never to legacy tones.
 export function cleanBriefCopy(output: CopyProviderOutput, brief?: ProductBrief): CopyProviderOutput {
-  const cleanText = (text: string) => cleanupBriefCopyText(localizeToTaiwanTraditionalText(text));
-  const cleanSentence = (text: string) => sentences(cleanText(text)).filter((s) => !badSentence.test(s) && !medicalSentence.test(s) && !cannedSentence.test(s)).join("");
+  const cleanText = (text: string, field = "text") => cleanupBriefCopyText(localizeToTaiwanTraditionalText(applyTaiwanCharacterNames(text, field)));
+  const cleanSentence = (text: string, field = "text") => sentences(cleanText(text, field)).filter((s) => !badSentence.test(s) && !medicalSentence.test(s) && !cannedSentence.test(s)).join("");
   const body = splitBriefDescription(output.generatedDescriptionHtml);
-  const cleanIntro = body.intro.split(/\n\s*\n/).map(cleanSentence).filter(Boolean).join("\n\n");
-  const faq = extractFaqPairs(output.generatedFaqHtml).filter((q) => !badSentence.test(q.question + q.answer) && !medicalSentence.test(q.question + q.answer) && !forbiddenFaq.test(q.question) && (isMainsPowered(brief) || !/[台臺]灣|電壓/.test(q.question)));
-  const singleLine = (text: string) => cleanText(text).replace(/\s+/g, " ").trim();
-  return { ...output, titleItem: singleLine(output.titleItem ?? ""), titleDiff: singleLine(output.titleDiff ?? ""), enrichedTitle: singleLine(output.enrichedTitle), seoTitle: singleLine(output.seoTitle), metaDescription: cleanSentence(output.metaDescription), generatedDescriptionHtml: description(cleanIntro, body.audience.map(cleanSentence).filter(Boolean)), productHighlights: output.productHighlights.map((line) => cleanSentence(line.replace(/^[・•\-]\s*/, ""))).filter(Boolean), whyWeChoseIt: cleanSentence(output.whyWeChoseIt), generatedFaqHtml: normalizeFaqOutput(faq.map((q) => `Q：${cleanText(q.question)}\nA：${cleanSentence(q.answer)}`).join("\n\n")) };
+  const cleanIntro = body.intro.split(/\n\s*\n/).map((part) => cleanSentence(part)).filter(Boolean).join("\n\n");
+  const faq = extractFaqPairs(output.generatedFaqHtml).filter((q) => !badSentence.test(q.question + q.answer) && !medicalSentence.test(q.question + q.answer) && !forbiddenFaq.test(q.question) && !/(有哪些|哪幾|幾種|幾款|多少款).{0,6}(款|造型|角色|顏色)|款式有哪些|系列有哪些/u.test(q.question) && (isMainsPowered(brief) || !/台灣.{0,8}(使用|能用|可以用|限制|適用)|電壓|插頭/u.test(cleanText(q.question))));
+  const singleLine = (text: string, field = "text") => cleanText(text, field).replace(/\s+/g, " ").trim();
+  return { ...output, titleItem: singleLine(output.titleItem ?? ""), titleDiff: singleLine(output.titleDiff ?? ""), enrichedTitle: singleLine(output.enrichedTitle), seoTitle: singleLine(output.seoTitle, "seoTitle"), metaDescription: cleanSentence(output.metaDescription, "metaDescription"), generatedDescriptionHtml: description(cleanIntro, body.audience.map((line) => cleanSentence(line)).filter(Boolean)), productHighlights: output.productHighlights.map((line) => cleanSentence(line.replace(/^[・•\-]\s*/, ""))).filter(Boolean), whyWeChoseIt: cleanSentence(output.whyWeChoseIt), generatedFaqHtml: normalizeFaqOutput(faq.map((q) => `Q：${cleanText(q.question)}\nA：${cleanSentence(q.answer)}`).join("\n\n")) };
 }
 
 export async function runBriefWriterPipeline(args: { input: CopyProviderInput; brief: ProductBrief; provider: CopyProvider; review?: typeof reviewBriefCopy; initialStages?: AiStageCost[] }) {
-  const { input, brief, provider } = args;
+  const { brief, provider } = args;
+  const factText = serializeProductBriefForWriter(brief);
+  const lengthHint = briefFactRichness(factText) === "thin" ? "【篇幅】這件商品資料不多，商品介紹寫 60–160 字。" : "【篇幅】商品介紹寫 80–260 字。";
+  const input = { ...args.input, productBrief: `${args.input.productBrief?.trim() || factText}\n${lengthHint}` };
   let output = cleanBriefCopy(await provider.generate(input), brief);
   const stages: AiStageCost[] = [...(args.initialStages ?? [])];
   const record = (value: CopyProviderOutput, stage: "writer" | "fix") => { if (value.callCosts?.length) { for (const call of value.callCosts) stages.push(stageCost({ stage, model: call.model, via: value.via ?? "none", usage: call.usage, reportedCostUsd: call.usage.reportedCostUsd })); } else if (value.usage) stages.push(stageCost({ stage, model: value.model, via: value.via ?? "none", usage: value.usage, reportedCostUsd: value.usage.reportedCostUsd })); };
@@ -201,6 +224,9 @@ export function assembleBriefTitle(output: CopyProviderOutput, brief: ProductBri
   const mid = cleanTitleMid(output.titleItem ?? "", brief) || brief.identity.productType;
   const norm = (value: string) => value.replace(/\s/g, "").toLowerCase();
   let diff = (output.titleDiff ?? "").replace(/[【】]/g, "").replace(/正版授權/g, "").replace(/\+/g, "＋").replace(/(?<=[\p{Script=Han}])[·・‧.•](?=[\p{Script=Han}\d])/gu, "．").replace(/&/g, "＆").replace(/\s*([．＆])\s*/g, "$1").trim();
+  if (/[＆、／]/u.test(diff) || brief.variantNames.filter((name) => name.trim() && diff.includes(name.trim())).length >= 2) {
+    diff = diff.replace(/[．・·]?\s*共\s*\d+\s*款/gu, "").replace(/\s*([．・·＆、／])\s*/gu, "$1").replace(/[．・·＆、／]{2,}/gu, (match) => match[0]).replace(/^[．・·＆、／\s]+|[．・·＆、／\s]+$/gu, "").trim();
+  }
   const parts = diff.split(/([．＆]|\s+)/).filter(Boolean);
   const kept: { text: string; separator: string }[] = [];
   let separator = "";

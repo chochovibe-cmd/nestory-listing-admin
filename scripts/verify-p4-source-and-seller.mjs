@@ -136,9 +136,19 @@ check("prompt: wrapper delegates and P4 ban + web search honesty kept in base", 
 check("COPY-PB1 focused path retains source-marker and seller-service guard", () => {
   const focused = read("src/lib/providers/chaochaoPrompt.ts");
   const brief = read("src/lib/providers/productBrief.ts");
-  assert.match(focused, /顧客可見欄位禁止出現「來源：網路」、URL 或任何出處註記/u);
+  const legacyStart = focused.indexOf("export function buildChaochaoCopySystemPrompt");
+  const legacyEnd = focused.indexOf("export function buildChaochaoBriefWriterSystemPrompt", legacyStart);
+  assert.ok(legacyStart >= 0 && legacyEnd > legacyStart, "legacy non-Brief writer remains available for fallback tones");
+  const opsStart = focused.indexOf("const CHAOCHAO_OPS =");
+  const opsEnd = focused.indexOf("`\n", opsStart + 1);
+  assert.ok(focused.slice(legacyStart, legacyEnd).includes("CHAOCHAO_OPS"), "legacy fallback no longer includes the operations guard");
+  assert.match(focused.slice(opsStart, opsEnd), /不要標「來源：網路」/u, "legacy fallback source-marker guard was removed");
+  const briefStart = legacyEnd;
+  const briefEnd = focused.indexOf("const CHAOCHAO_REGEN_FIELD_RULES", briefStart);
+  const briefPrompt = focused.slice(briefStart, briefEnd);
+  assert.match(briefPrompt, /全文不出現「商品資料」「標示」「頁面」「來源」/u, "A2b Brief Writer must forbid page/source wording");
+  assert.match(briefPrompt, /出貨、到貨、代購、現貨、預購、價格、退換、保固/u, "A2b Brief Writer lost seller-service exclusions");
   for (const term of ["保固", "售後", "退換", "贈品", "店鋪活動"]) {
-    assert.ok(focused.includes(term), `focused Writer missing ${term} guard`);
     assert.ok(brief.includes(term), `Product Brief missing ${term} filter`);
   }
   assert.match(brief, /不要放進 confirmedFacts、differentiators、useCases、fanHooks 或 specLines/u);

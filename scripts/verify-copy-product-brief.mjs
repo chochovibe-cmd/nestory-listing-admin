@@ -13,7 +13,7 @@ const openai = read("src/lib/providers/openai-copy-provider.ts");
 const webSearch = read("src/lib/providers/webSearch/index.ts");
 const fixtures = JSON.parse(read("scripts/fixtures/chaochao-product-brief-golden.json"));
 
-assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb1\.4-20261006"/u);
+assert.match(brief, /PRODUCT_BRIEF_VERSION = "pb2\.0-copya-20261103"/u);
 assert.match(brief, /gpt-4o-mini/u, "brief stage lost cheap-model default");
 assert.match(brief, /rejectedEvidence/u, "brief no longer records rejected web evidence");
 assert.match(brief, /當次直接證據優先：賣家標題／款式／操作備註／圖中文字 > 明確同款官方或零售資料 > 草稿既有分類與規格/u,
@@ -44,31 +44,18 @@ const writer = chaochao.slice(writerStart, writerEnd);
 for (const forbidden of ["[[detected_ip_name]]", "[[detected_character_name]]", "[[detected_product_type]]", "[[detected_category]]", "[[sku]]", "[[spec]]"]) {
   assert.ok(!writer.includes(forbidden), `Writer regained upstream operation: ${forbidden}`);
 }
-for (const required of ["[[enriched_title]]", "[[generated_description_html]]", "[[generated_faq_html]]", "[[seo_title]]", "[[meta_description]]", "[[why_we_chose_it]]", "[[product_highlights]]"]) {
+// COPY-A2c keeps eight writer sections and restores highlights and voice examples.
+for (const required of ["[[title_item]]", "[[title_diff]]", "[[generated_description_html]]", "[[generated_faq_html]]", "[[why_we_chose_it]]", "[[product_highlights]]", "[[seo_title]]", "[[seo_description]]"]) {
   assert.ok(writer.includes(required), `Writer output missing: ${required}`);
 }
-assert.match(writer, /不要用「品質有保證、絕佳收藏、經久耐用、不可錯過」/u,
-  "generic-copy regression guard missing");
-assert.match(writer, /Product Brief 沒有明確寫出的效果、耐用性、比較優勢或保證性結論/u,
-  "focused Writer can still infer unsupported product effects");
-assert.match(chaochao, /why_we_chose_it 只寫 1–2 句/u,
-  "PB1.4 Why rule lost 1–2 sentence contract");
-assert.match(chaochao, /只有它才有/u,
-  "PB1.4 Why lost item-specific curator question");
-assert.match(chaochao, /不要把商品介紹或功能清單濃縮重講/u,
-  "PB1.4 Why can still collapse into a summary");
-assert.match(chaochao, /不要固定開頭句型/u,
-  "PB1.4 Why regained a fixed opening template");
-assert.match(chaochao, /不要替潮巢虛構「想起童年、會心一笑、充滿回憶」/u,
-  "PB1.4 Why can still invent brand emotions");
-assert.match(chaochao, /只能問 Product Brief 有足夠資料回答的題目/u,
-  "PB1.1 FAQ evidence-answerability guard missing");
-assert.match(chaochao, /不能擴成「比一般吹風機更安靜」/u,
-  "PB1.1 FAQ comparison certainty guard missing");
-assert.match(writer, /\$\{buildChaochaoBriefFaqRules\(\)\}/u,
-  "focused Writer stopped applying PB1.1 FAQ evidence rules");
-assert.match(writer, /\$\{buildChaochaoBriefWhyRule\(\)\}/u,
-  "focused Writer stopped applying PB1.1 Why rules");
+assert.match(writer, /兩條線/u, "A2b Writer lost its marketing-vs-facts boundary");
+assert.match(writer, /純文字，段名照寫/u, "A2c Writer lost the plain-text description contract");
+assert.match(writer, /1～2 段/u, "A2c Writer lost the introduction paragraph rule");
+assert.match(writer, /小標：說明/u, "A2c Writer lost the shared highlights rule");
+assert.match(writer, /語氣範本/u, "A2c Writer lost its voice examples");
+for (const forbidden of ["3–5 題", "商品資料標示為", "CHAOCHAO_OWNER_VOICE_SAMPLES"]) {
+  assert.ok(!writer.includes(forbidden), `A2b Writer retained retired prompt block: ${forbidden}`);
+}
 
 assert.match(promptBase, /input\.productBrief\?\.trim\(\)/u, "Chaochao user message does not prefer Product Brief");
 assert.match(promptBase, /不要重新分類、不要重新查證/u, "Writer boundary instruction missing");

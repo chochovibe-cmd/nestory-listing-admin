@@ -80,6 +80,8 @@ export interface CopyProviderInput {
    * Identity/spec/title ops are produced upstream and merged back after writing.
    */
   productBrief?: string;
+  /** COPY-A2: fixable checks for one optional targeted rewrite. */
+  regenIssueMessages?: string[];
   /**
    * P5 層2／3：已組好的 IP 背景區塊（含誠實邊界文案），直接進 user 事實區。
    * 來源為 knowledge_pack 或冷門 IP 網搜／中性指示；規格事實仍走 webSearchSummary／spec。
@@ -167,6 +169,8 @@ export interface CopyProviderOutput {
   via?: "openrouter" | "openai";
   /** True when the model stopped because the output token cap was hit. */
   outputTruncated?: boolean;
+  writerRetries?: number;
+  callCosts?: Array<{ model: string; usage: RawUsage }>;
 }
 
 export interface CopyProvider {
@@ -279,7 +283,7 @@ export const TITLE_ASSEMBLER_KEYS = [
   "title_diff",
 ] as const;
 
-export const COPY_PARSEABLE_KEYS = [...COPY_SEGMENT_KEYS, ...TITLE_ASSEMBLER_KEYS] as const;
+export const COPY_PARSEABLE_KEYS = [...COPY_SEGMENT_KEYS, ...TITLE_ASSEMBLER_KEYS, "seo_description"] as const;
 
 type CopySegmentKey = (typeof COPY_PARSEABLE_KEYS)[number];
 
@@ -316,7 +320,7 @@ export function parseCopySegments(text: string, provider: string, model: string)
     generatedDescriptionHtml: get("generated_description_html"),
     generatedFaqHtml: normalizeFaqOutput(get("generated_faq_html")),
     seoTitle: get("seo_title"),
-    metaDescription: get("meta_description"),
+    metaDescription: get("seo_description") || get("meta_description"),
     whyWeChoseIt: get("why_we_chose_it"),
     productHighlights,
     detectedIpName: get("detected_ip_name"),
@@ -401,6 +405,7 @@ export async function generateWithParseRetry(
   provider: string,
   model: string,
   isEmpty: (output: CopyProviderOutput) => boolean = isCopyOutputEmpty,
+  options?: { attempts: number; validateText: (text: string) => boolean; reminder: string },
 ): Promise<CopyProviderOutput> {
   // A13: token usage accumulates across attempts so a retried generation
   // reports the true total spend, not just the successful call's.
@@ -428,6 +433,7 @@ export async function generateWithParseRetry(
       allAttemptsReportedCost = false;
     }
     try {
+      if (options && !options.validateText(text)) return null;
       const parsed = parseCopyProviderOutput(text, provider, model);
       return isEmpty(parsed) ? null : parsed;
     } catch {
@@ -444,7 +450,7 @@ export async function generateWithParseRetry(
   const first = await attempt(null);
   if (first) return withUsage(first);
 
-  const second = await attempt(COPY_FORMAT_REMINDER);
+  const second = options?.attempts === 1 ? null : await attempt(options?.reminder ?? COPY_FORMAT_REMINDER);
   if (second) return withUsage(second);
 
   throw new Error("文案解析失敗：模型連續兩次未回傳可解析的內容，請稍後重試或改用其他模型。");

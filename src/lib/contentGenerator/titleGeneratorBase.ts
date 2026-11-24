@@ -538,7 +538,7 @@ export function generateDisplayTitle(draft: ListingDraftInput, context: DisplayL
   }
 
   const productBrand = normalizeText(draft.product_brand);
-  const ipSegment = productBrand ? ipDisplayName + ' × ' + productBrand : ipDisplayName;
+  const ipSegment = productBrand ? productBrand + ' × ' + ipDisplayName : ipDisplayName;
   let featureText = getShortFeatureText(draft, characters.length > 1);
   if (characters.length > 3) {
     const countHint = `${characters.length}款`;

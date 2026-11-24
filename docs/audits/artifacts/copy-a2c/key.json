@@ -1,0 +1,50 @@
+[
+ {
+  "item": 1,
+  "id": "58f00e61-cfa4-45b3-bb62-2168f1587108",
+  "letters": {
+   "A": "prior-round1-2C",
+   "B": "A2c-new"
+  }
+ },
+ {
+  "item": 2,
+  "id": "71672805-47c4-405c-af69-ab967ff13b4d",
+  "letters": {
+   "A": "A2c-new",
+   "B": "prior-round1-4D"
+  }
+ },
+ {
+  "item": 3,
+  "id": "31701317-f664-4fab-9c05-b35d26075c3c",
+  "letters": {
+   "A": "prior-round1-6A",
+   "B": "A2c-new"
+  }
+ },
+ {
+  "item": 4,
+  "id": "a9f82c5f-1ed7-44ec-9e49-700280f34f23",
+  "letters": {
+   "A": "prior-round2-A",
+   "B": "A2c-new"
+  }
+ },
+ {
+  "item": 5,
+  "id": "3169bffa-86cf-4a01-b3b6-d4649084de05",
+  "letters": {
+   "A": "prior-round2-A",
+   "B": "A2c-new"
+  }
+ },
+ {
+  "item": 6,
+  "id": "b46b94b2-18da-48f4-872d-606aba12adeb",
+  "letters": {
+   "A": "A2c-new",
+   "B": "prior-round2-A"
+  }
+ }
+]

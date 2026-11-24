@@ -13,7 +13,8 @@ import {
   type ProcessedImageStorage
 } from "@/lib/images/imagePipeline";
 import { fetchServerImage } from "@/lib/images/fetchServerImage";
-import { processImageBuffer, SHARP_BATCH_MAX_IMAGES } from "@/lib/images/sharpProcess";
+import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
+import { processImageBuffer as defaultProcessImageBuffer, SHARP_BATCH_MAX_IMAGES } from "@/lib/images/sharpProcess";
 import { createServiceSupabaseClient } from "@/lib/supabase/server";
 import type { ImageProcessIntent, ImageType } from "@/types/domain";
 
@@ -56,6 +57,12 @@ export type RunSharpBatchForDraftInput = {
    * Default false — de_text/regen still skipped.
    */
   afterAi?: boolean;
+  /** Default 1 preserves other callers' sequential behavior. */
+  concurrency?: number;
+  deps?: {
+    fetchBytes?: (url: string) => Promise<Buffer>;
+    processImage?: typeof defaultProcessImageBuffer;
+  };
 };
 
 export type RunSharpBatchForDraftResult =
@@ -100,6 +107,8 @@ export async function runSharpBatchForDraft(
   input: RunSharpBatchForDraftInput
 ): Promise<RunSharpBatchForDraftResult> {
   const { serviceSupabase } = input;
+  const fetchBytes = input.deps?.fetchBytes ?? fetchOriginalBuffer;
+  const processImageBuffer = input.deps?.processImage ?? defaultProcessImageBuffer;
   const draftId = input.draftId.trim();
   if (!draftId) {
     return { ok: false, draftId: "", error: "draftId is required", httpStatus: 400 };
@@ -211,12 +220,7 @@ export async function runSharpBatchForDraft(
     await serviceSupabase.from("product_drafts").update({ image_status: "processing" }).eq("id", draftId);
   }
 
-  const results: SharpBatchPerImageResult[] = [];
-  let processed = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  for (const img of images) {
+  const processOne = async (img: SharpBatchImageRow): Promise<SharpBatchPerImageResult> => {
     const decision = decideSharpAction({
       imageType: img.image_type,
       processIntent: img.process_intent,
@@ -227,15 +231,15 @@ export async function runSharpBatchForDraft(
     });
 
     if (decision.action === "skip") {
-      skipped += 1;
-      results.push({
+
+      return {
         imageId: img.id,
         status: "skipped",
         reason: decision.reason,
         processedFileUrl: img.processed_file_url,
         storage: STORAGE_LABEL
-      });
-      continue;
+      };
+
     }
 
     try {
@@ -251,7 +255,7 @@ export async function runSharpBatchForDraft(
       if (!sourceUrl) {
         throw new Error(afterAi ? "missing generated_file_url" : "missing original_file_url");
       }
-      const buffer = await fetchOriginalBuffer(sourceUrl);
+      const buffer = await fetchBytes(sourceUrl);
       const out = await processImageBuffer(buffer, {
         squareMode: img.image_type === "main" || img.image_type === "variant" ? "blur-extend" : "none"
       });
@@ -295,8 +299,7 @@ export async function runSharpBatchForDraft(
         throw new Error(`db update failed: ${updateError.message}`);
       }
 
-      processed += 1;
-      results.push({
+      return {
         imageId: img.id,
         status: "done",
         reason: decision.reason,
@@ -305,10 +308,10 @@ export async function runSharpBatchForDraft(
         width: out.width,
         height: out.height,
         bytes: out.bytes
-      });
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      failed += 1;
+
       await serviceSupabase
         .from("product_images")
         .update({
@@ -317,15 +320,24 @@ export async function runSharpBatchForDraft(
         })
         .eq("id", img.id);
 
-      results.push({
+      return {
         imageId: img.id,
         status: "failed",
         error: message,
         processedFileUrl: img.processed_file_url,
         storage: STORAGE_LABEL
-      });
+      };
     }
-  }
+  };
+
+  const settled = await runWithConcurrency(images, input.concurrency ?? 1, processOne);
+  const results: SharpBatchPerImageResult[] = settled.map((item) => {
+    if (item.status === "rejected") throw item.reason;
+    return item.value;
+  });
+  const processed = results.filter((r) => r.status === "done").length;
+  const skipped = results.filter((r) => r.status === "skipped").length;
+  const failed = results.filter((r) => r.status === "failed").length;
 
   const nextImageStatus = aggregateImageStatusAfterSharp({ processed, failed, skipped });
   let imageStatus = (draft.image_status as string) ?? "pending";

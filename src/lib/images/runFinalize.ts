@@ -11,6 +11,7 @@ import {
   type ProcessedImageStorage
 } from "@/lib/images/imagePipeline";
 import { fetchServerImage } from "@/lib/images/fetchServerImage";
+import { runWithConcurrency } from "@/lib/images/runWithConcurrency";
 import { SHARP_BATCH_MAX_IMAGES } from "@/lib/images/sharpProcess";
 import {
   isFinalizeUploadImageType,
@@ -54,6 +55,12 @@ export type RunFinalizeForDraftInput = {
   serviceSupabase: FinalizeServiceClient;
   draftId: string;
   imageIds?: string[] | null;
+  /** Default 1 preserves other callers' sequential behavior. */
+  concurrency?: number;
+  deps?: {
+    fetchBytes?: (url: string) => Promise<Buffer>;
+    upload?: typeof uploadProcessedImageToShopifyFilesWithRetry;
+  };
 };
 
 export type RunFinalizeForDraftResult =
@@ -117,6 +124,8 @@ export async function runFinalizeForDraft(
   input: RunFinalizeForDraftInput
 ): Promise<RunFinalizeForDraftResult> {
   const { serviceSupabase } = input;
+  const fetchBytes = input.deps?.fetchBytes ?? fetchImageBuffer;
+  const uploadFile = input.deps?.upload ?? uploadProcessedImageToShopifyFilesWithRetry;
   const draftId = input.draftId.trim();
   if (!draftId) {
     return { ok: false, draftId: "", error: "draftId is required", httpStatus: 400 };
@@ -209,15 +218,10 @@ export async function runFinalizeForDraft(
     };
   }
 
-  const results: FinalizePerImageResult[] = [];
-  let uploaded = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  for (const img of images) {
+  const processOne = async (img: FinalizeImageRow): Promise<FinalizePerImageResult> => {
     if (!isFinalizeUploadImageType(img.image_type)) {
-      skipped += 1;
-      results.push({
+
+      return {
         imageId: img.id,
         status: "skipped",
         reason: `image_type=${img.image_type} not uploaded to Shopify Files (Q5-A: main+variant only)`,
@@ -227,8 +231,8 @@ export async function runFinalizeForDraft(
           : img.processed_file_url
             ? "supabase_temp"
             : "none"
-      });
-      continue;
+      };
+
     }
 
     const source = pickFinalizeSource({
@@ -237,43 +241,43 @@ export async function runFinalizeForDraft(
     });
 
     if (source.kind === "already_cdn") {
-      skipped += 1;
-      results.push({
+
+      return {
         imageId: img.id,
         status: "skipped",
         reason: "already shopify_cdn (idempotent)",
         processedFileUrl: source.url,
         storage: "shopify_cdn"
-      });
-      continue;
+      };
+
     }
 
     if (source.kind === "none") {
-      failed += 1;
+
       const errMsg = source.reason;
       await serviceSupabase
         .from("product_images")
         .update({ processing_error: errMsg.slice(0, 500) })
         .eq("id", img.id);
-      results.push({
+      return {
         imageId: img.id,
         status: "failed",
         error: errMsg,
         code: "NO_SOURCE",
         processedFileUrl: img.processed_file_url,
         storage: "none"
-      });
-      continue;
+      };
+
     }
 
     const previousProcessedUrl = img.processed_file_url;
     const sourceUrl = source.url;
 
     try {
-      const bytes = await fetchImageBuffer(sourceUrl);
+      const bytes = await fetchBytes(sourceUrl);
       const { mimeType, filename } = guessMimeAndFilename(sourceUrl, img.id);
 
-      const upload = await uploadProcessedImageToShopifyFilesWithRetry({
+      const upload = await uploadFile({
         filename,
         mimeType,
         fileSize: bytes.byteLength,
@@ -283,13 +287,13 @@ export async function runFinalizeForDraft(
       });
 
       if (!upload.ok) {
-        failed += 1;
+
         await serviceSupabase
           .from("product_images")
           .update({ processing_error: upload.error.slice(0, 500) })
           .eq("id", img.id);
 
-        results.push({
+        return {
           imageId: img.id,
           status: "failed",
           error: upload.error,
@@ -301,8 +305,8 @@ export async function runFinalizeForDraft(
             : img.processed_file_url
               ? "supabase_temp"
               : "none"
-        });
-        continue;
+        };
+
       }
 
       const { error: updateError } = await serviceSupabase
@@ -315,8 +319,8 @@ export async function runFinalizeForDraft(
         .eq("id", img.id);
 
       if (updateError) {
-        failed += 1;
-        results.push({
+
+        return {
           imageId: img.id,
           status: "failed",
           error: `db update failed after CDN upload: ${updateError.message}`,
@@ -324,8 +328,8 @@ export async function runFinalizeForDraft(
           fileGid: upload.fileGid,
           processedFileUrl: img.processed_file_url,
           storage: "supabase_temp"
-        });
-        continue;
+        };
+
       }
 
       let tempDeleted = false;
@@ -345,8 +349,7 @@ export async function runFinalizeForDraft(
         }
       }
 
-      uploaded += 1;
-      results.push({
+      return {
         imageId: img.id,
         status: "done",
         reason:
@@ -355,16 +358,16 @@ export async function runFinalizeForDraft(
         storage: "shopify_cdn",
         fileGid: upload.fileGid,
         tempDeleted
-      });
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      failed += 1;
+
       await serviceSupabase
         .from("product_images")
         .update({ processing_error: message.slice(0, 500) })
         .eq("id", img.id);
 
-      results.push({
+      return {
         imageId: img.id,
         status: "failed",
         error: message,
@@ -375,9 +378,18 @@ export async function runFinalizeForDraft(
           : img.processed_file_url
             ? "supabase_temp"
             : "none"
-      });
+      };
     }
-  }
+  };
+
+  const settled = await runWithConcurrency(images, input.concurrency ?? 1, processOne);
+  const results: FinalizePerImageResult[] = settled.map((item) => {
+    if (item.status === "rejected") throw item.reason;
+    return item.value;
+  });
+  const uploaded = results.filter((r) => r.status === "done").length;
+  const skipped = results.filter((r) => r.status === "skipped").length;
+  const failed = results.filter((r) => r.status === "failed").length;
 
   const anyCdn =
     uploaded > 0 || results.some((r) => r.storage === "shopify_cdn" && r.status !== "failed");

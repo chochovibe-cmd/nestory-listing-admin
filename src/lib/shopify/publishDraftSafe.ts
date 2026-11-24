@@ -381,6 +381,9 @@ export async function publishDraft(
     callShopifyAdminGraphQL(query, variables));
   const clock = deps.now ?? (() => Date.now());
   const startedAt = clock();
+  let prepareSharpMs: number | null = null;
+  let prepareFinalizeMs: number | null = null;
+  let descriptionUploadMs: number | null = null;
 
   const { data: draft, error } = await serviceSupabase
     .from("product_drafts")
@@ -599,7 +602,9 @@ export async function publishDraft(
   // Mock mode skips it entirely: it can upload to Shopify Files and writes image rows.
   let draftForPayload = draft;
   if (!mockMode) {
-    const prep = await prepareImagesForPublish({ serviceSupabase, draftId: id });
+    const prep = await prepareImagesForPublish({ serviceSupabase, draftId: id, deps: { now: clock } });
+    prepareSharpMs = prep.sharp === "skipped" || prep.sharp === "not_run" ? null : prep.timingsMs.sharp;
+    prepareFinalizeMs = prep.finalize === "not_run" || (prep.finalize === "skipped" && prep.timingsMs.finalize === 0) ? null : prep.timingsMs.finalize;
     // 4e: detail images → Shopify Files so the description embeds CDN URLs only.
     const uploadDescriptionImages =
       deps.uploadDescriptionImages ?? (deps.callGraphQL ? null : uploadDescriptionImagesToShopifyFiles);
@@ -609,11 +614,13 @@ export async function publishDraft(
       isDescriptionEmbedEnabled() &&
       isDescriptionDetailImagesEnabled(draft.image_flags)
     ) {
+      const descriptionStart = clock();
       const uploaded = await uploadDescriptionImages({
         serviceSupabase,
         draftId: id,
         images: draft.product_images ?? []
       });
+      descriptionUploadMs = Math.max(0, clock() - descriptionStart);
       descriptionImageWarnings.push(...uploaded.warnings);
     }
     if (prep.warnings.length || descriptionImageWarnings.length) {
@@ -1231,14 +1238,22 @@ export async function publishDraft(
     serviceSupabase,
     publishJobBase,
     finalStatus,
-    publishWarnings.length
-      ? {
-          ...createResult,
-          warning: priceSyncWarning ?? undefined,
-          resumeWarnings: resumeWarnings.length ? resumeWarnings : undefined,
-          videoWarnings: videoWarnings.length ? videoWarnings : undefined
-        }
-      : createResult
+    {
+      ...(publishWarnings.length
+        ? {
+            ...createResult,
+            warning: priceSyncWarning ?? undefined,
+            resumeWarnings: resumeWarnings.length ? resumeWarnings : undefined,
+            videoWarnings: videoWarnings.length ? videoWarnings : undefined
+          }
+        : createResult),
+      timings_ms: {
+        prepare_sharp: prepareSharpMs,
+        prepare_finalize: prepareFinalizeMs,
+        description_upload: descriptionUploadMs,
+        total: Math.max(0, clock() - startedAt)
+      }
+    }
   );
 
   const finalPersist = await finishLocalSuccess(

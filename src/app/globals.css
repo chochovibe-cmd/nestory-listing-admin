@@ -8960,6 +8960,14 @@ body[data-theme="nordic"] {
   color: var(--warn-text);
   line-height: 1.45;
 }
+/* PRICING 11-20: 抓取健康提醒（規格頁籤內一行紅字；同 .price-soft-warn 的字級，用 danger token） */
+.capture-health-note {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--danger, var(--accent2));
+}
 .price-opts { display: flex; gap: 14px; margin-top: 9px; flex-wrap: wrap; }
 
 .check-row { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 12px; cursor: pointer; }

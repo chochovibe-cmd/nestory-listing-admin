@@ -63,6 +63,7 @@
     "verify:4e": "node scripts/verify-4e.mjs",
     "verify:4f": "node scripts/verify-4f.mjs",
     "verify:gpt-handoff": "node scripts/verify-gpt-handoff.mjs",
+    "verify:pricing": "node scripts/verify-pricing.mjs",
     "verify:openrouter": "node scripts/verify-openrouter.mjs",
     "verify:copy-a": "node scripts/verify-copy-a.mjs",
     "verify:copy-a1": "node scripts/verify-copy-a.mjs --part=a1",
@@ -74,6 +75,8 @@
     "prod": "next build && next start -p 3019"
   },
   "dependencies": {
+    "@fontsource-variable/noto-sans-tc": "^5.3.1",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "next": "^15.0.3",

@@ -137,7 +137,7 @@ check("靜態 migration、API 更新、UI 路由接線、CSS !important 基線",
   assert.equal((css.match(/!important/g) ?? []).length, 12);
 });
 
-check("GPT 清單查詢投影欄位精簡、confidence aliases 明確、主圖/款式欄位限縮", () => {
+check("GPT 清單查詢投影欄位精簡、confidence aliases 明確、健康提醒欄位完整", () => {
   const page = read("src/app/drafts/new/page.tsx");
   const start = page.indexOf("// GPT handoffs");
   const end = page.indexOf("// B12 D7-A", start);
@@ -146,9 +146,11 @@ check("GPT 清單查詢投影欄位精簡、confidence aliases 明確、主圖/�
   assert.doesNotMatch(gptPage, /\.select\("\*"\)/, "GPT query must not fetch every column");
   assert.match(gptPage, /server_price_confidence:raw_capture->server->>price_confidence/);
   assert.match(gptPage, /client_price_confidence:raw_capture->client_meta->>price_confidence/);
-  assert.match(gptPage, /\.eq\("image_type",\s*"main"\)/);
+  assert.match(gptPage, /\.in\("image_type",\s*\["main",\s*"detail"\]\)/, "健康提醒必須實際載入詳情圖，避免每筆都誤報 0 張");
+  assert.match(gptPage, /capture_client_meta:raw_capture->client_meta/);
+  assert.match(gptPage, /capture_server:raw_capture->server/);
   assert.match(gptPage, /\.select\("id, draft_id, image_type, sort_order, processed_file_url, original_file_url"\)/);
-  assert.match(gptPage, /\.select\("id, draft_id, sort_order, cny_price"\)/);
+  assert.match(gptPage, /\.select\("id, draft_id, sort_order, cny_price, cost_is_inherited"\)/);
   const csv = read("src/lib/csv/gptRawExport.ts");
   assert.match(csv, /export type GptRawListItem/);
   assert.match(csv, /export function gptPriceWarningsFromCosts\(/);

@@ -1,0 +1,34 @@
+/*
+ * Self-hosted fonts (FONT-SELFHOST 2026-11-21).
+ * Replaces next/font/google, whose build-time fetch from Google Fonts started
+ * crashing Vercel builds ("Cannot read properties of null (reading '1')").
+ * The @font-face rules come from @fontsource-variable/* (imported in layout.tsx):
+ * same Google font files, split by unicode-range, so the browser still downloads
+ * only the chunks a page actually uses.
+ *
+ * Variable names and the metric-adjusted Arial fallbacks below are copied from
+ * what next/font generated before, so globals.css and the layout are unchanged.
+ */
+
+@font-face {
+  font-family: "Noto Sans TC Fallback";
+  src: local("Arial");
+  ascent-override: 110.73%;
+  descent-override: 27.49%;
+  line-gap-override: 0%;
+  size-adjust: 104.76%;
+}
+
+@font-face {
+  font-family: "Space Grotesk Fallback";
+  src: local("Arial");
+  ascent-override: 89.71%;
+  descent-override: 26.62%;
+  line-gap-override: 0%;
+  size-adjust: 109.69%;
+}
+
+:root {
+  --font-noto-sans-tc: "Noto Sans TC Variable", "Noto Sans TC Fallback";
+  --font-space-grotesk: "Space Grotesk Variable", "Space Grotesk Fallback";
+}

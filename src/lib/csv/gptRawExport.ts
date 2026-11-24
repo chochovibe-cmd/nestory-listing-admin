@@ -10,12 +10,14 @@ export type GptRawListItem = Pick<ProductDraft,
   | "id" | "created_by" | "source_platform" | "source_url" | "original_title"
   | "taobao_title" | "cny_price" | "gpt_handoff_at" | "gpt_exported_at"
 > & {
+  capture_client_meta: unknown;
+  capture_server: unknown;
   server_price_confidence: string | null;
   client_price_confidence: string | null;
   product_images: Pick<ProductImage,
     "id" | "draft_id" | "image_type" | "sort_order" | "processed_file_url" | "original_file_url"
   >[];
-  product_variants: Pick<ProductVariantRow, "id" | "draft_id" | "sort_order" | "cny_price">[];
+  product_variants: Pick<ProductVariantRow, "id" | "draft_id" | "sort_order" | "cny_price" | "cost_is_inherited">[];
 };
 
 export const GPT_RAW_HEADERS = [

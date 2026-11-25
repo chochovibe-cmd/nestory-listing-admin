@@ -17,6 +17,7 @@ import type { ProductDraft, ProductImage } from "@/types/domain";
  */
 export function WorkbenchPageClient({
   gptProducts,
+  captureUnsentIds = [],
   userId,
   drafts,
   images,
@@ -25,6 +26,7 @@ export function WorkbenchPageClient({
   loadNotice = null
 }: {
   gptProducts: GptRawListItem[];
+  captureUnsentIds?: string[];
   userId: string;
   drafts: ProductDraft[];
   images: ProductImage[];
@@ -78,6 +80,7 @@ export function WorkbenchPageClient({
       results={
         <DraftResultsPanel
           gptProducts={gptProducts}
+          captureUnsentIds={captureUnsentIds}
           drafts={drafts}
           images={images}
           userId={userId}

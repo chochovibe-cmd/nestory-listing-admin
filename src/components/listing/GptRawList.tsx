@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { showToast } from "@/components/Toast";
@@ -15,11 +15,12 @@ function timestamp(value?: string | null) {
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function GptRawList({ products }: { products: GptRawListItem[] }) {
+export function GptRawList({ products, captureUnsentIds }: { products: GptRawListItem[]; captureUnsentIds: string[] }) {
   const router = useRouter();
   const [exported, setExported] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<"export" | "archive" | null>(null);
+  const [busy, setBusy] = useState<"export" | "archive" | "send" | null>(null);
+  const pendingSelectRef = useRef<Set<string> | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   // Keep the download result visible immediately while the server refresh catches up.
@@ -28,8 +29,44 @@ export function GptRawList({ products }: { products: GptRawListItem[] }) {
   ), [products, hidden, overrides]);
   const rows = current.filter((p) => Boolean(p.gpt_exported_at) === exported);
   const ids = rows.filter((p) => selected.has(p.id)).map((p) => p.id);
-  useEffect(() => { setSelected(new Set()); }, [exported, products]);
+  const N = captureUnsentIds.length;
+  useEffect(() => {
+    const pending = pendingSelectRef.current;
+    if (pending && !exported) {
+      const ready = products.filter((p) => pending.has(p.id) && !p.gpt_exported_at).map((p) => p.id);
+      if (ready.length) {
+        pendingSelectRef.current = null;
+        setSelected(new Set(ready));
+        return;
+      }
+    }
+    setSelected(new Set());
+  }, [exported, products]);
   useEffect(() => { setOverrides({}); setHidden(new Set()); }, [products]);
+
+  async function sendAllCaptures() {
+    if (!N || busy) return;
+    setBusy("send");
+    try {
+      const response = await fetch("/api/drafts/gpt-handoff/batch", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftIds: captureUnsentIds })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        showToast(`送出失敗：${typeof payload.error === "string" ? payload.error : "請稍後再試"}`, "error");
+        router.refresh();
+        return;
+      }
+      const { sentIds, skipped }: { sentIds: string[]; skipped: number } = payload;
+      pendingSelectRef.current = new Set(sentIds);
+      showToast(`已送出 ${sentIds.length} 件，已幫你勾好，按「匯出原始 CSV」就能下載${skipped > 0 ? `（${skipped} 件已送過或有變動，略過）` : ""}`, "success");
+      window.dispatchEvent(new CustomEvent("nestory:gpt-handoff-changed"));
+    } catch (error) {
+      showToast(`送出失敗：${error instanceof TypeError ? "連線失敗，請稍後再試" : "請稍後再試"}`, "error");
+      router.refresh();
+    } finally { setBusy(null); }
+  }
 
   async function exportCsv() {
     if (!ids.length || busy) return;
@@ -95,6 +132,14 @@ export function GptRawList({ products }: { products: GptRawListItem[] }) {
       <button type="button" className={`pill-btn${!exported ? " active" : ""}`} onClick={() => setExported(false)}>待匯出 {current.filter((p) => !p.gpt_exported_at).length}</button>
       <button type="button" className={`pill-btn${exported ? " active" : ""}`} onClick={() => setExported(true)}>已匯出 {current.filter((p) => p.gpt_exported_at).length}</button>
     </div>
+    {!exported && captureUnsentIds.length > 0 ? (
+      <div className="notice gpt-capture-bar" role="status">
+        <span>還有 {N} 件擷取草稿還沒送</span>
+        <Button type="button" size="sm" variant="primary" disabled={Boolean(busy)} onClick={() => void sendAllCaptures()}>
+          {busy === "send" ? "送出中…" : `全部送給 GPT（${N}）`}
+        </Button>
+      </div>
+    ) : null}
     <div className="rc-batch-strip">
       <label className="rc-header-select-all">
         <input type="checkbox" aria-label="全選目前列表" disabled={Boolean(busy) || !rows.length}

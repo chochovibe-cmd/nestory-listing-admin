@@ -172,12 +172,14 @@ const EMPTY_VARIANT_PRICES: VariantPriceRow[] = [];
 
 export function DraftResultsPanel({
   gptProducts = [],
+  captureUnsentIds = [],
   drafts,
   images,
   variants = [],
   userId = null
 }: {
   gptProducts?: GptRawListItem[];
+  captureUnsentIds?: string[];
   drafts: ProductDraft[];
   images: ProductImage[];
   /** P1-5: multi-variant sell prices for card range display */
@@ -1866,8 +1868,8 @@ export function DraftResultsPanel({
             </label>
           ) : null}
           <StageFilterPills
-            gptTotalCount={scopedGptProducts.length}
-            gptPendingCount={scopedGptProducts.filter((d) => !d.gpt_exported_at).length}
+            gptTotalCount={scopedGptProducts.length + captureUnsentIds.length}
+            gptPendingCount={scopedGptProducts.filter((d) => !d.gpt_exported_at).length + captureUnsentIds.length}
             counts={stageCounts}
             onChange={onStageChange}
             stage={stage}
@@ -2099,7 +2101,7 @@ export function DraftResultsPanel({
           </div>
         ) : null}
 
-        {stage === "gpt" ? <GptRawList products={scopedGptProducts} /> : scopedDrafts.length === 0 && !progress ? (
+        {stage === "gpt" ? <GptRawList products={scopedGptProducts} captureUnsentIds={captureUnsentIds} /> : scopedDrafts.length === 0 && !progress ? (
           /* UX-AB T85 + UX-AD T129: full-empty + CTA */
           <div className="empty-state">
             <div className="empty-icon" aria-hidden>

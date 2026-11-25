@@ -2219,6 +2219,15 @@ textarea {
   scroll-margin-top: 64px;
 }
 
+/* GPT-EXPORT-BATCH: 「全部送給 GPT」列 */
+.gpt-capture-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 8px 0 10px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

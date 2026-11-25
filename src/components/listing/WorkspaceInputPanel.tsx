@@ -1877,6 +1877,15 @@ export function WorkspaceInputPanel({
       setFlowPhase("fill");
       resetForNextItem();
       showToast(`已送到「交給 GPT」：${title.trim().slice(0, 20)}`, "success");
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("draft") || params.has("notice")) {
+          params.delete("draft");
+          params.delete("notice");
+          const qs = params.toString();
+          router.replace(qs ? `/drafts/new?${qs}` : "/drafts/new", { scroll: false });
+        }
+      }
       window.dispatchEvent(new CustomEvent("nestory:gpt-handoff-changed", { detail: { draftId: id } }));
       return;
     }

@@ -159,4 +159,48 @@ check("GPT 清單查詢投影欄位精簡、confidence aliases 明確、健康�
   assert.match(list, /gptPriceWarningsFromCosts\(/);
 });
 
+check("擷取草稿批次送出：查詢範圍、原子更新、上限與錯誤", () => {
+  const page = read("src/app/drafts/new/page.tsx");
+  const start = page.indexOf("const { data: captureUnsentRows }");
+  const end = page.indexOf("const captureUnsentIds", start);
+  assert.ok(start >= 0 && end > start);
+  const query = page.slice(start, end);
+  assert.match(query, /\.select\("id"\)/);
+  assert.match(query, /\.eq\("source_type",\s*"capture"\)/);
+  assert.match(query, /\.eq\("status",\s*"pending_input"\)/);
+  assert.match(query, /\.is\("gpt_handoff_at",\s*null\)/);
+  assert.match(query, /\.eq\("created_by",\s*user\.id\)/);
+  assert.match(query, /\.order\("created_at",\s*\{\s*ascending:\s*false\s*\}\)/);
+  assert.match(query, /\.limit\(100\)/);
+  const route = read("src/app/api/drafts/gpt-handoff/batch/route.ts");
+  const updates = [...route.matchAll(/\.update\(\{([^}]+)\}\)/g)];
+  assert.equal(updates.length, 1);
+  assert.deepEqual(updates[0][1].split(",").map((part) => part.split(":")[0].trim()).sort(), ["gpt_exported_at", "gpt_handoff_at"]);
+  const update = route.slice(updates[0].index, route.indexOf('.select("id")', updates[0].index));
+  assert.match(update, /\.in\("id",\s*ids\)/);
+  assert.match(update, /\.eq\("created_by",\s*user\.id\)/);
+  assert.match(update, /\.eq\("source_type",\s*"capture"\)/);
+  assert.match(update, /\.eq\("status",\s*"pending_input"\)/);
+  assert.match(update, /\.is\("gpt_handoff_at",\s*null\)/);
+  assert.match(route, /ids\.length\s*>\s*100/);
+  assert.match(route, /一次最多送出 100 件/);
+  assert.match(route, /這些擷取草稿已經送過或有變動，請重新整理/);
+  assert.match(route, /status:\s*409/);
+});
+
+check("擷取草稿批次送出：UI、單件網址清理、CSS 基線", () => {
+  const list = read("src/components/listing/GptRawList.tsx");
+  assert.match(list, /gpt-capture-bar/);
+  assert.match(list, /全部送給 GPT（/);
+  assert.match(list, /還有 \{N\} 件擷取草稿還沒送/);
+  assert.match(list, /送出中…/);
+  const input = read("src/components/listing/WorkspaceInputPanel.tsx");
+  assert.match(input, /params\.delete\("draft"\)/);
+  assert.match(input, /router\.replace\(/);
+  assert.doesNotMatch(input, /router\.push\(/);
+  const css = read("src/app/globals.css");
+  assert.match(css, /\.gpt-capture-bar\s*\{/);
+  assert.equal((css.match(/!important/g) ?? []).length, 12);
+});
+
 console.log(`PASS: ${passed} GPT-HANDOFF checks`);

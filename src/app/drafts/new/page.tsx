@@ -133,6 +133,16 @@ export default async function NewDraftPage({
     }
   }
 
+  const { data: captureUnsentRows } = await supabase.from("product_drafts")
+    .select("id")
+    .eq("source_type", "capture")
+    .eq("status", "pending_input")
+    .is("gpt_handoff_at", null)
+    .eq("created_by", user.id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const captureUnsentIds = (captureUnsentRows ?? []).map((row) => row.id as string);
+
   // GPT handoffs have their own bounded list, outside the 40-item work queue.
   const { data: gptDraftRows } = await supabase.from("product_drafts")
     .select("id, created_by, source_platform, source_url, original_title, taobao_title, cny_price, gpt_handoff_at, gpt_exported_at, server_price_confidence:raw_capture->server->>price_confidence, client_price_confidence:raw_capture->client_meta->>price_confidence, capture_client_meta:raw_capture->client_meta, capture_server:raw_capture->server")
@@ -236,6 +246,7 @@ export default async function NewDraftPage({
       <Suspense fallback={<p className="muted">載入工作檯…</p>}>
         <WorkbenchPageClient
           gptProducts={gptProducts}
+          captureUnsentIds={captureUnsentIds}
           userId={user.id}
           drafts={typedDrafts}
           images={typedImages}

@@ -203,4 +203,104 @@ check("擷取草稿批次送出：UI、單件網址清理、CSS 基線", () => {
   assert.equal((css.match(/!important/g) ?? []).length, 12);
 });
 
+
+const cdn = await import(pathToFileURL(path.join(root, "src/lib/csv/gptExportCdn.ts")).href);
+const srcUrl = "https://example.test/raw.jpg";
+const rawImage = (id, image_type, source = srcUrl, processed = null) => ({
+  id, image_type, sort_order: 0, original_file_url: source, processed_file_url: processed
+});
+const rawProduct = base("cdn", {
+  product_images: [
+    rawImage("main", "main"), rawImage("detail", "detail"), rawImage("variant", "variant"),
+    rawImage("unused", "variant"), rawImage("spec", "spec"), rawImage("empty", "main", "")
+  ],
+  product_variants: [{ id: "v", sort_order: 0, sku: "v-sku", image_id: "variant", cny_price: 3 }]
+});
+const filename = cdn.gptCdnFilename(Buffer.from("fixture image bytes"), "image/jpeg");
+const readyUrl = "https://cdn.shopify.com/s/files/1/1234/files/" + filename + "?v=123";
+check("GPT CDN：只處理原 CSV 主圖、詳情圖與實際被款式引用的圖片；不改原資料", () => {
+  const candidates = cdn.gptCdnCandidates([rawProduct]);
+  assert.deepEqual(candidates.map((item) => item.imageId), ["main", "detail", "variant"]);
+  const oldRow = parse(buildGptRawCsv([rawProduct]))[1];
+  const mapped = cdn.withGptCdnUrls([rawProduct], new Map(candidates.map((item) => [item.imageId, readyUrl])));
+  const newRow = parse(buildGptRawCsv(mapped))[1];
+  assert.equal(newRow[10], "主圖1 " + readyUrl);
+  assert.equal(newRow[11], "詳情圖1 " + readyUrl);
+  assert.equal(newRow[24], readyUrl);
+  assert.deepEqual(newRow.filter((_, i) => ![10, 11, 24].includes(i)), oldRow.filter((_, i) => ![10, 11, 24].includes(i)));
+  assert.equal(rawProduct.product_images[0].processed_file_url, null);
+  assert.equal(mapped[0].product_images[3].processed_file_url, null);
+  assert.equal(cdn.gptCdnCandidates([base("prefer", { product_images: [rawImage("x", "main", srcUrl, readyUrl)] })])[0].sourceUrl, readyUrl);
+});
+check("GPT CDN：簽章綁定使用者、圖片、草稿、來源及到期時間，不接受偽造網址", () => {
+  const item = cdn.gptCdnCandidates([rawProduct])[0];
+  const secret = "fixture-only-key", now = 1000;
+  const proof = cdn.createGptCdnProof(item, "owner", readyUrl, secret, now);
+  assert.equal(cdn.verifyGptCdnProof(item, "owner", proof, secret, now), readyUrl);
+  assert.equal(cdn.verifyGptCdnProof(item, "other", proof, secret, now), null);
+  assert.equal(cdn.verifyGptCdnProof({ ...item, sourceUrl: "https://example.test/changed.jpg" }, "owner", proof, secret, now), null);
+  assert.equal(cdn.verifyGptCdnProof({ ...item, imageId: "other" }, "owner", proof, secret, now), null);
+  assert.equal(cdn.verifyGptCdnProof(item, "owner", { ...proof, url: readyUrl + "changed" }, secret, now), null);
+  assert.equal(cdn.verifyGptCdnProof(item, "owner", proof, secret, proof.expiresAt), null);
+  assert.equal(cdn.isGptCdnUrl("https://cdn.shopify.com.evil.example/a.jpg"), false);
+  assert.equal(cdn.isGptCdnUrl("http://cdn.shopify.com/a.jpg"), false);
+});
+check("GPT CDN：檔名依內容而非原網址；僅 READY 且檔名正確才可匯出", () => {
+  assert.equal(cdn.gptCdnFilename(Buffer.from("fixture image bytes"), "image/jpeg"), filename);
+  assert.notEqual(cdn.gptCdnFilename(Buffer.from("new image bytes"), "image/jpeg"), filename);
+  assert.equal(cdn.readyGptCdnUrl({ id: "f", fileStatus: "READY", image: { url: readyUrl } }, filename), readyUrl);
+  assert.equal(cdn.readyGptCdnUrl({ id: "f", fileStatus: "PROCESSING", image: { url: readyUrl } }, filename), null);
+  assert.equal(cdn.readyGptCdnUrl({ id: "f", fileStatus: "READY", image: { url: "https://cdn.shopify.com/wrong.jpg" } }, filename), null);
+});
+{
+  // Inject every network dependency. A repeat uses the same Files asset; no real writes.
+  let downloads = 0, uploads = 0, lookups = 0, polls = 0;
+  let existing = null;
+  const deps = {
+    download: async () => { downloads++; return { ok: true, bytes: Buffer.from("fixture image bytes"), contentType: "image/jpeg", finalUrl: srcUrl }; },
+    lookup: async (name) => { lookups++; assert.equal(name, filename); return existing; },
+    upload: async (input) => {
+      uploads++; assert.equal(input.duplicateResolutionMode, "RAISE_ERROR"); assert.equal(input.filename, filename);
+      existing = { id: "gid://shopify/MediaImage/1", fileStatus: "READY", image: { url: readyUrl } };
+      return { ok: true, storage: "shopify_cdn", fileGid: existing.id, cdnUrl: readyUrl };
+    },
+    ready: async (id, name) => { polls++; assert.equal(name, filename); assert.equal(id, existing.id); return readyUrl; }
+  };
+  assert.equal(await cdn.resolveGptCdnImage(readyUrl, deps), readyUrl);
+  assert.equal(downloads, 0);
+  assert.equal(await cdn.resolveGptCdnImage(srcUrl, deps), readyUrl);
+  assert.equal(await cdn.resolveGptCdnImage(srcUrl, deps), readyUrl);
+  assert.deepEqual([downloads, uploads, lookups, polls], [2, 1, 2, 1]);
+  await assert.rejects(cdn.resolveGptCdnImage(srcUrl, { ...deps, download: async () => ({ ok: false, code: "http_status", message: "fixture failure" }) }), /來源圖片讀取失敗/);
+  // fileCreate may have succeeded despite an ambiguous network failure; lookup recovers it.
+  existing = null;
+  assert.equal(await cdn.resolveGptCdnImage(srcUrl, { ...deps, upload: async () => {
+    existing = { id: "gid://shopify/MediaImage/2", fileStatus: "READY", image: { url: readyUrl } };
+    return { ok: false, code: "SHOPIFY_ERROR", error: "fixture ambiguous failure" };
+  }}), readyUrl);
+  existing = null;
+  await assert.rejects(cdn.resolveGptCdnImage(srcUrl, { ...deps, upload: async () => ({ ok: false, code: "SHOPIFY_ERROR", error: "fixture failure" }) }), /上傳失敗/);
+  passed++;
+  console.log("  ✓ GPT CDN：既有 CDN 跳過、內容去重、模擬成功／失敗／不明結果復原");
+}
+check("GPT CDN：批次準備與最終 CSV 分離，無圖片 DB 寫入或刪除", () => {
+  const route = read("src/app/api/exports/gpt-raw/route.ts");
+  const list = read("src/components/listing/GptRawList.tsx");
+  const helper = read("src/lib/csv/gptExportCdn.ts");
+  assert.equal(cdn.GPT_CDN_BATCH_SIZE, 4);
+  assert.match(route, /action === "plan"/);
+  assert.match(route, /action === "prepare"/);
+  assert.match(route, /verifyGptCdnProof/);
+  assert.match(route, /buildGptRawCsv\(withGptCdnUrls\(products, urls\)\)/);
+  assert.ok(route.indexOf("if (!url) return") < route.indexOf(".update({ gpt_exported_at:"));
+  assert.doesNotMatch(route, /\.from\("product_images"\)\.update/);
+  assert.doesNotMatch(helper, /\.remove\(|fileDelete|productCreate/);
+  assert.match(helper, /SHOPIFY_PUBLISH_MOCK !== "false"/);
+  assert.match(helper, /assertShopifyEnvironment\(\)/);
+  assert.match(list, /action: "plan"/);
+  assert.match(list, /action: "prepare"/);
+  assert.match(list, /action: "export"/);
+  assert.match(list, /start \+= plan.batchSize/);
+});
+
 console.log(`PASS: ${passed} GPT-HANDOFF checks`);

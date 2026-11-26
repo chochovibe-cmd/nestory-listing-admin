@@ -1,3 +1,10 @@
+## 2026-11-26 — GPT-EXPORT-CDN（feature / acceptance HOLD）
+
+- Owner 授權 GPT 直接施工、完整記錄交接；基準為今日 PR #92 上線後的 `handoff/20261008-golive-spec@0e252ba792661f4e9373c47eaebcc7b108ecb799`。
+- GPT CSV 圖片搬 Shopify CDN，僅主圖、詳情圖、實際款式引用圖；分批準備、內容去重、READY 檢查、簽章驗證後一份 CSV。不改其他欄位或原始圖片資料。
+- 詳細歷史、六項施工契約、實作決策、驗收與剩餘風險：[GPT-EXPORT-CDN 施工與交接](GPT-EXPORT-CDN-施工與交接-2026-11-26.md)。
+- Branch：`gpt/gpt-export-cdn-20261126`；PR / CI / Preview 最終真相須現查。未核准 merge、Production、真實 Files 測試或 Supabase 刪除。PR #86 已占用 CURRENT_STATUS／總表，留下一次 Commander checkpoint 整併。
+
 ## 2026-10-10 — Milestone handoff closed
 
 - Shopify DRAFT / ACTIVE release completed and the ACTIVE publication defect was repaired, merged, deployed, and verified against the real Online Store publication state.

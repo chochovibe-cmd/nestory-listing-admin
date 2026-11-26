@@ -24,6 +24,8 @@ export type ShopifyFilesUploadInput = {
   bytes: Buffer;
   /** Optional alt for fileCreate. */
   alt?: string | null;
+  /** GPT export: reject duplicate deterministic filenames; default behavior stays unchanged. */
+  duplicateResolutionMode?: "RAISE_ERROR";
   /**
    * Optional public temp URL for diagnostics only — never used as arbitrary client URL.
    * Callers must fetch bytes themselves from DB-stored URLs.
@@ -447,6 +449,7 @@ export async function uploadProcessedImageToShopifyFiles(
       contentType: "IMAGE",
       filename
     };
+    if (input.duplicateResolutionMode) fileInput.duplicateResolutionMode = input.duplicateResolutionMode;
     if (input.alt?.trim()) {
       fileInput.alt = input.alt.trim();
     }

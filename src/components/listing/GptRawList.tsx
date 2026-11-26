@@ -20,6 +20,7 @@ export function GptRawList({ products, captureUnsentIds }: { products: GptRawLis
   const [exported, setExported] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<"export" | "archive" | "send" | null>(null);
+  const [cdnProgress, setCdnProgress] = useState<{ done: number; total: number } | null>(null);
   const pendingSelectRef = useRef<Set<string> | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -71,15 +72,42 @@ export function GptRawList({ products, captureUnsentIds }: { products: GptRawLis
   async function exportCsv() {
     if (!ids.length || busy) return;
     setBusy("export");
+    setCdnProgress(null);
     try {
-      const response = await fetch("/api/exports/gpt-raw", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftIds: ids })
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || "無法產生檔案，請稍後再試");
+      if (ids.length > 100) throw new Error("一次最多匯出 100 件");
+      const requestExport = async (body: Record<string, unknown>) => {
+        const res = await fetch("/api/exports/gpt-raw", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.error || "無法產生檔案，請稍後再試");
+        }
+        return res;
+      };
+      const plan = await (await requestExport({ action: "plan", draftIds: ids })).json() as {
+        images: Array<{ draftId: string; imageId: string }>; batchSize: number;
+      };
+      if (!Array.isArray(plan.images) || !Number.isInteger(plan.batchSize) || plan.batchSize < 1 || plan.batchSize > 4) {
+        throw new Error("圖片準備清單無效，請重新匯出");
       }
+      const proofs: Record<string, unknown> = Object.create(null);
+      setCdnProgress({ done: 0, total: plan.images.length });
+      for (let start = 0; start < plan.images.length; start += plan.batchSize) {
+        const batch = plan.images.slice(start, start + plan.batchSize);
+        const prepared = await (await requestExport({
+          action: "prepare",
+          draftIds: [...new Set(batch.map((item) => item.draftId))],
+          imageIds: batch.map((item) => item.imageId)
+        })).json();
+        if (!prepared.proofs || batch.some((item) => !Object.hasOwn(prepared.proofs, item.imageId))) {
+          throw new Error("圖片準備未完成，請重新匯出");
+        }
+        Object.assign(proofs, prepared.proofs);
+        setCdnProgress({ done: start + batch.length, total: plan.images.length });
+      }
+      const response = await requestExport({ action: "export", draftIds: ids, proofs });
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const d = new Date();
@@ -96,7 +124,7 @@ export function GptRawList({ products, captureUnsentIds }: { products: GptRawLis
       router.refresh();
     } catch (error) {
       showToast(`匯出失敗：${error instanceof TypeError ? "連線失敗，請稍後再試" : error instanceof Error ? error.message : "請稍後再試"}`, "error");
-    } finally { setBusy(null); }
+    } finally { setBusy(null); setCdnProgress(null); }
   }
 
   async function archive() {
@@ -149,7 +177,7 @@ export function GptRawList({ products, captureUnsentIds }: { products: GptRawLis
         <span>{ids.length ? `已選 ${ids.length} 筆` : "勾選商品以匯出"}</span>
       </label>
       <div className="rc-batch-actions batch-actions">
-        <Button type="button" size="sm" variant="primary" disabled={Boolean(busy) || !ids.length} onClick={() => void exportCsv()}>{busy === "export" ? "匯出中…" : `⬇ ${exported ? "重新匯出" : "匯出原始 CSV"}（${ids.length}）`}</Button>
+        <Button type="button" size="sm" variant="primary" disabled={Boolean(busy) || !ids.length} onClick={() => void exportCsv()}>{busy === "export" ? (cdnProgress?.total ? `圖片 ${cdnProgress.done}/${cdnProgress.total}…` : "匯出中…") : `⬇ ${exported ? "重新匯出" : "匯出原始 CSV"}（${ids.length}）`}</Button>
         <Button type="button" size="sm" disabled={Boolean(busy) || !ids.length} onClick={() => void archive()}>封存</Button>
       </div>
     </div>
